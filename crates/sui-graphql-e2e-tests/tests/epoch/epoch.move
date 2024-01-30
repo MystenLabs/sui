@@ -51,5 +51,58 @@
     fundInflow
     fundOutflow
     netInflow
+    transactionBlocks {
+      nodes {
+        kind {
+          __typename
+        }
+        digest
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  epoch(id: 1) {
+    totalTransactions
+    transactionBlocks {
+      nodes {
+        kind {
+          __typename
+        }
+        digest
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  epoch(id: 0) {
+    totalTransactions
+    transactionBlocks {
+      nodes {
+        kind {
+          __typename
+        }
+        digest
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  epoch(id: 3) {
+    totalTransactions
+    transactionBlocks {
+      nodes {
+        kind {
+          __typename
+        }
+        digest
+      }
+    }
   }
 }

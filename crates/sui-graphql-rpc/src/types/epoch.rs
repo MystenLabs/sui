@@ -95,35 +95,10 @@ impl Epoch {
         )))
     }
 
-    /// The total number of transaction blocks in this epoch so far.
-    async fn total_transactions(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
-        match self.stored.epoch_total_transactions {
-            Some(total) => Ok(Some(BigInt::from(total as u64))),
-            None => {
-                // If the epoch has not ended yet, we calculate the total transactions by
-                // subtracting the last epoch's network total transactions from the last checkpoint's.
-                let last_checkpoint_network_total =
-                    Checkpoint::query(ctx.data_unchecked(), CheckpointId::default())
-                        .await
-                        .extend()?
-                        .map(|c| c.network_total_transactions_impl());
-                let last_epoch_last_checkpoint_id =
-                    CheckpointId::by_seq_num((self.stored.first_checkpoint_id - 1) as u64);
-                let last_epoch_network_total =
-                    Checkpoint::query(ctx.data_unchecked(), last_epoch_last_checkpoint_id)
-                        .await
-                        .extend()?
-                        .map(|c| c.network_total_transactions_impl());
-                match (last_checkpoint_network_total, last_epoch_network_total) {
-                    (Some(last_checkpoint_network_total), Some(last_epoch_network_total)) => {
-                        Ok(Some(BigInt::from(
-                            last_checkpoint_network_total - last_epoch_network_total,
-                        )))
-                    }
-                    _ => Ok(None),
-                }
-            }
-        }
+    /// The total number of transaction blocks in this epoch.
+    async fn total_transactions(&self) -> Result<Option<BigInt>> {
+        // TODO: this currently returns None for the current epoch. Fix this.
+        Ok(self.stored.epoch_total_transactions.map(BigInt::from))
     }
 
     /// The total amount of gas fees (in MIST) that were paid in this epoch.

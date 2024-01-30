@@ -1,4 +1,4 @@
-processed 11 tasks
+processed 14 tasks
 
 init:
 C: object(0,0)
@@ -38,7 +38,7 @@ Checkpoint created: 5
 task 9 'advance-epoch'. lines 31-32:
 Epoch advanced: 2
 
-task 10 'run-graphql'. lines 33-55:
+task 10 'run-graphql'. lines 33-63:
 Response: {
   "data": {
     "epoch": {
@@ -61,7 +61,78 @@ Response: {
       "fundSize": "15098160",
       "fundInflow": "1976000",
       "fundOutflow": "978120",
-      "netInflow": "997880"
+      "netInflow": "997880",
+      "transactionBlocks": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 11 'run-graphql'. lines 65-78:
+Response: {
+  "data": {
+    "epoch": {
+      "totalTransactions": "3",
+      "transactionBlocks": {
+        "nodes": [
+          {
+            "kind": {
+              "__typename": "ProgrammableTransactionBlock"
+            },
+            "digest": "3igzPANoDiVZVZeMXYFVT7thXPjHP7WavNTxvFS2iTvP"
+          },
+          {
+            "kind": {
+              "__typename": "ProgrammableTransactionBlock"
+            },
+            "digest": "2KewubjV2rdZGF4gdNWhxo7syAKcScL7XwHkRAaCDyCc"
+          },
+          {
+            "kind": {
+              "__typename": "EndOfEpochTransaction"
+            },
+            "digest": "51YXRaTTFUw1DUj995nmqc4ycgxzbSb8A7Pz9FtMwr1Q"
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 12 'run-graphql'. lines 80-93:
+Response: {
+  "data": {
+    "epoch": {
+      "totalTransactions": "2",
+      "transactionBlocks": {
+        "nodes": [
+          {
+            "kind": {
+              "__typename": "GenesisTransaction"
+            },
+            "digest": "7uBpHBhwyM1Mo9dhKtdA23eGEmmaoeEyJY7CF5VpoQ3a"
+          },
+          {
+            "kind": {
+              "__typename": "EndOfEpochTransaction"
+            },
+            "digest": "BhTzDZ2a2JVrbmZHEJ8LD6aqJqAa9GNw6K6Xbc5d7kM4"
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 13 'run-graphql'. lines 95-108:
+Response: {
+  "data": {
+    "epoch": {
+      "totalTransactions": null,
+      "transactionBlocks": {
+        "nodes": []
+      }
     }
   }
 }

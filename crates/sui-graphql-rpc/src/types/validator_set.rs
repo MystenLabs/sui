@@ -25,30 +25,30 @@ pub(crate) struct ValidatorSet {
     pub pending_removals: Option<Vec<u64>>,
 
     // TODO: instead of returning the id and size of the table, potentially return the table itself, paginated.
-    /// Id of the wrapped object `TableVec` storing the pending active validators.
+    /// Object ID of the wrapped object `TableVec` storing the pending active validators.
     pub pending_active_validators_id: Option<SuiAddress>,
 
     /// Size of the pending active validators table.
     pub pending_active_validators_size: Option<u64>,
 
-    /// Id of the table storing the mapping from staking pool ids to the addresses
+    /// Object ID of the `Table` storing the mapping from staking pool ids to the addresses
     /// of the corresponding validators. This is needed because a validator's address
-    /// can potentially change but its pool id will not.
+    /// can potentially change but the object ID of its pool will not.
     pub staking_pool_mappings_id: Option<SuiAddress>,
 
-    /// Size of the stake pool mappings table.
+    /// Size of the stake pool mappings `Table`.
     pub staking_pool_mappings_size: Option<u64>,
 
-    /// Id of the table storing the inactive staking pools.
+    /// Object ID of the `Table` storing the inactive staking pools.
     pub inactive_pools_id: Option<SuiAddress>,
 
-    /// Size of the inactive pools table.
+    /// Size of the inactive pools `Table`.
     pub inactive_pools_size: Option<u64>,
 
-    /// Id of the table storing the validator candidates.
+    /// Object ID of the `Table` storing the validator candidates.
     pub validator_candidates_id: Option<SuiAddress>,
 
-    /// Size of the validator candidates table.
+    /// Size of the validator candidates `Table`.
     pub validator_candidates_size: Option<u64>,
 }
 
