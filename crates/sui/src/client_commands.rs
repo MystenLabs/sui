@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{anyhow, ensure};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
@@ -741,9 +741,12 @@ impl SuiClientCommands {
                 tx_digest,
                 profile_output,
             } => {
-                if !cfg!(feature = "gas-profiler") {
-                    bail!("gas-profiler feature is not enabled, rebuild or reinstall with --features gas-profiler");
-                }
+                move_vm_profiler::gas_profiler_feature_disabled! {
+                    anyhow::bail!(
+                        "gas-profiler feature is not enabled, rebuild or reinstall with \
+                         --features gas-profiler"
+                    );
+                };
 
                 let cmd = ReplayToolCommand::ProfileTransaction {
                     tx_digest,
