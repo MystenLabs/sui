@@ -104,6 +104,7 @@ const concepts = [
 							'concepts/sui-move-concepts/patterns/app-extensions',
 						],
 					},
+					'concepts/sui-move-concepts/conventions',
 				],
 			},
 			{

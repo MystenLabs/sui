@@ -15,7 +15,7 @@ use crate::{
     transactions_client::TransactionsConsumer,
 };
 
-use consensus_config::AuthorityIndex;
+use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use mysten_metrics::monitored_scope;
 use tokio::sync::watch;
 
@@ -56,6 +56,8 @@ pub(crate) struct Core {
     signals: CoreSignals,
     /// The options for the component
     options: CoreOptions,
+    /// The keypair to be used for block signing
+    block_signer: NetworkKeyPair,
 }
 
 #[allow(dead_code)]
@@ -66,6 +68,7 @@ impl Core {
         block_manager: BlockManager,
         mut signals: CoreSignals,
         options: CoreOptions,
+        block_signer: NetworkKeyPair,
     ) -> Self {
         // TODO: restore the threshold clock round based on the last quorum data in storage when crash/recover
         let mut threshold_clock = ThresholdClock::new(0, context.clone());
@@ -98,6 +101,7 @@ impl Core {
             block_manager,
             signals,
             options,
+            block_signer,
         }
     }
 
@@ -199,7 +203,8 @@ impl Core {
                 ancestors,
                 payload,
             ));
-            let signed_block = SignedBlock::new(block);
+            let signed_block =
+                SignedBlock::new(block, &self.block_signer).expect("Block signing failed.");
             let verified_block = VerifiedBlock::new_verified_unserialized(signed_block)
                 .expect("Fatal error, creating a verified block failed");
 
@@ -400,7 +405,8 @@ mod test {
 
     #[tokio::test]
     async fn test_core_propose_after_genesis() {
-        let context = Arc::new(Context::new_for_test(4));
+        let (context, mut key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
         let block_manager = BlockManager::new();
         let (transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
         let transactions_consumer = TransactionsConsumer::new(tx_receiver);
@@ -415,6 +421,7 @@ mod test {
             block_manager,
             signals,
             options.clone(),
+            key_pairs.remove(context.own_index.value()).0,
         );
 
         // Send some transactions
@@ -469,7 +476,8 @@ mod test {
 
     #[tokio::test]
     async fn test_core_propose_once_receiving_a_quorum() {
-        let context = Arc::new(Context::new_for_test(4));
+        let (context, mut key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
         let block_manager = BlockManager::new();
         let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
         let transactions_consumer = TransactionsConsumer::new(tx_receiver);
@@ -481,6 +489,7 @@ mod test {
             block_manager,
             signals,
             CoreOptions::default(),
+            key_pairs.remove(context.own_index.value()).0,
         );
 
         let mut expected_ancestors = BTreeSet::new();
@@ -669,7 +678,7 @@ mod test {
         let mut cores = Vec::new();
 
         for index in 0..authorities.len() {
-            let (committee, _) = Committee::new_for_test(0, authorities.clone());
+            let (committee, mut signers) = Committee::new_for_test(0, authorities.clone());
             let context = Arc::new(Context::new(
                 AuthorityIndex::new_for_test(index as u32),
                 committee,
@@ -682,12 +691,15 @@ mod test {
             let transactions_consumer = TransactionsConsumer::new(tx_receiver);
             let (signals, signal_receivers) = CoreSignals::new();
 
+            let block_signer = signers.remove(index).0;
+
             let core = Core::new(
                 context,
                 transactions_consumer,
                 block_manager,
                 signals,
                 CoreOptions::default(),
+                block_signer,
             );
 
             cores.push((core, signal_receivers));

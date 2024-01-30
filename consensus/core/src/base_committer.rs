@@ -402,7 +402,7 @@ impl Display for BaseCommitter {
 mod base_committer_builder {
     use super::*;
 
-    pub struct BaseCommitterBuilder {
+    pub(crate) struct BaseCommitterBuilder {
         context: Arc<Context>,
         dag_state: Arc<RwLock<DagState>>,
         wave_length: u32,

@@ -106,6 +106,35 @@ type Address implements IOwner {
 	transactionBlocks(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection!
 }
 
+type AddressConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [AddressEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Address!]!
+}
+
+"""
+An edge in a connection.
+"""
+type AddressEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Address!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 """
 An address-owned object is owned by a specific 32-byte address that is
 either an account address (derived from a particular signature scheme) or
@@ -3982,12 +4011,27 @@ type Validator {
 	"""
 	The addresses of other validators this validator has reported.
 	"""
-	reportRecords: [Address!]
+	reportRecords(first: Int, before: String, last: Int, after: String): AddressConnection!
 	"""
 	The APY of this validator in basis points.
 	To get the APY in percentage, divide by 100.
 	"""
 	apy: Int
+}
+
+type ValidatorConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ValidatorEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Validator!]!
 }
 
 """
@@ -4005,6 +4049,20 @@ type ValidatorCredentials {
 }
 
 """
+An edge in a connection.
+"""
+type ValidatorEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Validator!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
 Representation of `0x3::validator_set::ValidatorSet`.
 """
 type ValidatorSet {
@@ -4012,10 +4070,6 @@ type ValidatorSet {
 	Total amount of stake for all active validators at the beginning of the epoch.
 	"""
 	totalStake: BigInt
-	"""
-	The current list of active validators.
-	"""
-	activeValidators: [Validator!]
 	"""
 	Validators that are pending removal from the active validator set, expressed as indices in
 	to `activeValidators`.
@@ -4025,6 +4079,10 @@ type ValidatorSet {
 	stakePoolMappingsSize: Int
 	inactivePoolsSize: Int
 	validatorCandidatesSize: Int
+	"""
+	The current set of active validators.
+	"""
+	activeValidators(first: Int, before: String, last: Int, after: String): ValidatorConnection!
 }
 
 schema {

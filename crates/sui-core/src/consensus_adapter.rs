@@ -179,6 +179,7 @@ impl ConsensusAdapterMetrics {
     }
 }
 
+#[mockall::automock]
 #[async_trait::async_trait]
 pub trait SubmitToConsensus: Sync + Send + 'static {
     async fn submit_to_consensus(

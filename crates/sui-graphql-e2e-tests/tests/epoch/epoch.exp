@@ -38,12 +38,19 @@ Checkpoint created: 5
 task 9 'advance-epoch'. lines 31-32:
 Epoch advanced: 2
 
-task 10 'run-graphql'. lines 33-47:
+task 10 'run-graphql'. lines 33-52:
 Response: {
   "data": {
     "epoch": {
       "validatorSet": {
-        "totalStake": "20000010002000000"
+        "totalStake": "20000010002000000",
+        "activeValidators": {
+          "nodes": [
+            {
+              "name": "validator-0"
+            }
+          ]
+        }
       },
       "totalGasFees": "1000000",
       "totalStakeRewards": "1000000",

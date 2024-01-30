@@ -16,7 +16,7 @@ use crate::{
 /// starts building the dag from the specified [`start`] parameter or from
 /// genesis if none are specified up to and including the specified round [`stop`]
 /// parameter.
-pub fn build_dag(
+pub(crate) fn build_dag(
     context: Arc<Context>,
     dag_state: Arc<RwLock<DagState>>,
     start: Option<Vec<BlockRef>>,
@@ -65,7 +65,7 @@ pub fn build_dag(
 }
 
 // TODO: Add layer_round as input parameter so ancestors can be from any round.
-pub fn build_dag_layer(
+pub(crate) fn build_dag_layer(
     // A list of (authority, parents) pairs. For each authority, we add a block
     // linking to the specified parents.
     connections: Vec<(AuthorityIndex, Vec<BlockRef>)>,

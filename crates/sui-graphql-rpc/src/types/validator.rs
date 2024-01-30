@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::context_data::db_data_provider::PgManager;
+use crate::types::cursor::{JsonCursor, Page};
+use async_graphql::connection::{Connection, CursorType, Edge};
 
 use super::big_int::BigInt;
 use super::move_object::MoveObject;
@@ -18,6 +20,8 @@ pub(crate) struct Validator {
     pub at_risk: Option<u64>,
     pub report_records: Option<Vec<Address>>,
 }
+
+type CAddr = JsonCursor<usize>;
 
 #[Object]
 impl Validator {
@@ -206,8 +210,35 @@ impl Validator {
     }
 
     /// The addresses of other validators this validator has reported.
-    async fn report_records(&self) -> &Option<Vec<Address>> {
-        &self.report_records
+    async fn report_records(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        before: Option<CAddr>,
+        last: Option<u64>,
+        after: Option<CAddr>,
+    ) -> Result<Connection<String, Address>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
+        let mut connection = Connection::new(false, false);
+        let Some(addresses) = &self.report_records else {
+            return Ok(connection);
+        };
+
+        let Some((prev, next, cs)) = page.paginate_indices(addresses.len()) else {
+            return Ok(connection);
+        };
+
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
+
+        for c in cs {
+            connection
+                .edges
+                .push(Edge::new(c.encode_cursor(), addresses[*c]));
+        }
+
+        Ok(connection)
     }
 
     /// The APY of this validator in basis points.

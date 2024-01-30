@@ -159,7 +159,8 @@ mod test {
 
     #[tokio::test]
     async fn test_core_thread() {
-        let context = Arc::new(Context::new_for_test(4));
+        let (context, mut key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
         let block_manager = BlockManager::new();
         let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
         let transactions_consumer = TransactionsConsumer::new(tx_receiver);
@@ -170,6 +171,7 @@ mod test {
             block_manager,
             signals,
             CoreOptions::default(),
+            key_pairs.remove(context.own_index.value()).0,
         );
 
         let (core_dispatcher, handle) = CoreThreadDispatcher::start(core, context);

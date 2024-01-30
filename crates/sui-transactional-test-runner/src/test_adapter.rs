@@ -38,6 +38,9 @@ use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::{self, Write};
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -49,7 +52,6 @@ use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_graphql_rpc::config::ConnectionConfig;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
-use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
 use sui_graphql_rpc::test_infra::cluster::{serve_executor, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
@@ -179,7 +181,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
     fn default_syntax(&self) -> SyntaxChoice {
         self.default_syntax
     }
-
+    async fn cleanup_resources(&mut self) -> anyhow::Result<()> {
+        if let Some(cluster) = self.cluster.take() {
+            cluster.cleanup_resources().await;
+        }
+        Ok(())
+    }
     async fn init(
         default_syntax: SyntaxChoice,
         pre_compiled_deps: Option<&'a FullyCompiledProgram>,
@@ -189,6 +196,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 Self::ExtraInitArgs,
             )>,
         >,
+        path: &Path,
     ) -> (Self, Option<String>) {
         let rng = StdRng::from_seed(RNG_SEED);
         assert!(
@@ -297,6 +305,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 reference_gas_price,
                 object_snapshot_min_checkpoint_lag,
                 object_snapshot_max_checkpoint_lag,
+                path.to_path_buf(),
             )
             .await
         } else {
@@ -1854,6 +1863,7 @@ async fn init_sim_executor(
     reference_gas_price: Option<u64>,
     object_snapshot_min_checkpoint_lag: Option<usize>,
     object_snapshot_max_checkpoint_lag: Option<usize>,
+    test_file_path: PathBuf,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -1919,9 +1929,35 @@ async fn init_sim_executor(
         None,
     );
 
+    // Hash the file path to create custom unique DB name
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    test_file_path.hash(&mut hasher);
+    let hash = hasher.finish();
+    let db_name = format!("sui_graphql_test_{}", hash);
+
+    // Take the last 4 digits of the has and use it as the port number
+    let base_port = hash
+        .to_string()
+        .chars()
+        .rev()
+        .take(4)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect::<String>()
+        .parse::<u16>()
+        .unwrap();
+
+    let graphql_port = 20000 + base_port;
+    let graphql_prom_port = graphql_port + 1;
+    let internal_data_port = graphql_prom_port + 1;
     let cluster = serve_executor(
-        ConnectionConfig::ci_integration_test_cfg(),
-        DEFAULT_INTERNAL_DATA_SOURCE_PORT,
+        ConnectionConfig::ci_integration_test_cfg_with_db_name(
+            db_name,
+            graphql_port,
+            graphql_prom_port,
+        ),
+        internal_data_port,
         Arc::new(read_replica),
         Some(SnapshotLagConfig::new(
             object_snapshot_min_checkpoint_lag,

@@ -14,7 +14,9 @@ use sui_indexer::errors::IndexerError;
 pub use sui_indexer::processors_v2::objects_snapshot_processor::SnapshotLagConfig;
 use sui_indexer::store::indexer_store_v2::IndexerStoreV2;
 use sui_indexer::store::PgIndexerStoreV2;
+use sui_indexer::test_utils::force_delete_database;
 use sui_indexer::test_utils::start_test_indexer_v2;
+use sui_indexer::test_utils::start_test_indexer_v2_impl;
 use sui_indexer::test_utils::ReaderWriterConfig;
 use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
@@ -37,6 +39,7 @@ pub struct ExecutorCluster {
     pub graphql_server_join_handle: JoinHandle<()>,
     pub graphql_client: SimpleClient,
     pub snapshot_config: SnapshotLagConfig,
+    pub graphql_connection_config: ConnectionConfig,
 }
 
 pub struct Cluster {
@@ -106,11 +109,12 @@ pub async fn serve_executor(
         sui_rest_api::start_service(executor_server_url, executor, Some("/rest".to_owned())).await;
     });
 
-    let (pg_store, pg_handle) = start_test_indexer_v2(
+    let (pg_store, pg_handle) = start_test_indexer_v2_impl(
         Some(db_url),
         format!("http://{}", executor_server_url),
         true,
         ReaderWriterConfig::writer_mode(snapshot_config.clone()),
+        Some(graphql_connection_config.db_name()),
     )
     .await;
 
@@ -133,6 +137,7 @@ pub async fn serve_executor(
         graphql_server_join_handle: graphql_server_handle,
         graphql_client: client,
         snapshot_config: snapshot_config.unwrap_or_default(),
+        graphql_connection_config,
     }
 }
 
@@ -247,5 +252,11 @@ impl ExecutorCluster {
         })
         .await
         .expect("Timeout waiting for indexer to update objects snapshot");
+    }
+
+    pub async fn cleanup_resources(self) {
+        // Delete the database
+        let db_url = self.graphql_connection_config.db_url.clone();
+        force_delete_database(db_url).await;
     }
 }
