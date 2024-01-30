@@ -51,9 +51,8 @@ use super::{
 #[derive(Clone, Debug)]
 pub(crate) struct TransactionBlock {
     pub inner: TransactionBlockInner,
-    /// The checkpoint_sequence_number at which this was viewed at, or `None` if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint_sequence_number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -137,7 +136,7 @@ impl TransactionBlock {
 
         (sender != NativeSuiAddress::ZERO).then(|| Address {
             address: SuiAddress::from(sender),
-            checkpoint_viewed_at: self.checkpoint_viewed_at,
+            checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
         })
     }
 
@@ -163,7 +162,10 @@ impl TransactionBlock {
     /// The type of this transaction as well as the commands and/or parameters comprising the
     /// transaction of this kind.
     async fn kind(&self) -> Option<TransactionBlockKind> {
-        Some(TransactionBlockKind::from(self.native().kind().clone()))
+        Some(TransactionBlockKind::from(
+            self.native().kind().clone(),
+            self.checkpoint_viewed_at,
+        ))
     }
 
     /// A list of all signatures, Base64-encoded, from senders, and potentially the gas owner if
@@ -190,9 +192,13 @@ impl TransactionBlock {
             return Ok(None);
         };
 
-        Epoch::query(ctx.data_unchecked(), Some(*id), self.checkpoint_viewed_at)
-            .await
-            .extend()
+        Epoch::query(
+            ctx.data_unchecked(),
+            Some(*id),
+            Some(self.checkpoint_viewed_at),
+        )
+        .await
+        .extend()
     }
 
     /// Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
@@ -262,7 +268,7 @@ impl TransactionBlock {
         let inner = TransactionBlockInner::try_from(stored)?;
         Ok(Some(TransactionBlock {
             inner,
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         }))
     }
 
@@ -278,11 +284,18 @@ impl TransactionBlock {
         use transactions::dsl;
         let digests: Vec<_> = digests.into_iter().map(|d| d.to_vec()).collect();
 
-        let stored: Vec<StoredTransaction> = db
-            .execute(move |conn| {
-                conn.results(move || {
+        let (stored, checkpoint_viewed_at): (Vec<StoredTransaction>, u64) = db
+            .execute_repeatable(move |conn| {
+                let checkpoint_viewed_at = match checkpoint_viewed_at {
+                    Some(value) => Ok(value),
+                    None => Checkpoint::latest_checkpoint_sequence_number(conn),
+                }?;
+
+                let results = conn.results(move || {
                     dsl::transactions.filter(dsl::transaction_digest.eq_any(digests.clone()))
-                })
+                })?;
+
+                Ok::<_, diesel::result::Error>((results, checkpoint_viewed_at))
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch transactions: {e}")))?;
@@ -327,7 +340,7 @@ impl TransactionBlock {
             .execute_repeatable(move |conn| {
                 let checkpoint_viewed_at = match checkpoint_viewed_at {
                     Some(value) => Ok(value),
-                    None => Checkpoint::available_range(conn).map(|(_, rhs)| rhs),
+                    None => Checkpoint::latest_checkpoint_sequence_number(conn),
                 }?;
 
                 let result = page.paginate_query::<StoredTransaction, _, _, _>(
@@ -480,7 +493,7 @@ impl TransactionBlock {
             let inner = TransactionBlockInner::try_from(stored)?;
             let transaction = TransactionBlock {
                 inner,
-                checkpoint_viewed_at: Some(checkpoint_viewed_at),
+                checkpoint_viewed_at,
             };
             conn.edges.push(Edge::new(cursor, transaction));
         }

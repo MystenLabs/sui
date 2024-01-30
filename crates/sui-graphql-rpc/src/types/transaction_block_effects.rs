@@ -35,9 +35,8 @@ use super::{
 #[derive(Clone, Debug)]
 pub(crate) struct TransactionBlockEffects {
     pub inner: TransactionBlockEffectsInner,
-    /// The checkpoint_sequence_number at which this was viewed at, or `None` if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint_sequence_number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -172,7 +171,7 @@ impl TransactionBlockEffects {
                 .iter()
                 .map(|d| Digest::from(*d))
                 .collect(),
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()?;
@@ -336,14 +335,18 @@ impl TransactionBlockEffects {
         for c in cs {
             let event = match &self.inner {
                 TransactionBlockEffectsInner::Stored { stored_tx, .. } => {
-                    Event::try_from_stored_transaction(stored_tx, *c, self.checkpoint_viewed_at)
-                        .extend()?
+                    Event::try_from_stored_transaction(
+                        stored_tx,
+                        *c,
+                        Some(self.checkpoint_viewed_at),
+                    )
+                    .extend()?
                 }
                 TransactionBlockEffectsInner::Executed { events, .. }
                 | TransactionBlockEffectsInner::DryRun { events, .. } => Event {
                     stored: None,
                     native: events[*c].clone(),
-                    checkpoint_viewed_at: self.checkpoint_viewed_at,
+                    checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
                 },
             };
             connection.edges.push(Edge::new(c.encode_cursor(), event));
@@ -365,7 +368,7 @@ impl TransactionBlockEffects {
         Epoch::query(
             ctx.data_unchecked(),
             Some(self.native().executed_epoch()),
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -381,7 +384,7 @@ impl TransactionBlockEffects {
         Checkpoint::query(
             ctx.data_unchecked(),
             CheckpointId::by_seq_num(stored_tx.checkpoint_sequence_number as u64),
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()

@@ -11,9 +11,8 @@ use super::{
 
 pub(crate) struct ObjectChange {
     pub native: NativeObjectChange,
-    /// The checkpoint sequence number at which this was viewed at, or None if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Effect on an individual Object (keyed by its ID).
@@ -35,7 +34,7 @@ impl ObjectChange {
             self.native.id.into(),
             ObjectLookupKey::VersionAt {
                 version: version.value(),
-                checkpoint_viewed_at: self.checkpoint_viewed_at,
+                checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
             },
         )
         .await
@@ -53,7 +52,7 @@ impl ObjectChange {
             self.native.id.into(),
             ObjectLookupKey::VersionAt {
                 version: version.value(),
-                checkpoint_viewed_at: self.checkpoint_viewed_at,
+                checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
             },
         )
         .await

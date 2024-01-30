@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::types::checkpoint::Checkpoint;
 use crate::types::transaction_block_effects::TransactionBlockEffectsInner;
 use crate::{
     error::Error, types::execution_result::ExecutionResult,
@@ -119,6 +120,10 @@ impl Mutation {
             })
             .collect();
 
+        let latest_cp = Checkpoint::query_latest_checkpoint_sequence_number(ctx.data_unchecked())
+            .await
+            .extend()?;
+
         Ok(ExecutionResult {
             errors: if result.errors.is_empty() {
                 None
@@ -131,7 +136,7 @@ impl Mutation {
                     native,
                     events,
                 },
-                checkpoint_viewed_at: None,
+                checkpoint_viewed_at: latest_cp,
             },
         })
     }
