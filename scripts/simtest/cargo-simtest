@@ -10,6 +10,7 @@ fi
 CODE_COV=0
 if [ "$2" == "codecov" ]; then
   CODE_COV=1
+  shift
 fi
 
 # consume simtest arg
