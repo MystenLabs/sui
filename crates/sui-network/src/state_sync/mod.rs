@@ -73,7 +73,7 @@ use tokio::{
     sync::{broadcast, mpsc, watch},
     task::{AbortHandle, JoinSet},
 };
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, instrument, trace};
 
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.StateSync.rs"));
@@ -509,6 +509,7 @@ where
     }
 
     // Handle a checkpoint that we received from consensus
+    #[instrument(level = "debug", skip_all)]
     fn handle_checkpoint_from_consensus(&mut self, checkpoint: Box<VerifiedCheckpoint>) {
         // Always check previous_digest matches in case there is a gap between
         // state sync and consensus.
@@ -1228,14 +1229,22 @@ async fn sync_checkpoint_contents<S>(
                             info!("unable to sync contents of checkpoint through state sync {}", checkpoint.sequence_number());
 
                         }
-                        // Retry contents sync on failure.
-                        checkpoint_contents_tasks.push_front(sync_one_checkpoint_contents(
-                            network.clone(),
-                            &store,
-                            peer_heights.clone(),
-                            timeout,
-                            checkpoint,
-                        ));
+
+                        if store.get_highest_synced_checkpoint()
+                                .expect("store operation should not fail")
+                                .sequence_number() >= checkpoint.sequence_number() {
+                            debug!(seq = ?checkpoint.sequence_number(), "checkpoint was already created via consensus output");
+                            highest_synced = checkpoint;
+                        } else {
+                            // Retry contents sync on failure.
+                            checkpoint_contents_tasks.push_front(sync_one_checkpoint_contents(
+                                network.clone(),
+                                &store,
+                                peer_heights.clone(),
+                                timeout,
+                                checkpoint,
+                            ));
+                        }
                     }
                 }
             },
@@ -1316,6 +1325,7 @@ where
     Ok((checkpoint, num_txns))
 }
 
+#[instrument(level = "debug", skip_all)]
 async fn get_full_checkpoint_contents<S>(
     peers: PeerBalancer,
     store: S,
