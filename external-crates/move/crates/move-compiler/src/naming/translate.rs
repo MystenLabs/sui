@@ -7,7 +7,7 @@ use crate::{
     diagnostics::codes::*,
     editions::FeatureGate,
     expansion::{
-        ast::{self as E, AbilitySet, ModuleIdent, Visibility},
+        ast::{self as E, AbilitySet, Ellipsis, ModuleIdent, Visibility},
         translate::is_valid_struct_constant_or_schema_name as is_constant_name,
     },
     naming::{
@@ -2274,6 +2274,55 @@ fn match_arm(context: &mut Context, sp!(aloc, arm): E::MatchArm) -> N::MatchArm 
     sp(aloc, arm)
 }
 
+fn expand_positional_ellipsis<T>(
+    missing: isize,
+    args: Vec<E::Ellipsis<Spanned<T>>>,
+    replacement: impl Fn(Loc) -> Spanned<T>,
+) -> Vec<(Field, (usize, Spanned<T>))> {
+    args.into_iter()
+        .flat_map(|p| match p {
+            E::Ellipsis::Binder(p) => vec![p],
+            E::Ellipsis::Ellipsis(eloc) => {
+                (0..=missing).map(|_| replacement(eloc)).collect::<Vec<_>>()
+            }
+        })
+        .enumerate()
+        .map(|(idx, p)| {
+            let field = Field::add_loc(p.loc, format!("{idx}").into());
+            (field, (idx, p))
+        })
+        .collect()
+}
+
+fn expand_named_ellipsis<T>(
+    field_info: &FieldInfo,
+    head_loc: Loc,
+    eloc: Loc,
+    args: &mut UniqueMap<Field, (usize, Spanned<T>)>,
+    replacement: impl Fn(Loc) -> Spanned<T>,
+) {
+    let mut fields = match field_info {
+        FieldInfo::Empty => BTreeSet::new(),
+        FieldInfo::Named(fields) => fields.clone(),
+        FieldInfo::Positional(num_fields) => (0..*num_fields)
+            .map(|i| Field::add_loc(head_loc, format!("{i}").into()))
+            .collect(),
+    };
+
+    for (k, _) in args.key_cloned_iter() {
+        fields.remove(&k);
+    }
+
+    let start_idx = args.len();
+    for (i, f) in fields.into_iter().enumerate() {
+        args.add(
+            Field(sp(eloc, f.value())),
+            (start_idx + i, replacement(eloc)),
+        )
+        .unwrap();
+    }
+}
+
 fn pat(context: &mut Context, sp!(ploc, pat_): E::MatchPattern) -> N::MatchPattern {
     use E::MatchPattern_ as EP;
     use N::MatchPattern_ as NP;
@@ -2302,26 +2351,13 @@ fn pat(context: &mut Context, sp!(ploc, pat_): E::MatchPattern) -> N::MatchPatte
                 // NB: We may have more args than fields! Since we allow `..` to be zero-or-more
                 // wildcards.
                 let missing = (fields as isize) - args.value.len() as isize;
-                let mut idx = 0;
-                let mut result_args = UniqueMap::new();
-                for p in args.value.into_iter() {
-                    match p {
-                        E::Ellipsis::Ellipsis(loc) => {
-                            for _ in 0..=missing {
-                                let field = Field::add_loc(loc, format!("{idx}").into());
-                                result_args
-                                    .add(field, (idx, sp(loc, NP::Wildcard)))
-                                    .unwrap();
-                                idx += 1;
-                            }
-                        }
-                        E::Ellipsis::Binder(p) => {
-                            let field = Field::add_loc(p.loc, format!("{idx}").into());
-                            result_args.add(field, (idx, pat(context, p))).unwrap();
-                            idx += 1;
-                        }
-                    }
-                }
+                let args =
+                    expand_positional_ellipsis(missing, args.value, |eloc| sp(eloc, EP::Wildcard));
+                let result_args = UniqueMap::maybe_from_iter(
+                    args.into_iter()
+                        .map(|(f, (i, p))| (f, (i, pat(context, p)))),
+                )
+                .unwrap();
                 NP::Constructor(mident, enum_, variant, tys_opt, result_args)
             } else {
                 assert!(context.env.has_errors());
@@ -2348,27 +2384,11 @@ fn pat(context: &mut Context, sp!(ploc, pat_): E::MatchPattern) -> N::MatchPatte
 
                 // If we have an ellipsis fill in any missing patterns
                 if let Some(ellipsis_loc) = ellipsis {
-                    let mut fields = match field_info {
-                        FieldInfo::Empty => BTreeSet::new(),
-                        FieldInfo::Named(fields) => fields,
-                        FieldInfo::Positional(num_fields) => (0..num_fields)
-                            .map(|i| Field::add_loc(ploc, format!("{i}").into()))
-                            .collect(),
-                    };
-
-                    for (k, _) in args.key_cloned_iter() {
-                        fields.remove(&k);
-                    }
-
-                    let start_idx = args.len();
-                    for (i, f) in fields.into_iter().enumerate() {
-                        args.add(
-                            Field(sp(ellipsis_loc, f.value())),
-                            (start_idx + i, sp(ellipsis_loc, EP::Wildcard)),
-                        )
-                        .unwrap();
-                    }
+                    expand_named_ellipsis(&field_info, ploc, ellipsis_loc, &mut args, |eloc| {
+                        sp(eloc, EP::Wildcard)
+                    });
                 }
+
                 let args = args.map(|_, (idx, p)| (idx, pat(context, p)));
                 NP::Constructor(mident, enum_, variant, tys_opt, args)
             } else {
@@ -2509,27 +2529,13 @@ fn lvalue(
             let efields = match efields {
                 E::FieldBindings::Named(mut efields, ellipsis) => {
                     if let Some(ellipsis_loc) = ellipsis {
-                        let mut fields = match field_info {
-                            FieldInfo::Empty => BTreeSet::new(),
-                            FieldInfo::Named(fields) => fields,
-                            FieldInfo::Positional(num_fields) => (0..num_fields)
-                                .map(|i| Field::add_loc(ellipsis_loc, format!("{i}").into()))
-                                .collect(),
-                        };
-
-                        for (k, _) in efields.key_cloned_iter() {
-                            fields.remove(&k);
-                        }
-
-                        let start_idx = efields.len();
-                        for (i, f) in fields.into_iter().enumerate() {
-                            efields
-                                .add(
-                                    Field(sp(ellipsis_loc, f.value())),
-                                    (start_idx + i, make_ignore(ellipsis_loc)),
-                                )
-                                .unwrap();
-                        }
+                        expand_named_ellipsis(
+                            &field_info,
+                            loc,
+                            ellipsis_loc,
+                            &mut efields,
+                            make_ignore,
+                        );
                     }
 
                     efields
@@ -2537,25 +2543,9 @@ fn lvalue(
                 E::FieldBindings::Positional(lvals) => {
                     let fields = field_info.field_count();
                     let missing = (fields as isize) - lvals.len() as isize;
-                    let mut expanded_lvals = UniqueMap::new();
-                    let mut idx = 0;
-                    for l in lvals.into_iter() {
-                        match l {
-                            E::Ellipsis::Binder(l) => {
-                                let field_name = Field::add_loc(l.loc, format!("{idx}").into());
-                                expanded_lvals.add(field_name, (idx, l)).unwrap();
-                                idx += 1;
-                            }
-                            E::Ellipsis::Ellipsis(eloc) => {
-                                for _ in 0..=missing {
-                                    let field = Field::add_loc(loc, format!("{idx}").into());
-                                    expanded_lvals.add(field, (idx, make_ignore(eloc))).unwrap();
-                                    idx += 1;
-                                }
-                            }
-                        }
-                    }
-                    expanded_lvals
+
+                    let expanded_lvals = expand_positional_ellipsis(missing, lvals, make_ignore);
+                    UniqueMap::maybe_from_iter(expanded_lvals.into_iter()).unwrap()
                 }
             };
             let nfields =

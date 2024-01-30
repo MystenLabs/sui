@@ -6,7 +6,7 @@ error[E03015]: invalid pattern
    │                    │    
    │                    Multiple ellipsis patterns
    │
-   = An ellipsis pattern can only appear once in a field constructor.
+   = An ellipsis pattern can only appear once in a constructor's pattern.
 
 error[E03015]: invalid pattern
    ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:11:20
@@ -17,7 +17,7 @@ error[E03015]: invalid pattern
    │                    │   Ellipsis pattern used again here
    │                    Multiple ellipsis patterns
    │
-   = An ellipsis pattern can only appear once in a field constructor.
+   = An ellipsis pattern can only appear once in a constructor's pattern.
 
 error[E03015]: invalid pattern
    ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:12:20
@@ -27,7 +27,7 @@ error[E03015]: invalid pattern
    │                    │    
    │                    Multiple ellipsis patterns
    │
-   = An ellipsis pattern can only appear once in a field constructor.
+   = An ellipsis pattern can only appear once in a constructor's pattern.
 
 error[E03015]: invalid pattern
    ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:13:20
@@ -37,7 +37,7 @@ error[E03015]: invalid pattern
    │                    │       
    │                    Multiple ellipsis patterns
    │
-   = An ellipsis pattern can only appear once in a field constructor.
+   = An ellipsis pattern can only appear once in a constructor's pattern.
 
 error[E03015]: invalid pattern
    ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:14:18
@@ -47,7 +47,7 @@ error[E03015]: invalid pattern
    │                  │       
    │                  Multiple ellipsis patterns
    │
-   = An ellipsis pattern can only appear once in a field constructor.
+   = An ellipsis pattern can only appear once in a constructor's pattern.
 
 error[E03015]: invalid pattern
    ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:15:18
@@ -57,5 +57,5 @@ error[E03015]: invalid pattern
    │                  │    
    │                  Multiple ellipsis patterns
    │
-   = An ellipsis pattern can only appear once in a field constructor.
+   = An ellipsis pattern can only appear once in a constructor's pattern.
 
