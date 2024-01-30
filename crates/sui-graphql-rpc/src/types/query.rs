@@ -172,7 +172,11 @@ impl Query {
             )
             .await?;
 
-        DryRunResult::try_from(res).extend()
+        let latest_cp = Checkpoint::query_latest_checkpoint_sequence_number(ctx.data_unchecked())
+            .await
+            .extend()?;
+
+        DryRunResult::try_from(res, latest_cp).extend()
     }
 
     async fn owner(&self, address: SuiAddress) -> Option<Owner> {

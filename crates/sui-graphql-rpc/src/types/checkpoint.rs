@@ -239,6 +239,34 @@ impl Checkpoint {
         }))
     }
 
+    /// Look up the latest checkpoint sequence number in the database. This should be used to set
+    /// the `checkpoint_viewed_at` for another top-level query.
+    pub(crate) async fn query_latest_checkpoint_sequence_number(db: &Db) -> Result<u64, Error> {
+        let stored: u64 = db
+            .execute(move |conn| Checkpoint::latest_checkpoint_sequence_number(conn))
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))?;
+
+        Ok(stored)
+    }
+
+    /// Queries the database for the upper bound of the available range supported by the graphql
+    /// server. This method takes a connection, so that it can be used in an execute_repeatable
+    /// transaction.
+    pub(crate) fn latest_checkpoint_sequence_number(
+        conn: &mut Conn,
+    ) -> Result<u64, diesel::result::Error> {
+        use checkpoints::dsl;
+
+        let result: i64 = conn.first(move || {
+            dsl::checkpoints
+                .select(dsl::sequence_number)
+                .order_by(dsl::sequence_number.desc())
+        })?;
+
+        Ok(result as u64)
+    }
+
     /// Query the database for a `page` of checkpoints. The Page uses the checkpoint sequence number
     /// of the stored checkpoint and the checkpoint at which this was viewed at as the cursor, and
     /// can optionally be further `filter`-ed by an epoch number (to only return checkpoints within

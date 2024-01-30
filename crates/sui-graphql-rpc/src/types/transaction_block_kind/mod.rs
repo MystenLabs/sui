@@ -32,13 +32,17 @@ pub(crate) enum TransactionBlockKind {
     EndOfEpoch(EndOfEpochTransaction),
 }
 
-impl From<NativeTransactionKind> for TransactionBlockKind {
-    fn from(kind: NativeTransactionKind) -> Self {
+// change this to normal impl, and take self.checkpoint_viewed_at from the transaction
+impl TransactionBlockKind {
+    pub(crate) fn from(kind: NativeTransactionKind, checkpoint_viewed_at: u64) -> Self {
         use NativeTransactionKind as K;
         use TransactionBlockKind as T;
 
         match kind {
-            K::ProgrammableTransaction(pt) => T::Programmable(ProgrammableTransactionBlock(pt)),
+            K::ProgrammableTransaction(pt) => T::Programmable(ProgrammableTransactionBlock {
+                native: pt,
+                checkpoint_viewed_at,
+            }),
             K::ChangeEpoch(ce) => T::ChangeEpoch(ChangeEpochTransaction(ce)),
             K::Genesis(g) => T::Genesis(GenesisTransaction(g)),
             K::ConsensusCommitPrologue(ccp) => T::ConsensusCommitPrologue(ccp.into()),

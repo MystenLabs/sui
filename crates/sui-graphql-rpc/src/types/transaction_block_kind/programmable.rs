@@ -25,8 +25,8 @@ use sui_types::transaction::{
 
 #[derive(Clone, Eq, PartialEq)]
 pub(crate) struct ProgrammableTransactionBlock {
-    native: NativeProgrammableTransactionBlock,
-    checkpoint_viewed_at: u64,
+    pub native: NativeProgrammableTransactionBlock,
+    pub checkpoint_viewed_at: u64,
 }
 
 pub(crate) type CInput = JsonCursor<ConsistentIndexCursor>;
