@@ -743,7 +743,7 @@ impl<'a> PTBBuilder<'a> {
                         sp: ident_loc,
                         help: {
                            "This is most likely because the previous command did not \
-                           produce a result, e.g., '{ASSIGN}' or '{GAS_BUDGET}' commands do not produce results.."
+                           produce a result. E.g., '{ASSIGN}' or '{GAS_BUDGET}' commands do not produce results."
 
                         },
                         self,
