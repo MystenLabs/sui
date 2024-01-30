@@ -43,7 +43,6 @@ use sui_move_build::{
     gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
 use sui_replay::ReplayToolCommand;
-use sui_sdk::SuiClient;
 use sui_sdk::{
     apis::ReadApi,
     sui_client_config::{SuiClientConfig, SuiEnv},
@@ -733,6 +732,11 @@ pub enum SuiClientCommands {
         #[arg(long, short)]
         terminate_early: bool,
     },
+}
+
+#[derive(serde::Deserialize)]
+struct FaucetResponse {
+    error: Option<String>,
 }
 
 impl SuiClientCommands {

@@ -91,85 +91,21 @@ impl FromStr for CommandToken {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Copy)]
-pub enum Arity {
-    Exact(usize),
-    Range(usize, usize),
-    Variable,
-}
-
-#[derive(Eq, PartialEq, Debug, Clone, Copy)]
-pub struct CommandArity {
-    types: Arity,
-    args: Arity,
-}
-
-impl CommandToken {
-    pub fn arity(&self) -> CommandArity {
-        match self {
-            CommandToken::TransferObjects => CommandArity {
-                types: Arity::Exact(0),
-                args: Arity::Exact(2),
-            },
-            CommandToken::SplitCoins => CommandArity {
-                types: Arity::Exact(0),
-                args: Arity::Exact(2),
-            },
-            CommandToken::MergeCoins => CommandArity {
-                types: Arity::Exact(0),
-                args: Arity::Exact(2),
-            },
-            CommandToken::MakeMoveVec => CommandArity {
-                types: Arity::Exact(1),
-                args: Arity::Exact(1),
-            },
-            CommandToken::MoveCall => CommandArity {
-                types: Arity::Range(0, 1),
-                args: Arity::Variable,
-            },
-            CommandToken::Publish => CommandArity {
-                types: Arity::Exact(0),
-                args: Arity::Exact(1),
-            },
-            CommandToken::Upgrade => CommandArity {
-                types: Arity::Exact(0),
-                args: Arity::Exact(1),
-            },
-            CommandToken::Assign => CommandArity {
-                types: Arity::Exact(0),
-                args: Arity::Range(1, 3),
-            },
-            CommandToken::File => CommandArity {
-                types: Arity::Exact(0),
-                args: Arity::Exact(1),
-            },
-            CommandToken::WarnShadows => CommandArity {
-                types: Arity::Exact(0),
-                args: Arity::Exact(0),
-            },
-            CommandToken::Preview => CommandArity {
-                types: Arity::Exact(0),
-                args: Arity::Exact(0),
-            },
-            CommandToken::PickGasBudget => CommandArity {
-                types: Arity::Exact(0),
-                args: Arity::Exact(1),
-            },
-            CommandToken::GasBudget => CommandArity {
-                types: Arity::Exact(0),
-                args: Arity::Exact(1),
-            },
-            CommandToken::FileStart => CommandArity {
-                types: Arity::Exact(0),
-                args: Arity::Exact(1),
-            },
-            CommandToken::FileEnd => CommandArity {
-                types: Arity::Exact(0),
-                args: Arity::Exact(1),
-            },
-        }
-    }
-}
+pub const ALL_PUBLIC_COMMAND_TOKENS: &[&'static str] = &[
+    TRANSFER_OBJECTS,
+    SPLIT_COINS,
+    MERGE_COINS,
+    MAKE_MOVE_VEC,
+    MOVE_CALL,
+    PUBLISH,
+    UPGRADE,
+    ASSIGN,
+    FILE,
+    PREVIEW,
+    WARN_SHADOWS,
+    PICK_GAS_BUDGET,
+    GAS_BUDGET,
+];
 
 #[cfg(test)]
 mod tests {
