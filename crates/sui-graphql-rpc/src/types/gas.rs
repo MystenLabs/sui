@@ -40,9 +40,8 @@ pub(crate) struct GasEffects {
     pub summary: GasCostSummary,
     pub object_id: SuiAddress,
     pub object_version: u64,
-    /// The checkpoint sequence number at which this was viewed at, or None if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Configuration for this transaction's gas price and the coins used to pay for gas.
@@ -136,7 +135,7 @@ impl GasEffects {
             self.object_id,
             ObjectLookupKey::VersionAt {
                 version: self.object_version,
-                checkpoint_viewed_at: self.checkpoint_viewed_at,
+                checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
             },
         )
         .await
@@ -153,10 +152,7 @@ impl GasEffects {
     /// was queried for, or `None` if the data was requested at the latest checkpoint. This is
     /// stored on `GasEffects` so that when viewing that entity's state, it will be as if it was
     /// read at the same checkpoint.
-    pub(crate) fn from(
-        effects: &NativeTransactionEffects,
-        checkpoint_viewed_at: Option<u64>,
-    ) -> Self {
+    pub(crate) fn from(effects: &NativeTransactionEffects, checkpoint_viewed_at: u64) -> Self {
         let ((id, version, _digest), _owner) = effects.gas_object();
         Self {
             summary: GasCostSummary::from(effects.gas_cost_summary()),
