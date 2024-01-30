@@ -659,7 +659,7 @@ fn find_token(
                                 (loc, "Missing closing quote (\") after byte string")
                             ))
                         };
-                        (Err(diag), start_offset + line.len() + 2)
+                        (Err(diag), line.len() + 2)
                     }
                 }
             } else {

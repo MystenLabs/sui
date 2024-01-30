@@ -2920,9 +2920,11 @@ fn parse_module(
             }
             Err(ErrCase::Unknown(diag)) => {
                 context.env.add_diag(*diag);
-                stop_parsing =
+                let next_tok =
                     skip_to_next_desired_tok_or_eof(context, is_start_of_member_or_module);
-                if stop_parsing {
+                if next_tok == Tok::EOF || next_tok == Tok::Module {
+                    // either end of file or next module to potentially be parsed
+                    stop_parsing = true;
                     break;
                 }
                 if curr_token_loc == context.tokens.current_token_loc() {
@@ -2960,15 +2962,12 @@ fn parse_module(
 fn skip_to_next_desired_tok_or_eof(
     context: &mut Context,
     is_desired_tok: fn(Tok, &str) -> bool,
-) -> bool {
+) -> Tok {
     loop {
         let tok = context.tokens.peek();
         let content = context.tokens.content();
-        if tok == Tok::EOF {
-            return true;
-        }
-        if is_desired_tok(tok, content) {
-            return false;
+        if tok == Tok::EOF || is_desired_tok(tok, content) {
+            return tok;
         }
         if let Err(diag) = context.tokens.advance() {
             // record diagnostics but keep advancing until encountering one of the desired tokens or
