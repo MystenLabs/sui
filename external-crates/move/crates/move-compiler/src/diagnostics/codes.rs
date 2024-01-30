@@ -228,6 +228,8 @@ codes!(
         PositionalCallMismatch: { msg: "positional call mismatch", severity: NonblockingError },
         InvalidLabel: { msg: "invalid use of label", severity: BlockingError },
         UnboundLabel: { msg: "unbound label", severity: BlockingError },
+        InvalidMut: { msg: "invalid 'mut' declaration", severity: NonblockingError },
+        InvalidAssignment: { msg: "invalid assignment", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [

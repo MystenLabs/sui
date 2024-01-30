@@ -3516,6 +3516,11 @@ fn check_valid_type_parameter_name(
     }
 
     // TODO move these names to a more central place?
+    if n.value == symbol!("_") {
+        let diag = restricted_name_error(NameCase::TypeParameter, n.loc, "_");
+        context.env().add_diag(diag);
+        return Err(());
+    }
     check_restricted_names(
         context,
         NameCase::TypeParameter,

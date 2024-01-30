@@ -11,7 +11,7 @@ use crate::{
         translate::is_valid_struct_constant_or_schema_name as is_constant_name,
     },
     naming::ast::{self as N, BlockLabel, NominalBlockUsage},
-    parser::ast::{self as P, ConstantName, Field, FunctionName, StructName},
+    parser::ast::{self as P, ConstantName, Field, FunctionName, StructName, MACRO_MODIFIER},
     shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
@@ -1100,8 +1100,15 @@ fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::Fu
         .parameters
         .into_iter()
         .map(|(mut_, param, param_ty)| {
+            let is_underscore = param.is_underscore();
+            let mut_ = if is_underscore {
+                check_mut_underscore(context, mut_);
+                None
+            } else {
+                mut_
+            };
             if let Err((param, prev_loc)) = declared.add(param, ()) {
-                if !param.is_underscore() {
+                if !is_underscore {
                     let msg = format!("Duplicate parameter with name '{}'", param);
                     context.env.add_diag(diag!(
                         Declarations::DuplicateItem,
@@ -1852,6 +1859,7 @@ fn lvalue(
         EL::Var(mut_, sp!(_, E::ModuleAccess_::Name(n)), None) => {
             let v = P::Var(n);
             if v.is_underscore() {
+                check_mut_underscore(context, mut_);
                 NL::Ignore
             } else {
                 if let Err((var, prev_loc)) = seen_locals.add(n, ()) {
@@ -1886,6 +1894,17 @@ fn lvalue(
                         n,
                     )?,
                 };
+                if v.is_macro_identifier() && matches!(case, C::Assign) {
+                    let msg = format!(
+                        "Invalid assignment. Cannot assign to '{}' parameter '{}'",
+                        MACRO_MODIFIER, v,
+                    );
+                    let note = format!("'{}' parameters are substituted without being evaluated. There is no local variable to assign to", MACRO_MODIFIER);
+                    let mut diag = diag!(NameResolution::InvalidAssignment, (loc, msg));
+                    diag.add_note(note);
+                    context.env.add_diag(diag);
+                    return None;
+                }
                 NL::Var {
                     mut_,
                     var: nv,
@@ -1940,6 +1959,14 @@ fn lvalue(
         EL::Var(_, _, _) => panic!("unexpected specification construct"),
     };
     Some(sp(loc, nl_))
+}
+
+fn check_mut_underscore(context: &mut Context, mut_: Option<Loc>) {
+    let Some(mut_) = mut_ else { return };
+    let msg = "Invalid 'mut' declaration. 'mut' is applied to variables and cannot be applied to the '_' pattern";
+    context
+        .env
+        .add_diag(diag!(NameResolution::InvalidMut, (mut_, msg)));
 }
 
 fn bind_list(context: &mut Context, ls: E::LValueList) -> Option<N::LValueList> {
