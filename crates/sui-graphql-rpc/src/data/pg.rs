@@ -15,6 +15,7 @@ use diesel::{
 use sui_indexer::indexer_reader::IndexerReader;
 
 use tracing::error;
+use uuid::Uuid;
 
 pub(crate) struct PgExecutor {
     pub inner: IndexerReader,
@@ -94,23 +95,27 @@ impl<'c> super::DbConnection for PgConnection<'c> {
     type Connection = diesel::PgConnection;
     type Backend = Pg;
 
-    fn result<Q, U>(&mut self, query: impl Fn() -> Q) -> QueryResult<U>
+    fn result<Q, U>(&mut self, query: impl Fn() -> Q, query_id: &Uuid) -> QueryResult<U>
     where
         Q: diesel::query_builder::Query,
         Q: LoadQuery<'static, Self::Connection, U>,
         Q: QueryId + QueryFragment<Self::Backend>,
     {
-        query_cost::log(self.conn, self.max_cost, query());
+        if !query_id.is_nil() {
+            query_cost::log(self.conn, self.max_cost, query());
+        }
         query().get_result(self.conn)
     }
 
-    fn results<Q, U>(&mut self, query: impl Fn() -> Q) -> QueryResult<Vec<U>>
+    fn results<Q, U>(&mut self, query: impl Fn() -> Q, query_id: &Uuid) -> QueryResult<Vec<U>>
     where
         Q: diesel::query_builder::Query,
         Q: LoadQuery<'static, Self::Connection, U>,
         Q: QueryId + QueryFragment<Self::Backend>,
     {
-        query_cost::log(self.conn, self.max_cost, query());
+        if !query_id.is_nil() {
+            query_cost::log(self.conn, self.max_cost, query());
+        }
         query().get_results(self.conn)
     }
 }

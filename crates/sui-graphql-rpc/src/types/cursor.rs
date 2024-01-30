@@ -189,6 +189,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         &self,
         conn: &mut Conn<'_>,
         query: Q,
+        ctx: &Context<'_>,
     ) -> QueryResult<(bool, bool, impl Iterator<Item = T>)>
     where
         Q: Fn() -> Query<ST, T::Source, GB>,
@@ -221,7 +222,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
             // Avoid the database roundtrip in the degenerate case.
             vec![]
         } else {
-            let mut results = conn.results(query)?;
+            let mut results = conn.results(query, ctx.data_unchecked())?;
             if !self.is_from_front() {
                 results.reverse();
             }

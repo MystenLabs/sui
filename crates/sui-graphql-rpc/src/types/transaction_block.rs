@@ -193,14 +193,19 @@ impl TransactionBlock {
     }
 
     /// Look up a `TransactionBlock` in the database, by its transaction digest.
-    pub(crate) async fn query(db: &Db, digest: Digest) -> Result<Option<Self>, Error> {
+    pub(crate) async fn query(
+        db: &Db,
+        digest: Digest,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Self>, Error> {
         use transactions::dsl;
 
         let stored: Option<StoredTransaction> = db
             .execute(move |conn| {
-                conn.result(move || {
-                    dsl::transactions.filter(dsl::transaction_digest.eq(digest.to_vec()))
-                })
+                conn.result(
+                    move || dsl::transactions.filter(dsl::transaction_digest.eq(digest.to_vec())),
+                    ctx.data_unchecked(),
+                )
                 .optional()
             })
             .await
@@ -216,15 +221,19 @@ impl TransactionBlock {
     pub(crate) async fn multi_query(
         db: &Db,
         digests: Vec<Digest>,
+        ctx: &Context<'_>,
     ) -> Result<BTreeMap<Digest, Self>, Error> {
         use transactions::dsl;
         let digests: Vec<_> = digests.into_iter().map(|d| d.to_vec()).collect();
 
         let stored: Vec<StoredTransaction> = db
             .execute(move |conn| {
-                conn.results(move || {
-                    dsl::transactions.filter(dsl::transaction_digest.eq_any(digests.clone()))
-                })
+                conn.results(
+                    move || {
+                        dsl::transactions.filter(dsl::transaction_digest.eq_any(digests.clone()))
+                    },
+                    ctx.data_unchecked(),
+                )
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch transactions: {e}")))?;

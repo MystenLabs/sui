@@ -9,6 +9,7 @@ use diesel::{
     query_dsl::{methods::LimitDsl, LoadQuery},
     QueryResult,
 };
+use uuid::Uuid;
 
 use crate::error::Error;
 
@@ -69,7 +70,7 @@ pub(crate) trait DbConnection {
 
     /// Run a query that fetches a single value. `query` is a thunk that returns a query when
     /// called.
-    fn result<Q, U>(&mut self, query: impl Fn() -> Q) -> QueryResult<U>
+    fn result<Q, U>(&mut self, query: impl Fn() -> Q, query_id: &Uuid) -> QueryResult<U>
     where
         Q: diesel::query_builder::Query,
         Q: LoadQuery<'static, Self::Connection, U>,
@@ -77,7 +78,7 @@ pub(crate) trait DbConnection {
 
     /// Run a query that fetches multiple values. `query` is a thunk that returns a query when
     /// called.
-    fn results<Q, U>(&mut self, query: impl Fn() -> Q) -> QueryResult<Vec<U>>
+    fn results<Q, U>(&mut self, query: impl Fn() -> Q, query_id: &Uuid) -> QueryResult<Vec<U>>
     where
         Q: diesel::query_builder::Query,
         Q: LoadQuery<'static, Self::Connection, U>,
@@ -85,12 +86,12 @@ pub(crate) trait DbConnection {
 
     /// Helper to limit a query that fetches multiple values to return only its first value. `query`
     /// is a thunk that returns a query when called.
-    fn first<Q: LimitDsl, U>(&mut self, query: impl Fn() -> Q) -> QueryResult<U>
+    fn first<Q: LimitDsl, U>(&mut self, query: impl Fn() -> Q, query_id: &Uuid) -> QueryResult<U>
     where
         <Q as LimitDsl>::Output: diesel::query_builder::Query,
         <Q as LimitDsl>::Output: LoadQuery<'static, Self::Connection, U>,
         <Q as LimitDsl>::Output: QueryId + QueryFragment<Self::Backend>,
     {
-        self.result(move || query().limit(1i64))
+        self.result(move || query().limit(1i64), query_id)
     }
 }

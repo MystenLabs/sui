@@ -498,6 +498,7 @@ impl ObjectImpl<'_> {
                     ctx.data_unchecked(),
                     address.into(),
                     ObjectVersionKey::Latest,
+                    ctx,
                 )
                 .await
                 .ok()
@@ -522,7 +523,7 @@ impl ObjectImpl<'_> {
         };
         let digest = native.previous_transaction;
 
-        TransactionBlock::query(ctx.data_unchecked(), digest.into())
+        TransactionBlock::query(ctx.data_unchecked(), digest.into(), ctx)
             .await
             .extend()
     }
@@ -646,8 +647,9 @@ impl Object {
         db: &Db,
         page: Page<Cursor>,
         filter: ObjectFilter,
+        ctx: &Context<'_>,
     ) -> Result<Connection<String, Object>, Error> {
-        Self::paginate_subtype(db, page, filter, Ok).await
+        Self::paginate_subtype(db, page, filter, Ok, ctx).await
     }
 
     /// Query the database for a `page` of some sub-type of Object. The page uses the bytes of an
@@ -658,44 +660,50 @@ impl Object {
         page: Page<Cursor>,
         filter: ObjectFilter,
         downcast: impl Fn(Object) -> Result<T, Error>,
+        ctx: &Context<'_>,
     ) -> Result<Connection<String, T>, Error> {
         let (prev, next, results) = db
             .execute(move |conn| {
-                page.paginate_query::<StoredObject, _, _, _>(conn, move || {
-                    use objects::dsl;
-                    let mut query = dsl::objects.into_boxed();
+                page.paginate_query::<StoredObject, _, _, _>(
+                    conn,
+                    move || {
+                        use objects::dsl;
+                        let mut query = dsl::objects.into_boxed();
 
-                    // Start by applying the filters on IDs and/or keys because they are combined as
-                    // a disjunction, while the remaining queries are conjunctions.
-                    if let Some(object_ids) = &filter.object_ids {
-                        query = query.or_filter(
-                            dsl::object_id.eq_any(object_ids.iter().map(|a| a.into_vec())),
-                        );
-                    }
+                        // Start by applying the filters on IDs and/or keys because they are combined as
+                        // a disjunction, while the remaining queries are conjunctions.
+                        if let Some(object_ids) = &filter.object_ids {
+                            query = query.or_filter(
+                                dsl::object_id.eq_any(object_ids.iter().map(|a| a.into_vec())),
+                            );
+                        }
 
-                    for ObjectKey { object_id, version } in filter.object_keys.iter().flatten() {
-                        query = query.or_filter(
-                            dsl::object_id
-                                .eq(object_id.into_vec())
-                                .and(dsl::object_version.eq(*version as i64)),
-                        );
-                    }
+                        for ObjectKey { object_id, version } in filter.object_keys.iter().flatten()
+                        {
+                            query = query.or_filter(
+                                dsl::object_id
+                                    .eq(object_id.into_vec())
+                                    .and(dsl::object_version.eq(*version as i64)),
+                            );
+                        }
 
-                    if let Some(type_) = &filter.type_ {
-                        query = query.filter(dsl::object_type.is_not_null());
-                        query = type_.apply(query, dsl::object_type.assume_not_null());
-                    }
+                        if let Some(type_) = &filter.type_ {
+                            query = query.filter(dsl::object_type.is_not_null());
+                            query = type_.apply(query, dsl::object_type.assume_not_null());
+                        }
 
-                    if let Some(owner) = &filter.owner {
-                        query = query.filter(dsl::owner_id.eq(owner.into_vec()));
+                        if let Some(owner) = &filter.owner {
+                            query = query.filter(dsl::owner_id.eq(owner.into_vec()));
 
-                        // If we are supplying an address as the owner, we know that the object must
-                        // be owned by an address, or by an object.
-                        query = query.filter(dsl::owner_type.eq(OwnerType::Address as i16));
-                    }
+                            // If we are supplying an address as the owner, we know that the object must
+                            // be owned by an address, or by an object.
+                            query = query.filter(dsl::owner_type.eq(OwnerType::Address as i16));
+                        }
 
-                    query
-                })
+                        query
+                    },
+                    ctx.data_unchecked(),
+                )
             })
             .await?;
 
@@ -710,15 +718,20 @@ impl Object {
         Ok(conn)
     }
 
-    async fn query_live(db: &Db, address: SuiAddress) -> Result<Option<Self>, Error> {
+    async fn query_live(
+        db: &Db,
+        address: SuiAddress,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Self>, Error> {
         use objects::dsl as objects;
         let vec_address = address.into_vec();
 
         let stored_obj: Option<StoredObject> = db
             .execute(move |conn| {
-                conn.first(move || {
-                    objects::objects.filter(objects::object_id.eq(vec_address.clone()))
-                })
+                conn.first(
+                    move || objects::objects.filter(objects::object_id.eq(vec_address.clone())),
+                    ctx.data_unchecked(),
+                )
                 .optional()
             })
             .await
@@ -731,6 +744,7 @@ impl Object {
         db: &Db,
         address: SuiAddress,
         version: u64,
+        ctx: &Context<'_>,
     ) -> Result<Option<Self>, Error> {
         use checkpoints::dsl as checkpoints;
         use objects_history::dsl as history;
@@ -740,48 +754,51 @@ impl Object {
 
         let results: Option<Vec<StoredHistoryObject>> = db
             .execute(move |conn| {
-                conn.results(move || {
-                    // If an object was created or mutated in a checkpoint outside the current
-                    // available range, and never touched again, it will not show up in the
-                    // objects_history table. Thus, we always need to check the objects_snapshot
-                    // table as well.
-                    let snapshot_query = snapshot::objects_snapshot
-                        .filter(snapshot::object_id.eq(address.into_vec()))
-                        .filter(snapshot::object_version.eq(version))
-                        .into_boxed();
-                    let mut historical_query = history::objects_history
-                        .filter(history::object_id.eq(address.into_vec()))
-                        .filter(history::object_version.eq(version))
-                        .order_by(history::object_version.desc())
-                        .limit(1)
-                        .into_boxed();
+                conn.results(
+                    move || {
+                        // If an object was created or mutated in a checkpoint outside the current
+                        // available range, and never touched again, it will not show up in the
+                        // objects_history table. Thus, we always need to check the objects_snapshot
+                        // table as well.
+                        let snapshot_query = snapshot::objects_snapshot
+                            .filter(snapshot::object_id.eq(address.into_vec()))
+                            .filter(snapshot::object_version.eq(version))
+                            .into_boxed();
+                        let mut historical_query = history::objects_history
+                            .filter(history::object_id.eq(address.into_vec()))
+                            .filter(history::object_version.eq(version))
+                            .order_by(history::object_version.desc())
+                            .limit(1)
+                            .into_boxed();
 
-                    let left = snapshot::objects_snapshot
-                        .select(snapshot::checkpoint_sequence_number)
-                        .order(snapshot::checkpoint_sequence_number.desc())
-                        .limit(1);
+                        let left = snapshot::objects_snapshot
+                            .select(snapshot::checkpoint_sequence_number)
+                            .order(snapshot::checkpoint_sequence_number.desc())
+                            .limit(1);
 
-                    let right = checkpoints::checkpoints
-                        .select(checkpoints::sequence_number)
-                        .order(checkpoints::sequence_number.desc())
-                        .limit(1);
+                        let right = checkpoints::checkpoints
+                            .select(checkpoints::sequence_number)
+                            .order(checkpoints::sequence_number.desc())
+                            .limit(1);
 
-                    historical_query = historical_query
-                        .filter(
-                            left.single_value()
-                                .is_null()
-                                .or(history::checkpoint_sequence_number
+                        historical_query = historical_query
+                            .filter(
+                                left.single_value().is_null().or(
+                                    history::checkpoint_sequence_number
+                                        .nullable()
+                                        .ge(left.single_value()),
+                                ),
+                            )
+                            .filter(
+                                history::checkpoint_sequence_number
                                     .nullable()
-                                    .ge(left.single_value())),
-                        )
-                        .filter(
-                            history::checkpoint_sequence_number
-                                .nullable()
-                                .le(right.single_value()),
-                        );
+                                    .le(right.single_value()),
+                            );
 
-                    snapshot_query.union(historical_query)
-                })
+                        snapshot_query.union(historical_query)
+                    },
+                    ctx.data_unchecked(),
+                )
                 .optional()
             })
             .await?;
@@ -804,6 +821,7 @@ impl Object {
         db: &Db,
         address: SuiAddress,
         checkpoint_sequence_number: u64,
+        ctx: &Context<'_>,
     ) -> Result<Option<Self>, Error> {
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
@@ -812,43 +830,47 @@ impl Object {
 
         let results: Option<Vec<StoredHistoryObject>> = db
             .execute(move |conn| {
-                conn.results(move || {
-                    // If an object was created or mutated in a checkpoint outside the current
-                    // available range, and never touched again, it will not show up in the
-                    // objects_history table. Thus, we always need to check the objects_snapshot
-                    // table as well.
-                    let mut snapshot_query = snapshot::objects_snapshot
-                        .filter(snapshot::object_id.eq(address.into_vec()))
-                        .into_boxed();
+                conn.results(
+                    move || {
+                        // If an object was created or mutated in a checkpoint outside the current
+                        // available range, and never touched again, it will not show up in the
+                        // objects_history table. Thus, we always need to check the objects_snapshot
+                        // table as well.
+                        let mut snapshot_query = snapshot::objects_snapshot
+                            .filter(snapshot::object_id.eq(address.into_vec()))
+                            .into_boxed();
 
-                    let mut historical_query = history::objects_history
-                        .filter(history::object_id.eq(address.into_vec()))
-                        .order_by(history::object_version.desc())
-                        .limit(1)
-                        .into_boxed();
+                        let mut historical_query = history::objects_history
+                            .filter(history::object_id.eq(address.into_vec()))
+                            .order_by(history::object_version.desc())
+                            .limit(1)
+                            .into_boxed();
 
-                    let left = snapshot::objects_snapshot
-                        .select(snapshot::checkpoint_sequence_number)
-                        .order(snapshot::checkpoint_sequence_number.desc())
-                        .limit(1);
+                        let left = snapshot::objects_snapshot
+                            .select(snapshot::checkpoint_sequence_number)
+                            .order(snapshot::checkpoint_sequence_number.desc())
+                            .limit(1);
 
-                    historical_query = historical_query.filter(
-                        left.single_value()
-                            .is_null()
-                            .or(history::checkpoint_sequence_number
-                                .nullable()
-                                .ge(left.single_value())),
-                    );
+                        historical_query = historical_query.filter(
+                            left.single_value()
+                                .is_null()
+                                .or(history::checkpoint_sequence_number
+                                    .nullable()
+                                    .ge(left.single_value())),
+                        );
 
-                    historical_query = historical_query
-                        .filter(history::checkpoint_sequence_number.le(checkpoint_sequence_number));
+                        historical_query = historical_query.filter(
+                            history::checkpoint_sequence_number.le(checkpoint_sequence_number),
+                        );
 
-                    snapshot_query = snapshot_query.filter(
-                        snapshot::checkpoint_sequence_number.le(checkpoint_sequence_number),
-                    );
+                        snapshot_query = snapshot_query.filter(
+                            snapshot::checkpoint_sequence_number.le(checkpoint_sequence_number),
+                        );
 
-                    snapshot_query.union(historical_query)
-                })
+                        snapshot_query.union(historical_query)
+                    },
+                    ctx.data_unchecked(),
+                )
                 .optional()
             })
             .await?;
@@ -871,14 +893,15 @@ impl Object {
         db: &Db,
         address: SuiAddress,
         key: ObjectVersionKey,
+        ctx: &Context<'_>,
     ) -> Result<Option<Self>, Error> {
         match key {
-            ObjectVersionKey::Latest => Self::query_live(db, address).await,
+            ObjectVersionKey::Latest => Self::query_live(db, address, ctx).await,
             ObjectVersionKey::LatestAt(checkpoint_sequence_number) => {
-                Self::query_latest_at_checkpoint(db, address, checkpoint_sequence_number).await
+                Self::query_latest_at_checkpoint(db, address, checkpoint_sequence_number, ctx).await
             }
             ObjectVersionKey::Historical(version) => {
-                Self::query_at_version(db, address, version).await
+                Self::query_at_version(db, address, version, ctx).await
             }
         }
         .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))
@@ -887,16 +910,23 @@ impl Object {
     /// Query for a singleton object identified by its type. Note: the object is assumed to be a
     /// singleton (we either find at least one object with this type and then return it, or return
     /// nothing).
-    pub(crate) async fn query_singleton(db: &Db, type_: TypeTag) -> Result<Option<Object>, Error> {
+    pub(crate) async fn query_singleton(
+        db: &Db,
+        type_: TypeTag,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Object>, Error> {
         use objects::dsl;
 
         let stored_obj: Option<StoredObject> = db
             .execute(move |conn| {
-                conn.first(move || {
-                    dsl::objects.filter(
-                        dsl::object_type.eq(type_.to_canonical_string(/* with_prefix */ true)),
-                    )
-                })
+                conn.first(
+                    move || {
+                        dsl::objects.filter(
+                            dsl::object_type.eq(type_.to_canonical_string(/* with_prefix */ true)),
+                        )
+                    },
+                    ctx.data_unchecked(),
+                )
                 .optional()
             })
             .await
