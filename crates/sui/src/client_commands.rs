@@ -388,7 +388,6 @@ pub enum SuiClientCommands {
     /// Pay SUI coins to recipients following following specified amounts, with input coins.
     /// Length of recipients must be the same as that of amounts.
     /// The input coins also include the coin for gas payment, so no extra gas coin is required.
-    #[clap(name = "test")]
     PaySui {
         /// The input coins to be used for pay recipients, including the gas coin.
         #[clap(long, num_args(1..))]
@@ -628,6 +627,7 @@ pub enum SuiClientCommands {
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
         /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
         /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
+        #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
