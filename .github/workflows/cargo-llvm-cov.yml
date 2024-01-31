@@ -25,7 +25,7 @@ env:
   RUST_BACKTRACE: short
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
-  CODECOV: true
+  CODECOV: 1
 
 jobs:
   cargo-llvm-cov:
@@ -64,7 +64,7 @@ jobs:
       - name: Run code coverage for simtest
         run: |
           ./scripts/simtest/install.sh
-          CODECOV=1 ./scripts/simtest/cargo-simtest simtest
+          ./scripts/simtest/cargo-simtest simtest
 
       - name: Upload report to Codecov for simtest
         uses: codecov/codecov-action@v3
