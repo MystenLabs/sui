@@ -15,6 +15,7 @@ use crate::{
     transactions_client::TransactionsConsumer,
 };
 
+use crate::storage::Store;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use mysten_metrics::monitored_scope;
 use tokio::sync::watch;
@@ -37,6 +38,8 @@ pub(crate) struct Core {
     signals: CoreSignals,
     /// The keypair to be used for block signing
     block_signer: NetworkKeyPair,
+    /// The node's storage
+    store: Arc<dyn Store>,
 }
 
 #[allow(dead_code)]
@@ -47,23 +50,40 @@ impl Core {
         block_manager: BlockManager,
         mut signals: CoreSignals,
         block_signer: NetworkKeyPair,
+        store: Arc<dyn Store>,
     ) -> Self {
-        // TODO: restore the threshold clock round based on the last quorum data in storage when crash/recover
-        let mut threshold_clock = ThresholdClock::new(0, context.clone());
+        // Recover the pending ancestors to ensure that we'll have a quorum of blocks to make progress.
+        let (mut last_proposed_block, mut all_pending_ancestors) = Block::genesis(context.clone());
 
-        // TODO: restore based on DagState, for now we just init via the genesis
-        let (genesis_my, mut genesis_others) = Block::genesis(context.clone());
-        genesis_others.push(genesis_my.clone());
+        // Now fetch the proposed blocks per authority for their last two rounds.
+        for (index, _authority) in context.committee.authorities() {
+            let blocks = store
+                .scan_last_blocks_by_author(index, 2)
+                .expect("Storage error while recovering Core");
 
-        // populate the threshold clock to properly advance the round & also the pending ancestors
-        let mut pending_ancestors: BTreeMap<Round, Vec<VerifiedBlock>> = BTreeMap::new();
-        for ancestor in genesis_others {
-            threshold_clock.add_block(ancestor.reference());
-            pending_ancestors
-                .entry(ancestor.round())
-                .or_default()
-                .push(ancestor)
+            if index == context.own_index && !blocks.is_empty() {
+                last_proposed_block = blocks.last().cloned().unwrap();
+            }
+            all_pending_ancestors.extend(blocks);
         }
+
+        // populate the threshold clock to properly advance the round & also populate the pending ancestors
+        let mut threshold_clock = ThresholdClock::new(0, context.clone());
+        let mut pending_ancestors = all_pending_ancestors.into_iter().fold(
+            BTreeMap::<Round, Vec<VerifiedBlock>>::new(),
+            |mut map, ancestor| {
+                threshold_clock.add_block(ancestor.reference());
+                map.entry(ancestor.round()).or_default().push(ancestor);
+                map
+            },
+        );
+
+        // We want as minimum to keep all the ancestors after or equal the last proposed block round. If though the threshold clock round is higher, then
+        // we can keep truncating up to the threshold_clock.round - 1 , so we can successfully make a proposal for the threshold_clock.round.
+        pending_ancestors.retain(|round, _| {
+            *round >= last_proposed_block.round()
+                && *round >= threshold_clock.get_round().saturating_sub(1)
+        });
 
         // emit a signal for the last threshold clock round, even if that's unnecessary it will ensure that the timeout
         // logic will trigger to attempt a block creation.
@@ -72,12 +92,13 @@ impl Core {
         Self {
             context,
             threshold_clock,
-            last_proposed_block: genesis_my,
+            last_proposed_block,
             transactions_consumer,
             pending_ancestors,
             block_manager,
             signals,
             block_signer,
+            store,
         }
     }
 
@@ -355,7 +376,156 @@ mod test {
 
     use super::*;
     use crate::block::TestBlock;
+    use crate::storage::mem_store::MemStore;
     use crate::transactions_client::TransactionsClient;
+
+    /// Recover Core and continue proposing from the last round which forms a quorum.
+    #[tokio::test]
+    async fn test_core_recover_from_store_for_full_round() {
+        let (context, mut key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let block_manager = BlockManager::new();
+        let (_transactions_client, tx_receiver) = TransactionsClient::new(
+            context.clone(),
+            context
+                .protocol_config
+                .consensus_max_transaction_size_bytes(),
+        );
+        let transactions_consumer = TransactionsConsumer::new(
+            tx_receiver,
+            context
+                .protocol_config
+                .consensus_max_block_transactions_size_bytes(),
+        );
+        let store = Arc::new(MemStore::new());
+
+        // Create test blocks for all the authorities for 4 rounds and populate them in store
+        let (_, mut last_round_blocks) = Block::genesis(context.clone());
+        let mut all_blocks = last_round_blocks.clone();
+        for round in 1..=4 {
+            let mut this_round_blocks = Vec::new();
+            for (index, _authority) in context.committee.authorities() {
+                let block = TestBlock::new(round, index.value() as u32)
+                    .set_ancestors(last_round_blocks.iter().map(|b| b.reference()).collect())
+                    .build();
+
+                this_round_blocks.push(VerifiedBlock::new_for_test(block));
+            }
+            all_blocks.extend(this_round_blocks.clone());
+            last_round_blocks = this_round_blocks;
+        }
+
+        // write them in store
+        store.write(all_blocks, vec![]).expect("Storage error");
+
+        // Now spin up core
+        let (signals, signal_receivers) = CoreSignals::new();
+        let mut core = Core::new(
+            context.clone(),
+            transactions_consumer,
+            block_manager,
+            signals,
+            key_pairs.remove(context.own_index.value()).0,
+            store,
+        );
+
+        // New round should be 5
+        let mut new_round = signal_receivers.new_round_receiver();
+        assert_eq!(*new_round.borrow_and_update(), 5);
+
+        // When trying to propose now we should propose block for round 5
+        let proposed_block = core
+            .try_new_block(true)
+            .expect("A block should have been created");
+        assert_eq!(proposed_block.round(), 5);
+        let ancestors = proposed_block.ancestors();
+
+        // Only ancestors of round 4 should be included.
+        assert_eq!(ancestors.len(), 4);
+        for ancestor in ancestors {
+            assert_eq!(ancestor.round, 4);
+        }
+    }
+
+    /// Recover Core and continue proposing when having a partial last round which doesn't form a quorum and we haven't
+    /// proposed for that round yet.
+    #[tokio::test]
+    async fn test_core_recover_from_store_for_partial_round() {
+        let (context, mut key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let block_manager = BlockManager::new();
+        let (_transactions_client, tx_receiver) = TransactionsClient::new(
+            context.clone(),
+            context
+                .protocol_config
+                .consensus_max_transaction_size_bytes(),
+        );
+        let transactions_consumer = TransactionsConsumer::new(
+            tx_receiver,
+            context
+                .protocol_config
+                .consensus_max_block_transactions_size_bytes(),
+        );
+        let store = Arc::new(MemStore::new());
+
+        // Create test blocks for all authorities except our's (index = 0) .
+        let (_, mut last_round_blocks) = Block::genesis(context.clone());
+        let mut all_blocks = last_round_blocks.clone();
+        for round in 1..=4 {
+            let mut this_round_blocks = Vec::new();
+
+            // For round 4 only produce f+1 blocks only skip our validator and that of position 1 from creating blocks.
+            let authorities_to_skip = if round == 4 {
+                context.committee.validity_threshold() as usize
+            } else {
+                // otherwise always skip creating a block for our authority
+                1
+            };
+
+            for (index, _authority) in context.committee.authorities().skip(authorities_to_skip) {
+                let block = TestBlock::new(round, index.value() as u32)
+                    .set_ancestors(last_round_blocks.iter().map(|b| b.reference()).collect())
+                    .build();
+                this_round_blocks.push(VerifiedBlock::new_for_test(block));
+            }
+            all_blocks.extend(this_round_blocks.clone());
+            last_round_blocks = this_round_blocks;
+        }
+
+        // write them in store
+        store.write(all_blocks, vec![]).expect("Storage error");
+
+        // Now spin up core
+        let (signals, signal_receivers) = CoreSignals::new();
+        let mut core = Core::new(
+            context.clone(),
+            transactions_consumer,
+            block_manager,
+            signals,
+            key_pairs.remove(context.own_index.value()).0,
+            store,
+        );
+
+        // New round should be 4
+        let mut new_round = signal_receivers.new_round_receiver();
+        assert_eq!(*new_round.borrow_and_update(), 4);
+
+        // When trying to propose now we should propose block for round 4
+        let proposed_block = core
+            .try_new_block(true)
+            .expect("A block should have been created");
+        assert_eq!(proposed_block.round(), 4);
+        let ancestors = proposed_block.ancestors();
+
+        assert_eq!(ancestors.len(), 4);
+        for ancestor in ancestors {
+            if ancestor.author == context.own_index {
+                assert_eq!(ancestor.round, 0);
+            } else {
+                assert_eq!(ancestor.round, 3);
+            }
+        }
+    }
 
     #[tokio::test]
     async fn test_core_propose_after_genesis() {
@@ -371,6 +541,7 @@ mod test {
         let (transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
         let transactions_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
+        let store = Arc::new(MemStore::new());
 
         let mut core = Core::new(
             context.clone(),
@@ -378,6 +549,7 @@ mod test {
             block_manager,
             signals,
             key_pairs.remove(context.own_index.value()).0,
+            store,
         );
 
         // Send some transactions
@@ -420,11 +592,10 @@ mod test {
         );
 
         // genesis blocks should be referenced
-        let (genesis_my, mut genesis_others) = Block::genesis(context);
-        genesis_others.push(genesis_my);
+        let (_genesis_my, all_genesis) = Block::genesis(context);
 
         for ancestor in block.ancestors() {
-            genesis_others
+            all_genesis
                 .iter()
                 .find(|block| block.reference() == *ancestor)
                 .expect("Block should be found amongst genesis blocks");
@@ -443,6 +614,7 @@ mod test {
         let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
         let transactions_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
+        let store = Arc::new(MemStore::new());
 
         let mut core = Core::new(
             context.clone(),
@@ -450,6 +622,7 @@ mod test {
             block_manager,
             signals,
             key_pairs.remove(context.own_index.value()).0,
+            store,
         );
 
         let mut expected_ancestors = BTreeSet::new();
@@ -651,6 +824,7 @@ mod test {
             let transactions_consumer =
                 TransactionsConsumer::new(tx_receiver, context.clone(), None);
             let (signals, signal_receivers) = CoreSignals::new();
+            let store = Arc::new(MemStore::new());
 
             let block_signer = signers.remove(index).0;
 
@@ -660,6 +834,7 @@ mod test {
                 block_manager,
                 signals,
                 block_signer,
+                store,
             );
 
             cores.push((core, signal_receivers));

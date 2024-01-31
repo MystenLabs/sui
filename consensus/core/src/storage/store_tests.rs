@@ -162,6 +162,17 @@ async fn scan_blocks(
             ]
         );
     }
+
+    {
+        let scanned_blocks = store
+            .scan_last_blocks_by_author(AuthorityIndex::new_for_test(1), 2)
+            .expect("Scan blocks should not fail");
+        assert_eq!(scanned_blocks.len(), 2, "{:?}", scanned_blocks);
+        assert_eq!(
+            scanned_blocks,
+            vec![written_blocks[7].clone(), additional_blocks[2].clone()]
+        );
+    }
 }
 
 #[rstest]

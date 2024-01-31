@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::VecDeque;
 use std::{
     ops::Bound::{Included, Unbounded},
     time::Duration,
@@ -147,6 +148,40 @@ impl Store for RocksDBStore {
             refs.push(BlockRef::new(round, author, digest));
         }
         let results = self.read_blocks(refs.as_slice())?;
+        let mut blocks = vec![];
+        for (r, block) in refs.into_iter().zip(results.into_iter()) {
+            blocks.push(
+                block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),
+            );
+        }
+        Ok(blocks)
+    }
+
+    // The method returns the last `num_of_rounds` rounds blocks by author in round ascending order.
+    fn scan_last_blocks_by_author(
+        &self,
+        author: AuthorityIndex,
+        num_of_rounds: u64,
+    ) -> ConsensusResult<Vec<VerifiedBlock>> {
+        let mut refs = VecDeque::new();
+        let mut total_rounds = 0;
+        for kv in self
+            .digests_by_authorities
+            .safe_range_iter((
+                Included((author, Round::MIN, BlockDigest::MIN)),
+                Included((author, Round::MAX, BlockDigest::MAX)),
+            ))
+            .skip_to_last()
+            .reverse()
+        {
+            let ((author, round, digest), _) = kv?;
+            refs.push_front(BlockRef::new(round, author, digest));
+            total_rounds += 1;
+            if total_rounds >= num_of_rounds {
+                break;
+            }
+        }
+        let results = self.read_blocks(refs.as_slices().0)?;
         let mut blocks = vec![];
         for (r, block) in refs.into_iter().zip(results.into_iter()) {
             blocks.push(
