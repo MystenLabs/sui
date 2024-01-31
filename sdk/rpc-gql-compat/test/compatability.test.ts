@@ -23,6 +23,7 @@ describe('GraphQL SuiClient compatibility', () => {
 	const graphQLClient = new SuiClient({
 		transport: new SuiClientGraphQLTransport({
 			url: DEFAULT_GRAPHQL_URL,
+			fallbackFullNodeUrl: getFullnodeUrl('localnet'),
 		}),
 	});
 
@@ -599,7 +600,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphql).toEqual(rpc);
 	});
 
-	test.skip('dryRunTransactionBlock', async () => {
+	test('dryRunTransactionBlock', async () => {
 		const txb = new TransactionBlock();
 		txb.setSender(toolbox.address());
 		const [coin] = txb.splitCoins(txb.gas, [1]);

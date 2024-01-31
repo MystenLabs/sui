@@ -57,15 +57,15 @@ export type GraphQLResponseErrors = Array<{
 export class SuiClientGraphQLTransport implements SuiTransport {
 	#options: SuiClientGraphQLTransportOptions;
 	#fallbackTransport?: SuiTransport;
-	#fallbackMethods: (keyof typeof RPC_METHODS)[] = [
-		'executeTransactionBlock',
-		'dryRunTransactionBlock',
-		'devInspectTransactionBlock',
-	];
+	#fallbackMethods: (keyof typeof RPC_METHODS)[];
 
 	constructor(options: SuiClientGraphQLTransportOptions) {
 		this.#options = options;
-		this.#fallbackMethods = [];
+		this.#fallbackMethods = options.fallbackMethods || [
+			'executeTransactionBlock',
+			'dryRunTransactionBlock',
+			'devInspectTransactionBlock',
+		];
 
 		if (options.fallbackFullNodeUrl) {
 			this.#fallbackTransport = new SuiHTTPTransport({
