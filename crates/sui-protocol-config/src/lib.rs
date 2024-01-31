@@ -106,6 +106,7 @@ const MAX_PROTOCOL_VERSION: u64 = 36;
 // Version 35: Add poseidon hash function.
 //             Enable coin deny list.
 // Version 36: Enable group operations native functions in devnet.
+//             Enable shared object deletion in mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1868,6 +1869,8 @@ impl ProtocolConfig {
                         cfg.group_ops_bls12381_msm_max_len = Some(32);
                         cfg.group_ops_bls12381_pairing_cost = Some(52);
                     }
+                    // Enable shared object deletion on all networks.
+                    cfg.feature_flags.shared_object_deletion = true;
                 }
                 // Use this template when making changes:
                 //
