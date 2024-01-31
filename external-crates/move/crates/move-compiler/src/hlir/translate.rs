@@ -2190,7 +2190,11 @@ enum Freeze {
     Sub(Vec<bool>),
 }
 
-fn needs_freeze(context: &Context, sp!(_, actual): &H::Type, sp!(_, expected): &H::Type) -> Freeze {
+fn needs_freeze(
+    _context: &Context,
+    sp!(_, actual): &H::Type,
+    sp!(_, expected): &H::Type,
+) -> Freeze {
     use H::Type_ as T;
     match (actual, expected) {
         (T::Unit, T::Unit) => Freeze::NotNeeded,
@@ -2215,7 +2219,7 @@ fn needs_freeze(context: &Context, sp!(_, actual): &H::Type, sp!(_, expected): &
             }
         }
         (_actual, _expected) => {
-            assert!(context.env.has_errors());
+            // `_actual` type might be unreachable
             Freeze::NotNeeded
         }
     }
