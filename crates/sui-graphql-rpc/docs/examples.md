@@ -303,7 +303,6 @@
 >    timestamp
 >    validatorSignatures
 >    previousCheckpointDigest
->    liveObjectSetDigest
 >    networkTotalTransactions
 >    rollingGasSummary {
 >      computationCost
@@ -313,6 +312,7 @@
 >    }
 >    epoch {
 >      epochId
+>      liveObjectSetDigest
 >    }
 >    transactionBlocks {
 >      edges {
@@ -332,14 +332,13 @@
 
 ### <a id=196610></a>
 ### With Timestamp Tx Block Live Objects
-####  Latest checkpoint's timestamp, liveObjectSetDigest, and transaction block data
+####  Latest checkpoint's timestamp, and transaction block data
 
 ><pre>{
 >  checkpoint {
 >    digest
 >    sequenceNumber
 >    timestamp
->    liveObjectSetDigest
 >    transactionBlocks {
 >      edges {
 >        node {
@@ -365,7 +364,6 @@
 >    digest
 >    sequenceNumber
 >    timestamp
->    liveObjectSetDigest
 >    transactionBlocks(
 >      filter: {
 >        signAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
@@ -515,7 +513,7 @@
 >    validatorSet {
 >      totalStake
 >      pendingActiveValidatorsSize
->      stakePoolMappingsSize
+>      stakingPoolMappingsSize
 >      inactivePoolsSize
 >      validatorCandidatesSize
 >      activeValidators {

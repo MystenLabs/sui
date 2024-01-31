@@ -38,7 +38,7 @@ Checkpoint created: 5
 task 9 'advance-epoch'. lines 31-32:
 Epoch advanced: 2
 
-task 10 'run-graphql'. lines 33-52:
+task 10 'run-graphql'. lines 33-62:
 Response: {
   "data": {
     "epoch": {
@@ -50,7 +50,9 @@ Response: {
               "name": "validator-0"
             }
           ]
-        }
+        },
+        "validatorCandidatesSize": 0,
+        "inactivePoolsId": "0x3e79098bee2cf7d5cdd6e31a71f608f22b90af2952ce19c031910186a5c9cca8"
       },
       "totalGasFees": "1000000",
       "totalStakeRewards": "1000000",
@@ -58,7 +60,10 @@ Response: {
       "fundSize": "15098160",
       "fundInflow": "1976000",
       "fundOutflow": "978120",
-      "netInflow": "997880"
+      "netInflow": "997880",
+      "transactionBlocks": {
+        "nodes": []
+      }
     }
   }
 }
