@@ -20,3 +20,12 @@ pub struct Rule {
 // the feature gate is needed to make it work for no_std and std
 #[cfg(feature = "user")]
 unsafe impl aya::Pod for Rule {}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct Meta {
+    pub ktime: u64,
+}
+
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for Meta {}

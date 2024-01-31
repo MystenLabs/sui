@@ -56,6 +56,7 @@ pub fn build_ebpf(opts: Options) -> Result<(), anyhow::Error> {
 
     let status = Command::new("cargo")
         .current_dir(dir)
+        .env("RUSTC_BOOTSTRAP", "1")
         .env_remove("RUSTUP_TOOLCHAIN")
         .args(&args)
         .status()
