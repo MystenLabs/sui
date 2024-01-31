@@ -2,7 +2,7 @@
 name = "NestedDeps"
 
 [dependencies]
-MoveNursery = { git = "https://github.com/move-language/move", rev = "781c844", subdir = "language/move-stdlib/nursery" }
+MoveNursery = { git = "https://github.com/MystenLabs/sui", rev = "5d8a867", subdir = "external-crates/move/crates/move-stdlib/nursery" }
 
 [addresses]
 std = "0x1"
