@@ -2,32 +2,72 @@ name: Code Coverage
 on:
   workflow_dispatch:
 
+env:
+  CARGO_TERM_COLOR: always
+  # Disable incremental compilation.
+  #
+  # Incremental compilation is useful as part of an edit-build-test-edit cycle,
+  # as it lets the compiler avoid recompiling code that hasn't changed. However,
+  # on CI, we're not making small edits; we're almost always building the entire
+  # project from scratch. Thus, incremental compilation on CI actually
+  # introduces *additional* overhead to support making future builds
+  # faster...but no future builds will ever occur in any given CI environment.
+  #
+  # See https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
+  # for details.
+  CARGO_INCREMENTAL: 0
+  # Allow more retries for network requests in cargo (downloading crates) and
+  # rustup (installing toolchains). This should help to reduce flaky CI failures
+  # from transient network timeouts or other issues.
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  # Don't emit giant backtraces in the CI logs.
+  RUST_BACKTRACE: short
+  # RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+  CODECOV: true
+
 jobs:
   cargo-llvm-cov:
     name: Generate code coverage
-    runs-on: ubuntu-ghcloud
+    runs-on: [ubuntu-ghcloud]
+    timeout-minutes: 120
     env:
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v4
       - uses: bmwill/rust-cache@v1
 
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+    
+      - name: Install nextest
+        uses: taiki-e/install-action@nextest
+
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
-          swap-size-gb: 256      
+          swap-size-gb: 256
 
       - name: Install Rust
         run: rustup update stable
+        
+      # - name: Run code coverage for nextest
+      #   run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest
 
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
+      # - name: Upload report to Codecov for nextest
+      #   uses: codecov/codecov-action@v3
+      #   with:
+      #     files: lcov.info
+      #     fail_ci_if_error: true
 
-      - name: Generate code coverage
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+      - name: Run code coverage for simtest
+        run: |
+          ./scripts/simtest/install.sh
+          CODECOV=1 ./scripts/simtest/cargo-simtest simtest
 
-      - name: Upload coverage to Codecov
+      - name: Upload report to Codecov for simtest
         uses: codecov/codecov-action@v3
         with:
           files: lcov.info
-          fail_ci_if_error: true
+          fail_ci_if_error: true          
