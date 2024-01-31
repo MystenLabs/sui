@@ -144,8 +144,7 @@ impl Header {
         Self::from_str(&contents)
     }
 
-    #[allow(clippy::ptr_arg)] // Allowed to avoid interface changes.
-    fn from_str(contents: &String) -> Result<Header> {
+    fn from_str(contents: &str) -> Result<Header> {
         let Schema { move_: header } =
             toml::de::from_str::<Schema<Header>>(contents).context("Deserializing lock header")?;
 
