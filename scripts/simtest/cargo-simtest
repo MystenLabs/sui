@@ -7,12 +7,6 @@ if [ "$1" != "simtest" ]; then
   exit 1
 fi
 
-CODE_COV=0
-if [ "$2" == "codecov" ]; then
-  CODE_COV=1
-  shift
-fi
-
 # consume simtest arg
 shift
 
@@ -99,8 +93,8 @@ if [ "$1" = "build" ]; then
   CARGO_COMMAND=(build --profile simulator)
 fi
 
-if [ $CODE_COV == 1 ]; then
-  CARGO_COMMAND=(llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest)
+if [ -n "$CODECOV" ]; then
+  CARGO_COMMAND=(llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest --cargo-profile simulator)
 fi
 
 # Must supply a new temp dir - the test is deterministic and can't choose one randomly itself.
