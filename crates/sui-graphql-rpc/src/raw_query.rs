@@ -186,11 +186,15 @@ macro_rules! or_filter {
 /// macro parameter. Subqueries are consumed into the new `RawQuery`.
 #[macro_export]
 macro_rules! query {
+    // Matches the case where no subqueries are provided. A `RawQuery` is constructed from the given
+    // select clause.
     ($select:expr) => {
         RawQuery::new($select, vec![])
     };
 
-    ($select:expr $(,$subquery:expr)*) => {{
+    // Expects a select clause and one or more subqueries. The select clause should contain curly
+    // braces for subqueries to be interpolated into.
+    ($select:expr $(,$subquery:expr)+) => {{
         use $crate::raw_query::RawQuery;
         let mut binds = vec![];
 
