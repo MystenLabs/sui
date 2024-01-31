@@ -15,9 +15,7 @@ use super::display::DisplayEntry;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::{MoveObject, MoveObjectImpl};
 use super::move_value::MoveValue;
-use super::object::{
-    self, validate_cursor_consistency, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus,
-};
+use super::object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus};
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::SuiAddress;
@@ -305,7 +303,7 @@ impl Coin {
         // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
         // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
         // paginated queries are consistent with the previous query that created the cursor.
-        let cursor_viewed_at = validate_cursor_consistency(page.after(), page.before())?;
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
 
         let response = db
