@@ -15,14 +15,22 @@ pub(crate) struct AvailableRange {
 #[Object]
 impl AvailableRange {
     async fn first(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
-        Checkpoint::query(ctx.data_unchecked(), CheckpointId::by_seq_num(self.first))
-            .await
-            .extend()
+        Checkpoint::query(
+            ctx.data_unchecked(),
+            CheckpointId::by_seq_num(self.first),
+            Some(self.last),
+        )
+        .await
+        .extend()
     }
 
     async fn last(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
-        Checkpoint::query(ctx.data_unchecked(), CheckpointId::by_seq_num(self.last))
-            .await
-            .extend()
+        Checkpoint::query(
+            ctx.data_unchecked(),
+            CheckpointId::by_seq_num(self.last),
+            Some(self.last),
+        )
+        .await
+        .extend()
     }
 }

@@ -30,7 +30,7 @@
 
 //# create-checkpoint 12
 
-//# run-graphql --cursors 6
+//# run-graphql --cursors {"checkpoint_viewed_at":null,"sequence_number":6}
 {
   checkpoints(first: 4, after: "@{cursor_0}") {
     pageInfo {
@@ -44,7 +44,7 @@
   }
 }
 
-//# run-graphql --cursors 6 8
+//# run-graphql --cursors {"checkpoint_viewed_at":null,"sequence_number":6} {"checkpoint_viewed_at":null,"sequence_number":8}
 {
   checkpoints(first: 4, after: "@{cursor_0}", before: "@{cursor_1}") {
     pageInfo {
@@ -58,7 +58,7 @@
   }
 }
 
-//# run-graphql --cursors 6
+//# run-graphql --cursors {"checkpoint_viewed_at":null,"sequence_number":6}
 {
   checkpoints(first: 4, before: "@{cursor_0}") {
     pageInfo {
@@ -72,7 +72,7 @@
   }
 }
 
-//# run-graphql --cursors 3 6
+//# run-graphql --cursors {"checkpoint_viewed_at":null,"sequence_number":3} {"checkpoint_viewed_at":null,"sequence_number":6}
 {
   checkpoints(first: 4, after: "@{cursor_0}" before: "@{cursor_1}") {
     pageInfo {
@@ -86,7 +86,7 @@
   }
 }
 
-//# run-graphql --cursors 3
+//# run-graphql --cursors {"checkpoint_viewed_at":null,"sequence_number":3}
 {
   checkpoints(first: 4, before: "@{cursor_0}") {
     pageInfo {
@@ -100,7 +100,7 @@
   }
 }
 
-//# run-graphql --cursors 6
+//# run-graphql --cursors {"checkpoint_viewed_at":null,"sequence_number":6}
 {
   checkpoints(last: 4, after: "@{cursor_0}") {
     pageInfo {
@@ -114,7 +114,7 @@
   }
 }
 
-//# run-graphql --cursors 4
+//# run-graphql --cursors {"checkpoint_viewed_at":null,"sequence_number":4}
 {
   checkpoints(before: "@{cursor_0}") {
     pageInfo {
@@ -128,7 +128,7 @@
   }
 }
 
-//# run-graphql --cursors 4
+//# run-graphql --cursors {"checkpoint_viewed_at":null,"sequence_number":4}
 {
   checkpoints(after: "@{cursor_0}") {
     pageInfo {
@@ -142,7 +142,7 @@
   }
 }
 
-//# run-graphql --cursors 6
+//# run-graphql --cursors {"checkpoint_viewed_at":null,"sequence_number":6}
 {
   checkpoints(last: 4, before: "@{cursor_0}") {
     pageInfo {
@@ -156,7 +156,7 @@
   }
 }
 
-//# run-graphql --cursors 3 6
+//# run-graphql --cursors {"checkpoint_viewed_at":null,"sequence_number":3} {"checkpoint_viewed_at":null,"sequence_number":6}
 {
   checkpoints(last: 4, after: "@{cursor_0}" before: "@{cursor_1}") {
     pageInfo {
@@ -170,7 +170,7 @@
   }
 }
 
-//# run-graphql --cursors 9
+//# run-graphql --cursors {"checkpoint_viewed_at":null,"sequence_number":9}
 {
   checkpoints(last: 4, after: "@{cursor_0}") {
     pageInfo {
