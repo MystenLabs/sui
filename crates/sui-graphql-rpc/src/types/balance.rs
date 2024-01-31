@@ -47,9 +47,11 @@ pub(crate) type Cursor = cursor::JsonCursor<BalanceCursor>;
 /// `checkpoint_viewed_at` sets the consistent upper bound for the cursor.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub(crate) struct BalanceCursor {
+    #[serde(rename = "t")]
     coin_type: String,
-    /// Since the `Balance` result is an aggregate query, the default value is set to None.
-    checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number this was viewed at.
+    #[serde(rename = "c")]
+    checkpoint_viewed_at: u64,
 }
 
 impl Balance {
@@ -118,9 +120,7 @@ impl Balance {
         let mut conn = Connection::new(prev, next);
 
         for stored in results {
-            let cursor = stored
-                .consistent_cursor(checkpoint_viewed_at)
-                .encode_cursor();
+            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
             let balance = Balance::try_from(stored)?;
             conn.edges.push(Edge::new(cursor, balance));
         }
@@ -147,23 +147,16 @@ impl RawPaginated<Cursor> for StoredBalance {
 }
 
 impl Target<Cursor> for StoredBalance {
-    fn cursor(&self) -> Cursor {
+    fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
         Cursor::new(BalanceCursor {
             coin_type: self.coin_type.clone(),
-            checkpoint_viewed_at: None,
-        })
-    }
-
-    fn consistent_cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
-        Cursor::new(BalanceCursor {
-            coin_type: self.coin_type.clone(),
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         })
     }
 }
 
 impl Checkpointed for Cursor {
-    fn checkpoint_viewed_at(&self) -> Option<u64> {
+    fn checkpoint_viewed_at(&self) -> u64 {
         self.checkpoint_viewed_at
     }
 }
