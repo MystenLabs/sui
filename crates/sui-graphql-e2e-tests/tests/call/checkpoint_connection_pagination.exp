@@ -1,4 +1,4 @@
-processed 17 tasks
+processed 18 tasks
 
 task 1 'create-checkpoint'. lines 31-31:
 Checkpoint created: 12
@@ -8,10 +8,35 @@ Response: {
   "data": {
     "checkpoints": {
       "pageInfo": {
-        "hasPreviousPage": false,
-        "hasNextPage": false
+        "hasPreviousPage": true,
+        "hasNextPage": true
       },
-      "edges": []
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6N30",
+          "node": {
+            "sequenceNumber": 7
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6OH0",
+          "node": {
+            "sequenceNumber": 8
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6OX0",
+          "node": {
+            "sequenceNumber": 9
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
+          "node": {
+            "sequenceNumber": 10
+          }
+        }
+      ]
     }
   }
 }
@@ -21,10 +46,17 @@ Response: {
   "data": {
     "checkpoints": {
       "pageInfo": {
-        "hasPreviousPage": false,
-        "hasNextPage": false
+        "hasPreviousPage": true,
+        "hasNextPage": true
       },
-      "edges": []
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6N30",
+          "node": {
+            "sequenceNumber": 7
+          }
+        }
+      ]
     }
   }
 }
@@ -39,25 +71,25 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MH0",
+          "cursor": "eyJjIjoxMiwicyI6MH0",
           "node": {
             "sequenceNumber": 0
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MX0",
+          "cursor": "eyJjIjoxMiwicyI6MX0",
           "node": {
             "sequenceNumber": 1
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6Mn0",
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
           "node": {
             "sequenceNumber": 2
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6M30",
+          "cursor": "eyJjIjoxMiwicyI6M30",
           "node": {
             "sequenceNumber": 3
           }
@@ -72,10 +104,23 @@ Response: {
   "data": {
     "checkpoints": {
       "pageInfo": {
-        "hasPreviousPage": false,
-        "hasNextPage": false
+        "hasPreviousPage": true,
+        "hasNextPage": true
       },
-      "edges": []
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6NH0",
+          "node": {
+            "sequenceNumber": 4
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6NX0",
+          "node": {
+            "sequenceNumber": 5
+          }
+        }
+      ]
     }
   }
 }
@@ -86,31 +131,25 @@ Response: {
     "checkpoints": {
       "pageInfo": {
         "hasPreviousPage": false,
-        "hasNextPage": false
+        "hasNextPage": true
       },
       "edges": [
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MH0",
+          "cursor": "eyJjIjoxMiwicyI6MH0",
           "node": {
             "sequenceNumber": 0
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MX0",
+          "cursor": "eyJjIjoxMiwicyI6MX0",
           "node": {
             "sequenceNumber": 1
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6Mn0",
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
           "node": {
             "sequenceNumber": 2
-          }
-        },
-        {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6M30",
-          "node": {
-            "sequenceNumber": 3
           }
         }
       ]
@@ -128,25 +167,25 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6OX0",
+          "cursor": "eyJjIjoxMiwicyI6OX0",
           "node": {
             "sequenceNumber": 9
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MTB9",
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
           "node": {
             "sequenceNumber": 10
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MTF9",
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
           "node": {
             "sequenceNumber": 11
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MTJ9",
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
           "node": {
             "sequenceNumber": 12
           }
@@ -162,37 +201,31 @@ Response: {
     "checkpoints": {
       "pageInfo": {
         "hasPreviousPage": false,
-        "hasNextPage": false
+        "hasNextPage": true
       },
       "edges": [
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MH0",
+          "cursor": "eyJjIjoxMiwicyI6MH0",
           "node": {
             "sequenceNumber": 0
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MX0",
+          "cursor": "eyJjIjoxMiwicyI6MX0",
           "node": {
             "sequenceNumber": 1
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6Mn0",
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
           "node": {
             "sequenceNumber": 2
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6M30",
+          "cursor": "eyJjIjoxMiwicyI6M30",
           "node": {
             "sequenceNumber": 3
-          }
-        },
-        {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6NH0",
-          "node": {
-            "sequenceNumber": 4
           }
         }
       ]
@@ -205,10 +238,59 @@ Response: {
   "data": {
     "checkpoints": {
       "pageInfo": {
-        "hasPreviousPage": false,
+        "hasPreviousPage": true,
         "hasNextPage": false
       },
-      "edges": []
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6NX0",
+          "node": {
+            "sequenceNumber": 5
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6Nn0",
+          "node": {
+            "sequenceNumber": 6
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6N30",
+          "node": {
+            "sequenceNumber": 7
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6OH0",
+          "node": {
+            "sequenceNumber": 8
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6OX0",
+          "node": {
+            "sequenceNumber": 9
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
+          "node": {
+            "sequenceNumber": 10
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
+          "node": {
+            "sequenceNumber": 11
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
+          "node": {
+            "sequenceNumber": 12
+          }
+        }
+      ]
     }
   }
 }
@@ -218,10 +300,35 @@ Response: {
   "data": {
     "checkpoints": {
       "pageInfo": {
-        "hasPreviousPage": false,
-        "hasNextPage": false
+        "hasPreviousPage": true,
+        "hasNextPage": true
       },
-      "edges": []
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
+          "node": {
+            "sequenceNumber": 2
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6M30",
+          "node": {
+            "sequenceNumber": 3
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6NH0",
+          "node": {
+            "sequenceNumber": 4
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6NX0",
+          "node": {
+            "sequenceNumber": 5
+          }
+        }
+      ]
     }
   }
 }
@@ -231,10 +338,23 @@ Response: {
   "data": {
     "checkpoints": {
       "pageInfo": {
-        "hasPreviousPage": false,
-        "hasNextPage": false
+        "hasPreviousPage": true,
+        "hasNextPage": true
       },
-      "edges": []
+      "edges": [
+        {
+          "cursor": "eyJjIjoxMiwicyI6NH0",
+          "node": {
+            "sequenceNumber": 4
+          }
+        },
+        {
+          "cursor": "eyJjIjoxMiwicyI6NX0",
+          "node": {
+            "sequenceNumber": 5
+          }
+        }
+      ]
     }
   }
 }
@@ -244,30 +364,24 @@ Response: {
   "data": {
     "checkpoints": {
       "pageInfo": {
-        "hasPreviousPage": false,
+        "hasPreviousPage": true,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6OX0",
-          "node": {
-            "sequenceNumber": 9
-          }
-        },
-        {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MTB9",
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
           "node": {
             "sequenceNumber": 10
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MTF9",
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
           "node": {
             "sequenceNumber": 11
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MTJ9",
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
           "node": {
             "sequenceNumber": 12
           }
@@ -287,79 +401,79 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MH0",
+          "cursor": "eyJjIjoxMiwicyI6MH0",
           "node": {
             "sequenceNumber": 0
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MX0",
+          "cursor": "eyJjIjoxMiwicyI6MX0",
           "node": {
             "sequenceNumber": 1
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6Mn0",
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
           "node": {
             "sequenceNumber": 2
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6M30",
+          "cursor": "eyJjIjoxMiwicyI6M30",
           "node": {
             "sequenceNumber": 3
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6NH0",
+          "cursor": "eyJjIjoxMiwicyI6NH0",
           "node": {
             "sequenceNumber": 4
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6NX0",
+          "cursor": "eyJjIjoxMiwicyI6NX0",
           "node": {
             "sequenceNumber": 5
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6Nn0",
+          "cursor": "eyJjIjoxMiwicyI6Nn0",
           "node": {
             "sequenceNumber": 6
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6N30",
+          "cursor": "eyJjIjoxMiwicyI6N30",
           "node": {
             "sequenceNumber": 7
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6OH0",
+          "cursor": "eyJjIjoxMiwicyI6OH0",
           "node": {
             "sequenceNumber": 8
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6OX0",
+          "cursor": "eyJjIjoxMiwicyI6OX0",
           "node": {
             "sequenceNumber": 9
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MTB9",
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
           "node": {
             "sequenceNumber": 10
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MTF9",
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
           "node": {
             "sequenceNumber": 11
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MTJ9",
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
           "node": {
             "sequenceNumber": 12
           }
@@ -379,25 +493,25 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MH0",
+          "cursor": "eyJjIjoxMiwicyI6MH0",
           "node": {
             "sequenceNumber": 0
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MX0",
+          "cursor": "eyJjIjoxMiwicyI6MX0",
           "node": {
             "sequenceNumber": 1
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6Mn0",
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
           "node": {
             "sequenceNumber": 2
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6M30",
+          "cursor": "eyJjIjoxMiwicyI6M30",
           "node": {
             "sequenceNumber": 3
           }
@@ -417,25 +531,25 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6OX0",
+          "cursor": "eyJjIjoxMiwicyI6OX0",
           "node": {
             "sequenceNumber": 9
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MTB9",
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
           "node": {
             "sequenceNumber": 10
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MTF9",
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
           "node": {
             "sequenceNumber": 11
           }
         },
         {
-          "cursor": "eyJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MTIsInNlcXVlbmNlX251bWJlciI6MTJ9",
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
           "node": {
             "sequenceNumber": 12
           }
@@ -454,6 +568,28 @@ Response: {
       "locations": [
         {
           "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "checkpoints"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 17 'run-graphql'. lines 243-256:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "The provided cursors are taken from different checkpoints and cannot be used together in the same query.",
+      "locations": [
+        {
+          "line": 3,
           "column": 3
         }
       ],
