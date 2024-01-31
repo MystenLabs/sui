@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { beforeAll, describe, expect, test } from 'vitest';
+
+import { TransactionBlock } from '../../typescript/src/builder/index.js';
 import {
 	getFullnodeUrl,
 	SuiClient,
 	SuiObjectData,
 	SuiTransactionBlockResponse,
-} from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { beforeAll, describe, expect, test } from 'vitest';
-
+} from '../../typescript/src/client/index.js';
 import { publishPackage, setup, TestToolbox } from '../../typescript/test/e2e/utils/setup';
 import { SuiClientGraphQLTransport } from '../src/transport';
 

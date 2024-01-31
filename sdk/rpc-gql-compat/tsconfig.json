@@ -5,7 +5,11 @@
 		"module": "CommonJS",
 		"outDir": "dist/cjs",
 		"isolatedModules": true,
-		"rootDir": "src"
+		"rootDir": "src",
+		"paths": {
+			"@mysten/sui.js/client": ["../../typescrupt/src/client"],
+			"@mysten/sui.js/transactions": ["../../typescript/src/builder"]
+		}
 	},
 	"references": [{ "path": "../wallet-standard" }, { "path": "../typescript" }]
 }
