@@ -1,0 +1,100 @@
+---
+title: Pagination
+---
+
+{@include: ../../snippets/info-graphql-release.mdx}
+
+
+## Multiple data in one query
+
+The previous RPC service required multiple queries for more complex data retrieval. Now, with GraphQL, you can specify the data you need in one single query.
+
+For example, the following query retrieves the first 20 transaction blocks (along with the digest, the sender's address, the gas object used to pay for the transaction, the gas price, and the gas budget) after a specific transaction block at epoch `97`. In the previous RPC, this would have required multiple API calls.
+
+```graphql
+# Fetch the first 10 transactions for epoch 97
+query {
+  epoch(id: 97) {
+    transactionBlocks(first: 10) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+        cursor
+        node {
+          digest
+          sender {
+            address
+          }
+          effects {
+            gasEffects {
+              gasObject {
+                address
+              }
+            }
+          }
+          gasInput {
+            gasPrice
+            gasBudget
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+:::info
+By default, the number of results is limited to 50 items. To learn more about how GraphQL works with pagination, check out the official [documentation](https://graphql.org/learn/pagination/) and our following section on pagination.
+:::
+
+## Pagination
+
+Sui GraphQL RPC limits the number of items that are returned in a request. The default page limit size is set to 50 items. If there are more items requested than the max default page limit, use `cursors` to navigate between pages. A cursor refers to a specific position in the dataset. To access the start and end cursors of a page, use the `pageInfo` field  that exposes the cursor data and two additional fields indicating if there is a previous or next page. For example, if we want to get the `checkpoints` data:
+
+```graphql
+query {
+  checkpoints {
+    pageInfo {
+      hasPreviousPage
+      hasNextPage
+      startCursor
+      endCursor
+    }
+  }
+}
+```
+
+The query's result is:
+
+```json
+{
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true,
+        "startCursor": "MA",
+        "endCursor": "NA"
+      }
+    }
+  }
+}
+```
+
+The `pageInfo.startCursor` and `pageInfo.endCursor` indicate the index of the first and last item in the response. You can use `pageInfo.hasNextPage` to determine if there is a next page, and then use the `endCursor`'s value and pass it to the `after` filter in the connection to traverse the next set of elements:
+
+```graphql
+query {
+  checkpoints(after: "MA") {
+    nodes {
+      digest
+    }
+  }
+}
+```
+
+:::info
+When using pagination filters, you can only specify `first` or `last`, but not both.
+:::

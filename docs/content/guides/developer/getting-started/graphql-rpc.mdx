@@ -14,7 +14,7 @@ The online IDE is available for [mainnet](https://sui-mainnet.mystenlabs.com/gra
 - Both [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql) services are rate-limited to keep network throughput optimized.
 :::
 
-For more details about some concepts used in the examples below, please see the [GraphQL concepts](concepts/graphql-rpc.mdx) page.
+For more details about some concepts used in the examples below, please see the [GraphQL concepts](concepts/graphql-rpc.mdx) page, and consult the [reference](../../../references/sui-api/graphql) for full documentation on the supported schema.
 
 
 ## Discovering the schema
@@ -101,7 +101,7 @@ query {
 This example finds all the transactions that touched (modified/transferred/deleted) a given object. This is useful for when we want to trace the flow of a Coin/StakeSui/NFT.
 
 :::info
-This example uses GraphQL [variables](/concepts/graphql-rpc.mdx#working-with-variables) and [pagination](/concepts/graphql-rpc.mdx#pagination). When using the online IDE, copy the variables JSON to the "Variables" window, below the main editor.
+This example uses GraphQL [variables](/concepts/graphql-rpc/variables) and [pagination](/concepts/graphql-rpc/pagination). When using the online IDE, copy the variables JSON to the "Variables" window, below the main editor.
 :::
 
 ```graphql
@@ -213,7 +213,7 @@ query ($address: SuiAddress!) {
 ## Finding the coins owned by an address and accumulate their balances
 
 :::info
-This example uses aliases and [fragments](/concepts/graphql-rpc#fragments).
+This example uses aliases and [fragments](/concepts/graphql-rpc/fragments).
 :::
 
 ```graphql
@@ -356,28 +356,3 @@ Other examples can also be found in the [repository](https://github.com/MystenLa
 :::info
 Examples in the repository are designed to work with the version of GraphQL RPC built at the same revision. The links above point to examples intended for [GraphQL v2024.1](https://github.com/MystenLabs/sui/tree/releases/sui-graphql-rpc-v2024.1.0-release), the latest production version at the time of writing.
 :::
-
-## Limits
-
-The Sui GraphQL RPC service is rate-limited on all available instances to keep network throughput optimized and to protect against excessive or abusive calls to the service.
-
-### Rate limits
-Queries are rate-limited at the number of attempts per minute to ensure high availability of the service to all users.
-
-### Query limits
-
-In addition to rate limits, queries are also validated against a number of rules on their complexity, such as the number of nodes, the depth of the query, or their payload size.
-These limits can be retrieved by querying the `serviceConfig` field. An example of how to query for some of the available limits (at the time of this writing) follows:
-
-```graphql
-{
-  serviceConfig {
-    maxQueryDepth
-    maxQueryNodes
-    maxDbQueryCost
-    requestTimeoutMs
-    maxPageSize
-    maxQueryPayloadSize
-  }
-}
-```
