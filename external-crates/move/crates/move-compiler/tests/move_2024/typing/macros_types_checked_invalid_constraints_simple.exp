@@ -9,7 +9,7 @@ error[E05001]: ability constraint not satisfied
  7 │     macro fun bar<$T>(_: NeedsCopy<$T>) {}
    │                          ^^^^^^^^^^^^^ 'copy' constraint not satisifed
    ·
-13 │         bar!<None>(NeedsCopy {});
+14 │         bar!<None>(NeedsCopy {});
    │              ---- The type 'a::m::None' does not have the ability 'copy'
 
 error[E05001]: ability constraint not satisfied
@@ -23,7 +23,7 @@ error[E05001]: ability constraint not satisfied
  9 │     macro fun baz<$T>(): NeedsCopy<$T> { abort 0 }
    │                          ^^^^^^^^^^^^^ 'copy' constraint not satisifed
    ·
-14 │         baz!<None>(); // TODO do not complain about dead code?
+18 │         baz!<None>(); // TODO do not complain about dead code?
    │              ---- The type 'a::m::None' does not have the ability 'copy'
 
 warning[W09005]: dead or unreachable code
@@ -35,7 +35,7 @@ warning[W09005]: dead or unreachable code
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:12:9
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:13:9
    │
  2 │     public struct None()
    │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
@@ -43,7 +43,7 @@ error[E05001]: ability constraint not satisfied
  5 │     macro fun foo<$T: copy>() {}
    │                       ---- 'copy' constraint declared here
    ·
-12 │         foo!<None>();
+13 │         foo!<None>();
    │         ^^^^^^^^^^^^
    │         │    │
    │         │    The type 'a::m::None' does not have the ability 'copy'

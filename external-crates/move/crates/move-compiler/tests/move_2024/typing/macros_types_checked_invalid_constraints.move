@@ -18,6 +18,7 @@ module a::m {
         NeedsCopy {}
     }
 
+    #[allow(dead_code)]
     fun t() {
         // type args don't satisify constraints
         foo!<None, NeedsCopy<bool>>(0, &mut 1, NeedsCopy {});

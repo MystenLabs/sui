@@ -10,6 +10,7 @@ module a::m {
         let _: NeedsCopy<$U> = NeedsCopy {};
     }
 
+    #[allow(dead_code)]
     fun t() {
         foo!<u64, NeedsCopy<bool>>(0, &mut 1, NeedsCopy {});
     }

@@ -8,9 +8,14 @@ module a::m {
 
     macro fun baz<$T>(): NeedsCopy<$T> { abort 0 }
 
+    #[allow(dead_code)]
     fun t() {
         foo!<None>();
         bar!<None>(NeedsCopy {});
+    }
+
+    fun t2() {
         baz!<None>(); // TODO do not complain about dead code?
     }
+
 }

@@ -9,7 +9,7 @@ error[E05001]: ability constraint not satisfied
  9 │     macro fun needs_copy<$T, $U, $V>(_: X<$T>, _: $U, $v: $V): X<$U> {
    │                                         ^^^^^ 'copy' constraint not satisifed
    ·
-15 │         needs_copy!<None, None, None>(X(), None(), None());
+16 │         needs_copy!<None, None, None>(X(), None(), None());
    │                     ---- The type 'a::m::None' does not have the ability 'copy'
 
 error[E05001]: ability constraint not satisfied
@@ -23,7 +23,7 @@ error[E05001]: ability constraint not satisfied
  9 │     macro fun needs_copy<$T, $U, $V>(_: X<$T>, _: $U, $v: $V): X<$U> {
    │                                                                ^^^^^ 'copy' constraint not satisifed
    ·
-15 │         needs_copy!<None, None, None>(X(), None(), None());
+16 │         needs_copy!<None, None, None>(X(), None(), None());
    │                           ---- The type 'a::m::None' does not have the ability 'copy'
 
 error[E05001]: ability constraint not satisfied
@@ -38,7 +38,7 @@ error[E05001]: ability constraint not satisfied
 10 │         mycopy(&$v);
    │         ^^^^^^^^^^^ 'copy' constraint not satisifed
    ·
-15 │         needs_copy!<None, None, None>(X(), None(), None());
+16 │         needs_copy!<None, None, None>(X(), None(), None());
    │                                 ---- The type 'a::m::None' does not have the ability 'copy'
 
 error[E05001]: ability constraint not satisfied
@@ -52,6 +52,6 @@ error[E05001]: ability constraint not satisfied
 11 │         X()
    │         ^^^ 'copy' constraint not satisifed
    ·
-15 │         needs_copy!<None, None, None>(X(), None(), None());
+16 │         needs_copy!<None, None, None>(X(), None(), None());
    │                           ---- The type 'a::m::None' does not have the ability 'copy'
 

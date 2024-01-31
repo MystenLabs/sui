@@ -6,3 +6,11 @@ error[E04032]: unable to expand macro function
   │
   = 'macro' parameters are substituted without being evaluated. There is no local variable to assign to
 
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_2024/typing/macro_arg_by_name_invalid_usage_deref.move:9:14
+  │
+9 │         foo!(*x);
+  │              ^^ Unused macro argument. Its expression will not be type checked and it will not evaluated
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

@@ -11,6 +11,7 @@ module a::m {
         X()
     }
 
+    #[allow(dead_code)]
     fun t() {
         needs_copy!<None, None, None>(X(), None(), None());
     }

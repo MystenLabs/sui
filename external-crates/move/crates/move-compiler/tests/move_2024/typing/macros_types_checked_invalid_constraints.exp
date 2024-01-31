@@ -9,7 +9,7 @@ error[E05001]: ability constraint not satisfied
  8 │         $_n: NeedsCopy<$T>,
    │              ^^^^^^^^^^^^^ 'copy' constraint not satisifed
    ·
-23 │         foo!<None, NeedsCopy<bool>>(0, &mut 1, NeedsCopy {});
+24 │         foo!<None, NeedsCopy<bool>>(0, &mut 1, NeedsCopy {});
    │              ---- The type 'a::m::None' does not have the ability 'copy'
 
 error[E05001]: ability constraint not satisfied
@@ -23,7 +23,7 @@ error[E05001]: ability constraint not satisfied
 10 │         let _: NeedsCopy<$U> = NeedsCopy {};
    │                ^^^^^^^^^^^^^ 'copy' constraint not satisifed
    ·
-25 │         foo!<u64, None>(0, &mut 1, NeedsCopy {});
+26 │         foo!<u64, None>(0, &mut 1, NeedsCopy {});
    │                   ---- The type 'a::m::None' does not have the ability 'copy'
 
 error[E05001]: ability constraint not satisfied
@@ -37,7 +37,7 @@ error[E05001]: ability constraint not satisfied
 10 │         let _: NeedsCopy<$U> = NeedsCopy {};
    │                                ^^^^^^^^^^^^ 'copy' constraint not satisifed
    ·
-25 │         foo!<u64, None>(0, &mut 1, NeedsCopy {});
+26 │         foo!<u64, None>(0, &mut 1, NeedsCopy {});
    │                   ---- The type 'a::m::None' does not have the ability 'copy'
 
 error[E04010]: cannot infer type
@@ -57,7 +57,7 @@ error[E05001]: ability constraint not satisfied
 17 │     macro fun ret2<$T>(): NeedsCopy<$T> {
    │                           ^^^^^^^^^^^^^ 'copy' constraint not satisifed
    ·
-27 │         ret2!<None>();
+28 │         ret2!<None>();
    │               ---- The type 'a::m::None' does not have the ability 'copy'
 
 error[E05001]: ability constraint not satisfied
@@ -71,11 +71,11 @@ error[E05001]: ability constraint not satisfied
 18 │         NeedsCopy {}
    │         ^^^^^^^^^^^^ 'copy' constraint not satisifed
    ·
-27 │         ret2!<None>();
+28 │         ret2!<None>();
    │               ---- The type 'a::m::None' does not have the ability 'copy'
 
 error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:23:9
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:24:9
    │
  2 │     public struct None()
    │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
@@ -83,42 +83,42 @@ error[E05001]: ability constraint not satisfied
  5 │     macro fun foo<$T: copy, $U>(
    │                       ---- 'copy' constraint declared here
    ·
-23 │         foo!<None, NeedsCopy<bool>>(0, &mut 1, NeedsCopy {});
+24 │         foo!<None, NeedsCopy<bool>>(0, &mut 1, NeedsCopy {});
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │    │
    │         │    The type 'a::m::None' does not have the ability 'copy'
    │         'copy' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:24:19
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:25:19
    │
  2 │     public struct None()
    │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
  3 │     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;
    │                                        ---- 'copy' constraint declared here
    ·
-24 │         foo!<u64, NeedsCopy<None>>(0, &mut 1, NeedsCopy {});
+25 │         foo!<u64, NeedsCopy<None>>(0, &mut 1, NeedsCopy {});
    │                   ^^^^^^^^^^^^^^^
    │                   │         │
    │                   │         The type 'a::m::None' does not have the ability 'copy'
    │                   'copy' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:26:9
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:27:9
    │
  2 │     public struct None()
    │                   ---- To satisfy the constraint, the 'drop' ability would need to be added here
    ·
-26 │         ret!<None>();
+27 │         ret!<None>();
    │         ^^^^^^^^^^^^
    │         │    │
    │         │    The type 'a::m::None' does not have the ability 'drop'
    │         Cannot ignore values without the 'drop' ability. The value must be used
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:26:14
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:27:14
    │
-26 │         ret!<None>();
+27 │         ret!<None>();
    │         -----^^^^---
    │         │    │
    │         │    Invalid type annotation

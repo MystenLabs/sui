@@ -2865,14 +2865,17 @@ fn expand_macro(
             // bind the locals
             let mut seq: VecDeque<_> = by_value_args
                 .into_iter()
-                .map(|(v, e)| {
-                    let lvalue_ = N::LValue_::Var {
-                        mut_: None,
-                        var: v,
-                        unused_binding: false,
+                .map(|(sp!(vloc, v_), e)| {
+                    let lvalue_ = match v_ {
+                        Some(var_) => N::LValue_::Var {
+                            mut_: None,
+                            var: sp(vloc, var_),
+                            unused_binding: false,
+                        },
+                        None => N::LValue_::Ignore,
                     };
-                    let lvalue = sp(v.loc, lvalue_);
-                    let lvalues = sp(lvalue.loc, vec![lvalue]);
+                    let lvalue = sp(vloc, lvalue_);
+                    let lvalues = sp(vloc, vec![lvalue]);
                     let b = bind_list(context, lvalues, Some(e.ty.clone()));
                     let lvalue_ty = lvalues_expected_types(context, &b);
                     sp(b.loc, TS::Bind(b, lvalue_ty, Box::new(e)))

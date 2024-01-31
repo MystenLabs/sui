@@ -16,11 +16,15 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 type LambdaMap = BTreeMap<Var_, (N::Lambda, Vec<Type>, Type)>;
 type ArgMap = BTreeMap<Var_, (N::Exp, Type)>;
+struct ParamInfo {
+    argument: Option<EitherArg<Loc, Loc>>,
+    used: bool,
+}
 
 struct Context<'a, 'b> {
     core: &'a mut core::Context<'b>,
     // used for removing unbound params
-    all_params: BTreeMap<Var_, /* is bound to a value (by-name or by-value) */ bool>,
+    all_params: BTreeMap<Var_, ParamInfo>,
     // used for expanding lambda calls in VarCall
     lambdas: LambdaMap,
     // used for expanding by-name arguments in Var usage
@@ -30,7 +34,7 @@ struct Context<'a, 'b> {
 }
 
 pub struct ExpandedMacro {
-    pub by_value_args: Vec<(Var, T::Exp)>,
+    pub by_value_args: Vec<(Spanned<Option<Var_>>, T::Exp)>,
     pub body: Box<N::Exp>,
 }
 
@@ -82,19 +86,27 @@ pub(crate) fn call(
     // make separate out by-value and by-name arguments
     let mut all_params: BTreeMap<_, _> = macro_params
         .iter()
-        .map(|(_, sp!(_, v_), _)| (*v_, false))
+        .map(|(_, sp!(_, v_), _)| {
+            let info = ParamInfo {
+                argument: None,
+                used: false,
+            };
+            (*v_, info)
+        })
         .collect();
     let mut lambdas = BTreeMap::new();
     let mut by_name_args = BTreeMap::new();
     let mut by_value_args = vec![];
     for ((_, param, _param_ty), arg) in macro_params.into_iter().zip(args) {
-        if param.value.name == symbol!("_") {
-            // skip ignored args
-            continue;
-        }
-        let arg_ty = match &arg {
-            Arg::ByValue(e) => e.ty.clone(),
-            Arg::ByName((_, ty)) => ty.clone(),
+        let param_loc = param.loc;
+        let param = if param.value.name == symbol!("_") {
+            None
+        } else {
+            Some(param.value)
+        };
+        let (arg_loc, arg_ty) = match &arg {
+            Arg::ByValue(e) => (EitherArg::ByValue(e.exp.loc), e.ty.clone()),
+            Arg::ByName((e, ty)) => (EitherArg::ByName(e.loc), ty.clone()),
         };
         let unfolded = core::unfold_type(&context.subst, arg_ty);
         if let sp!(_, Type_::Fun(param_tys, result_ty)) = unfolded {
@@ -108,23 +120,28 @@ pub(crate) fn call(
                 }
                 Arg::ByName((e, _)) => e,
             };
-            bind_lambda(
-                context,
-                &mut lambdas,
-                param.value,
-                arg_exp,
-                param_tys,
-                *result_ty,
-            )?;
+            if let Some(v) = param {
+                bind_lambda(context, &mut lambdas, v, arg_exp, param_tys, *result_ty)?
+            }
         } else {
             match arg {
-                Arg::ByValue(e) => by_value_args.push((param, e)),
+                Arg::ByValue(e) => by_value_args.push((sp(param_loc, param), e)),
                 Arg::ByName((e, expected_ty)) => {
-                    by_name_args.insert(param.value, (e, expected_ty));
+                    if let Some(v) = param {
+                        by_name_args.insert(v, (e, expected_ty));
+                    }
                 }
             }
         }
-        all_params.insert(param.value, true);
+        if let Some(v) = param {
+            let info = ParamInfo {
+                argument: Some(arg_loc),
+                used: false,
+            };
+            all_params.insert(v, info);
+        } else {
+            report_unused_argument(context, arg_loc);
+        }
     }
     let break_labels: BTreeSet<_> = BTreeSet::from([return_label]);
     let mut context = Context {
@@ -136,6 +153,7 @@ pub(crate) fn call(
         macro_color: next_color,
     };
     block(&mut context, &mut macro_body);
+    context.report_unused_arguments();
     let mut wrapped_body = Box::new(sp(call_loc, N::Exp_::Block(macro_body)));
     for label in break_labels {
         let seq = (
@@ -555,8 +573,37 @@ fn recolor_exp_dotted(ctx: &mut Recolor, sp!(_, ed_): &mut N::ExpDotted) {
 }
 
 //**************************************************************************************************
-// recolor
+// subst args
 //**************************************************************************************************
+
+impl Context<'_, '_> {
+    fn mark_used(&mut self, v: &Var_) {
+        self.all_params.get_mut(v).unwrap().used = true;
+    }
+
+    fn report_unused_arguments(self) {
+        let unused = self
+            .all_params
+            .into_values()
+            .filter(|info| !info.used)
+            .filter_map(|info| info.argument);
+        for loc in unused {
+            report_unused_argument(self.core, loc)
+        }
+    }
+}
+
+fn report_unused_argument(context: &mut core::Context, loc: EitherArg<Loc, Loc>) {
+    let loc = match loc {
+        EitherArg::ByValue(_) => return, // will be evaluated
+        EitherArg::ByName(loc) => loc,
+    };
+    let msg = "Unused macro argument. \
+    Its expression will not be type checked and it will not evaluated";
+    context
+        .env
+        .add_diag(diag!(UnusedItem::DeadCode, (loc, msg)));
+}
 
 fn types(context: &mut Context, tys: &mut [Type]) {
     for ty in tys {
@@ -710,10 +757,12 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         // Lambda cases
         ///////
         N::Exp_::Var(sp!(_, v_)) if context.lambdas.contains_key(v_) => {
+            context.mark_used(v_);
             let (lambda, _, _) = context.lambdas.get(v_).unwrap();
             *e_ = N::Exp_::Lambda(lambda.clone());
         }
         N::Exp_::VarCall(sp!(_, v_), sp!(argloc, es)) if context.lambdas.contains_key(v_) => {
+            context.mark_used(v_);
             exps(context, es);
             // param_ty and result_ty have already been substituted
             let (
@@ -801,6 +850,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         // Argument cases
         ///////
         N::Exp_::Var(sp!(_, v_)) if context.by_name_args.contains_key(v_) => {
+            context.mark_used(v_);
             let (mut arg, expected_ty) = context.by_name_args.get(v_).cloned().unwrap();
             // recolor the arg in case it is used more than once
             let next_color = context.core.next_variable_color();
@@ -823,6 +873,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             *e_ = N::Exp_::Annotate(Box::new(arg), expected_ty);
         }
         N::Exp_::VarCall(sp!(_, v_), _) if context.by_name_args.contains_key(v_) => {
+            context.mark_used(v_);
             let (arg, _expected_ty) = context.by_name_args.get(v_).unwrap();
             context.core.env.add_diag(diag!(
                 TypeSafety::CannotExpandMacro,
@@ -836,7 +887,10 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         // Other var cases
         ///////
         N::Exp_::Var(sp!(_, v_)) => {
-            let is_unbound_param = context.all_params.get(v_).is_some_and(|is_bound| !is_bound);
+            let is_unbound_param = context
+                .all_params
+                .get(v_)
+                .is_some_and(|info| info.argument.is_none());
             if is_unbound_param {
                 assert!(!context.lambdas.contains_key(v_));
                 assert!(!context.by_name_args.contains_key(v_));
@@ -849,7 +903,10 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         }
         N::Exp_::VarCall(sp!(_, v_), sp!(_, es)) => {
             exps(context, es);
-            let is_unbound_param = context.all_params.get(v_).is_some_and(|is_bound| !is_bound);
+            let is_unbound_param = context
+                .all_params
+                .get(v_)
+                .is_some_and(|info| info.argument.is_none());
             if is_unbound_param {
                 assert!(!context.lambdas.contains_key(v_));
                 assert!(!context.by_name_args.contains_key(v_));

@@ -10,6 +10,7 @@ module a::m {
         let _: NeedsCopy<$U> = NeedsCopy {};
     }
 
+    #[allow(dead_code)]
     fun t() {
         // simple args don't check
         foo!<u64, NeedsCopy<bool>>(false, &mut 1, NeedsCopy {});
