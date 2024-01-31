@@ -36,7 +36,7 @@ use super::{
     address::Address,
     base64::Base64,
     checkpoint::Checkpoint,
-    cursor::{self, Page, Paginated, Target},
+    cursor::{self, Checkpointed, Page, Paginated, Target},
     digest::Digest,
     epoch::Epoch,
     gas::GasInput,
@@ -190,7 +190,9 @@ impl TransactionBlock {
             return Ok(None);
         };
 
-        Epoch::query(ctx.data_unchecked(), Some(*id)).await.extend()
+        Epoch::query(ctx.data_unchecked(), Some(*id), self.checkpoint_viewed_at)
+            .await
+            .extend()
     }
 
     /// Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
@@ -318,7 +320,7 @@ impl TransactionBlock {
         filter: TransactionBlockFilter,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, TransactionBlock>, Error> {
-        let cursor_viewed_at = validate_cursor_consistency(page.after(), page.before())?;
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
 
         let response = db
@@ -330,7 +332,7 @@ impl TransactionBlock {
 
                 let result = page.paginate_query::<StoredTransaction, _, _, _>(
                     conn,
-                    Some(checkpoint_viewed_at),
+                    checkpoint_viewed_at,
                     move || {
                         use transactions as tx;
                         let mut query = tx::dsl::transactions.into_boxed();
@@ -558,6 +560,12 @@ impl Target<Cursor> for StoredTransaction {
     }
 }
 
+impl Checkpointed for Cursor {
+    fn checkpoint_viewed_at(&self) -> Option<u64> {
+        self.checkpoint_viewed_at
+    }
+}
+
 impl TryFrom<StoredTransaction> for TransactionBlockInner {
     type Error = Error;
 
@@ -602,25 +610,5 @@ impl TryFrom<TransactionBlockEffects> for TransactionBlock {
             inner,
             checkpoint_viewed_at,
         })
-    }
-}
-
-pub(crate) fn validate_cursor_consistency(
-    after: Option<&Cursor>,
-    before: Option<&Cursor>,
-) -> Result<Option<u64>, Error> {
-    match (after, before) {
-        (Some(after_cursor), Some(before_cursor)) => {
-            if after_cursor.checkpoint_viewed_at == before_cursor.checkpoint_viewed_at {
-                Ok(after_cursor.checkpoint_viewed_at)
-            } else {
-                Err(Error::Client(
-                    "Cursors are inconsistent and cannot be used together in the same query."
-                        .to_string(),
-                ))
-            }
-        }
-        (Some(cursor), None) | (None, Some(cursor)) => Ok(cursor.checkpoint_viewed_at),
-        (None, None) => Ok(None),
     }
 }

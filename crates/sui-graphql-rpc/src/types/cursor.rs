@@ -105,6 +105,10 @@ pub(crate) trait Target<C: CursorType> {
     }
 }
 
+pub(crate) trait Checkpointed {
+    fn checkpoint_viewed_at(&self) -> Option<u64>;
+}
+
 impl<C> JsonCursor<C> {
     pub(crate) fn new(cursor: C) -> Self {
         JsonCursor(OpaqueCursor(cursor))
@@ -180,6 +184,31 @@ impl<C> Page<C> {
     }
 }
 
+impl<C> Page<C>
+where
+    C: Checkpointed,
+{
+    /// If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
+    /// consistent. Otherwise, use the value from the parameter, or set to None. This is so that
+    /// paginated queries are consistent with the previous query that created the cursor.
+    pub(crate) fn validate_cursor_consistency(&self) -> Result<Option<u64>, Error> {
+        match (self.after(), self.before()) {
+            (Some(after), Some(before)) => {
+                if after.checkpoint_viewed_at() == before.checkpoint_viewed_at() {
+                    Ok(after.checkpoint_viewed_at())
+                } else {
+                    Err(Error::Client(
+                        "The provided cursors are taken from different checkpoints and cannot be used together in the same query."
+                            .to_string(),
+                    ))
+                }
+            }
+            (Some(cursor), None) | (None, Some(cursor)) => Ok(cursor.checkpoint_viewed_at()),
+            (None, None) => Ok(None),
+        }
+    }
+}
+
 impl Page<JsonCursor<usize>> {
     /// Treat the cursors of this Page as indices into a range [0, total). Returns two booleans
     /// indicating whether there is a previous or next page in the range, followed by an iterator of
@@ -217,7 +246,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
     pub(crate) fn paginate_query<T, Q, ST, GB>(
         &self,
         conn: &mut Conn<'_>,
-        checkpoint_viewed_at: Option<u64>, // TODO (wlmyng) make this required once all paginable types have this value threaded through
+        checkpoint_viewed_at: u64,
         query: Q,
     ) -> QueryResult<(bool, bool, impl Iterator<Item = T>)>
     where
@@ -259,14 +288,12 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         };
 
         Ok(self.paginate_results(
-            results.first().map(|f| match checkpoint_viewed_at {
-                Some(checkpoint_viewed_at) => f.consistent_cursor(checkpoint_viewed_at),
-                None => f.cursor(),
-            }),
-            results.last().map(|l| match checkpoint_viewed_at {
-                Some(checkpoint_viewed_at) => l.consistent_cursor(checkpoint_viewed_at),
-                None => l.cursor(),
-            }),
+            results
+                .first()
+                .map(|f| f.consistent_cursor(checkpoint_viewed_at)),
+            results
+                .last()
+                .map(|l| l.consistent_cursor(checkpoint_viewed_at)),
             results,
         ))
     }
