@@ -19,6 +19,9 @@ use async_graphql::{connection::Connection, *};
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub(crate) struct Address {
     pub address: SuiAddress,
+    /// The checkpoint sequence number at which this was viewed at, or None if the data was
+    /// requested at the latest checkpoint.
+    pub checkpoint_viewed_at: Option<u64>,
 }
 
 /// The possible relationship types for a transaction block: sign, sent, received, or paid.
@@ -34,7 +37,7 @@ pub(crate) enum AddressTransactionBlockRelationship {
 #[Object]
 impl Address {
     pub(crate) async fn address(&self) -> SuiAddress {
-        OwnerImpl(self.address).address().await
+        OwnerImpl::from(self).address().await
     }
 
     /// Objects owned by this address, optionally `filter`-ed.
@@ -47,7 +50,7 @@ impl Address {
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, MoveObject>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -59,7 +62,7 @@ impl Address {
         ctx: &Context<'_>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        OwnerImpl(self.address).balance(ctx, type_).await
+        OwnerImpl::from(self).balance(ctx, type_).await
     }
 
     /// The balances of all coin types owned by this address.
@@ -71,7 +74,7 @@ impl Address {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .balances(ctx, first, after, last, before)
             .await
     }
@@ -88,7 +91,7 @@ impl Address {
         before: Option<object::Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .coins(ctx, first, after, last, before, type_)
             .await
     }
@@ -102,14 +105,14 @@ impl Address {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .staked_suis(ctx, first, after, last, before)
             .await
     }
 
     /// The domain explicitly configured as the default domain pointing to this address.
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl(self.address).default_suins_name(ctx).await
+        OwnerImpl::from(self).default_suins_name(ctx).await
     }
 
     /// The SuinsRegistration NFTs owned by this address. These grant the owner the capability to
@@ -122,7 +125,7 @@ impl Address {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, SuinsRegistration>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .suins_registrations(ctx, first, after, last, before)
             .await
     }
@@ -157,8 +160,22 @@ impl Address {
             return Ok(Connection::new(false, false));
         };
 
-        TransactionBlock::paginate(ctx.data_unchecked(), page, filter)
-            .await
-            .extend()
+        TransactionBlock::paginate(
+            ctx.data_unchecked(),
+            page,
+            filter,
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
+    }
+}
+
+impl From<&Address> for OwnerImpl {
+    fn from(address: &Address) -> Self {
+        OwnerImpl {
+            address: address.address,
+            checkpoint_viewed_at: address.checkpoint_viewed_at,
+        }
     }
 }

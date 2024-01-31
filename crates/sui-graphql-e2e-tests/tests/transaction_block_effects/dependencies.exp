@@ -57,12 +57,12 @@ Response: {
               "pageInfo": {
                 "hasPreviousPage": false,
                 "hasNextPage": false,
-                "startCursor": "MA",
-                "endCursor": "MQ"
+                "startCursor": "eyJpIjowLCJjIjoxfQ",
+                "endCursor": "eyJpIjoxLCJjIjoxfQ"
               },
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjoxfQ",
                   "node": {
                     "digest": "AYB8vogQozoV4YWagH7wyXu8tANoES7aTWi6AySbDVwv",
                     "kind": {
@@ -107,6 +107,24 @@ Response: {
                       }
                     }
                   }
+                },
+                {
+                  "cursor": "eyJpIjoxLCJjIjoxfQ",
+                  "node": {
+                    "digest": "EXm6yrqzNSRtZL6ZtfYn1xCLYgjVdXjPt772jyPXQftz",
+                    "kind": {
+                      "__typename": "ProgrammableTransactionBlock",
+                      "transactions": {
+                        "nodes": [
+                          {},
+                          {
+                            "module": "package",
+                            "functionName": "make_immutable"
+                          }
+                        ]
+                      }
+                    }
+                  }
                 }
               ]
             }
@@ -129,12 +147,12 @@ Response: {
               "pageInfo": {
                 "hasPreviousPage": true,
                 "hasNextPage": false,
-                "startCursor": "MQ",
-                "endCursor": "MQ"
+                "startCursor": "eyJpIjoxLCJjIjoxfQ",
+                "endCursor": "eyJpIjoxLCJjIjoxfQ"
               },
               "edges": [
                 {
-                  "cursor": "MQ",
+                  "cursor": "eyJpIjoxLCJjIjoxfQ",
                   "node": {
                     "digest": "EdTEVPC7MKFpt7Zs2p9fVSrssbGGEY1Td8mPw3sLYuBo",
                     "kind": {

@@ -165,6 +165,14 @@ pub struct RunGraphqlCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct ForceObjectSnapshotCatchup {
+    #[clap(long = "start-cp")]
+    pub start_cp: u64,
+    #[clap(long = "end-cp")]
+    pub end_cp: u64,
+}
+
+#[derive(Debug, clap::Parser)]
 pub struct CreateCheckpointCommand {
     pub count: Option<u64>,
 }
@@ -214,6 +222,8 @@ pub enum SuiSubcommand {
     ViewCheckpoint,
     #[clap(name = "run-graphql")]
     RunGraphql(RunGraphqlCommand),
+    #[clap(name = "force-object-snapshot-catchup")]
+    ForceObjectSnapshotCatchup(ForceObjectSnapshotCatchup),
 }
 
 #[derive(Clone, Debug)]
