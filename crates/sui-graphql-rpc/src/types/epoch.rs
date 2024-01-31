@@ -71,6 +71,7 @@ impl Epoch {
             inactive_pools_size: Some(system_state.inactive_pools_size),
             validator_candidates_id: Some(system_state.validator_candidates_id.into()),
             validator_candidates_size: Some(system_state.validator_candidates_size),
+            checkpoint_viewed_at,
         };
         Ok(Some(validator_set))
     }

@@ -230,6 +230,12 @@ impl Checkpoint {
         }))
     }
 
+    pub(crate) async fn query_latest_checkpoint_sequence_number(db: &Db) -> Result<u64, Error> {
+        db.execute(move |conn| Checkpoint::latest_checkpoint_sequence_number(conn))
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))
+    }
+
     /// Queries the database for the upper bound of the available range supported by the graphql
     /// server. This method takes a connection, so that it can be used in an execute_repeatable
     /// transaction.
