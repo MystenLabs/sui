@@ -98,9 +98,9 @@ impl Epoch {
     }
 
     /// The total number of transaction blocks in this epoch.
-    async fn total_transactions(&self) -> Result<Option<BigInt>> {
+    async fn total_transactions(&self) -> Result<Option<u64>> {
         // TODO: this currently returns None for the current epoch. Fix this.
-        Ok(self.stored.epoch_total_transactions.map(BigInt::from))
+        Ok(self.stored.epoch_total_transactions.map(|v| v as u64))
     }
 
     /// The total amount of gas fees (in MIST) that were paid in this epoch.
@@ -170,27 +170,19 @@ impl Epoch {
     /// A commitment by the committee at the end of epoch on the contents of the live object set at
     /// that time. This can be used to verify state snapshots.
     async fn live_object_set_digest(&self) -> Result<Option<String>> {
-        self.stored
-            .epoch_commitments
-            .as_ref()
-            .map(|commitments| {
-                bcs::from_bytes::<Vec<EpochCommitment>>(commitments)
-                    .map_err(|e| {
-                        Error::Internal(format!("Error deserializing commitments: {e}")).extend()
-                    })
-                    .map(|commitments| {
-                        commitments
-                            .into_iter()
-                            .map(|commitment| {
-                                let EpochCommitment::ECMHLiveObjectSetDigest(digest) = commitment;
-                                Base58::encode(digest.digest.into_inner())
-                            })
-                            .next()
-                    })
-                    .transpose()
-            })
-            .flatten()
-            .transpose()
+        let Some(commitments) = self.stored.epoch_commitments.as_ref() else {
+            return Ok(None);
+        };
+        let commitments: Vec<EpochCommitment> = bcs::from_bytes(commitments).map_err(|e| {
+            Error::Internal(format!("Error deserializing commitments: {e}")).extend()
+        })?;
+
+        let digest = commitments.into_iter().next().map(|commitment| {
+            let EpochCommitment::ECMHLiveObjectSetDigest(digest) = commitment;
+            Base58::encode(digest.digest.into_inner())
+        });
+
+        Ok(digest)
     }
 
     /// The epoch's corresponding checkpoints.

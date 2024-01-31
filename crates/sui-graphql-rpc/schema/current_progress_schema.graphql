@@ -1006,7 +1006,7 @@ type Epoch {
 	"""
 	The total number of transaction blocks in this epoch.
 	"""
-	totalTransactions: BigInt
+	totalTransactions: Int
 	"""
 	The total amount of gas fees (in MIST) that were paid in this epoch.
 	"""
@@ -3323,7 +3323,7 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	"""
 	requestedEpoch: Epoch
 	"""
-	The id of the validator staking pool this stake belongs to.
+	The object id of the validator staking pool this stake belongs to.
 	"""
 	poolId: SuiAddress
 	"""

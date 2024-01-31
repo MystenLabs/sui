@@ -7,7 +7,6 @@
     timestamp
     validatorSignatures
     previousCheckpointDigest
-    liveObjectSetDigest
     networkTotalTransactions
     rollingGasSummary {
       computationCost
@@ -17,6 +16,7 @@
     }
     epoch {
       epochId
+      liveObjectSetDigest
     }
     transactionBlocks {
       edges {

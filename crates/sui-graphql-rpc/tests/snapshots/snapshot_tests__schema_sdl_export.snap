@@ -390,11 +390,6 @@ type Checkpoint {
 	"""
 	previousCheckpointDigest: String
 	"""
-	A commitment by the committee at the end of epoch on the contents of the live object set at
-	that time. This can be used to verify state snapshots.
-	"""
-	liveObjectSetDigest: String
-	"""
 	The total number of transaction blocks in the network by the end of this checkpoint.
 	"""
 	networkTotalTransactions: Int
@@ -1015,7 +1010,7 @@ type Epoch {
 	"""
 	The total number of transaction blocks in this epoch.
 	"""
-	totalTransactions: BigInt
+	totalTransactions: Int
 	"""
 	The total amount of gas fees (in MIST) that were paid in this epoch.
 	"""
@@ -1077,6 +1072,11 @@ type Epoch {
 	Parameters related to the subsidy that supplements staking rewards
 	"""
 	systemStakeSubsidy: StakeSubsidy
+	"""
+	A commitment by the committee at the end of epoch on the contents of the live object set at
+	that time. This can be used to verify state snapshots.
+	"""
+	liveObjectSetDigest: String
 	"""
 	The epoch's corresponding checkpoints.
 	"""
@@ -3327,7 +3327,7 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	"""
 	requestedEpoch: Epoch
 	"""
-	The id of the validator staking pool this stake belongs to.
+	The object id of the validator staking pool this stake belongs to.
 	"""
 	poolId: SuiAddress
 	"""

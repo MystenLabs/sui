@@ -309,7 +309,7 @@ impl StakedSui {
             .extend()
     }
 
-    /// The id of the validator staking pool this stake belongs to.
+    /// The object id of the validator staking pool this stake belongs to.
     async fn pool_id(&self) -> Option<SuiAddress> {
         Some(self.native.pool_id().into())
     }
