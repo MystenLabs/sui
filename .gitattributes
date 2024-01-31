@@ -8,4 +8,4 @@ crates/sui-open-rpc/spec/openrpc.json text eol=lf
 sui_core/tests/staged/sui.yaml text eol=lf
 
 # These files are auto generated
-sdk/typescript/src/graphql/generated.ts linguist-generated=true
+sdk/rpc-gql-compat/src//queries/generated.ts linguist-generated=true

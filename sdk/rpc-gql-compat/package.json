@@ -60,10 +60,6 @@
 		"@graphql-typed-document-node/core": "^3.2.0",
 		"@mysten/bcs": "workspace:*",
 		"@mysten/sui.js": "workspace:*",
-		"gql.tada": "^1.1.0",
-		"graphql": "^16.8.1",
-		"mitt": "^3.0.1",
-		"nanostores": "^0.9.3",
-		"valibot": "^0.25.0"
+		"graphql": "^16.8.1"
 	}
 }
