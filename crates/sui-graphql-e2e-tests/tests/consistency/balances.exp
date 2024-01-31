@@ -1,0 +1,485 @@
+processed 25 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1 'publish'. lines 19-49:
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 15663600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'create-checkpoint'. lines 51-51:
+Checkpoint created: 1
+
+task 3 'programmable'. lines 53-55:
+mutated: object(0,0), object(1,1), object(1,5)
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 3972672, non_refundable_storage_fee: 40128
+
+task 4 'create-checkpoint'. lines 57-57:
+Checkpoint created: 2
+
+task 5 'transfer-object'. lines 59-59:
+mutated: object(0,0), object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 6 'create-checkpoint'. lines 61-61:
+Checkpoint created: 3
+
+task 7 'transfer-object'. lines 63-63:
+mutated: object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 9 'create-checkpoint'. lines 67-67:
+Checkpoint created: 4
+
+task 11 'create-checkpoint'. lines 71-71:
+Checkpoint created: 5
+
+task 13 'create-checkpoint'. lines 75-75:
+Checkpoint created: 6
+
+task 15 'create-checkpoint'. lines 79-79:
+Checkpoint created: 7
+
+task 16 'run-graphql'. lines 81-101:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "600"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999983336400"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                  },
+                  "coinObjectCount": 3,
+                  "totalBalance": "600"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "700"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999982296272"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                  },
+                  "coinObjectCount": 3,
+                  "totalBalance": "700"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "500"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "500"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "400"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 17 'force-object-snapshot-catchup'. lines 104-104:
+Objects snapshot updated to [0 to 2)
+
+task 18 'run-graphql'. lines 106-126:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "600"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999983336400"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                  },
+                  "coinObjectCount": 3,
+                  "totalBalance": "600"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "700"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999982296272"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                  },
+                  "coinObjectCount": 3,
+                  "totalBalance": "700"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "500"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "500"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "400"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 19 'force-object-snapshot-catchup'. lines 129-129:
+Objects snapshot updated to [0 to 3)
+
+task 20 'run-graphql'. lines 131-151:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": null,
+            "allBalances": {
+              "nodes": []
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "700"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999982296272"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                  },
+                  "coinObjectCount": 3,
+                  "totalBalance": "700"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "500"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "500"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "400"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 21 'force-object-snapshot-catchup'. lines 154-154:
+Objects snapshot updated to [0 to 4)
+
+task 22 'run-graphql'. lines 156-176:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": null,
+            "allBalances": {
+              "nodes": []
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": null,
+            "allBalances": {
+              "nodes": []
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "500"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "500"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": {
+              "totalBalance": "400"
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 23 'force-object-snapshot-catchup'. lines 179-179:
+Objects snapshot updated to [0 to 6)
+
+task 24 'run-graphql'. lines 181-201:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "fakeCoinBalance": null,
+            "allBalances": {
+              "nodes": []
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": null,
+            "allBalances": {
+              "nodes": []
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": null,
+            "allBalances": {
+              "nodes": []
+            }
+          }
+        },
+        {
+          "sender": {
+            "fakeCoinBalance": null,
+            "allBalances": {
+              "nodes": []
+            }
+          }
+        }
+      ]
+    }
+  }
+}
