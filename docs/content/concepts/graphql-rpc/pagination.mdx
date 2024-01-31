@@ -4,7 +4,7 @@ title: Pagination
 
 {@include: ../../snippets/info-graphql-release.mdx}
 
-GraphQL supports queries that fetches multiple different kinds of data, potentially nested. For example, the following query retrieves the first 20 transaction blocks (along with the digest, the sender's address, the gas object used to pay for the transaction, the gas price, and the gas budget) after a specific transaction block at epoch `97`.
+GraphQL supports queries that fetch multiple kinds of data, potentially nested. For example, the following query retrieves the first 20 transaction blocks (along with the digest, the sender's address, the gas object used to pay for the transaction, the gas price, and the gas budget) after a specific transaction block at epoch `97`.
 
 ```graphql
 query {
@@ -77,7 +77,7 @@ The GraphQL service does not support consistent pagination for arbitrarily old c
 }
 ```
 
-The results are the first and last checkpoint for which pagination will continue to work and produce a consitent result. At the time of writing the available range offers a 5 to 15 minute buffer period to finish pagination in.
+The results are the first and last checkpoint for which pagination will continue to work and produce a consistent result. At the time of writing the available range offers a 5 to 15 minute buffer period to finish pagination in.
 
 ## Page Limits
 
