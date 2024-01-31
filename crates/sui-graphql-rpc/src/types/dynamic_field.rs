@@ -9,7 +9,6 @@ use sui_indexer::types_v2::{ObjectStatus, OwnerType};
 use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
 
-use super::checkpoint::Checkpoint;
 use super::cursor::{Page, Target};
 use super::object::{
     self, deserialize_move_struct, validate_cursor_consistency, Object, ObjectKind, ObjectLookupKey,
@@ -18,6 +17,7 @@ use super::type_filter::ExactTypeFilter;
 use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
 };
+use crate::consistency::consistent_range;
 use crate::context_data::package_cache::PackageCache;
 use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
@@ -206,14 +206,9 @@ impl DynamicField {
 
         let Some(((prev, next, results), checkpoint_viewed_at)) = db
             .execute_repeatable(move |conn| {
-                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
-
-                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
-                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
-                        return Ok::<_, diesel::result::Error>(None);
-                    }
-                    rhs = checkpoint_viewed_at;
-                }
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
 
                 let result = page.paginate_raw_query::<StoredHistoryObject>(
                     conn,

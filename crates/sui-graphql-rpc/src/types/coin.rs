@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::consistency::{build_objects_query, consistent_range, View};
 use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
+use crate::filter;
 use crate::raw_query::RawQuery;
-use crate::{filter, query};
 
 use super::balance::{self, Balance};
 use super::base64::Base64;
 use super::big_int::BigInt;
-use super::checkpoint::Checkpoint;
 use super::cursor::{Page, Target};
 use super::display::DisplayEntry;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
@@ -310,14 +310,9 @@ impl Coin {
 
         let response = db
             .execute_repeatable(move |conn| {
-                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
-
-                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
-                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
-                        return Ok::<_, diesel::result::Error>(None);
-                    }
-                    rhs = checkpoint_viewed_at;
-                }
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
 
                 let result = page.paginate_raw_query::<StoredHistoryObject>(
                     conn,
@@ -381,50 +376,9 @@ impl TryFrom<&MoveObject> for Coin {
 }
 
 fn coins_query(coin_type: TypeTag, owner: Option<SuiAddress>, lhs: i64, rhs: i64) -> RawQuery {
-    // Construct the filtered inner query - apply the same filtering criteria to both
-    // objects_snapshot and objects_history tables.
-    let mut snapshot_objs = query!(r#"SELECT * FROM objects_snapshot"#);
-    snapshot_objs = apply_filter(snapshot_objs, &coin_type, owner);
-
-    // Additionally filter objects_history table for results between the available range, or
-    // checkpoint_viewed_at, if provided.
-    let mut history_objs = query!(r#"SELECT * FROM objects_history"#);
-    history_objs = apply_filter(history_objs, &coin_type, owner);
-    history_objs = filter!(
-        history_objs,
-        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
-    );
-
-    // Combine the two queries, and select the most recent version of each object.
-    let candidates = query!(
-        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ({})) o"#,
-        snapshot_objs,
-        history_objs
-    )
-    .order_by("object_id")
-    .order_by("object_version DESC");
-
-    // Objects that fulfill the filtering criteria may not be the most recent version available.
-    // Left join the candidates table on newer to filter out any objects that have a newer
-    // version.
-    let mut newer = query!("SELECT object_id, object_version FROM objects_history");
-    newer = filter!(
-        newer,
-        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
-    );
-    let query = query!(
-        r#"
-        SELECT candidates.*
-        FROM ({}) candidates
-        LEFT JOIN ({}) newer
-        ON (
-            candidates.object_id = newer.object_id
-            AND candidates.object_version < newer.object_version
-        )"#,
-        candidates,
-        newer
-    );
-    filter!(query, "newer.object_version IS NULL")
+    build_objects_query(View::Consistent, lhs, rhs, move |query| {
+        apply_filter(query, &coin_type, owner)
+    })
 }
 
 fn apply_filter(mut query: RawQuery, coin_type: &TypeTag, owner: Option<SuiAddress>) -> RawQuery {
