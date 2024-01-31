@@ -1,20 +1,25 @@
 ---
 title: Coin Standard
+description: The Sui Coin standard enables you to create a broad range of fungible tokens on the Sui network to satisfy a number of use cases. The Coin standed on Sui is equivalent to the ERC-20 technical standard on Ethereum. 
 ---
 
-The Coin standard is the technical standard used for smart contracts on Sui for implementing tokens on the blockchain. The standardization of coin creation on Sui means that wallets, exchanges, and other smart contracts can manage tokens created on Sui the same as the SUI token, without any additional processing logic. 
+The Coin standard is the technical standard used for smart contracts on Sui for implementing coin-type tokens on the blockchain. The standardization of coin creation on Sui means that wallets, exchanges, and other smart contracts can manage tokens created on Sui the same as they manage SUI, without any additional processing logic. 
 
-Although tokens on Sui follow the Coin standard, they still offer specialized abilities. For example, a [closed-loop token](./closed-loop-token.mdx) allows its creator to limit access and set up custom policies defining its usage. Similarly, you can create a regulated coin that allows its creator to add specific addresses to a deny list, so that the identified addresses cannot use the coin as inputs to transactions.
+See [Sui Tokenomics](../concepts/tokenomics.mdx) to learn more about the SUI native coin and its use on the Sui network.
+
+Although coin-type tokens on Sui follow the Coin standard, they can offer specialized abilities. For example, you can create a regulated token that allows its creator to add specific addresses to a deny list, so that the identified addresses cannot use the token as inputs to transactions.
+
+See the [coin module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui-framework/coin.md) documentation for all available options when creating a coin-type token on Sui. 
 
 ## Fungible tokens
 
-Coins are fungible tokens, which means there are many of a specific type and each coin of that type is the same as the next. If you created a regulated coin and named it REGCOIN, then you could mint as many of those coins as you wanted and each REGCOIN would have the same properties as the next. 
+Coin-type tokens are fungible tokens by definition, which means there are many of a specific type (`Coin`) and each token of that type is the same as the next. If you created a regulated token and named it REGCOIN, then you could mint as many of those tokens as you wanted and each REGCOIN would have the same properties as the next.
 
-### Basket
+### Basket tokens
 
-Basket tokens are a synthetic token that represent a "basket" of underlying assets. These underlying assets can be various cryptocurrencies like SUI, stocks, commodities, or other financial instruments. The key idea is that the basket token's value is derived from the combined value of these multiple assets. Although the basket of assets can be a number of different items, the basket coin itself is fungible.
+Basket tokens are a synthetic token that represent a "basket" of underlying assets. These underlying assets can be various cryptocurrencies like SUI, stocks, commodities, or other financial instruments. The key idea is that the basket token's value is derived from the combined value of these multiple assets. Although the basket of assets can be a number of different items, the basket token itself is fungible.
 
-#### Basket token example 
+This example creates an in-game currency called a GEM. The GEM is a basket token because it represents a certain number of SUI. In the example, the user can buy fungible GEMs using SUI, which can then be used as currency within the game.  
 
 ```mdx-code-block
 <details>
@@ -28,8 +33,90 @@ Basket tokens are a synthetic token that represent a "basket" of underlying asse
 </details>
 ```
 
-### Managed
+### Managed tokens
 
-### Regulated
+Managed tokens are ones whose distribution, circulation, and other functionalities are overseen by a trusted third party as a token manager. This is opposite of blockchain native coins, like SUI, where the coins are decentralized and not controlled by any single entity. 
 
-### Treasury lock
+```mdx-code-block
+<details>
+  <summary>
+  Show example code
+  </summary>
+```
+
+{@inject: sui_programmability/examples/fungible_tokens/sources/managed.move}
+
+```mdx-code-block
+</details>
+```
+
+### Regulated tokens
+
+The `coin` module of the Sui framework provides a `create_regulated_currency` function that enables the creation of a token whose access you can regulate. When you create a regulated token, Sui provides the publisher with a `DenyCap` object. The bearer of the `DenyCap` can add or remove addresses from the deny list associated with the token, a requirment for items like stablecoins. Any address that appears on the deny list is unable to use the token as an input to a programmable transaction block. 
+
+See [Create a Coin](../guides/developer/sui-101/create-coin.mdx) for more information on creating a regulated token. 
+
+### Closed-loop tokens
+
+Closed-loop tokens enable you to design a set of rules that govern the use of the underlying token. These rules allow you to create coin-type tokens with unique abilities to support your project goals. For example, you could create a loyalty reward token that users can use to purchase items from a gift shop, as demonstrated in the following example:
+
+```mdx-code-block
+<details>
+  <summary>
+  Show example code
+  </summary>
+```
+
+{@inject: sui/examples/move/token/sources/loyalty.move}
+
+```mdx-code-block
+</details>
+```
+
+See [Closed-Loop Token](./closed-loop-token.mdx) for more information on the Closed-Loop Token standard.
+
+## Treasury ability
+
+When you create a coin-type object, the publisher of the smart contract that creates the token receives a `TreasuryCap` object. The `TreasuryCap` object is required to mint new tokens or to burn current ones. Consequently, only the address that owns this object is able to maintain the token balance on the Sui network. 
+
+The `TreasuryCap` object is transferrable, so a third party can take over the management of a token that you create if you transfer the `TreasuryCap`. After transferring the ability, however, you are no longer able to mint and burn tokens yourself.  
+
+## Deny lists
+
+Regulated tokens include a `DenyCap` ability that allows the bearer to maintain a list of addresses that aren't allowed to use the token. The list is held within a system-created `DenyList` shared object. If you own the `DenyCap` you can use the `deny_list_add` and `deny_list_remove` functions of the Coin standard to add and remove addresses. You can also use the `deny_list_contains` function to check if an address is on the list.
+
+While only the blockchain can create the `DenyList` object, you can mimic it's utility in your own smart contracts using closed-loop tokens. This approach gives you granular control over rules that govern the deny list behavior. The Sui repo contains an example of a regulated token created using the Closed-Loop Token standard.
+
+```mdx-code-block
+<details>
+  <summary>
+  Show example code
+  </summary>
+```
+
+{@inject: sui/examples/move/token/sources/regulated_coin.move}
+
+```mdx-code-block
+</details>
+```
+
+## Token metadata
+
+Each coin-type token you create includes metadata that describes the token. Typically, smart contracts freeze this object upon creation using the `transfer::public_freeze_object` function because the metadata for coin-type tokens should never change. Regulated tokens freeze the metadata they create automatically. 
+
+Regular tokens using the Coin standard include a `CoinMetadata` object. Regulated tokens build on top of the same procedure that creates regular coin-type tokens, so they recieve the same metadata object in addition to a `RegulatedCoinMetadata` object that includes deny list information.
+
+The fields of the metadata objects include the following:
+    - `CoinMetadata`
+        - `id`: The object ID of the metadata for the token. 
+        - `decimals`: The number of decimals the token uses. If you set this field to `3`, then a token of value `1000` would display as `1.000`.
+        - `name`: Name of the token.
+        - `symbol`: Symbol for the token. This might be the same as `name`, but is typically fewer than five all capital letters. For example, `SUI` is the `symbol` for the native coin on Sui but its `name` is also `SUI`. 
+        - `description`: A short description to describe the token. 
+        - `icon_url`: The URL for the token's icon, used for display in wallets, explorers, and other apps.
+    - `RegulatedCoinMetadata`
+        - `id`: The ID of the metadata object for the regulated token.
+        - `coin_metadata_object`: The ID of the underlying metadata object (`CoinMetadata`) for the regulated token. 
+        - `deny_cap_object`: The ID of the token's `DenyCap` object, which is necessary to maintain the deny list entries that controls who can and cannot use the token.
+        
+
