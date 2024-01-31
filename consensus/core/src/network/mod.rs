@@ -6,9 +6,9 @@ use std::sync::Arc;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 
-use crate::block::BlockRef;
+use crate::{block::BlockRef, error::ConsensusResult};
 
-/// An AuthorityNode will keep a NetworkManager until shutdown.
+/// An `AuthorityNode` holds a `NetworkManager` until shutdown.
 pub(crate) trait NetworkManager<C, S>
 where
     C: NetworkClient,
@@ -23,15 +23,23 @@ where
 
 /// Network client for communicating with peers.
 pub(crate) trait NetworkClient: Send + Sync {
-    /// Sends a block to all connected peers.
-    async fn send_block(&self, target: AuthorityIndex, block: Bytes);
+    /// Sends a serialized SignedBlock to a peer.
+    async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()>;
 
-    /// Fetches blocks from a peer.
-    async fn fetch_blocks(&self, target: AuthorityIndex, block_refs: Vec<BlockRef>);
+    /// Fetches serialized `SignedBlock`s from a peer.
+    async fn fetch_blocks(
+        &self,
+        peer: AuthorityIndex,
+        block_refs: Vec<BlockRef>,
+    ) -> ConsensusResult<Vec<Bytes>>;
 }
 
 /// Network service for handling requests from peers.
 pub(crate) trait NetworkService: Send + Sync {
-    async fn handle_send_block(&self, source: AuthorityIndex, block: Bytes);
-    async fn handle_fetch_blocks(&self, source: AuthorityIndex, block_refs: Vec<BlockRef>);
+    async fn handle_send_block(&self, peer: AuthorityIndex, block: Bytes) -> ConsensusResult<()>;
+    async fn handle_fetch_blocks(
+        &self,
+        peer: AuthorityIndex,
+        block_refs: Vec<BlockRef>,
+    ) -> ConsensusResult<Vec<Bytes>>;
 }
