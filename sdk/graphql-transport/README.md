@@ -1,4 +1,4 @@
-# `@mysten/rpc-gql-compat`
+# `@mysten/graphql-transport`
 
 This package provides a `SuiTransport` that enables `SuiClient` to make requests using the RPC 2.0
 (GraphQL) API instead of the JSON RPC APi.
@@ -6,13 +6,13 @@ This package provides a `SuiTransport` that enables `SuiClient` to make requests
 ## Install
 
 ```bash
-npm install --save @mysten/rpc-gql-compat
+npm install --save @mysten/graphql-transport
 ```
 
 ## Setup
 
 ```ts
-import { SuiClientGraphQLTransport } from '@mysten/rpc-gql-compat';
+import { SuiClientGraphQLTransport } from '@mysten/graphql-transport';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({

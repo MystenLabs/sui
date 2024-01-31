@@ -7,8 +7,11 @@ const config: IGraphQLConfig = {
 	projects: {
 		tsSDK: {
 			schema: './crates/sui-graphql-rpc/schema/current_progress_schema.graphql',
-			documents: ['./sdk/rpc-gql-compat/src/**/*.ts', './sdk/rpc-gql-compat/src/**/*.graphql'],
-			include: ['./sdk/rpc-gql-compat/src/**/*.ts', './sdk/rpc-gql-compat/src/**/*.graphql'],
+			documents: [
+				'./sdk/graphql-transport/src/**/*.ts',
+				'./sdk/graphql-transport/src/**/*.graphql',
+			],
+			include: ['./sdk/graphql-transport/src/**/*.ts', './sdk/graphql-transport/src/**/*.graphql'],
 		},
 	},
 };

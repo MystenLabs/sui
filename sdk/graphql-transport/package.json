@@ -1,5 +1,5 @@
 {
-	"name": "@mysten/rpc-gql-compat",
+	"name": "@mysten/graphql-transport",
 	"version": "0.0.0",
 	"description": "A GraphQL transport to allow SuiClient to work with RPC 2.0",
 	"license": "Apache-2.0",
