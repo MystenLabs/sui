@@ -73,7 +73,7 @@ use tokio::{
     sync::{broadcast, mpsc, watch},
     task::{AbortHandle, JoinSet},
 };
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, instrument, trace};
 
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.StateSync.rs"));
@@ -509,6 +509,7 @@ where
     }
 
     // Handle a checkpoint that we received from consensus
+    #[instrument(level = "debug", skip_all)]
     fn handle_checkpoint_from_consensus(&mut self, checkpoint: Box<VerifiedCheckpoint>) {
         // Always check previous_digest matches in case there is a gap between
         // state sync and consensus.
@@ -1199,21 +1200,15 @@ async fn sync_checkpoint_contents<S>(
             },
             Some(maybe_checkpoint) = checkpoint_contents_tasks.next() => {
                 match maybe_checkpoint {
-                    Ok((checkpoint, num_txns)) => {
+                    Ok(checkpoint) => {
                         let _: &VerifiedCheckpoint = &checkpoint;  // type hint
-                        // if this fails, there is a bug in checkpoint construction (or the chain is
-                        // corrupted)
-                        assert_eq!(
-                            highest_synced.network_total_transactions + num_txns,
-                            checkpoint.network_total_transactions
-                        );
-                        tx_concurrency_remaining += num_txns;
 
                         store
                             .update_highest_synced_checkpoint(&checkpoint)
                             .expect("store operation should not fail");
                         // We don't care if no one is listening as this is a broadcast channel
                         let _ = checkpoint_event_sender.send(checkpoint.clone());
+                        tx_concurrency_remaining += checkpoint.network_total_transactions - highest_synced.network_total_transactions;
                         highest_synced = checkpoint;
 
                     }
@@ -1289,18 +1284,31 @@ async fn sync_one_checkpoint_contents<S>(
     peer_heights: Arc<RwLock<PeerHeights>>,
     timeout: Duration,
     checkpoint: VerifiedCheckpoint,
-) -> Result<(VerifiedCheckpoint, u64), VerifiedCheckpoint>
+) -> Result<VerifiedCheckpoint, VerifiedCheckpoint>
 where
     S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
 {
+    // Check if we already have produced this checkpoint locally. If so, we don't need
+    // to get it from peers anymore.
+    if store
+        .get_highest_synced_checkpoint()
+        .expect("store operation should not fail")
+        .sequence_number()
+        >= checkpoint.sequence_number()
+    {
+        debug!(seq = ?checkpoint.sequence_number(), "checkpoint was already created via consensus output");
+        return Ok(checkpoint);
+    }
+
+    // Request checkpoint contents from peers.
     let peers = PeerBalancer::new(
         &network,
         peer_heights.clone(),
         PeerCheckpointRequestType::Content,
     )
     .with_checkpoint(*checkpoint.sequence_number());
-    let Some(contents) = get_full_checkpoint_contents(peers, &store, &checkpoint, timeout).await
+    let Some(_contents) = get_full_checkpoint_contents(peers, &store, &checkpoint, timeout).await
     else {
         // Delay completion in case of error so we don't hammer the network with retries.
         let duration = peer_heights
@@ -1310,12 +1318,10 @@ where
         tokio::time::sleep(duration).await;
         return Err(checkpoint);
     };
-
-    let num_txns = contents.size() as u64;
-
-    Ok((checkpoint, num_txns))
+    Ok(checkpoint)
 }
 
+#[instrument(level = "debug", skip_all)]
 async fn get_full_checkpoint_contents<S>(
     peers: PeerBalancer,
     store: S,
