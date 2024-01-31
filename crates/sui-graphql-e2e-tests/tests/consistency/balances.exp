@@ -1,4 +1,4 @@
-processed 31 tasks
+processed 34 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -149,7 +149,10 @@ Response: {
 task 19 'force-object-snapshot-catchup'. lines 150-150:
 Objects snapshot updated to [0 to 3)
 
-task 20 'run-graphql'. lines 152-173:
+task 20 'create-checkpoint'. lines 152-152:
+Checkpoint created: 8
+
+task 21 'run-graphql'. lines 154-175:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -184,7 +187,7 @@ Response: {
   }
 }
 
-task 21 'run-graphql'. lines 175-196:
+task 22 'run-graphql'. lines 177-198:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -219,7 +222,7 @@ Response: {
   }
 }
 
-task 22 'run-graphql'. lines 198-219:
+task 23 'run-graphql'. lines 200-221:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -254,10 +257,13 @@ Response: {
   }
 }
 
-task 23 'force-object-snapshot-catchup'. lines 221-221:
+task 24 'force-object-snapshot-catchup'. lines 223-223:
 Objects snapshot updated to [0 to 4)
 
-task 24 'run-graphql'. lines 223-244:
+task 25 'create-checkpoint'. lines 225-225:
+Checkpoint created: 9
+
+task 26 'run-graphql'. lines 227-248:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -291,7 +297,7 @@ Response: {
   ]
 }
 
-task 25 'run-graphql'. lines 246-267:
+task 27 'run-graphql'. lines 250-271:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -326,7 +332,7 @@ Response: {
   }
 }
 
-task 26 'run-graphql'. lines 269-290:
+task 28 'run-graphql'. lines 273-294:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -361,10 +367,13 @@ Response: {
   }
 }
 
-task 27 'force-object-snapshot-catchup'. lines 293-293:
+task 29 'force-object-snapshot-catchup'. lines 297-297:
 Objects snapshot updated to [0 to 6)
 
-task 28 'run-graphql'. lines 295-316:
+task 30 'create-checkpoint'. lines 299-299:
+Checkpoint created: 10
+
+task 31 'run-graphql'. lines 301-322:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -398,7 +407,7 @@ Response: {
   ]
 }
 
-task 29 'run-graphql'. lines 318-339:
+task 32 'run-graphql'. lines 324-345:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -432,7 +441,7 @@ Response: {
   ]
 }
 
-task 30 'run-graphql'. lines 341-362:
+task 33 'run-graphql'. lines 347-368:
 Response: {
   "data": {
     "transactionBlocks": {

@@ -149,6 +149,8 @@ module P0::fake {
 
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 3
 
+//# create-checkpoint
+
 //# run-graphql --cursors {"c":2,"t":1}
 # Emulating viewing transaction blocks at checkpoint 2. Fake coin balance should be 700.
 {
@@ -219,6 +221,8 @@ module P0::fake {
 }
 
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 4
+
+//# create-checkpoint
 
 //# run-graphql --cursors {"c":2,"t":1}
 # Outside available range
@@ -291,6 +295,8 @@ module P0::fake {
 
 
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 6
+
+//# create-checkpoint
 
 //# run-graphql --cursors {"c":2,"t":1}
 # Outside available range

@@ -1,4 +1,4 @@
-processed 19 tasks
+processed 20 tasks
 
 init:
 A: object(0,0)
@@ -174,7 +174,10 @@ Response: {
 task 17 'force-object-snapshot-catchup'. lines 221-221:
 Objects snapshot updated to [0 to 5)
 
-task 18 'run-graphql'. lines 223-261:
+task 18 'create-checkpoint'. lines 223-223:
+Checkpoint created: 6
+
+task 19 'run-graphql'. lines 225-263:
 Response: {
   "data": {
     "object_within_available_range": {

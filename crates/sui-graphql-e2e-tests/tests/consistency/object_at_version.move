@@ -220,6 +220,8 @@ module Test::M1 {
 
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 5
 
+//# create-checkpoint
+
 //# run-graphql
 {
   object_within_available_range: object(

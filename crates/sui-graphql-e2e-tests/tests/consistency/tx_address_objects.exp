@@ -1,4 +1,4 @@
-processed 15 tasks
+processed 16 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -786,7 +786,10 @@ Response: {
 task 12 'force-object-snapshot-catchup'. lines 186-186:
 Objects snapshot updated to [0 to 3)
 
-task 13 'run-graphql'. lines 188-262:
+task 13 'create-checkpoint'. lines 188-188:
+Checkpoint created: 5
+
+task 14 'run-graphql'. lines 190-264:
 Response: {
   "data": {
     "address_at_latest_checkpoint_4": {
@@ -1111,7 +1114,7 @@ Response: {
   }
 }
 
-task 14 'run-graphql'. lines 264-311:
+task 15 'run-graphql'. lines 266-313:
 Response: {
   "data": {
     "all_transactions": {

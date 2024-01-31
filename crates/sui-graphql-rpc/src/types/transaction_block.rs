@@ -406,16 +406,22 @@ impl TransactionBlock {
                             .limit(1)
                             .into_boxed();
 
+                        // Exclude `checkpoint_viewed_at` if it is equal to `before_checkpoint` -
+                        // the latter sets an exclusive bound that should take precedence if it is
+                        // less than `checkpoint_viewed_at`, otherwise `checkpoint_viewed_at` is
+                        // more restrictive.
                         if filter
                             .before_checkpoint
-                            .map_or(true, |cp| cp >= checkpoint_viewed_at)
+                            .map_or(true, |cp| cp > checkpoint_viewed_at)
                         {
+                            // Note that this has to be <=, not strict equality!
                             let sub_query = sub_query
                                 .filter(
                                     tx_.field(tx::dsl::checkpoint_sequence_number)
-                                        .eq(checkpoint_viewed_at as i64),
+                                        .le(checkpoint_viewed_at as i64),
                                 )
-                                .order(tx_.field(tx::dsl::tx_sequence_number).desc());
+                                .order(tx_.field(tx::dsl::tx_sequence_number).desc())
+                                .limit(1);
 
                             query = query.filter(
                                 tx::dsl::tx_sequence_number

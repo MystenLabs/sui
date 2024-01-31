@@ -185,6 +185,8 @@ module Test::M1 {
 
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 3
 
+//# create-checkpoint
+
 //# run-graphql
 {
   address_at_latest_checkpoint_4: address(address: "@{A}") {

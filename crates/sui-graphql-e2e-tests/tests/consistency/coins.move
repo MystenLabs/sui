@@ -253,6 +253,8 @@ module P0::fake {
 
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 4
 
+//# create-checkpoint
+
 //# run-graphql --cursors @{obj_1_3,1}
 {
   queryCoinsAtChkpt1AfterSnapshotCatchup: coins(type: "@{P0}::fake::FAKE", before: "@{cursor_0}") {

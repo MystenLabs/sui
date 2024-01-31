@@ -1,4 +1,4 @@
-processed 34 tasks
+processed 35 tasks
 
 init:
 A: object(0,0)
@@ -945,7 +945,10 @@ Checkpoint created: 6
 task 31 'force-object-snapshot-catchup'. lines 444-444:
 Objects snapshot updated to [0 to 5)
 
-task 32 'run-graphql'. lines 446-496:
+task 32 'create-checkpoint'. lines 446-446:
+Checkpoint created: 7
+
+task 33 'run-graphql'. lines 448-498:
 Response: {
   "data": {
     "parent_version_4_outside_consistent_range": null,
@@ -954,7 +957,7 @@ Response: {
       "dynamicFields": {
         "edges": [
           {
-            "cursor": "ICGEVGOwhAtWM4In5XuXoE6RgDUaS2clCe80z92no5R1BgAAAAAAAAA=",
+            "cursor": "ICGEVGOwhAtWM4In5XuXoE6RgDUaS2clCe80z92no5R1BwAAAAAAAAA=",
             "node": {
               "name": {
                 "bcs": "pAEAAAAAAAA=",
@@ -966,7 +969,7 @@ Response: {
             }
           },
           {
-            "cursor": "IF0BgZHXo/N+8VYOyH4foOsD+ik2BoKHPTPJ2dpiu1h5BgAAAAAAAAA=",
+            "cursor": "IF0BgZHXo/N+8VYOyH4foOsD+ik2BoKHPTPJ2dpiu1h5BwAAAAAAAAA=",
             "node": {
               "name": {
                 "bcs": "A2RmNQ==",
@@ -980,7 +983,7 @@ Response: {
             }
           },
           {
-            "cursor": "IJGTKNFbgJNDz+84iilAntb7LGZfz6K/R0cFQV6xTMNVBgAAAAAAAAA=",
+            "cursor": "IJGTKNFbgJNDz+84iilAntb7LGZfz6K/R0cFQV6xTMNVBwAAAAAAAAA=",
             "node": {
               "name": {
                 "bcs": "A2RmNA==",
@@ -994,7 +997,7 @@ Response: {
             }
           },
           {
-            "cursor": "ILQt5/FAfXwDtn5zZaJfXGhcioyIXNim/x0pXunl3rTlBgAAAAAAAAA=",
+            "cursor": "ILQt5/FAfXwDtn5zZaJfXGhcioyIXNim/x0pXunl3rTlBwAAAAAAAAA=",
             "node": {
               "name": {
                 "bcs": "A2RmNg==",
@@ -1061,7 +1064,7 @@ Response: {
   }
 }
 
-task 33 'run-graphql'. lines 498-529:
+task 34 'run-graphql'. lines 500-531:
 Response: {
   "data": {
     "parent_version_4": null,

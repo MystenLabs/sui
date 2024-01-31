@@ -265,5 +265,6 @@ impl ExecutorCluster {
             .persist_object_snapshot(start_cp, end_cp)
             .await
             .unwrap();
+        tokio::time::sleep(Duration::from_secs(5)).await
     }
 }

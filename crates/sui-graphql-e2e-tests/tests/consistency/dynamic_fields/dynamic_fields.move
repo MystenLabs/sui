@@ -443,6 +443,8 @@ fragment DynamicFieldSelect on DynamicField {
 
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 5
 
+//# create-checkpoint
+
 //# run-graphql --cursors @{obj_5_0,2} @{obj_5_0,4}
 fragment DynamicFieldSelect on DynamicField {
   name {
