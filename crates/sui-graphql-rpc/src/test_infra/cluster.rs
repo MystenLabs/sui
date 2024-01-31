@@ -265,6 +265,26 @@ impl ExecutorCluster {
             .persist_object_snapshot(start_cp, end_cp)
             .await
             .unwrap();
-        tokio::time::sleep(Duration::from_secs(5)).await
+        // tokio::time::sleep(Duration::from_secs(5)).await;
+
+        let mut latest_snapshot_cp = self
+            .indexer_store
+            .get_latest_object_snapshot_checkpoint_sequence_number()
+            .await
+            .unwrap()
+            .unwrap_or_default();
+        tokio::time::timeout(Duration::from_secs(60), async {
+            while latest_snapshot_cp < end_cp - 1 {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                latest_snapshot_cp = self
+                    .indexer_store
+                    .get_latest_object_snapshot_checkpoint_sequence_number()
+                    .await
+                    .unwrap()
+                    .unwrap_or_default();
+            }
+        })
+        .await
+        .expect("Timeout waiting for indexer to update objects snapshot");
     }
 }
