@@ -227,7 +227,7 @@ Response: {
                             }
                           },
                           {
-                            "cursor": "eyJuIjoiZ3JvdXBfb3BzIiwiYyI6MH0",
+                            "cursor": "eyJuIjoiaGFzaCIsImMiOjB9",
                             "node": {
                               "name": "hash"
                             }
@@ -511,28 +511,6 @@ Response: {
                 },
                 {
                   "cursor": "eyJpIjoxMSwiYyI6MH0",
-                  "node": {
-                    "address": "0x6000a41518a630b1786f0d2c171265b7251377865cc9222f8f1463571fd5d5cf",
-                    "asMoveObject": {
-                      "contents": {
-                        "type": {
-                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::PoolTokenExchangeRate>"
-                        },
-                        "json": {
-                          "id": "0x6000a41518a630b1786f0d2c171265b7251377865cc9222f8f1463571fd5d5cf",
-                          "name": "0",
-                          "value": {
-                            "sui_amount": "0",
-                            "pool_token_amount": "0"
-                          }
-                        }
-                      }
-                    },
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "cursor": "eyJpIjoxMiwiYyI6MH0",
                   "node": {
                     "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
                     "asMoveObject": {
@@ -915,47 +893,9 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "eyJpIjoxMywiYyI6MH0",
+                  "cursor": "eyJpIjoxMiwiYyI6MH0",
                   "node": {
-                    "address": "0x853678ffa7115ad5e2fb078cba3d5652e93455b7f09ad2db593da73dbcf16de3",
-                    "asMoveObject": {
-                      "contents": {
-                        "type": {
-                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::validator_cap::UnverifiedValidatorOperationCap"
-                        },
-                        "json": {
-                          "id": "0x853678ffa7115ad5e2fb078cba3d5652e93455b7f09ad2db593da73dbcf16de3",
-                          "authorizer_validator_address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
-                        }
-                      }
-                    },
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "cursor": "eyJpIjoxNCwiYyI6MH0",
-                  "node": {
-                    "address": "0x9846c6281d33b7dde8a76599ffa4bc6c5c08c150a229da1577c769821a28d06d",
-                    "asMoveObject": {
-                      "contents": {
-                        "type": {
-                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                        },
-                        "json": {
-                          "id": "0x9846c6281d33b7dde8a76599ffa4bc6c5c08c150a229da1577c769821a28d06d",
-                          "balance": {
-                            "value": "30000000000000000"
-                          }
-                        }
-                      }
-                    },
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "cursor": "eyJpIjoxNSwiYyI6MH0",
-                  "node": {
-                    "address": "0xa726a088deea03b2f7dc05ef564a0d32d28a2841d2f0526a48376b3f8fb6a951",
+                    "address": "0x806850704f0dfc8972f09fb48ee345a01ae2d30eb9120bf95d8b95095f43dd9d",
                     "asMoveObject": {
                       "contents": {
                         "type": {
@@ -975,7 +915,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "eyJpIjoxNiwiYyI6MH0",
+                  "cursor": "eyJpIjoxMywiYyI6MH0",
                   "node": {
                     "address": "0x90fa919321670122721f196efa2771b51c3b8271d6f44029b59daa9b2f0e444a",
                     "asMoveObject": {
@@ -1004,7 +944,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MTQ",
+                  "cursor": "eyJpIjoxNCwiYyI6MH0",
                   "node": {
                     "address": "0x948c51404e7ec1f26d0825ac9aa364b9f518b8133914362da14bf37e813a80dc",
                     "asMoveObject": {
@@ -1023,7 +963,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MTU",
+                  "cursor": "eyJpIjoxNSwiYyI6MH0",
                   "node": {
                     "address": "0xa669d9f74ba9efd4150ae091a25823ead02bdea0ca2251a303a6f410aa63b8da",
                     "asMoveObject": {
@@ -1037,6 +977,28 @@ Response: {
                           "stake_activation_epoch": "0",
                           "principal": {
                             "value": "20000000000000000"
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxNiwiYyI6MH0",
+                  "node": {
+                    "address": "0xb35c1ae1210419e12970936dfc2ac333914326c7daaed64a1c267b2ac2d5d6c5",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::PoolTokenExchangeRate>"
+                        },
+                        "json": {
+                          "id": "0xb35c1ae1210419e12970936dfc2ac333914326c7daaed64a1c267b2ac2d5d6c5",
+                          "name": "0",
+                          "value": {
+                            "sui_amount": "0",
+                            "pool_token_amount": "0"
                           }
                         }
                       }
@@ -1469,7 +1431,7 @@ Response: {
                   "node": {
                     "__typename": "ChangeEpochTransaction",
                     "epoch": null,
-                    "protocolVersion": 36,
+                    "protocolVersion": 35,
                     "storageCharge": "0",
                     "computationCharge": "0",
                     "storageRebate": "0",

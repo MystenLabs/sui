@@ -80,7 +80,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MQ",
+                  "cursor": "eyJpIjoxLCJjIjoxfQ",
                   "node": {
                     "digest": "EdTEVPC7MKFpt7Zs2p9fVSrssbGGEY1Td8mPw3sLYuBo",
                     "kind": {
@@ -102,24 +102,6 @@ Response: {
                           {
                             "module": "M1",
                             "functionName": "create"
-                          }
-                        ]
-                      }
-                    }
-                  }
-                },
-                {
-                  "cursor": "eyJpIjoxLCJjIjoxfQ",
-                  "node": {
-                    "digest": "EXm6yrqzNSRtZL6ZtfYn1xCLYgjVdXjPt772jyPXQftz",
-                    "kind": {
-                      "__typename": "ProgrammableTransactionBlock",
-                      "transactions": {
-                        "nodes": [
-                          {},
-                          {
-                            "module": "package",
-                            "functionName": "make_immutable"
                           }
                         ]
                       }
