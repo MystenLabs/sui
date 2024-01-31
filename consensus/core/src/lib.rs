@@ -20,6 +20,7 @@ mod stake_aggregator;
 mod storage;
 mod threshold_clock;
 mod transactions_client;
+mod universal_committer;
 
 #[cfg(test)]
 mod test_dag;

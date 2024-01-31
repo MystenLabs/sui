@@ -3,6 +3,7 @@
 
 use std::{collections::HashMap, fmt::Display, sync::Arc};
 
+use consensus_config::{AuthorityIndex, Stake};
 use parking_lot::RwLock;
 
 use crate::{
@@ -13,8 +14,6 @@ use crate::{
     leader_schedule::LeaderSchedule,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
 };
-
-use consensus_config::{AuthorityIndex, Stake};
 
 #[cfg(test)]
 #[path = "tests/base_committer_tests.rs"]
@@ -160,25 +159,25 @@ impl BaseCommitter {
         ))
     }
 
-    /// Return the wave in which the specified round belongs. This takes into
-    /// account the round offset for when pipelining is enabled.
-    fn wave_number(&self, round: Round) -> WaveNumber {
-        round.saturating_sub(self.options.round_offset) / self.options.wave_length
-    }
-
     /// Return the leader round of the specified wave. The leader round is always
     /// the first round of the wave. This takes into account round offset for when
     /// pipelining is enabled.
-    fn leader_round(&self, wave: WaveNumber) -> Round {
+    pub(crate) fn leader_round(&self, wave: WaveNumber) -> Round {
         (wave * self.options.wave_length) + self.options.round_offset
     }
 
     /// Return the decision round of the specified wave. The decision round is
     /// always the last round of the wave. This takes into account round offset
     /// for when pipelining is enabled.
-    fn decision_round(&self, wave: WaveNumber) -> Round {
+    pub(crate) fn decision_round(&self, wave: WaveNumber) -> Round {
         let wave_length = self.options.wave_length;
         (wave * wave_length) + wave_length - 1 + self.options.round_offset
+    }
+
+    /// Return the wave in which the specified round belongs. This takes into
+    /// account the round offset for when pipelining is enabled.
+    fn wave_number(&self, round: Round) -> WaveNumber {
+        round.saturating_sub(self.options.round_offset) / self.options.wave_length
     }
 
     /// Find which block is supported at a slot (author, round) by the given block.

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cmp::max,
     collections::{BTreeMap, BTreeSet},
     ops::Bound::{Excluded, Included, Unbounded},
     panic,
@@ -43,6 +44,9 @@ pub(crate) struct DagState {
     // Last consensus commit of the dag.
     last_commit: Option<Commit>,
 
+    // Highest round of blocks accepted.
+    highest_accepted_round: Round,
+
     // Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
 }
@@ -64,6 +68,7 @@ impl DagState {
             cached_refs: vec![BTreeSet::new(); num_authorities],
             last_commit,
             store,
+            highest_accepted_round: 0,
         };
 
         for (i, round) in last_committed_rounds.into_iter().enumerate() {
@@ -83,6 +88,7 @@ impl DagState {
     /// Accepts a block into DagState and keeps it in memory.
     pub(crate) fn accept_block(&mut self, block: VerifiedBlock) {
         let block_ref = block.reference();
+        let block_round = block.round();
 
         // TODO: Move this check to core
         // Ensure we don't write multiple blocks per slot for our own index
@@ -96,6 +102,7 @@ impl DagState {
         }
         self.recent_blocks.insert(block_ref, block);
         self.cached_refs[block_ref.author].insert(block_ref);
+        self.highest_accepted_round = max(self.highest_accepted_round, block_round);
     }
 
     /// Accepts a blocks into DagState and keeps it in memory.
@@ -193,6 +200,10 @@ impl DagState {
                     .clone()
             })
             .collect()
+    }
+
+    pub(crate) fn highest_accepted_round(&self) -> Round {
+        self.highest_accepted_round
     }
 
     /// Highest round where a block is committed, which is last commit's leader round.
