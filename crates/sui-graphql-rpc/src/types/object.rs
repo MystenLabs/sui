@@ -31,10 +31,7 @@ use crate::types::intersect;
 use crate::{filter, or_filter, query};
 use async_graphql::connection::{CursorType, Edge};
 use async_graphql::{connection::Connection, *};
-use diesel::{
-    BoolExpressionMethods, CombineDsl, ExpressionMethods, NullableExpressionMethods,
-    OptionalExtension, QueryDsl,
-};
+use diesel::{CombineDsl, ExpressionMethods, OptionalExtension, QueryDsl};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
@@ -685,90 +682,24 @@ impl Object {
         filter: ObjectFilter,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, Object>, Error> {
-        Self::paginate_subtype_historical(db, page, filter, checkpoint_viewed_at, Ok).await
+        Self::paginate_subtype(db, page, filter, checkpoint_viewed_at, Ok).await
     }
 
     /// Query the database for a `page` of some sub-type of Object. The page uses the bytes of an
-    /// Object ID as the cursor, and can optionally be further `filter`-ed. The subtype is created
-    /// using the `downcast` function, which is allowed to fail, if the downcast has failed.
+    /// Object ID and the checkpoint when the query was made as the cursor, and can optionally be
+    /// further `filter`-ed. The subtype is created using the `downcast` function, which is allowed
+    /// to fail, if the downcast has failed.
     ///
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
     /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
     /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
     /// state, it will be as if it was read at the same checkpoint.
-    pub(crate) async fn paginate_subtype<T: OutputType>(
-        db: &Db,
-        page: Page<Cursor>,
-        filter: ObjectFilter,
-        checkpoint_viewed_at: Option<u64>,
-        downcast: impl Fn(Object) -> Result<T, Error>,
-    ) -> Result<Connection<String, T>, Error> {
-        let (prev, next, results) = db
-            .execute(move |conn| {
-                page.paginate_query::<StoredObject, _, _, _>(conn, move || {
-                    use objects::dsl;
-                    let mut query = dsl::objects.into_boxed();
-
-                    // Start by applying the filters on IDs and/or keys because they are combined as
-                    // a disjunction, while the remaining queries are conjunctions.
-                    if let Some(object_ids) = &filter.object_ids {
-                        query = query.or_filter(
-                            dsl::object_id.eq_any(object_ids.iter().map(|a| a.into_vec())),
-                        );
-                    }
-
-                    for ObjectKey { object_id, version } in filter.object_keys.iter().flatten() {
-                        query = query.or_filter(
-                            dsl::object_id
-                                .eq(object_id.into_vec())
-                                .and(dsl::object_version.eq(*version as i64)),
-                        );
-                    }
-
-                    if let Some(type_) = &filter.type_ {
-                        query = query.filter(dsl::object_type.is_not_null());
-                        query = type_.apply(query, dsl::object_type.assume_not_null());
-                    }
-
-                    if let Some(owner) = &filter.owner {
-                        query = query.filter(dsl::owner_id.eq(owner.into_vec()));
-
-                        // If we are supplying an address as the owner, we know that the object must
-                        // be owned by an address, or by an object.
-                        query = query.filter(dsl::owner_type.eq(OwnerType::Address as i16));
-                    }
-
-                    query
-                })
-            })
-            .await?;
-
-        let mut conn = Connection::new(prev, next);
-
-        for stored in results {
-            let cursor = stored.cursor().encode_cursor();
-            let object = Self::try_from_stored_object(stored, checkpoint_viewed_at)?;
-            conn.edges.push(Edge::new(cursor, downcast(object)?));
-        }
-
-        Ok(conn)
-    }
-
-    /// Query the database for a `page` of some sub-type of Object. The page uses the bytes of an
-    /// Object ID as the cursor, and can optionally be further `filter`-ed. The subtype is created
-    /// using the `downcast` function, which is allowed to fail, if the downcast has failed.
-    ///
-    /// The `checkpoint_viewed_at` parameter is an Option<u64> representing the
-    /// checkpoint_sequence_number at which this page was queried for, or `None` if the data was
-    /// requested at the latest checkpoint. Each entity returned in the connection will inherit this
-    /// checkpoint, so that when viewing that entity's state, it will be from the reference of this
-    /// checkpoint_viewed_at parameter.
     ///
     /// If a `Page<Cursor>` is also provided, then this function will defer to the
-    /// `checkpoint_viewed_at` in the cursor if they are consistent. Otherwise, use the value from
-    /// the parameter, or set to None. This is so that paginated queries are consistent with the
-    /// previous query that created the cursor.
-    pub(crate) async fn paginate_subtype_historical<T: OutputType>(
+    /// `checkpoint_viewed_at` in the cursors. Otherwise, use the value from the parameter, or set
+    /// to None. This is so that paginated queries are consistent with the previous query that
+    /// created the cursor.
+    pub(crate) async fn paginate_subtype<T: OutputType>(
         db: &Db,
         page: Page<Cursor>,
         filter: ObjectFilter,
