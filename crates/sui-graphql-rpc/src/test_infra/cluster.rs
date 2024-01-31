@@ -251,8 +251,8 @@ impl ExecutorCluster {
             }
         })
         .await
-        .expect(&format!("Timeout waiting for indexer to update objects snapshot - latest_cp: {}, latest_snapshot_cp: {}",
-            latest_cp, latest_snapshot_cp));
+        .unwrap_or_else(|_| panic!("Timeout waiting for indexer to update objects snapshot - latest_cp: {}, latest_snapshot_cp: {}",
+        latest_cp, latest_snapshot_cp));
     }
 
     pub async fn cleanup_resources(self) {
@@ -286,7 +286,7 @@ impl ExecutorCluster {
             }
         })
         .await
-        .expect(&format!("Timeout waiting for indexer to update objects snapshot - latest_snapshot_cp: {}, end_cp: {}",
+        .unwrap_or_else(|_| panic!("Timeout waiting for indexer to update objects snapshot - latest_snapshot_cp: {}, end_cp: {}",
         latest_snapshot_cp, end_cp));
 
         tokio::time::sleep(Duration::from_secs(5)).await;

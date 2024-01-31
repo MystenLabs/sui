@@ -297,18 +297,6 @@ module Test::M1 {
             }
           }
         }
-        gasPayment {
-          nodes {
-            asMoveObject {
-              contents {
-                type {
-                  repr
-                }
-                json
-              }
-            }
-          }
-        }
       }
     }
   }

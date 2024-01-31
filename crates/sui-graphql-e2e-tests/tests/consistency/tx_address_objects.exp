@@ -1117,7 +1117,7 @@ Response: {
 task 15 'create-checkpoint'. lines 266-266:
 Checkpoint created: 6
 
-task 16 'run-graphql'. lines 268-315:
+task 16 'run-graphql'. lines 268-303:
 Response: {
   "data": {
     "all_transactions": {
@@ -1195,7 +1195,9 @@ Response: {
               ]
             }
           },
-          "gasInput": null
+          "gasInput": {
+            "gasSponsor": null
+          }
         },
         {
           "sender": {
@@ -1309,9 +1311,6 @@ Response: {
                   }
                 ]
               }
-            },
-            "gasPayment": {
-              "nodes": []
             }
           }
         },
@@ -1460,25 +1459,6 @@ Response: {
                   }
                 ]
               }
-            },
-            "gasPayment": {
-              "nodes": [
-                {
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                      },
-                      "json": {
-                        "id": "0x3732dff5c4a9b80a9fe19790c6d99ca69f0a91bccd9ae437beb4cf9af01e707b",
-                        "balance": {
-                          "value": "299999993044572"
-                        }
-                      }
-                    }
-                  }
-                }
-              ]
             }
           }
         }
@@ -1501,25 +1481,6 @@ Response: {
         "gasInput",
         "gasSponsor",
         "objects"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    },
-    {
-      "message": "Requested data is outside the available range",
-      "locations": [
-        {
-          "line": 32,
-          "column": 9
-        }
-      ],
-      "path": [
-        "all_transactions",
-        "nodes",
-        0,
-        "gasInput",
-        "gasPayment"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"
