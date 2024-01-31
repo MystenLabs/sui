@@ -84,7 +84,7 @@ impl Extension for LoggerExtension {
             .any(|(_, operation)| operation.node.selection_set.node.items.iter().any(|selection| matches!(&selection.node, Selection::Field(field) if field.node.name.node == "__schema")));
         let query_id: &Uuid = ctx.data_unchecked();
         let session_id: &SocketAddr = ctx.data_unchecked();
-        if !is_schema && self.config.log_request_query && !is_health_check_request(query_id) {
+        if !is_schema && self.config.log_request_query {
             info!(
                 %query_id,
                 %session_id,
@@ -103,7 +103,7 @@ impl Extension for LoggerExtension {
         let res = next.run(ctx).await?;
         let query_id: &Uuid = ctx.data_unchecked();
         let session_id: &SocketAddr = ctx.data_unchecked();
-        if self.config.log_complexity && !is_health_check_request(query_id) {
+        if self.config.log_complexity {
             info!(
                 %query_id,
                 %session_id,
@@ -187,7 +187,7 @@ impl Extension for LoggerExtension {
                     )
                 }
             }
-        } else if self.config.log_response && !is_health_check_request(query_id) {
+        } else if self.config.log_response {
             match operation_name {
                 Some("IntrospectionQuery") => {
                     debug!(
@@ -205,9 +205,4 @@ impl Extension for LoggerExtension {
         }
         resp
     }
-}
-
-/// Check if the request comes from the `health` endpoint, which has the nil uuid
-fn is_health_check_request(id: &Uuid) -> bool {
-    id.is_nil()
 }

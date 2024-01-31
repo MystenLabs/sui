@@ -6,6 +6,7 @@ use crate::config::{
 };
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
+
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
 use crate::types::move_object::IMoveObject;
@@ -41,7 +42,7 @@ use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
 use hyper::Server as HyperServer;
 use std::convert::Infallible;
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpStream;
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
@@ -49,8 +50,6 @@ use tokio::sync::OnceCell;
 use tower::{Layer, Service};
 use tracing::{info, warn};
 use uuid::Uuid;
-
-const HEALTH_UUID: Uuid = Uuid::nil();
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
@@ -72,7 +71,7 @@ pub(crate) struct ServerBuilder {
 }
 
 #[derive(Clone)]
-struct AppState {
+pub(crate) struct AppState {
     connection: ConnectionConfig,
     metrics: Metrics,
 }
@@ -447,7 +446,7 @@ pub mod tests {
             let db = Db::new(reader.clone(), cfg.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
             let state = AppState::new(connection_config.clone(), metrics.clone());
-            let mut schema = ServerBuilder::new(state)
+            let schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(cfg)
@@ -502,7 +501,7 @@ pub mod tests {
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
             let state = AppState::new(connection_config.clone(), metrics.clone());
-            let mut schema = ServerBuilder::new(state)
+            let schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
@@ -576,7 +575,7 @@ pub mod tests {
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
             let state = AppState::new(connection_config.clone(), metrics.clone());
-            let mut schema = ServerBuilder::new(state)
+            let schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
@@ -650,7 +649,7 @@ pub mod tests {
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
         let state = AppState::new(connection_config.clone(), metrics.clone());
-        let mut schema = ServerBuilder::new(state)
+        let schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
@@ -704,7 +703,7 @@ pub mod tests {
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
         let state = AppState::new(connection_config.clone(), metrics.clone());
-        let mut schema = ServerBuilder::new(state)
+        let schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
@@ -747,7 +746,7 @@ pub mod tests {
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
         let state = AppState::new(connection_config.clone(), metrics.clone());
-        let mut schema = ServerBuilder::new(state)
+        let schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
