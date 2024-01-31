@@ -314,8 +314,8 @@ Aborts with <code><a href="group_ops.md#0x2_group_ops_EInputTooLong">EInputTooLo
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="group_ops.md#0x2_group_ops_multi_scalar_multiplication">multi_scalar_multiplication</a>&lt;S, G&gt;(type: u8, scalars: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="group_ops.md#0x2_group_ops_Element">Element</a>&lt;S&gt;&gt;, elements: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="group_ops.md#0x2_group_ops_Element">Element</a>&lt;G&gt;&gt;): <a href="group_ops.md#0x2_group_ops_Element">Element</a>&lt;G&gt; {
-    <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(scalars) == <a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(elements), <a href="group_ops.md#0x2_group_ops_EInvalidInput">EInvalidInput</a>);
     <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(scalars) &gt; 0, <a href="group_ops.md#0x2_group_ops_EInvalidInput">EInvalidInput</a>);
+    <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(scalars) == <a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(elements), <a href="group_ops.md#0x2_group_ops_EInvalidInput">EInvalidInput</a>);
 
     <b>let</b> scalars_bytes = <a href="dependencies/move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;u8&gt;();
     <b>let</b> elements_bytes = <a href="dependencies/move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;u8&gt;();
