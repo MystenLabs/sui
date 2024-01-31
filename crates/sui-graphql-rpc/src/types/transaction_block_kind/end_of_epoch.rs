@@ -112,7 +112,8 @@ impl EndOfEpochTransaction {
 impl ChangeEpochTransaction {
     /// The next (to become) epoch.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch))
+        // TODO (wlmyng)
+        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch), None)
             .await
             .extend()
     }
@@ -202,7 +203,8 @@ impl ChangeEpochTransaction {
 impl AuthenticatorStateExpireTransaction {
     /// Expire JWKs that have a lower epoch than this.
     async fn min_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.0.min_epoch))
+        // TODO (wlmyng)
+        Epoch::query(ctx.data_unchecked(), Some(self.0.min_epoch), None)
             .await
             .extend()
     }

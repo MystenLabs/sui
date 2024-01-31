@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::cursor::{self, Page, RawPaginated, Target};
+use super::cursor::{self, Checkpointed, Page, RawPaginated, Target};
 use super::{big_int::BigInt, move_type::MoveType, sui_address::SuiAddress};
 use crate::consistency::consistent_range;
 use crate::data::{Db, DbConnection, QueryExecutor};
@@ -90,7 +90,7 @@ impl Balance {
         // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
         // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
         // paginated queries are consistent with the previous query that created the cursor.
-        let cursor_viewed_at = validate_cursor_consistency(page.after(), page.before())?;
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
 
         let response = db
@@ -159,6 +159,12 @@ impl Target<Cursor> for StoredBalance {
             coin_type: self.coin_type.clone(),
             checkpoint_viewed_at: Some(checkpoint_viewed_at),
         })
+    }
+}
+
+impl Checkpointed for Cursor {
+    fn checkpoint_viewed_at(&self) -> Option<u64> {
+        self.checkpoint_viewed_at
     }
 }
 
@@ -264,25 +270,4 @@ fn filter(mut query: RawQuery, owner: SuiAddress, coin_type: Option<TypeTag>) ->
     };
 
     query
-}
-
-/// Check that the cursors, if provided, have the same checkpoint_viewed_at.
-pub(crate) fn validate_cursor_consistency(
-    after: Option<&Cursor>,
-    before: Option<&Cursor>,
-) -> Result<Option<u64>, Error> {
-    match (after, before) {
-        (Some(after_cursor), Some(before_cursor)) => {
-            if after_cursor.checkpoint_viewed_at == before_cursor.checkpoint_viewed_at {
-                Ok(after_cursor.checkpoint_viewed_at)
-            } else {
-                Err(Error::Client(
-                    "Cursors are inconsistent and cannot be used together in the same query."
-                        .to_string(),
-                ))
-            }
-        }
-        (Some(cursor), None) | (None, Some(cursor)) => Ok(cursor.checkpoint_viewed_at),
-        (None, None) => Ok(None),
-    }
 }
