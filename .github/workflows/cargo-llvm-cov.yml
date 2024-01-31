@@ -25,7 +25,6 @@ env:
   RUST_BACKTRACE: short
   # RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
-  CODECOV: 1
 
 jobs:
   cargo-llvm-cov:
