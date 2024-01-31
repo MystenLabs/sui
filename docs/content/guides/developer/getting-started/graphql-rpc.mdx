@@ -1,39 +1,28 @@
 ---
-title: Sui GraphQL RPC
+title: Querying Sui GraphQL RPC
 description: Sui is currently developing a GraphQL RPC service for interacting with the network.
 ---
 
 {@include: ../../../snippets/info-graphql-release.mdx}
 
-For an introduction to GraphQL, see [GitHub's Introduction to GraphQL](https://docs.github.com/en/graphql/guides/introduction-to-graphql).
+The quickest way to access the Sui GraphQL service is through the online IDE that provides a complete toolbox for fetching data and executing transactions on the network. The online IDE provides features such as auto-completion (use Ctrl+Space or just start typing), built-in documentation (Book icon, top-left), multi-tabs, and more.
 
-## Getting Started
-
-The quickest way to access the Sui GraphQL service is through the online IDE that provides a complete toolbox for fetching data and executing transactions on the network. The online IDE provides
-features such as auto-completion (use Ctrl-Space or just start typing), built-in documentation (click on the top-left icon), multi-tabs, and more.
-
-The online IDE is available for [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql).
-Later in this document, you can find query [examples](#examples) that you can use directly in the IDE.
+The online IDE is available for [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql). This guide contains various queries that you can try directly in the IDE.
 
 :::info
-
-Both [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql) services are rate-limited to keep network throughput optimized.
-
+- Any existing addresses/object IDs in these examples refer to `mainnet` data only.
+- Both [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql) services are rate-limited to keep network throughput optimized.
 :::
 
 For more details about some concepts used in the examples below, please see the [GraphQL concepts](concepts/graphql-rpc.mdx) page.
 
 
 ## Discovering the schema
-GraphQL offers an introspection feature that allows you to query for the schema that is loaded by a service instance. The [official documentation](https://graphql.org/learn/introspection/) provides an overview on introspection.
+GraphQL introspection exposes the schema supported by the RPC service. The IDE's "Docs" pane (Book icon, top-left) and Search dialog (Cmd+K on macOS or Ctrl+K on Windows and Linux) offer a way to browse introspection output interactively.
 
-## Examples
+The [official documentation](https://graphql.org/learn/introspection/) provides an overview on introspection, and how to interact with it programmatically.
 
-Many examples can also be found in the [repository](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples). For example, in that folder you can find examples on [transaction block effects](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples/transaction_block_effects), [protocol configs](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples/protocol_configs), [stake connection](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples/stake_connection), and more. Each folder contains one or more examples that you can use in your queries.
-
-Any existing addresses/object IDs in these examples refer to `mainnet` data only.
-
-### Find the reference gas price for last epoch
+## Finding the reference gas price for latest epoch
 
 ```graphql
 query {
@@ -43,13 +32,12 @@ query {
 }
 ```
 
-### Find the stake information for epoch 100
-
-Find the total stake rewards, the reference gas price, the number of checkpoints and the total gas fees for epoch 100. Note that in the query, the `id` argument is optional. When no id is provided, it will return the data for the last known epoch.
+## Finding information about a specific historical epoch
+This example finds the total stake rewards, the reference gas price, the number of checkpoints and the total gas fees for epoch 100. Note that in the query, the `id` argument is optional, and defaults to the latest epoch.
 
 ```graphql
 query {
-  epoch(id: 100) # note that id is optional, and without it, last epoch is returned
+  epoch(id: 100) # note that id is optional, and without it, latest epoch is returned
   {
     epochId
     totalStakeRewards
@@ -65,9 +53,8 @@ query {
 }
 ```
 
-### Find a transaction block by its digest
-
-Get a transaction block object by its digest and show information such as the gas sponsor's address, the gas price, the gas budget, and the effects from executing that transaction block.
+## Finding a transaction block by its digest
+This example gets a transaction block by its digest and shows information such as the gas sponsor's address, the gas price, the gas budget, and effects from executing that transaction block.
 
 ```graphql
 query {
@@ -94,7 +81,7 @@ query {
 }
 ```
 
-### Find the last 10 transactions that are not a system transaction
+## Finding the last ten transactions that are not a system transaction
 
 ```graphql
 query {
@@ -109,15 +96,12 @@ query {
 }
 ```
 
-### Find all transactions that touched a given object
+## Finding all transactions that touched a given object
 
-Find all the transactions that touched (modified/transferred/deleted) a given object. This is useful for when we want to trace the flow of a coin/stake/nft, and to trace the upgrade history of a package when the given object is a UpgradeCap.
+This example finds all the transactions that touched (modified/transferred/deleted) a given object. This is useful for when we want to trace the flow of a Coin/StakeSui/NFT.
 
 :::info
-
-Note that this example uses GraphQL [variables](/concepts/graphql-rpc.mdx#working-with-variables) and [pagination](/concepts/graphql-rpc.mdx#pagination). When using the online IDE, you need to pass the variables
-in the bottom window where it's written `Variables`.
-
+This example uses GraphQL [variables](/concepts/graphql-rpc.mdx#working-with-variables) and [pagination](/concepts/graphql-rpc.mdx#pagination). When using the online IDE, copy the variables JSON to the "Variables" window, below the main editor.
 :::
 
 ```graphql
@@ -140,39 +124,37 @@ query ($objectID: SuiAddress!) {
 }
 ```
 
-where the variables are:
+**Variables**:
 ```json
 {
   "objectID": "0x11c6ae8432156527fc2e12e05ac7db79f2e972510a823a4ef2e670f27ad7b52f"
 }
 ```
 
-### Filter transaction blocks by a function
+## Filtering transaction blocks by a function
 
-Find the last transaction blocks that called the `public_transfer` function.
+This example finds the last ten transaction blocks that called the `public_transfer` function, (as a move call transaction command).
 
 :::info
-
-This example makes usage of the filter `last`, which indicates that the user only wants the last 10 transaction blocks known to the service. It also uses cursors, which in this examples are used to aid for future pagination needs.
-
+This example makes usage of the filter `last`, which indicates that the user only wants the last ten transaction blocks known to the service.
 :::
 
 ```graphql
-{ # Filtering by function
-    transactionBlocks(
-        last: 10,
-        filter: {
-            function: "0x2::transfer::public_transfer"
-        }
-    ) {
-        edges { cursor }
-    }
+{
+  transactionBlocks(
+    last: 10,
+      filter: {
+        function: "0x2::transfer::public_transfer"
+      }
+  ) {
+    nodes { digest }
+  }
 }
 ```
 
-### Find the balance changes of all the transactions
+## Finding the balance changes of all the transactions
 
-Find the balance changes of all the transactions where a certain address called certain Move functions. This is useful when someone wants to get their staking and unstaking history, since you stake/unstake by calling specific Move functions.
+This example finds the balance changes of all the transactions where a given address called staking-related functions. This is useful when you want to get your staking and unstaking history.
 
 ```graphql
 query ($address: SuiAddress!) {
@@ -221,14 +203,14 @@ query ($address: SuiAddress!) {
 }
 ```
 
-where address is
+**Variables**:
 ```json
 {
   "address": "0xa9ad44383140a07cc9ea62d185c12c4d9ef9c6a8fd2f47e16316229815862d23"
 }
 ```
 
-### Coins on address and its balances
+## Finding the coins owned by an address and accumulate their balances
 
 :::info
 This example uses aliases and [fragments](/concepts/graphql-rpc#fragments).
@@ -278,7 +260,7 @@ fragment C on Coin {
 }
 ```
 
-### Find the dynamic fields of an object
+## Finding the dynamic fields of an object
 
 ```graphql
 query DynamicField {
@@ -333,7 +315,8 @@ fragment DynamicFieldValueSelection on DynamicFieldValue {
   }
 }
 ```
-### Execute a transaction
+
+## Executing a transaction
 
 Transaction execution takes in two arguments, `txBytes` and `signatures`. `txBytes` is the serialized unsigned transaction data, which can be generated when using the Sui CLI's `client call` [command](/references/cli/client), to call a Move function by passing the `--serialize-unsigned-transaction` flag. The `signatures` can be generated using Sui CLI's [keytool](/references/cli/keytool) command `sui keytool sign`. More information on Sui CLI can be found [here](/references/cli).
 
@@ -356,8 +339,7 @@ mutation ($tx: String!, $sigs: [String!]!) {
 }
 ```
 
-where `$tx` and `$sigs` are your generated data, which may look like this:
-
+**Variables**:
 ```json
 {
   "tx": "AAACACAZXApmrHgzTs3FGDyXWka+wmMCy2IwOdKLmTWHb5PnFQEASlCnLAw4qfzLF3unH9or5/L7YpOlReaSEWfoEwhTqpavSxAAAAAAACCUFUCOn8ljIxcG9O+CA1bzqjunqr4DLDSzSoNCkUvu2AEBAQEBAAEAALNQHmLi4jgC5MuwwmiMvZEeV5kuyh+waCS60voE7fpzAa3v/tOFuqDvQ+bjBpKTfjyL+6yIg+5eC3dKReVwghH/rksQAAAAAAAgxtZtKhXTr1zeFAo1JzEqVKn9J1H74ddbCJNVZGo2I1izUB5i4uI4AuTLsMJojL2RHleZLsofsGgkutL6BO36c+gDAAAAAAAAQEIPAAAAAAAA",
@@ -366,6 +348,14 @@ where `$tx` and `$sigs` are your generated data, which may look like this:
   ]
 }
 ```
+
+## Other examples
+
+Other examples can also be found in the [repository](https://github.com/MystenLabs/sui/tree/releases/sui-graphql-rpc-v2024.1.0-release/crates/sui-graphql-rpc/examples), grouped into sub-directories. For example, there are directories for [transaction block effects](https://github.com/MystenLabs/sui/tree/releases/sui-graphql-rpc-v2024.1.0-release/crates/sui-graphql-rpc/examples/transaction_block_effects), [protocol configs](https://github.com/MystenLabs/sui/tree/releases/sui-graphql-rpc-v2024.1.0-release/crates/sui-graphql-rpc/examples/protocol_configs), [stake connection](https://github.com/MystenLabs/sui/tree/releases/sui-graphql-rpc-v2024.1.0-release/crates/sui-graphql-rpc/examples/stake_connection), and more.
+
+:::info
+Examples in the repository are designed to work with the version of GraphQL RPC built at the same revision. The links above point to examples intended for [GraphQL v2024.1](https://github.com/MystenLabs/sui/tree/releases/sui-graphql-rpc-v2024.1.0-release), the latest production version at the time of writing.
+:::
 
 ## Limits
 
