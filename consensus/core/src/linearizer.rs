@@ -134,12 +134,12 @@ impl Linearizer {
         let leader_block_ref = leader_block.reference();
         let mut buffer = vec![leader_block];
         assert!(committed.insert(leader_block_ref));
+
+        let read_lock = self.dag_state.read();
         while let Some(x) = buffer.pop() {
             to_commit.push(x.clone());
 
-            let ancestors: Vec<VerifiedBlock> = self
-                .dag_state
-                .read()
+            let ancestors: Vec<VerifiedBlock> = read_lock
                 .get_uncommitted_blocks(
                     x.ancestors()
                         .iter()
@@ -171,6 +171,8 @@ impl Linearizer {
         )
     }
 
+    // This function should be called whenever a new commit is observed. This will
+    // iterate over the sequence of committed leaders and produce a list of sub-dags.
     pub fn handle_commit(&mut self, committed_leaders: Vec<VerifiedBlock>) -> Vec<CommittedSubDag> {
         let mut committed_sub_dags = vec![];
         let mut committed_blocks = HashSet::new();
@@ -219,7 +221,7 @@ mod tests {
     #[test]
     fn test_handle_commit() {
         telemetry_subscribers::init_for_testing();
-        let context = Arc::new(Context::new_for_test(4));
+        let context = Arc::new(Context::new_for_test(4).0);
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
             Arc::new(MemStore::new()),
@@ -298,7 +300,7 @@ mod tests {
     #[test]
     fn test_handle_already_committed() {
         telemetry_subscribers::init_for_testing();
-        let context = Arc::new(Context::new_for_test(4));
+        let context = Arc::new(Context::new_for_test(4).0);
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
             Arc::new(MemStore::new()),
@@ -420,7 +422,7 @@ mod tests {
     #[test]
     fn test_new_subdag_from_commit_data() {
         let store = Arc::new(MemStore::new());
-        let context = Arc::new(Context::new_for_test(4));
+        let context = Arc::new(Context::new_for_test(4).0);
         let wave_length = DEFAULT_WAVE_LENGTH;
 
         // Populate fully connected test blocks for round 0 ~ 3, authorities 0 ~ 3.
