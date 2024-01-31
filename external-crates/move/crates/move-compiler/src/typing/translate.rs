@@ -2639,7 +2639,7 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
     mut given: Vec<Type>,
 ) -> Vec<Type> {
     let given_len = given.len();
-    check_call_arity(context, loc, msg, arity, argloc, given_len);
+    core::check_call_arity(context, loc, msg, arity, argloc, given_len);
     while given.len() < arity {
         given.push(context.error_type(argloc))
     }
@@ -2647,35 +2647,6 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
         given.pop();
     }
     given
-}
-
-fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
-    context: &mut Context,
-    loc: Loc,
-    msg: F,
-    arity: usize,
-    argloc: Loc,
-    given_len: usize,
-) {
-    if given_len == arity {
-        return;
-    }
-    let code = if given_len < arity {
-        TypeSafety::TooFewArguments
-    } else {
-        TypeSafety::TooManyArguments
-    };
-    let cmsg = format!(
-        "{}. The call expected {} argument(s) but got {}",
-        msg(),
-        arity,
-        given_len
-    );
-    context.env.add_diag(diag!(
-        code,
-        (loc, cmsg),
-        (argloc, format!("Found {} argument(s) here", given_len)),
-    ));
 }
 
 fn check_call_target(
@@ -2733,8 +2704,16 @@ fn macro_method_call(
         method_call_resolve(context, loc, edotted, edotted_ty, method, ty_args_opt)?;
     let mut args = vec![macro_expand::EitherArg::ByValue(first_arg)];
     args.extend(nargs.into_iter().map(macro_expand::EitherArg::ByName));
-    let (type_arguments, args) = macro_call_impl(context, loc, m, f, fty, argloc, args);
-    Some(expand_macro(context, loc, m, f, type_arguments, args))
+    let (type_arguments, args, return_ty) = macro_call_impl(context, loc, m, f, fty, argloc, args);
+    Some(expand_macro(
+        context,
+        loc,
+        m,
+        f,
+        type_arguments,
+        args,
+        return_ty,
+    ))
 }
 
 fn macro_module_call(
@@ -2751,8 +2730,8 @@ fn macro_module_call(
         .into_iter()
         .map(macro_expand::EitherArg::ByName)
         .collect();
-    let (type_arguments, args) = macro_call_impl(context, loc, m, f, fty, argloc, args);
-    expand_macro(context, loc, m, f, type_arguments, args)
+    let (type_arguments, args, return_ty) = macro_call_impl(context, loc, m, f, fty, argloc, args);
+    expand_macro(context, loc, m, f, type_arguments, args, return_ty)
 }
 
 fn macro_call_impl(
@@ -2763,19 +2742,19 @@ fn macro_call_impl(
     fty: ResolvedFunctionType,
     argloc: Loc,
     mut args: Vec<macro_expand::EitherArg<T::Exp, N::Exp>>,
-) -> (Vec<Type>, Vec<macro_expand::Arg>) {
+) -> (Vec<Type>, Vec<macro_expand::Arg>, Type) {
     use macro_expand::EitherArg;
     let ResolvedFunctionType {
         declared,
         macro_,
         ty_args,
         params: parameters,
-        return_: _,
+        return_,
     } = fty;
     check_call_target(
         context, loc, /* is_macro_call */ true, macro_, declared, f,
     );
-    check_call_arity(
+    core::check_call_arity(
         context,
         loc,
         || format!("Invalid call of '{}::{}'", &m, &f),
@@ -2783,6 +2762,10 @@ fn macro_call_impl(
         argloc,
         args.len(),
     );
+    // instantiate the param types to check for constraints, even if the argument isn't used
+    for (_, param_ty) in &parameters {
+        core::instantiate(context, param_ty.clone());
+    }
     while args.len() < parameters.len() {
         args.push(EitherArg::ByName(sp(loc, N::Exp_::UnresolvedError)));
     }
@@ -2804,7 +2787,11 @@ fn macro_call_impl(
                 subtype(context, loc, msg, e.ty.clone(), param_ty.clone());
                 EitherArg::ByValue(e)
             }
-            EitherArg::ByName(ne) => EitherArg::ByName((ne, param_ty.clone())),
+            EitherArg::ByName(ne) => {
+                let expected_ty =
+                    expected_by_name_arg_type(context, loc, &m, &f, &param, &ne, param_ty.clone());
+                EitherArg::ByName((ne, expected_ty))
+            }
         })
         .collect();
     context
@@ -2812,7 +2799,52 @@ fn macro_call_impl(
         .entry(m.value)
         .or_default()
         .insert(f.value());
-    (ty_args, args_with_ty)
+    (ty_args, args_with_ty, return_)
+}
+
+// If the argument is a lambda, we need to check that the lambda's type matches the expected type
+// so that any calls to the lambda can be properly expanded
+// Otherwise, we just return the parameters type
+fn expected_by_name_arg_type(
+    context: &mut Context,
+    call_loc: Loc,
+    m: &ModuleIdent,
+    f: &FunctionName,
+    param: &N::Var,
+    ne: &N::Exp,
+    param_ty: Type,
+) -> Type {
+    let (eloc, lambda) = match ne {
+        sp!(eloc, N::Exp_::Lambda(l)) => (*eloc, l),
+        _ => return param_ty,
+    };
+    let param_tys = lambda
+        .parameters
+        .value
+        .iter()
+        .map(|(p, ty_opt)| {
+            if let Some(ty) = ty_opt {
+                core::instantiate(context, ty.clone())
+            } else {
+                core::make_tvar(context, p.loc)
+            }
+        })
+        .collect();
+    let ret_ty = if let Some(ty) = lambda.return_type.clone() {
+        core::instantiate(context, ty)
+    } else {
+        make_tvar(context, lambda.body.loc)
+    };
+    let tfun = sp(eloc, Type_::Fun(param_tys, Box::new(ret_ty)));
+    let msg = || {
+        format!(
+            "Invalid call of '{}::{}'. Invalid argument for parameter '{}'",
+            m, &f, &param.value.name
+        )
+    };
+    subtype(context, call_loc, msg, tfun.clone(), param_ty);
+    // prefer the lambda type over the parameters to preserve annotations on the lambda
+    tfun
 }
 
 fn expand_macro(
@@ -2822,6 +2854,7 @@ fn expand_macro(
     f: FunctionName,
     type_args: Vec<N::Type>,
     args: Vec<macro_expand::Arg>,
+    return_ty: Type,
 ) -> (Type, T::UnannotatedExp_) {
     use T::SequenceItem_ as TS;
     use T::UnannotatedExp_ as TE;
@@ -2831,7 +2864,7 @@ fn expand_macro(
         assert!(context.env.has_errors());
         return (context.error_type(call_loc), TE::UnresolvedError);
     }
-    let res = match macro_expand::call(context, call_loc, m, f, type_args, args) {
+    let res = match macro_expand::call(context, call_loc, m, f, type_args, args, return_ty) {
         None => {
             assert!(context.env.has_errors());
             (context.error_type(call_loc), TE::UnresolvedError)

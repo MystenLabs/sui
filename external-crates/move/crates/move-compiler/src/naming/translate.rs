@@ -1897,20 +1897,20 @@ fn lvalue(
                             ((var.loc, msg), (prev_loc, "Previously assigned here"))
                         }
                     };
-                    if matches!(case, C::Assign) && v.is_macro_identifier() {
-                        let msg = format!(
-                            "Cannot assign to argument for parameter '{}'. \
-                            Arguments must be used in value positions",
-                            v.0
-                        );
-                        let mut diag = diag!(TypeSafety::CannotExpandMacro, (loc, msg));
-                        diag.add_note(ASSIGN_MACRO_IDENTIFIER_NOTE);
-                        context.env.add_diag(diag);
-                        return None;
-                    }
                     context
                         .env
                         .add_diag(diag!(Declarations::DuplicateItem, primary, secondary));
+                }
+                if matches!(case, C::Assign) && v.is_macro_identifier() {
+                    let msg = format!(
+                        "Cannot assign to argument for parameter '{}'. \
+                        Arguments must be used in value positions",
+                        v.0
+                    );
+                    let mut diag = diag!(TypeSafety::CannotExpandMacro, (loc, msg));
+                    diag.add_note(ASSIGN_MACRO_IDENTIFIER_NOTE);
+                    context.env.add_diag(diag);
+                    return None;
                 }
                 let nv = match case {
                     C::Bind => {

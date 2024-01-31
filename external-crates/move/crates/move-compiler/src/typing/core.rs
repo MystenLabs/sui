@@ -4,7 +4,10 @@
 
 use crate::{
     debug_display, diag,
-    diagnostics::{codes::NameResolution, Diagnostic},
+    diagnostics::{
+        codes::{NameResolution, TypeSafety},
+        Diagnostic,
+    },
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
     ice,
     naming::ast::{
@@ -1276,6 +1279,35 @@ fn visibility_error(
         }
     }
     context.env.add_diag(diag)
+}
+
+pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
+    context: &mut Context,
+    loc: Loc,
+    msg: F,
+    arity: usize,
+    argloc: Loc,
+    given_len: usize,
+) {
+    if given_len == arity {
+        return;
+    }
+    let code = if given_len < arity {
+        TypeSafety::TooFewArguments
+    } else {
+        TypeSafety::TooManyArguments
+    };
+    let cmsg = format!(
+        "{}. The call expected {} argument(s) but got {}",
+        msg(),
+        arity,
+        given_len
+    );
+    context.env.add_diag(diag!(
+        code,
+        (loc, cmsg),
+        (argloc, format!("Found {} argument(s) here", given_len)),
+    ));
 }
 
 //**************************************************************************************************

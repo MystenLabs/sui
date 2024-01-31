@@ -19,7 +19,11 @@ type ArgMap = BTreeMap<Var_, (N::Exp, Type)>;
 
 struct Context<'a, 'b> {
     core: &'a mut core::Context<'b>,
+    // used for removing unbound params
+    all_params: BTreeMap<Var_, /* is bound to a value (by-name or by-value) */ bool>,
+    // used for expanding lambda calls in VarCall
     lambdas: LambdaMap,
+    // used for expanding by-name arguments in Var usage
     by_name_args: ArgMap,
     tparam_subst: TParamSubst,
     macro_color: Color,
@@ -44,6 +48,7 @@ pub(crate) fn call(
     f: FunctionName,
     type_args: Vec<Type>,
     args: Vec<Arg>,
+    return_type: Type,
 ) -> Option<ExpandedMacro> {
     let next_color = context.next_variable_color();
     // If none, there is no body to expand, likely because of an error in the macro definition
@@ -62,7 +67,6 @@ pub(crate) fn call(
             }
         };
     context.set_max_variable_color(max_color);
-    let return_type = macro_info.signature.return_type.clone();
 
     if macro_type_params.len() != type_args.len() || macro_params.len() != args.len() {
         assert!(context.env.has_errors());
@@ -75,7 +79,11 @@ pub(crate) fn call(
         "ICE should be fixed/caught by the module/method call"
     );
     let tparam_subst = macro_type_params.into_iter().zip(type_args).collect();
-    // make lambda map and bind non-lambda args to local vars
+    // make separate out by-value and by-name arguments
+    let mut all_params: BTreeMap<_, _> = macro_params
+        .iter()
+        .map(|(_, sp!(_, v_), _)| (*v_, false))
+        .collect();
     let mut lambdas = BTreeMap::new();
     let mut by_name_args = BTreeMap::new();
     let mut by_value_args = vec![];
@@ -91,15 +99,11 @@ pub(crate) fn call(
         let unfolded = core::unfold_type(&context.subst, arg_ty);
         if let sp!(_, Type_::Fun(param_tys, result_ty)) = unfolded {
             let arg_exp = match arg {
-                Arg::ByValue(arg) => {
-                    // declare the local here so that if the lambda is used outside
-                    // of the VarCall, we still know its type. This will also lead to
-                    // an error if it is used since a lambda type will appear during expansion
-                    let fun_ty = sp(
-                        arg.exp.loc,
-                        Type_::Fun(param_tys.clone(), result_ty.clone()),
+                Arg::ByValue(_) => {
+                    assert!(
+                        context.env.has_errors(),
+                        "ICE lambda args should never be by value"
                     );
-                    context.declare_local(None, param, fun_ty);
                     continue;
                 }
                 Arg::ByName((e, _)) => e,
@@ -120,12 +124,13 @@ pub(crate) fn call(
                 }
             }
         }
+        all_params.insert(param.value, true);
     }
-    let return_type = core::subst_tparams(&tparam_subst, return_type);
     let break_labels: BTreeSet<_> = BTreeSet::from([return_label]);
     let mut context = Context {
         core: context,
         lambdas,
+        all_params,
         by_name_args,
         tparam_subst,
         macro_color: next_color,
@@ -223,9 +228,6 @@ fn bind_lambda(
     result_ty: Type,
 ) -> Option<()> {
     match arg.value {
-        N::Exp_::Annotate(inner, _) => {
-            bind_lambda(context, lambdas, param, *inner, param_ty, result_ty)
-        }
         N::Exp_::Lambda(lambda) => {
             lambdas.insert(param, (lambda, param_ty, result_ty));
             Some(())
@@ -332,10 +334,15 @@ mod recolor_struct {
         }
 
         pub fn max_color(&self) -> Color {
-            // subtract one to skip the "next" color
-            let max = self.next_color - 1;
-            debug_assert!(self.remapping.values().all(|&c| c <= max));
-            max
+            if self.remapping.is_empty() {
+                // next color never used
+                self.next_color
+            } else {
+                // subtract one to skip the "next" color
+                let max = self.next_color - 1;
+                debug_assert!(self.remapping.values().all(|&c| c <= max));
+                max
+            }
         }
 
         pub fn return_label(&self) -> Option<BlockLabel> {
@@ -588,10 +595,15 @@ fn lvalue(context: &mut Context, sp!(_, lv_): &mut N::LValue) {
     match lv_ {
         N::LValue_::Ignore => (),
         N::LValue_::Var {
-            var: sp!(_, var_), ..
+            var: sp!(_, v_), ..
         } => {
-            assert!(!context.lambdas.contains_key(var_));
-            assert!(!context.by_name_args.contains_key(var_));
+            if context.all_params.contains_key(v_) {
+                assert!(
+                    context.core.env.has_errors(),
+                    "ICE cannot assign to macro parameter"
+                );
+                *lv_ = N::LValue_::Ignore
+            }
         }
         N::LValue_::Unpack(_, _, tys_opt, lvalues) => {
             if let Some(tys) = tys_opt {
@@ -701,7 +713,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             let (lambda, _, _) = context.lambdas.get(v_).unwrap();
             *e_ = N::Exp_::Lambda(lambda.clone());
         }
-        N::Exp_::VarCall(sp!(_, v_), sp!(_, es)) if context.lambdas.contains_key(v_) => {
+        N::Exp_::VarCall(sp!(_, v_), sp!(argloc, es)) if context.lambdas.contains_key(v_) => {
             exps(context, es);
             // param_ty and result_ty have already been substituted
             let (
@@ -714,7 +726,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 },
                 param_tys,
                 result_ty,
-            ) = context.lambdas.get(v_).unwrap().clone();
+            ) = context.lambdas.get(&v_).unwrap().clone();
             // recolor in case the lambda is used more than once
             let next_color = context.core.next_variable_color();
             let recolor_use_funs = false;
@@ -734,6 +746,17 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             recolor_exp(recolor, &mut lambda_body);
             // set max color when coloring is finished
             context.core.set_max_variable_color(recolor.max_color());
+            // check arity before expanding
+            let argloc = *argloc;
+            core::check_call_arity(
+                context.core,
+                *eloc,
+                || format!("Invalid lambda call of '{}'", v_.name),
+                param_tys.len(),
+                argloc,
+                es.len(),
+            );
+            // expand the call, replacing with a dummy value to take the args by value
             let N::Exp_::VarCall(_, sp!(_, args)) =
                 std::mem::replace(e_, /* dummy */ N::Exp_::UnresolvedError)
             else {
@@ -749,7 +772,12 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 seq: (N::UseFuns::new(use_fun_color), labeled_seq),
             });
             let labeled_body = Box::new(sp(body_loc, labeled_body_));
-            // we will get a type error on length mismatch here, so fine to zip
+            // pad args with errors
+            let args = args.into_iter().chain(std::iter::repeat_with(|| {
+                sp(argloc, N::Exp_::UnresolvedError)
+            }));
+            // Unlike other by-name arguments, we try to check the type of the lambda before
+            // expanding them macro. That, plus the arity check above, ensures these zips are safe
             let mut result: VecDeque<_> = lambda_params
                 .into_iter()
                 .zip(args)
@@ -800,8 +828,31 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         ///////
         // Other var cases
         ///////
-        N::Exp_::Var(_) => (),
-        N::Exp_::VarCall(_, sp!(_, es)) => exps(context, es),
+        N::Exp_::Var(sp!(_, v_)) => {
+            let is_unbound_param = context.all_params.get(v_).is_some_and(|is_bound| !is_bound);
+            if is_unbound_param {
+                assert!(!context.lambdas.contains_key(v_));
+                assert!(!context.by_name_args.contains_key(v_));
+                assert!(
+                    context.core.env.has_errors(),
+                    "ICE unbound param should have already resulted in an error"
+                );
+                *e_ = N::Exp_::UnresolvedError;
+            }
+        }
+        N::Exp_::VarCall(sp!(_, v_), sp!(_, es)) => {
+            exps(context, es);
+            let is_unbound_param = context.all_params.get(v_).is_some_and(|is_bound| !is_bound);
+            if is_unbound_param {
+                assert!(!context.lambdas.contains_key(v_));
+                assert!(!context.by_name_args.contains_key(v_));
+                assert!(
+                    context.core.env.has_errors(),
+                    "ICE unbound param should have already resulted in an error"
+                );
+                *e_ = N::Exp_::UnresolvedError;
+            }
+        }
     }
 }
 
