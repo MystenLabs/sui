@@ -17,7 +17,7 @@ Response: {
     "suiCoins": {
       "edges": [
         {
-          "cursor": "IBn/n37YAglMINy8F0BybIMhX8IK5wfnqbFSHafuIC4IAAAAAAAAAAA=",
+          "cursor": "IBn/n37YAglMINy8F0BybIMhX8IK5wfnqbFSHafuIC4IAQAAAAAAAAA=",
           "node": {
             "coinBalance": "300000000000000",
             "contents": {
@@ -28,7 +28,7 @@ Response: {
           }
         },
         {
-          "cursor": "II/63MA+j6LwJAPcA/a3ji/YgODt3Psm3sgs+MwUOEQDAAAAAAAAAAA=",
+          "cursor": "II/63MA+j6LwJAPcA/a3ji/YgODt3Psm3sgs+MwUOEQDAQAAAAAAAAA=",
           "node": {
             "coinBalance": "30000000000000000",
             "contents": {
