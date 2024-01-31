@@ -29,7 +29,11 @@ Response: {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
             "gasPayment": {
-              "nodes": []
+              "nodes": [
+                {
+                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                }
+              ]
             },
             "gasPrice": "1000",
             "gasBudget": "5000000000"
@@ -192,7 +196,11 @@ Response: {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
             "gasPayment": {
-              "nodes": []
+              "nodes": [
+                {
+                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                }
+              ]
             },
             "gasPrice": "1000",
             "gasBudget": "5000000000"
@@ -464,7 +472,11 @@ Response: {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
             "gasPayment": {
-              "nodes": []
+              "nodes": [
+                {
+                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                }
+              ]
             },
             "gasPrice": "1000",
             "gasBudget": "5000000000"
@@ -855,7 +867,11 @@ Response: {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
             "gasPayment": {
-              "nodes": []
+              "nodes": [
+                {
+                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                }
+              ]
             },
             "gasPrice": "1000",
             "gasBudget": "5000000000"

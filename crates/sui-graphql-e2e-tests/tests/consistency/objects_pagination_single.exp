@@ -1,0 +1,341 @@
+processed 15 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1 'publish'. lines 10-31:
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5456800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 33-33:
+created: object(2,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'run'. lines 35-35:
+created: object(3,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'run'. lines 37-37:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 1301652, non_refundable_storage_fee: 13148
+
+task 5 'create-checkpoint'. lines 39-39:
+Checkpoint created: 1
+
+task 6 'run-graphql'. lines 41-69:
+Response: {
+  "data": {
+    "after_obj_3_0": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 4,
+            "contents": {
+              "type": {
+                "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+              },
+              "json": {
+                "id": "0xb23a719317ae04313acc7a3c08b08ed9a6b7de49573df3e73a0ed9983ca61d30",
+                "value": "100"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "before_obj_3_0": {
+      "objects": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 7 'run'. lines 71-71:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 8 'create-checkpoint'. lines 73-73:
+Checkpoint created: 2
+
+task 9 'run-graphql'. lines 75-104:
+Response: {
+  "data": {
+    "after_obj_3_0_chkpt_1": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 4,
+            "contents": {
+              "type": {
+                "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+              },
+              "json": {
+                "id": "0xb23a719317ae04313acc7a3c08b08ed9a6b7de49573df3e73a0ed9983ca61d30",
+                "value": "100"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "before_obj_3_0_chkpt_1": {
+      "objects": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 106-181:
+Response: {
+  "data": {
+    "address": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 4,
+            "contents": {
+              "type": {
+                "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+              },
+              "json": {
+                "id": "0x840ed3bde37ff3b9f31cb230f7ebab0ee65163591f912c9f0cdf71932c302ea5",
+                "value": "1"
+              }
+            }
+          },
+          {
+            "version": 5,
+            "contents": {
+              "type": {
+                "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+              },
+              "json": {
+                "id": "0xb23a719317ae04313acc7a3c08b08ed9a6b7de49573df3e73a0ed9983ca61d30",
+                "value": "200"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "after_obj_3_0_chkpt_2": {
+      "consistent_with_above": {
+        "nodes": [
+          {
+            "version": 5,
+            "contents": {
+              "type": {
+                "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+              },
+              "json": {
+                "id": "0xb23a719317ae04313acc7a3c08b08ed9a6b7de49573df3e73a0ed9983ca61d30",
+                "value": "200"
+              }
+            },
+            "owner": {
+              "owner": {
+                "objects": {
+                  "nodes": [
+                    {
+                      "version": 4,
+                      "contents": {
+                        "type": {
+                          "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+                        },
+                        "json": {
+                          "id": "0x840ed3bde37ff3b9f31cb230f7ebab0ee65163591f912c9f0cdf71932c302ea5",
+                          "value": "1"
+                        }
+                      }
+                    },
+                    {
+                      "version": 5,
+                      "contents": {
+                        "type": {
+                          "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+                        },
+                        "json": {
+                          "id": "0xb23a719317ae04313acc7a3c08b08ed9a6b7de49573df3e73a0ed9983ca61d30",
+                          "value": "200"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "before_obj_3_0_chkpt_2": {
+      "consistent_with_above": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 11 'run'. lines 183-183:
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 12 'create-checkpoint'. lines 185-185:
+Checkpoint created: 3
+
+task 13 'run-graphql'. lines 187-250:
+Response: {
+  "data": {
+    "after_obj_3_0_chkpt_2": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 5,
+            "contents": {
+              "type": {
+                "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+              },
+              "json": {
+                "id": "0xb23a719317ae04313acc7a3c08b08ed9a6b7de49573df3e73a0ed9983ca61d30",
+                "value": "200"
+              }
+            },
+            "this_should_differ": {
+              "owner": {
+                "objects": {
+                  "nodes": [
+                    {
+                      "version": 4,
+                      "contents": {
+                        "type": {
+                          "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+                        },
+                        "json": {
+                          "id": "0x840ed3bde37ff3b9f31cb230f7ebab0ee65163591f912c9f0cdf71932c302ea5",
+                          "value": "1"
+                        }
+                      }
+                    },
+                    {
+                      "version": 5,
+                      "contents": {
+                        "type": {
+                          "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+                        },
+                        "json": {
+                          "id": "0xb23a719317ae04313acc7a3c08b08ed9a6b7de49573df3e73a0ed9983ca61d30",
+                          "value": "200"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "before_obj_3_0_chkpt_2": {
+      "objects": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 14 'run-graphql'. lines 252-327:
+Response: {
+  "data": {
+    "address": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 6,
+            "contents": {
+              "type": {
+                "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+              },
+              "json": {
+                "id": "0x840ed3bde37ff3b9f31cb230f7ebab0ee65163591f912c9f0cdf71932c302ea5",
+                "value": "300"
+              }
+            }
+          },
+          {
+            "version": 5,
+            "contents": {
+              "type": {
+                "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+              },
+              "json": {
+                "id": "0xb23a719317ae04313acc7a3c08b08ed9a6b7de49573df3e73a0ed9983ca61d30",
+                "value": "200"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "after_obj_3_0_chkpt_3": {
+      "consistent_with_above": {
+        "nodes": [
+          {
+            "version": 5,
+            "contents": {
+              "type": {
+                "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+              },
+              "json": {
+                "id": "0xb23a719317ae04313acc7a3c08b08ed9a6b7de49573df3e73a0ed9983ca61d30",
+                "value": "200"
+              }
+            },
+            "owner": {
+              "owner": {
+                "objects": {
+                  "nodes": [
+                    {
+                      "version": 6,
+                      "contents": {
+                        "type": {
+                          "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+                        },
+                        "json": {
+                          "id": "0x840ed3bde37ff3b9f31cb230f7ebab0ee65163591f912c9f0cdf71932c302ea5",
+                          "value": "300"
+                        }
+                      }
+                    },
+                    {
+                      "version": 5,
+                      "contents": {
+                        "type": {
+                          "repr": "0x72d5085f1350e840e975c3c0ee1fce6661ed5455e5f29e33cade918aaca74ef9::M1::Object"
+                        },
+                        "json": {
+                          "id": "0xb23a719317ae04313acc7a3c08b08ed9a6b7de49573df3e73a0ed9983ca61d30",
+                          "value": "200"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "before_obj_3_0_chkpt_3": {
+      "consistent_with_above": {
+        "nodes": []
+      }
+    }
+  }
+}
