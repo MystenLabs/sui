@@ -52,7 +52,10 @@ type Query<ST, GB> = data::Query<ST, checkpoints::table, GB>;
 /// cursor.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub(crate) struct CheckpointCursor {
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number this was viewed at.
+    #[serde(rename = "c")]
+    pub checkpoint_viewed_at: u64,
+    #[serde(rename = "s")]
     pub sequence_number: u64,
 }
 
@@ -226,6 +229,23 @@ impl Checkpoint {
         }))
     }
 
+    /// Queries the database for the upper bound of the available range supported by the graphql
+    /// server. This method takes a connection, so that it can be used in an execute_repeatable
+    /// transaction.
+    pub(crate) fn latest_checkpoint_sequence_number(
+        conn: &mut Conn,
+    ) -> Result<u64, diesel::result::Error> {
+        use checkpoints::dsl;
+
+        let result: i64 = conn.first(move || {
+            dsl::checkpoints
+                .select(dsl::sequence_number)
+                .order_by(dsl::sequence_number.desc())
+        })?;
+
+        Ok(result as u64)
+    }
+
     /// Query the database for a `page` of checkpoints. The Page uses the checkpoint sequence number
     /// of the stored checkpoint and the checkpoint at which this was viewed at as the cursor, and
     /// can optionally be further `filter`-ed by an epoch number (to only return checkpoints within
@@ -278,9 +298,7 @@ impl Checkpoint {
         let mut conn = Connection::new(prev, next);
         let checkpoint_viewed_at = checkpoint_viewed_at.unwrap_or(rhs);
         for stored in results {
-            let cursor = stored
-                .consistent_cursor(checkpoint_viewed_at)
-                .encode_cursor();
+            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
             conn.edges.push(Edge::new(
                 cursor,
                 Checkpoint {
@@ -347,23 +365,16 @@ impl Paginated<Cursor> for StoredCheckpoint {
 }
 
 impl Target<Cursor> for StoredCheckpoint {
-    fn cursor(&self) -> Cursor {
+    fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
         Cursor::new(CheckpointCursor {
-            sequence_number: self.sequence_number as u64,
-            checkpoint_viewed_at: None,
-        })
-    }
-
-    fn consistent_cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
-        Cursor::new(CheckpointCursor {
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
             sequence_number: self.sequence_number as u64,
         })
     }
 }
 
 impl Checkpointed for Cursor {
-    fn checkpoint_viewed_at(&self) -> Option<u64> {
+    fn checkpoint_viewed_at(&self) -> u64 {
         self.checkpoint_viewed_at
     }
 }

@@ -12,7 +12,11 @@ use super::{
 // A helper type representing the read of a specific version of an object. Intended to be
 // "flattened" into other GraphQL types.
 #[derive(Clone, Eq, PartialEq)]
-pub(crate) struct ObjectRead(pub NativeObjectRef);
+pub(crate) struct ObjectRead {
+    pub native: NativeObjectRef,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
+}
 
 #[Object]
 impl ObjectRead {
@@ -29,7 +33,7 @@ impl ObjectRead {
     /// 32-byte hash that identifies the object's contents at this version, encoded as a Base58
     /// string.
     async fn digest(&self) -> String {
-        self.0 .2.base58_encode()
+        self.native.2.base58_encode()
     }
 
     /// The object at this version.  May not be available due to pruning.
@@ -39,7 +43,7 @@ impl ObjectRead {
             self.address_impl(),
             ObjectLookupKey::VersionAt {
                 version: self.version_impl(),
-                checkpoint_viewed_at: None,
+                checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
             },
         )
         .await
@@ -49,10 +53,10 @@ impl ObjectRead {
 
 impl ObjectRead {
     fn address_impl(&self) -> SuiAddress {
-        SuiAddress::from(self.0 .0)
+        SuiAddress::from(self.native.0)
     }
 
     fn version_impl(&self) -> u64 {
-        self.0 .1.value()
+        self.native.1.value()
     }
 }
