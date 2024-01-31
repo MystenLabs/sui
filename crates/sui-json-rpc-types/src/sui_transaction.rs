@@ -272,7 +272,7 @@ impl Display for SuiTransactionBlockResponse {
         }
 
         if let Some(e) = &self.events {
-            writeln!(writer, "{}", e)?;
+            write!(writer, "{}", e)?;
         }
 
         if let Some(object_changes) = &self.object_changes {
@@ -336,7 +336,7 @@ fn write_obj_changes<T: Display>(
     builder: &mut TableBuilder,
 ) -> std::fmt::Result {
     if !values.is_empty() {
-        builder.push_record(vec![format!("\n{} Objects: ", output_string)]);
+        builder.push_record(vec![format!("{} Objects: ", output_string)]);
         for obj in values {
             builder.push_record(vec![format!("{}", obj)]);
         }
@@ -405,44 +405,44 @@ impl Display for SuiTransactionBlockKind {
         let mut writer = String::new();
         match &self {
             Self::ChangeEpoch(e) => {
-                writeln!(writer, "Transaction Kind : Epoch Change")?;
-                writeln!(writer, "New epoch ID : {}", e.epoch)?;
-                writeln!(writer, "Storage gas reward : {}", e.storage_charge)?;
-                writeln!(writer, "Computation gas reward : {}", e.computation_charge)?;
-                writeln!(writer, "Storage rebate : {}", e.storage_rebate)?;
-                writeln!(writer, "Timestamp : {}", e.epoch_start_timestamp_ms)?;
+                writeln!(writer, "Transaction Kind: Epoch Change")?;
+                writeln!(writer, "New epoch ID: {}", e.epoch)?;
+                writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
+                writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
+                writeln!(writer, "Storage rebate: {}", e.storage_rebate)?;
+                writeln!(writer, "Timestamp: {}", e.epoch_start_timestamp_ms)?;
             }
             Self::Genesis(_) => {
-                writeln!(writer, "Transaction Kind : Genesis Transaction")?;
+                writeln!(writer, "Transaction Kind: Genesis Transaction")?;
             }
             Self::ConsensusCommitPrologue(p) => {
-                writeln!(writer, "Transaction Kind : Consensus Commit Prologue")?;
+                writeln!(writer, "Transaction Kind: Consensus Commit Prologue")?;
                 writeln!(
                     writer,
-                    "Epoch: {}, Round: {}, Timestamp : {}",
+                    "Epoch: {}, Round: {}, Timestamp: {}",
                     p.epoch, p.round, p.commit_timestamp_ms
                 )?;
             }
             Self::ConsensusCommitPrologueV2(p) => {
-                writeln!(writer, "Transaction Kind : Consensus Commit Prologue V2")?;
+                writeln!(writer, "Transaction Kind: Consensus Commit Prologue V2")?;
                 writeln!(
                     writer,
-                    "Epoch: {}, Round: {}, Timestamp : {}, ConsensusCommitDigest : {}",
+                    "Epoch: {}, Round: {}, Timestamp: {}, ConsensusCommitDigest: {}",
                     p.epoch, p.round, p.commit_timestamp_ms, p.consensus_commit_digest
                 )?;
             }
             Self::ProgrammableTransaction(p) => {
-                writeln!(writer, "Transaction Kind : Programmable")?;
-                write!(writer, "{p}")?;
+                write!(writer, "Transaction Kind: Programmable")?;
+                write!(writer, "{}", crate::displays::Pretty(p))?;
             }
             Self::AuthenticatorStateUpdate(_) => {
-                writeln!(writer, "Transaction Kind : Authenticator State Update")?;
+                writeln!(writer, "Transaction Kind: Authenticator State Update")?;
             }
             Self::RandomnessStateUpdate(_) => {
-                writeln!(writer, "Transaction Kind : Randomness State Update")?;
+                writeln!(writer, "Transaction Kind: Randomness State Update")?;
             }
             Self::EndOfEpochTransaction(_) => {
-                writeln!(writer, "Transaction Kind : End of Epoch Transaction")?;
+                writeln!(writer, "Transaction Kind: End of Epoch Transaction")?;
             }
         }
         write!(f, "{}", writer)
@@ -883,21 +883,21 @@ impl Display for SuiTransactionBlockEffects {
         }
 
         if !self.mutated().is_empty() {
-            builder.push_record(vec![format!("\nMutated Objects: ")]);
+            builder.push_record(vec![format!("Mutated Objects: ")]);
             for oref in self.mutated() {
                 builder.push_record(vec![owned_objref_string(oref)]);
             }
         }
 
         if !self.shared_objects().is_empty() {
-            builder.push_record(vec![format!("\nShared Objects: ")]);
+            builder.push_record(vec![format!("Shared Objects: ")]);
             for oref in self.shared_objects() {
                 builder.push_record(vec![objref_string(oref)]);
             }
         }
 
         if !self.deleted().is_empty() {
-            builder.push_record(vec![format!("\nDeleted Objects: ")]);
+            builder.push_record(vec![format!("Deleted Objects: ")]);
 
             for oref in self.deleted() {
                 builder.push_record(vec![objref_string(oref)]);
@@ -905,7 +905,7 @@ impl Display for SuiTransactionBlockEffects {
         }
 
         if !self.wrapped().is_empty() {
-            builder.push_record(vec![format!("\nWrapped Objects: ")]);
+            builder.push_record(vec![format!("Wrapped Objects: ")]);
 
             for oref in self.wrapped() {
                 builder.push_record(vec![objref_string(oref)]);
@@ -913,20 +913,20 @@ impl Display for SuiTransactionBlockEffects {
         }
 
         if !self.unwrapped().is_empty() {
-            builder.push_record(vec![format!("\nUnwrapped Objects: ")]);
+            builder.push_record(vec![format!("Unwrapped Objects: ")]);
             for oref in self.unwrapped() {
                 builder.push_record(vec![owned_objref_string(oref)]);
             }
         }
 
         builder.push_record(vec![format!(
-            "\nGas Object: \n{}",
+            "Gas Object: \n{}",
             owned_objref_string(self.gas_object())
         )]);
 
         let gas_cost_summary = self.gas_cost_summary();
         builder.push_record(vec![format!(
-            "\nGas Cost Summary:\n   \
+            "Gas Cost Summary:\n   \
              Storage Cost: {}\n   \
              Computation Cost: {}\n   \
              Storage Rebate: {}\n   \

@@ -21,12 +21,8 @@ use move_core_types::{
     transaction_argument::{convert_txn_args, TransactionArgument},
 };
 use move_package::compilation::compiled_package::CompiledPackage;
-#[cfg(feature = "gas-profiler")]
-use move_vm_profiler::GasProfiler;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::gas_schedule::CostTable;
-#[cfg(feature = "gas-profiler")]
-use move_vm_types::gas::GasMeter;
 use std::{fs, path::Path};
 
 pub fn run(
@@ -89,8 +85,10 @@ pub fn run(
         // script fun. parse module, extract script ID to pass to VM
         let module = CompiledModule::deserialize_with_defaults(&bytecode)
             .map_err(|e| anyhow!("Error deserializing module: {:?}", e))?;
-        #[cfg(feature = "gas-profiler")]
-        {
+        move_vm_profiler::gas_profiler_feature_enabled! {
+            use move_vm_profiler::GasProfiler;
+            use move_vm_types::gas::GasMeter;
+
             let gas_rem: u64 = gas_status.remaining_gas().into();
             gas_status.set_profiler(GasProfiler::init(
                 &session.vm_config().profiler_config,

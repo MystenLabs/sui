@@ -16,7 +16,7 @@ use crate::{
 };
 
 /// A common interface for consensus storage.
-pub(crate) trait Store {
+pub(crate) trait Store: Send + Sync {
     /// Writes blocks and consensus commits to store.
     fn write(&self, blocks: Vec<VerifiedBlock>, commits: Vec<Commit>) -> ConsensusResult<()>;
 

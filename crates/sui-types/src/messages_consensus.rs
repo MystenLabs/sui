@@ -9,6 +9,8 @@ use crate::messages_checkpoint::{
 };
 use crate::transaction::CertifiedTransaction;
 use byteorder::{BigEndian, ReadBytesExt};
+use fastcrypto::groups::bls12381;
+use fastcrypto_tbls::dkg;
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -67,6 +69,8 @@ pub enum ConsensusTransactionKey {
     // Key must include both id and jwk, because honest validators could be given multiple jwks for
     // the same id by malfunctioning providers.
     NewJWKFetched(Box<(AuthorityName, JwkId, JWK)>),
+    RandomnessDkgMessage(AuthorityName),
+    RandomnessDkgConfirmation(AuthorityName),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -92,6 +96,12 @@ impl Debug for ConsensusTransactionKey {
                     id,
                     jwk
                 )
+            }
+            Self::RandomnessDkgMessage(name) => {
+                write!(f, "RandomnessDkgMessage({:?})", name.concise())
+            }
+            Self::RandomnessDkgConfirmation(name) => {
+                write!(f, "RandomnessDkgConfirmation({:?})", name.concise())
             }
         }
     }
@@ -161,6 +171,14 @@ pub enum ConsensusTransactionKind {
     CapabilityNotification(AuthorityCapabilities),
     NewJWKFetched(AuthorityName, JwkId, JWK),
     RandomnessStateUpdate(u64, Vec<u8>),
+    // DKG is used to generate keys for use in the random beacon protocol.
+    // `RandomnessDkgMessage` is sent out at start-of-epoch to initiate the process.
+    // Contents are a serialized `fastcrypto_tbls::dkg::Message`.
+    RandomnessDkgMessage(AuthorityName, Vec<u8>),
+    // `RandomnessDkgConfirmation` is the second DKG message, sent as soon as a threshold amount of
+    // `RandomnessDkgMessages` have been received locally, to complete the key generation process.
+    // Contents are a serialized `fastcrypto_tbls::dkg::Confirmation`.
+    RandomnessDkgConfirmation(AuthorityName, Vec<u8>),
 }
 
 impl ConsensusTransaction {
@@ -236,6 +254,35 @@ impl ConsensusTransaction {
         }
     }
 
+    pub fn new_randomness_dkg_message(
+        authority: AuthorityName,
+        message: &dkg::Message<bls12381::G2Element, bls12381::G2Element>,
+    ) -> Self {
+        let message = bcs::to_bytes(message).expect("message serialization should not fail");
+        let mut hasher = DefaultHasher::new();
+        message.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, message),
+        }
+    }
+
+    pub fn new_randomness_dkg_confirmation(
+        authority: AuthorityName,
+        confirmation: &dkg::Confirmation<bls12381::G2Element>,
+    ) -> Self {
+        let confirmation =
+            bcs::to_bytes(confirmation).expect("message serialization should not fail");
+        let mut hasher = DefaultHasher::new();
+        confirmation.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::RandomnessDkgConfirmation(authority, confirmation),
+        }
+    }
+
     pub fn get_tracking_id(&self) -> u64 {
         (&self.tracking_id[..])
             .read_u64::<BigEndian>()
@@ -268,6 +315,12 @@ impl ConsensusTransaction {
             }
             ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {
                 unreachable!("there should never be a RandomnessStateUpdate with SequencedConsensusTransactionKind::External")
+            }
+            ConsensusTransactionKind::RandomnessDkgMessage(authority, _) => {
+                ConsensusTransactionKey::RandomnessDkgMessage(*authority)
+            }
+            ConsensusTransactionKind::RandomnessDkgConfirmation(authority, _) => {
+                ConsensusTransactionKey::RandomnessDkgConfirmation(*authority)
             }
         }
     }

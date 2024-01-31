@@ -90,7 +90,10 @@ const guides = [
 			{
 				type: 'category',
 				label: 'Advanced Topics',
-				items: ['guides/developer/advanced/asset-tokenization'],
+				items: [
+					'guides/developer/advanced/asset-tokenization',
+					'guides/developer/advanced/graphql-migration',
+				],
 			},
 			/*{
 				type: 'category',

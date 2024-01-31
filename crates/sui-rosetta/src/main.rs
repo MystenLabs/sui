@@ -12,17 +12,17 @@ use std::time::Duration;
 use anyhow::anyhow;
 use clap::Parser;
 use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::traits::EncodeDecodeBase64;
 use serde_json::{json, Value};
-use tracing::info;
-use tracing::log::warn;
-
 use sui_config::{sui_config_dir, Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KEYSTORE_FILENAME};
 use sui_node::SuiNode;
 use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{EncodeDecodeBase64, KeypairTraits, SuiKeyPair, ToFromBytes};
+use sui_types::crypto::{KeypairTraits, SuiKeyPair, ToFromBytes};
+use tracing::info;
+use tracing::log::warn;
 
 #[derive(Parser)]
 #[clap(name = "sui-rosetta", rename_all = "kebab-case", author, version)]
@@ -210,7 +210,7 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
         .iter()
         .map(|kpstr| {
             let key = SuiKeyPair::decode_base64(kpstr);
-            key.map(|k| (Into::<SuiAddress>::into(&k.public()), k))
+            key.map(|k| (SuiAddress::from(&k.public()), k))
         })
         .collect::<Result<BTreeMap<_, _>, _>>()
         .unwrap();

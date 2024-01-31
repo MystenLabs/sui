@@ -58,6 +58,7 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/A",
                 ),
+                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
@@ -66,12 +67,14 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/ADep-v1",
                 ),
+                version: None,
                 resolver: None,
             },
             "B": Package {
                 kind: Local(
                     "deps_only/B",
                 ),
+                version: None,
                 resolver: None,
             },
         },

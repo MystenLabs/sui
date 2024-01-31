@@ -22,6 +22,7 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/other_dep",
                 ),
+                version: None,
                 resolver: None,
             },
         },

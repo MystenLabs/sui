@@ -158,9 +158,10 @@ impl TransactionExecutionApi {
         let mut events: Option<SuiTransactionBlockEvents> = None;
         if opts.show_events {
             let epoch_store = self.state.load_epoch_store_one_call_per_task();
+            let backing_package_store = self.state.get_backing_package_store();
             let mut layout_resolver = epoch_store
                 .executor()
-                .type_layout_resolver(Box::new(self.state.get_db()));
+                .type_layout_resolver(Box::new(backing_package_store.as_ref()));
             events = Some(SuiTransactionBlockEvents::try_from(
                 transaction_events,
                 digest,

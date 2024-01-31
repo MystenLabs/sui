@@ -40,114 +40,121 @@ Checkpoint created: 3
 task 9 'advance-epoch'. lines 53-53:
 Epoch advanced: 1
 
-task 10 'run-graphql'. lines 55-65:
+task 10 'run-graphql'. lines 55-67:
 Response: {
   "data": {
     "epoch": {
       "validatorSet": {
-        "activeValidators": [
-          {
-            "apy": 1,
-            "name": "validator-0"
-          }
-        ]
+        "activeValidators": {
+          "nodes": [
+            {
+              "apy": 1,
+              "name": "validator-0"
+            }
+          ]
+        }
       }
     }
   }
 }
 
-task 11 'run'. lines 67-67:
+task 11 'run'. lines 69-69:
 created: object(11,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 12 'run'. lines 69-69:
+task 12 'run'. lines 71-71:
 created: object(12,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 13 'run'. lines 71-71:
+task 13 'run'. lines 73-73:
 created: object(13,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 14 'run'. lines 73-73:
+task 14 'run'. lines 75-75:
 created: object(14,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 15 'run'. lines 75-75:
+task 15 'run'. lines 77-77:
 created: object(15,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 16 'run'. lines 77-77:
+task 16 'run'. lines 79-79:
 created: object(16,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 17 'run'. lines 79-79:
+task 17 'run'. lines 81-81:
 created: object(17,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 18 'run'. lines 81-81:
+task 18 'run'. lines 83-83:
 created: object(18,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 19 'run'. lines 83-83:
+task 19 'run'. lines 85-85:
 created: object(19,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 20 'run'. lines 85-85:
+task 20 'run'. lines 87-87:
 created: object(20,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 21 'run'. lines 87-87:
+task 21 'run'. lines 89-89:
 created: object(21,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 22 'run'. lines 89-89:
+task 22 'run'. lines 91-91:
 created: object(22,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 23 'run'. lines 91-91:
+task 23 'run'. lines 93-93:
 created: object(23,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 24 'run'. lines 93-93:
+task 24 'run'. lines 95-95:
 created: object(24,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 25 'run'. lines 95-95:
+task 25 'run'. lines 97-97:
 created: object(25,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 26 'create-checkpoint'. lines 97-97:
+task 26 'create-checkpoint'. lines 99-99:
 Checkpoint created: 5
 
-task 27 'advance-epoch'. lines 99-101:
+task 27 'advance-epoch'. lines 101-103:
 Epoch advanced: 2
 
-task 28 'run-graphql'. lines 103-113:
+task 28 'run-graphql'. lines 105-122:
 Response: {
   "data": {
     "epoch": {
       "validatorSet": {
-        "activeValidators": [
-          {
-            "apy": 2,
-            "name": "validator-0"
-          }
-        ]
+        "activeValidators": {
+          "nodes": [
+            {
+              "apy": 2,
+              "name": "validator-0",
+              "reportRecords": {
+                "nodes": []
+              }
+            }
+          ]
+        }
       }
     }
   }

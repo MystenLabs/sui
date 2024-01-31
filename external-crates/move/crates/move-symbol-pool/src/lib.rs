@@ -87,6 +87,7 @@ static_symbols!(
     "DenyList",
     "%implicit",
     "%macro",
+    "lint",
 );
 
 /// The global, unique cache of strings.

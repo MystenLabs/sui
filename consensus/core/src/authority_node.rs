@@ -5,14 +5,14 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::block_manager::BlockManager;
-use consensus_config::{AuthorityIndex, Committee, Parameters, ProtocolKeyPair};
+use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use prometheus::Registry;
 use sui_protocol_config::ProtocolConfig;
 use tracing::info;
 
 use crate::block_verifier::BlockVerifier;
 use crate::context::Context;
-use crate::core::{Core, CoreSignals};
+use crate::core::{Core, CoreOptions, CoreSignals};
 use crate::metrics::initialise_metrics;
 use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
@@ -29,8 +29,8 @@ impl AuthorityNode {
         committee: Committee,
         parameters: Parameters,
         protocol_config: ProtocolConfig,
-        // To avoid accidentally leaking the private key, the key pair should only be
-        // stored in the Block signer.
+        // To avoid accidentally leaking the private key, the key pair should only be stored in core
+        block_signer: NetworkKeyPair,
         _signer: ProtocolKeyPair,
         _block_verifier: impl BlockVerifier,
         registry: Registry,
@@ -52,7 +52,14 @@ impl AuthorityNode {
         // Construct Core
         let (core_signals, _signals_receivers) = CoreSignals::new();
         let block_manager = BlockManager::new();
-        let _core = Core::new(context.clone(), tx_consumer, block_manager, core_signals);
+        let _core = Core::new(
+            context.clone(),
+            tx_consumer,
+            block_manager,
+            core_signals,
+            CoreOptions::default(),
+            block_signer,
+        );
 
         Self {
             context,
@@ -82,7 +89,7 @@ impl AuthorityNode {
 
 #[cfg(test)]
 mod tests {
-    use consensus_config::{Committee, Parameters, ProtocolKeyPair};
+    use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
     use fastcrypto::traits::ToFromBytes;
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
@@ -98,6 +105,7 @@ mod tests {
         let block_verifier = TestBlockVerifier {};
 
         let (own_index, _) = committee.authorities().last().unwrap();
+        let block_signer = NetworkKeyPair::from_bytes(keypairs[0].0.as_bytes()).unwrap();
         let signer = ProtocolKeyPair::from_bytes(keypairs[0].1.as_bytes()).unwrap();
 
         let authority = AuthorityNode::start(
@@ -105,6 +113,7 @@ mod tests {
             committee,
             parameters,
             ProtocolConfig::get_for_min_version(),
+            block_signer,
             signer,
             block_verifier,
             registry,

@@ -90,7 +90,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors 0
+//# run-graphql --cursors {"i":0,"c":1}
 {
   transactionBlocks(last: 1, filter: { signAddress: "@{A}" }) {
     nodes {

@@ -1,4 +1,4 @@
-warning[W10007]: potential issue with attribute value
+warning[W10007]: issue with attribute value
   ┌─ tests/move_check/unit_test/expected_failure_out_of_range_value.move:6:24
   │
 6 │     #[expected_failure(abort_code=18446744073709551614)]
@@ -6,7 +6,7 @@ warning[W10007]: potential issue with attribute value
   │                        │           
   │                        WARNING: passes for an abort from any module.
 
-warning[W10007]: potential issue with attribute value
+warning[W10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/expected_failure_out_of_range_value.move:11:24
    │
 11 │     #[expected_failure(abort_code=18446744073709551615)]

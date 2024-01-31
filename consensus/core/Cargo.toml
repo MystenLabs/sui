@@ -20,6 +20,7 @@ parking_lot.workspace = true
 prometheus.workspace = true
 rand.workspace = true
 serde.workspace = true
+shared-crypto.workspace = true
 sui-protocol-config.workspace = true
 tap.workspace = true
 thiserror.workspace = true
@@ -32,3 +33,4 @@ workspace-hack.workspace = true
 [dev-dependencies]
 rstest.workspace = true
 tempfile.workspace = true
+telemetry-subscribers.workspace = true

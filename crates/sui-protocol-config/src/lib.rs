@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 35;
+const MAX_PROTOCOL_VERSION: u64 = 36;
 
 // Record history of protocol version allocations here:
 //
@@ -105,6 +105,8 @@ const MAX_PROTOCOL_VERSION: u64 = 35;
 // Version 34: Framework changes for random beacon.
 // Version 35: Add poseidon hash function.
 //             Enable coin deny list.
+// Version 36: Enable group operations native functions in devnet.
+//             Enable shared object deletion in mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -376,6 +378,10 @@ struct FeatureFlags {
     // If true, enable the coin deny list.
     #[serde(skip_serializing_if = "is_false")]
     enable_coin_deny_list: bool,
+
+    // Enable native functions for group operations.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_group_ops_native_functions: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -849,6 +855,38 @@ pub struct ProtocolConfig {
     poseidon_bn254_cost_base: Option<u64>,
     poseidon_bn254_cost_per_block: Option<u64>,
 
+    // group_ops
+    group_ops_bls12381_decode_scalar_cost: Option<u64>,
+    group_ops_bls12381_decode_g1_cost: Option<u64>,
+    group_ops_bls12381_decode_g2_cost: Option<u64>,
+    group_ops_bls12381_decode_gt_cost: Option<u64>,
+    group_ops_bls12381_scalar_add_cost: Option<u64>,
+    group_ops_bls12381_g1_add_cost: Option<u64>,
+    group_ops_bls12381_g2_add_cost: Option<u64>,
+    group_ops_bls12381_gt_add_cost: Option<u64>,
+    group_ops_bls12381_scalar_sub_cost: Option<u64>,
+    group_ops_bls12381_g1_sub_cost: Option<u64>,
+    group_ops_bls12381_g2_sub_cost: Option<u64>,
+    group_ops_bls12381_gt_sub_cost: Option<u64>,
+    group_ops_bls12381_scalar_mul_cost: Option<u64>,
+    group_ops_bls12381_g1_mul_cost: Option<u64>,
+    group_ops_bls12381_g2_mul_cost: Option<u64>,
+    group_ops_bls12381_gt_mul_cost: Option<u64>,
+    group_ops_bls12381_scalar_div_cost: Option<u64>,
+    group_ops_bls12381_g1_div_cost: Option<u64>,
+    group_ops_bls12381_g2_div_cost: Option<u64>,
+    group_ops_bls12381_gt_div_cost: Option<u64>,
+    group_ops_bls12381_g1_hash_to_base_cost: Option<u64>,
+    group_ops_bls12381_g2_hash_to_base_cost: Option<u64>,
+    group_ops_bls12381_g1_hash_to_cost_per_byte: Option<u64>,
+    group_ops_bls12381_g2_hash_to_cost_per_byte: Option<u64>,
+    group_ops_bls12381_g1_msm_base_cost: Option<u64>,
+    group_ops_bls12381_g2_msm_base_cost: Option<u64>,
+    group_ops_bls12381_g1_msm_base_cost_per_input: Option<u64>,
+    group_ops_bls12381_g2_msm_base_cost_per_input: Option<u64>,
+    group_ops_bls12381_msm_max_len: Option<u32>,
+    group_ops_bls12381_pairing_cost: Option<u64>,
+
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
@@ -1101,6 +1139,10 @@ impl ProtocolConfig {
 
     pub fn enable_coin_deny_list(&self) -> bool {
         self.feature_flags.enable_coin_deny_list
+    }
+
+    pub fn enable_group_ops_native_functions(&self) -> bool {
+        self.feature_flags.enable_group_ops_native_functions
     }
 }
 
@@ -1451,6 +1493,38 @@ impl ProtocolConfig {
             hmac_hmac_sha3_256_input_cost_per_byte: Some(2),
             hmac_hmac_sha3_256_input_cost_per_block: Some(2),
 
+            // group ops
+            group_ops_bls12381_decode_scalar_cost: None,
+            group_ops_bls12381_decode_g1_cost: None,
+            group_ops_bls12381_decode_g2_cost: None,
+            group_ops_bls12381_decode_gt_cost: None,
+            group_ops_bls12381_scalar_add_cost: None,
+            group_ops_bls12381_g1_add_cost: None,
+            group_ops_bls12381_g2_add_cost: None,
+            group_ops_bls12381_gt_add_cost: None,
+            group_ops_bls12381_scalar_sub_cost: None,
+            group_ops_bls12381_g1_sub_cost: None,
+            group_ops_bls12381_g2_sub_cost: None,
+            group_ops_bls12381_gt_sub_cost: None,
+            group_ops_bls12381_scalar_mul_cost: None,
+            group_ops_bls12381_g1_mul_cost: None,
+            group_ops_bls12381_g2_mul_cost: None,
+            group_ops_bls12381_gt_mul_cost: None,
+            group_ops_bls12381_scalar_div_cost: None,
+            group_ops_bls12381_g1_div_cost: None,
+            group_ops_bls12381_g2_div_cost: None,
+            group_ops_bls12381_gt_div_cost: None,
+            group_ops_bls12381_g1_hash_to_base_cost: None,
+            group_ops_bls12381_g2_hash_to_base_cost: None,
+            group_ops_bls12381_g1_hash_to_cost_per_byte: None,
+            group_ops_bls12381_g2_hash_to_cost_per_byte: None,
+            group_ops_bls12381_g1_msm_base_cost: None,
+            group_ops_bls12381_g2_msm_base_cost: None,
+            group_ops_bls12381_g1_msm_base_cost_per_input: None,
+            group_ops_bls12381_g2_msm_base_cost_per_input: None,
+            group_ops_bls12381_msm_max_len: None,
+            group_ops_bls12381_pairing_cost: None,
+
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
             // zklogin::check_zklogin_issuer
@@ -1759,6 +1833,45 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.enable_coin_deny_list = true;
                 }
+                36 => {
+                    // Only enable group ops on devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_group_ops_native_functions = true;
+                        // Next values are arbitrary in a similar way as the other crypto native functions.
+                        cfg.group_ops_bls12381_decode_scalar_cost = Some(52);
+                        cfg.group_ops_bls12381_decode_g1_cost = Some(52);
+                        cfg.group_ops_bls12381_decode_g2_cost = Some(52);
+                        cfg.group_ops_bls12381_decode_gt_cost = Some(52);
+                        cfg.group_ops_bls12381_scalar_add_cost = Some(52);
+                        cfg.group_ops_bls12381_g1_add_cost = Some(52);
+                        cfg.group_ops_bls12381_g2_add_cost = Some(52);
+                        cfg.group_ops_bls12381_gt_add_cost = Some(52);
+                        cfg.group_ops_bls12381_scalar_sub_cost = Some(52);
+                        cfg.group_ops_bls12381_g1_sub_cost = Some(52);
+                        cfg.group_ops_bls12381_g2_sub_cost = Some(52);
+                        cfg.group_ops_bls12381_gt_sub_cost = Some(52);
+                        cfg.group_ops_bls12381_scalar_mul_cost = Some(52);
+                        cfg.group_ops_bls12381_g1_mul_cost = Some(52);
+                        cfg.group_ops_bls12381_g2_mul_cost = Some(52);
+                        cfg.group_ops_bls12381_gt_mul_cost = Some(52);
+                        cfg.group_ops_bls12381_scalar_div_cost = Some(52);
+                        cfg.group_ops_bls12381_g1_div_cost = Some(52);
+                        cfg.group_ops_bls12381_g2_div_cost = Some(52);
+                        cfg.group_ops_bls12381_gt_div_cost = Some(52);
+                        cfg.group_ops_bls12381_g1_hash_to_base_cost = Some(52);
+                        cfg.group_ops_bls12381_g2_hash_to_base_cost = Some(52);
+                        cfg.group_ops_bls12381_g1_hash_to_cost_per_byte = Some(2);
+                        cfg.group_ops_bls12381_g2_hash_to_cost_per_byte = Some(2);
+                        cfg.group_ops_bls12381_g1_msm_base_cost = Some(52);
+                        cfg.group_ops_bls12381_g2_msm_base_cost = Some(52);
+                        cfg.group_ops_bls12381_g1_msm_base_cost_per_input = Some(52);
+                        cfg.group_ops_bls12381_g2_msm_base_cost_per_input = Some(52);
+                        cfg.group_ops_bls12381_msm_max_len = Some(32);
+                        cfg.group_ops_bls12381_pairing_cost = Some(52);
+                    }
+                    // Enable shared object deletion on all networks.
+                    cfg.feature_flags.shared_object_deletion = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -1807,6 +1920,9 @@ impl ProtocolConfig {
     }
     pub fn set_enable_jwk_consensus_updates_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_jwk_consensus_updates = val
+    }
+    pub fn set_random_beacon_for_testing(&mut self, val: bool) {
+        self.feature_flags.random_beacon = val
     }
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val

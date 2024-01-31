@@ -9,8 +9,9 @@ use super::{big_int::BigInt, move_type::MoveType, owner::Owner, sui_address::Sui
 use crate::error::Error;
 
 pub(crate) struct BalanceChange {
-    // TODO: Move this type into indexer crates, rather than JSON-RPC.
     stored: StoredBalanceChange,
+    /// The checkpoint sequence number this was viewed at.
+    checkpoint_viewed_at: u64,
 }
 
 /// Effects to the balance (sum of coin values per coin type) owned by an address or object.
@@ -23,6 +24,7 @@ impl BalanceChange {
         match self.stored.owner {
             O::AddressOwner(addr) | O::ObjectOwner(addr) => Some(Owner {
                 address: SuiAddress::from(addr),
+                checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
             }),
 
             O::Shared { .. } | O::Immutable => None,
@@ -41,10 +43,17 @@ impl BalanceChange {
 }
 
 impl BalanceChange {
-    pub(crate) fn read(bytes: &[u8]) -> Result<Self, Error> {
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this
+    /// `BalanceChange` was queried for, or `None` if the data was requested at the latest
+    /// checkpoint. This is stored on `BalanceChange` so that when viewing that entity's state, it
+    /// will be as if it was read at the same checkpoint.
+    pub(crate) fn read(bytes: &[u8], checkpoint_viewed_at: u64) -> Result<Self, Error> {
         let stored = bcs::from_bytes(bytes)
             .map_err(|e| Error::Internal(format!("Error deserializing BalanceChange: {e}")))?;
 
-        Ok(Self { stored })
+        Ok(Self {
+            stored,
+            checkpoint_viewed_at,
+        })
     }
 }

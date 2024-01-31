@@ -34,7 +34,6 @@ pub mod sui_mode;
 mod to_bytecode;
 pub mod typing;
 pub mod unit_test;
-pub mod verification;
 
 pub use command_line::{
     compiler::{

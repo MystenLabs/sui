@@ -13,7 +13,11 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceMap;
-use move_compiler::{expansion::ast as EA, parser::ast as PA, shared::Name};
+use move_compiler::{
+    expansion::ast as EA,
+    parser::ast as PA,
+    shared::{unique_map::UniqueMap, Name, TName},
+};
 use move_ir_types::ast::ConstantName;
 
 use crate::{
@@ -140,7 +144,10 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
 /// # Attribute Analysis
 
 impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
-    pub fn translate_attributes(&mut self, attrs: &EA::Attributes) -> Vec<Attribute> {
+    pub fn translate_attributes<T: TName>(
+        &mut self,
+        attrs: &UniqueMap<T, EA::Attribute>,
+    ) -> Vec<Attribute> {
         attrs
             .iter()
             .map(|(_, _, attr)| self.translate_attribute(attr))

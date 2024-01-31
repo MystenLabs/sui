@@ -24,11 +24,7 @@ mod checked {
         account_address::AccountAddress,
         language_storage::{ModuleId, StructTag, TypeTag},
     };
-    #[cfg(feature = "gas-profiler")]
-    use move_vm_profiler::GasProfiler;
     use move_vm_runtime::{move_vm::MoveVM, session::Session};
-    #[cfg(feature = "gas-profiler")]
-    use move_vm_types::gas::GasMeter;
     use move_vm_types::loaded_data::runtime_types::Type;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, ObjectRuntime, RuntimeResults,
@@ -205,6 +201,9 @@ mod checked {
             // Set the profiler if in CLI
             #[skip_checked_arithmetic]
             move_vm_profiler::gas_profiler_feature_enabled! {
+                use move_vm_profiler::GasProfiler;
+                use move_vm_types::gas::GasMeter;
+
                 let tx_digest = tx_context.digest();
                 let remaining_gas: u64 =
                     move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())
