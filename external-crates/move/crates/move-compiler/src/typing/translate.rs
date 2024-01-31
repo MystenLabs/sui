@@ -2688,7 +2688,11 @@ fn macro_method_call(
     let (m, f, fty, first_arg) =
         method_call_resolve(context, loc, edotted, edotted_ty, method, ty_args_opt)?;
     let mut args = vec![macro_expand::EitherArg::ByValue(first_arg)];
-    args.extend(nargs.into_iter().map(macro_expand::EitherArg::ByName));
+    args.extend(
+        nargs
+            .into_iter()
+            .map(|e| macro_expand::EitherArg::ByName(block_macro_arg(context, e))),
+    );
     let (type_arguments, args, return_ty) = macro_call_impl(context, loc, m, f, fty, argloc, args);
     Some(expand_macro(
         context,
@@ -2713,7 +2717,7 @@ fn macro_module_call(
     let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt);
     let args = nargs
         .into_iter()
-        .map(macro_expand::EitherArg::ByName)
+        .map(|e| macro_expand::EitherArg::ByName(block_macro_arg(context, e)))
         .collect();
     let (type_arguments, args, return_ty) = macro_call_impl(context, loc, m, f, fty, argloc, args);
     expand_macro(context, loc, m, f, type_arguments, args, return_ty)
@@ -2884,6 +2888,31 @@ fn expand_macro(
     };
     context.pop_macro_expansion(&m, &f);
     res
+}
+
+/// We need to make sure that arguments to macro calls are either lambdas or a Block
+/// These arguments are call-by-name so the whole expression is substituted in. So we need to track
+/// metadata about the scope where these expressions were originally written.
+/// The Block lets us track two pieces of metadata
+/// 1) We can track the use_fun_scope, which is used for resolving method calls correctly
+/// 2) After substitution, we can mark the Block as coming from a macro expansion which is used
+///    for tracking recursive macro calls
+fn block_macro_arg(context: &Context, sp!(loc, ne_): N::Exp) -> N::Exp {
+    let ne_ = match ne_ {
+        N::Exp_::Block(_) | N::Exp_::Lambda(_) | N::Exp_::UnresolvedError => ne_,
+        ne_ => {
+            let color = context.current_call_color();
+            let seq_ = VecDeque::from([sp(loc, N::SequenceItem_::Seq(Box::new(sp(loc, ne_))))]);
+            let seq = (N::UseFuns::new(color), seq_);
+            let block = N::Block {
+                name: None,
+                from_lambda_expansion: None,
+                seq,
+            };
+            N::Exp_::Block(block)
+        }
+    };
+    sp(loc, ne_)
 }
 
 //**************************************************************************************************

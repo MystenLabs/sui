@@ -813,6 +813,13 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             recolor_exp(recolor, &mut arg);
             context.core.set_max_variable_color(recolor.max_color());
 
+            // mark the arg as coming from an argument substitution
+            match &mut arg.value {
+                N::Exp_::Block(block) => block.from_lambda_expansion = Some(*eloc),
+                N::Exp_::UnresolvedError => (),
+                _ => unreachable!("ICE all macro args should have been made blocks in naming"),
+            };
+
             *e_ = N::Exp_::Annotate(Box::new(arg), expected_ty);
         }
         N::Exp_::VarCall(sp!(_, v_), _) if context.by_name_args.contains_key(v_) => {

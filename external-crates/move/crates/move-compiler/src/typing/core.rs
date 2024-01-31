@@ -268,7 +268,7 @@ impl<'env> Context<'env> {
     /// true iff it is safe to expand,
     /// false with an error otherwise (e.g. a recursive expansion)
     pub fn add_macro_expansion(&mut self, m: ModuleIdent, f: FunctionName, loc: Loc) -> bool {
-        let current_call_color = self.use_funs.last().unwrap().color.unwrap();
+        let current_call_color = self.current_call_color();
 
         let mut prev_opt = None;
         for (idx, mexp) in self.macro_expansion.iter().enumerate().rev() {
@@ -366,6 +366,10 @@ impl<'env> Context<'env> {
                 panic!("ICE macro expansion stack should have a lambda when leaving a lambda")
             };
         }
+    }
+
+    pub fn current_call_color(&self) -> Color {
+        self.use_funs.last().unwrap().color.unwrap()
     }
 
     pub fn reset_for_module_item(&mut self) {

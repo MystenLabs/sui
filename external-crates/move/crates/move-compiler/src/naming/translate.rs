@@ -1793,13 +1793,13 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 NE::UnresolvedError
             }
             Some(d) => {
+                let ty_args = tys_opt.map(|tys| types(context, tys));
+                let nes = call_args(context, rhs);
                 if is_macro {
                     context
                         .env
                         .check_feature(FeatureGate::Macros, context.current_package, eloc);
                 }
-                let ty_args = tys_opt.map(|tys| types(context, tys));
-                let nes = call_args(context, rhs);
                 NE::MethodCall(d, n, is_macro, ty_args, nes)
             }
         },
