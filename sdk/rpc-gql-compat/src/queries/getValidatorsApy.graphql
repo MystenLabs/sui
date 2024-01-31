@@ -3,10 +3,16 @@ query getValidatorsApy {
 		epochId
 		validatorSet {
 			activeValidators {
-				address {
-					address
+				pageInfo {
+					hasNextPage
+					endCursor
 				}
-				apy
+				nodes {
+					address {
+						address
+					}
+					apy
+				}
 			}
 		}
 	}

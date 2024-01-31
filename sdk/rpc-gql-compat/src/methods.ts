@@ -12,7 +12,12 @@ import type {
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { normalizeStructTag, parseStructTag } from '@mysten/sui.js/utils';
 
-import type { ObjectFilter, QueryEventsQueryVariables } from './generated/queries.js';
+import type {
+	ObjectFilter,
+	QueryEventsQueryVariables,
+	Rpc_Checkpoint_FieldsFragment,
+	Rpc_Transaction_FieldsFragment,
+} from './generated/queries.js';
 import {
 	DevInspectTransactionBlockDocument,
 	DryRunTransactionBlockDocument,
@@ -48,6 +53,11 @@ import {
 	GetValidatorsApyDocument,
 	MultiGetObjectsDocument,
 	MultiGetTransactionBlocksDocument,
+	PaginateCheckpointTransactionBlocksDocument,
+	PaginateDryRunTransactionBlockListsDocument,
+	PaginateEpochValidatorsDocument,
+	PaginateMoveModuleListsDocument,
+	PaginateTransactionBlockListsDocument,
 	QueryEventsDocument,
 	QueryTransactionBlocksDocument,
 	ResolveNameServiceAddressDocument,
@@ -289,8 +299,65 @@ export const RPC_METHODS: {
 			(data) => data.object?.asMovePackage,
 		);
 
+		let hasNextPage = movePackage.modules?.pageInfo.hasNextPage ?? false;
+		let cursor = movePackage.modules?.pageInfo.endCursor;
+		while (hasNextPage) {
+			const page = await transport.graphqlQuery(
+				{
+					query: GetNormalizedMoveModulesByPackageDocument,
+					variables: {
+						packageId: pkg,
+						cursor,
+					},
+				},
+				(data) => data.object?.asMovePackage,
+			);
+
+			movePackage.modules?.nodes.push(...(page.modules?.nodes ?? []));
+			hasNextPage = page.modules?.pageInfo.hasNextPage ?? false;
+			cursor = page.modules?.pageInfo.endCursor;
+		}
+
 		const address = toShortTypeString(movePackage.address);
 		const modules: Record<string, SuiMoveNormalizedModule> = {};
+
+		for (const moveModule of movePackage.modules?.nodes ?? []) {
+			let hasMoreFriends = moveModule.friends?.pageInfo.hasNextPage ?? false;
+			let hasMoreFunctions = moveModule.functions?.pageInfo.hasNextPage ?? false;
+			let hasMoreStructs = moveModule.structs?.pageInfo.hasNextPage ?? false;
+			let afterFriends = moveModule.friends?.pageInfo.endCursor;
+			let afterFunctions = moveModule.functions?.pageInfo.endCursor;
+			let afterStructs = moveModule.structs?.pageInfo.endCursor;
+
+			while (hasMoreFriends || hasMoreStructs || hasMoreFunctions) {
+				const page = await transport.graphqlQuery(
+					{
+						query: PaginateMoveModuleListsDocument,
+						variables: {
+							module: moveModule.name,
+							packageId: pkg,
+							hasMoreFriends,
+							hasMoreFunctions,
+							hasMoreStructs,
+							afterFriends,
+							afterFunctions,
+							afterStructs,
+						},
+					},
+					(data) => data.object?.asMovePackage?.module,
+				);
+
+				moveModule.friends.nodes.push(...(page.friends?.nodes ?? []));
+				moveModule.functions?.nodes.push(...(page.functions?.nodes ?? []));
+				moveModule.structs?.nodes.push(...(page.structs?.nodes ?? []));
+				hasMoreFriends = page.friends?.pageInfo.hasNextPage ?? false;
+				hasMoreFunctions = page.functions?.pageInfo.hasNextPage ?? false;
+				hasMoreStructs = page.structs?.pageInfo.hasNextPage ?? false;
+				afterFriends = page.friends?.pageInfo.endCursor;
+				afterFunctions = page.functions?.pageInfo.endCursor;
+				afterStructs = page.structs?.pageInfo.endCursor;
+			}
+		}
 
 		movePackage.modules?.nodes.forEach((module) => {
 			modules[module.name] = mapNormalizedMoveModule(module, address);
@@ -303,12 +370,48 @@ export const RPC_METHODS: {
 			{
 				query: GetNormalizedMoveModuleDocument,
 				variables: {
-					module: module,
+					module,
 					packageId: pkg,
 				},
 			},
 			(data) => data.object?.asMovePackage?.module,
 		);
+
+		let hasMoreFriends = moveModule.friends?.pageInfo.hasNextPage ?? false;
+		let hasMoreFunctions = moveModule.functions?.pageInfo.hasNextPage ?? false;
+		let hasMoreStructs = moveModule.structs?.pageInfo.hasNextPage ?? false;
+		let afterFriends = moveModule.friends?.pageInfo.endCursor;
+		let afterFunctions = moveModule.functions?.pageInfo.endCursor;
+		let afterStructs = moveModule.structs?.pageInfo.endCursor;
+
+		while (hasMoreFriends || hasMoreStructs || hasMoreFunctions) {
+			const page = await transport.graphqlQuery(
+				{
+					query: PaginateMoveModuleListsDocument,
+					variables: {
+						module,
+						packageId: pkg,
+						hasMoreFriends,
+						hasMoreFunctions,
+						hasMoreStructs,
+						afterFriends,
+						afterFunctions,
+						afterStructs,
+					},
+				},
+				(data) => data.object?.asMovePackage?.module,
+			);
+
+			moveModule.friends.nodes.push(...(page.friends?.nodes ?? []));
+			moveModule.functions?.nodes.push(...(page.functions?.nodes ?? []));
+			moveModule.structs?.nodes.push(...(page.structs?.nodes ?? []));
+			hasMoreFriends = page.friends?.pageInfo.hasNextPage ?? false;
+			hasMoreFunctions = page.functions?.pageInfo.hasNextPage ?? false;
+			hasMoreStructs = page.structs?.pageInfo.hasNextPage ?? false;
+			afterFriends = page.friends?.pageInfo.endCursor;
+			afterFunctions = page.functions?.pageInfo.endCursor;
+			afterStructs = page.structs?.pageInfo.endCursor;
+		}
 
 		return mapNormalizedMoveModule(moveModule, pkg);
 	},
@@ -533,6 +636,10 @@ export const RPC_METHODS: {
 			(data) => data.transactionBlocks,
 		);
 
+		for (const transactionBlock of transactionBlocks) {
+			await paginateTransactionBlockLists(transport, transactionBlock);
+		}
+
 		if (pagination.last) {
 			transactionBlocks.reverse();
 		}
@@ -561,6 +668,8 @@ export const RPC_METHODS: {
 			(data) => data.transactionBlock,
 		);
 
+		await paginateTransactionBlockLists(transport, transactionBlock);
+
 		return mapGraphQLTransactionBlockToRpcTransactionBlock(transactionBlock, options);
 	},
 
@@ -580,6 +689,10 @@ export const RPC_METHODS: {
 			},
 			(data) => data.transactionBlocks?.nodes,
 		);
+
+		for (const transactionBlock of transactionBlocks) {
+			await paginateTransactionBlockLists(transport, transactionBlock);
+		}
 
 		return transactionBlocks.map((transactionBlock) =>
 			mapGraphQLTransactionBlockToRpcTransactionBlock(transactionBlock, options),
@@ -638,11 +751,34 @@ export const RPC_METHODS: {
 			(data) => data.epoch,
 		);
 
+		let hasMoreValidators =
+			systemState.validatorSet?.activeValidators?.pageInfo.hasNextPage ?? false;
+		let afterValidators = systemState.validatorSet?.activeValidators?.pageInfo.endCursor;
+
+		while (hasMoreValidators) {
+			const page = await transport.graphqlQuery(
+				{
+					query: PaginateEpochValidatorsDocument,
+					variables: {
+						id: systemState.epochId,
+						after: afterValidators,
+					},
+				},
+				(data) => data.epoch,
+			);
+
+			systemState.validatorSet?.activeValidators?.nodes.push(
+				...(page.validatorSet?.activeValidators?.nodes ?? []),
+			);
+			hasMoreValidators = page.validatorSet?.activeValidators?.pageInfo.hasNextPage ?? false;
+			afterValidators = page.validatorSet?.activeValidators?.pageInfo.endCursor;
+		}
+
 		return {
-			activeValidators: systemState.validatorSet?.activeValidators?.map(
+			activeValidators: systemState.validatorSet?.activeValidators?.nodes.map(
 				mapGraphQlValidatorToRpcValidator,
 			)!,
-			atRiskValidators: systemState.validatorSet?.activeValidators
+			atRiskValidators: systemState.validatorSet?.activeValidators.nodes
 				?.filter((validator) => validator.atRisk)
 				.map((validator) => [validator.address.address!, validator.atRisk!.toString()])!,
 			epoch: String(systemState.epochId),
@@ -683,8 +819,8 @@ export const RPC_METHODS: {
 			validatorCandidatesSize: systemState.validatorSet?.validatorCandidatesSize?.toString()!,
 			validatorLowStakeGracePeriod: systemState.systemParameters?.validatorLowStakeGracePeriod,
 			validatorLowStakeThreshold: systemState.systemParameters?.validatorLowStakeThreshold,
-			validatorReportRecords: systemState.validatorSet?.activeValidators?.flatMap(
-				(validator) => validator.reportRecords?.map((record) => record.address)!,
+			validatorReportRecords: systemState.validatorSet?.activeValidators?.nodes.flatMap(
+				(validator) => validator.reportRecords?.nodes.map((record) => record.address)!,
 			)!,
 			validatorVeryLowStakeThreshold: systemState.systemParameters?.validatorVeryLowStakeThreshold,
 			validatorCandidatesId: '', // TODO
@@ -785,6 +921,8 @@ export const RPC_METHODS: {
 		if (!transaction) {
 			throw new Error('Unexpected error during dry run');
 		}
+
+		await paginateDryRunTransactionBlockLists(transport, transaction, devInspectTxBytes);
 
 		const result = mapGraphQLTransactionBlockToRpcTransactionBlock(transaction, {
 			showEffects: true,
@@ -943,6 +1081,8 @@ export const RPC_METHODS: {
 			return { errors: errors ?? undefined, digest: await txb.getDigest() };
 		}
 
+		await paginateTransactionBlockLists(transport, effects.transactionBlock);
+
 		return mapGraphQLTransactionBlockToRpcTransactionBlock(
 			effects.transactionBlock,
 			options,
@@ -970,6 +1110,8 @@ export const RPC_METHODS: {
 			throw new Error(error ?? 'Unexpected error during dry run');
 		}
 
+		await paginateDryRunTransactionBlockLists(transport, transaction, txBytes);
+
 		const result = mapGraphQLTransactionBlockToRpcTransactionBlock(
 			{ ...transaction, digest: await txb.getDigest() },
 			{
@@ -982,7 +1124,7 @@ export const RPC_METHODS: {
 		);
 
 		return {
-			input: {} as never, // TODO
+			input: result.transaction?.data!,
 			balanceChanges: result.balanceChanges!,
 			effects: result.effects!,
 			events: result.events!,
@@ -1017,6 +1159,7 @@ export const RPC_METHODS: {
 			(data) => data.checkpoint,
 		);
 
+		await paginateCheckpointLists(transport, checkpoint);
 		return mapGraphQLCheckpointToRpcCheckpoint(checkpoint);
 	},
 	async getCheckpoints(transport, [cursor, limit, descendingOrder]) {
@@ -1033,6 +1176,10 @@ export const RPC_METHODS: {
 			},
 			(data) => data.checkpoints,
 		);
+
+		for (const checkpoint of checkpoints) {
+			await paginateCheckpointLists(transport, checkpoint);
+		}
 
 		if (pagination.last) {
 			checkpoints.reverse();
@@ -1055,9 +1202,29 @@ export const RPC_METHODS: {
 			(data) => data.epoch,
 		);
 
+		let hasNextPage = validatorSet?.activeValidators?.pageInfo.hasNextPage;
+		let after = validatorSet?.activeValidators?.pageInfo.endCursor;
+
+		while (hasNextPage) {
+			const page = await transport.graphqlQuery(
+				{
+					query: GetCommitteeInfoDocument,
+					variables: {
+						epochId: epoch ? Number.parseInt(epoch) : undefined,
+						after,
+					},
+				},
+				(data) => data.epoch?.validatorSet?.activeValidators,
+			);
+
+			validatorSet?.activeValidators.nodes.push(...page.nodes);
+			hasNextPage = page.pageInfo.hasNextPage;
+			after = page.pageInfo.endCursor;
+		}
+
 		return {
 			epoch: epochId.toString(),
-			validators: validatorSet?.activeValidators?.map((val) => [
+			validators: validatorSet?.activeValidators?.nodes.map((val) => [
 				val.credentials?.protocolPubKey!,
 				String(val.votingPower),
 			])!,
@@ -1071,9 +1238,31 @@ export const RPC_METHODS: {
 			(data) => data.epoch,
 		);
 
+		let hasNextPage = epoch.validatorSet?.activeValidators?.pageInfo.hasNextPage;
+		let after = epoch.validatorSet?.activeValidators?.pageInfo.endCursor;
+
+		while (hasNextPage) {
+			const page = await transport.graphqlQuery(
+				{
+					query: PaginateEpochValidatorsDocument,
+					variables: {
+						id: epoch.epochId,
+						after,
+					},
+				},
+				(data) => data.epoch?.validatorSet?.activeValidators,
+			);
+
+			epoch.validatorSet?.activeValidators?.nodes.push(...page.nodes);
+			hasNextPage = page.pageInfo.hasNextPage;
+			after = page.pageInfo.endCursor;
+		}
+
 		return {
 			epoch: String(epoch.epochId),
-			validators: epoch.validatorSet?.activeValidators?.map(mapGraphQlValidatorToRpcValidator)!,
+			validators: epoch.validatorSet?.activeValidators?.nodes.map(
+				mapGraphQlValidatorToRpcValidator,
+			)!,
 			epochTotalTransactions: '0', // TODO
 			firstCheckpointId: epoch.firstCheckpoint?.nodes[0]?.sequenceNumber.toString()!,
 			endOfEpochInfo: null,
@@ -1089,9 +1278,31 @@ export const RPC_METHODS: {
 			(data) => data.epoch,
 		);
 
+		let hasNextPage = epoch.validatorSet?.activeValidators?.pageInfo.hasNextPage;
+		let after = epoch.validatorSet?.activeValidators?.pageInfo.endCursor;
+
+		while (hasNextPage) {
+			const page = await transport.graphqlQuery(
+				{
+					query: PaginateEpochValidatorsDocument,
+					variables: {
+						id: epoch.epochId,
+						after,
+					},
+				},
+				(data) => data.epoch,
+			);
+
+			epoch.validatorSet?.activeValidators?.nodes.push(
+				...(page.validatorSet?.activeValidators?.nodes ?? []),
+			);
+			hasNextPage = page.validatorSet?.activeValidators?.pageInfo.hasNextPage;
+			after = page.validatorSet?.activeValidators?.pageInfo.endCursor;
+		}
+
 		return {
 			epoch: String(epoch.epochId),
-			apys: epoch.validatorSet?.activeValidators?.map((validator) => ({
+			apys: epoch.validatorSet?.activeValidators?.nodes.map((validator) => ({
 				address: validator.address.address!,
 				apy: (typeof validator.apy === 'number' ? validator.apy / 100 : null) as number,
 			}))!,
@@ -1190,4 +1401,154 @@ export function unsupportedMethod(method: string): never {
 
 export function unsupportedParam(method: string, param: string): never {
 	throw new Error(`Parameter ${param} is not supported for ${method} in the GraphQL API`);
+}
+
+async function paginateTransactionBlockLists(
+	transport: SuiClientGraphQLTransport,
+	transactionBlock: Rpc_Transaction_FieldsFragment,
+) {
+	let hasMoreEvents = transactionBlock.effects?.events?.pageInfo.hasNextPage ?? false;
+	let hasMoreBalanceChanges =
+		transactionBlock.effects?.balanceChanges?.pageInfo.hasNextPage ?? false;
+	let hasMoreObjectChanges = transactionBlock.effects?.objectChanges?.pageInfo.hasNextPage ?? false;
+	let hasMoreDependencies = transactionBlock.effects?.dependencies?.pageInfo.hasNextPage ?? false;
+	let afterEvents = transactionBlock.effects?.events?.pageInfo.endCursor;
+	let afterBalanceChanges = transactionBlock.effects?.balanceChanges?.pageInfo.endCursor;
+	let afterObjectChanges = transactionBlock.effects?.objectChanges?.pageInfo.endCursor;
+	let afterDependencies = transactionBlock.effects?.dependencies?.pageInfo.endCursor;
+
+	while (hasMoreEvents || hasMoreBalanceChanges || hasMoreObjectChanges || hasMoreDependencies) {
+		const page = await transport.graphqlQuery(
+			{
+				query: PaginateTransactionBlockListsDocument,
+				variables: {
+					digest: transactionBlock.digest!,
+					afterEvents,
+					afterBalanceChanges,
+					afterObjectChanges,
+					afterDependencies,
+					hasMoreEvents,
+					hasMoreBalanceChanges,
+					hasMoreObjectChanges,
+					hasMoreDependencies,
+				},
+			},
+			(data) => data.transactionBlock?.effects,
+		);
+
+		transactionBlock.effects?.events?.nodes.push(...(page.events?.nodes ?? []));
+		transactionBlock.effects?.balanceChanges?.nodes.push(...(page.balanceChanges?.nodes ?? []));
+		transactionBlock.effects?.objectChanges?.nodes.push(...(page.objectChanges?.nodes ?? []));
+		transactionBlock.effects?.dependencies?.nodes.push(...(page.dependencies?.nodes ?? []));
+		hasMoreEvents = page.events?.pageInfo.hasNextPage ?? false;
+		hasMoreBalanceChanges = page.balanceChanges?.pageInfo.hasNextPage ?? false;
+		hasMoreObjectChanges = page.objectChanges?.pageInfo.hasNextPage ?? false;
+		hasMoreDependencies = page.dependencies?.pageInfo.hasNextPage ?? false;
+		afterEvents = page.events?.pageInfo.endCursor;
+		afterBalanceChanges = page.balanceChanges?.pageInfo.endCursor;
+		afterObjectChanges = page.objectChanges?.pageInfo.endCursor;
+		afterDependencies = page.dependencies?.pageInfo.endCursor;
+	}
+}
+
+async function paginateDryRunTransactionBlockLists(
+	transport: SuiClientGraphQLTransport,
+	transactionBlock: Rpc_Transaction_FieldsFragment,
+	txBytes: string,
+) {
+	let hasMoreEvents = transactionBlock.effects?.events?.pageInfo.hasNextPage ?? false;
+	let hasMoreBalanceChanges =
+		transactionBlock.effects?.balanceChanges?.pageInfo.hasNextPage ?? false;
+	let hasMoreObjectChanges = transactionBlock.effects?.objectChanges?.pageInfo.hasNextPage ?? false;
+	let hasMoreDependencies = transactionBlock.effects?.dependencies?.pageInfo.hasNextPage ?? false;
+	let afterEvents = transactionBlock.effects?.events?.pageInfo.endCursor;
+	let afterBalanceChanges = transactionBlock.effects?.balanceChanges?.pageInfo.endCursor;
+	let afterObjectChanges = transactionBlock.effects?.objectChanges?.pageInfo.endCursor;
+	let afterDependencies = transactionBlock.effects?.dependencies?.pageInfo.endCursor;
+
+	while (hasMoreEvents || hasMoreBalanceChanges || hasMoreObjectChanges || hasMoreDependencies) {
+		const page = await transport.graphqlQuery(
+			{
+				query: PaginateDryRunTransactionBlockListsDocument,
+				variables: {
+					txBytes: txBytes,
+					afterEvents,
+					afterBalanceChanges,
+					afterObjectChanges,
+					afterDependencies,
+					hasMoreEvents,
+					hasMoreBalanceChanges,
+					hasMoreObjectChanges,
+					hasMoreDependencies,
+				},
+			},
+			(data) => data.dryRunTransactionBlock.transaction?.effects,
+		);
+
+		transactionBlock.effects?.events?.nodes.push(...(page.events?.nodes ?? []));
+		transactionBlock.effects?.balanceChanges?.nodes.push(...(page.balanceChanges?.nodes ?? []));
+		transactionBlock.effects?.objectChanges?.nodes.push(...(page.objectChanges?.nodes ?? []));
+		transactionBlock.effects?.dependencies?.nodes.push(...(page.dependencies?.nodes ?? []));
+		hasMoreEvents = page.events?.pageInfo.hasNextPage ?? false;
+		hasMoreBalanceChanges = page.balanceChanges?.pageInfo.hasNextPage ?? false;
+		hasMoreObjectChanges = page.objectChanges?.pageInfo.hasNextPage ?? false;
+		hasMoreDependencies = page.dependencies?.pageInfo.hasNextPage ?? false;
+		afterEvents = page.events?.pageInfo.endCursor;
+		afterBalanceChanges = page.balanceChanges?.pageInfo.endCursor;
+		afterObjectChanges = page.objectChanges?.pageInfo.endCursor;
+		afterDependencies = page.dependencies?.pageInfo.endCursor;
+	}
+}
+
+async function paginateCheckpointLists(
+	transport: SuiClientGraphQLTransport,
+	checkpoint: Rpc_Checkpoint_FieldsFragment,
+) {
+	let hasNextPage = checkpoint.transactionBlocks.pageInfo.hasNextPage;
+	let after = checkpoint.transactionBlocks.pageInfo.endCursor;
+	while (hasNextPage) {
+		const page = await transport.graphqlQuery(
+			{
+				query: PaginateCheckpointTransactionBlocksDocument,
+				variables: {
+					id: { digest: checkpoint.digest! },
+					after,
+				},
+			},
+			(data) => data.checkpoint?.transactionBlocks,
+		);
+
+		checkpoint.transactionBlocks.nodes.push(...page.nodes);
+		hasNextPage = page.pageInfo.hasNextPage;
+		after = page.pageInfo.endCursor;
+	}
+
+	const endOfEpochTx = checkpoint.endOfEpoch.nodes[0];
+
+	if (
+		endOfEpochTx?.kind?.__typename === 'EndOfEpochTransaction' &&
+		endOfEpochTx.kind?.transactions.nodes[0].__typename === 'ChangeEpochTransaction' &&
+		endOfEpochTx.kind.transactions.nodes[0].epoch?.epochId
+	) {
+		const validatorSet = endOfEpochTx.kind.transactions.nodes[0].epoch.validatorSet;
+		let hasNextPage = validatorSet?.activeValidators.pageInfo.hasNextPage;
+		let after = validatorSet?.activeValidators.pageInfo.endCursor;
+
+		while (hasNextPage) {
+			const page = await transport.graphqlQuery(
+				{
+					query: GetCommitteeInfoDocument,
+					variables: {
+						epochId: endOfEpochTx.kind.transactions.nodes[0].epoch?.epochId,
+						after,
+					},
+				},
+				(data) => data.epoch?.validatorSet?.activeValidators,
+			);
+
+			validatorSet?.activeValidators.nodes.push(...page.nodes);
+			hasNextPage = page.pageInfo?.hasNextPage;
+			after = page.pageInfo?.endCursor;
+		}
+	}
 }

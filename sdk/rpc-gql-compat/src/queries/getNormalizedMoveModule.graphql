@@ -11,9 +11,61 @@ query getNormalizedMoveModule($packageId: SuiAddress!, $module: String!) {
 	}
 }
 
+query paginateMoveModuleLists(
+	$packageId: SuiAddress!
+	$module: String!
+	$hasMoreFriends: Boolean!
+	$hasMoreStructs: Boolean!
+	$hasMoreFunctions: Boolean!
+	$afterFriends: String
+	$afterStructs: String
+	$afterFunctions: String
+) {
+	object(address: $packageId) {
+		asMovePackage {
+			module(name: $module) {
+				friends(after: $afterFriends) @include(if: $hasMoreFriends) {
+					pageInfo {
+						hasNextPage
+						endCursor
+					}
+					nodes {
+						name
+						package {
+							address
+						}
+					}
+				}
+				structs(after: $afterStructs) @include(if: $hasMoreStructs) {
+					pageInfo {
+						hasNextPage
+						endCursor
+					}
+					nodes {
+						...RPC_MOVE_STRUCT_FIELDS
+					}
+				}
+				functions(after: $afterFunctions) @include(if: $hasMoreFunctions) {
+					pageInfo {
+						hasNextPage
+						endCursor
+					}
+					nodes {
+						...RPC_MOVE_FUNCTION_FIELDS
+					}
+				}
+			}
+		}
+	}
+}
+
 fragment RPC_MOVE_MODULE_FIELDS on MoveModule {
 	name
-	friends(first: 50) {
+	friends {
+		pageInfo {
+			hasNextPage
+			endCursor
+		}
 		nodes {
 			name
 			package {
@@ -21,13 +73,21 @@ fragment RPC_MOVE_MODULE_FIELDS on MoveModule {
 			}
 		}
 	}
-	structs(first: 50) {
+	structs {
+		pageInfo {
+			hasNextPage
+			endCursor
+		}
 		nodes {
 			...RPC_MOVE_STRUCT_FIELDS
 		}
 	}
 	fileFormatVersion
-	functions(first: 50) {
+	functions {
+		pageInfo {
+			hasNextPage
+			endCursor
+		}
 		nodes {
 			...RPC_MOVE_FUNCTION_FIELDS
 		}

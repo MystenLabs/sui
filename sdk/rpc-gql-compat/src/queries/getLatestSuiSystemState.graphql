@@ -45,7 +45,13 @@ query getLatestSuiSystemState {
 		}
 		validatorSet {
 			activeValidators {
-				...RPC_VALIDATOR_FIELDS
+				pageInfo {
+					hasNextPage
+					endCursor
+				}
+				nodes {
+					...RPC_VALIDATOR_FIELDS
+				}
 			}
 
 			inactivePoolsSize

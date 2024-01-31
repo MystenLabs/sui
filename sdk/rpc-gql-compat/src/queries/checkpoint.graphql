@@ -21,6 +21,20 @@ query getCheckpoints($first: Int, $before: String, $last: Int, $after: String) {
 	}
 }
 
+query paginateCheckpointTransactionBlocks($id: CheckpointId, $after: String) {
+	checkpoint(id: $id) {
+		transactionBlocks(after: $after) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				digest
+			}
+		}
+	}
+}
+
 fragment RPC_Checkpoint_Fields on Checkpoint {
 	# checkpointCommitments
 	digest
@@ -39,7 +53,11 @@ fragment RPC_Checkpoint_Fields on Checkpoint {
 	sequenceNumber
 	timestamp
 	validatorSignatures
-	transactionBlocks(first: 50) {
+	transactionBlocks {
+		pageInfo {
+			hasNextPage
+			endCursor
+		}
 		nodes {
 			digest
 		}
@@ -56,10 +74,16 @@ fragment RPC_Checkpoint_Fields on Checkpoint {
 								epoch {
 									validatorSet {
 										activeValidators {
-											credentials {
-												protocolPubKey
+											pageInfo {
+												hasNextPage
+												endCursor
 											}
-											votingPower
+											nodes {
+												credentials {
+													protocolPubKey
+												}
+												votingPower
+											}
 										}
 									}
 									protocolConfigs {

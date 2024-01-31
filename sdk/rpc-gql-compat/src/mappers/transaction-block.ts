@@ -9,6 +9,7 @@ import type {
 	SuiCallArg,
 	SuiTransaction,
 	SuiTransactionBlock,
+	SuiTransactionBlockKind,
 	SuiTransactionBlockResponse,
 	SuiTransactionBlockResponseOptions,
 } from '@mysten/sui.js/client';
@@ -177,7 +178,7 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 	};
 }
 
-function mapTransactionBlockToInput(
+export function mapTransactionBlockToInput(
 	data: typeof bcs.SenderSignedTransaction.$inferType,
 ): SuiTransactionBlock | null {
 	const txData = data.intentMessage.value.V1;
@@ -204,12 +205,18 @@ function mapTransactionBlockToInput(
 			},
 			messageVersion: 'v1',
 			sender: txData.sender,
-			transaction: {
-				inputs: programableTransaction.inputs.map(mapTransactionInput),
-				kind: 'ProgrammableTransaction',
-				transactions: programableTransaction.transactions.map(mapTransaction),
-			},
+			transaction: mapProgramableTransaction(programableTransaction),
 		},
+	};
+}
+
+export function mapProgramableTransaction(
+	programableTransaction: typeof bcs.ProgrammableTransaction.$inferType,
+): SuiTransactionBlockKind {
+	return {
+		inputs: programableTransaction.inputs.map(mapTransactionInput),
+		kind: 'ProgrammableTransaction',
+		transactions: programableTransaction.transactions.map(mapTransaction),
 	};
 }
 

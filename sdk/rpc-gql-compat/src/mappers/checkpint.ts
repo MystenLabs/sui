@@ -18,7 +18,7 @@ export function mapGraphQLCheckpointToRpcCheckpoint(
 		endOfEpochData = {
 			epochCommitments: [], // TODO
 			nextEpochCommittee:
-				endOfEpochTx.kind.transactions.nodes[0].epoch?.validatorSet?.activeValidators?.map(
+				endOfEpochTx.kind.transactions.nodes[0].epoch?.validatorSet?.activeValidators?.nodes.map(
 					(val) => [val.credentials?.protocolPubKey, val.votingPower?.toString()!],
 				) ?? [],
 			nextEpochProtocolVersion: String(
