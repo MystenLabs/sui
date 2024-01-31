@@ -1339,6 +1339,7 @@ export const RPC_METHODS: {
 			random_beacon_reduction_allowed_delta: 'u16',
 			scoring_decision_cutoff_value: 'f64',
 			scoring_decision_mad_divisor: 'f64',
+			group_ops_bls12381_msm_max_len: 'u32',
 		};
 
 		for (const { key, value } of protocolConfig.configs) {
