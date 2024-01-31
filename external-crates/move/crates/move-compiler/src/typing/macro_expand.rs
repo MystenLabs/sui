@@ -8,33 +8,42 @@ use crate::{
     naming::ast::{self as N, BlockLabel, Color, TParamID, Type, Type_, UseFuns, Var, Var_},
     parser::ast::FunctionName,
     shared::program_info::FunctionInfo,
-    typing::ast as T,
+    typing::ast::{self as T},
     typing::core::{self, TParamSubst},
 };
 use move_ir_types::location::*;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 type LambdaMap = BTreeMap<Var_, (N::Lambda, Vec<Type>, Type)>;
+type ArgMap = BTreeMap<Var_, (N::Exp, Type)>;
 
 struct Context<'a, 'b> {
     core: &'a mut core::Context<'b>,
     lambdas: LambdaMap,
+    by_name_args: ArgMap,
     tparam_subst: TParamSubst,
     macro_color: Color,
 }
 
 pub struct ExpandedMacro {
-    pub argument_bindings: Vec<(Option<Loc>, Var, T::Exp)>,
+    pub by_value_args: Vec<(Var, T::Exp)>,
     pub body: Box<N::Exp>,
 }
+
+pub enum EitherArg<ByValue, ByName> {
+    ByValue(ByValue),
+    ByName(ByName),
+}
+
+pub type Arg = EitherArg<T::Exp, (N::Exp, Type)>;
 
 pub(crate) fn call(
     context: &mut core::Context,
     call_loc: Loc,
     m: ModuleIdent,
     f: FunctionName,
-    type_args: Vec<N::Type>,
-    sp!(_, args): Spanned<Vec<T::Exp>>,
+    type_args: Vec<Type>,
+    args: Vec<Arg>,
 ) -> Option<ExpandedMacro> {
     let next_color = context.next_variable_color();
     // If none, there is no body to expand, likely because of an error in the macro definition
@@ -68,28 +77,48 @@ pub(crate) fn call(
     let tparam_subst = macro_type_params.into_iter().zip(type_args).collect();
     // make lambda map and bind non-lambda args to local vars
     let mut lambdas = BTreeMap::new();
-    let mut argument_bindings = Vec::new();
-    for ((mut_, param, _param_ty), arg) in macro_params.into_iter().zip(args) {
-        let unfolded = core::unfold_type(&context.subst, arg.ty.clone());
+    let mut by_name_args = BTreeMap::new();
+    let mut by_value_args = vec![];
+    for ((_, param, _param_ty), arg) in macro_params.into_iter().zip(args) {
+        if param.value.name == symbol!("_") {
+            // skip ignored args
+            continue;
+        }
+        let arg_ty = match &arg {
+            Arg::ByValue(e) => e.ty.clone(),
+            Arg::ByName((_, ty)) => ty.clone(),
+        };
+        let unfolded = core::unfold_type(&context.subst, arg_ty);
         if let sp!(_, Type_::Fun(param_tys, result_ty)) = unfolded {
-            // declare the local here so that if the lambda is used outside
-            // of the VarCall, we still know its type. This will also lead to
-            // an error if it is used since a lambda type will appear during expansion
-            let fun_ty = sp(
-                arg.exp.loc,
-                Type_::Fun(param_tys.clone(), result_ty.clone()),
-            );
-            context.declare_local(mut_, param, fun_ty);
+            let arg_exp = match arg {
+                Arg::ByValue(arg) => {
+                    // declare the local here so that if the lambda is used outside
+                    // of the VarCall, we still know its type. This will also lead to
+                    // an error if it is used since a lambda type will appear during expansion
+                    let fun_ty = sp(
+                        arg.exp.loc,
+                        Type_::Fun(param_tys.clone(), result_ty.clone()),
+                    );
+                    context.declare_local(None, param, fun_ty);
+                    continue;
+                }
+                Arg::ByName((e, _)) => e,
+            };
             bind_lambda(
                 context,
                 &mut lambdas,
                 param.value,
-                arg,
+                arg_exp,
                 param_tys,
                 *result_ty,
             )?;
         } else {
-            argument_bindings.push((mut_, param, arg))
+            match arg {
+                Arg::ByValue(e) => by_value_args.push((param, e)),
+                Arg::ByName((e, expected_ty)) => {
+                    by_name_args.insert(param.value, (e, expected_ty));
+                }
+            }
         }
     }
     let return_type = core::subst_tparams(&tparam_subst, return_type);
@@ -97,6 +126,7 @@ pub(crate) fn call(
     let mut context = Context {
         core: context,
         lambdas,
+        by_name_args,
         tparam_subst,
         macro_color: next_color,
     };
@@ -116,7 +146,7 @@ pub(crate) fn call(
     }
     let body = Box::new(sp(call_loc, N::Exp_::Annotate(wrapped_body, return_type)));
     Some(ExpandedMacro {
-        argument_bindings,
+        by_value_args,
         body,
     })
 }
@@ -188,15 +218,15 @@ fn bind_lambda(
     context: &mut core::Context,
     lambdas: &mut LambdaMap,
     param: Var_,
-    arg: T::Exp,
+    arg: N::Exp,
     param_ty: Vec<Type>,
     result_ty: Type,
 ) -> Option<()> {
-    match arg.exp.value {
-        T::UnannotatedExp_::Annotate(inner, _) => {
+    match arg.value {
+        N::Exp_::Annotate(inner, _) => {
             bind_lambda(context, lambdas, param, *inner, param_ty, result_ty)
         }
-        T::UnannotatedExp_::Lambda(lambda) => {
+        N::Exp_::Lambda(lambda) => {
             lambdas.insert(param, (lambda, param_ty, result_ty));
             Some(())
         }
@@ -207,7 +237,7 @@ fn bind_lambda(
             );
             context
                 .env
-                .add_diag(diag!(TypeSafety::CannotExpandMacro, (arg.exp.loc, msg)));
+                .add_diag(diag!(TypeSafety::CannotExpandMacro, (arg.loc, msg)));
             None
         }
     }
@@ -556,7 +586,13 @@ fn lvalues(context: &mut Context, sp!(_, lvs_): &mut N::LValueList) {
 
 fn lvalue(context: &mut Context, sp!(_, lv_): &mut N::LValue) {
     match lv_ {
-        N::LValue_::Ignore | N::LValue_::Var { .. } => (),
+        N::LValue_::Ignore => (),
+        N::LValue_::Var {
+            var: sp!(_, var_), ..
+        } => {
+            assert!(!context.lambdas.contains_key(var_));
+            assert!(!context.by_name_args.contains_key(var_));
+        }
         N::LValue_::Unpack(_, _, tys_opt, lvalues) => {
             if let Some(tys) = tys_opt {
                 types(context, tys)
@@ -649,20 +685,23 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             ..
         }) => {
             for (lvs, ty_opt) in parameters {
+                lvalues(context, lvs);
                 if let Some(ty) = ty_opt {
                     type_(context, ty)
                 }
-                lvalues(context, lvs);
             }
             exp(context, e)
         }
         N::Exp_::ExpDotted(_usage, ed) => exp_dotted(context, ed),
-        N::Exp_::Var(v) => {
-            if let Some((lambda, _, _)) = context.lambdas.get(&v.value) {
-                *e_ = N::Exp_::Lambda(lambda.clone())
-            }
+
+        ///////
+        // Lambda cases
+        ///////
+        N::Exp_::Var(sp!(_, v_)) if context.lambdas.contains_key(v_) => {
+            let (lambda, _, _) = context.lambdas.get(v_).unwrap();
+            *e_ = N::Exp_::Lambda(lambda.clone());
         }
-        N::Exp_::VarCall(v, sp!(_, es)) if context.lambdas.contains_key(&v.value) => {
+        N::Exp_::VarCall(sp!(_, v_), sp!(_, es)) if context.lambdas.contains_key(v_) => {
             exps(context, es);
             // param_ty and result_ty have already been substituted
             let (
@@ -675,7 +714,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 },
                 param_tys,
                 result_ty,
-            ) = context.lambdas.get(&v.value).unwrap().clone();
+            ) = context.lambdas.get(v_).unwrap().clone();
             // recolor in case the lambda is used more than once
             let next_color = context.core.next_variable_color();
             let recolor_use_funs = false;
@@ -729,6 +768,39 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 seq: (N::UseFuns::new(context.macro_color), result),
             });
         }
+
+        ///////
+        // Argument cases
+        ///////
+        N::Exp_::Var(sp!(_, v_)) if context.by_name_args.contains_key(v_) => {
+            let (mut arg, expected_ty) = context.by_name_args.get(v_).cloned().unwrap();
+            // recolor the arg in case it is used more than once
+            let next_color = context.core.next_variable_color();
+            let recolor_use_funs = false;
+            let recolor = &mut Recolor::new(
+                next_color,
+                /* return already labeled */ None,
+                recolor_use_funs,
+            );
+            recolor_exp(recolor, &mut arg);
+            context.core.set_max_variable_color(recolor.max_color());
+
+            *e_ = N::Exp_::Annotate(Box::new(arg), expected_ty);
+        }
+        N::Exp_::VarCall(sp!(_, v_), _) if context.by_name_args.contains_key(v_) => {
+            let (arg, _expected_ty) = context.by_name_args.get(v_).unwrap();
+            context.core.env.add_diag(diag!(
+                TypeSafety::CannotExpandMacro,
+                (*eloc, "Cannot call non-lambda argument"),
+                (arg.loc, "Expected a lambda argument")
+            ));
+            *e_ = N::Exp_::UnresolvedError;
+        }
+
+        ///////
+        // Other var cases
+        ///////
+        N::Exp_::Var(_) => (),
         N::Exp_::VarCall(_, sp!(_, es)) => exps(context, es),
     }
 }

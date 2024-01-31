@@ -14,7 +14,7 @@ use crate::{
         AttributeName_, AttributeValue_, Attribute_, Attributes, DottedUsage, Fields, Friend,
         ModuleAccess_, ModuleIdent, ModuleIdent_, Value_, Visibility,
     },
-    naming::ast::{self as N, BlockLabel, TParam, TParamID, Type, TypeName_, Type_, Var},
+    naming::ast::{self as N, BlockLabel, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_,
     },
@@ -1203,7 +1203,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             let ty = context.get_local_type(&var);
             (ty, TE::Use(var))
         }
-        NE::MethodCall(ndotted, f, is_macro, ty_args_opt, sp!(argloc, nargs_)) => {
+        NE::MethodCall(ndotted, f, /* is_macro */ false, ty_args_opt, sp!(argloc, nargs_)) => {
             let (edotted, last_ty) = exp_dotted(context, None, ndotted);
             let args = exp_vec(context, nargs_);
             let ty_call_opt = method_call(
@@ -1212,7 +1212,6 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 edotted,
                 last_ty,
                 f,
-                is_macro,
                 ty_args_opt,
                 argloc,
                 args,
@@ -1225,13 +1224,40 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 Some(ty_call) => ty_call,
             }
         }
-        NE::ModuleCall(m, f, is_macro, ty_args_opt, sp!(argloc, nargs_)) => {
+        NE::ModuleCall(m, f, /* is_macro */ false, ty_args_opt, sp!(argloc, nargs_)) => {
             let args = exp_vec(context, nargs_);
-            module_call(context, eloc, m, f, is_macro, ty_args_opt, argloc, args)
+            module_call(context, eloc, m, f, ty_args_opt, argloc, args)
         }
-        NE::VarCall(var, sp!(argloc, nargs_)) => {
-            let args = exp_vec(context, nargs_);
-            var_call(context, eloc, var, argloc, args)
+        NE::MethodCall(ndotted, f, /* is_macro */ true, ty_args_opt, sp!(argloc, nargs_)) => {
+            let (edotted, last_ty) = exp_dotted(context, None, ndotted);
+            let ty_call_opt = macro_method_call(
+                context,
+                eloc,
+                edotted,
+                last_ty,
+                f,
+                ty_args_opt,
+                argloc,
+                nargs_,
+            );
+            match ty_call_opt {
+                None => {
+                    assert!(context.env.has_errors());
+                    (context.error_type(eloc), TE::UnresolvedError)
+                }
+                Some(ty_call) => ty_call,
+            }
+        }
+        NE::ModuleCall(m, f, /* is_macro */ true, ty_args_opt, sp!(argloc, nargs_)) => {
+            macro_module_call(context, eloc, m, f, ty_args_opt, argloc, nargs_)
+        }
+        NE::VarCall(_, sp!(_, nargs_)) => {
+            exp_vec(context, nargs_);
+            assert!(
+                context.env.has_errors(),
+                "ICE unbound var call. Should be expanded"
+            );
+            (context.error_type(eloc), TE::UnresolvedError)
         }
         NE::Builtin(b, sp!(argloc, nargs_)) => {
             let args = exp_vec(context, nargs_);
@@ -2305,52 +2331,34 @@ fn annotate_<S: ToString, F: FnOnce() -> S>(
 // Calls
 //**************************************************************************************************
 
-fn var_call(
+fn method_call(
     context: &mut Context,
     loc: Loc,
-    var: Var,
+    edotted: ExpDotted,
+    edotted_ty: Type,
+    method: Name,
+    ty_args_opt: Option<Vec<Type>>,
     argloc: Loc,
-    args: Vec<T::Exp>,
-) -> (Type, T::UnannotatedExp_) {
-    let fn_ty = context.get_local_type(&var);
-    let (fn_arg_tys, fn_result_ty) = match core::unfold_type(&context.subst, fn_ty.clone()).value {
-        Type_::Fun(args, result) => (args, result),
-        Type_::UnresolvedError => {
-            assert!(context.env.has_errors());
-            return (context.error_type(loc), T::UnannotatedExp_::UnresolvedError);
-        }
-        _ => {
-            let ty_str = core::error_format(&fn_ty, &context.subst);
-            let msg = format!("Expected a lambda type type but found {}", ty_str);
-            context
-                .env
-                .add_diag(diag!(TypeSafety::JoinError, (var.loc, msg)));
-            return (context.error_type(loc), T::UnannotatedExp_::UnresolvedError);
-        }
-    };
-    let msg = || format!("Invalid call of '{}'", var.value.name);
-    let given = args.into_iter().map(|e| e.ty).collect();
-    // make arg types for arity checking
-    make_arg_types(context, loc, msg, fn_arg_tys.len(), argloc, given);
-    // we always return an error for the expression, since VarCall is only valid inside of macros,
-    // whose bodies will be discarded. But we need a valid type to keep sanity checking the macro
-    (*fn_result_ty, T::UnannotatedExp_::UnresolvedError)
+    mut args: Vec<T::Exp>,
+) -> Option<(Type, T::UnannotatedExp_)> {
+    use T::UnannotatedExp_ as TE;
+    let (m, f, fty, first_arg) =
+        method_call_resolve(context, loc, edotted, edotted_ty, method, ty_args_opt)?;
+    args.insert(0, first_arg);
+    let (call, ret_ty) = module_call_impl(context, loc, m, f, fty, argloc, args);
+    Some((ret_ty, TE::ModuleCall(Box::new(call))))
 }
 
-fn method_call(
+fn method_call_resolve(
     context: &mut Context,
     loc: Loc,
     mut edotted: ExpDotted,
     edotted_ty: Type,
     method: Name,
-    is_macro_call: bool,
     ty_args_opt: Option<Vec<Type>>,
-    argloc: Loc,
-    mut args: Vec<T::Exp>,
-) -> Option<(Type, T::UnannotatedExp_)> {
+) -> Option<(ModuleIdent, FunctionName, ResolvedFunctionType, T::Exp)> {
     use TypeName_ as TN;
     use Type_ as Ty;
-    use T::UnannotatedExp_ as TE;
     let edotted_ty_unfolded = core::unfold_type(&context.subst, edotted_ty.clone());
     let edotted_bty = edotted_ty_base(&edotted_ty_unfolded);
     let tn = match &edotted_bty.value {
@@ -2414,21 +2422,7 @@ fn method_call(
         }
         _ => exp_dotted_to_owned_value(context, DottedUsage::Use, loc, edotted, edotted_ty),
     };
-    args.insert(0, first_arg);
-    let (call, ret_ty) =
-        module_call_impl(context, loc, m, f, is_macro_call, fty, argloc, args.clone());
-    if is_macro_call {
-        Some(expand_macro(
-            context,
-            loc,
-            m,
-            f,
-            call.type_arguments,
-            sp(argloc, args),
-        ))
-    } else {
-        Some((ret_ty, TE::ModuleCall(Box::new(call))))
-    }
+    Some((m, f, fty, first_arg))
 }
 
 fn edotted_ty_base(ty: &Type) -> &Type {
@@ -2449,19 +2443,13 @@ fn module_call(
     loc: Loc,
     m: ModuleIdent,
     f: FunctionName,
-    is_macro_call: bool,
     ty_args_opt: Option<Vec<Type>>,
     argloc: Loc,
     args: Vec<T::Exp>,
 ) -> (Type, T::UnannotatedExp_) {
     let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt);
-    let (call, ret_ty) =
-        module_call_impl(context, loc, m, f, is_macro_call, fty, argloc, args.clone());
-    if is_macro_call {
-        expand_macro(context, loc, m, f, call.type_arguments, sp(argloc, args))
-    } else {
-        (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
-    }
+    let (call, ret_ty) = module_call_impl(context, loc, m, f, fty, argloc, args);
+    (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
 }
 
 fn module_call_impl(
@@ -2469,7 +2457,6 @@ fn module_call_impl(
     loc: Loc,
     m: ModuleIdent,
     f: FunctionName,
-    is_macro_call: bool,
     fty: ResolvedFunctionType,
     argloc: Loc,
     args: Vec<T::Exp>,
@@ -2481,31 +2468,9 @@ fn module_call_impl(
         params: parameters,
         return_,
     } = fty;
-    let decl_is_macro = macro_.is_some();
-    if is_macro_call != decl_is_macro {
-        let decl_loc = macro_.unwrap_or(declared);
-        let call_msg = if decl_is_macro {
-            format!(
-                "'{f}' is a macro function and must be called with a `!`. \
-                Try replacing with '{f}!'"
-            )
-        } else {
-            format!(
-                "'{f}' is not a macro function and cannot be called with a `!`. \
-                Try replacing with '{f}'"
-            )
-        };
-        let decl_msg = if decl_is_macro {
-            "Declared a normal (non-macro) function here"
-        } else {
-            "Declared a macro function here"
-        };
-        context.env.add_diag(diag!(
-            TypeSafety::InvalidCallTarget,
-            (loc, call_msg),
-            (decl_loc, decl_msg),
-        ));
-    }
+    check_call_target(
+        context, loc, /* is_macro_call */ false, macro_, declared, f,
+    );
     let (arguments, arg_tys) = call_args(
         context,
         loc,
@@ -2674,24 +2639,7 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
     mut given: Vec<Type>,
 ) -> Vec<Type> {
     let given_len = given.len();
-    if given_len != arity {
-        let code = if given_len < arity {
-            TypeSafety::TooFewArguments
-        } else {
-            TypeSafety::TooManyArguments
-        };
-        let cmsg = format!(
-            "{}. The call expected {} argument(s) but got {}",
-            msg(),
-            arity,
-            given_len
-        );
-        context.env.add_diag(diag!(
-            code,
-            (loc, cmsg),
-            (argloc, format!("Found {} argument(s) here", given_len)),
-        ));
-    }
+    check_call_arity(context, loc, msg, arity, argloc, given_len);
     while given.len() < arity {
         given.push(context.error_type(argloc))
     }
@@ -2701,13 +2649,179 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
     given
 }
 
+fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
+    context: &mut Context,
+    loc: Loc,
+    msg: F,
+    arity: usize,
+    argloc: Loc,
+    given_len: usize,
+) {
+    if given_len == arity {
+        return;
+    }
+    let code = if given_len < arity {
+        TypeSafety::TooFewArguments
+    } else {
+        TypeSafety::TooManyArguments
+    };
+    let cmsg = format!(
+        "{}. The call expected {} argument(s) but got {}",
+        msg(),
+        arity,
+        given_len
+    );
+    context.env.add_diag(diag!(
+        code,
+        (loc, cmsg),
+        (argloc, format!("Found {} argument(s) here", given_len)),
+    ));
+}
+
+fn check_call_target(
+    context: &mut Context,
+    call_loc: Loc,
+    is_macro_call: bool,
+    declared_macro_modifier: Option<Loc>,
+    declared: Loc,
+    f: FunctionName,
+) {
+    let decl_is_macro = declared_macro_modifier.is_some();
+    if is_macro_call == decl_is_macro {
+        return;
+    }
+
+    let decl_loc = declared_macro_modifier.unwrap_or(declared);
+    let call_msg = if decl_is_macro {
+        format!(
+            "'{f}' is a macro function and must be called with a `!`. \
+            Try replacing with '{f}!'"
+        )
+    } else {
+        format!(
+            "'{f}' is not a macro function and cannot be called with a `!`. \
+            Try replacing with '{f}'"
+        )
+    };
+    let decl_msg = if decl_is_macro {
+        "Declared a normal (non-macro) function here"
+    } else {
+        "Declared a macro function here"
+    };
+    context.env.add_diag(diag!(
+        TypeSafety::InvalidCallTarget,
+        (call_loc, call_msg),
+        (decl_loc, decl_msg),
+    ));
+}
+
+//**************************************************************************************************
+// Macro
+//**************************************************************************************************
+
+fn macro_method_call(
+    context: &mut Context,
+    loc: Loc,
+    edotted: ExpDotted,
+    edotted_ty: Type,
+    method: Name,
+    ty_args_opt: Option<Vec<Type>>,
+    argloc: Loc,
+    nargs: Vec<N::Exp>,
+) -> Option<(Type, T::UnannotatedExp_)> {
+    let (m, f, fty, first_arg) =
+        method_call_resolve(context, loc, edotted, edotted_ty, method, ty_args_opt)?;
+    let mut args = vec![macro_expand::EitherArg::ByValue(first_arg)];
+    args.extend(nargs.into_iter().map(macro_expand::EitherArg::ByName));
+    let (type_arguments, args) = macro_call_impl(context, loc, m, f, fty, argloc, args);
+    Some(expand_macro(context, loc, m, f, type_arguments, args))
+}
+
+fn macro_module_call(
+    context: &mut Context,
+    loc: Loc,
+    m: ModuleIdent,
+    f: FunctionName,
+    ty_args_opt: Option<Vec<Type>>,
+    argloc: Loc,
+    nargs: Vec<N::Exp>,
+) -> (Type, T::UnannotatedExp_) {
+    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt);
+    let args = nargs
+        .into_iter()
+        .map(macro_expand::EitherArg::ByName)
+        .collect();
+    let (type_arguments, args) = macro_call_impl(context, loc, m, f, fty, argloc, args);
+    expand_macro(context, loc, m, f, type_arguments, args)
+}
+
+fn macro_call_impl(
+    context: &mut Context,
+    loc: Loc,
+    m: ModuleIdent,
+    f: FunctionName,
+    fty: ResolvedFunctionType,
+    argloc: Loc,
+    mut args: Vec<macro_expand::EitherArg<T::Exp, N::Exp>>,
+) -> (Vec<Type>, Vec<macro_expand::Arg>) {
+    use macro_expand::EitherArg;
+    let ResolvedFunctionType {
+        declared,
+        macro_,
+        ty_args,
+        params: parameters,
+        return_: _,
+    } = fty;
+    check_call_target(
+        context, loc, /* is_macro_call */ true, macro_, declared, f,
+    );
+    check_call_arity(
+        context,
+        loc,
+        || format!("Invalid call of '{}::{}'", &m, &f),
+        parameters.len(),
+        argloc,
+        args.len(),
+    );
+    while args.len() < parameters.len() {
+        args.push(EitherArg::ByName(sp(loc, N::Exp_::UnresolvedError)));
+    }
+    while args.len() > parameters.len() {
+        args.pop();
+    }
+    assert!(args.len() == parameters.len());
+    let args_with_ty = args
+        .into_iter()
+        .zip(parameters)
+        .map(|(arg, (param, param_ty))| match arg {
+            EitherArg::ByValue(e) => {
+                let msg = || {
+                    format!(
+                        "Invalid call of '{}::{}'. Invalid argument for parameter '{}'",
+                        &m, &f, &param.value.name
+                    )
+                };
+                subtype(context, loc, msg, e.ty.clone(), param_ty.clone());
+                EitherArg::ByValue(e)
+            }
+            EitherArg::ByName(ne) => EitherArg::ByName((ne, param_ty.clone())),
+        })
+        .collect();
+    context
+        .used_module_members
+        .entry(m.value)
+        .or_default()
+        .insert(f.value());
+    (ty_args, args_with_ty)
+}
+
 fn expand_macro(
     context: &mut core::Context,
     call_loc: Loc,
     m: ModuleIdent,
     f: FunctionName,
     type_args: Vec<N::Type>,
-    args: Spanned<Vec<T::Exp>>,
+    args: Vec<macro_expand::Arg>,
 ) -> (Type, T::UnannotatedExp_) {
     use T::SequenceItem_ as TS;
     use T::UnannotatedExp_ as TE;
@@ -2723,15 +2837,15 @@ fn expand_macro(
             (context.error_type(call_loc), TE::UnresolvedError)
         }
         Some(macro_expand::ExpandedMacro {
-            argument_bindings,
+            by_value_args,
             body,
         }) => {
             // bind the locals
-            let mut seq: VecDeque<_> = argument_bindings
+            let mut seq: VecDeque<_> = by_value_args
                 .into_iter()
-                .map(|(mut_, v, e)| {
+                .map(|(v, e)| {
                     let lvalue_ = N::LValue_::Var {
-                        mut_,
+                        mut_: None,
                         var: v,
                         unused_binding: false,
                     };
