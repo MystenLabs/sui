@@ -66,6 +66,9 @@ If an unsupported parameter is used, the request will error, or fallback to JSON
 - `getLatestSuiSystemState`
   - missing `stakingPoolMappingsId`, `inactivePoolsId`, `pendingActiveValidatorsId`,
     `validatorCandidatesId`
+  - missing `reportRecords` on validators
+- `getCurrentEpoch`
+  - missing `reportRecords` on validators
 - `queryEvents`
   - missing `id` for `events`
 - `getCheckpoint` and `getCheckpoints`

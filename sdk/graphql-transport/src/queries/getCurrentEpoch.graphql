@@ -85,12 +85,6 @@ fragment RPC_VALIDATOR_FIELDS on Validator {
 		address
 	}
 	votingPower
-	reportRecords {
-		# todo paginate?
-		nodes {
-			address
-		}
-	}
 }
 
 fragment RPC_CREDENTIAL_FIELDS on ValidatorCredentials {

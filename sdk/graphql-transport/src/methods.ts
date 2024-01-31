@@ -818,9 +818,7 @@ export const RPC_METHODS: {
 			validatorCandidatesSize: systemState.validatorSet?.validatorCandidatesSize?.toString()!,
 			validatorLowStakeGracePeriod: systemState.systemParameters?.validatorLowStakeGracePeriod,
 			validatorLowStakeThreshold: systemState.systemParameters?.validatorLowStakeThreshold,
-			validatorReportRecords: systemState.validatorSet?.activeValidators?.nodes.flatMap(
-				(validator) => validator.reportRecords?.nodes.map((record) => record.address)!,
-			)!,
+			validatorReportRecords: [], // TODO
 			validatorVeryLowStakeThreshold: systemState.systemParameters?.validatorVeryLowStakeThreshold,
 			validatorCandidatesId: '', // TODO
 			inactivePoolsId: '', // TODO
