@@ -8,6 +8,7 @@ use petgraph::{algo, prelude::DiGraphMap, Direction};
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet, VecDeque},
     fmt,
+    fs::File,
     io::{BufWriter, Read, Write},
     path::{Path, PathBuf},
     process::Command,
@@ -226,17 +227,14 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         // compute digests eagerly as even if we can't reuse existing lock file, they need to become
         // part of the newly computed dependency graph
         let new_manifest_digest = digest_str(manifest_string.into_bytes().as_slice());
-        let (old_manifest_digest_opt, old_deps_digest_opt, lock_string) = match lock_string_opt {
-            Some(lock_string) => match schema::read_header(&lock_string) {
-                Ok(header) => (
-                    Some(header.manifest_digest),
-                    Some(header.deps_digest),
-                    Some(lock_string),
-                ),
-                Err(_) => (None, None, None), // malformed header - regenerate lock file
-            },
-            None => (None, None, None),
-        };
+        let lock_path = root_path.join(SourcePackageLayout::Lock.path());
+        let lock_file = File::open(lock_path);
+        let digest_and_lock_contents = lock_file
+            .map(|mut lock_file| match schema::Header::read(&mut lock_file) {
+                Ok(header) => Some((header.manifest_digest, header.deps_digest, lock_string_opt)),
+                Err(_) => None, // malformed header - regenerate lock file
+            })
+            .unwrap_or(None);
 
         // collect sub-graphs for "regular" and "dev" dependencies
         let root_pkg_name = custom_resolve_pkg_name(&root_manifest).with_context(|| {
@@ -274,24 +272,23 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
             .collect::<Result<Vec<LockFile>>>()?;
         let new_deps_digest = self.dependency_digest(dep_lock_files, dev_dep_lock_files)?;
-        let (manifest_digest, deps_digest) =
-            match (old_manifest_digest_opt, old_deps_digest_opt, lock_string) {
-                (Some(old_manifest_digest), Some(old_deps_digest), Some(lock_string))
-                    if old_manifest_digest == new_manifest_digest
-                        && old_deps_digest == new_deps_digest =>
-                {
-                    return Ok((
-                        DependencyGraph::read_from_lock(
-                            root_path,
-                            root_pkg_name,
-                            &mut lock_string.as_bytes(), // safe since old_deps_digest exists
-                            None,
-                        )?,
-                        false,
-                    ));
-                }
-                _ => (new_manifest_digest, new_deps_digest),
-            };
+        let (manifest_digest, deps_digest) = match digest_and_lock_contents {
+            Some((old_manifest_digest, old_deps_digest, Some(lock_string)))
+                if old_manifest_digest == new_manifest_digest
+                    && old_deps_digest == new_deps_digest =>
+            {
+                return Ok((
+                    DependencyGraph::read_from_lock(
+                        root_path,
+                        root_pkg_name,
+                        &mut lock_string.as_bytes(), // safe since old_deps_digest exists
+                        None,
+                    )?,
+                    false,
+                ));
+            }
+            _ => (new_manifest_digest, new_deps_digest),
+        };
 
         dep_graphs.extend(dev_dep_graphs);
         dep_orig_names.extend(dev_dep_orig_names);

@@ -109,7 +109,7 @@ impl Packages {
         let Schema { move_: packages } =
             toml::de::from_str::<Schema<Packages>>(&contents).context("Deserializing packages")?;
 
-        Ok((packages, read_header(&contents)?))
+        Ok((packages, Header::from_str(&contents)?))
     }
 }
 
@@ -136,32 +136,31 @@ impl ToolchainVersion {
 }
 
 impl Header {
+    /// Read lock file header after verifying that the version of the lock is not newer than the version
+    /// supported by this library.
     pub fn read(lock: &mut impl Read) -> Result<Header> {
         let contents = {
             let mut buf = String::new();
             lock.read_to_string(&mut buf).context("Reading lock file")?;
             buf
         };
-        read_header(&contents)
-    }
-}
-
-/// Read lock file header after verifying that the version of the lock is not newer than the version
-/// supported by this library.
-#[allow(clippy::ptr_arg)] // Allowed to avoid interface changes.
-pub fn read_header(contents: &String) -> Result<Header> {
-    let Schema { move_: header } =
-        toml::de::from_str::<Schema<Header>>(contents).context("Deserializing lock header")?;
-
-    if header.version > VERSION {
-        bail!(
-            "Lock file format is too new, expected version {} or below, found {}",
-            VERSION,
-            header.version
-        );
+        Self::from_str(&contents)
     }
 
-    Ok(header)
+    fn from_str(contents: &str) -> Result<Header> {
+        let Schema { move_: header } =
+            toml::de::from_str::<Schema<Header>>(contents).context("Deserializing lock header")?;
+
+        if header.version > VERSION {
+            bail!(
+                "Lock file format is too new, expected version {} or below, found {}",
+                VERSION,
+                header.version
+            );
+        }
+
+        Ok(header)
+    }
 }
 
 /// Write the initial part of the lock file.
