@@ -36,15 +36,15 @@ impl UniversalCommitter {
     /// ordered decided leaders.
     #[tracing::instrument(skip_all, fields(last_decided = %last_decided))]
     pub fn try_commit(&self, last_decided: Slot) -> Vec<LeaderStatus> {
-        let highest_known_round = self.dag_state.read().highest_round;
+        let highest_accepted_round = self.dag_state.read().highest_accepted_round();
 
         // Try to decide as many leaders as possible, starting with the highest round.
         let mut leaders = VecDeque::new();
-        // try to commit a leader up to the highest_known_round - 2. There is no
+        // try to commit a leader up to the highest_accepted_round - 2. There is no
         // reason to try and iterate on higher rounds as in order to make a direct
         // decision for a leader at round R we need blocks from round R+2 to figure
         // out that enough certificates and support exist to commit a leader.
-        'outer: for round in (last_decided.round..=highest_known_round.saturating_sub(2)).rev() {
+        'outer: for round in (last_decided.round..=highest_accepted_round.saturating_sub(2)).rev() {
             for committer in self.committers.iter().rev() {
                 // Skip committers that don't have a leader for this round.
                 let Some(leader) = committer.elect_leader(round) else {
@@ -125,7 +125,6 @@ impl UniversalCommitter {
 
 /// A builder for a universal committer. By default, the builder creates a single
 /// base committer, that is, a single leader and no pipeline.
-#[cfg(test)]
 #[allow(unused)]
 mod universal_committer_builder {
     use super::*;
