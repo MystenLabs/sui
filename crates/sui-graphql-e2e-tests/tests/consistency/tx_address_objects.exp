@@ -1,4 +1,4 @@
-processed 16 tasks
+processed 17 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -1114,7 +1114,10 @@ Response: {
   }
 }
 
-task 15 'run-graphql'. lines 266-313:
+task 15 'create-checkpoint'. lines 266-266:
+Checkpoint created: 6
+
+task 16 'run-graphql'. lines 268-315:
 Response: {
   "data": {
     "all_transactions": {

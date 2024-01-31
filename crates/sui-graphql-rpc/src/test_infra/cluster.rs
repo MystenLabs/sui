@@ -241,7 +241,7 @@ impl ExecutorCluster {
 
         tokio::time::timeout(base_timeout, async {
             while latest_cp > latest_snapshot_cp + self.snapshot_config.snapshot_max_lag as u64 {
-                tokio::time::sleep(Duration::from_secs(self.snapshot_config.sleep_duration)).await;
+                tokio::time::sleep(Duration::from_secs(1)).await;
                 latest_snapshot_cp = self
                     .indexer_store
                     .get_latest_object_snapshot_checkpoint_sequence_number()
@@ -251,7 +251,8 @@ impl ExecutorCluster {
             }
         })
         .await
-        .expect("Timeout waiting for indexer to update objects snapshot");
+        .expect(&format!("Timeout waiting for indexer to update objects snapshot - latest_cp: {}, latest_snapshot_cp: {}",
+            latest_cp, latest_snapshot_cp));
     }
 
     pub async fn cleanup_resources(self) {
@@ -265,7 +266,6 @@ impl ExecutorCluster {
             .persist_object_snapshot(start_cp, end_cp)
             .await
             .unwrap();
-        // tokio::time::sleep(Duration::from_secs(5)).await;
 
         let mut latest_snapshot_cp = self
             .indexer_store
@@ -273,6 +273,7 @@ impl ExecutorCluster {
             .await
             .unwrap()
             .unwrap_or_default();
+
         tokio::time::timeout(Duration::from_secs(60), async {
             while latest_snapshot_cp < end_cp - 1 {
                 tokio::time::sleep(Duration::from_secs(1)).await;
@@ -285,6 +286,9 @@ impl ExecutorCluster {
             }
         })
         .await
-        .expect("Timeout waiting for indexer to update objects snapshot");
+        .expect(&format!("Timeout waiting for indexer to update objects snapshot - latest_snapshot_cp: {}, end_cp: {}",
+        latest_snapshot_cp, end_cp));
+
+        tokio::time::sleep(Duration::from_secs(5)).await;
     }
 }

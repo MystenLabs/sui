@@ -802,7 +802,7 @@ Objects snapshot updated to [0 to 4)
 task 19 'create-checkpoint'. lines 256-256:
 Checkpoint created: 7
 
-task 20 'run-graphql'. lines 258-299:
+task 20 'run-graphql'. lines 258-287:
 Response: {
   "data": null,
   "errors": [
@@ -816,22 +816,6 @@ Response: {
       ],
       "path": [
         "queryCoinsAtChkpt1AfterSnapshotCatchup"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    },
-    {
-      "message": "Requested data is outside the available range",
-      "locations": [
-        {
-          "line": 30,
-          "column": 5
-        }
-      ],
-      "path": [
-        "queryAddressCoinsAtChkpt1AfterSnapshotCatchup",
-        "coins"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"

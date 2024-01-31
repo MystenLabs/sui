@@ -263,6 +263,8 @@ module Test::M1 {
   }
 }
 
+//# create-checkpoint
+
 //# run-graphql
 # First transaction should have no results since its data is no longer in objects_snapshot. Second
 # transaction is still valid - since objects_snapshot table is at [0, 3), it will have data from

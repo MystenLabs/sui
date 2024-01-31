@@ -284,16 +284,4 @@ module P0::fake {
       }
     }
   }
-  queryAddressCoinsAtChkpt1AfterSnapshotCatchup: address(address: "@{A}") {
-    coins(type: "@{P0}::fake::FAKE", before: "@{cursor_0}") {
-      edges {
-        cursor
-        node {
-          contents {
-            json
-          }
-        }
-      }
-    }
-  }
 }

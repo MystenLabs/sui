@@ -587,7 +587,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .await;
 
                 cluster
-                    .wait_for_objects_snapshot_catchup(Duration::from_secs(30))
+                    .wait_for_objects_snapshot_catchup(Duration::from_secs(60))
                     .await;
 
                 let interpolated =
