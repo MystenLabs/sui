@@ -326,21 +326,24 @@ async fn graphql_handler(
 
 /// Connect via a TCPStream to the DB to check if it is alive
 async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode {
-    let db_url = connection.db_url;
-    let url = reqwest::Url::parse(db_url.as_str());
-    if let Ok(url) = url {
-        if let (Some(h), Some(p)) = (url.host_str(), url.port()) {
-            let listener = TcpStream::connect(format!("{}:{}", h, p));
-            if listener.is_err() {
-                StatusCode::INTERNAL_SERVER_ERROR
-            } else {
-                StatusCode::OK
-            }
-        } else {
-            StatusCode::INTERNAL_SERVER_ERROR
-        }
+    let Ok(url) = reqwest::Url::parse(connection.db_url.as_str()) else {
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    };
+
+    let Some(host) = url.host_str() else {
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    };
+
+    let tcp_url = if let Some(port) = url.port() {
+        format!("{host}:{port}")
     } else {
+        host.to_string();
+    };
+
+    if TcpStream::connect(tcp_url).is_err() {
         StatusCode::INTERNAL_SERVER_ERROR
+    } else {
+        StatusCode::OK
     }
 }
 
