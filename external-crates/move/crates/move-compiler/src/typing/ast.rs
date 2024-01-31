@@ -6,8 +6,7 @@ use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{Address, Attributes, Fields, Friend, ModuleIdent, Value, Visibility},
     naming::ast::{
-        self as N, BlockLabel, FunctionSignature, Neighbor, StructDefinition, Type, TypeName_,
-        Type_, Var,
+        BlockLabel, FunctionSignature, Neighbor, StructDefinition, Type, TypeName_, Type_, Var,
     },
     parser::ast::{
         BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
@@ -173,7 +172,6 @@ pub enum UnannotatedExp_ {
     },
     NamedBlock(BlockLabel, Sequence),
     Block(Sequence),
-    Lambda(N::Lambda),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
     Return(Box<Exp>),
@@ -559,9 +557,6 @@ impl AstDebug for UnannotatedExp_ {
                 seq.ast_debug(w)
             }
             E::Block(seq) => seq.ast_debug(w),
-            E::Lambda(lambda) => {
-                lambda.ast_debug(w);
-            }
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));

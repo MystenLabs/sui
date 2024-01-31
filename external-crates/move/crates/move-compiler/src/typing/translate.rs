@@ -502,7 +502,6 @@ mod check_valid_constant {
                 s = format!("'{}' is", b);
                 &s
             }
-            E::Lambda(_) => "lambda expressions are",
             E::IfElse(eb, et, ef) => {
                 exp(context, eb);
                 exp(context, et);
@@ -1339,26 +1338,12 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             res
         }
 
-        NE::Lambda(lambda) => {
-            let param_tys = lambda
-                .parameters
-                .value
-                .iter()
-                .map(|(p, ty_opt)| {
-                    if let Some(ty) = ty_opt {
-                        core::instantiate(context, ty.clone())
-                    } else {
-                        core::make_tvar(context, p.loc)
-                    }
-                })
-                .collect();
-            let ret_ty = if let Some(ty) = lambda.return_type.clone() {
-                core::instantiate(context, ty)
-            } else {
-                make_tvar(context, lambda.body.loc)
-            };
-            let tfun = sp(eloc, Type_::Fun(param_tys, Box::new(ret_ty)));
-            (tfun, TE::Lambda(lambda))
+        NE::Lambda(_) => {
+            let msg = "Lambdas can only be used directly as arguments to macro functions";
+            context
+                .env
+                .add_diag(diag!(TypeSafety::UnexpectedLambda, (eloc, msg)));
+            (context.error_type(eloc), TE::UnresolvedError)
         }
 
         NE::Assign(na, nr) => {

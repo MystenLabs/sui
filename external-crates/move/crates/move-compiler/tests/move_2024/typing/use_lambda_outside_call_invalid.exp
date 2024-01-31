@@ -1,9 +1,3 @@
-error[E04030]: invalid usage of lambda type
-  ┌─ tests/move_2024/typing/use_lambda_outside_call_invalid.move:3:13
-  │
-3 │         let x = $f;
-  │             ^ Unexpected lambda type. Lambdas can only be used as parameters for, or direct arguments to, macro functions
-
 error[E04031]: invalid usage of lambda
   ┌─ tests/move_2024/typing/use_lambda_outside_call_invalid.move:3:17
   │

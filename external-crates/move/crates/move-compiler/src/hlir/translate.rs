@@ -1222,7 +1222,6 @@ fn value(
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
         E::Use(_) => panic!("ICE unexpanded use"),
-        E::Lambda(_) => panic!("ICE unexpanded lambda"),
 
         E::UnresolvedError => {
             assert!(context.env.has_errors());
@@ -1535,7 +1534,6 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
         E::Use(_) => panic!("ICE unexpanded use"),
-        E::Lambda(_) => panic!("ICE unexpanded lambda"),
     }
 }
 

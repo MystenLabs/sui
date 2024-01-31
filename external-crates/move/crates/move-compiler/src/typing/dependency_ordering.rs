@@ -437,7 +437,6 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Constant(..)
         | E::Continue(_)
         | E::BorrowLocal(..)
-        | E::Lambda(_)
         | E::UnresolvedError => (),
     }
 }
