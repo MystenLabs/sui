@@ -181,6 +181,14 @@ pub(crate) enum ObjectLookupKey {
         /// requested at the latest checkpoint.
         checkpoint_viewed_at: Option<u64>,
     },
+    LatestAtParentVersion {
+        /// The parent version to be used as the upper bound for the query. Look for the latest
+        /// version of a child object that is less than or equal to this upper bound.
+        version: u64,
+        /// The checkpoint sequence number at which this was viewed at, or None if the data was
+        /// requested at the latest checkpoint.
+        checkpoint_viewed_at: Option<u64>,
+    },
 }
 
 pub(crate) type Cursor = cursor::BcsCursor<HistoricalObjectCursor>;
@@ -433,7 +441,9 @@ impl Object {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl::from(self).dynamic_field(ctx, name).await
+        OwnerImpl::from(self)
+            .dynamic_field(ctx, name, Some(self.version_impl()))
+            .await
     }
 
     /// Access a dynamic object field on an object using its name. Names are arbitrary Move values
@@ -448,7 +458,9 @@ impl Object {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl::from(self).dynamic_object_field(ctx, name).await
+        OwnerImpl::from(self)
+            .dynamic_object_field(ctx, name, Some(self.version_impl()))
+            .await
     }
 
     /// The dynamic fields and dynamic object fields on an object.
@@ -464,7 +476,7 @@ impl Object {
         before: Option<Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_fields(ctx, first, after, last, before)
+            .dynamic_fields(ctx, first, after, last, before, Some(self.version_impl()))
             .await
     }
 
@@ -818,6 +830,69 @@ impl Object {
             .transpose()
     }
 
+    /// Query for the latest version of an object bounded by the provided `parent_version`.
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
+    /// queried in, or `None` if the data was requested at the latest checkpoint. This is stored on
+    /// `Object` so that when viewing that entity's state, it will be as if it was read at the same
+    /// checkpoint.
+    async fn query_latest_at_version(
+        db: &Db,
+        address: SuiAddress,
+        parent_version: u64,
+        checkpoint_viewed_at: Option<u64>,
+    ) -> Result<Option<Self>, Error> {
+        use objects_history::dsl as history;
+        use objects_snapshot::dsl as snapshot;
+
+        let version = parent_version as i64;
+
+        let stored_objs: Option<Vec<StoredHistoryObject>> = db
+            .execute_repeatable(move |conn| {
+                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
+
+                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
+                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
+                        return Ok(None);
+                    }
+                    rhs = checkpoint_viewed_at;
+                }
+
+                conn.results(move || {
+                    // If an object was created or mutated in a checkpoint outside the current
+                    // available range, and never touched again, it will not show up in the
+                    // objects_history table. Thus, we always need to check the objects_snapshot
+                    // table as well.
+                    let snapshot_query = snapshot::objects_snapshot
+                        .filter(snapshot::object_id.eq(address.into_vec()))
+                        .filter(snapshot::object_version.le(version));
+
+                    let historical_query = history::objects_history
+                        .filter(history::object_id.eq(address.into_vec()))
+                        .filter(history::object_version.le(version))
+                        .filter(history::checkpoint_sequence_number.between(lhs as i64, rhs as i64))
+                        .order_by(history::object_version.desc())
+                        .limit(1);
+
+                    snapshot_query.union(historical_query)
+                })
+                .optional() // Return optional to match the state when checkpoint_viewed_at is out of range
+            })
+            .await?;
+
+        let Some(stored_objs) = stored_objs else {
+            return Ok(None);
+        };
+
+        // Select the max by key after the union query, because Diesel currently does not support
+        // order_by on union
+        stored_objs
+            .into_iter()
+            .max_by_key(|o| o.object_version)
+            .map(|obj| Self::try_from_stored_history_object(obj, checkpoint_viewed_at))
+            .transpose()
+    }
+
     /// Query for the object at the latest version at the checkpoint sequence number if given, else
     /// the latest version of the object against the latest checkpoint.
     async fn query_latest_at_checkpoint(
@@ -886,6 +961,10 @@ impl Object {
                 version,
                 checkpoint_viewed_at,
             } => Self::query_at_version(db, address, version, checkpoint_viewed_at).await,
+            ObjectLookupKey::LatestAtParentVersion {
+                version,
+                checkpoint_viewed_at,
+            } => Self::query_latest_at_version(db, address, version, checkpoint_viewed_at).await,
         }
         .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))
     }
