@@ -12,7 +12,7 @@ use aya_bpf::{
     maps::HashMap,
     programs::XdpContext,
 };
-use aya_log_ebpf::info;
+use aya_log_ebpf::{error, info};
 use core::{mem, ptr::read_volatile};
 // TODO see if this is preferred over ptr_at
 // use memoffset::offset_of;
@@ -32,7 +32,8 @@ const MAX_BLOCKLIST_SIZE: u32 = 1024;
 
 // the key is an ipv4 or ipv6 octet value expressed as an array.
 #[map]
-static BLOCKLIST: HashMap<[u8; 16usize], Rule> = HashMap::with_max_entries(MAX_BLOCKLIST_SIZE, 0|BPF_F_NO_PREALLOC);
+static BLOCKLIST: HashMap<[u8; 16usize], Rule> =
+    HashMap::with_max_entries(MAX_BLOCKLIST_SIZE, 0 | BPF_F_NO_PREALLOC);
 
 /// block_ip inspects our blocklist against the incoming packet and makes a filter determination
 fn block_ip(ctx: &XdpContext, address: [u8; 16usize], dest_port: u16) -> bool {
@@ -76,7 +77,7 @@ fn get_dest_port(ctx: &XdpContext, af: IpProto, proto: IpProto) -> Result<u16, (
         IpProto::Ipv4 => Ipv4Hdr::LEN,
         IpProto::Ipv6 => Ipv6Hdr::LEN,
         _ => {
-            info!(ctx, "invalid address family!");
+            error!(ctx, "invalid address family!");
             return Err(());
         }
     };
