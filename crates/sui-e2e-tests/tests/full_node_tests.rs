@@ -528,7 +528,16 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
-async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
+async fn test_full_node_sync_flood() {
+    do_test_full_node_sync_flood().await
+}
+
+#[sim_test(check_determinism)]
+async fn test_full_node_sync_flood_determinism() {
+    do_test_full_node_sync_flood().await
+}
+
+async fn do_test_full_node_sync_flood() {
     let mut test_cluster = TestClusterBuilder::new().build().await;
 
     // Start a new fullnode that is not on the write path
@@ -624,8 +633,6 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         .notify_read_executed_effects(digests)
         .await
         .unwrap();
-
-    Ok(())
 }
 
 #[sim_test]
