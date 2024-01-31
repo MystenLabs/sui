@@ -5,6 +5,7 @@
 use move_ir_types::location::Loc;
 
 use crate::{
+    diag,
     parser::{
         ast as P,
         filter::{filter_program, FilterContext},
@@ -48,13 +49,25 @@ pub fn program(compilation_env: &mut CompilationEnv, prog: P::Program) -> P::Pro
 
 // An AST element should be removed if:
 // * It is annotated #[verify_only] and verify mode is not set
-fn should_remove_node(env: &CompilationEnv, attrs: &[P::Attributes]) -> bool {
+fn should_remove_node(env: &mut CompilationEnv, attrs: &[P::Attributes]) -> bool {
     use known_attributes::VerificationAttribute;
     let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
-    let is_verify_only = flattened_attrs
+    let is_verify_only_loc = flattened_attrs
         .iter()
-        .any(|attr| matches!(attr.1, VerificationAttribute::VerifyOnly));
-    is_verify_only && !env.flags().is_verification()
+        .map(|attr| match attr {
+            (loc, VerificationAttribute::VerifyOnly) => loc,
+        })
+        .next();
+    if let Some(loc) = is_verify_only_loc {
+        let msg = format!(
+            "The '{}' attribute has been deprecated along with specification blocks",
+            VerificationAttribute::VERIFY_ONLY
+        );
+        env.add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (*loc, msg)));
+        true
+    } else {
+        false
+    }
 }
 
 fn verification_attributes(
@@ -67,10 +80,7 @@ fn verification_attributes(
         .filter_map(
             |attr| match KnownAttribute::resolve(attr.value.attribute_name().value)? {
                 KnownAttribute::Verification(verify_attr) => Some((attr.loc, verify_attr)),
-                KnownAttribute::Testing(_)
-                | KnownAttribute::Native(_)
-                | KnownAttribute::Diagnostic(_)
-                | KnownAttribute::DefinesPrimitive(_) => None,
+                _ => None,
             },
         )
         .collect()

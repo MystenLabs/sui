@@ -12,6 +12,7 @@ use crate::{
         },
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_},
         byte_string, hex_string, legacy_aliases,
+        translate::known_attributes::KnownAttribute,
     },
     parser::ast::{
         self as P, Ability, BlockLabel, ConstantName, Field, FieldBindings, FunctionName,
@@ -28,6 +29,8 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     iter::IntoIterator,
 };
+
+use self::known_attributes::DiagnosticAttribute;
 
 //**************************************************************************************************
 // Context
@@ -65,8 +68,8 @@ impl<'env, 'map> Context<'env, 'map> {
         address_conflicts: BTreeSet<Symbol>,
     ) -> Self {
         let mut all_filter_alls = WarningFilters::new_for_dependency();
-        for allow in compilation_env.filter_attributes() {
-            for f in compilation_env.filter_from_str(FILTER_ALL, *allow) {
+        for prefix in compilation_env.known_filter_names() {
+            for f in compilation_env.filter_from_str(prefix, FILTER_ALL) {
                 all_filter_alls.add(f);
             }
         }
@@ -591,10 +594,13 @@ fn module_(
         attributes,
         loc,
         address,
-        is_spec_module: _,
+        is_spec_module,
         name,
         members,
     } = mdef;
+    if is_spec_module {
+        context.spec_deprecated(name.0.loc, /* is_error */ true)
+    }
     let attributes = flatten_attributes(context, AttributePosition::Module, attributes);
     let mut warning_filter = module_warning_filter(context, &attributes);
     let config = context.env().package_config(package_name);
@@ -770,7 +776,30 @@ fn flatten_attributes(
         .flat_map(|attrs| attrs.value)
         .flat_map(|attr| attribute(context, attr_position, attr))
         .collect::<Vec<_>>();
-    unique_attributes(context, attr_position, false, all_attrs)
+    known_attributes(context, attr_position, all_attrs)
+}
+
+fn known_attributes(
+    context: &mut Context,
+    attr_position: AttributePosition,
+    attributes: impl IntoIterator<Item = E::Attribute>,
+) -> E::Attributes {
+    let attributes = unique_attributes(context, attr_position, false, attributes);
+    UniqueMap::maybe_from_iter(attributes.into_iter().filter_map(|(n, attr)| match n {
+        sp!(loc, E::AttributeName_::Unknown(n)) => {
+            let msg = format!(
+                "Unknown attribute '{n}'. Custom attributes must be wrapped in '{ext}', \
+                e.g. #[{ext}({n})]",
+                ext = known_attributes::ExternalAttribute::EXTERNAL
+            );
+            context
+                .env()
+                .add_diag(diag!(Declarations::UnknownAttribute, (loc, msg)));
+            None
+        }
+        sp!(loc, E::AttributeName_::Known(n)) => Some((sp(loc, n), attr)),
+    }))
+    .unwrap()
 }
 
 fn unique_attributes(
@@ -778,7 +807,7 @@ fn unique_attributes(
     attr_position: AttributePosition,
     is_nested: bool,
     attributes: impl IntoIterator<Item = E::Attribute>,
-) -> E::Attributes {
+) -> E::InnerAttributes {
     let mut attr_map = UniqueMap::new();
     for sp!(loc, attr_) in attributes {
         let sp!(nloc, sym) = match &attr_ {
@@ -824,6 +853,12 @@ fn unique_attributes(
                 E::AttributeName_::Known(known)
             }
         };
+        if matches!(
+            name_,
+            E::AttributeName_::Known(KnownAttribute::Verification(_))
+        ) {
+            context.spec_deprecated(loc, /* is_error */ true)
+        }
         if let Err((_, old_loc)) = attr_map.add(sp(nloc, name_), sp(loc, attr_)) {
             let msg = format!("Duplicate attribute '{}' attached to the same item", name_);
             context.env().add_diag(diag!(
@@ -861,10 +896,7 @@ fn attribute(
 
 /// Like warning_filter, but it will filter _all_ warnings for non-source definitions (or for any
 /// dependency packages)
-fn module_warning_filter(
-    context: &mut Context,
-    attributes: &UniqueMap<E::AttributeName, E::Attribute>,
-) -> WarningFilters {
+fn module_warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
     let filters = warning_filter(context, attributes);
     let is_dep = !context.is_source_definition || {
         let pkg = context.current_package;
@@ -879,42 +911,35 @@ fn module_warning_filter(
     }
 }
 
-fn warning_filter(
-    context: &mut Context,
-    attributes: &UniqueMap<E::AttributeName, E::Attribute>,
-) -> WarningFilters {
-    use crate::diagnostics::codes::Category;
-    use known_attributes::DiagnosticAttribute;
+/// Finds the warning filters from the #[allow(_)] attribute and the deprecated #[lint_allow(_)]
+/// attribute.
+fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
     let mut warning_filters = WarningFilters::new_for_source();
-    let filter_attribute_names = context.env().filter_attributes().clone();
-    for allow in filter_attribute_names {
-        let Some(attr) = attributes.get_(&allow) else {
-            continue;
-        };
-        let inners = match &attr.value {
-            E::Attribute_::Parameterized(_, inner) if !inner.is_empty() => inner,
-            _ => {
-                let msg = format!(
-                    "Expected list of warnings, e.g. '{}({})'",
-                    DiagnosticAttribute::ALLOW,
-                    WarningFilter::Category {
-                        prefix: None,
-                        category: Category::UnusedItem as u8,
-                        name: Some(FILTER_UNUSED)
-                    }
-                    .to_str()
-                    .unwrap(),
-                );
-                context
-                    .env()
-                    .add_diag(diag!(Attributes::InvalidValue, (attr.loc, msg)));
-                continue;
-            }
-        };
-        for (inner_attr_loc, _, inner_attr) in inners {
-            let sp!(_, name_) = match inner_attr.value {
-                E::Attribute_::Name(n) => n,
-                E::Attribute_::Assigned(n, _) | E::Attribute_::Parameterized(n, _) => {
+    let mut prefixed_filters: Vec<(DiagnosticAttribute, Option<Symbol>, Vec<Name>)> = vec![];
+    // Gather lint_allow warnings
+    if let Some(lint_allow_attr) = attributes.get_(&DiagnosticAttribute::LintAllow.into()) {
+        // get the individual filters
+        let inners =
+            get_allow_attribute_inners(context, DiagnosticAttribute::LINT_ALLOW, lint_allow_attr);
+        if let Some(inners) = inners {
+            let names = prefixed_warning_filters(context, DiagnosticAttribute::LINT_ALLOW, inners);
+            prefixed_filters.push((DiagnosticAttribute::LintAllow, Some(symbol!("lint")), names));
+        }
+    }
+    // Gather allow warnings
+    if let Some(allow_attr) = attributes.get_(&DiagnosticAttribute::Allow.into()) {
+        // get the individual filters, or nested filters
+        let inners = get_allow_attribute_inners(context, DiagnosticAttribute::ALLOW, allow_attr);
+        for (inner_attr_loc, _, inner_attr) in inners.into_iter().flatten() {
+            let (prefix, names) = match &inner_attr.value {
+                // a filter, e.g. allow(unused_variables)
+                E::Attribute_::Name(n) => (None, vec![*n]),
+                // a nested filter, e.g. allow(lint(_))
+                E::Attribute_::Parameterized(prefix, inners) => (
+                    Some(prefix.value),
+                    prefixed_warning_filters(context, prefix, inners),
+                ),
+                E::Attribute_::Assigned(n, _) => {
                     let msg = format!(
                         "Expected a stand alone warning filter identifier, e.g. '{}({})'",
                         DiagnosticAttribute::ALLOW,
@@ -922,16 +947,34 @@ fn warning_filter(
                     );
                     context
                         .env()
-                        .add_diag(diag!(Attributes::InvalidValue, (inner_attr_loc, msg)));
-                    n
+                        .add_diag(diag!(Declarations::InvalidAttribute, (inner_attr_loc, msg)));
+                    (None, vec![*n])
                 }
             };
-            let filters = context.env().filter_from_str(name_, allow);
+            prefixed_filters.push((DiagnosticAttribute::Allow, prefix, names));
+        }
+    }
+    // Find the warning filter for each prefix+name instance
+    for (diag_attr, prefix, names) in prefixed_filters {
+        for sp!(nloc, n_) in names {
+            let filters = context.env().filter_from_str(prefix, n_);
             if filters.is_empty() {
-                let msg = format!("Unknown warning filter '{name_}'");
+                let msg = match diag_attr {
+                    DiagnosticAttribute::Allow => {
+                        format!("Unknown warning filter '{}'", format_allow_attr(prefix, n_))
+                    }
+                    DiagnosticAttribute::LintAllow => {
+                        // specialized error message for the deprecated syntax
+                        format!(
+                            "Unknown warning filter '{}({})'",
+                            DiagnosticAttribute::LINT_ALLOW,
+                            n_
+                        )
+                    }
+                };
                 context
                     .env()
-                    .add_diag(diag!(Attributes::InvalidValue, (attr.loc, msg)));
+                    .add_diag(diag!(Attributes::ValueWarning, (nloc, msg)));
                 continue;
             };
             for f in filters {
@@ -940,6 +983,62 @@ fn warning_filter(
         }
     }
     warning_filters
+}
+
+fn get_allow_attribute_inners<'a>(
+    context: &mut Context,
+    name: &'static str,
+    allow_attr: &'a E::Attribute,
+) -> Option<&'a E::InnerAttributes> {
+    use crate::diagnostics::codes::Category;
+    match &allow_attr.value {
+        E::Attribute_::Parameterized(_, inner) if !inner.is_empty() => Some(inner),
+        _ => {
+            let msg = format!(
+                "Expected list of warnings, e.g. '{}({})'",
+                name,
+                WarningFilter::Category {
+                    prefix: None,
+                    category: Category::UnusedItem as u8,
+                    name: Some(FILTER_UNUSED)
+                }
+                .to_str()
+                .unwrap(),
+            );
+            context
+                .env()
+                .add_diag(diag!(Attributes::ValueWarning, (allow_attr.loc, msg)));
+            None
+        }
+    }
+}
+
+fn prefixed_warning_filters(
+    context: &mut Context,
+    prefix: impl std::fmt::Display,
+    inners: &E::InnerAttributes,
+) -> Vec<Name> {
+    inners
+        .key_cloned_iter()
+        .map(|(_, inner_attr)| match inner_attr {
+            sp!(_, E::Attribute_::Name(n)) => *n,
+            sp!(
+                loc,
+                E::Attribute_::Assigned(n, _) | E::Attribute_::Parameterized(n, _)
+            ) => {
+                let msg = format!(
+                    "Expected a warning filter identifier, e.g. '{}({}({}))'",
+                    DiagnosticAttribute::ALLOW,
+                    prefix,
+                    n
+                );
+                context
+                    .env()
+                    .add_diag(diag!(Attributes::ValueWarning, (*loc, msg)));
+                *n
+            }
+        })
+        .collect()
 }
 
 //**************************************************************************************************

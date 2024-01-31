@@ -12,7 +12,6 @@ use crate::{
     editions::{check_feature_or_error as edition_check_feature, Edition, FeatureGate, Flavor},
     expansion::ast as E,
     naming::ast as N,
-    naming::ast::ModuleDefinition,
     sui_mode,
     typing::visitor::{TypingVisitor, TypingVisitorObj},
 };
@@ -30,6 +29,7 @@ use std::{
 };
 
 pub mod ast_debug;
+pub mod known_attributes;
 pub mod program_info;
 pub mod remembering_unique_map;
 pub mod unique_map;
@@ -202,25 +202,10 @@ pub struct IndexedPackagePath {
     pub named_address_map: NamedAddressMapIndex,
 }
 
-pub type AttributeDeriver = dyn Fn(&mut CompilationEnv, &mut ModuleDefinition);
-
-/// Filter info for example filter #[allow(unused_function)] would have `name` to be
-/// `unused_function` and `attribute_name` to be `allow`
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct KnownFilterInfo {
-    name: Symbol,
-    attribute_name: E::AttributeName_,
-}
-
-impl KnownFilterInfo {
-    pub fn new(n: impl Into<Symbol>, attribute_name: E::AttributeName_) -> Self {
-        let name = n.into();
-        KnownFilterInfo {
-            name,
-            attribute_name,
-        }
-    }
-}
+/// None for the default 'allow'.
+/// Some(prefix) for a custom set of warnings, e.g. 'allow(lint(_))'.
+pub type FilterPrefix = Option<Symbol>;
+pub type FilterName = Symbol;
 
 pub struct CompilationEnv {
     flags: Flags,
@@ -232,11 +217,9 @@ pub struct CompilationEnv {
     /// Config for any package not found in `package_configs`, or for inputs without a package.
     default_config: PackageConfig,
     /// Maps warning filter key (filter name and filter attribute name) to the filter itself.
-    known_filters: BTreeMap<KnownFilterInfo, BTreeSet<WarningFilter>>,
+    known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>>,
     /// Maps a diagnostics ID to a known filter name.
-    known_filter_names: BTreeMap<DiagnosticsID, KnownFilterInfo>,
-    /// Attribute names (including externally provided ones) identifying known warning filters.
-    known_filter_attributes: BTreeSet<E::AttributeName_>,
+    known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
     prim_definers:
         BTreeMap<crate::naming::ast::BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
     // TODO(tzakian): Remove the global counter and use this counter instead
@@ -244,9 +227,9 @@ pub struct CompilationEnv {
 }
 
 macro_rules! known_code_filter {
-    ($name:ident, $category:ident::$code:ident, $attr_name:ident) => {
+    ($name:ident, $category:ident::$code:ident) => {
         (
-            KnownFilterInfo::new($name, $attr_name),
+            Symbol::from($name),
             BTreeSet::from([WarningFilter::Code {
                 prefix: None,
                 category: Category::$category as u8,
@@ -269,62 +252,29 @@ impl CompilationEnv {
             sui_mode::id_leak::IDLeakVerifier.visitor(),
             sui_mode::typing::SuiTypeChecks.visitor(),
         ]);
-        let filter_attr_name =
-            E::AttributeName_::Known(known_attributes::KnownAttribute::Diagnostic(
-                known_attributes::DiagnosticAttribute::Allow,
-            ));
-        let filter_attributes = BTreeSet::from([filter_attr_name]);
-        let known_filters = BTreeMap::from([
+        let known_filters_: BTreeMap<FilterName, BTreeSet<WarningFilter>> = BTreeMap::from([
             (
-                KnownFilterInfo::new(FILTER_ALL, filter_attr_name),
+                FILTER_ALL.into(),
                 BTreeSet::from([WarningFilter::All(None)]),
             ),
             (
-                KnownFilterInfo::new(FILTER_UNUSED, filter_attr_name),
+                FILTER_UNUSED.into(),
                 BTreeSet::from([WarningFilter::Category {
                     prefix: None,
                     category: Category::UnusedItem as u8,
                     name: Some(FILTER_UNUSED),
                 }]),
             ),
-            known_code_filter!(
-                FILTER_MISSING_PHANTOM,
-                Declarations::InvalidNonPhantomUse,
-                filter_attr_name
-            ),
-            known_code_filter!(FILTER_UNUSED_USE, UnusedItem::Alias, filter_attr_name),
-            known_code_filter!(
-                FILTER_UNUSED_VARIABLE,
-                UnusedItem::Variable,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_ASSIGNMENT,
-                UnusedItem::Assignment,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_TRAILING_SEMI,
-                UnusedItem::TrailingSemi,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_ATTRIBUTE,
-                UnusedItem::Attribute,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_FUNCTION,
-                UnusedItem::Function,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_STRUCT_FIELD,
-                UnusedItem::StructField,
-                filter_attr_name
-            ),
+            known_code_filter!(FILTER_MISSING_PHANTOM, Declarations::InvalidNonPhantomUse),
+            known_code_filter!(FILTER_UNUSED_USE, UnusedItem::Alias),
+            known_code_filter!(FILTER_UNUSED_VARIABLE, UnusedItem::Variable),
+            known_code_filter!(FILTER_UNUSED_ASSIGNMENT, UnusedItem::Assignment),
+            known_code_filter!(FILTER_UNUSED_TRAILING_SEMI, UnusedItem::TrailingSemi),
+            known_code_filter!(FILTER_UNUSED_ATTRIBUTE, UnusedItem::Attribute),
+            known_code_filter!(FILTER_UNUSED_FUNCTION, UnusedItem::Function),
+            known_code_filter!(FILTER_UNUSED_STRUCT_FIELD, UnusedItem::StructField),
             (
-                KnownFilterInfo::new(FILTER_UNUSED_TYPE_PARAMETER, filter_attr_name),
+                FILTER_UNUSED_TYPE_PARAMETER.into(),
                 BTreeSet::from([
                     WarningFilter::Code {
                         prefix: None,
@@ -340,45 +290,33 @@ impl CompilationEnv {
                     },
                 ]),
             ),
-            known_code_filter!(FILTER_UNUSED_CONST, UnusedItem::Constant, filter_attr_name),
-            known_code_filter!(FILTER_DEAD_CODE, UnusedItem::DeadCode, filter_attr_name),
-            known_code_filter!(
-                FILTER_UNUSED_LET_MUT,
-                UnusedItem::MutModifier,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_MUT_REF,
-                UnusedItem::MutReference,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_MUT_PARAM,
-                UnusedItem::MutParam,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_IMPLICIT_CONST_COPY,
-                TypeSafety::ImplicitConstantCopy,
-                filter_attr_name
-            ),
+            known_code_filter!(FILTER_UNUSED_CONST, UnusedItem::Constant),
+            known_code_filter!(FILTER_DEAD_CODE, UnusedItem::DeadCode),
+            known_code_filter!(FILTER_UNUSED_LET_MUT, UnusedItem::MutModifier),
+            known_code_filter!(FILTER_UNUSED_MUT_REF, UnusedItem::MutReference),
+            known_code_filter!(FILTER_UNUSED_MUT_PARAM, UnusedItem::MutParam),
+            known_code_filter!(FILTER_IMPLICIT_CONST_COPY, TypeSafety::ImplicitConstantCopy),
         ]);
+        let known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>> =
+            BTreeMap::from([(None, known_filters_)]);
 
-        let known_filter_names: BTreeMap<DiagnosticsID, KnownFilterInfo> = known_filters
+        let known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)> = known_filters
             .iter()
-            .flat_map(|(known_filter_info, filters)| {
-                filters.iter().filter_map(|v| {
-                    if let WarningFilter::Code {
-                        prefix,
-                        category,
-                        code,
-                        ..
-                    } = v
-                    {
-                        Some(((*prefix, *category, *code), known_filter_info.clone()))
-                    } else {
-                        None
-                    }
+            .flat_map(|(attr, all_filters)| {
+                all_filters.iter().flat_map(|(name, filters)| {
+                    filters.iter().filter_map(|v| {
+                        if let WarningFilter::Code {
+                            prefix,
+                            category,
+                            code,
+                            ..
+                        } = v
+                        {
+                            Some(((*prefix, *category, *code), (*attr, *name)))
+                        } else {
+                            None
+                        }
+                    })
                 })
             })
             .collect();
@@ -399,7 +337,6 @@ impl CompilationEnv {
             default_config: default_config.unwrap_or_default(),
             known_filters,
             known_filter_names,
-            known_filter_attributes: filter_attributes,
             prim_definers: BTreeMap::new(),
         }
     }
@@ -413,12 +350,12 @@ impl CompilationEnv {
             // add help to suppress warning, if applicable
             // TODO do we want a centralized place for tips like this?
             if diag.info().severity() == Severity::Warning {
-                if let Some(filter_info) = self.known_filter_names.get(&diag.info().id()) {
+                if let Some((prefix, name)) = self.known_filter_names.get(&diag.info().id()) {
                     let help = format!(
                         "This warning can be suppressed with '#[{}({})]' \
                          applied to the 'module' or module member ('const', 'fun', or 'struct')",
-                        filter_info.attribute_name.name(),
-                        filter_info.name.as_str()
+                        known_attributes::DiagnosticAttribute::ALLOW,
+                        format_allow_attr(*prefix, *name),
                     );
                     diag.add_note(help)
                 }
@@ -499,43 +436,40 @@ impl CompilationEnv {
         self.warning_filter.pop().unwrap();
     }
 
-    pub fn filter_from_str(
-        &self,
-        name: impl Into<Symbol>,
-        attribute_name: E::AttributeName_,
-    ) -> BTreeSet<WarningFilter> {
-        self.known_filters
-            .get(&KnownFilterInfo::new(name, attribute_name))
-            .cloned()
-            .unwrap_or_default()
+    pub fn known_filter_names(&self) -> impl IntoIterator<Item = FilterPrefix> + '_ {
+        self.known_filters.keys().copied()
     }
 
-    pub fn filter_attributes(&self) -> &BTreeSet<E::AttributeName_> {
-        &self.known_filter_attributes
+    pub fn filter_from_str(
+        &self,
+        prefix: Option<impl Into<Symbol>>,
+        name: impl Into<Symbol>,
+    ) -> BTreeSet<WarningFilter> {
+        self.known_filters
+            .get(&prefix.map(|p| p.into()))
+            .and_then(|filters| filters.get(&name.into()).cloned())
+            .unwrap_or_default()
     }
 
     pub fn add_custom_known_filters(
         &mut self,
+        attr_name: FilterPrefix,
         filters: Vec<WarningFilter>,
-        filter_attr_name: E::AttributeName_,
     ) -> anyhow::Result<()> {
-        self.known_filter_attributes.insert(filter_attr_name);
+        let prev = self.known_filters.insert(attr_name, BTreeMap::new());
+        anyhow::ensure!(
+            prev.is_none(),
+            "A known filter attr for '{attr_name:?}' already exists"
+        );
+        let filter_attr = self.known_filters.get_mut(&attr_name).unwrap();
         for filter in filters {
-            match filter {
-                WarningFilter::All(_) => {
-                    self.known_filters
-                        .entry(KnownFilterInfo::new(FILTER_ALL, filter_attr_name))
-                        .or_default()
-                        .insert(filter);
-                }
-                WarningFilter::Category { name, .. } => {
+            let (prefix, n) = match filter {
+                WarningFilter::All(prefix) => (prefix, Symbol::from(FILTER_ALL)),
+                WarningFilter::Category { name, prefix, .. } => {
                     let Some(n) = name else {
                         anyhow::bail!("A known Category warning filter must have a name specified");
                     };
-                    self.known_filters
-                        .entry(KnownFilterInfo::new(n, filter_attr_name))
-                        .or_default()
-                        .insert(filter);
+                    (prefix, Symbol::from(n))
                 }
                 WarningFilter::Code {
                     prefix,
@@ -546,15 +480,18 @@ impl CompilationEnv {
                     let Some(n) = name else {
                         anyhow::bail!("A known Code warning filter must have a name specified");
                     };
-                    let known_filter_info = KnownFilterInfo::new(n, filter_attr_name);
-                    self.known_filters
-                        .entry(known_filter_info.clone())
-                        .or_default()
-                        .insert(filter);
+                    let n = Symbol::from(n);
                     self.known_filter_names
-                        .insert((prefix, category, code), known_filter_info);
+                        .insert((prefix, category, code), (attr_name, n));
+                    (prefix, n)
                 }
-            }
+            };
+            anyhow::ensure!(
+                attr_name.is_some() == prefix.is_some(),
+                "If the attribute name is specified, e.g. Some(_), the external prefix must also \
+                be specified. attribute name: {attr_name:?}, external prefix: {prefix:?}",
+            );
+            filter_attr.entry(n).or_default().insert(filter);
         }
         Ok(())
     }
@@ -604,6 +541,13 @@ impl CompilationEnv {
     }
 }
 
+pub fn format_allow_attr(attr_name: FilterPrefix, filter: FilterName) -> String {
+    match attr_name {
+        None => filter.to_string(),
+        Some(attr_name) => format!("{attr_name}({filter})"),
+    }
+}
+
 //**************************************************************************************************
 // Counter
 //**************************************************************************************************
@@ -648,13 +592,6 @@ pub struct Flags {
     )]
     test: bool,
 
-    /// Compile in verification mode
-    #[clap(
-        short = cli::VERIFY_SHORT,
-        long = cli::VERIFY,
-    )]
-    verify: bool,
-
     /// If set, warnings become errors.
     #[clap(
         long = cli::WARNINGS_ARE_ERRORS,
@@ -693,7 +630,6 @@ impl Flags {
     pub fn empty() -> Self {
         Self {
             test: false,
-            verify: false,
             shadow: false,
             bytecode_version: None,
             warnings_are_errors: false,
@@ -705,20 +641,7 @@ impl Flags {
     pub fn testing() -> Self {
         Self {
             test: true,
-            verify: false,
             shadow: false,
-            bytecode_version: None,
-            warnings_are_errors: false,
-            silence_warnings: false,
-            keep_testing_functions: false,
-        }
-    }
-
-    pub fn verification() -> Self {
-        Self {
-            test: false,
-            verify: true,
-            shadow: true, // allows overlapping between sources and deps
             bytecode_version: None,
             warnings_are_errors: false,
             silence_warnings: false,
@@ -764,10 +687,6 @@ impl Flags {
 
     pub fn keep_testing_functions(&self) -> bool {
         self.test || self.keep_testing_functions
-    }
-
-    pub fn is_verification(&self) -> bool {
-        self.verify
     }
 
     pub fn sources_shadow_deps(&self) -> bool {
@@ -833,261 +752,6 @@ impl Visitors {
             }
         }
         vs
-    }
-}
-
-//**************************************************************************************************
-// Attributes
-//**************************************************************************************************
-
-pub mod known_attributes {
-    use once_cell::sync::Lazy;
-    use std::{collections::BTreeSet, fmt};
-
-    use crate::diagnostics::codes::WARNING_FILTER_ATTR;
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub enum AttributePosition {
-        AddressBlock,
-        Module,
-        Use,
-        Friend,
-        Constant,
-        Struct,
-        Function,
-        Spec,
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub enum KnownAttribute {
-        Testing(TestingAttribute),
-        Verification(VerificationAttribute),
-        Native(NativeAttribute),
-        Diagnostic(DiagnosticAttribute),
-        DefinesPrimitive(DefinesPrimitive),
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub enum TestingAttribute {
-        // Can be called by other testing code, and included in compilation in test mode
-        TestOnly,
-        // Is a test that will be run
-        Test,
-        // This test is expected to fail
-        ExpectedFailure,
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub enum VerificationAttribute {
-        // The associated AST node will be included in the compilation in prove mode
-        VerifyOnly,
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub enum NativeAttribute {
-        // It is a fake native function that actually compiles to a bytecode instruction
-        BytecodeInstruction,
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub enum DiagnosticAttribute {
-        Allow,
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct DefinesPrimitive;
-
-    impl fmt::Display for AttributePosition {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self {
-                Self::AddressBlock => write!(f, "address block"),
-                Self::Module => write!(f, "module"),
-                Self::Use => write!(f, "use"),
-                Self::Friend => write!(f, "friend"),
-                Self::Constant => write!(f, "constant"),
-                Self::Struct => write!(f, "struct"),
-                Self::Function => write!(f, "function"),
-                Self::Spec => write!(f, "spec"),
-            }
-        }
-    }
-
-    impl KnownAttribute {
-        pub fn resolve(attribute_str: impl AsRef<str>) -> Option<Self> {
-            Some(match attribute_str.as_ref() {
-                TestingAttribute::TEST => Self::Testing(TestingAttribute::Test),
-                TestingAttribute::TEST_ONLY => Self::Testing(TestingAttribute::TestOnly),
-                TestingAttribute::EXPECTED_FAILURE => {
-                    Self::Testing(TestingAttribute::ExpectedFailure)
-                }
-                VerificationAttribute::VERIFY_ONLY => {
-                    Self::Verification(VerificationAttribute::VerifyOnly)
-                }
-                NativeAttribute::BYTECODE_INSTRUCTION => {
-                    Self::Native(NativeAttribute::BytecodeInstruction)
-                }
-                DiagnosticAttribute::ALLOW => Self::Diagnostic(DiagnosticAttribute::Allow),
-                DefinesPrimitive::DEFINES_PRIM => Self::DefinesPrimitive(DefinesPrimitive),
-                _ => return None,
-            })
-        }
-
-        pub const fn name(&self) -> &str {
-            match self {
-                Self::Testing(a) => a.name(),
-                Self::Verification(a) => a.name(),
-                Self::Native(a) => a.name(),
-                Self::Diagnostic(a) => a.name(),
-                Self::DefinesPrimitive(a) => a.name(),
-            }
-        }
-
-        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-            match self {
-                Self::Testing(a) => a.expected_positions(),
-                Self::Verification(a) => a.expected_positions(),
-                Self::Native(a) => a.expected_positions(),
-                Self::Diagnostic(a) => a.expected_positions(),
-                Self::DefinesPrimitive(a) => a.expected_positions(),
-            }
-        }
-    }
-
-    impl TestingAttribute {
-        pub const TEST: &'static str = "test";
-        pub const EXPECTED_FAILURE: &'static str = "expected_failure";
-        pub const TEST_ONLY: &'static str = "test_only";
-        pub const ABORT_CODE_NAME: &'static str = "abort_code";
-        pub const ARITHMETIC_ERROR_NAME: &'static str = "arithmetic_error";
-        pub const VECTOR_ERROR_NAME: &'static str = "vector_error";
-        pub const OUT_OF_GAS_NAME: &'static str = "out_of_gas";
-        pub const MAJOR_STATUS_NAME: &'static str = "major_status";
-        pub const MINOR_STATUS_NAME: &'static str = "minor_status";
-        pub const ERROR_LOCATION: &'static str = "location";
-
-        pub const fn name(&self) -> &str {
-            match self {
-                Self::Test => Self::TEST,
-                Self::TestOnly => Self::TEST_ONLY,
-                Self::ExpectedFailure => Self::EXPECTED_FAILURE,
-            }
-        }
-
-        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-            static TEST_ONLY_POSITIONS: Lazy<BTreeSet<AttributePosition>> = Lazy::new(|| {
-                BTreeSet::from([
-                    AttributePosition::AddressBlock,
-                    AttributePosition::Module,
-                    AttributePosition::Use,
-                    AttributePosition::Friend,
-                    AttributePosition::Constant,
-                    AttributePosition::Struct,
-                    AttributePosition::Function,
-                ])
-            });
-            static TEST_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
-                Lazy::new(|| BTreeSet::from([AttributePosition::Function]));
-            static EXPECTED_FAILURE_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
-                Lazy::new(|| BTreeSet::from([AttributePosition::Function]));
-            match self {
-                TestingAttribute::TestOnly => &TEST_ONLY_POSITIONS,
-                TestingAttribute::Test => &TEST_POSITIONS,
-                TestingAttribute::ExpectedFailure => &EXPECTED_FAILURE_POSITIONS,
-            }
-        }
-
-        pub fn expected_failure_cases() -> &'static [&'static str] {
-            &[
-                Self::ABORT_CODE_NAME,
-                Self::ARITHMETIC_ERROR_NAME,
-                Self::VECTOR_ERROR_NAME,
-                Self::OUT_OF_GAS_NAME,
-                Self::MAJOR_STATUS_NAME,
-            ]
-        }
-    }
-
-    impl VerificationAttribute {
-        pub const VERIFY_ONLY: &'static str = "verify_only";
-
-        pub const fn name(&self) -> &str {
-            match self {
-                Self::VerifyOnly => Self::VERIFY_ONLY,
-            }
-        }
-
-        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-            static VERIFY_ONLY_POSITIONS: Lazy<BTreeSet<AttributePosition>> = Lazy::new(|| {
-                BTreeSet::from([
-                    AttributePosition::AddressBlock,
-                    AttributePosition::Module,
-                    AttributePosition::Use,
-                    AttributePosition::Friend,
-                    AttributePosition::Constant,
-                    AttributePosition::Struct,
-                    AttributePosition::Function,
-                ])
-            });
-            match self {
-                Self::VerifyOnly => &VERIFY_ONLY_POSITIONS,
-            }
-        }
-    }
-
-    impl NativeAttribute {
-        pub const BYTECODE_INSTRUCTION: &'static str = "bytecode_instruction";
-
-        pub const fn name(&self) -> &str {
-            match self {
-                NativeAttribute::BytecodeInstruction => Self::BYTECODE_INSTRUCTION,
-            }
-        }
-
-        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-            static BYTECODE_INSTRUCTION_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
-                Lazy::new(|| IntoIterator::into_iter([AttributePosition::Function]).collect());
-            match self {
-                NativeAttribute::BytecodeInstruction => &BYTECODE_INSTRUCTION_POSITIONS,
-            }
-        }
-    }
-
-    impl DiagnosticAttribute {
-        pub const ALLOW: &'static str = WARNING_FILTER_ATTR;
-
-        pub const fn name(&self) -> &str {
-            match self {
-                DiagnosticAttribute::Allow => Self::ALLOW,
-            }
-        }
-
-        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-            static ALLOW_WARNING_POSITIONS: Lazy<BTreeSet<AttributePosition>> = Lazy::new(|| {
-                BTreeSet::from([
-                    AttributePosition::Module,
-                    AttributePosition::Constant,
-                    AttributePosition::Struct,
-                    AttributePosition::Function,
-                ])
-            });
-            match self {
-                DiagnosticAttribute::Allow => &ALLOW_WARNING_POSITIONS,
-            }
-        }
-    }
-
-    impl DefinesPrimitive {
-        pub const DEFINES_PRIM: &'static str = "defines_primitive";
-
-        pub const fn name(&self) -> &str {
-            Self::DEFINES_PRIM
-        }
-
-        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-            static DEFINES_PRIM_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
-                Lazy::new(|| IntoIterator::into_iter([AttributePosition::Module]).collect());
-            &DEFINES_PRIM_POSITIONS
-        }
     }
 }
 

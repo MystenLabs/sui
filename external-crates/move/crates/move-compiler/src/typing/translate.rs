@@ -11,19 +11,16 @@ use crate::{
     diagnostics::{codes::*, Diagnostic},
     editions::{FeatureGate, Flavor},
     expansion::ast::{
-        AttributeName_, AttributeValue_, Attribute_, Attributes, DottedUsage, Fields, Friend,
-        ModuleAccess_, ModuleIdent, ModuleIdent_, Value_, Visibility,
+        Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend, ModuleAccess_,
+        ModuleIdent, ModuleIdent_, Value_, Visibility,
     },
     naming::ast::{self as N, BlockLabel, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_,
     },
     shared::{
-        known_attributes::{KnownAttribute, TestingAttribute},
-        process_binops,
-        program_info::TypingProgramInfo,
-        unique_map::UniqueMap,
-        *,
+        known_attributes::TestingAttribute, process_binops, program_info::TypingProgramInfo,
+        unique_map::UniqueMap, *,
     },
     sui_mode,
     typing::{
@@ -2468,7 +2465,7 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
 // Utils
 //**************************************************************************************************
 
-fn process_attributes(context: &mut Context, all_attributes: &Attributes) {
+fn process_attributes<T: TName>(context: &mut Context, all_attributes: &UniqueMap<T, Attribute>) {
     for (_, _, attr) in all_attributes {
         match &attr.value {
             Attribute_::Name(_) => (),
@@ -2551,9 +2548,7 @@ fn unused_module_members(context: &mut Context, mident: &ModuleIdent_, mdef: &T:
     }
 
     for (loc, name, fun) in &mdef.functions {
-        if fun.attributes.iter().any(|(_, n, _)| {
-            n == &AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::Test))
-        }) {
+        if fun.attributes.contains_key_(&TestingAttribute::Test.into()) {
             // functions with #[test] attribute are implicitly used
             continue;
         }

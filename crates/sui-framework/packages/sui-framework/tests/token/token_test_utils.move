@@ -22,7 +22,7 @@ module sui::token_test_utils {
         coin::create_treasury_cap_for_testing(ctx)
     }
 
-    #[lint_allow(share_owned)]
+    #[allow(lint(share_owned))]
     /// Return `TreasuryCap` (shares it for now).
     public fun return_treasury_cap(treasury_cap: TreasuryCap<TEST>) {
         sui::transfer::public_share_object(treasury_cap)

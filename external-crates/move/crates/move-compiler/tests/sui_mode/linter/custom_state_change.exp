@@ -9,7 +9,7 @@ warning[Lint W02001]: potentially unenforceable custom transfer/share/freeze pol
    │                   -------- Instances of a type with a store ability can be transferred using the public_transfer function which often negates the intent of enforcing a custom transfer policy
    │
    = A custom transfer policy for a given type is implemented through calling the private transfer function variant in the module defining this type
-   = This warning can be suppressed with '#[lint_allow(custom_state_change)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(custom_state_change))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W02001]: potentially unenforceable custom transfer/share/freeze policy
    ┌─ tests/sui_mode/linter/custom_state_change.move:20:16
@@ -22,7 +22,7 @@ warning[Lint W02001]: potentially unenforceable custom transfer/share/freeze pol
    │                   ------------ Instances of a type with a store ability can be shared using the public_share_object function which often negates the intent of enforcing a custom share policy
    │
    = A custom share policy for a given type is implemented through calling the private share_object function variant in the module defining this type
-   = This warning can be suppressed with '#[lint_allow(custom_state_change)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(custom_state_change))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W02001]: potentially unenforceable custom transfer/share/freeze policy
    ┌─ tests/sui_mode/linter/custom_state_change.move:24:16
@@ -35,5 +35,5 @@ warning[Lint W02001]: potentially unenforceable custom transfer/share/freeze pol
    │                   ------------- Instances of a type with a store ability can be frozen using the public_freeze_object function which often negates the intent of enforcing a custom freeze policy
    │
    = A custom freeze policy for a given type is implemented through calling the private freeze_object function variant in the module defining this type
-   = This warning can be suppressed with '#[lint_allow(custom_state_change)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(custom_state_change))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
