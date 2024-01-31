@@ -26,10 +26,19 @@ module a::m {
         $f()
     }
 
+    // invalid cycle through by-name arg
+    macro fun cycle_by_name($f: u64): u64 {
+        by_name!(cycle_by_name!($f))
+    }
+
+    macro fun by_name($f: u64): u64 {
+        $f
+    }
 
     fun t() {
         self_cyle!();
         cycle1!();
         cycle_app!(|| 1);
+        cycle_by_name!(1);
     }
 }

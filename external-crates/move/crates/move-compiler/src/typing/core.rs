@@ -1960,7 +1960,10 @@ fn join_impl(
         (sp!(_, Fun(a1, r1)), sp!(loc, Fun(a2, r2))) => {
             // TODO this is going to likely lead to some strange error locations/messages
             // since the RHS in subtyping is currently assumed to be an annotation
-            let (subst, args) = join_impl_types(subst, case, a2, a1)?;
+            let (subst, args) = match case {
+                Join => join_impl_types(subst, case, a1, a2)?,
+                Subtype => join_impl_types(subst, case, a2, a1)?,
+            };
             let (subst, result) = join_impl(subst, case, r1, r2)?;
             Ok((subst, sp(*loc, Fun(args, Box::new(result)))))
         }
