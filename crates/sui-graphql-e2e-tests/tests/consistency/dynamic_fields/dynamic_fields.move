@@ -150,23 +150,6 @@ fragment ParentSelect on Parent {
     dynamicFields {
       ...DynamicFieldsSelect
     }
-    child_dof_state_consistent: dynamicObjectField(name: {type: "u64", bcs: "pAEAAAAAAAA="}) {
-      value {
-        ... on MoveObject {
-          address
-          # When we look up a dynamic object field, the object retrieved is the `Field<Wrapper<K>,
-          # V>` which points to the expected parent object. To resolve the value of this dynamic
-          # object field, we look up the wrapped object(?) for the actual contents of the dynamic
-          # field. This move object will have its parent pointed to the wrapper, not the actual
-          # parent object.
-          owner {
-            ... on Parent {
-              ...ParentSelect
-            }
-          }
-        }
-      }
-    }
   }
   child_version_2_no_parent: object(address: "@{obj_2_0}", version: 2) {
     address
@@ -178,7 +161,8 @@ fragment ParentSelect on Parent {
       }
     }
   }
-  # Likewise, the following error is expected
+  # Note that the value object's parent is the field object, not the parent object that we may
+  # expect
   child_version_3_has_parent: object(address: "@{obj_2_0}", version: 3) {
     owner {
       ... on Parent {

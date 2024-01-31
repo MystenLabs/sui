@@ -107,7 +107,7 @@ Response: {
       "allBalances": {
         "edges": [
           {
-            "cursor": "eyJjb2luX3R5cGUiOiIweDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDI6OnN1aTo6U1VJIiwiY2hlY2twb2ludF92aWV3ZWRfYXQiOjF9",
+            "cursor": "eyJ0IjoiMHgwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAyOjpzdWk6OlNVSSIsImMiOjF9",
             "node": {
               "coinType": {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
@@ -117,7 +117,7 @@ Response: {
             }
           },
           {
-            "cursor": "eyJjb2luX3R5cGUiOiIweDRjMjYwMTJhNWMxNDgwMTJkYjY3MzE2OGExZGEwYjM3N2M1MmIzMTkzNjRmNTNjN2NkYjk4MWE2NDM4ODdhMzA6OmZha2U6OkZBS0UiLCJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MX0",
+            "cursor": "eyJ0IjoiMHg0NGJiY2ExNWViZGFjMmFiMDgzNmExNjUxNzYxZDdjMGQwODNkNTM1OTMxZjk2ZjJhZWE3YTM2YTVkYzg1ZTEzOjpmYWtlOjpGQUtFIiwiYyI6MX0",
             "node": {
               "coinType": {
                 "repr": "0x44bbca15ebdac2ab0836a1651761d7c0d083d535931f96f2aea7a36a5dc85e13::fake::FAKE"
@@ -131,14 +131,14 @@ Response: {
       "firstBalance": {
         "edges": [
           {
-            "cursor": "eyJjb2luX3R5cGUiOiIweDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDI6OnN1aTo6U1VJIiwiY2hlY2twb2ludF92aWV3ZWRfYXQiOjF9"
+            "cursor": "eyJ0IjoiMHgwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAyOjpzdWk6OlNVSSIsImMiOjF9"
           }
         ]
       },
       "lastBalance": {
         "edges": [
           {
-            "cursor": "eyJjb2luX3R5cGUiOiIweDRjMjYwMTJhNWMxNDgwMTJkYjY3MzE2OGExZGEwYjM3N2M1MmIzMTkzNjRmNTNjN2NkYjk4MWE2NDM4ODdhMzA6OmZha2U6OkZBS0UiLCJjaGVja3BvaW50X3ZpZXdlZF9hdCI6MX0"
+            "cursor": "eyJ0IjoiMHg0NGJiY2ExNWViZGFjMmFiMDgzNmExNjUxNzYxZDdjMGQwODNkNTM1OTMxZjk2ZjJhZWE3YTM2YTVkYzg1ZTEzOjpmYWtlOjpGQUtFIiwiYyI6MX0"
           }
         ]
       }
