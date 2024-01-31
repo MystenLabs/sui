@@ -50,9 +50,9 @@ pub(crate) struct EventKey {
     /// Event Sequence Number
     e: u64,
 
-    /// The checkpoint_sequence_number at which this was viewed at, or `None` if the data was
-    /// requested at the latest checkpoint.
-    checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number this was viewed at.
+    #[serde(rename = "c")]
+    checkpoint_viewed_at: u64,
 }
 
 pub(crate) type Cursor = cursor::JsonCursor<EventKey>;
@@ -226,9 +226,7 @@ impl Event {
         // Defer to the provided checkpoint_viewed_at, but if it is not provided, use the
         // current available range. This sets a consistent upper bound for the nested queries.
         for stored in results {
-            let cursor = stored
-                .consistent_cursor(checkpoint_viewed_at)
-                .encode_cursor();
+            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
             conn.edges.push(Edge::new(
                 cursor,
                 Event::try_from_stored_event(stored, Some(checkpoint_viewed_at))?,
@@ -344,25 +342,17 @@ impl Paginated<Cursor> for StoredEvent {
 }
 
 impl Target<Cursor> for StoredEvent {
-    fn cursor(&self) -> Cursor {
+    fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
         Cursor::new(EventKey {
             tx: self.tx_sequence_number as u64,
             e: self.event_sequence_number as u64,
-            checkpoint_viewed_at: None,
-        })
-    }
-
-    fn consistent_cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
-        Cursor::new(EventKey {
-            tx: self.tx_sequence_number as u64,
-            e: self.event_sequence_number as u64,
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         })
     }
 }
 
 impl Checkpointed for Cursor {
-    fn checkpoint_viewed_at(&self) -> Option<u64> {
+    fn checkpoint_viewed_at(&self) -> u64 {
         self.checkpoint_viewed_at
     }
 }

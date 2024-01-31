@@ -16,6 +16,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     config::ServiceConfig,
+    consistency::ConsistentIndexCursor,
     data::{Conn, DbConnection, DieselBackend, DieselConn, Query},
     error::Error,
     raw_query::RawQuery,
@@ -96,17 +97,12 @@ pub(crate) trait RawPaginated<C: CursorType>: Target<C> {
 }
 
 pub(crate) trait Target<C: CursorType> {
-    /// The cursor pointing at this target value.
-    fn cursor(&self) -> C;
-
     /// The cursor pointing at this target value, assuming it was read at `checkpoint_viewed_at`.
-    fn consistent_cursor(&self, _checkpoint_viewed_at: u64) -> C {
-        self.cursor()
-    }
+    fn cursor(&self, checkpoint_viewed_at: u64) -> C;
 }
 
-pub(crate) trait Checkpointed {
-    fn checkpoint_viewed_at(&self) -> Option<u64>;
+pub(crate) trait Checkpointed: CursorType {
+    fn checkpoint_viewed_at(&self) -> u64;
 }
 
 impl<C> JsonCursor<C> {
@@ -195,7 +191,7 @@ where
         match (self.after(), self.before()) {
             (Some(after), Some(before)) => {
                 if after.checkpoint_viewed_at() == before.checkpoint_viewed_at() {
-                    Ok(after.checkpoint_viewed_at())
+                    Ok(Some(after.checkpoint_viewed_at()))
                 } else {
                     Err(Error::Client(
                         "The provided cursors are taken from different checkpoints and cannot be used together in the same query."
@@ -203,7 +199,9 @@ where
                     ))
                 }
             }
-            (Some(cursor), None) | (None, Some(cursor)) => Ok(cursor.checkpoint_viewed_at()),
+            // If only one cursor is provided, then we can directly use the checkpoint sequence
+            // number on it.
+            (Some(cursor), None) | (None, Some(cursor)) => Ok(Some(cursor.checkpoint_viewed_at())),
             (None, None) => Ok(None),
         }
     }
@@ -231,6 +229,58 @@ impl Page<JsonCursor<usize>> {
         }
 
         Some((0 < lo, hi < total, (lo..hi).map(JsonCursor::new)))
+    }
+}
+
+impl Page<JsonCursor<ConsistentIndexCursor>> {
+    /// Treat the cursors of this Page as indices into a range [0, total). Returns two booleans
+    /// indicating whether there is a previous or next page in the range, followed by an iterator of
+    /// cursors within that Page. Ignores whether each cursor's `c`, checkpoint sequence number, is
+    /// consistent, and returns an iterator of `JsonCursor<usize>`.
+    pub(crate) fn paginate_consistent_indices(
+        &self,
+        total: usize,
+        checkpoint_viewed_at: u64,
+    ) -> Result<
+        Option<(
+            bool,
+            bool,
+            impl Iterator<Item = JsonCursor<ConsistentIndexCursor>>,
+        )>,
+        Error,
+    > {
+        let cursor_viewed_at = self.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
+
+        let mut lo = self.after().map_or(0, |a| a.ix + 1);
+        let mut hi = self.before().map_or(total, |b| b.ix);
+
+        if hi <= lo {
+            return Ok(None);
+        } else if (hi - lo) > self.limit() {
+            if self.is_from_front() {
+                hi = lo + self.limit();
+            } else {
+                lo = hi - self.limit();
+            }
+        }
+
+        Ok(Some((
+            0 < lo,
+            hi < total,
+            (lo..hi).map(move |ix| {
+                JsonCursor::new(ConsistentIndexCursor {
+                    ix,
+                    c: checkpoint_viewed_at,
+                })
+            }),
+        )))
+    }
+}
+
+impl Checkpointed for JsonCursor<ConsistentIndexCursor> {
+    fn checkpoint_viewed_at(&self) -> u64 {
+        self.c
     }
 }
 
@@ -288,12 +338,8 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         };
 
         Ok(self.paginate_results(
-            results
-                .first()
-                .map(|f| f.consistent_cursor(checkpoint_viewed_at)),
-            results
-                .last()
-                .map(|l| l.consistent_cursor(checkpoint_viewed_at)),
+            results.first().map(|f| f.cursor(checkpoint_viewed_at)),
+            results.last().map(|l| l.cursor(checkpoint_viewed_at)),
             results,
         ))
     }
@@ -342,12 +388,8 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         };
 
         Ok(self.paginate_results(
-            results
-                .first()
-                .map(|f| f.consistent_cursor(checkpoint_viewed_at)),
-            results
-                .last()
-                .map(|l| l.consistent_cursor(checkpoint_viewed_at)),
+            results.first().map(|f| f.cursor(checkpoint_viewed_at)),
+            results.last().map(|l| l.cursor(checkpoint_viewed_at)),
             results,
         ))
     }

@@ -8,9 +8,8 @@ use sui_types::transaction::RandomnessStateUpdate as NativeRandomnessStateUpdate
 #[derive(Clone, Eq, PartialEq)]
 pub(crate) struct RandomnessStateUpdateTransaction {
     pub native: NativeRandomnessStateUpdate,
-    /// The checkpoint sequence number at which this was viewed at, or None if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// System transaction to update the source of on-chain randomness.
@@ -18,11 +17,10 @@ pub(crate) struct RandomnessStateUpdateTransaction {
 impl RandomnessStateUpdateTransaction {
     /// Epoch of the randomness state update transaction.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        // TODO (wlmyng)
         Epoch::query(
             ctx.data_unchecked(),
             Some(self.native.epoch),
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()

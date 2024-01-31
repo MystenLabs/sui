@@ -228,9 +228,7 @@ impl DynamicField {
         for stored in results {
             // To maintain consistency, the returned cursor should have the same upper-bound as the
             // checkpoint found on the cursor.
-            let cursor = stored
-                .consistent_cursor(checkpoint_viewed_at)
-                .encode_cursor();
+            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
 
             let object =
                 Object::try_from_stored_history_object(stored, Some(checkpoint_viewed_at))?;
