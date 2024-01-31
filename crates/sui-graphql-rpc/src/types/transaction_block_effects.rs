@@ -155,7 +155,7 @@ impl TransactionBlockEffects {
 
         let dependencies = self.native().dependencies();
 
-        let Some((prev, next, cs)) =
+        let Some((prev, next, _, cs)) =
             page.paginate_consistent_indices(dependencies.len(), self.checkpoint_viewed_at)?
         else {
             return Ok(connection);
@@ -215,7 +215,7 @@ impl TransactionBlockEffects {
 
         let input_shared_objects = self.native().input_shared_objects();
 
-        let Some((prev, next, cs)) = page
+        let Some((prev, next, _, cs)) = page
             .paginate_consistent_indices(input_shared_objects.len(), self.checkpoint_viewed_at)?
         else {
             return Ok(connection);
@@ -253,7 +253,7 @@ impl TransactionBlockEffects {
 
         let object_changes = self.native().object_changes();
 
-        let Some((prev, next, cs)) =
+        let Some((prev, next, _, cs)) =
             page.paginate_consistent_indices(object_changes.len(), self.checkpoint_viewed_at)?
         else {
             return Ok(connection);
@@ -293,7 +293,7 @@ impl TransactionBlockEffects {
             return Ok(connection);
         };
 
-        let Some((prev, next, cs)) = page.paginate_consistent_indices(
+        let Some((prev, next, _, cs)) = page.paginate_consistent_indices(
             stored_tx.balance_changes.len(),
             self.checkpoint_viewed_at,
         )?
@@ -334,7 +334,7 @@ impl TransactionBlockEffects {
             TransactionBlockEffectsKind::Executed { events, .. }
             | TransactionBlockEffectsKind::DryRun { events, .. } => events.len(),
         };
-        let Some((prev, next, cs)) =
+        let Some((prev, next, _, cs)) =
             page.paginate_consistent_indices(len, self.checkpoint_viewed_at)?
         else {
             return Ok(connection);
@@ -346,13 +346,13 @@ impl TransactionBlockEffects {
         for c in cs {
             let event = match &self.kind {
                 TransactionBlockEffectsKind::Stored { stored_tx, .. } => {
-                    Event::try_from_stored_transaction(stored_tx, c.ix, Some(c.c)).extend()?
+                    Event::try_from_stored_transaction(stored_tx, c.ix, c.c).extend()?
                 }
                 TransactionBlockEffectsKind::Executed { events, .. }
                 | TransactionBlockEffectsKind::DryRun { events, .. } => Event {
                     stored: None,
                     native: events[c.ix].clone(),
-                    checkpoint_viewed_at: Some(c.c),
+                    checkpoint_viewed_at: c.c,
                 },
             };
             connection.edges.push(Edge::new(c.encode_cursor(), event));

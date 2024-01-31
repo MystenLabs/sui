@@ -44,7 +44,7 @@ impl GenesisTransaction {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) =
+        let Some((prev, next, _, cs)) =
             page.paginate_consistent_indices(self.native.objects.len(), self.checkpoint_viewed_at)?
         else {
             return Ok(connection);

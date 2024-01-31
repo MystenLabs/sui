@@ -6,9 +6,10 @@ use std::fmt::Write;
 
 use super::balance::{self, Balance};
 use super::big_int::BigInt;
+use super::checkpoint::Checkpoint;
 use super::coin::Coin;
 use super::coin_metadata::CoinMetadata;
-use super::cursor::{self, Checkpointed, Page, Paginated, RawPaginated, Target};
+use super::cursor::{self, Page, Paginated, RawPaginated, Target};
 use super::digest::Digest;
 use super::display::{Display, DisplayEntry};
 use super::dynamic_field::{DynamicField, DynamicFieldName};
@@ -21,6 +22,7 @@ use super::transaction_block;
 use super::transaction_block::TransactionBlockFilter;
 use super::type_filter::{ExactTypeFilter, TypeFilter};
 use super::{owner::Owner, sui_address::SuiAddress, transaction_block::TransactionBlock};
+use crate::consistency::Checkpointed;
 use crate::consistency::{build_objects_query, consistent_range, View};
 use crate::context_data::package_cache::PackageCache;
 use crate::data::{self, Db, DbConnection, QueryExecutor};
@@ -489,8 +491,16 @@ impl Object {
     }
 
     /// Attempts to convert the object into a MovePackage
-    async fn as_move_package(&self) -> Option<MovePackage> {
-        MovePackage::try_from(self).ok()
+    async fn as_move_package(&self, ctx: &Context<'_>) -> Option<MovePackage> {
+        let Some(checkpoint_viewed_at) = match self.checkpoint_viewed_at {
+            Some(value) => Ok(value),
+            None => Checkpoint::query_latest_checkpoint_sequence_number(ctx.data_unchecked()).await,
+        }
+        .ok() else {
+            return None;
+        };
+
+        MovePackage::try_from(self, checkpoint_viewed_at).ok()
     }
 }
 

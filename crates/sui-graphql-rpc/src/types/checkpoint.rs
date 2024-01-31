@@ -3,13 +3,14 @@
 
 use super::{
     base64::Base64,
-    cursor::{self, Checkpointed, Page, Paginated, Target},
+    cursor::{self, Page, Paginated, Target},
     date_time::DateTime,
     digest::Digest,
     epoch::Epoch,
     gas::GasCostSummary,
     transaction_block::{self, TransactionBlock, TransactionBlockFilter},
 };
+use crate::consistency::Checkpointed;
 use crate::{
     data::{self, Conn, Db, DbConnection, QueryExecutor},
     error::Error,

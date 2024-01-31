@@ -78,7 +78,7 @@ module P0::fake {
 
 //# create-checkpoint
 
-//# run-graphql --cursors {"checkpoint_viewed_at":2,"tx_sequence_number":1}
+//# run-graphql --cursors {"c":2,"t":1}
 # Emulating viewing transaction blocks at checkpoint 2. Fake coin balance should be 700.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -101,7 +101,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"checkpoint_viewed_at":3,"tx_sequence_number":1}
+//# run-graphql --cursors {"c":3,"t":1}
 # Emulating viewing transaction blocks at checkpoint 3. Fake coin balance should be 500.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -124,7 +124,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"checkpoint_viewed_at":4,"tx_sequence_number":1}
+//# run-graphql --cursors {"c":4,"t":1}
 # Emulating viewing transaction blocks at checkpoint 4. Fake coin balance should be 400.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -149,7 +149,7 @@ module P0::fake {
 
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 3
 
-//# run-graphql --cursors {"checkpoint_viewed_at":2,"tx_sequence_number":1}
+//# run-graphql --cursors {"c":2,"t":1}
 # Emulating viewing transaction blocks at checkpoint 2. Fake coin balance should be 700.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -172,7 +172,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"checkpoint_viewed_at":3,"tx_sequence_number":1}
+//# run-graphql --cursors {"c":3,"t":1}
 # Emulating viewing transaction blocks at checkpoint 3. Fake coin balance should be 500.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -195,7 +195,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"checkpoint_viewed_at":4,"tx_sequence_number":1}
+//# run-graphql --cursors {"c":4,"t":1}
 # Emulating viewing transaction blocks at checkpoint 4. Fake coin balance should be 400.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -220,7 +220,7 @@ module P0::fake {
 
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 4
 
-//# run-graphql --cursors {"checkpoint_viewed_at":2,"tx_sequence_number":1}
+//# run-graphql --cursors {"c":2,"t":1}
 # Outside available range
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -243,7 +243,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"checkpoint_viewed_at":3,"tx_sequence_number":1}
+//# run-graphql --cursors {"c":3,"t":1}
 # Emulating viewing transaction blocks at checkpoint 3. Fake coin balance should be 500.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -266,7 +266,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"checkpoint_viewed_at":4,"tx_sequence_number":1}
+//# run-graphql --cursors {"c":4,"t":1}
 # Emulating viewing transaction blocks at checkpoint 4. Fake coin balance should be 400.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -292,7 +292,7 @@ module P0::fake {
 
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 6
 
-//# run-graphql --cursors {"checkpoint_viewed_at":2,"tx_sequence_number":1}
+//# run-graphql --cursors {"c":2,"t":1}
 # Outside available range
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -315,7 +315,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"checkpoint_viewed_at":3,"tx_sequence_number":1}
+//# run-graphql --cursors {"c":3,"t":1}
 # Outside available range
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -338,7 +338,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"checkpoint_viewed_at":4,"tx_sequence_number":1}
+//# run-graphql --cursors {"c":4,"t":1}
 # Outside available range
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {

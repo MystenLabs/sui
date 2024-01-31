@@ -27,6 +27,7 @@ use sui_types::{
 };
 
 use crate::{
+    consistency::Checkpointed,
     data::{self, Db, DbConnection, QueryExecutor},
     error::Error,
     types::intersect,
@@ -36,7 +37,7 @@ use super::{
     address::Address,
     base64::Base64,
     checkpoint::Checkpoint,
-    cursor::{self, Checkpointed, Page, Paginated, Target},
+    cursor::{self, Page, Paginated, Target},
     digest::Digest,
     epoch::Epoch,
     gas::GasInput,
