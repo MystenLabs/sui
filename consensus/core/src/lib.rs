@@ -15,6 +15,7 @@ mod dag_state;
 mod error;
 mod leader_schedule;
 mod metrics;
+mod network;
 mod stake_aggregator;
 mod storage;
 mod threshold_clock;
