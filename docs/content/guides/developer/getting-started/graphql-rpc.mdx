@@ -316,6 +316,52 @@ fragment DynamicFieldValueSelection on DynamicFieldValue {
 }
 ```
 
+## Paginating checkpoints forward, five at a time {#page-forward}
+
+```graphql
+query ($after: String) {
+  checkpoints(first: 5, after: $after) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      digest
+      timestamp
+    }
+  }
+}
+```
+
+Sets up a paginated query, starting at the genesis checkpoint, reading five checkpoints at a time, in increasing order of sequence number. The value of `pageInfo.hasNextPage` determines whether there is another page to be read, and the value of `pageInfo.endCursor` is fed back in as the cursor to read `$after`.
+
+:::info
+This example uses GraphQL [variables](/concepts/graphql-rpc/variables) and [pagination](/concepts/graphql-rpc/pagination).
+:::
+
+## Paginating checkpoints backwards, five at a time {#page-back}
+
+```graphql
+query ($before: String) {
+  checkpoints(last: 5, before: $before) {
+    pageInfo {
+      hasPreviousPage
+      startCursor
+    }
+    nodes {
+      digest
+      timestamp
+    }
+  }
+}
+```
+
+Sets up a paginated query, starting at the latest indexed checkpoint, reading five checkpoints at a time, in decreasing order of sequence number. The value of `pageInfo.hasPreviousPage` determines whether there is another page to be read, and the value of `pageInfo.startCursor` is fed back in as the cursor to read `$before`.
+
+:::info
+This example uses GraphQL [variables](/concepts/graphql-rpc/variables) and [pagination](/concepts/graphql-rpc/pagination).
+:::
+
 ## Executing a transaction
 
 Transaction execution takes in two arguments, `txBytes` and `signatures`. `txBytes` is the serialized unsigned transaction data, which can be generated when using the Sui CLI's `client call` [command](/references/cli/client), to call a Move function by passing the `--serialize-unsigned-transaction` flag. The `signatures` can be generated using Sui CLI's [keytool](/references/cli/keytool) command `sui keytool sign`. More information on Sui CLI can be found [here](/references/cli).
