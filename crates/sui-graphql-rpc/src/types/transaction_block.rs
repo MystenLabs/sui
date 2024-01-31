@@ -34,7 +34,7 @@ use crate::{
 use super::{
     address::Address,
     base64::Base64,
-    cursor::{self, Page, Target},
+    cursor::{self, Page, Paginated, Target},
     digest::Digest,
     epoch::Epoch,
     gas::GasInput,
@@ -416,7 +416,7 @@ impl TransactionBlockFilter {
     }
 }
 
-impl Target<Cursor> for StoredTransaction {
+impl Paginated<Cursor> for StoredTransaction {
     type Source = transactions::table;
 
     fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
@@ -435,7 +435,9 @@ impl Target<Cursor> for StoredTransaction {
             query.order_by(dsl::tx_sequence_number.desc())
         }
     }
+}
 
+impl Target<Cursor> for StoredTransaction {
     fn cursor(&self) -> Cursor {
         Cursor::new(self.tx_sequence_number as u64)
     }
