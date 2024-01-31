@@ -94,30 +94,35 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/A",
                 ),
+                version: None,
                 resolver: None,
             },
             "B": Package {
                 kind: Local(
                     "deps_only/B",
                 ),
+                version: None,
                 resolver: None,
             },
             "C": Package {
                 kind: Local(
                     "deps_only/C2",
                 ),
+                version: None,
                 resolver: None,
             },
             "D": Package {
                 kind: Local(
                     "deps_only/D",
                 ),
+                version: None,
                 resolver: None,
             },
             "E": Package {
                 kind: Local(
                     "deps_only/E-v1",
                 ),
+                version: None,
                 resolver: None,
             },
         },

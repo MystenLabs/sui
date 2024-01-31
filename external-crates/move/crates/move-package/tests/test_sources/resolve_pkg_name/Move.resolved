@@ -50,18 +50,21 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/A-rename",
                 ),
+                version: None,
                 resolver: None,
             },
             "B-resolved": Package {
                 kind: Local(
                     "deps_only/B-rename",
                 ),
+                version: None,
                 resolver: None,
             },
             "C-resolved": Package {
                 kind: Local(
                     "deps_only/C-rename",
                 ),
+                version: None,
                 resolver: None,
             },
         },

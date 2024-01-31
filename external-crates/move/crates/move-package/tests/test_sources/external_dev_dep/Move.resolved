@@ -52,6 +52,7 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/A",
                 ),
+                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
@@ -60,6 +61,7 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/ADep",
                 ),
+                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
@@ -68,6 +70,7 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/B",
                 ),
+                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
@@ -76,6 +79,7 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/BDep",
                 ),
+                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),

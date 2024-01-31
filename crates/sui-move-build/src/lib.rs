@@ -627,6 +627,10 @@ impl PackageHooks for SuiPackageHooks {
     fn custom_resolve_pkg_name(&self, manifest: &SourceManifest) -> anyhow::Result<Symbol> {
         Ok(manifest.package.name)
     }
+
+    fn resolve_version(&self, _: &SourceManifest) -> anyhow::Result<Option<Symbol>> {
+        Ok(None)
+    }
 }
 
 #[derive(Debug, Clone)]

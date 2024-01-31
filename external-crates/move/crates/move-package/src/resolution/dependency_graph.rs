@@ -15,7 +15,7 @@ use std::{
 
 use crate::{
     lock_file::{schema, LockFile},
-    package_hooks::{self, custom_resolve_pkg_name},
+    package_hooks::{self, custom_resolve_pkg_name, resolve_version},
     source_package::{
         layout::SourcePackageLayout,
         manifest_parser::{
@@ -98,6 +98,8 @@ pub struct DependencyGraphInfo {
     pub is_override: bool,
     /// Is the dependency graph externally resolved?
     pub is_external: bool,
+    /// Resolved version of the root package (based on version resolution hook)
+    pub version: Option<Symbol>,
 }
 
 impl DependencyGraphInfo {
@@ -106,12 +108,14 @@ impl DependencyGraphInfo {
         mode: DependencyMode,
         is_override: bool,
         is_external: bool,
+        version: Option<Symbol>,
     ) -> Self {
         Self {
             g,
             mode,
             is_override,
             is_external,
+            version,
         }
     }
 }
@@ -119,21 +123,31 @@ impl DependencyGraphInfo {
 #[derive(Debug, Clone, Eq, Ord, PartialOrd)]
 pub struct Package {
     pub kind: PM::DependencyKind,
+    pub version: Option<Symbol>,
     /// Optional field set if the package was externally resolved.
     resolver: Option<Symbol>,
 }
 
 impl PartialEq for Package {
     fn eq(&self, other: &Self) -> bool {
-        // comparison omit the type of resolver (as it would actually lead to incorrect result when
+        // When the resolve_version hook is defined (both packages have a version),
+        // we compare the packages based on their version rather than their location (`PM::DependencyKind`)
+        // as defined in their parent manifest. When the hook is not defined (or returns None) for both packages,
+        // we compare the packages based on their location. If the version resolves for one package but is None for
+        // the other, we consider the packages to be different.
+        // Comparison omits the type of resolver (as it would actually lead to incorrect result when
         // comparing packages during insertion of externally resolved ones - an internally resolved
         // existing package in the graph would not be recognized as a potential different version of
-        // the externally resolved one)
-        self.kind == other.kind
+        // the externally resolved one).
+        match (&self.version, &other.version) {
+            (Some(this), Some(other)) => this == other,
+            (None, None) => self.kind == other.kind,
+            _ => false,
+        }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Eq, PartialOrd, Ord)]
 pub struct Dependency {
     pub mode: DependencyMode,
     pub subst: Option<PM::Substitution>,
@@ -142,6 +156,17 @@ pub struct Dependency {
     /// Original dependency name as defined in parent manifest since it can be different from the
     /// resolved name. Used for printing user-friendly error messages.
     pub dep_orig_name: PM::PackageName,
+}
+
+impl PartialEq for Dependency {
+    // We store the original dependency name in the graph for printing user-friendly error messages,
+    // but we don't want to consider it when comparing dependencies for equality.
+    fn eq(&self, other: &Self) -> bool {
+        self.mode == other.mode
+            && self.subst == other.subst
+            && self.digest == other.digest
+            && self.dep_override == other.dep_override
+    }
 }
 
 /// Indicates whether one package always depends on another, or only in dev-mode.
@@ -293,6 +318,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 mode,
                 is_override,
                 is_external: _,
+                version: _,
             },
         ) in dep_graphs.iter_mut()
         {
@@ -350,7 +376,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         let mut dep_orig_names = BTreeMap::new();
         let mut overrides = BTreeMap::new();
         for (dep_pkg_name, dep) in dependencies {
-            let (pkg_graph, is_override, is_external, resolved_pkg_name) = self
+            let (pkg_graph, is_override, is_external, resolved_pkg_name, resolved_version) = self
                 .new_for_dep(
                     parent,
                     &dep,
@@ -367,7 +393,13 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 })?;
             dep_graphs.insert(
                 resolved_pkg_name,
-                DependencyGraphInfo::new(pkg_graph, mode, is_override, is_external),
+                DependencyGraphInfo::new(
+                    pkg_graph,
+                    mode,
+                    is_override,
+                    is_external,
+                    resolved_version,
+                ),
             );
             resolved_name_deps.insert(resolved_pkg_name, dep.clone());
             dep_orig_names.insert(resolved_pkg_name, dep_pkg_name);
@@ -383,6 +415,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 let mut dep_pkg = Package {
                     kind,
                     resolver: None,
+                    version: resolved_version,
                 };
                 dep_pkg.kind.reroot(parent)?;
                 overrides.insert(resolved_pkg_name, dep_pkg);
@@ -400,8 +433,8 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         parent_pkg: PM::PackageName,
         dep_pkg_name: PM::PackageName,
         dep_pkg_path: PathBuf,
-    ) -> Result<(DependencyGraph, bool, bool, Symbol)> {
-        let (pkg_graph, is_override, is_external, resolved_pkg_name) = match dep {
+    ) -> Result<(DependencyGraph, bool, bool, Symbol, Option<Symbol>)> {
+        let (pkg_graph, is_override, is_external, resolved_pkg_name, resolved_version) = match dep {
             PM::Dependency::Internal(d) => {
                 self.dependency_cache
                     .download_and_update_if_remote(dep_pkg_name, &d.kind, &mut self.progress_output)
@@ -412,11 +445,16 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                         .with_context(|| format!("Parsing manifest for '{}'", dep_pkg_name))?;
                 let lock_string =
                     std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Lock.path())).ok();
-                let resolved_pkg_name = custom_resolve_pkg_name(&parse_source_manifest(
-                    parse_move_manifest_string(manifest_string.clone())?,
-                )?)
-                .with_context(|| format!("Resolving package name for '{}'", dep_pkg_name))?;
+
+                // resolve name and version
+                let manifest =
+                    parse_source_manifest(parse_move_manifest_string(manifest_string.clone())?)?;
+                let resolved_pkg_name = custom_resolve_pkg_name(&manifest)
+                    .with_context(|| format!("Resolving package name for '{}'", dep_pkg_name))?;
+                let resolved_version = resolve_version(&manifest)
+                    .with_context(|| format!("Resolving version for '{}'", dep_pkg_name))?;
                 check_for_dep_cycles(d.clone(), resolved_pkg_name, &mut self.visited_dependencies)?;
+
                 // save dependency for cycle detection
                 self.visited_dependencies
                     .push_front((resolved_pkg_name, d.clone()));
@@ -436,7 +474,13 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                         p.kind.reroot(&d.kind)?;
                     }
                 }
-                (pkg_graph, d.dep_override, false, resolved_pkg_name)
+                (
+                    pkg_graph,
+                    d.dep_override,
+                    false,
+                    resolved_pkg_name,
+                    resolved_version,
+                )
             }
             PM::Dependency::External(resolver) => {
                 let pkg_graph = DependencyGraph::get_external(
@@ -447,10 +491,18 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                     &dep_pkg_path,
                     &mut self.progress_output,
                 )?;
-                (pkg_graph, false, true, dep_pkg_name)
+                // TODO: support resolved_pkg_name and resolved_version for
+                // externally resolved deps.
+                (pkg_graph, false, true, dep_pkg_name, None)
             }
         };
-        Ok((pkg_graph, is_override, is_external, resolved_pkg_name))
+        Ok((
+            pkg_graph,
+            is_override,
+            is_external,
+            resolved_pkg_name,
+            resolved_version,
+        ))
     }
 
     /// Computes dependency hashes.
@@ -656,6 +708,7 @@ impl DependencyGraph {
                 dep,
                 *dep_name,
                 *dep_orig_name,
+                graph_info.version,
                 &graph_info.g,
                 graph_info.mode,
                 parent,
@@ -682,7 +735,7 @@ impl DependencyGraph {
 
         dep_graphs.insert(
             self.root_package,
-            DependencyGraphInfo::new(self.clone(), DependencyMode::Always, false, false),
+            DependencyGraphInfo::new(self.clone(), DependencyMode::Always, false, false, None),
         );
 
         // analyze all packages to determine if any of these packages represent a conflicting
@@ -859,6 +912,7 @@ impl DependencyGraph {
         dep: &PM::Dependency,
         dep_pkg_name: PM::PackageName,
         dep_orig_name: PM::PackageName,
+        dep_version: Option<Symbol>,
         sub_graph: &DependencyGraph,
         mode: DependencyMode,
         parent: &PM::DependencyKind,
@@ -874,6 +928,7 @@ impl DependencyGraph {
                     let mut pkg = Package {
                         kind: kind.clone(),
                         resolver: None,
+                        version: dep_version,
                     };
                     pkg.kind.reroot(parent)?;
                     entry.insert(pkg);
@@ -1040,6 +1095,7 @@ impl DependencyGraph {
         for schema::Package {
             name: pkg_name,
             source,
+            version,
             dependencies,
             dev_dependencies,
         } in packages.packages.into_iter().flatten()
@@ -1066,6 +1122,7 @@ impl DependencyGraph {
             let pkg = Package {
                 kind: source.kind,
                 resolver,
+                version: version.map(Symbol::from),
             };
 
             match package_table.entry(pkg_name) {
@@ -1160,6 +1217,9 @@ impl DependencyGraph {
 
             writeln!(writer, "name = {}", str_escape(name.as_str())?)?;
             writeln!(writer, "source = {}", PackageTOML(pkg))?;
+            if let Some(version) = &pkg.version {
+                writeln!(writer, "version = {}", str_escape(version.as_str())?)?;
+            }
 
             self.write_dependencies_to_lock(*name, &mut writer)?;
         }
@@ -1611,6 +1671,7 @@ fn deps_equal<'a>(
         })
         .collect::<BTreeMap<PM::PackageName, (&Dependency, &Package)>>();
 
+    // Compare deps in both graphs. See `PartialEq` implementation for `Package` for more details.
     let mut graph1_pkgs = vec![];
     for (k, v) in graph1_edges.iter() {
         if !graph2_edges.contains_key(k) || graph2_edges.get(k) != Some(v) {
