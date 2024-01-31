@@ -276,9 +276,15 @@ pub struct AuthorityMetrics {
     pub execution_queueing_latency: LatencyObserver,
 
     // Tracks the rate of transactions become ready for execution in transaction manager.
+    // The need for the Mutex is that the tracker is updated in transaction manager and read
+    // in the overload_monitor. There should be low mutex contention because
+    // transaction manager is single threaded and the read rate in overload_monitor is
+    // low. In the case where transaction manager becomes multi-threaded, we can
+    // create one rate tracker per thread.
     pub txn_ready_rate_tracker: Arc<Mutex<RateTracker>>,
 
     // Tracks the rate of transactions starts execution in execution driver.
+    // Similar reason for using a Mutex here as to `txn_ready_rate_tracker`.
     pub execution_rate_tracker: Arc<Mutex<RateTracker>>,
 }
 

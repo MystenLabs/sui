@@ -12,7 +12,9 @@ use indexmap::IndexMap;
 use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use sui_types::{base_types::TransactionDigest, error::SuiResult, fp_ensure};
+use sui_types::{
+    base_types::TransactionDigest, error::SuiResult, fp_ensure, message_envelope::Message,
+};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     committee::EpochId,
@@ -817,6 +819,7 @@ impl TransactionManager {
                 threshold: MAX_TM_QUEUE_LENGTH,
             }
         );
+        tx_data.digest();
 
         for (object_id, queue_len, txn_age) in self.objects_queue_len_and_age(
             tx_data
