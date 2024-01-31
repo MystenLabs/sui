@@ -63,6 +63,7 @@ jobs:
       - name: Run code coverage for simtest
         run: |
           ./scripts/simtest/install.sh
+          cargo update
           ./scripts/simtest/cargo-simtest simtest
 
       - name: Upload report to Codecov for simtest
