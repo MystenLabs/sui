@@ -54,7 +54,6 @@ import {
 	MultiGetObjectsDocument,
 	MultiGetTransactionBlocksDocument,
 	PaginateCheckpointTransactionBlocksDocument,
-	PaginateDryRunTransactionBlockListsDocument,
 	PaginateEpochValidatorsDocument,
 	PaginateMoveModuleListsDocument,
 	PaginateTransactionBlockListsDocument,
@@ -462,7 +461,7 @@ export const RPC_METHODS: {
 
 			for (const unsupportedFilter of unsupportedFilters) {
 				if (unsupportedFilter in inputFilter) {
-					unsupportedParam('getOwnedObjects', unsupportedFilter);
+					throw new UnsupportedParamError('getOwnedObjects', unsupportedFilter);
 				}
 			}
 		}
@@ -596,7 +595,7 @@ export const RPC_METHODS: {
 		if (filter) {
 			for (const unsupportedFilter of unsupportedFilters) {
 				if (unsupportedFilter in filter) {
-					unsupportedParam('queryTransactionBlocks', unsupportedFilter);
+					throw new UnsupportedParamError('queryTransactionBlocks', unsupportedFilter);
 				}
 			}
 		}
@@ -863,7 +862,7 @@ export const RPC_METHODS: {
 		if (query) {
 			for (const unsupportedFilter of unsupportedFilters) {
 				if (unsupportedFilter in query) {
-					unsupportedParam('queryEvents', unsupportedFilter);
+					throw new UnsupportedParamError('queryEvents', unsupportedFilter);
 				}
 			}
 		}
@@ -921,8 +920,6 @@ export const RPC_METHODS: {
 		if (!transaction) {
 			throw new Error('Unexpected error during dry run');
 		}
-
-		await paginateDryRunTransactionBlockLists(transport, transaction, devInspectTxBytes);
 
 		const result = mapGraphQLTransactionBlockToRpcTransactionBlock(transaction, {
 			showEffects: true,
@@ -1109,8 +1106,6 @@ export const RPC_METHODS: {
 		if (error || !transaction) {
 			throw new Error(error ?? 'Unexpected error during dry run');
 		}
-
-		await paginateDryRunTransactionBlockLists(transport, transaction, txBytes);
 
 		const result = mapGraphQLTransactionBlockToRpcTransactionBlock(
 			{ ...transaction, digest: await txb.getDigest() },
@@ -1395,12 +1390,16 @@ export const RPC_METHODS: {
 	},
 };
 
-export function unsupportedMethod(method: string): never {
-	throw new Error(`Method ${method} is not supported in the GraphQL API`);
+export class UnsupportedParamError extends Error {
+	constructor(method: string, param: string) {
+		super(`Parameter ${param} is not supported for ${method} in the GraphQL API`);
+	}
 }
 
-export function unsupportedParam(method: string, param: string): never {
-	throw new Error(`Parameter ${param} is not supported for ${method} in the GraphQL API`);
+export class UnsupportedMethodError extends Error {
+	constructor(method: string) {
+		super(`Method ${method} is not supported in the GraphQL API`);
+	}
 }
 
 async function paginateTransactionBlockLists(
@@ -1434,55 +1433,6 @@ async function paginateTransactionBlockLists(
 				},
 			},
 			(data) => data.transactionBlock?.effects,
-		);
-
-		transactionBlock.effects?.events?.nodes.push(...(page.events?.nodes ?? []));
-		transactionBlock.effects?.balanceChanges?.nodes.push(...(page.balanceChanges?.nodes ?? []));
-		transactionBlock.effects?.objectChanges?.nodes.push(...(page.objectChanges?.nodes ?? []));
-		transactionBlock.effects?.dependencies?.nodes.push(...(page.dependencies?.nodes ?? []));
-		hasMoreEvents = page.events?.pageInfo.hasNextPage ?? false;
-		hasMoreBalanceChanges = page.balanceChanges?.pageInfo.hasNextPage ?? false;
-		hasMoreObjectChanges = page.objectChanges?.pageInfo.hasNextPage ?? false;
-		hasMoreDependencies = page.dependencies?.pageInfo.hasNextPage ?? false;
-		afterEvents = page.events?.pageInfo.endCursor;
-		afterBalanceChanges = page.balanceChanges?.pageInfo.endCursor;
-		afterObjectChanges = page.objectChanges?.pageInfo.endCursor;
-		afterDependencies = page.dependencies?.pageInfo.endCursor;
-	}
-}
-
-async function paginateDryRunTransactionBlockLists(
-	transport: SuiClientGraphQLTransport,
-	transactionBlock: Rpc_Transaction_FieldsFragment,
-	txBytes: string,
-) {
-	let hasMoreEvents = transactionBlock.effects?.events?.pageInfo.hasNextPage ?? false;
-	let hasMoreBalanceChanges =
-		transactionBlock.effects?.balanceChanges?.pageInfo.hasNextPage ?? false;
-	let hasMoreObjectChanges = transactionBlock.effects?.objectChanges?.pageInfo.hasNextPage ?? false;
-	let hasMoreDependencies = transactionBlock.effects?.dependencies?.pageInfo.hasNextPage ?? false;
-	let afterEvents = transactionBlock.effects?.events?.pageInfo.endCursor;
-	let afterBalanceChanges = transactionBlock.effects?.balanceChanges?.pageInfo.endCursor;
-	let afterObjectChanges = transactionBlock.effects?.objectChanges?.pageInfo.endCursor;
-	let afterDependencies = transactionBlock.effects?.dependencies?.pageInfo.endCursor;
-
-	while (hasMoreEvents || hasMoreBalanceChanges || hasMoreObjectChanges || hasMoreDependencies) {
-		const page = await transport.graphqlQuery(
-			{
-				query: PaginateDryRunTransactionBlockListsDocument,
-				variables: {
-					txBytes: txBytes,
-					afterEvents,
-					afterBalanceChanges,
-					afterObjectChanges,
-					afterDependencies,
-					hasMoreEvents,
-					hasMoreBalanceChanges,
-					hasMoreObjectChanges,
-					hasMoreDependencies,
-				},
-			},
-			(data) => data.dryRunTransactionBlock.transaction?.effects,
 		);
 
 		transactionBlock.effects?.events?.nodes.push(...(page.events?.nodes ?? []));

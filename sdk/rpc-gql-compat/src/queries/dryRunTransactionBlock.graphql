@@ -17,21 +17,3 @@ query dryRunTransactionBlock(
 		}
 	}
 }
-
-query paginateDryRunTransactionBlockLists(
-	$txBytes: String!
-	$hasMoreEvents: Boolean!
-	$hasMoreBalanceChanges: Boolean!
-	$hasMoreObjectChanges: Boolean!
-	$hasMoreDependencies: Boolean!
-	$afterEvents: String
-	$afterBalanceChanges: String
-	$afterObjectChanges: String
-	$afterDependencies: String
-) {
-	dryRunTransactionBlock(txBytes: $txBytes) {
-		transaction {
-			...PAGINATE_TRANSACTION_LISTS
-		}
-	}
-}

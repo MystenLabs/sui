@@ -7,14 +7,17 @@ import type {
 	SuiTransportRequestOptions,
 	SuiTransportSubscribeOptions,
 } from '@mysten/sui.js/client';
+import { SuiHTTPTransport } from '@mysten/sui.js/client';
 import type { DocumentNode } from 'graphql';
 import { print } from 'graphql';
 
 import { TypedDocumentString } from './generated/queries.js';
-import { RPC_METHODS, unsupportedMethod } from './methods.js';
+import { RPC_METHODS, UnsupportedMethodError, UnsupportedParamError } from './methods.js';
 
 export interface SuiClientGraphQLTransportOptions {
 	url: string;
+	fallbackFullNodeUrl?: string;
+	fallbackMethods?: (keyof typeof RPC_METHODS)[];
 }
 
 export type GraphQLDocument<
@@ -53,9 +56,22 @@ export type GraphQLResponseErrors = Array<{
 
 export class SuiClientGraphQLTransport implements SuiTransport {
 	#options: SuiClientGraphQLTransportOptions;
+	#fallbackTransport?: SuiTransport;
+	#fallbackMethods: (keyof typeof RPC_METHODS)[] = [
+		'executeTransactionBlock',
+		'dryRunTransactionBlock',
+		'devInspectTransactionBlock',
+	];
 
 	constructor(options: SuiClientGraphQLTransportOptions) {
 		this.#options = options;
+		this.#fallbackMethods = [];
+
+		if (options.fallbackFullNodeUrl) {
+			this.#fallbackTransport = new SuiHTTPTransport({
+				url: options.fallbackFullNodeUrl,
+			});
+		}
 	}
 
 	async graphqlQuery<
@@ -121,17 +137,37 @@ export class SuiClientGraphQLTransport implements SuiTransport {
 
 		const method = RPC_METHODS[clientMethod];
 
-		if (!method) {
-			unsupportedMethod(input.method);
+		if (!method || this.#fallbackMethods.includes(clientMethod)) {
+			return this.#unsupportedMethod(input);
 		}
 
-		return method(this, input.params as never) as Promise<T>;
+		try {
+			return method(this, input.params as never) as Promise<T>;
+		} catch (error) {
+			if (this.#fallbackTransport && error instanceof UnsupportedParamError) {
+				return this.#fallbackTransport.request(input);
+			}
+
+			throw error;
+		}
 	}
 
 	async subscribe<T = unknown>(
 		input: SuiTransportSubscribeOptions<T>,
 	): Promise<() => Promise<boolean>> {
-		unsupportedMethod(input.method);
+		if (!this.#fallbackTransport) {
+			throw new UnsupportedMethodError(input.method);
+		}
+
+		return this.#fallbackTransport.subscribe(input);
+	}
+
+	async #unsupportedMethod<T = unknown>(input: SuiTransportRequestOptions): Promise<T> {
+		if (!this.#fallbackTransport) {
+			throw new UnsupportedMethodError(input.method);
+		}
+
+		return this.#fallbackTransport.request(input);
 	}
 }
 
