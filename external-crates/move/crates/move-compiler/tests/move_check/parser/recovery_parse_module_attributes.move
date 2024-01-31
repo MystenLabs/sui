@@ -6,7 +6,7 @@ module 0x42::M1 {
     public fun
 }
 
-#[some_annotation]
+#[ext(some_annotation)]
 module 0x42::M2 {
     public fun wrong_return(): u64 {
     }
