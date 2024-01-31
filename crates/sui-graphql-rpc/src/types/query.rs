@@ -237,9 +237,13 @@ impl Query {
         ctx: &Context<'_>,
         id: Option<CheckpointId>,
     ) -> Result<Option<Checkpoint>> {
-        Checkpoint::query(ctx.data_unchecked(), id.unwrap_or_default())
-            .await
-            .extend()
+        Checkpoint::query(
+            ctx.data_unchecked(),
+            id.unwrap_or_default(),
+            /* checkpoint_viewed_at */ None,
+        )
+        .await
+        .extend()
     }
 
     /// Fetch a transaction block by its transaction digest.
@@ -289,9 +293,14 @@ impl Query {
         before: Option<checkpoint::Cursor>,
     ) -> Result<Connection<String, Checkpoint>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Checkpoint::paginate(ctx.data_unchecked(), page, None)
-            .await
-            .extend()
+        Checkpoint::paginate(
+            ctx.data_unchecked(),
+            page,
+            /* epoch */ None,
+            /* checkpoint_viewed_at */ None,
+        )
+        .await
+        .extend()
     }
 
     /// The transaction blocks that exist in the network.

@@ -89,7 +89,7 @@ impl Epoch {
     async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
         let last = match self.stored.last_checkpoint_id {
             Some(last) => last as u64,
-            None => Checkpoint::query(ctx.data_unchecked(), CheckpointId::default())
+            None => Checkpoint::query(ctx.data_unchecked(), CheckpointId::default(), None)
                 .await
                 .extend()?
                 .map_or(self.stored.first_checkpoint_id as u64, |c| {
@@ -200,7 +200,7 @@ impl Epoch {
     ) -> Result<Connection<String, Checkpoint>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let epoch = self.stored.epoch as u64;
-        Checkpoint::paginate(ctx.data_unchecked(), page, Some(epoch))
+        Checkpoint::paginate(ctx.data_unchecked(), page, Some(epoch), None)
             .await
             .extend()
     }
