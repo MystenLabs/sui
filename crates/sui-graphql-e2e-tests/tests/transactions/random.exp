@@ -43,13 +43,13 @@ Response: {
             "transactions": {
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjoyfQ",
                   "node": {
                     "__typename": "RandomnessStateCreateTransaction"
                   }
                 },
                 {
-                  "cursor": "MQ",
+                  "cursor": "eyJpIjoxLCJjIjoyfQ",
                   "node": {
                     "__typename": "ChangeEpochTransaction"
                   }

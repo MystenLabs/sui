@@ -241,7 +241,7 @@ impl ExecutorCluster {
 
         tokio::time::timeout(base_timeout, async {
             while latest_cp > latest_snapshot_cp + self.snapshot_config.snapshot_max_lag as u64 {
-                tokio::time::sleep(Duration::from_secs(self.snapshot_config.sleep_duration)).await;
+                tokio::time::sleep(Duration::from_secs(1)).await;
                 latest_snapshot_cp = self
                     .indexer_store
                     .get_latest_object_snapshot_checkpoint_sequence_number()
@@ -251,12 +251,44 @@ impl ExecutorCluster {
             }
         })
         .await
-        .expect("Timeout waiting for indexer to update objects snapshot");
+        .unwrap_or_else(|_| panic!("Timeout waiting for indexer to update objects snapshot - latest_cp: {}, latest_snapshot_cp: {}",
+        latest_cp, latest_snapshot_cp));
     }
 
     pub async fn cleanup_resources(self) {
         // Delete the database
         let db_url = self.graphql_connection_config.db_url.clone();
         force_delete_database(db_url).await;
+    }
+
+    pub async fn force_objects_snapshot_catchup(&self, start_cp: u64, end_cp: u64) {
+        self.indexer_store
+            .persist_object_snapshot(start_cp, end_cp)
+            .await
+            .unwrap();
+
+        let mut latest_snapshot_cp = self
+            .indexer_store
+            .get_latest_object_snapshot_checkpoint_sequence_number()
+            .await
+            .unwrap()
+            .unwrap_or_default();
+
+        tokio::time::timeout(Duration::from_secs(60), async {
+            while latest_snapshot_cp < end_cp - 1 {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                latest_snapshot_cp = self
+                    .indexer_store
+                    .get_latest_object_snapshot_checkpoint_sequence_number()
+                    .await
+                    .unwrap()
+                    .unwrap_or_default();
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("Timeout waiting for indexer to update objects snapshot - latest_snapshot_cp: {}, end_cp: {}",
+        latest_snapshot_cp, end_cp));
+
+        tokio::time::sleep(Duration::from_secs(5)).await;
     }
 }

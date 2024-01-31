@@ -47,7 +47,7 @@ Response: {
     "events": {
       "edges": [
         {
-          "cursor": "eyJ0eCI6MywiZSI6MH0",
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
@@ -65,7 +65,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NCwiZSI6MH0",
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
@@ -83,7 +83,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NiwiZSI6MH0",
+          "cursor": "eyJ0eCI6NiwiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M2"
@@ -101,7 +101,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NywiZSI6MH0",
+          "cursor": "eyJ0eCI6NywiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M2"
@@ -129,7 +129,7 @@ Response: {
     "events": {
       "edges": [
         {
-          "cursor": "eyJ0eCI6MywiZSI6MH0",
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
@@ -147,7 +147,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NCwiZSI6MH0",
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
@@ -165,7 +165,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NiwiZSI6MH0",
+          "cursor": "eyJ0eCI6NiwiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M2"
@@ -183,7 +183,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NywiZSI6MH0",
+          "cursor": "eyJ0eCI6NywiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M2"
@@ -211,7 +211,7 @@ Response: {
     "events": {
       "edges": [
         {
-          "cursor": "eyJ0eCI6MywiZSI6MH0",
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
@@ -229,7 +229,7 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NCwiZSI6MH0",
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
@@ -257,7 +257,7 @@ Response: {
     "events": {
       "edges": [
         {
-          "cursor": "eyJ0eCI6MywiZSI6MH0",
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
@@ -285,7 +285,7 @@ Response: {
     "events": {
       "edges": [
         {
-          "cursor": "eyJ0eCI6NCwiZSI6MH0",
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"

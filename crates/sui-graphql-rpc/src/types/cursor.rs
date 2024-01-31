@@ -8,15 +8,18 @@ use async_graphql::{
     *,
 };
 use diesel::{
-    query_builder::QueryFragment, query_dsl::LoadQuery, QueryDsl, QueryResult, QuerySource,
+    deserialize::FromSqlRow, query_builder::QueryFragment, query_dsl::LoadQuery,
+    sql_types::Untyped, QueryDsl, QueryResult, QuerySource,
 };
 use fastcrypto::encoding::{Base64, Encoding};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     config::ServiceConfig,
+    consistency::{Checkpointed, ConsistentIndexCursor},
     data::{Conn, DbConnection, DieselBackend, DieselConn, Query},
     error::Error,
+    raw_query::RawQuery,
 };
 
 /// Cursor that hides its value by encoding it as JSON and then Base64.
@@ -53,7 +56,7 @@ enum End {
 }
 
 /// Results from the database that are pointed to by cursors.
-pub(crate) trait Target<C: CursorType> {
+pub(crate) trait Paginated<C: CursorType>: Target<C> {
     type Source: QuerySource;
 
     /// Adds a filter to `query` to bound its result to be greater than or equal to `cursor`
@@ -74,9 +77,28 @@ pub(crate) trait Target<C: CursorType> {
     /// (returning the new query). The `asc` parameter controls whether the ordering is ASCending
     /// (`true`) or descending (`false`).
     fn order<ST, GB>(asc: bool, query: Query<ST, Self::Source, GB>) -> Query<ST, Self::Source, GB>;
+}
 
-    /// The cursor pointing at this target value.
-    fn cursor(&self) -> C;
+/// Results from the database that are pointed to by cursors. Equivalent to `Paginated`, but for a
+/// `RawQuery`.
+pub(crate) trait RawPaginated<C: CursorType>: Target<C> {
+    /// Adds a filter to `query` to bound its result to be greater than or equal to `cursor`
+    /// (returning the new query).
+    fn filter_ge(cursor: &C, query: RawQuery) -> RawQuery;
+
+    /// Adds a filter to `query` to bound its results to be less than or equal to `cursor`
+    /// (returning the new query).
+    fn filter_le(cursor: &C, query: RawQuery) -> RawQuery;
+
+    /// Adds an `ORDER BY` clause to `query` to order rows according to their cursor values
+    /// (returning the new query). The `asc` parameter controls whether the ordering is ASCending
+    /// (`true`) or descending (`false`).
+    fn order(asc: bool, query: RawQuery) -> RawQuery;
+}
+
+pub(crate) trait Target<C: CursorType> {
+    /// The cursor pointing at this target value, assuming it was read at `checkpoint_viewed_at`.
+    fn cursor(&self, checkpoint_viewed_at: u64) -> C;
 }
 
 impl<C> JsonCursor<C> {
@@ -154,19 +176,59 @@ impl<C> Page<C> {
     }
 }
 
-impl Page<JsonCursor<usize>> {
-    /// Treat the cursors of this Page as indices into a range [0, total). Returns two booleans
-    /// indicating whether there is a previous or next page in the range, followed by an iterator of
-    /// cursors within that Page.
-    pub(crate) fn paginate_indices(
+impl<C> Page<C>
+where
+    C: Checkpointed,
+{
+    /// If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
+    /// consistent. Otherwise, use the value from the parameter, or set to None. This is so that
+    /// paginated queries are consistent with the previous query that created the cursor.
+    pub(crate) fn validate_cursor_consistency(&self) -> Result<Option<u64>, Error> {
+        match (self.after(), self.before()) {
+            (Some(after), Some(before)) => {
+                if after.checkpoint_viewed_at() == before.checkpoint_viewed_at() {
+                    Ok(Some(after.checkpoint_viewed_at()))
+                } else {
+                    Err(Error::Client(
+                        "The provided cursors are taken from different checkpoints and cannot be used together in the same query."
+                            .to_string(),
+                    ))
+                }
+            }
+            // If only one cursor is provided, then we can directly use the checkpoint sequence
+            // number on it.
+            (Some(cursor), None) | (None, Some(cursor)) => Ok(Some(cursor.checkpoint_viewed_at())),
+            (None, None) => Ok(None),
+        }
+    }
+}
+
+impl Page<JsonCursor<ConsistentIndexCursor>> {
+    /// Treat the cursors of this Page as indices into a range [0, total). Validates that the
+    /// cursors of the page are consistent, and returns two booleans indicating whether there is a
+    /// previous or next page in the range, the `checkpoint_viewed_at` to set for consistency, and
+    /// an iterator of cursors within that Page.
+    pub(crate) fn paginate_consistent_indices(
         &self,
         total: usize,
-    ) -> Option<(bool, bool, impl Iterator<Item = JsonCursor<usize>>)> {
-        let mut lo = self.after().map_or(0, |a| **a + 1);
-        let mut hi = self.before().map_or(total, |b| **b);
+        checkpoint_viewed_at: u64,
+    ) -> Result<
+        Option<(
+            bool,
+            bool,
+            u64,
+            impl Iterator<Item = JsonCursor<ConsistentIndexCursor>>,
+        )>,
+        Error,
+    > {
+        let cursor_viewed_at = self.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
+
+        let mut lo = self.after().map_or(0, |a| a.ix + 1);
+        let mut hi = self.before().map_or(total, |b| b.ix);
 
         if hi <= lo {
-            return None;
+            return Ok(None);
         } else if (hi - lo) > self.limit() {
             if self.is_from_front() {
                 hi = lo + self.limit();
@@ -175,7 +237,17 @@ impl Page<JsonCursor<usize>> {
             }
         }
 
-        Some((0 < lo, hi < total, (lo..hi).map(JsonCursor::new)))
+        Ok(Some((
+            0 < lo,
+            hi < total,
+            checkpoint_viewed_at,
+            (lo..hi).map(move |ix| {
+                JsonCursor::new(ConsistentIndexCursor {
+                    ix,
+                    c: checkpoint_viewed_at,
+                })
+            }),
+        )))
     }
 }
 
@@ -185,19 +257,23 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
     /// followed by an iterator of values in the page, fetched from the database.
     ///
     /// The values returned implement `Target<C>`, so are able to compute their own cursors.
+    ///
+    /// `checkpoint_viewed_at` is a required parameter to and passed to each element to construct a
+    /// consistent cursor.
     pub(crate) fn paginate_query<T, Q, ST, GB>(
         &self,
         conn: &mut Conn<'_>,
+        checkpoint_viewed_at: u64,
         query: Q,
     ) -> QueryResult<(bool, bool, impl Iterator<Item = T>)>
     where
         Q: Fn() -> Query<ST, T::Source, GB>,
         Query<ST, T::Source, GB>: LoadQuery<'static, DieselConn, T>,
         Query<ST, T::Source, GB>: QueryFragment<DieselBackend>,
-        <T as Target<C>>::Source: Send + 'static,
-        <<T as Target<C>>::Source as QuerySource>::FromClause: Send + 'static,
+        <T as Paginated<C>>::Source: Send + 'static,
+        <<T as Paginated<C>>::Source as QuerySource>::FromClause: Send + 'static,
         Q: Send + 'static,
-        T: Send + Target<C> + 'static,
+        T: Send + Paginated<C> + 'static,
         ST: Send + 'static,
         GB: Send + 'static,
     {
@@ -228,67 +304,134 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
             results
         };
 
-        // Detect whether the results imply the existence of a previous or next page.
-        let (prev, next, prefix, suffix) = match (
-            self.after(),
-            results.first(),
-            results.last(),
-            self.before(),
-            self.end,
-        ) {
-            // Results came back empty, despite supposedly including the `after` and `before`
-            // cursors, so the bounds must have been invalid, no matter which end the page was
-            // drawn from.
-            (_, None, _, _, _) | (_, _, None, _, _) => {
-                return Ok((false, false, vec![].into_iter()));
+        Ok(self.paginate_results(
+            results.first().map(|f| f.cursor(checkpoint_viewed_at)),
+            results.last().map(|l| l.cursor(checkpoint_viewed_at)),
+            results,
+        ))
+    }
+
+    /// This function is similar to `paginate_query`, but is specifically designed for handling
+    /// `RawQuery`. Treat the cursors of this page as upper- and lowerbound filters for a database
+    /// `query`. Returns two booleans indicating whether there is a previous or next page in the
+    /// range, followed by an iterator of values in the page, fetched from the database.
+    ///
+    /// `checkpoint_viewed_at` is a required parameter to and passed to each element to construct a
+    /// consistent cursor.
+    pub(crate) fn paginate_raw_query<T>(
+        &self,
+        conn: &mut Conn<'_>,
+        checkpoint_viewed_at: u64,
+        query: RawQuery,
+    ) -> QueryResult<(bool, bool, impl Iterator<Item = T>)>
+    where
+        T: Send + RawPaginated<C> + FromSqlRow<Untyped, DieselBackend> + 'static,
+    {
+        let new_query = move || {
+            let mut query = query.clone();
+            if let Some(after) = self.after() {
+                query = T::filter_ge(after, query);
             }
 
-            // Page drawn from the front, and the cursor for the first element does not match
-            // `after`. This implies the bound was invalid, so we return an empty result.
-            (Some(a), Some(f), _, _, End::Front) if f.cursor() != *a => {
-                return Ok((false, false, vec![].into_iter()));
+            if let Some(before) = self.before() {
+                query = T::filter_le(before, query);
             }
 
-            // Similar to above case, but for back of results.
-            (_, _, Some(l), Some(b), End::Back) if l.cursor() != *b => {
-                return Ok((false, false, vec![].into_iter()));
-            }
+            query = T::order(self.is_from_front(), query);
 
-            // From here onwards, we know that the results are non-empty and if a cursor was
-            // supplied on the end the page is being drawn from, it was found in the results
-            // (implying a page follows in that direction).
-            (after, _, Some(l), before, End::Front) => {
-                let has_previous_page = after.is_some();
-                let prefix = has_previous_page as usize;
-
-                // If results end with the before cursor, we will at least need to trim one element
-                // from the suffix and we trim more off the end if there is more after applying the
-                // limit.
-                let mut suffix = before.is_some_and(|b| *b == l.cursor()) as usize;
-                suffix += results.len().saturating_sub(self.limit() + prefix + suffix);
-                let has_next_page = suffix > 0;
-
-                (has_previous_page, has_next_page, prefix, suffix)
-            }
-
-            // Symmetric to the previous case, but drawing from the back.
-            (after, Some(f), _, before, End::Back) => {
-                let has_next_page = before.is_some();
-                let suffix = has_next_page as usize;
-
-                let mut prefix = after.is_some_and(|a| *a == f.cursor()) as usize;
-                prefix += results.len().saturating_sub(self.limit() + prefix + suffix);
-                let has_previous_page = prefix > 0;
-
-                (has_previous_page, has_next_page, prefix, suffix)
-            }
+            query = query.limit(self.limit() as i64 + 2);
+            query.into_boxed()
         };
+
+        let results: Vec<T> = if self.limit() == 0 {
+            // Avoid the database roundtrip in the degenerate case.
+            vec![]
+        } else {
+            let mut results: Vec<T> = conn.results(new_query)?;
+            if !self.is_from_front() {
+                results.reverse();
+            }
+            results
+        };
+
+        Ok(self.paginate_results(
+            results.first().map(|f| f.cursor(checkpoint_viewed_at)),
+            results.last().map(|l| l.cursor(checkpoint_viewed_at)),
+            results,
+        ))
+    }
+
+    /// Given the results of a database query, determine whether the result set has a previous and
+    /// next page and is consistent with the provided cursors.
+    ///
+    /// Returns two booleans indicating whether there is a previous or next page in the range,
+    /// followed by an iterator of values in the page, fetched from the database. The values
+    /// returned implement `Target<C>`, so are able to compute their own cursors.
+    fn paginate_results<T>(
+        &self,
+        f_cursor: Option<C>,
+        l_cursor: Option<C>,
+        results: Vec<T>,
+    ) -> (bool, bool, impl Iterator<Item = T>)
+    where
+        T: Send + 'static,
+    {
+        // Detect whether the results imply the existence of a previous or next page.
+        let (prev, next, prefix, suffix) =
+            match (self.after(), f_cursor, l_cursor, self.before(), self.end) {
+                // Results came back empty, despite supposedly including the `after` and `before`
+                // cursors, so the bounds must have been invalid, no matter which end the page was
+                // drawn from.
+                (_, None, _, _, _) | (_, _, None, _, _) => {
+                    return (false, false, vec![].into_iter());
+                }
+
+                // Page drawn from the front, and the cursor for the first element does not match
+                // `after`. This implies the bound was invalid, so we return an empty result.
+                (Some(a), Some(f), _, _, End::Front) if f != *a => {
+                    return (false, false, vec![].into_iter());
+                }
+
+                // Similar to above case, but for back of results.
+                (_, _, Some(l), Some(b), End::Back) if l != *b => {
+                    return (false, false, vec![].into_iter());
+                }
+
+                // From here onwards, we know that the results are non-empty and if a cursor was
+                // supplied on the end the page is being drawn from, it was found in the results
+                // (implying a page follows in that direction).
+                (after, _, Some(l), before, End::Front) => {
+                    let has_previous_page = after.is_some();
+                    let prefix = has_previous_page as usize;
+
+                    // If results end with the before cursor, we will at least need to trim one element
+                    // from the suffix and we trim more off the end if there is more after applying the
+                    // limit.
+                    let mut suffix = before.is_some_and(|b| *b == l) as usize;
+                    suffix += results.len().saturating_sub(self.limit() + prefix + suffix);
+                    let has_next_page = suffix > 0;
+
+                    (has_previous_page, has_next_page, prefix, suffix)
+                }
+
+                // Symmetric to the previous case, but drawing from the back.
+                (after, Some(f), _, before, End::Back) => {
+                    let has_next_page = before.is_some();
+                    let suffix = has_next_page as usize;
+
+                    let mut prefix = after.is_some_and(|a| *a == f) as usize;
+                    prefix += results.len().saturating_sub(self.limit() + prefix + suffix);
+                    let has_previous_page = prefix > 0;
+
+                    (has_previous_page, has_next_page, prefix, suffix)
+                }
+            };
 
         // If after trimming, we're going to return no elements, then forget whether there's a
         // previous or next page, because there will be no start or end cursor for this page to
         // anchor on.
         if results.len() == prefix + suffix {
-            return Ok((false, false, vec![].into_iter()));
+            return (false, false, vec![].into_iter());
         }
 
         // We finally made it -- trim the prefix and suffix rows from the result and send it!
@@ -300,7 +443,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
             results.nth_back(suffix - 1);
         }
 
-        Ok((prev, next, results))
+        (prev, next, results)
     }
 }
 

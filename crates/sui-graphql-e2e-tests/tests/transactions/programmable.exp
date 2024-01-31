@@ -29,7 +29,11 @@ Response: {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
             "gasPayment": {
-              "nodes": []
+              "nodes": [
+                {
+                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                }
+              ]
             },
             "gasPrice": "1000",
             "gasBudget": "5000000000"
@@ -39,7 +43,7 @@ Response: {
             "inputs": {
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjoxfQ",
                   "node": {
                     "__typename": "Pure",
                     "bytes": "/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4="
@@ -50,7 +54,7 @@ Response: {
             "transactions": {
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjoxfQ",
                   "node": {
                     "__typename": "PublishTransaction",
                     "modules": [
@@ -63,7 +67,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MQ",
+                  "cursor": "eyJpIjoxLCJjIjoxfQ",
                   "node": {
                     "__typename": "TransferObjectsTransaction",
                     "inputs": [
@@ -192,7 +196,11 @@ Response: {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
             "gasPayment": {
-              "nodes": []
+              "nodes": [
+                {
+                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                }
+              ]
             },
             "gasPrice": "1000",
             "gasBudget": "5000000000"
@@ -202,7 +210,7 @@ Response: {
             "inputs": {
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjoyfQ",
                   "node": {
                     "__typename": "OwnedOrImmutable",
                     "address": "0x6f4533bc7b0fad7dc586bade57e1aa41d85221fb25d50c1fa33a32a9074cfa30",
@@ -229,14 +237,14 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MQ",
+                  "cursor": "eyJpIjoxLCJjIjoyfQ",
                   "node": {
                     "__typename": "Pure",
                     "bytes": "AA=="
                   }
                 },
                 {
-                  "cursor": "Mg",
+                  "cursor": "eyJpIjoyLCJjIjoyfQ",
                   "node": {
                     "__typename": "Pure",
                     "bytes": "IKtSxFg0BLyRn8vrtIRqeqpsihVPvPFxPFBg5s0K+UqS"
@@ -247,7 +255,7 @@ Response: {
             "transactions": {
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjoyfQ",
                   "node": {
                     "__typename": "MoveCallTransaction",
                     "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
@@ -291,7 +299,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MQ",
+                  "cursor": "eyJpIjoxLCJjIjoyfQ",
                   "node": {
                     "__typename": "UpgradeTransaction",
                     "modules": [
@@ -310,7 +318,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "Mg",
+                  "cursor": "eyJpIjoyLCJjIjoyfQ",
                   "node": {
                     "__typename": "MoveCallTransaction",
                     "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
@@ -464,7 +472,11 @@ Response: {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
             "gasPayment": {
-              "nodes": []
+              "nodes": [
+                {
+                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                }
+              ]
             },
             "gasPrice": "1000",
             "gasBudget": "5000000000"
@@ -474,28 +486,28 @@ Response: {
             "inputs": {
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjozfQ",
                   "node": {
                     "__typename": "Pure",
                     "bytes": "KgAAAAAAAAA="
                   }
                 },
                 {
-                  "cursor": "MQ",
+                  "cursor": "eyJpIjoxLCJjIjozfQ",
                   "node": {
                     "__typename": "Pure",
                     "bytes": "KwAAAAAAAAA="
                   }
                 },
                 {
-                  "cursor": "Mg",
+                  "cursor": "eyJpIjoyLCJjIjozfQ",
                   "node": {
                     "__typename": "Pure",
                     "bytes": "6AMAAAAAAAA="
                   }
                 },
                 {
-                  "cursor": "Mw",
+                  "cursor": "eyJpIjozLCJjIjozfQ",
                   "node": {
                     "__typename": "Pure",
                     "bytes": "/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4="
@@ -506,7 +518,7 @@ Response: {
             "transactions": {
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjozfQ",
                   "node": {
                     "__typename": "MakeMoveVecTransaction",
                     "type": {
@@ -525,7 +537,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MQ",
+                  "cursor": "eyJpIjoxLCJjIjozfQ",
                   "node": {
                     "__typename": "MakeMoveVecTransaction",
                     "type": {
@@ -535,7 +547,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "Mg",
+                  "cursor": "eyJpIjoyLCJjIjozfQ",
                   "node": {
                     "__typename": "SplitCoinsTransaction",
                     "coin": {
@@ -554,7 +566,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "Mw",
+                  "cursor": "eyJpIjozLCJjIjozfQ",
                   "node": {
                     "__typename": "MoveCallTransaction",
                     "package": "0xd4a3bb6dbcad1086208a5c0355dd9f6cc4e70fef1c1c3cdecbf5ca61202a76fb",
@@ -588,7 +600,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "NA",
+                  "cursor": "eyJpIjo0LCJjIjozfQ",
                   "node": {
                     "__typename": "TransferObjectsTransaction",
                     "inputs": [
@@ -605,7 +617,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "NQ",
+                  "cursor": "eyJpIjo1LCJjIjozfQ",
                   "node": {
                     "__typename": "MoveCallTransaction",
                     "package": "0xd4a3bb6dbcad1086208a5c0355dd9f6cc4e70fef1c1c3cdecbf5ca61202a76fb",
@@ -639,7 +651,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "Ng",
+                  "cursor": "eyJpIjo2LCJjIjozfQ",
                   "node": {
                     "__typename": "MoveCallTransaction",
                     "package": "0xd4a3bb6dbcad1086208a5c0355dd9f6cc4e70fef1c1c3cdecbf5ca61202a76fb",
@@ -666,7 +678,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "Nw",
+                  "cursor": "eyJpIjo3LCJjIjozfQ",
                   "node": {
                     "__typename": "MergeCoinsTransaction",
                     "coin": {
@@ -684,7 +696,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "OA",
+                  "cursor": "eyJpIjo4LCJjIjozfQ",
                   "node": {
                     "__typename": "TransferObjectsTransaction",
                     "inputs": [
@@ -855,7 +867,11 @@ Response: {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
             "gasPayment": {
-              "nodes": []
+              "nodes": [
+                {
+                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                }
+              ]
             },
             "gasPrice": "1000",
             "gasBudget": "5000000000"
@@ -865,7 +881,7 @@ Response: {
             "inputs": {
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjo0fQ",
                   "node": {
                     "__typename": "Pure",
                     "bytes": "6AMAAAAAAAA="
@@ -876,7 +892,7 @@ Response: {
             "transactions": {
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjo0fQ",
                   "node": {
                     "__typename": "SplitCoinsTransaction",
                     "coin": {
@@ -965,7 +981,7 @@ Response: {
     "transactionBlocks": {
       "edges": [
         {
-          "cursor": "MA",
+          "cursor": "eyJjIjo0LCJ0IjowfQ",
           "node": {
             "kind": {
               "__typename": "GenesisTransaction"
@@ -973,7 +989,7 @@ Response: {
           }
         },
         {
-          "cursor": "MQ",
+          "cursor": "eyJjIjo0LCJ0IjoxfQ",
           "node": {
             "kind": {
               "__typename": "ProgrammableTransactionBlock"
@@ -981,7 +997,7 @@ Response: {
           }
         },
         {
-          "cursor": "Mg",
+          "cursor": "eyJjIjo0LCJ0IjoyfQ",
           "node": {
             "kind": {
               "__typename": "ProgrammableTransactionBlock"
@@ -989,7 +1005,7 @@ Response: {
           }
         },
         {
-          "cursor": "Mw",
+          "cursor": "eyJjIjo0LCJ0IjozfQ",
           "node": {
             "kind": {
               "__typename": "ProgrammableTransactionBlock"
@@ -997,7 +1013,7 @@ Response: {
           }
         },
         {
-          "cursor": "NA",
+          "cursor": "eyJjIjo0LCJ0Ijo0fQ",
           "node": {
             "kind": {
               "__typename": "ProgrammableTransactionBlock"
@@ -1005,7 +1021,7 @@ Response: {
           }
         },
         {
-          "cursor": "NQ",
+          "cursor": "eyJjIjo0LCJ0Ijo1fQ",
           "node": {
             "kind": {
               "__typename": "ProgrammableTransactionBlock"
@@ -1023,7 +1039,7 @@ Response: {
     "transactionBlocks": {
       "edges": [
         {
-          "cursor": "MA",
+          "cursor": "eyJjIjo0LCJ0IjowfQ",
           "node": {
             "kind": {
               "__typename": "GenesisTransaction"
@@ -1041,7 +1057,7 @@ Response: {
     "transactionBlocks": {
       "edges": [
         {
-          "cursor": "MQ",
+          "cursor": "eyJjIjo0LCJ0IjoxfQ",
           "node": {
             "kind": {
               "__typename": "ProgrammableTransactionBlock"
@@ -1049,7 +1065,7 @@ Response: {
           }
         },
         {
-          "cursor": "Mg",
+          "cursor": "eyJjIjo0LCJ0IjoyfQ",
           "node": {
             "kind": {
               "__typename": "ProgrammableTransactionBlock"
@@ -1057,7 +1073,7 @@ Response: {
           }
         },
         {
-          "cursor": "Mw",
+          "cursor": "eyJjIjo0LCJ0IjozfQ",
           "node": {
             "kind": {
               "__typename": "ProgrammableTransactionBlock"
@@ -1065,7 +1081,7 @@ Response: {
           }
         },
         {
-          "cursor": "NA",
+          "cursor": "eyJjIjo0LCJ0Ijo0fQ",
           "node": {
             "kind": {
               "__typename": "ProgrammableTransactionBlock"
@@ -1073,7 +1089,7 @@ Response: {
           }
         },
         {
-          "cursor": "NQ",
+          "cursor": "eyJjIjo0LCJ0Ijo1fQ",
           "node": {
             "kind": {
               "__typename": "ProgrammableTransactionBlock"
@@ -1102,10 +1118,10 @@ Response: {
     "transactionBlocks": {
       "edges": [
         {
-          "cursor": "Mg"
+          "cursor": "eyJjIjo0LCJ0IjoyfQ"
         },
         {
-          "cursor": "Mw"
+          "cursor": "eyJjIjo0LCJ0IjozfQ"
         }
       ]
     }
@@ -1118,10 +1134,10 @@ Response: {
     "transactionBlocks": {
       "edges": [
         {
-          "cursor": "Mw"
+          "cursor": "eyJjIjo0LCJ0IjozfQ"
         },
         {
-          "cursor": "NA"
+          "cursor": "eyJjIjo0LCJ0Ijo0fQ"
         }
       ]
     }
@@ -1134,7 +1150,7 @@ Response: {
     "transactionBlocks": {
       "edges": [
         {
-          "cursor": "Mw"
+          "cursor": "eyJjIjo0LCJ0IjozfQ"
         }
       ]
     }

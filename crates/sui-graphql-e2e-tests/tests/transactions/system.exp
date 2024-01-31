@@ -26,7 +26,7 @@ Response: {
             "objects": {
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjowfQ",
                   "node": {
                     "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
                     "asMoveObject": null,
@@ -34,67 +34,67 @@ Response: {
                       "modules": {
                         "edges": [
                           {
-                            "cursor": "ImFkZHJlc3Mi",
+                            "cursor": "eyJuIjoiYWRkcmVzcyIsImMiOjB9",
                             "node": {
                               "name": "address"
                             }
                           },
                           {
-                            "cursor": "ImFzY2lpIg",
+                            "cursor": "eyJuIjoiYXNjaWkiLCJjIjowfQ",
                             "node": {
                               "name": "ascii"
                             }
                           },
                           {
-                            "cursor": "ImJjcyI",
+                            "cursor": "eyJuIjoiYmNzIiwiYyI6MH0",
                             "node": {
                               "name": "bcs"
                             }
                           },
                           {
-                            "cursor": "ImJpdF92ZWN0b3Ii",
+                            "cursor": "eyJuIjoiYml0X3ZlY3RvciIsImMiOjB9",
                             "node": {
                               "name": "bit_vector"
                             }
                           },
                           {
-                            "cursor": "ImRlYnVnIg",
+                            "cursor": "eyJuIjoiZGVidWciLCJjIjowfQ",
                             "node": {
                               "name": "debug"
                             }
                           },
                           {
-                            "cursor": "ImZpeGVkX3BvaW50MzIi",
+                            "cursor": "eyJuIjoiZml4ZWRfcG9pbnQzMiIsImMiOjB9",
                             "node": {
                               "name": "fixed_point32"
                             }
                           },
                           {
-                            "cursor": "Imhhc2gi",
+                            "cursor": "eyJuIjoiaGFzaCIsImMiOjB9",
                             "node": {
                               "name": "hash"
                             }
                           },
                           {
-                            "cursor": "Im9wdGlvbiI",
+                            "cursor": "eyJuIjoib3B0aW9uIiwiYyI6MH0",
                             "node": {
                               "name": "option"
                             }
                           },
                           {
-                            "cursor": "InN0cmluZyI",
+                            "cursor": "eyJuIjoic3RyaW5nIiwiYyI6MH0",
                             "node": {
                               "name": "string"
                             }
                           },
                           {
-                            "cursor": "InR5cGVfbmFtZSI",
+                            "cursor": "eyJuIjoidHlwZV9uYW1lIiwiYyI6MH0",
                             "node": {
                               "name": "type_name"
                             }
                           },
                           {
-                            "cursor": "InZlY3RvciI",
+                            "cursor": "eyJuIjoidmVjdG9yIiwiYyI6MH0",
                             "node": {
                               "name": "vector"
                             }
@@ -105,7 +105,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MQ",
+                  "cursor": "eyJpIjoxLCJjIjowfQ",
                   "node": {
                     "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
                     "asMoveObject": null,
@@ -113,121 +113,121 @@ Response: {
                       "modules": {
                         "edges": [
                           {
-                            "cursor": "ImFkZHJlc3Mi",
+                            "cursor": "eyJuIjoiYWRkcmVzcyIsImMiOjB9",
                             "node": {
                               "name": "address"
                             }
                           },
                           {
-                            "cursor": "ImF1dGhlbnRpY2F0b3Jfc3RhdGUi",
+                            "cursor": "eyJuIjoiYXV0aGVudGljYXRvcl9zdGF0ZSIsImMiOjB9",
                             "node": {
                               "name": "authenticator_state"
                             }
                           },
                           {
-                            "cursor": "ImJhZyI",
+                            "cursor": "eyJuIjoiYmFnIiwiYyI6MH0",
                             "node": {
                               "name": "bag"
                             }
                           },
                           {
-                            "cursor": "ImJhbGFuY2Ui",
+                            "cursor": "eyJuIjoiYmFsYW5jZSIsImMiOjB9",
                             "node": {
                               "name": "balance"
                             }
                           },
                           {
-                            "cursor": "ImJjcyI",
+                            "cursor": "eyJuIjoiYmNzIiwiYyI6MH0",
                             "node": {
                               "name": "bcs"
                             }
                           },
                           {
-                            "cursor": "ImJsczEyMzgxIg",
+                            "cursor": "eyJuIjoiYmxzMTIzODEiLCJjIjowfQ",
                             "node": {
                               "name": "bls12381"
                             }
                           },
                           {
-                            "cursor": "ImJvcnJvdyI",
+                            "cursor": "eyJuIjoiYm9ycm93IiwiYyI6MH0",
                             "node": {
                               "name": "borrow"
                             }
                           },
                           {
-                            "cursor": "ImNsb2NrIg",
+                            "cursor": "eyJuIjoiY2xvY2siLCJjIjowfQ",
                             "node": {
                               "name": "clock"
                             }
                           },
                           {
-                            "cursor": "ImNvaW4i",
+                            "cursor": "eyJuIjoiY29pbiIsImMiOjB9",
                             "node": {
                               "name": "coin"
                             }
                           },
                           {
-                            "cursor": "ImRlbnlfbGlzdCI",
+                            "cursor": "eyJuIjoiZGVueV9saXN0IiwiYyI6MH0",
                             "node": {
                               "name": "deny_list"
                             }
                           },
                           {
-                            "cursor": "ImRpc3BsYXki",
+                            "cursor": "eyJuIjoiZGlzcGxheSIsImMiOjB9",
                             "node": {
                               "name": "display"
                             }
                           },
                           {
-                            "cursor": "ImR5bmFtaWNfZmllbGQi",
+                            "cursor": "eyJuIjoiZHluYW1pY19maWVsZCIsImMiOjB9",
                             "node": {
                               "name": "dynamic_field"
                             }
                           },
                           {
-                            "cursor": "ImR5bmFtaWNfb2JqZWN0X2ZpZWxkIg",
+                            "cursor": "eyJuIjoiZHluYW1pY19vYmplY3RfZmllbGQiLCJjIjowfQ",
                             "node": {
                               "name": "dynamic_object_field"
                             }
                           },
                           {
-                            "cursor": "ImVjZHNhX2sxIg",
+                            "cursor": "eyJuIjoiZWNkc2FfazEiLCJjIjowfQ",
                             "node": {
                               "name": "ecdsa_k1"
                             }
                           },
                           {
-                            "cursor": "ImVjZHNhX3IxIg",
+                            "cursor": "eyJuIjoiZWNkc2FfcjEiLCJjIjowfQ",
                             "node": {
                               "name": "ecdsa_r1"
                             }
                           },
                           {
-                            "cursor": "ImVjdnJmIg",
+                            "cursor": "eyJuIjoiZWN2cmYiLCJjIjowfQ",
                             "node": {
                               "name": "ecvrf"
                             }
                           },
                           {
-                            "cursor": "ImVkMjU1MTki",
+                            "cursor": "eyJuIjoiZWQyNTUxOSIsImMiOjB9",
                             "node": {
                               "name": "ed25519"
                             }
                           },
                           {
-                            "cursor": "ImV2ZW50Ig",
+                            "cursor": "eyJuIjoiZXZlbnQiLCJjIjowfQ",
                             "node": {
                               "name": "event"
                             }
                           },
                           {
-                            "cursor": "Imdyb3RoMTYi",
+                            "cursor": "eyJuIjoiZ3JvdGgxNiIsImMiOjB9",
                             "node": {
                               "name": "groth16"
                             }
                           },
                           {
-                            "cursor": "Imdyb3VwX29wcyI",
+                            "cursor": "eyJuIjoiZ3JvdXBfb3BzIiwiYyI6MH0",
                             "node": {
                               "name": "group_ops"
                             }
@@ -238,7 +238,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "Mg",
+                  "cursor": "eyJpIjoyLCJjIjowfQ",
                   "node": {
                     "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
                     "asMoveObject": null,
@@ -246,67 +246,67 @@ Response: {
                       "modules": {
                         "edges": [
                           {
-                            "cursor": "ImdlbmVzaXMi",
+                            "cursor": "eyJuIjoiZ2VuZXNpcyIsImMiOjB9",
                             "node": {
                               "name": "genesis"
                             }
                           },
                           {
-                            "cursor": "InN0YWtlX3N1YnNpZHki",
+                            "cursor": "eyJuIjoic3Rha2Vfc3Vic2lkeSIsImMiOjB9",
                             "node": {
                               "name": "stake_subsidy"
                             }
                           },
                           {
-                            "cursor": "InN0YWtpbmdfcG9vbCI",
+                            "cursor": "eyJuIjoic3Rha2luZ19wb29sIiwiYyI6MH0",
                             "node": {
                               "name": "staking_pool"
                             }
                           },
                           {
-                            "cursor": "InN0b3JhZ2VfZnVuZCI",
+                            "cursor": "eyJuIjoic3RvcmFnZV9mdW5kIiwiYyI6MH0",
                             "node": {
                               "name": "storage_fund"
                             }
                           },
                           {
-                            "cursor": "InN1aV9zeXN0ZW0i",
+                            "cursor": "eyJuIjoic3VpX3N5c3RlbSIsImMiOjB9",
                             "node": {
                               "name": "sui_system"
                             }
                           },
                           {
-                            "cursor": "InN1aV9zeXN0ZW1fc3RhdGVfaW5uZXIi",
+                            "cursor": "eyJuIjoic3VpX3N5c3RlbV9zdGF0ZV9pbm5lciIsImMiOjB9",
                             "node": {
                               "name": "sui_system_state_inner"
                             }
                           },
                           {
-                            "cursor": "InZhbGlkYXRvciI",
+                            "cursor": "eyJuIjoidmFsaWRhdG9yIiwiYyI6MH0",
                             "node": {
                               "name": "validator"
                             }
                           },
                           {
-                            "cursor": "InZhbGlkYXRvcl9jYXAi",
+                            "cursor": "eyJuIjoidmFsaWRhdG9yX2NhcCIsImMiOjB9",
                             "node": {
                               "name": "validator_cap"
                             }
                           },
                           {
-                            "cursor": "InZhbGlkYXRvcl9zZXQi",
+                            "cursor": "eyJuIjoidmFsaWRhdG9yX3NldCIsImMiOjB9",
                             "node": {
                               "name": "validator_set"
                             }
                           },
                           {
-                            "cursor": "InZhbGlkYXRvcl93cmFwcGVyIg",
+                            "cursor": "eyJuIjoidmFsaWRhdG9yX3dyYXBwZXIiLCJjIjowfQ",
                             "node": {
                               "name": "validator_wrapper"
                             }
                           },
                           {
-                            "cursor": "InZvdGluZ19wb3dlciI",
+                            "cursor": "eyJuIjoidm90aW5nX3Bvd2VyIiwiYyI6MH0",
                             "node": {
                               "name": "voting_power"
                             }
@@ -317,7 +317,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "Mw",
+                  "cursor": "eyJpIjozLCJjIjowfQ",
                   "node": {
                     "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
                     "asMoveObject": {
@@ -335,7 +335,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "NA",
+                  "cursor": "eyJpIjo0LCJjIjowfQ",
                   "node": {
                     "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
                     "asMoveObject": {
@@ -353,7 +353,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "NQ",
+                  "cursor": "eyJpIjo1LCJjIjowfQ",
                   "node": {
                     "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
                     "asMoveObject": {
@@ -371,7 +371,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "Ng",
+                  "cursor": "eyJpIjo2LCJjIjowfQ",
                   "node": {
                     "address": "0x0000000000000000000000000000000000000000000000000000000000000008",
                     "asMoveObject": {
@@ -392,7 +392,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "Nw",
+                  "cursor": "eyJpIjo3LCJjIjowfQ",
                   "node": {
                     "address": "0x0000000000000000000000000000000000000000000000000000000000000403",
                     "asMoveObject": {
@@ -413,7 +413,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "OA",
+                  "cursor": "eyJpIjo4LCJjIjowfQ",
                   "node": {
                     "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
                     "asMoveObject": null,
@@ -421,43 +421,43 @@ Response: {
                       "modules": {
                         "edges": [
                           {
-                            "cursor": "ImNsb2Ii",
+                            "cursor": "eyJuIjoiY2xvYiIsImMiOjB9",
                             "node": {
                               "name": "clob"
                             }
                           },
                           {
-                            "cursor": "ImNsb2JfdjIi",
+                            "cursor": "eyJuIjoiY2xvYl92MiIsImMiOjB9",
                             "node": {
                               "name": "clob_v2"
                             }
                           },
                           {
-                            "cursor": "ImNyaXRiaXQi",
+                            "cursor": "eyJuIjoiY3JpdGJpdCIsImMiOjB9",
                             "node": {
                               "name": "critbit"
                             }
                           },
                           {
-                            "cursor": "ImN1c3RvZGlhbiI",
+                            "cursor": "eyJuIjoiY3VzdG9kaWFuIiwiYyI6MH0",
                             "node": {
                               "name": "custodian"
                             }
                           },
                           {
-                            "cursor": "ImN1c3RvZGlhbl92MiI",
+                            "cursor": "eyJuIjoiY3VzdG9kaWFuX3YyIiwiYyI6MH0",
                             "node": {
                               "name": "custodian_v2"
                             }
                           },
                           {
-                            "cursor": "Im1hdGgi",
+                            "cursor": "eyJuIjoibWF0aCIsImMiOjB9",
                             "node": {
                               "name": "math"
                             }
                           },
                           {
-                            "cursor": "Im9yZGVyX3F1ZXJ5Ig",
+                            "cursor": "eyJuIjoib3JkZXJfcXVlcnkiLCJjIjowfQ",
                             "node": {
                               "name": "order_query"
                             }
@@ -468,7 +468,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "OQ",
+                  "cursor": "eyJpIjo5LCJjIjowfQ",
                   "node": {
                     "address": "0x39b81dfb401da6cda2b4a1c90a0c7f61baec6c049377b4df254f0416524b99d9",
                     "asMoveObject": {
@@ -487,7 +487,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MTA",
+                  "cursor": "eyJpIjoxMCwiYyI6MH0",
                   "node": {
                     "address": "0x3bc8d2f8d49cf6417eb5a6b50378ca609f2b9606258cf8185e7050221002f13e",
                     "asMoveObject": {
@@ -507,7 +507,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MTE",
+                  "cursor": "eyJpIjoxMSwiYyI6MH0",
                   "node": {
                     "address": "0x6000a41518a630b1786f0d2c171265b7251377865cc9222f8f1463571fd5d5cf",
                     "asMoveObject": {
@@ -529,7 +529,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MTI",
+                  "cursor": "eyJpIjoxMiwiYyI6MH0",
                   "node": {
                     "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
                     "asMoveObject": {
@@ -912,7 +912,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MTM",
+                  "cursor": "eyJpIjoxMywiYyI6MH0",
                   "node": {
                     "address": "0x853678ffa7115ad5e2fb078cba3d5652e93455b7f09ad2db593da73dbcf16de3",
                     "asMoveObject": {
@@ -930,7 +930,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MTQ",
+                  "cursor": "eyJpIjoxNCwiYyI6MH0",
                   "node": {
                     "address": "0x9846c6281d33b7dde8a76599ffa4bc6c5c08c150a229da1577c769821a28d06d",
                     "asMoveObject": {
@@ -950,7 +950,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MTU",
+                  "cursor": "eyJpIjoxNSwiYyI6MH0",
                   "node": {
                     "address": "0xa726a088deea03b2f7dc05ef564a0d32d28a2841d2f0526a48376b3f8fb6a951",
                     "asMoveObject": {
@@ -972,7 +972,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MTY",
+                  "cursor": "eyJpIjoxNiwiYyI6MH0",
                   "node": {
                     "address": "0xb97fa8bccf2959354fc7b1bd5e1f08ba405e47d471b9a7bd83afdb07c9546da2",
                     "asMoveObject": {
@@ -994,7 +994,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MTc",
+                  "cursor": "eyJpIjoxNywiYyI6MH0",
                   "node": {
                     "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
                     "asMoveObject": {
@@ -1016,7 +1016,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MTg",
+                  "cursor": "eyJpIjoxOCwiYyI6MH0",
                   "node": {
                     "address": "0xd77b65cabba9c4c40b113197872bacccc287c8b027b375f9766ef88cc180a0f3",
                     "asMoveObject": {
@@ -1040,7 +1040,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MTk",
+                  "cursor": "eyJpIjoxOSwiYyI6MH0",
                   "node": {
                     "address": "0xf1966947781edc48891fe3cfb9ed34db368e4ec0127af83b28708239daa6be95",
                     "asMoveObject": {
@@ -1427,12 +1427,10 @@ Response: {
             "transactions": {
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjoyfQ",
                   "node": {
                     "__typename": "ChangeEpochTransaction",
-                    "epoch": {
-                      "epochId": 1
-                    },
+                    "epoch": null,
                     "protocolVersion": 36,
                     "storageCharge": "0",
                     "computationCharge": "0",

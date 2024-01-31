@@ -57,12 +57,12 @@ Response: {
               "pageInfo": {
                 "hasPreviousPage": false,
                 "hasNextPage": false,
-                "startCursor": "MA",
-                "endCursor": "MQ"
+                "startCursor": "eyJpIjowLCJjIjoxfQ",
+                "endCursor": "eyJpIjoxLCJjIjoxfQ"
               },
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjoxfQ",
                   "node": {
                     "digest": "Di6r3KiP7QHJT9rigcrgRekNRXf3D31EU8nvaMkFLADs",
                     "kind": {
@@ -91,7 +91,7 @@ Response: {
                   }
                 },
                 {
-                  "cursor": "MQ",
+                  "cursor": "eyJpIjoxLCJjIjoxfQ",
                   "node": {
                     "digest": "EXm6yrqzNSRtZL6ZtfYn1xCLYgjVdXjPt772jyPXQftz",
                     "kind": {
@@ -129,12 +129,12 @@ Response: {
               "pageInfo": {
                 "hasPreviousPage": true,
                 "hasNextPage": false,
-                "startCursor": "MQ",
-                "endCursor": "MQ"
+                "startCursor": "eyJpIjoxLCJjIjoxfQ",
+                "endCursor": "eyJpIjoxLCJjIjoxfQ"
               },
               "edges": [
                 {
-                  "cursor": "MQ",
+                  "cursor": "eyJpIjoxLCJjIjoxfQ",
                   "node": {
                     "digest": "EXm6yrqzNSRtZL6ZtfYn1xCLYgjVdXjPt772jyPXQftz",
                     "kind": {

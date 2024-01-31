@@ -117,9 +117,13 @@ impl PgManager {
     }
 }
 
+/// `checkpoint_viewed_at` represents the checkpoint sequence number at which the set of
+/// `SuiValidatorSummary` was queried for. Each `Validator` will inherit this checkpoint, so that
+/// when viewing the `Validator`'s state, it will be as if it was read at the same checkpoint.
 pub(crate) fn convert_to_validators(
     validators: Vec<SuiValidatorSummary>,
     system_state: Option<NativeSuiSystemStateSummary>,
+    checkpoint_viewed_at: u64,
 ) -> Vec<Validator> {
     let (at_risk, reports) = if let Some(NativeSuiSystemStateSummary {
         at_risk_validators,
@@ -145,6 +149,7 @@ pub(crate) fn convert_to_validators(
                     .cloned()
                     .map(|a| Address {
                         address: SuiAddress::from(a),
+                        checkpoint_viewed_at: Some(checkpoint_viewed_at),
                     })
                     .collect()
             });
@@ -153,6 +158,7 @@ pub(crate) fn convert_to_validators(
                 validator_summary,
                 at_risk,
                 report_records,
+                checkpoint_viewed_at,
             }
         })
         .collect()

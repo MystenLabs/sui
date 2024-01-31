@@ -1,20 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::cursor::{self, Page, Target};
+use super::cursor::{self, Page, RawPaginated, Target};
 use super::{big_int::BigInt, move_type::MoveType, sui_address::SuiAddress};
-use crate::data::{self, Db, DbConnection, QueryExecutor};
+use crate::consistency::{consistent_range, Checkpointed};
+use crate::data::{Db, DbConnection, QueryExecutor};
 use crate::error::Error;
+use crate::raw_query::RawQuery;
+use crate::{filter, query};
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
-use diesel::NullableExpressionMethods;
 use diesel::{
-    dsl::sql,
     sql_types::{BigInt as SqlBigInt, Nullable, Text},
-    ExpressionMethods, OptionalExtension, QueryDsl,
+    OptionalExtension, QueryableByName,
 };
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use sui_indexer::{schema_v2::objects, types_v2::OwnerType};
 use sui_types::{parse_sui_type_tag, TypeTag};
 
 /// The total balance for a particular coin type.
@@ -30,14 +31,28 @@ pub(crate) struct Balance {
 
 /// Representation of a row of balance information from the DB. We read the balance as a `String` to
 /// deal with the large (bigger than 2^63 - 1) balances.
-type StoredBalance = (
-    /* balance */ Option<String>,
-    /* count */ Option<i64>,
-    /* type */ String,
-);
+#[derive(QueryableByName)]
+pub struct StoredBalance {
+    #[diesel(sql_type = Nullable<Text>)]
+    pub balance: Option<String>,
+    #[diesel(sql_type = Nullable<SqlBigInt>)]
+    pub count: Option<i64>,
+    #[diesel(sql_type = Text)]
+    pub coin_type: String,
+}
 
-pub(crate) type Cursor = cursor::JsonCursor<String>;
-type Query<ST, GB> = data::Query<ST, objects::table, GB>;
+pub(crate) type Cursor = cursor::JsonCursor<BalanceCursor>;
+
+/// The inner struct for the `Balance`'s cursor. The `coin_type` is used as the cursor, while the
+/// `checkpoint_viewed_at` sets the consistent upper bound for the cursor.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub(crate) struct BalanceCursor {
+    #[serde(rename = "t")]
+    coin_type: String,
+    /// The checkpoint sequence number this was viewed at.
+    #[serde(rename = "c")]
+    checkpoint_viewed_at: u64,
+}
 
 impl Balance {
     /// Query for the balance of coins owned by `address`, of coins with type `coin_type`. Note that
@@ -47,25 +62,17 @@ impl Balance {
         db: &Db,
         address: SuiAddress,
         coin_type: TypeTag,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<Balance>, Error> {
-        use objects::dsl;
-
         let stored: Option<StoredBalance> = db
-            .execute(move |conn| {
-                conn.first(move || {
-                    dsl::objects
-                        .select((
-                            sql::<Nullable<Text>>("CAST(SUM(coin_balance) AS TEXT)"),
-                            sql::<Nullable<SqlBigInt>>("COUNT(*)"),
-                            dsl::coin_type.assume_not_null(),
-                        ))
-                        .filter(dsl::owner_id.eq(address.into_vec()))
-                        .filter(dsl::owner_type.eq(OwnerType::Address as i16))
-                        .filter(
-                            dsl::coin_type
-                                .eq(coin_type.to_canonical_string(/* with_prefix */ true)),
-                        )
-                        .group_by(dsl::coin_type)
+            .execute_repeatable(move |conn| {
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
+
+                conn.result(move || {
+                    balance_query(address, Some(coin_type.clone()), lhs as i64, rhs as i64)
+                        .into_boxed()
                 })
                 .optional()
             })
@@ -80,30 +87,40 @@ impl Balance {
         db: &Db,
         page: Page<Cursor>,
         address: SuiAddress,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, Balance>, Error> {
-        let (prev, next, results) = db
-            .execute(move |conn| {
-                page.paginate_query::<StoredBalance, _, _, _>(conn, move || {
-                    use objects::dsl;
-                    dsl::objects
-                        .select((
-                            sql::<Nullable<Text>>("CAST(SUM(coin_balance) AS TEXT)"),
-                            sql::<Nullable<SqlBigInt>>("COUNT(*)"),
-                            dsl::coin_type.assume_not_null(),
-                        ))
-                        .filter(dsl::owner_id.eq(address.into_vec()))
-                        .filter(dsl::owner_type.eq(OwnerType::Address as i16))
-                        .filter(dsl::coin_type.is_not_null())
-                        .group_by(dsl::coin_type)
-                        .into_boxed()
-                })
+        // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
+        // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
+        // paginated queries are consistent with the previous query that created the cursor.
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
+
+        let response = db
+            .execute_repeatable(move |conn| {
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
+
+                let result = page.paginate_raw_query::<StoredBalance>(
+                    conn,
+                    rhs,
+                    balance_query(address, None, lhs as i64, rhs as i64),
+                )?;
+
+                Ok(Some((result, rhs)))
             })
             .await?;
+
+        let Some(((prev, next, results), checkpoint_viewed_at)) = response else {
+            return Err(Error::Client(
+                "Requested data is outside the available range".to_string(),
+            ));
+        };
 
         let mut conn = Connection::new(prev, next);
 
         for stored in results {
-            let cursor = stored.cursor().encode_cursor();
+            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
             let balance = Balance::try_from(stored)?;
             conn.edges.push(Edge::new(cursor, balance));
         }
@@ -112,35 +129,47 @@ impl Balance {
     }
 }
 
-impl Target<Cursor> for StoredBalance {
-    type Source = objects::table;
-
-    fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(objects::dsl::coin_type.ge((**cursor).clone()))
+impl RawPaginated<Cursor> for StoredBalance {
+    fn filter_ge(cursor: &Cursor, query: RawQuery) -> RawQuery {
+        filter!(query, "coin_type >= {}", cursor.coin_type.clone())
     }
 
-    fn filter_le<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(objects::dsl::coin_type.le((**cursor).clone()))
+    fn filter_le(cursor: &Cursor, query: RawQuery) -> RawQuery {
+        filter!(query, "coin_type <= {}", cursor.coin_type.clone())
     }
 
-    fn order<ST, GB>(asc: bool, query: Query<ST, GB>) -> Query<ST, GB> {
-        use objects::dsl;
+    fn order(asc: bool, query: RawQuery) -> RawQuery {
         if asc {
-            query.order_by(dsl::coin_type.asc())
-        } else {
-            query.order_by(dsl::coin_type.desc())
+            return query.order_by("coin_type ASC");
         }
+        query.order_by("coin_type DESC")
     }
+}
 
-    fn cursor(&self) -> Cursor {
-        Cursor::new(self.2.clone())
+impl Target<Cursor> for StoredBalance {
+    fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
+        Cursor::new(BalanceCursor {
+            coin_type: self.coin_type.clone(),
+            checkpoint_viewed_at,
+        })
+    }
+}
+
+impl Checkpointed for Cursor {
+    fn checkpoint_viewed_at(&self) -> u64 {
+        self.checkpoint_viewed_at
     }
 }
 
 impl TryFrom<StoredBalance> for Balance {
     type Error = Error;
 
-    fn try_from((balance, count, coin_type): StoredBalance) -> Result<Self, Error> {
+    fn try_from(s: StoredBalance) -> Result<Self, Error> {
+        let StoredBalance {
+            balance,
+            count,
+            coin_type,
+        } = s;
         let total_balance = balance
             .map(|b| BigInt::from_str(&b))
             .transpose()
@@ -159,4 +188,79 @@ impl TryFrom<StoredBalance> for Balance {
             total_balance,
         })
     }
+}
+
+/// Query the database for a `page` of coin balances. Each balance represents the total balance for
+/// a particular coin type, owned by `address`. This function is meant to be called within a thunk
+/// and returns a RawQuery that can be converted into a BoxedSqlQuery with `.into_boxed()`.
+fn balance_query(address: SuiAddress, coin_type: Option<TypeTag>, lhs: i64, rhs: i64) -> RawQuery {
+    // Construct the filtered inner query - apply the same filtering criteria to both
+    // objects_snapshot and objects_history tables.
+    let mut snapshot_objs = query!("SELECT * FROM objects_snapshot");
+    snapshot_objs = filter(snapshot_objs, address, coin_type.clone());
+
+    // Additionally filter objects_history table for results between the available range, or
+    // checkpoint_viewed_at, if provided.
+    let mut history_objs = query!("SELECT * FROM objects_history");
+    history_objs = filter(history_objs, address, coin_type.clone());
+    history_objs = filter!(
+        history_objs,
+        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+    );
+
+    // Combine the two queries, and select the most recent version of each object.
+    let candidates = query!(
+        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ({})) o"#,
+        snapshot_objs,
+        history_objs
+    )
+    .order_by("object_id")
+    .order_by("object_version DESC");
+
+    // Objects that fulfill the filtering criteria may not be the most recent version available.
+    // Left join the candidates table on newer to filter out any objects that have a newer
+    // version.
+    let mut newer = query!("SELECT object_id, object_version FROM objects_history");
+    newer = filter!(
+        newer,
+        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+    );
+    let final_ = query!(
+        r#"SELECT
+            CAST(SUM(coin_balance) AS TEXT) as balance,
+            COUNT(*) as count,
+            coin_type
+        FROM ({}) candidates
+        LEFT JOIN ({}) newer
+        ON (
+            candidates.object_id = newer.object_id
+            AND candidates.object_version < newer.object_version
+        )"#,
+        candidates,
+        newer
+    );
+
+    // Additionally for balance's query, group coins by coin_type.
+    filter!(final_, "newer.object_version IS NULL").group_by("coin_type")
+}
+
+/// Applies the filtering criteria for balances to the input `RawQuery` and returns a new
+/// `RawQuery`.
+fn filter(mut query: RawQuery, owner: SuiAddress, coin_type: Option<TypeTag>) -> RawQuery {
+    query = filter!(query, "coin_type IS NOT NULL");
+
+    query = filter!(
+        query,
+        format!("owner_id = '\\x{}'::bytea", hex::encode(owner.into_vec()))
+    );
+
+    if let Some(coin_type) = coin_type {
+        query = filter!(
+            query,
+            "coin_type = {}",
+            coin_type.to_canonical_display(/* with_prefix */ true)
+        );
+    };
+
+    query
 }

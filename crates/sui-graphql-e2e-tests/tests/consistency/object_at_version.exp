@@ -1,65 +1,22 @@
-processed 26 tasks
+processed 20 tasks
 
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 13-54:
+task 1 'publish'. lines 19-60:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7014800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 56-56:
+task 2 'run'. lines 62-62:
 created: object(2,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'create-checkpoint'. lines 58-58:
+task 3 'create-checkpoint'. lines 64-64:
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 60-73:
-Response: {
-  "data": {
-    "object": {
-      "status": "LIVE",
-      "version": 3,
-      "asMoveObject": {
-        "contents": {
-          "json": {
-            "id": "0x501a8fa6c1c725cdc33a0de570680b14e94876ce328d0e56b53f592beee00a85",
-            "value": "0"
-          }
-        }
-      }
-    }
-  }
-}
-
-task 5 'run'. lines 75-75:
-mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 1301652, non_refundable_storage_fee: 13148
-
-task 6 'create-checkpoint'. lines 77-77:
-Checkpoint created: 2
-
-task 7 'run-graphql'. lines 79-92:
-Response: {
-  "data": {
-    "object": {
-      "status": "LIVE",
-      "version": 4,
-      "asMoveObject": {
-        "contents": {
-          "json": {
-            "id": "0x501a8fa6c1c725cdc33a0de570680b14e94876ce328d0e56b53f592beee00a85",
-            "value": "1"
-          }
-        }
-      }
-    }
-  }
-}
-
-task 8 'run-graphql'. lines 94-108:
+task 4 'run-graphql'. lines 66-79:
 Response: {
   "data": {
     "object": {
@@ -77,26 +34,61 @@ Response: {
   }
 }
 
-task 9 'run'. lines 110-110:
-created: object(9,0)
+task 5 'run'. lines 81-81:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 1301652, non_refundable_storage_fee: 13148
+
+task 6 'create-checkpoint'. lines 83-83:
+Checkpoint created: 2
+
+task 7 'run-graphql'. lines 85-111:
+Response: {
+  "data": {
+    "latest_version": {
+      "status": "HISTORICAL",
+      "version": 4,
+      "asMoveObject": {
+        "contents": {
+          "json": {
+            "id": "0x501a8fa6c1c725cdc33a0de570680b14e94876ce328d0e56b53f592beee00a85",
+            "value": "1"
+          }
+        }
+      }
+    },
+    "previous_version": {
+      "status": "HISTORICAL",
+      "version": 3,
+      "asMoveObject": {
+        "contents": {
+          "json": {
+            "id": "0x501a8fa6c1c725cdc33a0de570680b14e94876ce328d0e56b53f592beee00a85",
+            "value": "0"
+          }
+        }
+      }
+    }
+  }
+}
+
+task 8 'run'. lines 113-113:
+created: object(8,0)
 mutated: object(0,0)
 wrapped: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2553600,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 10 'create-checkpoint'. lines 112-112:
+task 9 'create-checkpoint'. lines 115-115:
 Checkpoint created: 3
 
-task 11 'run-graphql'. lines 114-127:
+task 10 'run-graphql'. lines 117-143:
 Response: {
   "data": {
-    "object": null
-  }
-}
-
-task 12 'run-graphql'. lines 130-144:
-Response: {
-  "data": {
-    "object": {
+    "latest_wrapped": {
+      "status": "WRAPPED_OR_DELETED",
+      "version": 5,
+      "asMoveObject": null
+    },
+    "previous_version": {
       "status": "HISTORICAL",
       "version": 4,
       "asMoveObject": {
@@ -111,38 +103,20 @@ Response: {
   }
 }
 
-task 13 'run-graphql'. lines 146-160:
-Response: {
-  "data": {
-    "object": {
-      "status": "HISTORICAL",
-      "version": 3,
-      "asMoveObject": {
-        "contents": {
-          "json": {
-            "id": "0x501a8fa6c1c725cdc33a0de570680b14e94876ce328d0e56b53f592beee00a85",
-            "value": "0"
-          }
-        }
-      }
-    }
-  }
-}
-
-task 14 'run'. lines 162-162:
+task 11 'run'. lines 145-145:
 mutated: object(0,0)
 unwrapped: object(2,0)
-deleted: object(9,0)
+deleted: object(8,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2528064, non_refundable_storage_fee: 25536
 
-task 15 'create-checkpoint'. lines 164-164:
+task 12 'create-checkpoint'. lines 147-147:
 Checkpoint created: 4
 
-task 16 'run-graphql'. lines 166-179:
+task 13 'run-graphql'. lines 149-187:
 Response: {
   "data": {
-    "object": {
-      "status": "LIVE",
+    "latest_unwrapped": {
+      "status": "HISTORICAL",
       "version": 6,
       "asMoveObject": {
         "contents": {
@@ -152,43 +126,13 @@ Response: {
           }
         }
       }
-    }
-  }
-}
-
-task 17 'run-graphql'. lines 181-195:
-Response: {
-  "data": {
-    "object": {
+    },
+    "previous_version": {
       "status": "WRAPPED_OR_DELETED",
       "version": 5,
       "asMoveObject": null
-    }
-  }
-}
-
-task 18 'run-graphql'. lines 197-211:
-Response: {
-  "data": {
-    "object": {
-      "status": "HISTORICAL",
-      "version": 4,
-      "asMoveObject": {
-        "contents": {
-          "json": {
-            "id": "0x501a8fa6c1c725cdc33a0de570680b14e94876ce328d0e56b53f592beee00a85",
-            "value": "1"
-          }
-        }
-      }
-    }
-  }
-}
-
-task 19 'run-graphql'. lines 213-227:
-Response: {
-  "data": {
-    "object": {
+    },
+    "first_version": {
       "status": "HISTORICAL",
       "version": 3,
       "asMoveObject": {
@@ -203,25 +147,23 @@ Response: {
   }
 }
 
-task 20 'run'. lines 229-229:
+task 14 'run'. lines 189-189:
 mutated: object(0,0)
 deleted: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 21 'create-checkpoint'. lines 231-231:
+task 15 'create-checkpoint'. lines 191-191:
 Checkpoint created: 5
 
-task 22 'run-graphql'. lines 233-246:
+task 16 'run-graphql'. lines 193-219:
 Response: {
   "data": {
-    "object": null
-  }
-}
-
-task 23 'run-graphql'. lines 248-262:
-Response: {
-  "data": {
-    "object": {
+    "latest_deleted": {
+      "status": "WRAPPED_OR_DELETED",
+      "version": 7,
+      "asMoveObject": null
+    },
+    "version_specified": {
       "status": "WRAPPED_OR_DELETED",
       "version": 7,
       "asMoveObject": null
@@ -229,10 +171,16 @@ Response: {
   }
 }
 
-task 24 'run-graphql'. lines 264-278:
+task 17 'force-object-snapshot-catchup'. lines 221-221:
+Objects snapshot updated to [0 to 5)
+
+task 18 'create-checkpoint'. lines 223-223:
+Checkpoint created: 6
+
+task 19 'run-graphql'. lines 225-263:
 Response: {
   "data": {
-    "object": {
+    "object_within_available_range": {
       "status": "HISTORICAL",
       "version": 6,
       "asMoveObject": {
@@ -243,17 +191,8 @@ Response: {
           }
         }
       }
-    }
-  }
-}
-
-task 25 'run-graphql'. lines 280-294:
-Response: {
-  "data": {
-    "object": {
-      "status": "WRAPPED_OR_DELETED",
-      "version": 5,
-      "asMoveObject": null
-    }
+    },
+    "object_outside_available_range": null,
+    "object_not_in_snapshot": null
   }
 }

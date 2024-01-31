@@ -1,12 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Simple test suite to validate expected results from reading objects_history. objects_snapshot
-// remains empty for this test, so we expect the start_cp to coalesce to 0. Every time we modify an
-// object, we create a checkpoint to extend end_cp. Create an object, update, wrap, unwrap, and
-// finally delete it. When the object is WrappedOrDeleted, it should not be findable on the live
-// objects table, but can still be found on the objects_history table. Verify that the object's
-// previous versions are retrievable.
+// Create an object and modify it at checkpoints as follows:
+// cp | version
+// ------------
+// 1  | 3
+// 2  | 4
+// 3  | 5
+// 4  | 6
+// 5  | 7
+// Verify that the object is returned in its WrappedOrDeleted or Historical state. Increment
+// objects_snapshot to [0, 5). This coalesces objects in objects_snapshot to its verson at
+// checkpoint 4. The object would only be visible at version 6 from objects_snapshot, and at version
+// 7 from objects_history.
 
 //# init --addresses Test=0x0 --accounts A --simulator
 
@@ -77,8 +83,9 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
+# Version should increment.
 {
-  object(
+  latest_version: object(
     address: "@{obj_2_0}"
   ) {
     status
@@ -89,11 +96,7 @@ module Test::M1 {
       }
     }
   }
-}
-
-//# run-graphql
-{
-  object(
+  previous_version: object(
     address: "@{obj_2_0}"
     version: 3
   ) {
@@ -112,8 +115,9 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
+# Wrapped object should still be available.
 {
-  object(
+  latest_wrapped: object(
     address: "@{obj_2_0}"
   ) {
     status
@@ -124,12 +128,7 @@ module Test::M1 {
       }
     }
   }
-}
-
-
-//# run-graphql
-{
-  object(
+  previous_version: object(
     address: "@{obj_2_0}"
     version: 4
   ) {
@@ -143,29 +142,14 @@ module Test::M1 {
   }
 }
 
-//# run-graphql
-{
-  object(
-    address: "@{obj_2_0}"
-    version: 3
-  ) {
-    status
-    version
-    asMoveObject {
-      contents {
-        json
-      }
-    }
-  }
-}
-
-//# run Test::M1::unwrap --sender A --args object(9,0)
+//# run Test::M1::unwrap --sender A --args object(8,0)
 
 //# create-checkpoint
 
 //# run-graphql
+# Unwrapping an object should allow its contents to be visible again.
 {
-  object(
+  latest_unwrapped: object(
     address: "@{obj_2_0}"
   ) {
     status
@@ -176,11 +160,7 @@ module Test::M1 {
       }
     }
   }
-}
-
-//# run-graphql
-{
-  object(
+  previous_version: object(
     address: "@{obj_2_0}"
     version: 5
   ) {
@@ -192,27 +172,7 @@ module Test::M1 {
       }
     }
   }
-}
-
-//# run-graphql
-{
-  object(
-    address: "@{obj_2_0}"
-    version: 4
-  ) {
-    status
-    version
-    asMoveObject {
-      contents {
-        json
-      }
-    }
-  }
-}
-
-//# run-graphql
-{
-  object(
+  first_version: object(
     address: "@{obj_2_0}"
     version: 3
   ) {
@@ -231,8 +191,9 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
+# Object is now deleted.
 {
-  object(
+  latest_deleted: object(
     address: "@{obj_2_0}"
   ) {
     status
@@ -243,11 +204,7 @@ module Test::M1 {
       }
     }
   }
-}
-
-//# run-graphql
-{
-  object(
+  version_specified: object(
     address: "@{obj_2_0}"
     version: 7
   ) {
@@ -261,9 +218,13 @@ module Test::M1 {
   }
 }
 
+//# force-object-snapshot-catchup --start-cp 0 --end-cp 5
+
+//# create-checkpoint
+
 //# run-graphql
 {
-  object(
+  object_within_available_range: object(
     address: "@{obj_2_0}"
     version: 6
   ) {
@@ -275,13 +236,21 @@ module Test::M1 {
       }
     }
   }
-}
-
-//# run-graphql
-{
-  object(
+  object_outside_available_range: object(
     address: "@{obj_2_0}"
     version: 5
+  ) {
+    status
+    version
+    asMoveObject {
+      contents {
+        json
+      }
+    }
+  }
+  object_not_in_snapshot: object(
+    address: "@{obj_2_0}"
+    version: 3
   ) {
     status
     version
