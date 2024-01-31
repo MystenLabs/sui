@@ -493,6 +493,53 @@ mod tests {
         assert!(res.get("results").unwrap().is_array());
     }
 
+    #[tokio::test]
+    #[serial]
+    async fn test_epoch_data() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        cluster
+            .validator_fullnode_handle
+            .trigger_reconfiguration()
+            .await;
+
+        // Wait for the epoch to be indexed
+        sleep(Duration::from_secs(10)).await;
+
+        // Query the epoch
+        let query = "
+            {
+                epoch(id: 0){
+                    liveObjectSetDigest
+                }
+            }
+        ";
+
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, vec![], vec![])
+            .await
+            .unwrap();
+        tracing::error!("res: {:?}", res);
+
+        let binding = res.response_body().data.clone().into_json().unwrap();
+
+        // Check that liveObjectSetDigest is not null
+        assert!(!binding
+            .get("epoch")
+            .unwrap()
+            .get("liveObjectSetDigest")
+            .unwrap()
+            .is_null());
+    }
+
     use sui_graphql_rpc::server::builder::tests::*;
 
     #[tokio::test]

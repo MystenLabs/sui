@@ -16,8 +16,10 @@ use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
+use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer::models_v2::epoch::QueryableEpochInfo;
 use sui_indexer::schema_v2::epochs;
+use sui_types::messages_checkpoint::CheckpointCommitment as EpochCommitment;
 
 pub(crate) struct Epoch {
     pub stored: QueryableEpochInfo,
@@ -53,7 +55,15 @@ impl Epoch {
         let validator_set = ValidatorSet {
             total_stake: Some(BigInt::from(self.stored.total_stake)),
             active_validators: Some(active_validators),
-            ..Default::default()
+            pending_removals: Some(system_state.pending_removals),
+            pending_active_validators_id: Some(system_state.pending_active_validators_id.into()),
+            pending_active_validators_size: Some(system_state.pending_active_validators_size),
+            staking_pool_mappings_id: Some(system_state.staking_pool_mappings_id.into()),
+            staking_pool_mappings_size: Some(system_state.staking_pool_mappings_size),
+            inactive_pools_id: Some(system_state.inactive_pools_id.into()),
+            inactive_pools_size: Some(system_state.inactive_pools_size),
+            validator_candidates_id: Some(system_state.validator_candidates_id.into()),
+            validator_candidates_size: Some(system_state.validator_candidates_size),
         };
         Ok(Some(validator_set))
     }
@@ -85,6 +95,12 @@ impl Epoch {
         Ok(Some(BigInt::from(
             last - self.stored.first_checkpoint_id as u64,
         )))
+    }
+
+    /// The total number of transaction blocks in this epoch.
+    async fn total_transactions(&self) -> Result<Option<u64>> {
+        // TODO: this currently returns None for the current epoch. Fix this.
+        Ok(self.stored.epoch_total_transactions.map(|v| v as u64))
     }
 
     /// The total amount of gas fees (in MIST) that were paid in this epoch.
@@ -149,6 +165,24 @@ impl Epoch {
             .fetch_sui_system_state(Some(self.stored.epoch as u64))
             .await?;
         Ok(SystemStateSummary { native: state })
+    }
+
+    /// A commitment by the committee at the end of epoch on the contents of the live object set at
+    /// that time. This can be used to verify state snapshots.
+    async fn live_object_set_digest(&self) -> Result<Option<String>> {
+        let Some(commitments) = self.stored.epoch_commitments.as_ref() else {
+            return Ok(None);
+        };
+        let commitments: Vec<EpochCommitment> = bcs::from_bytes(commitments).map_err(|e| {
+            Error::Internal(format!("Error deserializing commitments: {e}")).extend()
+        })?;
+
+        let digest = commitments.into_iter().next().map(|commitment| {
+            let EpochCommitment::ECMHLiveObjectSetDigest(digest) = commitment;
+            Base58::encode(digest.digest.into_inner())
+        });
+
+        Ok(digest)
     }
 
     /// The epoch's corresponding checkpoints.

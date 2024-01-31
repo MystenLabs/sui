@@ -40,6 +40,8 @@
           name
         }
       }
+      validatorCandidatesSize
+      inactivePoolsId
     }
     totalGasFees
     totalStakeRewards
@@ -48,5 +50,13 @@
     fundInflow
     fundOutflow
     netInflow
+    transactionBlocks {
+      nodes {
+        kind {
+          __typename
+        }
+        digest
+      }
+    }
   }
 }

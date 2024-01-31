@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::types::cursor::{JsonCursor, Page};
+use crate::types::sui_address::SuiAddress;
 use async_graphql::connection::{Connection, CursorType, Edge};
 
 use super::big_int::BigInt;
@@ -23,15 +24,31 @@ pub(crate) struct ValidatorSet {
     /// to `activeValidators`.
     pub pending_removals: Option<Vec<u64>>,
 
-    // TODO: finish implementing the commented out fields below.
+    // TODO: instead of returning the id and size of the table, potentially return the table itself, paginated.
+    /// Object ID of the wrapped object `TableVec` storing the pending active validators.
+    pub pending_active_validators_id: Option<SuiAddress>,
 
-    // pending_active_validators: Option<MoveObject>,
+    /// Size of the pending active validators table.
     pub pending_active_validators_size: Option<u64>,
-    // stake_pool_mappings: Option<MoveObject>,
-    pub stake_pool_mappings_size: Option<u64>,
-    // inactive_pools: Option<MoveObject>,
+
+    /// Object ID of the `Table` storing the mapping from staking pool ids to the addresses
+    /// of the corresponding validators. This is needed because a validator's address
+    /// can potentially change but the object ID of its pool will not.
+    pub staking_pool_mappings_id: Option<SuiAddress>,
+
+    /// Size of the stake pool mappings `Table`.
+    pub staking_pool_mappings_size: Option<u64>,
+
+    /// Object ID of the `Table` storing the inactive staking pools.
+    pub inactive_pools_id: Option<SuiAddress>,
+
+    /// Size of the inactive pools `Table`.
     pub inactive_pools_size: Option<u64>,
-    // validator_candidates: Option<MoveObject>,
+
+    /// Object ID of the `Table` storing the validator candidates.
+    pub validator_candidates_id: Option<SuiAddress>,
+
+    /// Size of the validator candidates `Table`.
     pub validator_candidates_size: Option<u64>,
 }
 

@@ -21,7 +21,7 @@ use async_graphql::{
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer::{models_v2::checkpoints::StoredCheckpoint, schema_v2::checkpoints};
-use sui_types::messages_checkpoint::{CheckpointCommitment, CheckpointDigest};
+use sui_types::messages_checkpoint::CheckpointDigest;
 
 /// Filter either by the digest, or the sequence number, or neither, to get the latest checkpoint.
 #[derive(Default, InputObject)]
@@ -77,26 +77,9 @@ impl Checkpoint {
             .map(Base58::encode)
     }
 
-    /// A commitment by the committee at the end of epoch on the contents of the live object set at
-    /// that time. This can be used to verify state snapshots.
-    async fn live_object_set_digest(&self) -> Result<Option<String>> {
-        use CheckpointCommitment as C;
-        Ok(
-            bcs::from_bytes::<Vec<C>>(&self.stored.checkpoint_commitments)
-                .map_err(|e| Error::Internal(format!("Error deserializing commitments: {e}")))
-                .extend()?
-                .into_iter()
-                .map(|commitment| {
-                    let C::ECMHLiveObjectSetDigest(digest) = commitment;
-                    Base58::encode(digest.digest.into_inner())
-                })
-                .next(),
-        )
-    }
-
     /// The total number of transaction blocks in the network by the end of this checkpoint.
     async fn network_total_transactions(&self) -> Option<u64> {
-        Some(self.stored.network_total_transactions as u64)
+        Some(self.network_total_transactions_impl())
     }
 
     /// The computation cost, storage cost, storage rebate, and non-refundable storage fee
@@ -158,6 +141,10 @@ impl CheckpointId {
 impl Checkpoint {
     pub(crate) fn sequence_number_impl(&self) -> u64 {
         self.stored.sequence_number as u64
+    }
+
+    pub(crate) fn network_total_transactions_impl(&self) -> u64 {
+        self.stored.network_total_transactions as u64
     }
 
     pub(crate) fn digest_impl(&self) -> Result<CheckpointDigest, Error> {
