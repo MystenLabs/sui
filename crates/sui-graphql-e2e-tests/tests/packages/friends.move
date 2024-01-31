@@ -18,7 +18,7 @@ module P0::n {
 
 //# create-checkpoint
 
-//# run-graphql --cursors 0 2
+//# run-graphql --cursors {"i":0,"c":1} {"i":2,"c":1}
 
 fragment ModuleFriends on Object {
     asMovePackage {
@@ -110,7 +110,7 @@ fragment ModuleFriends on Object {
     }
 }
 
-//# run-graphql --cursors 0 2
+//# run-graphql --cursors {"i":0,"c":1} {"i":2,"c":1}
 
 fragment ModuleFriends on Object {
     asMovePackage {

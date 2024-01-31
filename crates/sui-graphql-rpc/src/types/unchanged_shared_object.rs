@@ -42,10 +42,11 @@ pub(crate) struct SharedObjectDelete {
 /// Error for converting from an `InputSharedObject`.
 pub(crate) struct SharedObjectChanged;
 
-impl TryFrom<NativeInputSharedObject> for UnchangedSharedObject {
-    type Error = SharedObjectChanged;
-
-    fn try_from(input: NativeInputSharedObject) -> Result<Self, Self::Error> {
+impl UnchangedSharedObject {
+    pub fn try_from(
+        input: NativeInputSharedObject,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Self, SharedObjectChanged> {
         use NativeInputSharedObject as I;
         use UnchangedSharedObject as U;
 
@@ -53,7 +54,10 @@ impl TryFrom<NativeInputSharedObject> for UnchangedSharedObject {
             I::Mutate(_) => Err(SharedObjectChanged),
 
             I::ReadOnly(oref) => Ok(U::Read(SharedObjectRead {
-                read: ObjectRead(oref),
+                read: ObjectRead {
+                    native: oref,
+                    checkpoint_viewed_at,
+                },
             })),
 
             I::ReadDeleted(id, v) => Ok(U::Delete(SharedObjectDelete {

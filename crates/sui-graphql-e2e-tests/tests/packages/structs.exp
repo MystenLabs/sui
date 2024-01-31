@@ -524,31 +524,31 @@ Response: {
           "after": {
             "edges": [
               {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "CoinMetadata"
                 }
               },
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
               },
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
               },
               {
-                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "RegulatedCoinMetadata"
                 }
               },
               {
-                "cursor": "IlRyZWFzdXJ5Q2FwIg",
+                "cursor": "eyJuIjoiVHJlYXN1cnlDYXAiLCJjIjoyfQ",
                 "node": {
                   "name": "TreasuryCap"
                 }
@@ -562,31 +562,31 @@ Response: {
           "before": {
             "edges": [
               {
-                "cursor": "IkNvaW4i",
+                "cursor": "eyJuIjoiQ29pbiIsImMiOjJ9",
                 "node": {
                   "name": "Coin"
                 }
               },
               {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "CoinMetadata"
                 }
               },
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
               },
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
               },
               {
-                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "RegulatedCoinMetadata"
                 }
@@ -612,13 +612,13 @@ Response: {
           "prefix": {
             "edges": [
               {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "CoinMetadata"
                 }
               },
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
@@ -632,19 +632,19 @@ Response: {
           "prefixAll": {
             "edges": [
               {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "CoinMetadata"
                 }
               },
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
               },
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
@@ -658,31 +658,31 @@ Response: {
           "prefixExcess": {
             "edges": [
               {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "CoinMetadata"
                 }
               },
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
               },
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
               },
               {
-                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "RegulatedCoinMetadata"
                 }
               },
               {
-                "cursor": "IlRyZWFzdXJ5Q2FwIg",
+                "cursor": "eyJuIjoiVHJlYXN1cnlDYXAiLCJjIjoyfQ",
                 "node": {
                   "name": "TreasuryCap"
                 }
@@ -696,13 +696,13 @@ Response: {
           "suffix": {
             "edges": [
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
               },
               {
-                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "RegulatedCoinMetadata"
                 }
@@ -716,19 +716,19 @@ Response: {
           "suffixAll": {
             "edges": [
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
               },
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
               },
               {
-                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "RegulatedCoinMetadata"
                 }
@@ -742,31 +742,31 @@ Response: {
           "suffixExcess": {
             "edges": [
               {
-                "cursor": "IkNvaW4i",
+                "cursor": "eyJuIjoiQ29pbiIsImMiOjJ9",
                 "node": {
                   "name": "Coin"
                 }
               },
               {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "CoinMetadata"
                 }
               },
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
               },
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
               },
               {
-                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "RegulatedCoinMetadata"
                 }

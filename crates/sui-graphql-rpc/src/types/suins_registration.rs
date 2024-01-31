@@ -13,7 +13,7 @@ use super::{
     dynamic_field::{DynamicField, DynamicFieldName},
     move_object::{MoveObject, MoveObjectImpl},
     move_value::MoveValue,
-    object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus, ObjectVersionKey},
+    object::{self, Object, ObjectFilter, ObjectImpl, ObjectLookupKey, ObjectOwner, ObjectStatus},
     owner::OwnerImpl,
     stake::StakedSui,
     string_input::impl_string_input,
@@ -61,7 +61,7 @@ pub(crate) enum SuinsRegistrationDowncastError {
 #[Object]
 impl SuinsRegistration {
     pub(crate) async fn address(&self) -> SuiAddress {
-        OwnerImpl(self.super_.super_.address).address().await
+        OwnerImpl::from(&self.super_.super_).address().await
     }
 
     /// Objects owned by this object, optionally `filter`-ed.
@@ -74,7 +74,7 @@ impl SuinsRegistration {
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, MoveObject>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -86,7 +86,7 @@ impl SuinsRegistration {
         ctx: &Context<'_>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .balance(ctx, type_)
             .await
     }
@@ -100,7 +100,7 @@ impl SuinsRegistration {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .balances(ctx, first, after, last, before)
             .await
     }
@@ -117,7 +117,7 @@ impl SuinsRegistration {
         before: Option<object::Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .coins(ctx, first, after, last, before, type_)
             .await
     }
@@ -131,14 +131,14 @@ impl SuinsRegistration {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .staked_suis(ctx, first, after, last, before)
             .await
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .default_suins_name(ctx)
             .await
     }
@@ -153,7 +153,7 @@ impl SuinsRegistration {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, SuinsRegistration>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .suins_registrations(ctx, first, after, last, before)
             .await
     }
@@ -251,8 +251,8 @@ impl SuinsRegistration {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
-            .dynamic_field(ctx, name)
+        OwnerImpl::from(&self.super_.super_)
+            .dynamic_field(ctx, name, Some(self.super_.super_.version_impl()))
             .await
     }
 
@@ -268,8 +268,8 @@ impl SuinsRegistration {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
-            .dynamic_object_field(ctx, name)
+        OwnerImpl::from(&self.super_.super_)
+            .dynamic_object_field(ctx, name, Some(self.super_.super_.version_impl()))
             .await
     }
 
@@ -285,8 +285,15 @@ impl SuinsRegistration {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
-            .dynamic_fields(ctx, first, after, last, before)
+        OwnerImpl::from(&self.super_.super_)
+            .dynamic_fields(
+                ctx,
+                first,
+                after,
+                last,
+                before,
+                Some(self.super_.super_.version_impl()),
+            )
             .await
     }
 
@@ -306,8 +313,7 @@ impl SuinsRegistration {
     ) -> Result<Option<NameRecord>, Error> {
         let record_id = config.record_field_id(&domain.0);
 
-        let Some(object) =
-            MoveObject::query(db, record_id.into(), ObjectVersionKey::Latest).await?
+        let Some(object) = MoveObject::query(db, record_id.into(), ObjectLookupKey::Latest).await?
         else {
             return Ok(None);
         };
@@ -330,7 +336,7 @@ impl SuinsRegistration {
         let reverse_record_id = config.reverse_record_field_id(address.as_slice());
 
         let Some(object) =
-            MoveObject::query(db, reverse_record_id.into(), ObjectVersionKey::Latest).await?
+            MoveObject::query(db, reverse_record_id.into(), ObjectLookupKey::Latest).await?
         else {
             return Ok(None);
         };
@@ -346,11 +352,17 @@ impl SuinsRegistration {
     /// Query the database for a `page` of SuiNS registrations. The page uses the same cursor type
     /// as is used for `Object`, and is further filtered to a particular `owner`. `config` specifies
     /// where to find the domain name registry and its type.
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
+    /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
+    /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
+    /// state, it will be as if it was read at the same checkpoint.
     pub(crate) async fn paginate(
         db: &Db,
         config: &NameServiceConfig,
         page: Page<object::Cursor>,
         owner: SuiAddress,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, SuinsRegistration>, Error> {
         let type_ = SuinsRegistration::type_(config.package_address.into());
 
@@ -360,7 +372,7 @@ impl SuinsRegistration {
             ..Default::default()
         };
 
-        Object::paginate_subtype(db, page, filter, |object| {
+        Object::paginate_subtype(db, page, filter, checkpoint_viewed_at, |object| {
             let address = object.address;
             let move_object = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(

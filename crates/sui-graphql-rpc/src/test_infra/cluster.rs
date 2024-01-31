@@ -14,7 +14,9 @@ use sui_indexer::errors::IndexerError;
 pub use sui_indexer::processors_v2::objects_snapshot_processor::SnapshotLagConfig;
 use sui_indexer::store::indexer_store_v2::IndexerStoreV2;
 use sui_indexer::store::PgIndexerStoreV2;
+use sui_indexer::test_utils::force_delete_database;
 use sui_indexer::test_utils::start_test_indexer_v2;
+use sui_indexer::test_utils::start_test_indexer_v2_impl;
 use sui_indexer::test_utils::ReaderWriterConfig;
 use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
@@ -37,6 +39,7 @@ pub struct ExecutorCluster {
     pub graphql_server_join_handle: JoinHandle<()>,
     pub graphql_client: SimpleClient,
     pub snapshot_config: SnapshotLagConfig,
+    pub graphql_connection_config: ConnectionConfig,
 }
 
 pub struct Cluster {
@@ -106,11 +109,12 @@ pub async fn serve_executor(
         sui_rest_api::start_service(executor_server_url, executor, Some("/rest".to_owned())).await;
     });
 
-    let (pg_store, pg_handle) = start_test_indexer_v2(
+    let (pg_store, pg_handle) = start_test_indexer_v2_impl(
         Some(db_url),
         format!("http://{}", executor_server_url),
         true,
         ReaderWriterConfig::writer_mode(snapshot_config.clone()),
+        Some(graphql_connection_config.db_name()),
     )
     .await;
 
@@ -133,6 +137,7 @@ pub async fn serve_executor(
         graphql_server_join_handle: graphql_server_handle,
         graphql_client: client,
         snapshot_config: snapshot_config.unwrap_or_default(),
+        graphql_connection_config,
     }
 }
 
@@ -188,11 +193,12 @@ impl ExecutorCluster {
             .indexer_store
             .get_latest_tx_checkpoint_sequence_number()
             .await
-            .unwrap()
             .unwrap();
 
-        let checkpoint_diff = std::cmp::max(1, checkpoint.saturating_sub(current_checkpoint));
-        let timeout = base_timeout.mul_f64(checkpoint_diff as f64);
+        let diff = checkpoint
+            .saturating_sub(current_checkpoint.unwrap_or(0))
+            .max(1);
+        let timeout = base_timeout.mul_f64(diff as f64);
 
         tokio::time::timeout(timeout, async {
             while self
@@ -200,10 +206,9 @@ impl ExecutorCluster {
                 .get_latest_tx_checkpoint_sequence_number()
                 .await
                 .unwrap()
-                .unwrap()
-                < checkpoint
+                < Some(checkpoint)
             {
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
         })
         .await
@@ -225,10 +230,7 @@ impl ExecutorCluster {
 
         tokio::time::timeout(base_timeout, async {
             while latest_cp > latest_snapshot_cp + self.snapshot_config.snapshot_max_lag as u64 {
-                tokio::time::sleep(std::time::Duration::from_secs(
-                    self.snapshot_config.sleep_duration,
-                ))
-                .await;
+                tokio::time::sleep(Duration::from_secs(1)).await;
                 latest_snapshot_cp = self
                     .indexer_store
                     .get_latest_object_snapshot_checkpoint_sequence_number()
@@ -238,6 +240,44 @@ impl ExecutorCluster {
             }
         })
         .await
-        .expect("Timeout waiting for indexer to update objects snapshot");
+        .unwrap_or_else(|_| panic!("Timeout waiting for indexer to update objects snapshot - latest_cp: {}, latest_snapshot_cp: {}",
+        latest_cp, latest_snapshot_cp));
+    }
+
+    pub async fn cleanup_resources(self) {
+        // Delete the database
+        let db_url = self.graphql_connection_config.db_url.clone();
+        force_delete_database(db_url).await;
+    }
+
+    pub async fn force_objects_snapshot_catchup(&self, start_cp: u64, end_cp: u64) {
+        self.indexer_store
+            .persist_object_snapshot(start_cp, end_cp)
+            .await
+            .unwrap();
+
+        let mut latest_snapshot_cp = self
+            .indexer_store
+            .get_latest_object_snapshot_checkpoint_sequence_number()
+            .await
+            .unwrap()
+            .unwrap_or_default();
+
+        tokio::time::timeout(Duration::from_secs(60), async {
+            while latest_snapshot_cp < end_cp - 1 {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                latest_snapshot_cp = self
+                    .indexer_store
+                    .get_latest_object_snapshot_checkpoint_sequence_number()
+                    .await
+                    .unwrap()
+                    .unwrap_or_default();
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("Timeout waiting for indexer to update objects snapshot - latest_snapshot_cp: {}, end_cp: {}",
+        latest_snapshot_cp, end_cp));
+
+        tokio::time::sleep(Duration::from_secs(5)).await;
     }
 }

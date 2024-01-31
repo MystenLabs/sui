@@ -9,7 +9,7 @@ use super::cursor::{JsonCursor, Page};
 use super::move_module::MoveModule;
 use super::move_object::MoveObject;
 use super::object::{
-    self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus, ObjectVersionKey,
+    self, Object, ObjectFilter, ObjectImpl, ObjectLookupKey, ObjectOwner, ObjectStatus,
 };
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
@@ -17,8 +17,10 @@ use super::sui_address::SuiAddress;
 use super::suins_registration::SuinsRegistration;
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
+use crate::consistency::ConsistentNamedCursor;
 use crate::data::Db;
 use crate::error::Error;
+use crate::types::checkpoint::Checkpoint;
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use sui_package_resolver::{error::Error as PackageCacheError, Package as ParsedMovePackage};
@@ -32,6 +34,9 @@ pub(crate) struct MovePackage {
     /// Move-object-specific data, extracted from the native representation at
     /// `graphql_object.native_object.data`.
     pub native: NativeMovePackage,
+
+    /// The checkpoint sequence number this package was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Information used by a package to link to a specific version of its dependency.
@@ -63,14 +68,14 @@ struct TypeOrigin {
 
 pub(crate) struct MovePackageDowncastError;
 
-pub(crate) type CModule = JsonCursor<String>;
+pub(crate) type CModule = JsonCursor<ConsistentNamedCursor>;
 
 /// A MovePackage is a kind of Move object that represents code that has been published on chain.
 /// It exposes information about its modules, type definitions, functions, and dependencies.
 #[Object]
 impl MovePackage {
     pub(crate) async fn address(&self) -> SuiAddress {
-        OwnerImpl(self.super_.address).address().await
+        OwnerImpl::from(&self.super_).address().await
     }
 
     /// Objects owned by this package, optionally `filter`-ed.
@@ -86,7 +91,7 @@ impl MovePackage {
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, MoveObject>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -101,7 +106,7 @@ impl MovePackage {
         ctx: &Context<'_>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        OwnerImpl(self.super_.address).balance(ctx, type_).await
+        OwnerImpl::from(&self.super_).balance(ctx, type_).await
     }
 
     /// The balances of all coin types owned by this package.
@@ -116,7 +121,7 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .balances(ctx, first, after, last, before)
             .await
     }
@@ -136,7 +141,7 @@ impl MovePackage {
         before: Option<object::Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .coins(ctx, first, after, last, before, type_)
             .await
     }
@@ -153,14 +158,14 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .staked_suis(ctx, first, after, last, before)
             .await
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl(self.super_.address).default_suins_name(ctx).await
+        OwnerImpl::from(&self.super_).default_suins_name(ctx).await
     }
 
     /// The SuinsRegistration NFTs owned by this package. These grant the owner the capability to
@@ -176,7 +181,7 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, SuinsRegistration>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .suins_registrations(ctx, first, after, last, before)
             .await
     }
@@ -266,11 +271,13 @@ impl MovePackage {
         use std::ops::Bound as B;
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(self.checkpoint_viewed_at);
 
         let parsed = self.parsed_package()?;
         let module_range = parsed.modules().range::<String, _>((
-            page.after().map_or(B::Unbounded, |a| B::Excluded(&**a)),
-            page.before().map_or(B::Unbounded, |b| B::Excluded(&**b)),
+            page.after().map_or(B::Unbounded, |a| B::Excluded(&a.name)),
+            page.before().map_or(B::Unbounded, |b| B::Excluded(&b.name)),
         ));
 
         let mut connection = Connection::new(false, false);
@@ -306,13 +313,18 @@ impl MovePackage {
                 .extend());
             };
 
-            let cursor = JsonCursor::new(name.clone()).encode_cursor();
+            let cursor = JsonCursor::new(ConsistentNamedCursor {
+                name: name.clone(),
+                c: checkpoint_viewed_at,
+            })
+            .encode_cursor();
             connection.edges.push(Edge::new(
                 cursor,
                 MoveModule {
                     storage_id: self.super_.address,
                     native: native.clone(),
                     parsed: parsed.clone(),
+                    checkpoint_viewed_at,
                 },
             ))
         }
@@ -393,6 +405,7 @@ impl MovePackage {
                 storage_id: self.super_.address,
                 native: native.clone(),
                 parsed: parsed.clone(),
+                checkpoint_viewed_at: self.checkpoint_viewed_at,
             })),
 
             (None, _) | (_, Err(E::ModuleNotFound(_, _))) => Ok(None),
@@ -405,22 +418,27 @@ impl MovePackage {
     pub(crate) async fn query(
         db: &Db,
         address: SuiAddress,
-        key: ObjectVersionKey,
+        key: ObjectLookupKey,
     ) -> Result<Option<Self>, Error> {
         let Some(object) = Object::query(db, address, key).await? else {
             return Ok(None);
         };
 
-        Ok(Some(MovePackage::try_from(&object).map_err(|_| {
-            Error::Internal(format!("{address} is not a package"))
-        })?))
+        let checkpoint_viewed_at = match object.checkpoint_viewed_at {
+            Some(value) => Ok(value),
+            None => Checkpoint::query_latest_checkpoint_sequence_number(db).await,
+        }?;
+
+        Ok(Some(
+            MovePackage::try_from(&object, checkpoint_viewed_at)
+                .map_err(|_| Error::Internal(format!("{address} is not a package")))?,
+        ))
     }
-}
 
-impl TryFrom<&Object> for MovePackage {
-    type Error = MovePackageDowncastError;
-
-    fn try_from(object: &Object) -> Result<Self, Self::Error> {
+    pub(crate) fn try_from(
+        object: &Object,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Self, MovePackageDowncastError> {
         let Some(native) = object.native_impl() else {
             return Err(MovePackageDowncastError);
         };
@@ -429,6 +447,7 @@ impl TryFrom<&Object> for MovePackage {
             Ok(Self {
                 super_: object.clone(),
                 native: move_package.clone(),
+                checkpoint_viewed_at,
             })
         } else {
             Err(MovePackageDowncastError)

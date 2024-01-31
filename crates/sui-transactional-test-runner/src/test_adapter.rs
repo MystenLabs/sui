@@ -38,6 +38,9 @@ use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::{self, Write};
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -49,7 +52,6 @@ use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_graphql_rpc::config::ConnectionConfig;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
-use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
 use sui_graphql_rpc::test_infra::cluster::{serve_executor, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
@@ -179,7 +181,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
     fn default_syntax(&self) -> SyntaxChoice {
         self.default_syntax
     }
-
+    async fn cleanup_resources(&mut self) -> anyhow::Result<()> {
+        if let Some(cluster) = self.cluster.take() {
+            cluster.cleanup_resources().await;
+        }
+        Ok(())
+    }
     async fn init(
         default_syntax: SyntaxChoice,
         pre_compiled_deps: Option<&'a FullyCompiledProgram>,
@@ -189,6 +196,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 Self::ExtraInitArgs,
             )>,
         >,
+        path: &Path,
     ) -> (Self, Option<String>) {
         let rng = StdRng::from_seed(RNG_SEED);
         assert!(
@@ -297,6 +305,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 reference_gas_price,
                 object_snapshot_min_checkpoint_lag,
                 object_snapshot_max_checkpoint_lag,
+                path.to_path_buf(),
             )
             .await
         } else {
@@ -539,6 +548,30 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }};
         }
         match command {
+            SuiSubcommand::ForceObjectSnapshotCatchup(ForceObjectSnapshotCatchup {
+                start_cp,
+                end_cp,
+            }) => {
+                let cluster = self.cluster.as_ref().unwrap();
+                let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
+
+                if end_cp > highest_checkpoint {
+                    bail!(
+                        "end_cp {} is greater than highest checkpoint {}",
+                        end_cp,
+                        highest_checkpoint,
+                    );
+                }
+
+                cluster
+                    .force_objects_snapshot_catchup(start_cp, end_cp)
+                    .await;
+
+                Ok(Some(format!(
+                    "Objects snapshot updated to [{} to {})",
+                    start_cp, end_cp
+                )))
+            }
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
                 show_usage,
                 show_headers,
@@ -554,10 +587,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .await;
 
                 cluster
-                    .wait_for_objects_snapshot_catchup(Duration::from_secs(30))
+                    .wait_for_objects_snapshot_catchup(Duration::from_secs(60))
                     .await;
 
-                let interpolated = self.interpolate_query(&contents, &cursors)?;
+                let interpolated =
+                    self.interpolate_query(&contents, &cursors, highest_checkpoint)?;
                 let resp = cluster
                     .graphql_client
                     .execute_to_graphql(interpolated.trim().to_owned(), show_usage, vec![], vec![])
@@ -1055,35 +1089,21 @@ impl<'a> SuiTestAdapter<'a> {
         self.executor
     }
 
-    fn named_variables(&self, cursors: &[String]) -> BTreeMap<String, String> {
+    fn named_variables(
+        &self,
+        cursors: &[String],
+        highest_checkpoint: u64,
+    ) -> BTreeMap<String, String> {
         let mut variables = BTreeMap::new();
+        let mut objects_mapping: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+
         let named_addrs = self
             .compiled_state
             .named_address_mapping
             .iter()
             .map(|(name, addr)| (name.clone(), format!("{:#02x}", addr)));
 
-        let objects = self
-            .object_enumeration
-            .iter()
-            .flat_map(|(oid, fid)| match fid {
-                FakeID::Known(_) => vec![],
-                FakeID::Enumerated(x, y) => vec![
-                    (format!("obj_{x}_{y}"), oid.to_string()),
-                    // Add a binding to treat this object as a cursor
-                    (
-                        format!("obj_{x}_{y}_cursor"),
-                        Base64::encode(bcs::to_bytes(&oid.to_vec()).unwrap_or_default()),
-                    ),
-                ],
-            });
-
-        let cursors = cursors
-            .iter()
-            .enumerate()
-            .map(|(idx, c)| (format!("cursor_{idx}"), Base64::encode(c)));
-
-        for (name, addr) in named_addrs.chain(objects).chain(cursors) {
+        for (name, addr) in named_addrs {
             let addr = addr.to_string();
 
             // Required variant
@@ -1092,11 +1112,54 @@ impl<'a> SuiTestAdapter<'a> {
             let name = name.to_string() + "_opt";
             variables.insert(name.clone(), addr.clone());
         }
+
+        for (oid, fid) in &self.object_enumeration {
+            if let FakeID::Enumerated(x, y) = fid {
+                objects_mapping.insert(format!("obj_{x}_{y}"), oid.to_vec());
+                variables.insert(format!("obj_{x}_{y}"), oid.to_string());
+                variables.insert(format!("obj_{x}_{y}_opt"), oid.to_string());
+            }
+        }
+
+        for (idx, s) in cursors.iter().enumerate() {
+            // an object cursor may be either @{obj_x_y} or @{obj_x_y,n}
+            // if the former, then use highest_checkpoint
+            if s.starts_with("@{obj_") && s.ends_with('}') {
+                let end_of_key = s.find(',').unwrap_or(s.len() - 1);
+                let obj_lookup = s[2..end_of_key].to_string();
+
+                let obj_id = objects_mapping.get(&obj_lookup).unwrap_or_else(|| {
+                    panic!(
+                        "Unknown object lookup: {}\nAllowed variable mappings are {:#?}",
+                        obj_lookup, variables
+                    )
+                });
+
+                let checkpoint = if end_of_key == s.len() - 1 {
+                    highest_checkpoint
+                } else {
+                    s[end_of_key + 1..s.len() - 1].parse::<u64>().unwrap()
+                };
+
+                let bcsd = bcs::to_bytes(&(obj_id.clone(), checkpoint)).unwrap_or_default();
+                let base64d = Base64::encode(bcsd);
+
+                variables.insert(format!("cursor_{idx}"), base64d);
+            } else {
+                variables.insert(format!("cursor_{idx}"), Base64::encode(s));
+            }
+        }
+
         variables
     }
 
-    fn interpolate_query(&self, contents: &str, cursors: &[String]) -> anyhow::Result<String> {
-        let variables = self.named_variables(cursors);
+    fn interpolate_query(
+        &self,
+        contents: &str,
+        cursors: &[String],
+        highest_checkpoint: u64,
+    ) -> anyhow::Result<String> {
+        let variables = self.named_variables(cursors, highest_checkpoint);
         let mut interpolated_query = contents.to_string();
 
         let re = regex::Regex::new(r"@\{([^\}]+)\}").unwrap();
@@ -1854,6 +1917,7 @@ async fn init_sim_executor(
     reference_gas_price: Option<u64>,
     object_snapshot_min_checkpoint_lag: Option<usize>,
     object_snapshot_max_checkpoint_lag: Option<usize>,
+    test_file_path: PathBuf,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -1919,9 +1983,35 @@ async fn init_sim_executor(
         None,
     );
 
+    // Hash the file path to create custom unique DB name
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    test_file_path.hash(&mut hasher);
+    let hash = hasher.finish();
+    let db_name = format!("sui_graphql_test_{}", hash);
+
+    // Take the last 4 digits of the has and use it as the port number
+    let base_port = hash
+        .to_string()
+        .chars()
+        .rev()
+        .take(4)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect::<String>()
+        .parse::<u16>()
+        .unwrap();
+
+    let graphql_port = 20000 + base_port;
+    let graphql_prom_port = graphql_port + 1;
+    let internal_data_port = graphql_prom_port + 1;
     let cluster = serve_executor(
-        ConnectionConfig::ci_integration_test_cfg(),
-        DEFAULT_INTERNAL_DATA_SOURCE_PORT,
+        ConnectionConfig::ci_integration_test_cfg_with_db_name(
+            db_name,
+            graphql_port,
+            graphql_prom_port,
+        ),
+        internal_data_port,
         Arc::new(read_replica),
         Some(SnapshotLagConfig::new(
             object_snapshot_min_checkpoint_lag,

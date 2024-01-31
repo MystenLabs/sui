@@ -1,4 +1,4 @@
-processed 17 tasks
+processed 18 tasks
 
 task 1 'create-checkpoint'. lines 31-31:
 Checkpoint created: 12
@@ -13,25 +13,25 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "Nw",
+          "cursor": "eyJjIjoxMiwicyI6N30",
           "node": {
             "sequenceNumber": 7
           }
         },
         {
-          "cursor": "OA",
+          "cursor": "eyJjIjoxMiwicyI6OH0",
           "node": {
             "sequenceNumber": 8
           }
         },
         {
-          "cursor": "OQ",
+          "cursor": "eyJjIjoxMiwicyI6OX0",
           "node": {
             "sequenceNumber": 9
           }
         },
         {
-          "cursor": "MTA",
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
           "node": {
             "sequenceNumber": 10
           }
@@ -51,7 +51,7 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "Nw",
+          "cursor": "eyJjIjoxMiwicyI6N30",
           "node": {
             "sequenceNumber": 7
           }
@@ -71,25 +71,25 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "MA",
+          "cursor": "eyJjIjoxMiwicyI6MH0",
           "node": {
             "sequenceNumber": 0
           }
         },
         {
-          "cursor": "MQ",
+          "cursor": "eyJjIjoxMiwicyI6MX0",
           "node": {
             "sequenceNumber": 1
           }
         },
         {
-          "cursor": "Mg",
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
           "node": {
             "sequenceNumber": 2
           }
         },
         {
-          "cursor": "Mw",
+          "cursor": "eyJjIjoxMiwicyI6M30",
           "node": {
             "sequenceNumber": 3
           }
@@ -109,13 +109,13 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "NA",
+          "cursor": "eyJjIjoxMiwicyI6NH0",
           "node": {
             "sequenceNumber": 4
           }
         },
         {
-          "cursor": "NQ",
+          "cursor": "eyJjIjoxMiwicyI6NX0",
           "node": {
             "sequenceNumber": 5
           }
@@ -135,19 +135,19 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "MA",
+          "cursor": "eyJjIjoxMiwicyI6MH0",
           "node": {
             "sequenceNumber": 0
           }
         },
         {
-          "cursor": "MQ",
+          "cursor": "eyJjIjoxMiwicyI6MX0",
           "node": {
             "sequenceNumber": 1
           }
         },
         {
-          "cursor": "Mg",
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
           "node": {
             "sequenceNumber": 2
           }
@@ -167,25 +167,25 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "OQ",
+          "cursor": "eyJjIjoxMiwicyI6OX0",
           "node": {
             "sequenceNumber": 9
           }
         },
         {
-          "cursor": "MTA",
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
           "node": {
             "sequenceNumber": 10
           }
         },
         {
-          "cursor": "MTE",
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
           "node": {
             "sequenceNumber": 11
           }
         },
         {
-          "cursor": "MTI",
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
           "node": {
             "sequenceNumber": 12
           }
@@ -205,25 +205,25 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "MA",
+          "cursor": "eyJjIjoxMiwicyI6MH0",
           "node": {
             "sequenceNumber": 0
           }
         },
         {
-          "cursor": "MQ",
+          "cursor": "eyJjIjoxMiwicyI6MX0",
           "node": {
             "sequenceNumber": 1
           }
         },
         {
-          "cursor": "Mg",
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
           "node": {
             "sequenceNumber": 2
           }
         },
         {
-          "cursor": "Mw",
+          "cursor": "eyJjIjoxMiwicyI6M30",
           "node": {
             "sequenceNumber": 3
           }
@@ -243,49 +243,49 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "NQ",
+          "cursor": "eyJjIjoxMiwicyI6NX0",
           "node": {
             "sequenceNumber": 5
           }
         },
         {
-          "cursor": "Ng",
+          "cursor": "eyJjIjoxMiwicyI6Nn0",
           "node": {
             "sequenceNumber": 6
           }
         },
         {
-          "cursor": "Nw",
+          "cursor": "eyJjIjoxMiwicyI6N30",
           "node": {
             "sequenceNumber": 7
           }
         },
         {
-          "cursor": "OA",
+          "cursor": "eyJjIjoxMiwicyI6OH0",
           "node": {
             "sequenceNumber": 8
           }
         },
         {
-          "cursor": "OQ",
+          "cursor": "eyJjIjoxMiwicyI6OX0",
           "node": {
             "sequenceNumber": 9
           }
         },
         {
-          "cursor": "MTA",
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
           "node": {
             "sequenceNumber": 10
           }
         },
         {
-          "cursor": "MTE",
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
           "node": {
             "sequenceNumber": 11
           }
         },
         {
-          "cursor": "MTI",
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
           "node": {
             "sequenceNumber": 12
           }
@@ -305,25 +305,25 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "Mg",
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
           "node": {
             "sequenceNumber": 2
           }
         },
         {
-          "cursor": "Mw",
+          "cursor": "eyJjIjoxMiwicyI6M30",
           "node": {
             "sequenceNumber": 3
           }
         },
         {
-          "cursor": "NA",
+          "cursor": "eyJjIjoxMiwicyI6NH0",
           "node": {
             "sequenceNumber": 4
           }
         },
         {
-          "cursor": "NQ",
+          "cursor": "eyJjIjoxMiwicyI6NX0",
           "node": {
             "sequenceNumber": 5
           }
@@ -343,13 +343,13 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "NA",
+          "cursor": "eyJjIjoxMiwicyI6NH0",
           "node": {
             "sequenceNumber": 4
           }
         },
         {
-          "cursor": "NQ",
+          "cursor": "eyJjIjoxMiwicyI6NX0",
           "node": {
             "sequenceNumber": 5
           }
@@ -369,19 +369,19 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "MTA",
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
           "node": {
             "sequenceNumber": 10
           }
         },
         {
-          "cursor": "MTE",
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
           "node": {
             "sequenceNumber": 11
           }
         },
         {
-          "cursor": "MTI",
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
           "node": {
             "sequenceNumber": 12
           }
@@ -401,79 +401,79 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "MA",
+          "cursor": "eyJjIjoxMiwicyI6MH0",
           "node": {
             "sequenceNumber": 0
           }
         },
         {
-          "cursor": "MQ",
+          "cursor": "eyJjIjoxMiwicyI6MX0",
           "node": {
             "sequenceNumber": 1
           }
         },
         {
-          "cursor": "Mg",
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
           "node": {
             "sequenceNumber": 2
           }
         },
         {
-          "cursor": "Mw",
+          "cursor": "eyJjIjoxMiwicyI6M30",
           "node": {
             "sequenceNumber": 3
           }
         },
         {
-          "cursor": "NA",
+          "cursor": "eyJjIjoxMiwicyI6NH0",
           "node": {
             "sequenceNumber": 4
           }
         },
         {
-          "cursor": "NQ",
+          "cursor": "eyJjIjoxMiwicyI6NX0",
           "node": {
             "sequenceNumber": 5
           }
         },
         {
-          "cursor": "Ng",
+          "cursor": "eyJjIjoxMiwicyI6Nn0",
           "node": {
             "sequenceNumber": 6
           }
         },
         {
-          "cursor": "Nw",
+          "cursor": "eyJjIjoxMiwicyI6N30",
           "node": {
             "sequenceNumber": 7
           }
         },
         {
-          "cursor": "OA",
+          "cursor": "eyJjIjoxMiwicyI6OH0",
           "node": {
             "sequenceNumber": 8
           }
         },
         {
-          "cursor": "OQ",
+          "cursor": "eyJjIjoxMiwicyI6OX0",
           "node": {
             "sequenceNumber": 9
           }
         },
         {
-          "cursor": "MTA",
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
           "node": {
             "sequenceNumber": 10
           }
         },
         {
-          "cursor": "MTE",
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
           "node": {
             "sequenceNumber": 11
           }
         },
         {
-          "cursor": "MTI",
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
           "node": {
             "sequenceNumber": 12
           }
@@ -493,25 +493,25 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "MA",
+          "cursor": "eyJjIjoxMiwicyI6MH0",
           "node": {
             "sequenceNumber": 0
           }
         },
         {
-          "cursor": "MQ",
+          "cursor": "eyJjIjoxMiwicyI6MX0",
           "node": {
             "sequenceNumber": 1
           }
         },
         {
-          "cursor": "Mg",
+          "cursor": "eyJjIjoxMiwicyI6Mn0",
           "node": {
             "sequenceNumber": 2
           }
         },
         {
-          "cursor": "Mw",
+          "cursor": "eyJjIjoxMiwicyI6M30",
           "node": {
             "sequenceNumber": 3
           }
@@ -531,25 +531,25 @@ Response: {
       },
       "edges": [
         {
-          "cursor": "OQ",
+          "cursor": "eyJjIjoxMiwicyI6OX0",
           "node": {
             "sequenceNumber": 9
           }
         },
         {
-          "cursor": "MTA",
+          "cursor": "eyJjIjoxMiwicyI6MTB9",
           "node": {
             "sequenceNumber": 10
           }
         },
         {
-          "cursor": "MTE",
+          "cursor": "eyJjIjoxMiwicyI6MTF9",
           "node": {
             "sequenceNumber": 11
           }
         },
         {
-          "cursor": "MTI",
+          "cursor": "eyJjIjoxMiwicyI6MTJ9",
           "node": {
             "sequenceNumber": 12
           }
@@ -568,6 +568,28 @@ Response: {
       "locations": [
         {
           "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "checkpoints"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 17 'run-graphql'. lines 243-256:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "The provided cursors are taken from different checkpoints and cannot be used together in the same query.",
+      "locations": [
+        {
+          "line": 3,
           "column": 3
         }
       ],

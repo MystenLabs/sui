@@ -53,7 +53,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"tx":2,"e":0}
+//# run-graphql --cursors {"tx":2,"e":0,"c":1}
 {
   events(first: 2 after: "@{cursor_0}", filter: {sender: "@{A}"}) {
     pageInfo {
@@ -79,7 +79,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"tx":3,"e":1}
+//# run-graphql --cursors {"tx":3,"e":1,"c":1}
 {
   events(last: 2 before: "@{cursor_0}", filter: {sender: "@{A}"}) {
     pageInfo {
