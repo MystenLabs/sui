@@ -16,7 +16,7 @@ error[E04007]: incompatible types
 9 │         foo!(0, |x| x);
   │         ^^^^^^^^^^^^^^
   │         │       │
-  │         │       Given: '|_|_'
+  │         │       Given: '|_| -> _'
   │         Invalid call of 'a::m::foo'. Invalid argument for parameter '$x'
 
 error[E04032]: unable to expand macro function

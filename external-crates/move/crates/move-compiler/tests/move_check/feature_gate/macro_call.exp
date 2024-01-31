@@ -24,6 +24,6 @@ error[E04007]: incompatible types
 4 │         foo!(|| ())
   │         ^^^^^^^^^^^
   │         │    │
-  │         │    Given: '||_'
+  │         │    Given: '|| -> _'
   │         Invalid call of 'a::m::foo'. Invalid argument for parameter '_'
 

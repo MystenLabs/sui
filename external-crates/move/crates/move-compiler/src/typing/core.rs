@@ -728,7 +728,7 @@ fn error_format_impl_(b_: &Type_, subst: &Subst, nested: bool) -> String {
         }
         Fun(args, result) => {
             format!(
-                "|{}|{}",
+                "|{}| -> {}",
                 format_comma(args.iter().map(|t| error_format_nested(t, subst))),
                 error_format_nested(result, subst)
             )

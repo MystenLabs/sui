@@ -43,6 +43,6 @@ error[E04007]: incompatible types
 21 │         let x = apply!(|x| x, |x| x);
    │                 ^^^^^^^^^^^^^^^^^^^^
    │                 │             │
-   │                 │             Given: '|_|_'
+   │                 │             Given: '|_| -> _'
    │                 Invalid call of 'a::m::apply'. Invalid argument for parameter '$x'
 
