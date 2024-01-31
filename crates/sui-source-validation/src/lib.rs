@@ -511,7 +511,7 @@ fn units_for_toolchain(
         }
 
         let package_root = SourcePackageLayout::try_find_root(&local_unit.source_path)?;
-        let lock_file = package_root.join("Move.lock");
+        let lock_file = package_root.join(SourcePackageLayout::Lock.path());
         if !lock_file.exists() {
             // No lock file implies current compiler for this package.
             package_version_map.insert(*package, (current_toolchain(), vec![local_unit.clone()]));
