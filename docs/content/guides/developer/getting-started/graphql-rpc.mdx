@@ -152,41 +152,17 @@ This example makes usage of the filter `last`, which indicates that the user onl
 }
 ```
 
-## Finding the balance changes of all the transactions
+## Finding transaction balance changes
 
-This example finds the balance changes of all the transactions where a given address called staking-related functions. This is useful when you want to get your staking and unstaking history.
+This example finds the balance changes of all the transactions where a given address called a staking-related function. This is useful when you want to get your staking or unstaking history.
 
 ```graphql
 query ($address: SuiAddress!) {
-  stakeTxns: transactionBlocks(filter: {
+  transactionBlocks(filter: {
     function: "0x3::sui_system::request_add_stake"
     signAddress: $address
   }) {
     nodes {
-      sender {
-        address
-      }
-      digest
-      effects {
-        balanceChanges {
-          nodes {
-            owner {
-              address
-            }
-            amount
-          }
-        }
-      }
-    }
-  }
-  unstakeTxns: transactionBlocks(filter: {
-    function: "0x3::sui_system::request_withdraw_stake"
-    signAddress: $address
-  }) {
-    nodes {
-      sender {
-        address
-      }
       digest
       effects {
         balanceChanges {
@@ -210,57 +186,11 @@ query ($address: SuiAddress!) {
 }
 ```
 
-## Finding the coins owned by an address and accumulate their balances
+## Finding the dynamic fields of an object
 
 :::info
 This example uses aliases and [fragments](/concepts/graphql-rpc/fragments).
 :::
-
-```graphql
-fragment C on Coin {
-  coinBalance
-  contents { type { repr } }
-}
-
-{
-  suiCoins: coins {
-    edges {
-      cursor
-      node { ...C }
-    }
-  }
-
-  address(address: "0x576f3566219e81748bb599646a5f4f7317068bbe62b143518427b1977b03256d") {
-    coins {
-      edges {
-        cursor
-        node { ...C }
-      }
-    }
-
-    allBalances: balances {
-      edges {
-        cursor
-        node {
-          coinType { repr }
-          coinObjectCount
-          totalBalance
-        }
-      }
-    }
-
-    firstBalance: balances(first: 1) {
-      edges { cursor }
-    }
-
-    lastBalance: balances(last: 1) {
-      edges { cursor }
-    }
-  }
-}
-```
-
-## Finding the dynamic fields of an object
 
 ```graphql
 query DynamicField {
@@ -280,39 +210,32 @@ query DynamicField {
 
 fragment DynamicFieldSelect on DynamicField {
   name {
-    ...DynamicFieldNameSelection
+    ...MoveValueFields
   }
   value {
     ...DynamicFieldValueSelection
   }
 }
 
-fragment DynamicFieldNameSelection on MoveValue {
+fragment DynamicFieldValueSelection on DynamicFieldValue {
+  __typename
+  ... on MoveValue {
+    ...MoveValueFields
+  }
+  ... on MoveObject {
+    hasPublicTransfer
+    contents {
+      ...MoveValueFields
+    }
+  }
+}
+
+fragment MoveValueFields on MoveValue {
   type {
     repr
   }
   data
   bcs
-}
-
-fragment DynamicFieldValueSelection on DynamicFieldValue {
-  ... on MoveValue {
-    type {
-      repr
-    }
-    data
-    __typename
-  }
-  ... on MoveObject {
-    hasPublicTransfer
-    contents {
-      type {
-        repr
-      }
-      data
-    }
-    __typename
-  }
 }
 ```
 
