@@ -337,7 +337,7 @@ async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode
     let tcp_url = if let Some(port) = url.port() {
         format!("{host}:{port}")
     } else {
-        host.to_string();
+        host.to_string()
     };
 
     if TcpStream::connect(tcp_url).is_err() {
