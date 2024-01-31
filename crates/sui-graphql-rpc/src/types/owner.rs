@@ -254,7 +254,9 @@ impl Owner {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl::from(self).dynamic_field(ctx, name).await
+        OwnerImpl::from(self)
+            .dynamic_field(ctx, name, /* parent_version */ None)
+            .await
     }
 
     /// Access a dynamic object field on an object using its name. Names are arbitrary Move values
@@ -268,7 +270,9 @@ impl Owner {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl::from(self).dynamic_object_field(ctx, name).await
+        OwnerImpl::from(self)
+            .dynamic_object_field(ctx, name, /* parent_version */ None)
+            .await
     }
 
     /// The dynamic fields and dynamic object fields on an object.
@@ -283,7 +287,9 @@ impl Owner {
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_fields(ctx, first, after, last, before)
+            .dynamic_fields(
+                ctx, first, after, last, before, /* parent_version */ None,
+            )
             .await
     }
 }
@@ -435,22 +441,38 @@ impl OwnerImpl {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
+        parent_version: Option<u64>,
     ) -> Result<Option<DynamicField>> {
         use DynamicFieldType as T;
-        DynamicField::query(ctx.data_unchecked(), self.address, name, T::DynamicField)
-            .await
-            .extend()
+        DynamicField::query(
+            ctx.data_unchecked(),
+            self.address,
+            parent_version,
+            name,
+            T::DynamicField,
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn dynamic_object_field(
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
+        parent_version: Option<u64>,
     ) -> Result<Option<DynamicField>> {
         use DynamicFieldType as T;
-        DynamicField::query(ctx.data_unchecked(), self.address, name, T::DynamicObject)
-            .await
-            .extend()
+        DynamicField::query(
+            ctx.data_unchecked(),
+            self.address,
+            parent_version,
+            name,
+            T::DynamicObject,
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn dynamic_fields(
@@ -460,11 +482,18 @@ impl OwnerImpl {
         after: Option<object::Cursor>,
         last: Option<u64>,
         before: Option<object::Cursor>,
+        parent_version: Option<u64>,
     ) -> Result<Connection<String, DynamicField>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        DynamicField::paginate(ctx.data_unchecked(), page, self.address)
-            .await
-            .extend()
+        DynamicField::paginate(
+            ctx.data_unchecked(),
+            page,
+            self.address,
+            parent_version,
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 }
 
