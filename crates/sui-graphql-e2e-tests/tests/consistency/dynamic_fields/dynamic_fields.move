@@ -131,14 +131,6 @@ fragment DynamicFieldsSelect on DynamicFieldConnection {
   }
 }
 
-fragment ParentSelect on Parent {
-  parent {
-    dynamicFields {
-      ...DynamicFieldsSelect
-    }
-  }
-}
-
 {
   parent_version_2_no_dof: object(address: "@{obj_2_1}", version: 2) {
     address

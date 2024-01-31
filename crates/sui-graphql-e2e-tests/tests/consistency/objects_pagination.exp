@@ -1,4 +1,4 @@
-processed 23 tasks
+processed 24 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -485,7 +485,10 @@ Checkpoint created: 5
 task 19 'force-object-snapshot-catchup'. lines 227-227:
 Objects snapshot updated to [0 to 4)
 
-task 20 'run-graphql'. lines 229-257:
+task 20 'create-checkpoint'. lines 229-229:
+Checkpoint created: 6
+
+task 21 'run-graphql'. lines 231-259:
 Response: {
   "data": null,
   "errors": [
@@ -523,7 +526,7 @@ Response: {
   ]
 }
 
-task 21 'run-graphql'. lines 259-275:
+task 22 'run-graphql'. lines 261-277:
 Response: {
   "data": {
     "owned_by_address_b_latest": {
@@ -583,7 +586,7 @@ Response: {
   }
 }
 
-task 22 'run-graphql'. lines 277-303:
+task 23 'run-graphql'. lines 279-305:
 Response: {
   "data": {
     "objects_at_version": {

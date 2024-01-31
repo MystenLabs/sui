@@ -41,7 +41,7 @@ Contents: Test::M1::Child {id: sui::object::UID {id: sui::object::ID {bytes: fak
 task 8 'create-checkpoint'. lines 103-103:
 Checkpoint created: 1
 
-task 9 'run-graphql'. lines 105-191:
+task 9 'run-graphql'. lines 105-167:
 Response: {
   "data": {
     "parent_version_2_no_dof": {
@@ -73,18 +73,6 @@ Response: {
             }
           }
         ]
-      },
-      "child_dof_state_consistent": {
-        "value": {
-          "address": "0x64cf03102291cf3259814899d62e47a21c2d96110729afb7565ab4824ad41f54",
-          "owner": {
-            "parent": {
-              "dynamicFields": {
-                "edges": []
-              }
-            }
-          }
-        }
       }
     },
     "child_version_2_no_parent": {
@@ -101,25 +89,25 @@ Response: {
   }
 }
 
-task 10 'programmable'. lines 193-195:
+task 10 'programmable'. lines 169-171:
 created: object(10,0), object(10,1), object(10,2)
 mutated: object(0,0), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 9910400,  storage_rebate: 3513708, non_refundable_storage_fee: 35492
 
-task 11 'view-object'. lines 197-197:
+task 11 'view-object'. lines 173-173:
 Owner: Account Address ( A )
 Version: 4
 Contents: Test::M1::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
 
-task 12 'view-object'. lines 199-199:
+task 12 'view-object'. lines 175-175:
 Owner: Object ID: ( fake(5,0) )
 Version: 4
 Contents: Test::M1::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, count: 2u64}
 
-task 13 'create-checkpoint'. lines 201-201:
+task 13 'create-checkpoint'. lines 177-177:
 Checkpoint created: 2
 
-task 14 'run-graphql'. lines 203-263:
+task 14 'run-graphql'. lines 179-239:
 Response: {
   "data": {
     "parent_version_4_show_dof_and_dfs": {
@@ -280,7 +268,7 @@ Response: {
   }
 }
 
-task 15 'run-graphql'. lines 265-302:
+task 15 'run-graphql'. lines 241-278:
 Response: {
   "data": {
     "parent_version_3": {
@@ -334,25 +322,25 @@ Response: {
   }
 }
 
-task 16 'programmable'. lines 305-306:
+task 16 'programmable'. lines 281-282:
 created: object(16,0), object(16,1), object(16,2)
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 8603200,  storage_rebate: 2219580, non_refundable_storage_fee: 22420
 
-task 17 'view-object'. lines 308-308:
+task 17 'view-object'. lines 284-284:
 Owner: Account Address ( A )
 Version: 5
 Contents: Test::M1::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
 
-task 18 'view-object'. lines 310-310:
+task 18 'view-object'. lines 286-286:
 Owner: Object ID: ( fake(5,0) )
 Version: 4
 Contents: Test::M1::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, count: 2u64}
 
-task 19 'create-checkpoint'. lines 312-312:
+task 19 'create-checkpoint'. lines 288-288:
 Checkpoint created: 3
 
-task 20 'run-graphql'. lines 314-364:
+task 20 'run-graphql'. lines 290-340:
 Response: {
   "data": {
     "parent_version_4_has_4_children": {
@@ -672,25 +660,25 @@ Response: {
   }
 }
 
-task 21 'programmable'. lines 366-367:
+task 21 'programmable'. lines 342-343:
 mutated: object(0,0), object(2,1)
 deleted: object(10,0), object(10,1), object(10,2)
 gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 8517168, non_refundable_storage_fee: 86032
 
-task 22 'view-object'. lines 369-369:
+task 22 'view-object'. lines 345-345:
 Owner: Account Address ( A )
 Version: 6
 Contents: Test::M1::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
 
-task 23 'view-object'. lines 371-371:
+task 23 'view-object'. lines 347-347:
 Owner: Object ID: ( fake(5,0) )
 Version: 4
 Contents: Test::M1::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, count: 2u64}
 
-task 24 'create-checkpoint'. lines 373-373:
+task 24 'create-checkpoint'. lines 349-349:
 Checkpoint created: 4
 
-task 25 'run-graphql'. lines 375-425:
+task 25 'run-graphql'. lines 351-401:
 Response: {
   "data": {
     "parent_version_4_has_df1_2_3": {
@@ -926,7 +914,7 @@ Response: {
   }
 }
 
-task 26 'run-graphql'. lines 427-458:
+task 26 'run-graphql'. lines 403-434:
 Response: {
   "data": {
     "parent_version_4": {
@@ -948,16 +936,16 @@ Response: {
   }
 }
 
-task 28 'create-checkpoint'. lines 462-462:
+task 28 'create-checkpoint'. lines 438-438:
 Checkpoint created: 5
 
-task 30 'create-checkpoint'. lines 466-466:
+task 30 'create-checkpoint'. lines 442-442:
 Checkpoint created: 6
 
-task 31 'force-object-snapshot-catchup'. lines 468-468:
+task 31 'force-object-snapshot-catchup'. lines 444-444:
 Objects snapshot updated to [0 to 5)
 
-task 32 'run-graphql'. lines 470-520:
+task 32 'run-graphql'. lines 446-496:
 Response: {
   "data": {
     "parent_version_4_outside_consistent_range": null,
@@ -1073,7 +1061,7 @@ Response: {
   }
 }
 
-task 33 'run-graphql'. lines 522-553:
+task 33 'run-graphql'. lines 498-529:
 Response: {
   "data": {
     "parent_version_4": null,

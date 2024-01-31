@@ -226,6 +226,8 @@ module Test::M1 {
 
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 4
 
+//# create-checkpoint
+
 //# run-graphql --cursors @{obj_6_0,2}
 {
   after_obj_6_0_at_checkpoint_2_now_before_available_range: address(address: "@{A}") {
