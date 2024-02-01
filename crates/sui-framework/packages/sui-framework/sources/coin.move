@@ -258,7 +258,7 @@ module sui::coin {
         (treasury_cap, deny_cap, metadata)
     }
 
-    /// Create a coin worth `value`. and increase the total supply
+    /// Create a coin worth `value` and increase the total supply
     /// in `cap` accordingly.
     public fun mint<T>(
         cap: &mut TreasuryCap<T>, value: u64, ctx: &mut TxContext,

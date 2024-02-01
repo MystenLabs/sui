@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// docs:: http://docs.sui.io/standards/closed-loop-token
+
 /// This module illustrates a Closed Loop Loyalty Token. The `Token` is sent to
 /// users as a reward for their loyalty by the application Admin. The `Token`
 /// can be used to buy a `Gift` in the shop.

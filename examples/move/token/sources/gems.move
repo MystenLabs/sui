@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// docs:: http://docs.sui.io/standards/closed-loop-token
+
 /// This is a simple example of a permissionless module for an imaginary game
 /// that sells swords for Gems. Gems are an in-game currency that can be bought
 /// with SUI.
