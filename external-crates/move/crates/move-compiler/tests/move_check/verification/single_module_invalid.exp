@@ -22,7 +22,7 @@ warning[W00001]: DEPRECATED. will be removed
 12 │     #[verify_only]
    │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
-error[E03009]: unbound variable
+error[E03005]: unbound unscoped name
    ┌─ tests/move_check/verification/single_module_invalid.move:17:24
    │
 17 │     public fun baz() { bar() }

@@ -4,7 +4,7 @@
 
 use crate::{
     diag,
-    diagnostics::codes::*,
+    diagnostics::{self, codes::*},
     editions::FeatureGate,
     expansion::{
         ast::{self as E, AbilitySet, ModuleIdent, Visibility},
@@ -450,6 +450,7 @@ impl<'env> Context<'env> {
     fn resolve_local<S: ToString>(
         &mut self,
         loc: Loc,
+        code: diagnostics::codes::NameResolution,
         variable_msg: impl FnOnce(Symbol) -> S,
         sp!(vloc, name): Name,
     ) -> Option<N::Var> {
@@ -457,8 +458,7 @@ impl<'env> Context<'env> {
         match id_opt {
             None => {
                 let msg = variable_msg(name);
-                self.env
-                    .add_diag(diag!(NameResolution::UnboundVariable, (loc, msg)));
+                self.env.add_diag(diag!(code, (loc, msg)));
                 None
             }
             Some(id) => {
@@ -1422,7 +1422,12 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             if is_constant_name(&v.value) {
                 access_constant(context, sp(aloc, E::ModuleAccess_::Name(v)))
             } else {
-                match context.resolve_local(eloc, |name| format!("Unbound variable '{name}'"), v) {
+                match context.resolve_local(
+                    eloc,
+                    NameResolution::UnboundVariable,
+                    |name| format!("Unbound variable '{name}'"),
+                    v,
+                ) {
                     None => {
                         debug_assert!(context.env.has_errors());
                         NE::UnresolvedError
@@ -1864,6 +1869,7 @@ fn lvalue(
                     }
                     C::Assign => context.resolve_local(
                         loc,
+                        NameResolution::UnboundVariable,
                         |name| format!("Invalid assignment. Unbound variable '{name}'"),
                         n,
                     )?,
@@ -2017,6 +2023,7 @@ fn resolve_function(
         (EA::Name(n), ResolveFunctionCase::Call) => {
             match context.resolve_local(
                 n.loc,
+                NameResolution::UnboundUnscopedName,
                 |n| format!("Unbound function '{}' in current scope", n),
                 n,
             ) {
@@ -2260,7 +2267,7 @@ fn remove_unused_bindings_exp(
             body,
         }) => {
             for (lvs, _) in parameters {
-                remove_unused_bindings_lvalues(context, used, lvs, /* report unused */ true)
+                remove_unused_bindings_lvalues(context, used, lvs, /* report unused */ false)
             }
             remove_unused_bindings_exp(context, used, body)
         }
