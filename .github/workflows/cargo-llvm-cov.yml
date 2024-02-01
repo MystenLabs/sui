@@ -53,25 +53,27 @@ jobs:
       - name: Install Rust
         run: rustup update stable
         
-      # - name: Run code coverage for nextest
-      #   run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest
+      - name: Run code coverage for nextest
+        run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest
 
-      # - name: Upload report to Codecov for nextest
-      #   uses: codecov/codecov-action@v3
-      #   with:
-      #     files: lcov.info
-      #     fail_ci_if_error: true
-
-      - name: Run code coverage for simtest
-        run: |
-          ./scripts/simtest/install.sh
-          CODECOV=1 ./scripts/simtest/cargo-simtest simtest
-
-      - name: Upload report to Codecov for simtest
+      - name: Upload report to Codecov for nextest
         uses: codecov/codecov-action@v3
         with:
           files: lcov.info
           fail_ci_if_error: true
+
+      # TODO: Will enable this once we get this work
+      #
+      # - name: Run code coverage for simtest
+      #   run: |
+      #     ./scripts/simtest/install.sh
+      #     CODECOV=1 ./scripts/simtest/cargo-simtest simtest
+
+      # - name: Upload report to Codecov for simtest
+      #   uses: codecov/codecov-action@v3
+      #   with:
+      #     files: lcov.info
+      #     fail_ci_if_error: true
 
   notify:
     name: Notify
@@ -91,6 +93,16 @@ jobs:
       run: |
         export sui_sha=$(git rev-parse HEAD)
         echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
+
+    - name: Get a branch name for a sui commit
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        export sui_branch_name=$(gh api -H 'Accept: application/vnd.github+json' /repos/MystenLabs/sui/commits/${{ env.SUI_SHA }}/branches-where-head --jq '.[].name' | head -n 1)
+        # if the commit is not the head of the branch, get it's base branch 
+        [[ -z $sui_branch_name ]] && export sui_branch_name=$(gh api -H 'Accept: application/vnd.github+json' /repos/MystenLabs/sui/commits/${{ env.SUI_SHA }}/pulls --jq '.[].base.ref' | head -n 1)
+        echo "sui_branch_name=${sui_branch_name}" >> $GITHUB_ENV
+        echo "sui_branch_name=${sui_branch_name}"
 
     - name: Get link to logs
       env:
@@ -125,7 +137,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
+                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>\n sui branch: `${{ env.sui_branch_name }}`\nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
                 }
               },
               {
