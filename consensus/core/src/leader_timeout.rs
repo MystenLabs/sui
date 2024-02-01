@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use std::time::Duration;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::block::Round;
 use crate::context::Context;
 use crate::core::CoreSignalsReceivers;
 use crate::core_thread::CoreThreadDispatcherInterface;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::oneshot::{Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio::time::{sleep_until, Instant};
