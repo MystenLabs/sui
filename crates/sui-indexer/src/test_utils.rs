@@ -106,18 +106,15 @@ pub async fn start_test_indexer_v2_impl(
 
         // Open in default mode
         let blocking_pool = new_pg_connection_pool_impl(&default_db_url, Some(5)).unwrap();
+        let mut default_conn = blocking_pool.get().unwrap();
 
         // Delete the old db if it exists
-        blocking_pool
-            .get()
-            .unwrap()
+        default_conn
             .batch_execute(&format!("DROP DATABASE IF EXISTS {}", new_database))
             .unwrap();
 
         // Create the new db
-        blocking_pool
-            .get()
-            .unwrap()
+        default_conn
             .batch_execute(&format!("CREATE DATABASE {}", new_database))
             .unwrap();
         parsed_url = replace_db_name(&parsed_url, &new_database).0;
