@@ -5,8 +5,6 @@ title: Variables
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-{@include: ../../snippets/info-graphql-release.mdx}
-
 Variables offer a way to introduce dynamic inputs to a re-usable/static query. A variable is declared in the parameters to a `query` or `mutation`, using the `$` symbol and its type (in this example `Int`) which must be a `scalar`, `enum`, or `input` type. In the query body, it is referred to by its name (again prefixed with the `$` symbol).
 
 If a variable is declared but not used in the query or not defined (supplied a value), the query will fail to execute.
