@@ -281,6 +281,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                     DependencyGraph::read_from_lock(
                         root_path,
                         root_pkg_id,
+                        root_pkg_name,
                         &mut lock_string.as_bytes(), // safe since old_deps_digest exists
                         None,
                     )?,
@@ -320,7 +321,6 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         ) in dep_graphs.iter_mut()
         {
             g.prune_subgraph(
-                root_pkg_id,
                 root_pkg_name,
                 *dep_id,
                 *dep_names.get(dep_id).unwrap(),
@@ -379,6 +379,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                     &dep,
                     mode,
                     parent_pkg_id,
+                    parent_pkg_name,
                     dep_pkg_name,
                     root_path.clone(),
                 )
@@ -428,6 +429,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         dep: &PM::Dependency,
         mode: DependencyMode,
         parent_pkg_id: PackageIdentifier,
+        parent_pkg_name: PM::PackageName,
         dep_pkg_name: PM::PackageName,
         dep_pkg_path: PathBuf,
     ) -> Result<(DependencyGraph, bool, bool, Symbol, Option<Symbol>)> {
@@ -450,7 +452,12 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                     .with_context(|| format!("Resolving package name for '{}'", dep_pkg_name))?;
                 let resolved_version = resolve_version(&manifest)
                     .with_context(|| format!("Resolving version for '{}'", dep_pkg_name))?;
-                check_for_dep_cycles(d.clone(), resolved_pkg_id, &mut self.visited_dependencies)?;
+                check_for_dep_cycles(
+                    d.clone(),
+                    resolved_pkg_id,
+                    dep_pkg_name,
+                    &mut self.visited_dependencies,
+                )?;
 
                 // save dependency for cycle detection
                 self.visited_dependencies
@@ -483,6 +490,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 let pkg_graph = DependencyGraph::get_external(
                     mode,
                     parent_pkg_id,
+                    parent_pkg_name,
                     dep_pkg_name,
                     *resolver,
                     &dep_pkg_path,
@@ -537,7 +545,6 @@ impl DependencyGraph {
     /// Main driver from sub-graph pruning based on information about overrides.
     fn prune_subgraph(
         &mut self,
-        root_package_id: PackageIdentifier,
         root_package_name: PM::PackageName,
         dep_id: PackageIdentifier,
         dep_name: PM::PackageName,
@@ -554,7 +561,7 @@ impl DependencyGraph {
             let mut o = overrides.clone();
             let mut dev_o = dev_overrides.clone();
             DependencyGraph::remove_dep_override(
-                root_package_id,
+                root_package_name,
                 dep_id,
                 dep_name,
                 &mut o,
@@ -649,6 +656,7 @@ impl DependencyGraph {
         dev_overrides: &BTreeMap<PackageIdentifier, Package>,
     ) -> Result<()> {
         let from_pkg_id = self.root_package_id;
+        let from_pkg_name = self.root_package_name;
         let mut pruned_pkgs = BTreeSet::new();
         let mut reachable_pkgs = BTreeSet::new();
         self.find_pruned_pkgs(
@@ -656,7 +664,7 @@ impl DependencyGraph {
             &mut reachable_pkgs,
             root_pkg_name,
             from_pkg_id,
-            from_pkg_id,
+            from_pkg_name,
             mode,
             overrides,
             dev_overrides,
@@ -997,7 +1005,7 @@ impl DependencyGraph {
     /// Helper function to remove an override for a package with a given name for "regular"
     /// dependencies (`dev_only` is false) or "dev" dependencies (`dev_only` is true).
     fn remove_dep_override(
-        root_pkg_id: PackageIdentifier,
+        root_pkg_name: PM::PackageName,
         pkg_id: PackageIdentifier,
         pkg_name: PM::PackageName,
         overrides: &mut BTreeMap<Symbol, Package>,
@@ -1011,7 +1019,7 @@ impl DependencyGraph {
             if let Some(dev_pkg) = dev_overrides.get(&pkg_id) {
                 bail!(
                     "Conflicting \"regular\" and \"dev\" overrides found in {0}:\n{1} = {2}\n{1} = {3}",
-                    root_pkg_id,
+                    root_pkg_name,
                     pkg_name,
                     PackageWithResolverTOML(&pkg),
                     PackageWithResolverTOML(dev_pkg),
@@ -1035,6 +1043,7 @@ impl DependencyGraph {
     pub fn read_from_lock(
         root_path: PathBuf,
         root_package_id: PackageIdentifier,
+        root_package_name: PM::PackageName,
         lock: &mut impl Read,
         resolver: Option<Symbol>,
     ) -> Result<DependencyGraph> {
@@ -1185,7 +1194,7 @@ impl DependencyGraph {
         let mut graph = DependencyGraph {
             root_path,
             root_package_id,
-            root_package_name: root_package_id,
+            root_package_name,
             package_graph,
             package_table,
             always_deps: BTreeSet::new(),
@@ -1304,7 +1313,8 @@ impl DependencyGraph {
     fn get_external<Progress: Write>(
         mode: DependencyMode,
         from_id: PackageIdentifier,
-        to: PM::PackageName,
+        from_name: PM::PackageName,
+        to_name: PM::PackageName,
         resolver: Symbol,
         package_path: &Path,
         progress_output: &mut Progress,
@@ -1321,7 +1331,7 @@ impl DependencyGraph {
 
         writeln!(
             progress_output,
-            "{progress_label} {to} {} {from_id} {} {resolver}",
+            "{progress_label} {to_name} {} {from_name} {} {resolver}",
             "FROM".bold().green(),
             "WITH".bold().green(),
         )?;
@@ -1329,7 +1339,7 @@ impl DependencyGraph {
         // Call out to the external resolver
         let output = Command::new(resolver.as_str())
             .arg(format!("--resolve-move-{mode_label}"))
-            .arg(to.as_str())
+            .arg(to_name.as_str())
             .current_dir(package_path)
             .output()
             .with_context(|| format!("Running resolver: {resolver}"))?;
@@ -1343,8 +1353,8 @@ impl DependencyGraph {
 
         if !output.status.success() {
             let err_msg = format!(
-                "'{resolver}' failed to resolve {mode_label} for dependency '{to}' of package \
-                 '{from_id}'"
+                "'{resolver}' failed to resolve {mode_label} for dependency '{to_name}' of package \
+                 '{from_name}'"
             );
 
             if let Some(code) = output.status.code() {
@@ -1357,12 +1367,13 @@ impl DependencyGraph {
         let sub_graph = DependencyGraph::read_from_lock(
             package_path.to_path_buf(),
             from_id,
+            from_name,
             &mut output.stdout.as_slice(),
             Some(resolver),
         )
         .with_context(|| {
             format!(
-                "Parsing response from '{resolver}' for dependency '{to}' of package '{from_id}'"
+                "Parsing response from '{resolver}' for dependency '{to_name}' of package '{from_id}'"
             )
         })?;
 
@@ -1700,6 +1711,7 @@ fn deps_equal<'a>(
 fn check_for_dep_cycles(
     dep: PM::InternalDependency,
     dep_pkg_id: PackageIdentifier,
+    dep_pkg_name: PM::PackageName,
     internal_dependencies: &mut VecDeque<(PM::PackageName, PM::InternalDependency)>,
 ) -> Result<()> {
     if internal_dependencies.contains(&(dep_pkg_id, dep.clone())) {
@@ -1709,12 +1721,12 @@ fn check_for_dep_cycles(
         }
         // now the queue contains all intermediate dependencies
         let mut msg = "Found cycle between packages: ".to_string();
-        msg.push_str(format!("{} -> ", dep_pkg_id).as_str());
+        msg.push_str(format!("{} -> ", dep_pkg_name).as_str());
         while !internal_dependencies.is_empty() {
             let (p, _) = internal_dependencies.pop_back().unwrap();
             msg.push_str(format!("{} -> ", p).as_str());
         }
-        msg.push_str(format!("{}", dep_pkg_id).as_str());
+        msg.push_str(format!("{}", dep_pkg_name).as_str());
         bail!(msg);
     }
     Ok(())
@@ -1741,7 +1753,7 @@ fn dep_path_from_root(
             "When resolving dependencies for package {}, \
              expected a dependency path between {} and {} which does not exist",
             root_package_name,
-            graph.root_package_id,
+            graph.root_package_name,
             pkg_name
         ),
         Some((_, p)) => {
