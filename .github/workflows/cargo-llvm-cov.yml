@@ -102,6 +102,7 @@ jobs:
         # if the commit is not the head of the branch, get it's base branch 
         [[ -z $sui_branch_name ]] && export sui_branch_name=$(gh api -H 'Accept: application/vnd.github+json' /repos/MystenLabs/sui/commits/${{ env.sui_sha }}/pulls --jq '.[].base.ref' | head -n 1)
         echo "sui_branch_name=${sui_branch_name}" >> $GITHUB_ENV
+        echo "sui_branch_name_url=$(echo ${sui_branch_name} | sed 's\/\%2F\g')" >> $GITHUB_ENV
 
     - name: Get link to logs
       env:
@@ -116,6 +117,7 @@ jobs:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         SUI_SHA: ${{ env.sui_sha }}
         SUI_BRANCH_NAME: ${{ env.sui_branch_name }}
+        SUI_BRANCH_NAME_URL: ${{ env.sui_branch_name_url }}
         GH_JOB_LINK: ${{ env.gh_job_link }}
       with:
         channel-id: 'code-coverage'
@@ -147,7 +149,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "@sui-core, Please look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME }}|report> for the ${{ env.SUI_BRANCH_NAME }} branch in Sui repo."
+                  "text": "@sui-core, Please look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo."
                 }
               }
             ]
