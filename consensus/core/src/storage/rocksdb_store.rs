@@ -164,7 +164,6 @@ impl Store for RocksDBStore {
         num_of_rounds: u64,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
         let mut refs = VecDeque::new();
-        let mut total_rounds = 0;
         for kv in self
             .digests_by_authorities
             .safe_range_iter((
@@ -173,13 +172,10 @@ impl Store for RocksDBStore {
             ))
             .skip_to_last()
             .reverse()
+            .take(num_of_rounds as usize)
         {
             let ((author, round, digest), _) = kv?;
             refs.push_front(BlockRef::new(round, author, digest));
-            total_rounds += 1;
-            if total_rounds >= num_of_rounds {
-                break;
-            }
         }
         let results = self.read_blocks(refs.as_slices().0)?;
         let mut blocks = vec![];
