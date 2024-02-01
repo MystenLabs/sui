@@ -2601,7 +2601,7 @@ version = "0.1.0"
 dependencies = [
  "fastcrypto",
  "insta",
- "multiaddr",
+ "mysten-network",
  "rand 0.8.5",
  "serde",
  "shared-crypto",
@@ -2612,6 +2612,10 @@ dependencies = [
 name = "consensus-core"
 version = "0.1.0"
 dependencies = [
+ "anemo",
+ "anemo-build",
+ "anemo-tower",
+ "arc-swap",
  "async-trait",
  "base64 0.21.2",
  "bcs",
@@ -2620,7 +2624,9 @@ dependencies = [
  "consensus-config",
  "enum_dispatch",
  "fastcrypto",
+ "mockall",
  "mysten-metrics",
+ "mysten-network",
  "parking_lot 0.12.1",
  "prometheus",
  "rand 0.8.5",
@@ -2633,6 +2639,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tower",
  "tracing",
  "typed-store",
  "workspace-hack",

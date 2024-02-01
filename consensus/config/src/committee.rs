@@ -7,7 +7,7 @@ use std::{
 };
 
 use fastcrypto::traits::KeyPair;
-use multiaddr::Multiaddr;
+use mysten_network::Multiaddr;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 

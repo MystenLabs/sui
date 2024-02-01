@@ -20,6 +20,12 @@ pub enum ConsensusError {
 
     #[error("Unknown authority provided: {0}")]
     UnknownAuthority(String),
+
+    #[error("Authority {0} is disconnected.")]
+    Disconnected(String),
+
+    #[error("Error from network: {0:?}")]
+    AnemoNetworkError(String),
 }
 
 #[allow(unused)]
