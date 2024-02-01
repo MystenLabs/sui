@@ -54,14 +54,20 @@ impl Context {
     ) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
         let (committee, keypairs) = Committee::new_for_test(0, vec![1; committee_size]);
         let metrics = test_metrics();
+
         let context = Context::new(
             AuthorityIndex::new_for_test(0),
             committee,
             Parameters::default(),
-            ProtocolConfig::get_for_min_version(),
+            Self::default_protocol_config_for_testing(),
             metrics,
         );
         (context, keypairs)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn default_protocol_config_for_testing() -> ProtocolConfig {
+        ProtocolConfig::get_for_max_version_UNSAFE()
     }
 
     #[cfg(test)]

@@ -1989,18 +1989,8 @@ async fn init_sim_executor(
     let hash = hasher.finish();
     let db_name = format!("sui_graphql_test_{}", hash);
 
-    // Take the last 4 digits of the has and use it as the port number
-    let base_port = hash
-        .to_string()
-        .chars()
-        .rev()
-        .take(4)
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect::<String>()
-        .parse::<u16>()
-        .unwrap();
+    // Use the hash as a seed to generate a random port number
+    let base_port = hash as u16 % 8192;
 
     let graphql_port = 20000 + base_port;
     let graphql_prom_port = graphql_port + 1;
