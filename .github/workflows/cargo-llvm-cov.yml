@@ -1,7 +1,7 @@
 name: Code Coverage
 on:
-  # schedule:
-  #   - cron: '0 9 * * *' # UTC timing is every day at 1am PST
+  schedule:
+    - cron: '0 9 * * *' # UTC timing is every day at 1am PST
   workflow_dispatch:
 
 env:
