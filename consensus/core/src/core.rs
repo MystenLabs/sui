@@ -359,7 +359,7 @@ mod test {
     async fn test_core_propose_after_genesis() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_consensus_max_transaction_size_bytes(2_000);
-            config.set_consensus_max_block_transactions_size_bytes(2_000);
+            config.set_consensus_max_transactions_in_block_bytes(2_000);
             config
         });
 
@@ -414,7 +414,7 @@ mod test {
             total
                 <= context
                     .protocol_config
-                    .consensus_max_block_transactions_size_bytes()
+                    .consensus_max_transactions_in_block_bytes()
         );
 
         // genesis blocks should be referenced

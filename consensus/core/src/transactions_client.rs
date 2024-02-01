@@ -36,7 +36,7 @@ impl TransactionsConsumer {
             tx_receiver,
             max_consumed_bytes_per_request: context
                 .protocol_config
-                .consensus_max_block_transactions_size_bytes(),
+                .consensus_max_transactions_in_block_bytes(),
             max_consumed_transactions_per_request: max_consumed_transactions_per_request
                 .unwrap_or(MAX_CONSUMED_TRANSACTIONS_PER_REQUEST),
             pending_transaction: None,
@@ -138,7 +138,7 @@ mod tests {
     async fn basic_submit_and_consume() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_consensus_max_transaction_size_bytes(2_000); // 2KB
-            config.set_consensus_max_block_transactions_size_bytes(2_000);
+            config.set_consensus_max_transactions_in_block_bytes(2_000);
             config
         });
 
@@ -173,7 +173,7 @@ mod tests {
     async fn submit_over_max_fetch_size_and_consume() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_consensus_max_transaction_size_bytes(100);
-            config.set_consensus_max_block_transactions_size_bytes(100);
+            config.set_consensus_max_transactions_in_block_bytes(100);
             config
         });
 
@@ -202,11 +202,11 @@ mod tests {
             total_size
                 <= context
                     .protocol_config
-                    .consensus_max_block_transactions_size_bytes(),
+                    .consensus_max_transactions_in_block_bytes(),
             "Should have fetched transactions up to {}",
             context
                 .protocol_config
-                .consensus_max_block_transactions_size_bytes()
+                .consensus_max_transactions_in_block_bytes()
         );
         all_transactions.extend(transactions);
 
@@ -220,11 +220,11 @@ mod tests {
             total_size
                 <= context
                     .protocol_config
-                    .consensus_max_block_transactions_size_bytes(),
+                    .consensus_max_transactions_in_block_bytes(),
             "Should have fetched transactions up to {}",
             context
                 .protocol_config
-                .consensus_max_block_transactions_size_bytes()
+                .consensus_max_transactions_in_block_bytes()
         );
         all_transactions.extend(transactions);
 
