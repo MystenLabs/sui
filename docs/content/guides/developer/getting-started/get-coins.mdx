@@ -9,13 +9,9 @@ Sui faucet is a helpful tool where Sui developers can get free test SUI tokens t
 To request tokens from the faucet, you must own a wallet address that can receive the SUI tokens. See the [Get Sui Address](./get-address.mdx) topic if you don't already have an address or need to create a new one.
 
 ## Request test tokens via the CLI 
-If you are using the devnet or testnet networks, or you spinned up a local network, you can simply use the [Sui CLI](https://docs.sui.io/guides/developer/getting-started/sui-install) to request tokens for your address. Use the `--url` option to provide a custom faucet endpoint.
-```bash
-sui client faucet 		=> will use the active network and active address
-sui client faucet --address[..] => will use the address corresponding to this address (or its alias), and the active network
-sui client faucet --url [..]	=> will use the active address and the faucet server at that endpoint
-sui client faucet --address [..] --url https://myfaucet.mysui.io/v5/gas => will use that address and the faucet server at that endpoint.
-```
+If you are using the devnet or testnet networks, or you spinned up a local network, you can simply use the [Sui CLI](https://docs.sui.io/guides/developer/getting-started/sui-install) to request tokens for your address. The `sui client faucet` will by default use the active network and active address, but it also accepts the following two arguments:
+- `--address` argument to provide a specific address (or its alias),
+- `--url` argument to provide a custom faucet endpoint.
 
 ## Request test tokens through Discord
 
