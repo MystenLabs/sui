@@ -366,18 +366,8 @@ mod test {
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let block_manager = BlockManager::new();
-        let (transactions_client, tx_receiver) = TransactionsClient::new(
-            context.clone(),
-            context
-                .protocol_config
-                .consensus_max_transaction_size_bytes(),
-        );
-        let transactions_consumer = TransactionsConsumer::new(
-            tx_receiver,
-            context
-                .protocol_config
-                .consensus_max_block_transactions_size_bytes(),
-        );
+        let (transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
+        let transactions_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
 
         let mut core = Core::new(
@@ -422,7 +412,7 @@ mod test {
         }
         assert!(
             total
-                < context
+                <= context
                     .protocol_config
                     .consensus_max_block_transactions_size_bytes()
         );
@@ -448,18 +438,8 @@ mod test {
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let block_manager = BlockManager::new();
-        let (_transactions_client, tx_receiver) = TransactionsClient::new(
-            context.clone(),
-            context
-                .protocol_config
-                .consensus_max_transaction_size_bytes(),
-        );
-        let transactions_consumer = TransactionsConsumer::new(
-            tx_receiver,
-            context
-                .protocol_config
-                .consensus_max_block_transactions_size_bytes(),
-        );
+        let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
+        let transactions_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
 
         let mut core = Core::new(
@@ -665,18 +645,9 @@ mod test {
             let context = Arc::new(context);
 
             let block_manager = BlockManager::new();
-            let (_transactions_client, tx_receiver) = TransactionsClient::new(
-                context.clone(),
-                context
-                    .protocol_config
-                    .consensus_max_transaction_size_bytes(),
-            );
-            let transactions_consumer = TransactionsConsumer::new(
-                tx_receiver,
-                context
-                    .protocol_config
-                    .consensus_max_block_transactions_size_bytes(),
-            );
+            let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
+            let transactions_consumer =
+                TransactionsConsumer::new(tx_receiver, context.clone(), None);
             let (signals, signal_receivers) = CoreSignals::new();
 
             let block_signer = signers.remove(index).0;

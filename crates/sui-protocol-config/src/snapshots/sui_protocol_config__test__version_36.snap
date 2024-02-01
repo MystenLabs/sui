@@ -206,7 +206,6 @@ hash_keccak256_data_cost_per_byte: 2
 hash_keccak256_data_cost_per_block: 2
 poseidon_bn254_cost_base: 260
 poseidon_bn254_cost_per_block: 10
-<<<<<<< HEAD
 group_ops_bls12381_decode_scalar_cost: 52
 group_ops_bls12381_decode_g1_cost: 52
 group_ops_bls12381_decode_g2_cost: 52

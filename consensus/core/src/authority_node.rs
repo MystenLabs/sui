@@ -46,18 +46,8 @@ impl AuthorityNode {
         let start_time = Instant::now();
 
         // Create the transactions client and the transactions consumer
-        let (client, tx_receiver) = TransactionsClient::new(
-            context.clone(),
-            context
-                .protocol_config
-                .consensus_max_transaction_size_bytes(),
-        );
-        let tx_consumer = TransactionsConsumer::new(
-            tx_receiver,
-            context
-                .protocol_config
-                .consensus_max_block_transactions_size_bytes(),
-        );
+        let (client, tx_receiver) = TransactionsClient::new(context.clone());
+        let tx_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
 
         // Construct Core
         let (core_signals, _signals_receivers) = CoreSignals::new();
