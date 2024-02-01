@@ -60,7 +60,9 @@ export class EnokiClient {
 		return this.#fetch<CreateZkLoginNonceApiResponse>('zklogin/nonce', {
 			method: 'POST',
 			body: JSON.stringify({
+				network: input.network,
 				ephemeralPublicKey: input.ephemeralPublicKey.toSuiPublicKey(),
+				additionalEpochs: input.additionalEpochs,
 			}),
 		});
 	}
@@ -72,6 +74,7 @@ export class EnokiClient {
 				[ZKLOGIN_HEADER]: input.jwt,
 			},
 			body: JSON.stringify({
+				network: input.network,
 				ephemeralPublicKey: input.ephemeralPublicKey.toSuiPublicKey(),
 				maxEpoch: input.maxEpoch,
 				randomness: input.randomness,
