@@ -299,7 +299,7 @@ pub(crate) struct CoreSignals {
 
 impl CoreSignals {
     #[allow(dead_code)]
-    pub(crate) fn new() -> (Self, CoreSignalsReceivers) {
+    pub fn new() -> (Self, CoreSignalsReceivers) {
         let (block_ready_sender, block_ready_receiver) = watch::channel(None);
         let (new_round_sender, new_round_receiver) = watch::channel(0);
 
@@ -317,13 +317,13 @@ impl CoreSignals {
     }
 
     /// Sends a signal to all the waiters that a new block has been produced.
-    fn new_block_ready(&mut self, block: BlockRef) {
+    pub fn new_block_ready(&mut self, block: BlockRef) {
         self.block_ready_sender.send(Some(block)).ok();
     }
 
     /// Sends a signal that threshold clock has advanced to new round. The `round_number` is the round at which the
     /// threshold clock has advanced to.
-    fn new_round(&mut self, round_number: Round) {
+    pub fn new_round(&mut self, round_number: Round) {
         self.new_round_sender.send(round_number).ok();
     }
 }

@@ -13,6 +13,8 @@ use tracing::info;
 use crate::block_verifier::BlockVerifier;
 use crate::context::Context;
 use crate::core::{Core, CoreSignals};
+use crate::core_thread::CoreThreadDispatcher;
+use crate::leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle};
 use crate::metrics::initialise_metrics;
 use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
@@ -20,6 +22,7 @@ pub struct AuthorityNode {
     context: Arc<Context>,
     start_time: Instant,
     transactions_client: Arc<TransactionsClient>,
+    leader_timeout_handle: LeaderTimeoutTaskHandle,
 }
 
 impl AuthorityNode {
@@ -50,9 +53,9 @@ impl AuthorityNode {
         let tx_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
 
         // Construct Core
-        let (core_signals, _signals_receivers) = CoreSignals::new();
+        let (core_signals, signals_receivers) = CoreSignals::new();
         let block_manager = BlockManager::new();
-        let _core = Core::new(
+        let core = Core::new(
             context.clone(),
             tx_consumer,
             block_manager,
@@ -60,9 +63,15 @@ impl AuthorityNode {
             block_signer,
         );
 
+        let (core_dispatcher, core_dispatcher_handle) =
+            CoreThreadDispatcher::start(core, context.clone());
+        let leader_timeout_handle =
+            LeaderTimeoutTask::start(core_dispatcher, signals_receivers, context.clone());
+
         Self {
             context,
             start_time,
+            leader_timeout_handle,
             transactions_client: Arc::new(client),
         }
     }
@@ -73,6 +82,9 @@ impl AuthorityNode {
             "Stopping authority. Total run time: {:?}",
             self.start_time.elapsed()
         );
+
+        self.leader_timeout_handle.stop().await;
+
         self.context
             .metrics
             .node_metrics

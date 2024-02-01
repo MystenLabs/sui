@@ -22,5 +22,6 @@ mod threshold_clock;
 mod transactions_client;
 mod universal_committer;
 
+mod leader_timeout;
 #[cfg(test)]
 mod test_dag;
