@@ -177,12 +177,12 @@ async fn test_pay_with_gas_budget_fail() {
             assert_eq!(
                 rosetta_submit_gas_error,
                 RosettaSubmitGasError {
-                    code: 10,
-                    message: "Transaction execution error".to_string(),
+                    code: 11,
+                    message: "Transaction dry run error".to_string(),
                     description: None,
                     retriable: false,
                     details: RosettaSubmitGasErrorDetails {
-                        error: "Error executing transaction: InsufficientGas".to_string()
+                        error: "InsufficientGas".to_string()
                     }
                 }
             )

@@ -130,6 +130,19 @@ pub async fn submit(
     env.check_network_identifier(&request.network_identifier)?;
     let signed_tx: Transaction = bcs::from_bytes(&request.signed_transaction.to_vec()?)?;
 
+    // According to RosettaClient.rosseta_flow() (see tests), this transaction has already passed
+    // through a dry_run with a possibly invalid budget (metadata endpoint), but the requirements
+    // are that it should pass from there and fail here.
+    let tx_data = signed_tx.data().transaction_data().clone();
+    let dry_run = context
+        .client
+        .read_api()
+        .dry_run_transaction_block(tx_data)
+        .await?;
+    if let SuiExecutionStatus::Failure { error } = dry_run.effects.status() {
+        return Err(Error::TransactionDryRunError(error.clone()));
+    };
+
     let response = context
         .client
         .quorum_driver_api()
