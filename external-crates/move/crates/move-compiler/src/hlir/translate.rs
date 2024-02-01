@@ -1671,8 +1671,9 @@ fn still_has_break(name: &BlockLabel, block: &Block) -> bool {
             } => has_break_block(name, if_block) || has_break_block(name, else_block),
             S::While { block, .. } => has_break_block(name, block),
             S::Loop { block, .. } => has_break_block(name, block),
+            S::NamedBlock { block, .. } => has_break_block(name, block),
             hcmd!(C::Break(break_name)) => break_name == name,
-            _ => false,
+            S::Command(_) => false,
         }
     }
 
@@ -2201,8 +2202,18 @@ fn needs_freeze(context: &Context, sp!(_, actual): &H::Type, sp!(_, expected): &
                 Freeze::NotNeeded
             }
         }
+        (T::Single(sp!(_, H::SingleType_::Base(sp!(_, H::BaseType_::Unreachable)))), _expected) => {
+            Freeze::NotNeeded
+        }
         (_actual, _expected) => {
-            assert!(context.env.has_errors());
+            if !context.env.has_errors() {
+                println!("typing produced the following actual and expected types: ");
+                print!("actual: ");
+                _actual.print();
+                print!("expected: ");
+                _expected.print();
+                panic!("ICE HLIR freezing went wrong")
+            }
             Freeze::NotNeeded
         }
     }
