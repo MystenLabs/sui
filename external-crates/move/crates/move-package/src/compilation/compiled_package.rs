@@ -485,11 +485,12 @@ impl CompiledPackage {
         let mut compiler = Compiler::from_package_paths(paths, bytecode_deps)
             .unwrap()
             .set_flags(flags);
-        if lint && sui_mode {
+        if sui_mode {
             let (filter_attr_name, filters) = known_filters();
-            compiler = compiler
-                .add_visitors(linter_visitors())
-                .add_custom_known_filters(filters, filter_attr_name);
+            compiler = compiler.add_custom_known_filters(filter_attr_name, filters);
+            if lint {
+                compiler = compiler.add_visitors(linter_visitors())
+            }
         }
         let (file_map, all_compiled_units) = compiler_driver(compiler)?;
         let mut root_compiled_units = vec![];

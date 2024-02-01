@@ -29,12 +29,12 @@ module P0::m {
         };
         v
     }
-    
+
     public entry fun new(ctx: &mut TxContext){
         let id = object::new(ctx);
         let w = weight();
         sui::transfer::public_transfer(
-            Big { id, weight: w }, 
+            Big { id, weight: w },
             sender(ctx)
         )
     }
@@ -57,8 +57,10 @@ module P0::m {
   epoch(id: 1) {
     validatorSet {
       activeValidators {
-        apy
-        name
+        nodes {
+          apy
+          name
+        }
       }
     }
   }
@@ -105,8 +107,15 @@ module P0::m {
   epoch(id: 2) {
     validatorSet {
       activeValidators {
-        apy
-        name
+        nodes {
+          apy
+          name
+          reportRecords {
+            nodes {
+              address
+            }
+          }
+        }
       }
     }
   }

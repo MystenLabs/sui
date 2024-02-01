@@ -5275,6 +5275,57 @@ fn parse_error_test() {
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
+
+    fpath.push("sources/M1.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+    // const in a file containing a parse error
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        8,
+        10,
+        "M1.move",
+        8,
+        10,
+        "M1.move",
+        "const c: u64 = 7",
+        None,
+    );
+    // const in a file containing a parse error (in the second module, after parsing error in the
+    // previous module)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        14,
+        10,
+        "M1.move",
+        14,
+        10,
+        "M1.move",
+        "const c: u64 = 7",
+        None,
+    );
+    // const in a file containing a parse error (in the second module, with module annotation, after
+    // parsing error in the previous module)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        21,
+        10,
+        "M1.move",
+        21,
+        10,
+        "M1.move",
+        "const c: u64 = 7",
+        None,
+    );
+
+    let mut fpath = path.clone();
     fpath.push("sources/M2.move");
     let cpath = dunce::canonicalize(&fpath).unwrap();
 
@@ -5339,8 +5390,8 @@ fn parse_error_with_deps_test() {
         8,
         29,
         "M2.move",
-        "s: unknown type (unresolved)",
-        None,
+        "s: ParseErrorDep::M1::SomeStruct",
+        Some((2, 11, "M1.move")),
     );
 }
 

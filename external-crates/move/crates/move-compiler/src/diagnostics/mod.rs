@@ -11,8 +11,9 @@ use crate::{
         WellKnownFilterName,
     },
     shared::{
-        ast_debug::AstDebug, FILTER_UNUSED_CONST, FILTER_UNUSED_FUNCTION, FILTER_UNUSED_MUT_PARAM,
-        FILTER_UNUSED_MUT_REF, FILTER_UNUSED_STRUCT_FIELD, FILTER_UNUSED_TYPE_PARAMETER,
+        ast_debug::AstDebug, known_attributes, FILTER_UNUSED_CONST, FILTER_UNUSED_FUNCTION,
+        FILTER_UNUSED_MUT_PARAM, FILTER_UNUSED_MUT_REF, FILTER_UNUSED_STRUCT_FIELD,
+        FILTER_UNUSED_TYPE_PARAMETER,
     },
 };
 use codespan_reporting::{
@@ -33,7 +34,7 @@ use std::{
     ops::Range,
 };
 
-use self::codes::{UnusedItem, WARNING_FILTER_ATTR};
+use self::codes::UnusedItem;
 
 //**************************************************************************************************
 // Types
@@ -652,7 +653,7 @@ impl From<Option<Diagnostic>> for Diagnostics {
 impl AstDebug for WarningFilters {
     fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
         for (prefix, filters) in &self.filters {
-            let prefix_str = prefix.unwrap_or(WARNING_FILTER_ATTR);
+            let prefix_str = prefix.unwrap_or(known_attributes::DiagnosticAttribute::ALLOW);
             match filters {
                 UnprefixedWarningFilters::All => w.write(&format!(
                     "#[{}({})]",

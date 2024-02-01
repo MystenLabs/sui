@@ -3,6 +3,7 @@
 
 use std::{collections::HashMap, fmt::Display, sync::Arc};
 
+use consensus_config::{AuthorityIndex, Stake};
 use parking_lot::RwLock;
 
 use crate::{
@@ -14,7 +15,9 @@ use crate::{
     stake_aggregator::{QuorumThreshold, StakeAggregator},
 };
 
-use consensus_config::{AuthorityIndex, Stake};
+#[cfg(test)]
+#[path = "tests/base_committer_tests.rs"]
+pub mod base_committer_tests;
 
 #[allow(unused)]
 pub(crate) struct BaseCommitterOptions {
@@ -156,25 +159,25 @@ impl BaseCommitter {
         ))
     }
 
-    /// Return the wave in which the specified round belongs. This takes into
-    /// account the round offset for when pipelining is enabled.
-    fn wave_number(&self, round: Round) -> WaveNumber {
-        round.saturating_sub(self.options.round_offset) / self.options.wave_length
-    }
-
     /// Return the leader round of the specified wave. The leader round is always
     /// the first round of the wave. This takes into account round offset for when
     /// pipelining is enabled.
-    fn leader_round(&self, wave: WaveNumber) -> Round {
+    pub(crate) fn leader_round(&self, wave: WaveNumber) -> Round {
         (wave * self.options.wave_length) + self.options.round_offset
     }
 
     /// Return the decision round of the specified wave. The decision round is
     /// always the last round of the wave. This takes into account round offset
     /// for when pipelining is enabled.
-    fn decision_round(&self, wave: WaveNumber) -> Round {
+    pub(crate) fn decision_round(&self, wave: WaveNumber) -> Round {
         let wave_length = self.options.wave_length;
         (wave * wave_length) + wave_length - 1 + self.options.round_offset
+    }
+
+    /// Return the wave in which the specified round belongs. This takes into
+    /// account the round offset for when pipelining is enabled.
+    fn wave_number(&self, round: Round) -> WaveNumber {
+        round.saturating_sub(self.options.round_offset) / self.options.wave_length
     }
 
     /// Find which block is supported at a slot (author, round) by the given block.
@@ -242,14 +245,20 @@ impl BaseCommitter {
             };
 
             if is_vote {
-                tracing::trace!("[{self}] {reference} is a vote for {leader_block:?}");
+                tracing::trace!("[{self}] {reference} is a vote for {leader_block}");
                 if votes_stake_aggregator.add(reference.author, &self.context.committee) {
+                    tracing::trace!(
+                        "[{self}] {potential_certificate} is a certificate for leader {leader_block}"
+                    );
                     return true;
                 }
             } else {
-                tracing::trace!("[{self}] {reference} is not a vote for {leader_block:?}",);
+                tracing::trace!("[{self}] {reference} is not a vote for {leader_block}",);
             }
         }
+        tracing::trace!(
+            "[{self}] {potential_certificate} is not a certificate for leader {leader_block}"
+        );
         false
     }
 
@@ -322,12 +331,17 @@ impl BaseCommitter {
                 .all(|ancestor| ancestor.author != leader)
             {
                 tracing::trace!(
-                    "[{self}] {voting_block:?} is a blame for leader {}",
+                    "[{self}] {voting_block} is a blame for leader {}",
                     Slot::new(voting_round - 1, leader)
                 );
                 if blame_stake_aggregator.add(voter, &self.context.committee) {
                     return true;
                 }
+            } else {
+                tracing::trace!(
+                    "[{self}] {voting_block} is not a blame for leader {}",
+                    Slot::new(voting_round - 1, leader)
+                );
             }
         }
         false
@@ -349,9 +363,7 @@ impl BaseCommitter {
             .sum();
         if !self.context.committee.reached_quorum(total_stake) {
             tracing::debug!(
-                "Not enough support for: {}. Stake not enough: {} < {}",
-                leader_block.round(),
-                total_stake,
+                "Not enough support for {leader_block}. Stake not enough: {total_stake} < {}",
                 self.context.committee.quorum_threshold()
             );
             return false;
@@ -361,17 +373,10 @@ impl BaseCommitter {
         let mut all_votes = HashMap::new();
         for decision_block in &decision_blocks {
             let authority = decision_block.reference().author;
-            if self.is_certificate(decision_block, leader_block, &mut all_votes) {
-                tracing::trace!(
-                    "[{self}] {decision_block:?} is a certificate for leader {leader_block:?}"
-                );
-                if certificate_stake_aggregator.add(authority, &self.context.committee) {
-                    return true;
-                }
-            } else {
-                tracing::trace!(
-                    "[{self}] {decision_block:?} is not a certificate for leader {leader_block:?}"
-                );
+            if self.is_certificate(decision_block, leader_block, &mut all_votes)
+                && certificate_stake_aggregator.add(authority, &self.context.committee)
+            {
+                return true;
             }
         }
         false
@@ -385,5 +390,63 @@ impl Display for BaseCommitter {
             "Committer-L{}-R{}",
             self.options.leader_offset, self.options.round_offset
         )
+    }
+}
+
+/// A builder for the base committer. By default, the builder creates a base committer
+/// that has no leader or round offset. Which indicates single leader & pipelining
+/// disabled.
+#[cfg(test)]
+#[allow(unused)]
+mod base_committer_builder {
+    use super::*;
+
+    pub(crate) struct BaseCommitterBuilder {
+        context: Arc<Context>,
+        dag_state: Arc<RwLock<DagState>>,
+        wave_length: u32,
+        leader_offset: u32,
+        round_offset: u32,
+    }
+
+    impl BaseCommitterBuilder {
+        pub fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
+            Self {
+                context,
+                dag_state,
+                wave_length: DEFAULT_WAVE_LENGTH,
+                leader_offset: 0,
+                round_offset: 0,
+            }
+        }
+
+        pub fn with_wave_length(mut self, wave_length: u32) -> Self {
+            self.wave_length = wave_length;
+            self
+        }
+
+        pub fn with_leader_offset(mut self, leader_offset: u32) -> Self {
+            self.leader_offset = leader_offset;
+            self
+        }
+
+        pub fn with_round_offset(mut self, round_offset: u32) -> Self {
+            self.round_offset = round_offset;
+            self
+        }
+
+        pub fn build(self) -> BaseCommitter {
+            let options = BaseCommitterOptions {
+                wave_length: DEFAULT_WAVE_LENGTH,
+                leader_offset: 0,
+                round_offset: 0,
+            };
+            BaseCommitter::new(
+                self.context.clone(),
+                LeaderSchedule::new(self.context),
+                self.dag_state,
+                options,
+            )
+        }
     }
 }

@@ -4,7 +4,6 @@
 import { type Serializable } from '_src/shared/cryptography/keystore';
 import {
 	toSerializedSignature,
-	type ExportedKeypair,
 	type Keypair,
 	type SerializedSignature,
 } from '@mysten/sui.js/cryptography';
@@ -186,7 +185,7 @@ export function isSigningAccount(account: any): account is SigningAccount {
 
 export interface KeyPairExportableAccount {
 	readonly exportableKeyPair: true;
-	exportKeyPair(password: string): Promise<ExportedKeypair>;
+	exportKeyPair(password: string): Promise<string>;
 }
 
 export function isKeyPairExportableAccount(account: any): account is KeyPairExportableAccount {

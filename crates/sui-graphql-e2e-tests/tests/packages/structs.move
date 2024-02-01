@@ -208,7 +208,7 @@ fragment Structs on Object {
 }
 
 
-//# run-graphql --cursors "Coin" "TreasuryCap"
+//# run-graphql --cursors {"n":"Coin","c":2} {"n":"TreasuryCap","c":2}
 {
     object(address: "0x2") {
         asMovePackage {
@@ -250,7 +250,7 @@ fragment Structs on Object {
     }
 }
 
-//# run-graphql --cursors "Coin" "TreasuryCap"
+//# run-graphql --cursors {"n":"Coin","c":2} {"n":"TreasuryCap","c":2}
 fragment NodeNames on MoveStructConnection {
     edges {
         cursor

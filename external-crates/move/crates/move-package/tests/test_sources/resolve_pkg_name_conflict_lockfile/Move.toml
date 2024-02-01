@@ -1,0 +1,22 @@
+# This test highlights the problem of error messages using resolved pkg
+# names instead of original when dependency lock files are present. The
+# resulting error massage in Move.resolved should print `C-rename` instead
+# of `C-resolved`.
+#                                                             
+#             +----------+      1                               
+#    +------->|    B     |-------------+                        
+#    |        +----------+             |                        
+#    |                                 |                        
+#    |                                 v                        
+#  +----+     +----------+   2   +----------+                   
+#  |Root|---->| A-rename | ----->| C-rename |                   
+#  +----+     +----------+       +----------+                   
+#
+#
+
+[package]
+name = "Root-rename"
+
+[dependencies]
+A-rename = { local = "./deps_only/A-rename" }
+B = { local = "./deps_only/B" }

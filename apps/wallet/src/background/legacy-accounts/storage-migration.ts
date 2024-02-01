@@ -71,7 +71,7 @@ async function makeMnemonicAccounts(password: string, vault: LegacyVault) {
 async function makeImportedAccounts(password: string, vault: LegacyVault) {
 	return Promise.all(
 		vault.importedKeypairs.map((keyPair) =>
-			ImportedAccount.createNew({ password, keyPair: keyPair.export() }),
+			ImportedAccount.createNew({ password, keyPair: keyPair.getSecretKey() }),
 		),
 	);
 }

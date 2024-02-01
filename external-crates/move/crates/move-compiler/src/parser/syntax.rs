@@ -142,6 +142,19 @@ macro_rules! expect_token {
     }
 }
 
+/// Error when parsing a module member with a special case when (unexpectedly) encountering another
+/// module to be parsed.
+enum ErrCase {
+    Unknown(Box<Diagnostic>),
+    ContinueToModule(Vec<Attributes>),
+}
+
+impl From<Box<Diagnostic>> for ErrCase {
+    fn from(diag: Box<Diagnostic>) -> Self {
+        ErrCase::Unknown(diag)
+    }
+}
+
 //**************************************************************************************************
 // Miscellaneous Utilities
 //**************************************************************************************************
@@ -2629,11 +2642,25 @@ fn parse_address_block(
         Tok::LBrace => {
             context.tokens.advance()?;
             let mut modules = vec![];
-            while context.tokens.peek() != Tok::RBrace {
-                let attributes = parse_attributes(context)?;
-                modules.push(parse_module(attributes, context)?);
+            loop {
+                let tok = context.tokens.peek();
+                if tok == Tok::RBrace || tok == Tok::EOF {
+                    break;
+                }
+
+                let mut attributes = parse_attributes(context)?;
+                loop {
+                    let (module, next_mod_attributes) = parse_module(attributes, context)?;
+                    modules.push(module);
+                    let Some(attrs) = next_mod_attributes else {
+                        // no attributes returned from parse_module - just keep parsing next module
+                        break;
+                    };
+                    // parse next module with the returned attributes
+                    attributes = attrs;
+                }
             }
-            consume_token(context.tokens, Tok::RBrace)?;
+            consume_token(context.tokens, context.tokens.peek())?;
             modules
         }
         _ => return Err(unexpected_token_error(context.tokens, "'{'")),
@@ -2842,10 +2869,16 @@ fn parse_use_alias(context: &mut Context) -> Result<Option<Name>, Box<Diagnostic
 //                  )
 //              )*
 //          "}"
+//
+// Due to parsing error recovery, while parsing a module the parser may advance past the end of the
+// current module and encounter the next module which also should be parsed. At the point of
+// encountering this next module's starting keyword, its (optional) attributes are already parsed
+// and should be used when constructing this next module - hence making them part of the returned
+// result.
 fn parse_module(
     attributes: Vec<Attributes>,
     context: &mut Context,
-) -> Result<ModuleDefinition, Box<Diagnostic>> {
+) -> Result<(ModuleDefinition, Option<Vec<Attributes>>), Box<Diagnostic>> {
     context.tokens.match_doc_comments();
     let start_loc = context.tokens.start_loc();
 
@@ -2871,86 +2904,42 @@ fn parse_module(
     consume_token(context.tokens, Tok::LBrace)?;
 
     let mut members = vec![];
+    let mut next_mod_attributes = None;
+    let mut stop_parsing = false;
     while context.tokens.peek() != Tok::RBrace {
-        members.push({
-            let attributes = parse_attributes(context)?;
-            match context.tokens.peek() {
-                // Top-level specification constructs
-                Tok::Invariant => {
-                    context.tokens.match_doc_comments();
-                    ModuleMember::Spec(singleton_module_spec_block(
-                        context,
-                        context.tokens.start_loc(),
-                        attributes,
-                        parse_invariant,
-                    )?)
+        let curr_token_loc = context.tokens.current_token_loc();
+        match parse_module_member(context) {
+            Ok(m) => members.push(m),
+            Err(ErrCase::ContinueToModule(attrs)) => {
+                // while trying to parse module members, we moved past the current module and
+                // encountered a new one - keep parsing it at a higher level, keeping the
+                // already parsed attributes
+                next_mod_attributes = Some(attrs);
+                stop_parsing = true;
+                break;
+            }
+            Err(ErrCase::Unknown(diag)) => {
+                context.env.add_diag(*diag);
+                let next_tok =
+                    skip_to_next_desired_tok_or_eof(context, is_start_of_member_or_module);
+                if next_tok == Tok::EOF || next_tok == Tok::Module {
+                    // either end of file or next module to potentially be parsed
+                    stop_parsing = true;
+                    break;
                 }
-                Tok::Spec => {
-                    match context.tokens.lookahead() {
-                        Ok(Tok::Fun) | Ok(Tok::Native) => {
-                            context.tokens.match_doc_comments();
-                            let start_loc = context.tokens.start_loc();
-                            context.tokens.advance()?;
-                            // Add an extra check for better error message
-                            // if old syntax is used
-                            if context.tokens.lookahead2() == Ok((Tok::Identifier, Tok::LBrace)) {
-                                return Err(unexpected_token_error(
-                                    context.tokens,
-                                    "only 'spec', drop the 'fun' keyword",
-                                ));
-                            }
-                            ModuleMember::Spec(singleton_module_spec_block(
-                                context,
-                                start_loc,
-                                attributes,
-                                parse_spec_function,
-                            )?)
-                        }
-                        _ => {
-                            // Regular spec block
-                            ModuleMember::Spec(parse_spec_block(attributes, context)?)
-                        }
-                    }
-                }
-                // Regular move constructs
-                Tok::Friend => ModuleMember::Friend(parse_friend_decl(attributes, context)?),
-                _ => {
-                    context.tokens.match_doc_comments();
-                    let start_loc = context.tokens.start_loc();
-                    let modifiers = parse_module_member_modifiers(context)?;
-                    match context.tokens.peek() {
-                        Tok::Const => ModuleMember::Constant(parse_constant_decl(
-                            attributes, start_loc, modifiers, context,
-                        )?),
-                        Tok::Fun => ModuleMember::Function(parse_function_decl(
-                            attributes, start_loc, modifiers, context,
-                        )?),
-                        Tok::Struct => ModuleMember::Struct(parse_struct_decl(
-                            attributes, start_loc, modifiers, context,
-                        )?),
-                        Tok::Use => ModuleMember::Use(parse_use_decl(
-                            attributes, start_loc, modifiers, context,
-                        )?),
-                        _ => {
-                            return Err(unexpected_token_error(
-                                context.tokens,
-                                &format!(
-                                    "a module member: '{}', '{}', '{}', '{}', '{}', or '{}'",
-                                    Tok::Spec,
-                                    Tok::Use,
-                                    Tok::Friend,
-                                    Tok::Const,
-                                    Tok::Fun,
-                                    Tok::Struct
-                                ),
-                            ))
-                        }
-                    }
+                if curr_token_loc == context.tokens.current_token_loc() {
+                    // token wasn't advanced by either `parse_module_member` nor by
+                    // `skip_to_next_member_or_module_or_eof` - no further parsing is possible (in
+                    // particular, without this check, compiler tests get stuck)
+                    stop_parsing = true;
+                    break;
                 }
             }
-        })
+        }
     }
-    consume_token(context.tokens, Tok::RBrace)?;
+    if !stop_parsing {
+        consume_token(context.tokens, Tok::RBrace)?;
+    }
     let loc = make_loc(
         context.tokens.file_hash(),
         start_loc,
@@ -2965,7 +2954,141 @@ fn parse_module(
         members,
     };
 
-    Ok(def)
+    Ok((def, next_mod_attributes))
+}
+
+/// Skips tokens until reaching the desired one or EOF. Returns true if further parsing is
+/// impossible and parser should stop.
+fn skip_to_next_desired_tok_or_eof(
+    context: &mut Context,
+    is_desired_tok: fn(Tok, &str) -> bool,
+) -> Tok {
+    loop {
+        let tok = context.tokens.peek();
+        let content = context.tokens.content();
+        if tok == Tok::EOF || is_desired_tok(tok, content) {
+            return tok;
+        }
+        if let Err(diag) = context.tokens.advance() {
+            // record diagnostics but keep advancing until encountering one of the desired tokens or
+            // (which is eventually guaranteed) EOF
+            context.env.add_diag(*diag);
+        }
+    }
+}
+
+fn is_start_of_member_or_module(tok: Tok, content: &str) -> bool {
+    match tok {
+        Tok::Invariant
+        | Tok::Spec
+        | Tok::Friend
+        | Tok::Public
+        | Tok::Native
+        | Tok::Const
+        | Tok::Fun
+        | Tok::Struct
+        | Tok::Use
+        | Tok::Module
+        | Tok::NumSign => true,
+        Tok::Identifier => content == ENTRY_MODIFIER, // TODO: add macro start
+        _ => false,
+    }
+}
+
+fn is_start_of_module_or_spec(tok: Tok, _: &str) -> bool {
+    matches!(tok, Tok::Spec | Tok::Module)
+}
+
+/// Parse a single module member. Due to parsing error recovery, when attempting to parse the next
+/// module member, the parser may have already advanced past the end of the current module and
+/// encounter the next module which also should be parsed. While this is a member parsing error,
+/// (optional) attributes for this presumed member (but in fact the next module) had already been
+/// parsed and should be returned as part of the result to allow further parsing of the next module.
+fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
+    let attributes = parse_attributes(context)?;
+    match context.tokens.peek() {
+        // Top-level specification constructs
+        Tok::Invariant => {
+            context.tokens.match_doc_comments();
+            Ok(ModuleMember::Spec(singleton_module_spec_block(
+                context,
+                context.tokens.start_loc(),
+                attributes,
+                parse_invariant,
+            )?))
+        }
+        Tok::Spec => {
+            match context.tokens.lookahead() {
+                Ok(Tok::Fun) | Ok(Tok::Native) => {
+                    context.tokens.match_doc_comments();
+                    let start_loc = context.tokens.start_loc();
+                    context.tokens.advance()?;
+                    // Add an extra check for better error message
+                    // if old syntax is used
+                    if context.tokens.lookahead2() == Ok((Tok::Identifier, Tok::LBrace)) {
+                        return Err(ErrCase::Unknown(unexpected_token_error(
+                            context.tokens,
+                            "only 'spec', drop the 'fun' keyword",
+                        )));
+                    }
+                    Ok(ModuleMember::Spec(singleton_module_spec_block(
+                        context,
+                        start_loc,
+                        attributes,
+                        parse_spec_function,
+                    )?))
+                }
+                _ => {
+                    // Regular spec block
+                    Ok(ModuleMember::Spec(parse_spec_block(attributes, context)?))
+                }
+            }
+        }
+        // Regular move constructs
+        Tok::Friend => Ok(ModuleMember::Friend(parse_friend_decl(
+            attributes, context,
+        )?)),
+        _ => {
+            context.tokens.match_doc_comments();
+            let start_loc = context.tokens.start_loc();
+            let modifiers = parse_module_member_modifiers(context)?;
+            let tok = context.tokens.peek();
+            match tok {
+                Tok::Const => Ok(ModuleMember::Constant(parse_constant_decl(
+                    attributes, start_loc, modifiers, context,
+                )?)),
+                Tok::Fun => Ok(ModuleMember::Function(parse_function_decl(
+                    attributes, start_loc, modifiers, context,
+                )?)),
+                Tok::Struct => Ok(ModuleMember::Struct(parse_struct_decl(
+                    attributes, start_loc, modifiers, context,
+                )?)),
+                Tok::Use => Ok(ModuleMember::Use(parse_use_decl(
+                    attributes, start_loc, modifiers, context,
+                )?)),
+                _ => {
+                    let diag = unexpected_token_error(
+                        context.tokens,
+                        &format!(
+                            "a module member: '{}', '{}', '{}', '{}', '{}', or '{}'",
+                            Tok::Spec,
+                            Tok::Use,
+                            Tok::Friend,
+                            Tok::Const,
+                            Tok::Fun,
+                            Tok::Struct
+                        ),
+                    );
+                    if tok == Tok::Module {
+                        context.env.add_diag(*diag);
+                        Err(ErrCase::ContinueToModule(attributes))
+                    } else {
+                        Err(ErrCase::Unknown(diag))
+                    }
+                }
+            }
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -3671,13 +3794,39 @@ fn singleton_module_spec_block(
 fn parse_file(context: &mut Context) -> Result<Vec<Definition>, Box<Diagnostic>> {
     let mut defs = vec![];
     while context.tokens.peek() != Tok::EOF {
-        let attributes = parse_attributes(context)?;
-        defs.push(match context.tokens.peek() {
-            Tok::Spec | Tok::Module => Definition::Module(parse_module(attributes, context)?),
-            _ => Definition::Address(parse_address_block(attributes, context)?),
-        })
+        if let Err(diag) = parse_file_def(context, &mut defs) {
+            context.env.add_diag(*diag);
+            // skip to the next def and try parsing it if it's there (ignore address blocks as they
+            // are pretty much defunct anyway)
+            skip_to_next_desired_tok_or_eof(context, is_start_of_module_or_spec);
+        }
     }
     Ok(defs)
+}
+
+fn parse_file_def(
+    context: &mut Context,
+    defs: &mut Vec<Definition>,
+) -> Result<(), Box<Diagnostic>> {
+    let mut attributes = parse_attributes(context)?;
+    match context.tokens.peek() {
+        Tok::Spec | Tok::Module => {
+            loop {
+                let (module, next_mod_attributes) = parse_module(attributes, context)?;
+                defs.push(Definition::Module(module));
+                let Some(attrs) = next_mod_attributes else {
+                    // no attributes returned from parse_module - just keep parsing next module
+                    break;
+                };
+                // parse next module with the returned attributes
+                attributes = attrs;
+            }
+        }
+        _ => defs.push(Definition::Address(parse_address_block(
+            attributes, context,
+        )?)),
+    }
+    Ok(())
 }
 
 /// Parse the `input` string as a file of Move source code and return the

@@ -20,9 +20,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
+use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::util::{copy_file, path_to_filesystem};
-use sui_storage::object_store::ObjectStoreConfig;
 use sui_storage::{compress, FileCompression, StorageFormat};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber,
@@ -305,7 +305,7 @@ impl CheckpointWriter {
             .join(format!("{}{}", EPOCH_DIR_PREFIX, self.epoch_num))
     }
     fn update_to_next_epoch(&mut self) {
-        self.epoch_num = self.epoch_num.saturating_add(1);
+        self.epoch_num = self.epoch_num.checked_add(1).unwrap();
     }
 }
 

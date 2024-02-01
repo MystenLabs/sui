@@ -131,7 +131,7 @@ impl Extension for QueryLimitsChecker {
             metrics
                 .request_metrics
                 .query_payload_too_large_size
-                .observe(query.len() as u64);
+                .observe(query.len() as f64);
             info!(
                 query_id = %query_id,
                 session_id = %session_id,
@@ -205,19 +205,19 @@ impl Extension for QueryLimitsChecker {
         metrics
             .request_metrics
             .input_nodes
-            .observe(running_costs.input_nodes as u64);
+            .observe(running_costs.input_nodes as f64);
         metrics
             .request_metrics
             .output_nodes
-            .observe(running_costs.output_nodes);
+            .observe(running_costs.output_nodes as f64);
         metrics
             .request_metrics
             .query_depth
-            .observe(running_costs.depth as u64);
+            .observe(running_costs.depth as f64);
         metrics
             .request_metrics
             .query_payload_size
-            .observe(query.len() as u64);
+            .observe(query.len() as f64);
         Ok(doc)
     }
 }

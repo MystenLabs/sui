@@ -318,13 +318,12 @@ pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemS
 /// dynamic field as a Validator type. We need the version to determine which inner type to use for
 /// the Validator type. This is assuming that the validator is stored in the table as
 /// ValidatorWrapper type.
-pub fn get_validator_from_table<S, K>(
-    object_store: &S,
+pub fn get_validator_from_table<K>(
+    object_store: &dyn ObjectStore,
     table_id: ObjectID,
     key: &K,
 ) -> Result<SuiValidatorSummary, SuiError>
 where
-    S: ObjectStore,
     K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
 {
     let field: ValidatorWrapper = get_dynamic_field_from_store(object_store, table_id, key)

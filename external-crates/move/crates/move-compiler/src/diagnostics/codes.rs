@@ -74,9 +74,6 @@ pub enum WarningFilter {
     },
 }
 
-/// The text used in the attribute for warning suppression
-pub const WARNING_FILTER_ATTR: &str = "allow";
-
 //**************************************************************************************************
 // Categories and Codes
 //**************************************************************************************************
@@ -209,6 +206,7 @@ codes!(
         InvalidVisibilityModifier:
             { msg: "invalid visibility modifier", severity: NonblockingError },
         InvalidUseFun: { msg: "invalid 'use fun' declaration", severity: NonblockingError },
+        UnknownAttribute: { msg: "unknown attribute", severity: Warning },
     ],
     // errors name resolution, mostly expansion/translate and naming/translate
     NameResolution: [
@@ -316,7 +314,7 @@ codes!(
         InvalidTest: { msg: "unable to generate test", severity: NonblockingError },
         InvalidBytecodeInst:
             { msg: "unknown bytecode instruction function", severity: NonblockingError },
-        ValueWarning: { msg: "potential issue with attribute value", severity: Warning }
+        ValueWarning: { msg: "issue with attribute value", severity: Warning }
     ],
     Tests: [
         TestFailed: { msg: "test failure", severity: BlockingError },

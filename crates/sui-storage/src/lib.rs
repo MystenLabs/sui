@@ -168,7 +168,7 @@ pub fn verify_checkpoint_with_committee(
 ) -> Result<VerifiedCheckpoint, CertifiedCheckpointSummary> {
     assert_eq!(
         *checkpoint.sequence_number(),
-        current.sequence_number().saturating_add(1)
+        current.sequence_number().checked_add(1).unwrap()
     );
 
     if Some(*current.digest()) != checkpoint.previous_digest {
@@ -184,7 +184,8 @@ pub fn verify_checkpoint_with_committee(
     }
 
     let current_epoch = current.epoch();
-    if checkpoint.epoch() != current_epoch && checkpoint.epoch() != current_epoch.saturating_add(1)
+    if checkpoint.epoch() != current_epoch
+        && checkpoint.epoch() != current_epoch.checked_add(1).unwrap()
     {
         debug!(
             checkpoint_seq = checkpoint.sequence_number(),
@@ -196,7 +197,7 @@ pub fn verify_checkpoint_with_committee(
         return Err(checkpoint);
     }
 
-    if checkpoint.epoch() == current_epoch.saturating_add(1)
+    if checkpoint.epoch() == current_epoch.checked_add(1).unwrap()
         && current.next_epoch_committee().is_none()
     {
         debug!(

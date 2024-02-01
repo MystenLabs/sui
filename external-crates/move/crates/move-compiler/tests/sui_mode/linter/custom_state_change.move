@@ -11,12 +11,12 @@ module a::test {
         id: UID
     }
 
-    #[lint_allow(self_transfer)]
+    #[allow(lint(self_transfer))]
     public fun custom_transfer_bad(o: S1, ctx: &TxContext) {
         transfer::transfer(o, tx_context::sender(ctx))
     }
 
-    #[lint_allow(share_owned)]
+    #[allow(lint(share_owned))]
     public fun custom_share_bad(o: S1) {
         transfer::share_object(o)
     }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cmp::max,
     collections::{BTreeMap, BTreeSet},
     ops::Bound::{Excluded, Included, Unbounded},
     panic,
@@ -43,6 +44,9 @@ pub(crate) struct DagState {
     // Last consensus commit of the dag.
     last_commit: Option<Commit>,
 
+    // Highest round of blocks accepted.
+    highest_accepted_round: Round,
+
     // Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
 }
@@ -64,6 +68,7 @@ impl DagState {
             cached_refs: vec![BTreeSet::new(); num_authorities],
             last_commit,
             store,
+            highest_accepted_round: 0,
         };
 
         for (i, round) in last_committed_rounds.into_iter().enumerate() {
@@ -83,11 +88,32 @@ impl DagState {
     /// Accepts a block into DagState and keeps it in memory.
     pub(crate) fn accept_block(&mut self, block: VerifiedBlock) {
         let block_ref = block.reference();
+        let block_round = block.round();
+
+        // TODO: Move this check to core
+        // Ensure we don't write multiple blocks per slot for our own index
+        if block_ref.author == self.context.own_index {
+            let existing_blocks = self.get_uncommitted_blocks_at_slot(block_ref.into());
+            assert!(
+                existing_blocks.is_empty(),
+                "Block Rejected! Attempted to add block {block} to own slot where \
+                block(s) {existing_blocks:#?} already exists."
+            );
+        }
         self.recent_blocks.insert(block_ref, block);
         self.cached_refs[block_ref.author].insert(block_ref);
+        self.highest_accepted_round = max(self.highest_accepted_round, block_round);
     }
 
-    /// Gets an uncommitted block. Returns None if not found.
+    /// Accepts a blocks into DagState and keeps it in memory.
+    #[cfg(test)]
+    pub(crate) fn accept_blocks(&mut self, blocks: Vec<VerifiedBlock>) {
+        for block in blocks {
+            self.accept_block(block);
+        }
+    }
+
+    /// Gets a copy of an uncommitted block. Returns None if not found.
     /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
     pub(crate) fn get_uncommitted_block(&self, reference: &BlockRef) -> Option<VerifiedBlock> {
         self.recent_blocks.get(reference).cloned()
@@ -96,6 +122,7 @@ impl DagState {
     /// Gets all uncommitted blocks in a slot.
     /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
     pub(crate) fn get_uncommitted_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
+        // TODO: evauluate if we should panic `if slot.round <= last_commit_round`
         let mut blocks = vec![];
         for (block_ref, block) in self.recent_blocks.range((
             Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
@@ -175,6 +202,10 @@ impl DagState {
             .collect()
     }
 
+    pub(crate) fn highest_accepted_round(&self) -> Round {
+        self.highest_accepted_round
+    }
+
     /// Highest round where a block is committed, which is last commit's leader round.
     fn last_commit_round(&self) -> Round {
         match &self.last_commit {
@@ -196,9 +227,11 @@ mod test {
 
     #[test]
     fn get_unncommitted_blocks() {
-        let context = Arc::new(Context::new_for_test());
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let mut dag_state = DagState::new(context.clone(), store.clone());
+        let own_index = AuthorityIndex::new_for_test(0);
 
         // Populate test blocks for round 1 ~ 10, authorities 0 ~ 2.
         let num_rounds: u32 = 10;
@@ -218,6 +251,11 @@ mod test {
                     );
                     dag_state.accept_block(block.clone());
                     blocks.insert(block.reference(), block);
+
+                    // Only write one block per slot for own index
+                    if AuthorityIndex::new_for_test(author) == own_index {
+                        break;
+                    }
                 }
             }
         }
@@ -248,7 +286,14 @@ mod test {
                         .unwrap(),
                 );
                 let blocks = dag_state.get_uncommitted_blocks_at_slot(slot);
-                assert_eq!(blocks.len(), num_blocks_per_slot);
+
+                // We only write one block per slot for own index
+                if AuthorityIndex::new_for_test(author) == own_index {
+                    assert_eq!(blocks.len(), 1);
+                } else {
+                    assert_eq!(blocks.len(), num_blocks_per_slot);
+                }
+
                 for b in blocks {
                     assert_eq!(b.round(), round);
                     assert_eq!(
@@ -269,7 +314,12 @@ mod test {
         // Check rounds with uncommitted blocks.
         for round in 1..=num_rounds {
             let blocks = dag_state.get_uncommitted_blocks_at_round(round);
-            assert_eq!(blocks.len(), num_authorities as usize * num_blocks_per_slot);
+            // Expect 3 blocks per authority except for own authority which should
+            // have 1 block.
+            assert_eq!(
+                blocks.len(),
+                (num_authorities - 1) as usize * num_blocks_per_slot + 1
+            );
             for b in blocks {
                 assert_eq!(b.round(), round);
             }
@@ -284,7 +334,8 @@ mod test {
     #[test]
     fn ancestors_at_uncommitted_round() {
         // Initialize DagState.
-        let context = Arc::new(Context::new_for_test());
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let mut dag_state = DagState::new(context.clone(), store.clone());
 
@@ -381,7 +432,7 @@ mod test {
         ];
         let round_13 = vec![
             VerifiedBlock::new_for_test(
-                TestBlock::new(12, 0)
+                TestBlock::new(12, 1)
                     .set_timestamp_ms(1300)
                     .set_ancestors(ancestors_for_round_13.clone())
                     .build(),

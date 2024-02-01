@@ -135,7 +135,7 @@ fragment Functions on Object {
     }
 }
 
-//# run-graphql --cursors "consensus_commit_prologue" "timestamp_ms"
+//# run-graphql --cursors {"n":"consensus_commit_prologue","c":2} {"n":"timestamp_ms","c":2}
 
 fragment Signatures on MoveFunctionConnection {
     edges {
@@ -172,7 +172,7 @@ fragment Signatures on MoveFunctionConnection {
     }
 }
 
-//# run-graphql --cursors "consensus_commit_prologue" "timestamp_ms"
+//# run-graphql --cursors {"n":"consensus_commit_prologue","c":2} {"n":"timestamp_ms","c":2}
 
 fragment Signatures on MoveFunctionConnection {
     edges {

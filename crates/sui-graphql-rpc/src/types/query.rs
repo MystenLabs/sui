@@ -27,7 +27,7 @@ use super::{
     epoch::Epoch,
     event::{self, Event, EventFilter},
     move_type::MoveType,
-    object::{self, Object, ObjectFilter, ObjectVersionKey},
+    object::{self, Object, ObjectFilter, ObjectLookupKey},
     owner::Owner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
@@ -176,7 +176,10 @@ impl Query {
     }
 
     async fn owner(&self, address: SuiAddress) -> Option<Owner> {
-        Some(Owner { address })
+        Some(Owner {
+            address,
+            checkpoint_viewed_at: None,
+        })
     }
 
     /// The object corresponding to the given address at the (optionally) given version.
@@ -191,11 +194,14 @@ impl Query {
             Some(version) => Object::query(
                 ctx.data_unchecked(),
                 address,
-                ObjectVersionKey::Historical(version),
+                ObjectLookupKey::VersionAt {
+                    version,
+                    checkpoint_viewed_at: None,
+                },
             )
             .await
             .extend(),
-            None => Object::query(ctx.data_unchecked(), address, ObjectVersionKey::Latest)
+            None => Object::query(ctx.data_unchecked(), address, ObjectLookupKey::Latest)
                 .await
                 .extend(),
         }
@@ -203,7 +209,10 @@ impl Query {
 
     /// Look-up an Account by its SuiAddress.
     async fn address(&self, address: SuiAddress) -> Option<Address> {
-        Some(Address { address })
+        Some(Address {
+            address,
+            checkpoint_viewed_at: None,
+        })
     }
 
     /// Fetch a structured representation of a concrete type, including its layout information.
@@ -218,7 +227,7 @@ impl Query {
 
     /// Fetch epoch information by ID (defaults to the latest epoch).
     async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), id).await.extend()
+        Epoch::query(ctx.data_unchecked(), id, None).await.extend()
     }
 
     /// Fetch checkpoint information by sequence number or digest (defaults to the latest available
@@ -228,9 +237,13 @@ impl Query {
         ctx: &Context<'_>,
         id: Option<CheckpointId>,
     ) -> Result<Option<Checkpoint>> {
-        Checkpoint::query(ctx.data_unchecked(), id.unwrap_or_default())
-            .await
-            .extend()
+        Checkpoint::query(
+            ctx.data_unchecked(),
+            id.unwrap_or_default(),
+            /* checkpoint_viewed_at */ None,
+        )
+        .await
+        .extend()
     }
 
     /// Fetch a transaction block by its transaction digest.
@@ -239,7 +252,7 @@ impl Query {
         ctx: &Context<'_>,
         digest: Digest,
     ) -> Result<Option<TransactionBlock>> {
-        TransactionBlock::query(ctx.data_unchecked(), digest)
+        TransactionBlock::query(ctx.data_unchecked(), digest, None)
             .await
             .extend()
     }
@@ -259,9 +272,15 @@ impl Query {
     ) -> Result<Connection<String, Coin>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
-        Coin::paginate(ctx.data_unchecked(), page, coin, /* owner */ None)
-            .await
-            .extend()
+        Coin::paginate(
+            ctx.data_unchecked(),
+            page,
+            coin,
+            /* owner */ None,
+            /* checkpoint_sequence_number */ None,
+        )
+        .await
+        .extend()
     }
 
     /// The checkpoints that exist in the network.
@@ -274,9 +293,14 @@ impl Query {
         before: Option<checkpoint::Cursor>,
     ) -> Result<Connection<String, Checkpoint>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Checkpoint::paginate(ctx.data_unchecked(), page, None)
-            .await
-            .extend()
+        Checkpoint::paginate(
+            ctx.data_unchecked(),
+            page,
+            /* epoch */ None,
+            /* checkpoint_viewed_at */ None,
+        )
+        .await
+        .extend()
     }
 
     /// The transaction blocks that exist in the network.
@@ -290,7 +314,7 @@ impl Query {
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Connection<String, TransactionBlock>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        TransactionBlock::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default())
+        TransactionBlock::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default(), None)
             .await
             .extend()
     }
@@ -306,7 +330,7 @@ impl Query {
         filter: Option<EventFilter>,
     ) -> Result<Connection<String, Event>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Event::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default())
+        Event::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default(), None)
             .await
             .extend()
     }
@@ -322,7 +346,7 @@ impl Query {
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Object::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default())
+        Object::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default(), None)
             .await
             .extend()
     }
@@ -353,7 +377,10 @@ impl Query {
         .await
         .extend()?
         .and_then(|r| r.target_address)
-        .map(|a| Address { address: a.into() }))
+        .map(|a| Address {
+            address: a.into(),
+            checkpoint_viewed_at: None,
+        }))
     }
 
     /// The coin metadata associated with the given coin type.

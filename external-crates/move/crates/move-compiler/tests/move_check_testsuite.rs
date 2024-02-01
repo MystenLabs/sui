@@ -21,7 +21,6 @@ use move_compiler::{
 const KEEP_TMP: &str = "KEEP";
 
 const TEST_EXT: &str = "unit_test";
-const VERIFICATION_EXT: &str = "verification";
 const UNUSED_EXT: &str = "unused";
 
 const LINTER_DIR: &str = "linter";
@@ -97,33 +96,6 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
         )?;
     }
 
-    // A verification case is marked that it should also be compiled in verification mode by having
-    // a `path.verification` file.
-    if path.with_extension(VERIFICATION_EXT).exists() {
-        let verification_exp_path = format!(
-            "{}.verification.{}",
-            path.with_extension("").to_string_lossy(),
-            EXP_EXT
-        );
-        let verification_out_path = format!(
-            "{}.verification.{}",
-            path.with_extension("").to_string_lossy(),
-            OUT_EXT
-        );
-        let mut config = config.clone();
-        config
-            .warning_filter
-            .union(&WarningFilters::unused_warnings_filter_for_test());
-        run_test(
-            path,
-            Path::new(&verification_exp_path),
-            Path::new(&verification_out_path),
-            Flags::verification(),
-            config,
-            lint,
-        )?;
-    }
-
     // A cross-module unused case that should run without unused warnings suppression
     if path.with_extension(UNUSED_EXT).exists() {
         let unused_exp_path = format!(
@@ -188,10 +160,10 @@ pub fn run_test(
         .set_default_config(default_config);
 
     if lint {
-        let (filter_attr_name, filters) = known_filters();
+        let (prefix, filters) = known_filters();
         compiler = compiler
             .add_visitors(linter_visitors())
-            .add_custom_known_filters(filters, filter_attr_name);
+            .add_custom_known_filters(prefix, filters);
     }
 
     let (files, comments_and_compiler_res) = compiler.run::<PASS_PARSER>()?;

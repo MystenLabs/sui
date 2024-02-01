@@ -15,7 +15,7 @@ export const NetworkConfigs: Record<Network, { url: string }> = {
 	[Network.LOCAL]: { url: getFullnodeUrl('localnet') },
 	[Network.DEVNET]: { url: 'https://explorer-rpc.devnet.sui.io:443' },
 	[Network.TESTNET]: { url: 'https://sui-testnet.mystenlabs.com/json-rpc' },
-	[Network.MAINNET]: { url: 'https://explorer-rpc.mainnet.sui.io:443' },
+	[Network.MAINNET]: { url: 'https://sui-mainnet.mystenlabs.com/json-rpc' },
 };
 
 const defaultClientMap: Map<Network | string, SuiClient> = new Map();

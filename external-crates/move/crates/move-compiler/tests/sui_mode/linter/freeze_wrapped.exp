@@ -7,7 +7,7 @@ warning[Lint W04001]: attempting to freeze wrapped objects
 43 │         transfer::public_freeze_object(w);
    │                                        ^ Freezing an object of type 'Wrapper' also freezes all objects wrapped in its field 'inner'.
    │
-   = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04001]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:47:40
@@ -21,7 +21,7 @@ warning[Lint W04001]: attempting to freeze wrapped objects
 47 │         transfer::public_freeze_object(w);
    │                                        ^ Freezing an object of type 'IndirectWrapper' also freezes all objects wrapped in its field 's'.
    │
-   = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04001]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:52:40
@@ -32,7 +32,7 @@ warning[Lint W04001]: attempting to freeze wrapped objects
 52 │         transfer::public_freeze_object(v);
    │                                        ^ Freezing an object of type 'Wrapper' also freezes all objects wrapped in its field 'inner'.
    │
-   = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04001]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:56:40
@@ -43,7 +43,7 @@ warning[Lint W04001]: attempting to freeze wrapped objects
 56 │         transfer::public_freeze_object(w);
    │                                        ^ Freezing an object of type 'GenWrapper' also freezes all objects wrapped in its field 'inner'.
    │
-   = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04001]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:60:40
@@ -57,7 +57,7 @@ warning[Lint W04001]: attempting to freeze wrapped objects
 60 │         transfer::public_freeze_object(w);
    │                                        ^ Freezing an object of type 'IndirectGenWrapper' also freezes all objects wrapped in its field 'inner'.
    │
-   = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04001]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:64:40
@@ -68,7 +68,7 @@ warning[Lint W04001]: attempting to freeze wrapped objects
 64 │         transfer::public_freeze_object({ transfer::public_freeze_object(w1) ; w2});
    │                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Freezing an object of type 'Wrapper' also freezes all objects wrapped in its field 'inner'.
    │
-   = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04001]: attempting to freeze wrapped objects
    ┌─ tests/sui_mode/linter/freeze_wrapped.move:64:73
@@ -79,5 +79,5 @@ warning[Lint W04001]: attempting to freeze wrapped objects
 64 │         transfer::public_freeze_object({ transfer::public_freeze_object(w1) ; w2});
    │                                                                         ^^ Freezing an object of type 'Wrapper' also freezes all objects wrapped in its field 'inner'.
    │
-   = This warning can be suppressed with '#[lint_allow(freeze_wrapped)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(freeze_wrapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

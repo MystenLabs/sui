@@ -433,6 +433,10 @@ impl CheckpointStore {
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), TypedStoreError> {
+        debug!(
+            checkpoint_seq = checkpoint.sequence_number(),
+            "Inserting certified checkpoint",
+        );
         let mut batch = self.certified_checkpoints.batch();
         batch
             .insert_batch(
@@ -463,6 +467,7 @@ impl CheckpointStore {
 
     // Called by state sync, apart from inserting the checkpoint and updating
     // related tables, it also bumps the highest_verified_checkpoint watermark.
+    #[instrument(level = "debug", skip_all)]
     pub fn insert_verified_checkpoint(
         &self,
         checkpoint: &VerifiedCheckpoint,
@@ -480,6 +485,10 @@ impl CheckpointStore {
                 .get_highest_verified_checkpoint()?
                 .map(|x| *x.sequence_number())
         {
+            debug!(
+                checkpoint_seq = checkpoint.sequence_number(),
+                "Updating highest verified checkpoint",
+            );
             self.watermarks.insert(
                 &CheckpointWatermark::HighestVerified,
                 &(*checkpoint.sequence_number(), *checkpoint.digest()),
@@ -493,6 +502,10 @@ impl CheckpointStore {
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), TypedStoreError> {
+        debug!(
+            checkpoint_seq = checkpoint.sequence_number(),
+            "Updating highest synced checkpoint",
+        );
         self.watermarks.insert(
             &CheckpointWatermark::HighestSynced,
             &(*checkpoint.sequence_number(), *checkpoint.digest()),
@@ -512,6 +525,10 @@ impl CheckpointStore {
             checkpoint.sequence_number(),
             seq_number);
         }
+        debug!(
+            checkpoint_seq = checkpoint.sequence_number(),
+            "Updating highest executed checkpoint",
+        );
         self.watermarks.insert(
             &CheckpointWatermark::HighestExecuted,
             &(*checkpoint.sequence_number(), *checkpoint.digest()),
@@ -546,6 +563,10 @@ impl CheckpointStore {
         &self,
         contents: CheckpointContents,
     ) -> Result<(), TypedStoreError> {
+        debug!(
+            checkpoint_seq = ?contents.digest(),
+            "Inserting checkpoint contents",
+        );
         self.checkpoint_content.insert(contents.digest(), &contents)
     }
 
@@ -666,7 +687,7 @@ pub struct CheckpointBuilder {
     epoch_store: Arc<AuthorityPerEpochStore>,
     notify: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
-    effects_store: Box<dyn EffectsNotifyRead>,
+    effects_store: Arc<dyn EffectsNotifyRead>,
     accumulator: Arc<StateAccumulator>,
     output: Box<dyn CheckpointOutput>,
     exit: watch::Receiver<()>,
@@ -704,7 +725,7 @@ impl CheckpointBuilder {
         tables: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
-        effects_store: Box<dyn EffectsNotifyRead>,
+        effects_store: Arc<dyn EffectsNotifyRead>,
         accumulator: Arc<StateAccumulator>,
         output: Box<dyn CheckpointOutput>,
         exit: watch::Receiver<()>,
@@ -942,7 +963,7 @@ impl CheckpointBuilder {
             .collect();
         let transactions_and_sizes = self
             .state
-            .database
+            .get_cache_reader()
             .get_transactions_and_serialized_sizes(&all_digests)?;
         let mut all_effects_and_transaction_sizes = Vec::with_capacity(all_effects.len());
         let mut transaction_keys = Vec::new();
@@ -1673,11 +1694,6 @@ async fn diagnose_split_brain(
     debug!("{}", fork_logs_text);
 
     fail_point!("split_brain_reached");
-
-    // There is no option to never restart the node, so choosing longer than should
-    // be needed for any testcase
-    // #[cfg(msim)]
-    // sui_simulator::task::kill_current_node(Some(Duration::from_secs(100)));
 }
 
 pub trait CheckpointServiceNotify {
@@ -1704,7 +1720,7 @@ impl CheckpointService {
         state: Arc<AuthorityState>,
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
-        effects_store: Box<dyn EffectsNotifyRead>,
+        effects_store: Arc<dyn EffectsNotifyRead>,
         accumulator: Arc<StateAccumulator>,
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
@@ -1969,7 +1985,7 @@ mod tests {
         let (output, mut result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
         let (certified_output, mut certified_result) =
             mpsc::channel::<CertifiedCheckpointSummary>(10);
-        let store = Box::new(store);
+        let store = Arc::new(store);
 
         let ckpt_dir = tempfile::tempdir().unwrap();
         let checkpoint_store = CheckpointStore::new(ckpt_dir.path());
