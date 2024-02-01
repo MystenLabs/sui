@@ -8,8 +8,10 @@ use crate::{
     naming::ast::{self as N, BlockLabel, Color, TParamID, Type, Type_, UseFuns, Var, Var_},
     parser::ast::FunctionName,
     shared::program_info::FunctionInfo,
-    typing::ast::{self as T},
-    typing::core::{self, TParamSubst},
+    typing::{
+        ast as T,
+        core::{self, TParamSubst},
+    },
 };
 use move_ir_types::location::*;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -505,10 +507,16 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             recolor_exp(ctx, ebody)
         }
         N::Exp_::Block(N::Block {
-            name: _,
+            name,
             from_macro_argument: _,
             seq: s,
-        }) => recolor_seq(ctx, s),
+        }) => {
+            if let Some(name) = name {
+                ctx.add_block_label(*name);
+                recolor_block_label(ctx, name);
+            }
+            recolor_seq(ctx, s);
+        }
         N::Exp_::FieldMutate(ed, e) => {
             recolor_exp_dotted(ctx, ed);
             recolor_exp(ctx, e)
@@ -817,7 +825,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             let labeled_body_ = N::Exp_::Block(N::Block {
                 name: Some(return_label),
                 // mark lambda expansion for recursive macro check
-                from_macro_argument: Some(*eloc),
+                from_macro_argument: Some(N::MacroArgument::Lambda(*eloc)),
                 seq: (N::UseFuns::new(use_fun_color), labeled_seq),
             });
             let labeled_body = Box::new(sp(body_loc, labeled_body_));
@@ -865,7 +873,9 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
 
             // mark the arg as coming from an argument substitution for recursive checks
             match &mut arg.value {
-                N::Exp_::Block(block) => block.from_macro_argument = Some(*eloc),
+                N::Exp_::Block(block) => {
+                    block.from_macro_argument = Some(N::MacroArgument::Substituted(*eloc))
+                }
                 N::Exp_::UnresolvedError => (),
                 _ => unreachable!("ICE all macro args should have been made blocks in naming"),
             };

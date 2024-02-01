@@ -1318,7 +1318,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             let res = if let Some(name) = name {
                 let final_type = if let Some(local_return_type) = context.named_block_type_opt(name)
                 {
-                    let msg = if from_macro_argument.is_some() {
+                    let msg = if let Some(N::MacroArgument::Lambda(_)) = from_macro_argument {
                         || "Invalid lambda return"
                     } else {
                         || "Invalid named block"

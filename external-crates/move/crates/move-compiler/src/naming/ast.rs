@@ -310,8 +310,14 @@ pub struct Lambda {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Block {
     pub name: Option<BlockLabel>,
-    pub from_macro_argument: Option<Loc>,
+    pub from_macro_argument: Option<MacroArgument>,
     pub seq: Sequence,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum MacroArgument {
+    Lambda(Loc),
+    Substituted(Loc),
 }
 
 #[derive(Debug, PartialEq, Clone)]

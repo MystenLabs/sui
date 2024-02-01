@@ -349,14 +349,18 @@ impl<'env> Context<'env> {
         );
     }
 
-    pub fn maybe_enter_macro_argument(&mut self, from_macro_argument: Option<Loc>, color: Color) {
+    pub fn maybe_enter_macro_argument(
+        &mut self,
+        from_macro_argument: Option<N::MacroArgument>,
+        color: Color,
+    ) {
         if from_macro_argument.is_some() {
             self.macro_expansion
                 .push(MacroExpansion::Argument { scope_color: color })
         }
     }
 
-    pub fn maybe_exit_macro_argument(&mut self, from_macro_argument: Option<Loc>) {
+    pub fn maybe_exit_macro_argument(&mut self, from_macro_argument: Option<N::MacroArgument>) {
         if from_macro_argument.is_some() {
             let Some(MacroExpansion::Argument { .. }) = self.macro_expansion.pop() else {
                 panic!("ICE macro expansion stack should have a lambda when leaving a lambda")
