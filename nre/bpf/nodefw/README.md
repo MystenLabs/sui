@@ -25,7 +25,7 @@ but sometimes fall behind.
 ## Build eBPF
 
 ```bash
-cargo task build-ebpf
+cargo bpf build-ebpf
 ```
 
 To perform a release build you can use the `--release` flag.
@@ -48,5 +48,5 @@ capabilites on the built binary.  Some or all of these, depending on the program
 Alternatively, run with `sudo -E`
 
 ```bash
-RUST_LOG=info cargo task run
+RUST_LOG=info cargo bpf run
 ```

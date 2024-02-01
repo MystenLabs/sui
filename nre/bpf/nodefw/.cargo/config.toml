@@ -1,2 +1,2 @@
 [alias]
-task = "run --package xtask --"
+bpf = "run --package xtask --"
