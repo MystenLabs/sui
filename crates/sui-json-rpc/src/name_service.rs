@@ -48,7 +48,7 @@ pub struct Table<K, V> {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Domain {
-    pub labels: Vec<String>,
+    labels: Vec<String>,
 }
 
 impl Domain {

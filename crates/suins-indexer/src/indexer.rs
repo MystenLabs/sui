@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
 use move_core_types::language_storage::StructTag;
 use sui_json_rpc::name_service::{Domain, NameRecord, SubDomainRegistration};
@@ -17,7 +20,8 @@ use crate::models::VerifiedDomain;
 /// TODO(manos): Hardcode mainnet addresses.
 const REGISTRY_TABLE_ID: &str =
     "0xe64cd9db9f829c6cc405d9790bd71567ae07259855f4fba6f02c84f52298c106";
-const SUBDOMAIN_REGISTRATION_TYPE: &str = "0xPackageIdTBD::subdomain_registration::SubDomainRegistration";
+const SUBDOMAIN_REGISTRATION_TYPE: &str =
+    "0xPackageIdTBD::subdomain_registration::SubDomainRegistration";
 
 #[derive(Debug, Clone)]
 pub struct NameRecordChange {
@@ -57,7 +61,9 @@ impl SuinsIndexer {
     /// For subdomain wrappers, we're saving the ID of the wrapper object,
     /// to make it easy to locate the NFT (since the base NFT gets wrapped and indexing won't work there).
     pub fn is_subdomain_wrapper(&self, object: &Object) -> bool {
-        object.struct_tag().is_some() && object.struct_tag().unwrap() == self.subdomain_wrapper_type
+        object
+            .struct_tag()
+            .is_some_and(|tag| tag == self.subdomain_wrapper_type)
     }
 
     // Filter by owner.
@@ -65,8 +71,9 @@ impl SuinsIndexer {
     // A table of that type can only have `Field<Domain,NameRecord> as a child so that check is enough to
     // make sure we're dealing with a registry change.
     pub fn is_name_record(&self, object: &Object) -> bool {
-        object.get_single_owner().is_some()
-            && object.get_single_owner() == Some(self.registry_table_id)
+        object
+            .get_single_owner()
+            .is_some_and(|owner| owner == self.registry_table_id)
     }
 
     /// Parses the name record changes + subdomain wraps.
@@ -75,7 +82,7 @@ impl SuinsIndexer {
     /// It is implemented in a way to do just a single iteration over the objects.
     pub fn parse_name_record_changes(
         &self,
-        objects: &Vec<&Object>,
+        objects: &[&Object],
         name_record_changes: &mut Vec<NameRecordChange>,
         sub_domain_wrappers: &mut HashMap<String, String>,
     ) {
@@ -116,7 +123,7 @@ impl SuinsIndexer {
         // Gather all object ids that got deleted.
         // This way, we can delete removed name records
         // (detects burning of expired names or leaf names removal).
-        let deleted_objects: Vec<_> = checkpoint
+        let deleted_objects: HashSet<_> = checkpoint
             .transactions
             .iter()
             .flat_map(|x| x.effects.all_removed_objects())
@@ -167,6 +174,8 @@ impl SuinsIndexer {
 /// only if the checkpoint is newer than the last checkpoint we have in the DB.
 /// Doing that, we do not care about the order of execution and we can use multiple threads
 /// to commit from later checkpoints to the DB.
+///
+/// WARNING: This can easily be SQL-injected, so make sure to use it only with trusted inputs.
 pub fn format_update_field_query(field: &str) -> String {
     format!(
         "CASE WHEN excluded.last_checkpoint_updated > domains.last_checkpoint_updated THEN excluded.{field} ELSE domains.{field} END"
@@ -187,7 +196,7 @@ pub fn prepare_db_updates(
 ) -> Vec<VerifiedDomain> {
     let mut updates: Vec<VerifiedDomain> = vec![];
 
-    for name_record_change in name_record_changes.iter() {
+    for name_record_change in name_record_changes {
         let name_record = &name_record_change.field;
 
         let parent = name_record.name.parent().to_string();

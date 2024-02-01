@@ -37,7 +37,7 @@ impl SuinsIndexerWorker {
     /// - The second query is a bulk delete of all deletions.
     ///
     /// You can safely call this with empty updates/deletions as it will return Ok.
-    fn commit_to_db(&self, updates: &Vec<VerifiedDomain>, removals: &Vec<String>) -> Result<()> {
+    fn commit_to_db(&self, updates: &[VerifiedDomain], removals: &Vec<String>) -> Result<()> {
         if updates.is_empty() && removals.is_empty() {
             return Ok(());
         }
@@ -126,7 +126,7 @@ async fn main() -> Result<()> {
     executor
         .run(
             PathBuf::from(checkpoints_dir), /* directory should exist but can be empty */
-            aws_s3_endpoint, /* remote_read_endpoint: If set */
+            aws_s3_endpoint,                /* remote_read_endpoint: If set */
             vec![
                 (
                     "aws_access_key_id".to_string(),
