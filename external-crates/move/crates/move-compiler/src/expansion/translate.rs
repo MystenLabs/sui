@@ -2918,15 +2918,15 @@ fn maybe_labeled_exp(
     let sp!(_eloc, e_) = *e;
     let e_ = match e_ {
         E::Exp_::While(label_opt, cond, body) => {
-            unique_label(context, loc, &label, label_opt);
+            ensure_unique_label(context, loc, &label, label_opt);
             E::Exp_::While(Some(label), cond, body)
         }
         E::Exp_::Loop(label_opt, body) => {
-            unique_label(context, loc, &label, label_opt);
+            ensure_unique_label(context, loc, &label, label_opt);
             E::Exp_::Loop(Some(label), body)
         }
         E::Exp_::Block(label_opt, seq) => {
-            unique_label(context, loc, &label, label_opt);
+            ensure_unique_label(context, loc, &label, label_opt);
             E::Exp_::Block(Some(label), seq)
         }
         _ => {
@@ -2943,7 +2943,7 @@ fn maybe_labeled_exp(
     Box::new(sp(loc, e_))
 }
 
-fn unique_label(
+fn ensure_unique_label(
     context: &mut Context,
     loc: Loc,
     _label: &BlockLabel,

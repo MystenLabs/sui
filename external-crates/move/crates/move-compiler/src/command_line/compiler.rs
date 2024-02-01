@@ -293,7 +293,7 @@ impl<'a> Compiler<'a> {
         }
 
         let (source_text, pprog, comments) =
-            stacker!(parse_program(&mut compilation_env, maps, targets, deps))?;
+            with_large_stack!(parse_program(&mut compilation_env, maps, targets, deps))?;
 
         let res: Result<_, Diagnostics> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
@@ -929,7 +929,7 @@ fn run(
             PassResult::Compilation(_, _) => unreachable!("ICE Pass::Compilation is >= all passes"),
         }
     }
-    stacker!(rec(
+    with_large_stack!(rec(
         compilation_env,
         pre_compiled_lib,
         cur,

@@ -1309,16 +1309,16 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         }
         NE::Block(N::Block {
             name,
-            from_lambda_expansion,
+            from_macro_argument,
             seq: nseq,
         }) => {
-            context.maybe_enter_lambda_expansion(from_lambda_expansion, nseq.0.color);
+            context.maybe_enter_macro_argument(from_macro_argument, nseq.0.color);
             let seq = sequence(context, nseq);
             let seq_ty = sequence_type(&seq).clone();
             let res = if let Some(name) = name {
                 let final_type = if let Some(local_return_type) = context.named_block_type_opt(name)
                 {
-                    let msg = if from_lambda_expansion.is_some() {
+                    let msg = if from_macro_argument.is_some() {
                         || "Invalid lambda return"
                     } else {
                         || "Invalid named block"
@@ -1331,7 +1331,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             } else {
                 (seq_ty, TE::Block(seq))
             };
-            context.maybe_exit_lambda_expansion(from_lambda_expansion);
+            context.maybe_exit_macro_argument(from_macro_argument);
             res
         }
 
@@ -2906,7 +2906,7 @@ fn block_macro_arg(context: &Context, sp!(loc, ne_): N::Exp) -> N::Exp {
             let seq = (N::UseFuns::new(color), seq_);
             let block = N::Block {
                 name: None,
-                from_lambda_expansion: None,
+                from_macro_argument: None,
                 seq,
             };
             N::Exp_::Block(block)

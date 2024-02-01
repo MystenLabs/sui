@@ -5,7 +5,7 @@ error[E04032]: unable to expand macro function
    │         ----------------- From this macro expansion
    ·
  8 │         foo!(|| bar!($f))
-   │         ^^^^^^^^^^^^^^^^^ Recursive macro expansion. 'a::m::foo' has already been expanded
+   │         ^^^^^^^^^^^^^^^^^ Recursive macro expansion. 'a::m::foo' cannot recursively expand itself
    ·
 28 │         foo!(|| 0);
    │         ---------- 'a::m::foo' previously expanded here
@@ -14,7 +14,7 @@ error[E04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_invalid_lambdas.move:12:12
    │
 12 │         $f(arg!($f))
-   │            ^^^^^^^^ Recursive macro expansion. 'a::m::arg' has already been expanded
+   │            ^^^^^^^^ Recursive macro expansion. 'a::m::arg' cannot recursively expand itself
    ·
 29 │         arg!(|x| x);
    │         ----------- 'a::m::arg' previously expanded here
@@ -23,7 +23,7 @@ error[E04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_invalid_lambdas.move:16:12
    │
 16 │         $f(arg_eta!(|x| $f(x)))
-   │            ^^^^^^^^^^^^^^^^^^^ Recursive macro expansion. 'a::m::arg_eta' has already been expanded
+   │            ^^^^^^^^^^^^^^^^^^^ Recursive macro expansion. 'a::m::arg_eta' cannot recursively expand itself
    ·
 30 │         arg_eta!(|x| x);
    │         --------------- 'a::m::arg_eta' previously expanded here
@@ -34,7 +34,7 @@ error[E04032]: unable to expand macro function
 20 │         $f(apply!(|| arg_apply!($f)))
    │            ----------^^^^^^^^^^^^^^-
    │            │         │
-   │            │         Recursive macro expansion. 'a::m::arg_apply' has already been expanded
+   │            │         Recursive macro expansion. 'a::m::arg_apply' cannot recursively expand itself
    │            From this macro expansion
    ·
 31 │         arg_apply!(|x| x);

@@ -4,7 +4,7 @@
 
 use crate::{
     diag,
-    diagnostics::{codes::*, Diagnostic},
+    diagnostics::codes::*,
     editions::FeatureGate,
     expansion::{
         ast::{self as E, AbilitySet, ModuleIdent, Visibility},
@@ -79,7 +79,8 @@ enum LoopType {
 enum NominalBlockType {
     Loop(LoopType),
     Block,
-    Lambda,
+    LambdaReturn,
+    LambdaLoopCapture,
 }
 
 struct Context<'env> {
@@ -92,7 +93,7 @@ struct Context<'env> {
     local_scopes: Vec<BTreeMap<Symbol, u16>>,
     local_count: BTreeMap<Symbol, u16>,
     used_locals: BTreeSet<N::Var_>,
-    nominal_blocks: Vec<(Loc, Option<Symbol>, u16, NominalBlockType)>,
+    nominal_blocks: Vec<(Option<Symbol>, BlockLabel, NominalBlockType)>,
     nominal_block_id: u16,
     /// Type parameters used in a function (they have to be cleared after processing each function).
     used_fun_tparams: BTreeSet<TParamID>,
@@ -482,50 +483,50 @@ impl<'env> Context<'env> {
         );
         let id = self.nominal_block_id;
         self.nominal_block_id += 1;
+        let block_label = block_label(loc, name.map(|n| n.value()), id);
         self.nominal_blocks
-            .push((loc, name.map(|n| n.value()), id, name_type));
+            .push((name.map(|n| n.value()), block_label, name_type));
     }
 
-    fn current_loop(
-        &self,
-        loc: Loc,
-        usage: NominalBlockUsage,
-    ) -> Result<BlockLabel, Option<Diagnostic>> {
-        let Some((lblloc, name, id, name_type)) =
-            self.nominal_blocks
-                .iter()
-                .rev()
-                .find(|(_, _, _, name_type)| {
-                    matches!(
-                        name_type,
-                        NominalBlockType::Loop(_) | NominalBlockType::Lambda
-                    )
-                })
+    fn current_loop(&mut self, loc: Loc, usage: NominalBlockUsage) -> Option<BlockLabel> {
+        let Some((_name, label, name_type)) =
+            self.nominal_blocks.iter().rev().find(|(_, _, name_type)| {
+                matches!(
+                    name_type,
+                    NominalBlockType::Loop(_) | NominalBlockType::LambdaLoopCapture
+                )
+            })
         else {
-            return Err(None);
+            let msg = format!(
+                "Invalid usage of '{usage}'. \
+                '{usage}' can only be used inside a loop body or lambda",
+            );
+            self.env
+                .add_diag(diag!(TypeSafety::InvalidLoopControl, (loc, msg)));
+            return None;
         };
-        if *name_type == NominalBlockType::Lambda {
+        if *name_type == NominalBlockType::LambdaLoopCapture {
             // lambdas capture break/continue even though it is not yet supported
             let msg =
                 format!("Invalid '{usage}'. This usage is not yet supported for lambdas or macros");
             let mut diag = diag!(
                 TypeSafety::InvalidLoopControl,
                 (loc, msg),
-                (*lblloc, "Inside this lambda")
+                (label.label.loc, "Inside this lambda")
             );
             // suggest adding a label to the loop
             let most_recent_loop_opt =
                 self.nominal_blocks
                     .iter()
                     .rev()
-                    .find_map(|(loc, name, _, name_type)| {
+                    .find_map(|(name, label, name_type)| {
                         if let NominalBlockType::Loop(loop_type) = name_type {
-                            Some((*loc, name, *loop_type))
+                            Some((name, label, *loop_type))
                         } else {
                             None
                         }
                     });
-            if let Some((loop_loc, name, loop_type)) = most_recent_loop_opt {
+            if let Some((name, loop_label, loop_type)) = most_recent_loop_opt {
                 let msg = if let Some(loop_label) = name {
                     format!(
                         "To '{usage}' to this loop, specify the label, \
@@ -537,29 +538,28 @@ impl<'env> Context<'env> {
                         e.g. `'label: {loop_type}` and `{usage}'label`",
                     )
                 };
-                diag.add_secondary_label((loop_loc, msg));
+                diag.add_secondary_label((loop_label.label.loc, msg));
             }
-            return Err(Some(diag));
+            self.env.add_diag(diag);
+            return None;
         }
-        Ok(block_label(loc, usage, *name, *id, *name_type))
+        Some(*label)
     }
 
-    fn current_continue(&self, loc: Loc) -> Result<BlockLabel, Option<Diagnostic>> {
+    fn current_continue(&mut self, loc: Loc) -> Option<BlockLabel> {
         self.current_loop(loc, NominalBlockUsage::Continue)
     }
 
-    fn current_break(&self, loc: Loc) -> Result<BlockLabel, Option<Diagnostic>> {
+    fn current_break(&mut self, loc: Loc) -> Option<BlockLabel> {
         self.current_loop(loc, NominalBlockUsage::Break)
     }
 
-    fn current_return(&self, loc: Loc) -> Option<BlockLabel> {
+    fn current_return(&self, _loc: Loc) -> Option<BlockLabel> {
         self.nominal_blocks
             .iter()
             .rev()
-            .find(|(_, _, _, name_type)| matches!(name_type, NominalBlockType::Lambda))
-            .map(|(_, name, id, name_type)| {
-                block_label(loc, NominalBlockUsage::Return, *name, *id, *name_type)
-            })
+            .find(|(_, _, name_type)| matches!(name_type, NominalBlockType::LambdaReturn))
+            .map(|(_, label, _)| *label)
     }
 
     fn resolve_nominal_label(
@@ -569,22 +569,16 @@ impl<'env> Context<'env> {
     ) -> Option<BlockLabel> {
         let loc = label.loc();
         let name = label.value();
-        let id_opt = self
+        let label_opt = self
             .nominal_blocks
             .iter()
             .rev()
-            .find(|(_, block_name, _, _)| block_name.is_some_and(|n| n == name))
-            .map(|(_, _, id, block_type)| (id, block_type));
-        if let Some((id, block_type)) = id_opt {
+            .find(|(block_name, _, _)| block_name.is_some_and(|n| n == name))
+            .map(|(_, label, block_type)| (label, block_type));
+        if let Some((label, block_type)) = label_opt {
             let block_type = *block_type;
             if block_type.is_acceptable_usage(usage) {
-                Some(block_label(
-                    loc,
-                    NominalBlockUsage::Return,
-                    Some(name),
-                    *id,
-                    block_type,
-                ))
+                Some(*label)
             } else {
                 let msg = format!("Invalid usage of '{usage}' with a {block_type} block label",);
                 let mut diag = diag!(NameResolution::InvalidLabel, (loc, msg));
@@ -597,7 +591,7 @@ impl<'env> Context<'env> {
                         "Named block labels may only be used with 'return', \
                         not 'break' or 'continue'."
                     }
-                    NominalBlockType::Lambda => {
+                    NominalBlockType::LambdaReturn | NominalBlockType::LambdaLoopCapture => {
                         "Lambda block labels may only be used with 'return' or 'break', \
                         not 'continue'."
                     }
@@ -613,61 +607,15 @@ impl<'env> Context<'env> {
         }
     }
 
-    fn exit_nominal_block(&mut self, loc: Loc) -> BlockLabel {
-        let (_, name, id, name_type) = self.nominal_blocks.pop().unwrap();
-        assert_ne!(name_type, NominalBlockType::Lambda);
-        block_label(
-            loc,
-            /* unused */ NominalBlockUsage::Return,
-            name,
-            id,
-            name_type,
-        )
-    }
-
-    fn exit_lambda(&mut self, loc: Loc) -> BlockLabel {
-        let (_, name, id, name_type) = self.nominal_blocks.pop().unwrap();
-        assert_eq!(name_type, NominalBlockType::Lambda);
-        block_label(
-            loc,
-            NominalBlockUsage::Return,
-            name,
-            id,
-            NominalBlockType::Lambda,
-        )
+    fn exit_nominal_block(&mut self) -> (BlockLabel, NominalBlockType) {
+        let (_name, label, name_type) = self.nominal_blocks.pop().unwrap();
+        (label, name_type)
     }
 }
 
-fn lambda_return(lambda: Symbol) -> Symbol {
-    format!("{}-return", lambda).into()
-}
-
-fn rename_lambda_label(
-    usage: NominalBlockUsage,
-    name: Symbol,
-    name_type: NominalBlockType,
-) -> Symbol {
-    if name_type != NominalBlockType::Lambda {
-        return name;
-    }
-    match usage {
-        NominalBlockUsage::Return => lambda_return(name),
-        NominalBlockUsage::Break | NominalBlockUsage::Continue => {
-            unreachable!("ICE lambda continue should be caught as an error")
-        }
-    }
-}
-
-fn block_label(
-    loc: Loc,
-    usage: NominalBlockUsage,
-    name: Option<Symbol>,
-    id: u16,
-    name_type: NominalBlockType,
-) -> BlockLabel {
+fn block_label(loc: Loc, name: Option<Symbol>, id: u16) -> BlockLabel {
     let is_implicit = name.is_none();
     let name = name.unwrap_or(BlockLabel::IMPLICIT_LABEL_SYMBOL);
-    let name = rename_lambda_label(usage, name, name_type);
     let var_ = N::Var_ { name, id, color: 0 };
     let label = sp(loc, var_);
     BlockLabel { label, is_implicit }
@@ -682,12 +630,15 @@ impl NominalBlockType {
             (NominalBlockType::Loop(_), NominalBlockUsage::Break)
             | (NominalBlockType::Loop(_), NominalBlockUsage::Continue)
             | (NominalBlockType::Block, NominalBlockUsage::Return)
-            | (NominalBlockType::Lambda, NominalBlockUsage::Return)
-            | (NominalBlockType::Lambda, NominalBlockUsage::Break) => true,
+            | (NominalBlockType::LambdaReturn, NominalBlockUsage::Return)
+            | (NominalBlockType::LambdaLoopCapture, NominalBlockUsage::Break)
+            | (NominalBlockType::LambdaLoopCapture, NominalBlockUsage::Continue) => true,
             (NominalBlockType::Loop(_), NominalBlockUsage::Return)
             | (NominalBlockType::Block, NominalBlockUsage::Break)
             | (NominalBlockType::Block, NominalBlockUsage::Continue)
-            | (NominalBlockType::Lambda, NominalBlockUsage::Continue) => false,
+            | (NominalBlockType::LambdaReturn, NominalBlockUsage::Break)
+            | (NominalBlockType::LambdaReturn, NominalBlockUsage::Continue)
+            | (NominalBlockType::LambdaLoopCapture, NominalBlockUsage::Return) => false,
         }
     }
 }
@@ -709,7 +660,7 @@ impl std::fmt::Display for NominalBlockType {
             match self {
                 NominalBlockType::Loop(_) => "loop",
                 NominalBlockType::Block => "named",
-                NominalBlockType::Lambda => "lambda",
+                NominalBlockType::LambdaReturn | NominalBlockType::LambdaLoopCapture => "lambda",
             }
         )
     }
@@ -1487,35 +1438,45 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             let cond = exp(context, eb);
             context.enter_nominal_block(eloc, name_opt, NominalBlockType::Loop(LoopType::While));
             let body = exp(context, el);
-            NE::While(context.exit_nominal_block(eloc), cond, body)
+            let (label, name_type) = context.exit_nominal_block();
+            assert_eq!(name_type, NominalBlockType::Loop(LoopType::While));
+            NE::While(label, cond, body)
         }
         EE::Loop(name_opt, el) => {
             context.enter_nominal_block(eloc, name_opt, NominalBlockType::Loop(LoopType::Loop));
             let body = exp(context, el);
-            NE::Loop(context.exit_nominal_block(eloc), body)
+            let (label, name_type) = context.exit_nominal_block();
+            assert_eq!(name_type, NominalBlockType::Loop(LoopType::Loop));
+            NE::Loop(label, body)
         }
         EE::Block(Some(name), eseq) => {
             context.enter_nominal_block(eloc, Some(name), NominalBlockType::Block);
             let seq = sequence(context, eseq);
+            let (label, name_type) = context.exit_nominal_block();
+            assert_eq!(name_type, NominalBlockType::Block);
             NE::Block(N::Block {
-                name: Some(context.exit_nominal_block(eloc)),
-                from_lambda_expansion: None,
+                name: Some(label),
+                from_macro_argument: None,
                 seq,
             })
         }
         EE::Block(None, eseq) => NE::Block(N::Block {
             name: None,
-            from_lambda_expansion: None,
+            from_macro_argument: None,
             seq: sequence(context, eseq),
         }),
         EE::Lambda(elambda_binds, ety_opt, body) => {
             context.new_local_scope();
             let nlambda_binds_opt = lambda_bind_list(context, elambda_binds);
             let return_type = ety_opt.map(|t| type_(context, t));
-            context.enter_nominal_block(eloc, None, NominalBlockType::Lambda);
+            context.enter_nominal_block(eloc, None, NominalBlockType::LambdaLoopCapture);
+            context.enter_nominal_block(eloc, None, NominalBlockType::LambdaReturn);
             let body = exp(context, body);
             context.close_local_scope();
-            let return_label = context.exit_lambda(eloc);
+            let (return_label, return_name_type) = context.exit_nominal_block();
+            assert_eq!(return_name_type, NominalBlockType::LambdaReturn);
+            let (_, loop_name_type) = context.exit_nominal_block();
+            assert_eq!(loop_name_type, NominalBlockType::LambdaLoopCapture);
             match nlambda_binds_opt {
                 None => {
                     assert!(context.env.has_errors());
@@ -1584,15 +1545,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 context
                     .current_break(eloc)
                     .map(|name| NE::Give(NominalBlockUsage::Return, name, out_rhs))
-                    .unwrap_or_else(|e| {
-                        let diag = e.unwrap_or_else(|| {
-                            let msg = "Invalid usage of 'break'. \
-                            'break' can only be used inside a loop body or lambda";
-                            diag!(TypeSafety::InvalidLoopControl, (eloc, msg))
-                        });
-                        context.env.add_diag(diag);
-                        NE::UnresolvedError
-                    })
+                    .unwrap_or_else(|| NE::UnresolvedError)
             }
         }
         EE::Continue(name_opt) => {
@@ -1605,15 +1558,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 context
                     .current_continue(eloc)
                     .map(NE::Continue)
-                    .unwrap_or_else(|e| {
-                        let diag = e.unwrap_or_else(|| {
-                            let msg = "Invalid usage of 'continue'. \
-                            'continue' can only be used inside a loop body";
-                            diag!(TypeSafety::InvalidLoopControl, (eloc, msg))
-                        });
-                        context.env.add_diag(diag);
-                        NE::UnresolvedError
-                    })
+                    .unwrap_or_else(|| NE::UnresolvedError)
             }
         }
 
@@ -2304,7 +2249,7 @@ fn remove_unused_bindings_exp(
         }
         N::Exp_::Block(N::Block {
             name: _,
-            from_lambda_expansion: _,
+            from_macro_argument: _,
             seq,
         }) => remove_unused_bindings_seq(context, used, seq),
         N::Exp_::Lambda(N::Lambda {

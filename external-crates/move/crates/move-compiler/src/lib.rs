@@ -12,7 +12,7 @@ extern crate move_symbol_pool;
 
 pub const STACK_LIMIT: usize = 42 * 1_000_000_000;
 
-macro_rules! stacker {
+macro_rules! with_large_stack {
     ($e:expr) => {
         stacker::grow($crate::STACK_LIMIT, || $e)
     };

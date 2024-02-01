@@ -162,7 +162,7 @@ pub(crate) fn call(
         );
         let block = N::Block {
             name: Some(label),
-            from_lambda_expansion: None,
+            from_macro_argument: None,
             seq,
         };
         wrapped_body = Box::new(sp(call_loc, N::Exp_::Block(block)));
@@ -228,7 +228,7 @@ fn recolor_macro(
         recolor_seq(recolor, &mut body);
         N::Block {
             name: None,
-            from_lambda_expansion: None,
+            from_macro_argument: None,
             seq: body,
         }
     };
@@ -506,7 +506,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
         }
         N::Exp_::Block(N::Block {
             name: _,
-            from_lambda_expansion: _,
+            from_macro_argument: _,
             seq: s,
         }) => recolor_seq(ctx, s),
         N::Exp_::FieldMutate(ed, e) => {
@@ -695,7 +695,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         }
         N::Exp_::Block(N::Block {
             name: _,
-            from_lambda_expansion: _,
+            from_macro_argument: _,
             seq: s,
         }) => seq(context, s),
         N::Exp_::FieldMutate(ed, e) => {
@@ -817,7 +817,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             let labeled_body_ = N::Exp_::Block(N::Block {
                 name: Some(return_label),
                 // mark lambda expansion for recursive macro check
-                from_lambda_expansion: Some(*eloc),
+                from_macro_argument: Some(*eloc),
                 seq: (N::UseFuns::new(use_fun_color), labeled_seq),
             });
             let labeled_body = Box::new(sp(body_loc, labeled_body_));
@@ -841,7 +841,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             result.push_back(sp(body_loc, N::SequenceItem_::Seq(labeled_body)));
             *e_ = N::Exp_::Block(N::Block {
                 name: None,
-                from_lambda_expansion: None,
+                from_macro_argument: None,
                 seq: (N::UseFuns::new(context.macro_color), result),
             });
         }
@@ -863,9 +863,9 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             recolor_exp(recolor, &mut arg);
             context.core.set_max_variable_color(recolor.max_color());
 
-            // mark the arg as coming from an argument substitution
+            // mark the arg as coming from an argument substitution for recursive checks
             match &mut arg.value {
-                N::Exp_::Block(block) => block.from_lambda_expansion = Some(*eloc),
+                N::Exp_::Block(block) => block.from_macro_argument = Some(*eloc),
                 N::Exp_::UnresolvedError => (),
                 _ => unreachable!("ICE all macro args should have been made blocks in naming"),
             };

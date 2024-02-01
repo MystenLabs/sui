@@ -2,7 +2,7 @@ error[E04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_invalid.move:4:13
    │
  4 │         1 + self_cyle!()
-   │             ^^^^^^^^^^^^ Recursive macro expansion. 'a::m::self_cyle' has already been expanded
+   │             ^^^^^^^^^^^^ Recursive macro expansion. 'a::m::self_cyle' cannot recursively expand itself
    ·
 39 │         self_cyle!();
    │         ------------ 'a::m::self_cyle' previously expanded here
@@ -17,7 +17,7 @@ error[E04032]: unable to expand macro function
    │         --------- From this macro expansion
    ·
 17 │         cycle1!()
-   │         ^^^^^^^^^ Recursive macro expansion. 'a::m::cycle1' has already been expanded
+   │         ^^^^^^^^^ Recursive macro expansion. 'a::m::cycle1' cannot recursively expand itself
    ·
 40 │         cycle1!();
    │         --------- 'a::m::cycle1' previously expanded here
@@ -28,7 +28,7 @@ error[E04032]: unable to expand macro function
 22 │         apply!(|| cycle_app!(|| $f()))
    │         ----------^^^^^^^^^^^^^^^^^^^-
    │         │         │
-   │         │         Recursive macro expansion. 'a::m::cycle_app' has already been expanded
+   │         │         Recursive macro expansion. 'a::m::cycle_app' cannot recursively expand itself
    │         From this macro expansion
    ·
 41 │         cycle_app!(|| 1);
@@ -40,7 +40,7 @@ error[E04032]: unable to expand macro function
 31 │         by_name!(cycle_by_name!($f))
    │         ---------^^^^^^^^^^^^^^^^^^-
    │         │        │
-   │         │        Recursive macro expansion. 'a::m::cycle_by_name' has already been expanded
+   │         │        Recursive macro expansion. 'a::m::cycle_by_name' cannot recursively expand itself
    │         From this macro expansion
    ·
 42 │         cycle_by_name!(1);

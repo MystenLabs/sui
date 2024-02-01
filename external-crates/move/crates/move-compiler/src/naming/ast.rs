@@ -310,7 +310,7 @@ pub struct Lambda {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Block {
     pub name: Option<BlockLabel>,
-    pub from_lambda_expansion: Option<Loc>,
+    pub from_macro_argument: Option<Loc>,
     pub seq: Sequence,
 }
 
@@ -757,17 +757,6 @@ impl Value_ {
     }
 }
 
-pub fn explist(loc: Loc, mut es: Vec<Exp>) -> Exp {
-    match es.len() {
-        0 => {
-            let e_ = Exp_::Unit { trailing: false };
-            sp(loc, e_)
-        }
-        1 => es.pop().unwrap(),
-        _ => sp(loc, Exp_::ExpList(es)),
-    }
-}
-
 //**************************************************************************************************
 // Display
 //**************************************************************************************************
@@ -1069,13 +1058,10 @@ impl AstDebug for Var_ {
 impl AstDebug for BlockLabel {
     fn ast_debug(&self, w: &mut AstWriter) {
         let BlockLabel {
-            is_implicit,
+            is_implicit: _,
             label: sp!(_, Var_ { name, id, color }),
         } = self;
         w.write(&format!("'{name}"));
-        if *is_implicit {
-            w.write("#implicit")
-        }
         if *id != 0 {
             w.write(&format!("#{id}"));
         }
@@ -1479,15 +1465,15 @@ impl AstDebug for Block {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Block {
             name,
-            from_lambda_expansion,
+            from_macro_argument,
             seq,
         } = self;
         if let Some(name) = name {
             name.ast_debug(w);
             w.write(": ");
         }
-        if from_lambda_expansion.is_some() {
-            w.write("from_lambda#");
+        if from_macro_argument.is_some() {
+            w.write("substituted_macro_arg#");
         }
         seq.ast_debug(w);
     }

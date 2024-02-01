@@ -66,10 +66,11 @@ pub enum MacroExpansion {
         module: ModuleIdent,
         function: FunctionName,
         invocation: Loc,
-        use_funs_scope: Color,
+        scope_color: Color,
     },
-    Lambda {
-        use_funs_scope: Color,
+    // An argument to a macro, where the entire expression was substituted in
+    Argument {
+        scope_color: Color,
     },
 }
 
@@ -273,23 +274,23 @@ impl<'env> Context<'env> {
         let mut prev_opt = None;
         for (idx, mexp) in self.macro_expansion.iter().enumerate().rev() {
             match mexp {
-                MacroExpansion::Lambda { use_funs_scope } => {
-                    // the lambda has a smaller (or equal) color, meaning this lambda was written
-                    // and invoked from an outer scope
-                    if current_call_color > *use_funs_scope {
+                MacroExpansion::Argument { scope_color } => {
+                    // the argument has a smaller (or equal) color, meaning this lambda/arg was
+                    // written in an outer scope
+                    if current_call_color > *scope_color {
                         break;
                     }
                 }
                 MacroExpansion::Call {
                     module,
                     function,
-                    use_funs_scope,
+                    scope_color,
                     ..
                 } => {
-                    // recursive call is found if we call the same module
-                    // but at a color that is less than or equal to the current color is safe
-                    // since it means it is from some outer scope (likely from a lambda)
-                    if current_call_color > *use_funs_scope && module == &m && function == &f {
+                    // If we find a call (same module/fn) above us at a shallower expansion depth,
+                    // without an interceding macro arg/lambda, we are in a macro calling itself.
+                    // If it was a deeper depth, that's fine -- it must have come from elsewhere.
+                    if current_call_color > *scope_color && module == &m && function == &f {
                         prev_opt = Some(idx);
                         break;
                     }
@@ -299,7 +300,7 @@ impl<'env> Context<'env> {
 
         if let Some(idx) = prev_opt {
             let msg = format!(
-                "Recursive macro expansion. '{}::{}' has already been expanded",
+                "Recursive macro expansion. '{}::{}' cannot recursively expand itself",
                 m, f
             );
             let mut diag = diag!(TypeSafety::CannotExpandMacro, (loc, msg));
@@ -312,7 +313,7 @@ impl<'env> Context<'env> {
                         invocation,
                         ..
                     } => Some((module, function, invocation)),
-                    MacroExpansion::Lambda { .. } => None,
+                    MacroExpansion::Argument { .. } => None,
                 });
             for (prev_m, prev_f, prev_loc) in cycle {
                 let msg = if prev_m == &m && prev_f == &f {
@@ -329,7 +330,7 @@ impl<'env> Context<'env> {
                 module: m,
                 function: f,
                 invocation: loc,
-                use_funs_scope: current_call_color,
+                scope_color: current_call_color,
             });
             true
         }
@@ -348,21 +349,16 @@ impl<'env> Context<'env> {
         );
     }
 
-    pub fn maybe_enter_lambda_expansion(
-        &mut self,
-        from_lambda_expansion: Option<Loc>,
-        color: Color,
-    ) {
-        if from_lambda_expansion.is_some() {
-            self.macro_expansion.push(MacroExpansion::Lambda {
-                use_funs_scope: color,
-            })
+    pub fn maybe_enter_macro_argument(&mut self, from_macro_argument: Option<Loc>, color: Color) {
+        if from_macro_argument.is_some() {
+            self.macro_expansion
+                .push(MacroExpansion::Argument { scope_color: color })
         }
     }
 
-    pub fn maybe_exit_lambda_expansion(&mut self, from_lambda_expansion: Option<Loc>) {
-        if from_lambda_expansion.is_some() {
-            let Some(MacroExpansion::Lambda { .. }) = self.macro_expansion.pop() else {
+    pub fn maybe_exit_macro_argument(&mut self, from_macro_argument: Option<Loc>) {
+        if from_macro_argument.is_some() {
+            let Some(MacroExpansion::Argument { .. }) = self.macro_expansion.pop() else {
                 panic!("ICE macro expansion stack should have a lambda when leaving a lambda")
             };
         }
@@ -587,13 +583,13 @@ impl<'env> Context<'env> {
         self.named_block_map.get(&name).cloned()
     }
 
-    pub fn next_variable_color(&mut self) -> u16 {
+    pub fn next_variable_color(&mut self) -> Color {
         let max_variable_color: &mut u16 = &mut *self.max_variable_color.borrow_mut();
         *max_variable_color += 1;
         *max_variable_color
     }
 
-    pub fn set_max_variable_color(&self, color: u16) {
+    pub fn set_max_variable_color(&self, color: Color) {
         let max_variable_color: &mut u16 = &mut *self.max_variable_color.borrow_mut();
         assert!(
             *max_variable_color <= color,
@@ -1138,8 +1134,7 @@ pub fn make_function_type(
     let public_for_testing =
         public_testing_visibility(context.env, context.current_package, f, finfo.entry);
     let is_testing_context = context.is_testing_context();
-    let visibility = finfo.visibility;
-    match visibility {
+    match finfo.visibility {
         _ if is_testing_context && public_for_testing.is_some() => (),
         Visibility::Internal if in_current_module => (),
         Visibility::Internal => {
