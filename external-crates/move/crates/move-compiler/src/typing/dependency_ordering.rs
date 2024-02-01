@@ -309,7 +309,7 @@ fn type_opt(context: &mut Context, t_opt: &Option<N::Type>) {
 // Expressions
 //**************************************************************************************************
 
-fn sequence(context: &mut Context, sequence: &T::Sequence) {
+fn sequence(context: &mut Context, (_, sequence): &T::Sequence) {
     use T::SequenceItem_ as SI;
     for sp!(_, item_) in sequence {
         match item_ {

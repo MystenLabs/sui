@@ -140,7 +140,7 @@ fn module(
     let functions = nfunctions.map(|name, f| function(context, name, f));
     assert!(context.constraints.is_empty());
     context.current_package = None;
-    context.pop_use_funs_scope();
+    let use_funs = context.pop_use_funs_scope();
     context.env.pop_warning_filter_scope();
     let typed_module = T::ModuleDefinition {
         loc,
@@ -151,6 +151,7 @@ fn module(
         dependency_order: 0,
         immediate_neighbors: UniqueMap::new(),
         used_addresses: BTreeSet::new(),
+        use_funs,
         friends,
         structs,
         constants,
@@ -227,7 +228,8 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
             let seq = sequence(context, es);
             let ety = sequence_type(&seq);
             let ret_ty = context.return_type.clone().unwrap();
-            let sloc = seq.back().unwrap().loc;
+            let (_, seq_items) = &seq;
+            let sloc = seq_items.back().unwrap().loc;
             subtype(
                 context,
                 sloc,
@@ -504,7 +506,7 @@ mod check_valid_constant {
         }
     }
 
-    fn sequence(context: &mut Context, seq: &T::Sequence) {
+    fn sequence(context: &mut Context, (_, seq): &T::Sequence) {
         for item in seq {
             sequence_item(context, item)
         }
@@ -982,7 +984,6 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
 
     context.add_use_funs_scope(use_funs);
     let mut work_queue = VecDeque::new();
-    let mut resulting_sequence = T::Sequence::new();
 
     let len = seq.len();
     for (idx, sp!(loc, ns_)) in seq.into_iter().enumerate() {
@@ -1020,21 +1021,22 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
         }
     }
 
+    let mut seq_items = VecDeque::new();
     for case in work_queue {
         match case {
-            SeqCase::Seq(loc, e) => resulting_sequence.push_front(sp(loc, TS::Seq(e))),
-            SeqCase::Declare { loc, b } => resulting_sequence.push_front(sp(loc, TS::Declare(b))),
+            SeqCase::Seq(loc, e) => seq_items.push_front(sp(loc, TS::Seq(e))),
+            SeqCase::Declare { loc, b } => seq_items.push_front(sp(loc, TS::Declare(b))),
             SeqCase::Bind { loc, b, e } => {
                 let lvalue_ty = lvalues_expected_types(context, &b);
-                resulting_sequence.push_front(sp(loc, TS::Bind(b, lvalue_ty, e)))
+                seq_items.push_front(sp(loc, TS::Bind(b, lvalue_ty, e)))
             }
         }
     }
-    context.pop_use_funs_scope();
-    resulting_sequence
+    let use_funs = context.pop_use_funs_scope();
+    (use_funs, seq_items)
 }
 
-fn sequence_type(seq: &T::Sequence) -> &Type {
+fn sequence_type((_, seq): &T::Sequence) -> &Type {
     use T::SequenceItem_ as TS;
     match seq.back().unwrap() {
         sp!(_, TS::Bind(_, _, _)) | sp!(_, TS::Declare(_)) => {
@@ -2230,7 +2232,17 @@ fn method_call(
         _ => exp_dotted_to_owned_value(context, DottedUsage::Use, loc, edotted, edotted_ty),
     };
     args.insert(0, first_arg);
-    let call = module_call_impl(context, loc, m, f, targs, parameters, argloc, args);
+    let call = module_call_impl(
+        context,
+        loc,
+        m,
+        f,
+        targs,
+        parameters,
+        argloc,
+        args,
+        Some(method),
+    );
     Some((ret_ty, TE::ModuleCall(Box::new(call))))
 }
 
@@ -2257,7 +2269,9 @@ fn module_call(
 ) -> (Type, T::UnannotatedExp_) {
     let (_, ty_args, parameters, ret_ty) =
         core::make_function_type(context, loc, &m, &f, ty_args_opt);
-    let call = module_call_impl(context, loc, m, f, ty_args, parameters, argloc, args);
+    let call = module_call_impl(
+        context, loc, m, f, ty_args, parameters, argloc, args, /* method_name */ None,
+    );
     (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
 }
 
@@ -2270,6 +2284,7 @@ fn module_call_impl(
     parameters: Vec<(N::Var, Type)>,
     argloc: Loc,
     args: Vec<T::Exp>,
+    method_name: Option<Name>,
 ) -> T::ModuleCall {
     let (arguments, arg_tys) = call_args(
         context,
@@ -2296,6 +2311,7 @@ fn module_call_impl(
         type_arguments: ty_args,
         arguments,
         parameter_types: params_ty_list,
+        method_name,
     };
     context
         .used_module_members

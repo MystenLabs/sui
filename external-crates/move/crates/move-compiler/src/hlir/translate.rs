@@ -279,6 +279,7 @@ fn module(
         dependency_order,
         immediate_neighbors: _,
         used_addresses: _,
+        use_funs: _,
         friends,
         structs: tstructs,
         functions: tfunctions,
@@ -373,7 +374,7 @@ fn function_body(
             context.extract_function_locals();
             HB::Native
         }
-        TB::Defined(seq) => {
+        TB::Defined((_, seq)) => {
             let (locals, body) = function_body_defined(context, sig, loc, seq);
             HB::Defined { locals, body }
         }
@@ -385,7 +386,7 @@ fn function_body_defined(
     context: &mut Context,
     signature: &H::FunctionSignature,
     loc: Loc,
-    seq: T::Sequence,
+    seq: VecDeque<T::SequenceItem>,
 ) -> (UniqueMap<H::Var, H::SingleType>, Block) {
     context.signature = Some(signature.clone());
     let (mut body, final_value) = { body(context, Some(&signature.return_type), loc, seq) };
@@ -430,7 +431,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
     let signature = base_type(context, tsignature);
     let eloc = tvalue.exp.loc;
     let tseq = {
-        let mut v = T::Sequence::new();
+        let mut v = VecDeque::new();
         v.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(tvalue))));
         v
     };
@@ -611,7 +612,7 @@ fn body(
     context: &mut Context,
     expected_type: Option<&H::Type>,
     loc: Loc,
-    seq: T::Sequence,
+    seq: VecDeque<T::SequenceItem>,
 ) -> (Block, Option<H::Exp>) {
     if seq.is_empty() {
         (make_block!(), Some(unit_exp(loc)))
@@ -731,7 +732,7 @@ fn tail(
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
             None
         }
-        E::NamedBlock(name, seq) => {
+        E::NamedBlock(name, (_, seq)) => {
             let name = translate_block_label(name);
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             let result = if binders.is_empty() {
@@ -756,7 +757,7 @@ fn tail(
                 result
             })
         }
-        E::Block(seq) => tail_block(context, block, expected_type, seq),
+        E::Block((_, seq)) => tail_block(context, block, expected_type, seq),
 
         // -----------------------------------------------------------------------------------------
         //  statements that need to be hoisted out
@@ -785,7 +786,7 @@ fn tail_block(
     context: &mut Context,
     block: &mut Block,
     expected_type: Option<&H::Type>,
-    mut seq: T::Sequence,
+    mut seq: VecDeque<T::SequenceItem>,
 ) -> Option<H::Exp> {
     use T::SequenceItem_ as S;
     let last_exp = seq.pop_back();
@@ -973,7 +974,7 @@ fn value(
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
             make_exp(HE::Unreachable)
         }
-        E::NamedBlock(name, seq) => {
+        E::NamedBlock(name, (_, seq)) => {
             let name = translate_block_label(name);
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             context.record_named_block_binders(name, binders.clone());
@@ -990,7 +991,7 @@ fn value(
             ));
             bound_exp
         }
-        E::Block(seq) => value_block(context, block, Some(&out_type), seq),
+        E::Block((_, seq)) => value_block(context, block, Some(&out_type), seq),
 
         // -----------------------------------------------------------------------------------------
         //  calls
@@ -1002,6 +1003,7 @@ fn value(
                 type_arguments,
                 arguments,
                 parameter_types,
+                method_name: _,
             } = *call;
             let htys = base_types(context, type_arguments);
             let expected_type = H::Type_::from_vec(eloc, single_types(context, parameter_types));
@@ -1222,7 +1224,7 @@ fn value_block(
     context: &mut Context,
     block: &mut Block,
     expected_type: Option<&H::Type>,
-    mut seq: T::Sequence,
+    mut seq: VecDeque<T::SequenceItem>,
 ) -> H::Exp {
     use T::SequenceItem_ as S;
     let last_exp = seq.pop_back();
@@ -1437,7 +1439,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
                 make_ignore_and_pop(block, bound_exp);
             }
         }
-        E::Block(seq) => statement_block(context, block, seq),
+        E::Block((_, seq)) => statement_block(context, block, seq),
         E::Return(rhs) => {
             let expected_type = context.signature.as_ref().map(|s| s.return_type.clone());
             let exp = value(context, block, expected_type.as_ref(), *rhs);
@@ -1524,7 +1526,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
     }
 }
 
-fn statement_block(context: &mut Context, block: &mut Block, seq: T::Sequence) {
+fn statement_block(context: &mut Context, block: &mut Block, seq: VecDeque<T::SequenceItem>) {
     use T::SequenceItem_ as S;
     for sp!(sloc, seq_item) in seq.into_iter() {
         match seq_item {
