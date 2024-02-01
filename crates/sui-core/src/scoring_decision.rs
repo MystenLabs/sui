@@ -97,7 +97,6 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    #[cfg_attr(msim, ignore)]
     pub fn test_update_low_scoring_authorities() {
         // GIVEN
         // Total stake is 8 for this committee and every authority has equal stake = 1

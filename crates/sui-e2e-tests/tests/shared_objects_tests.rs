@@ -535,7 +535,6 @@ async fn shared_object_sync() {
         // Set the threshold high enough so it won't be triggered.
         .with_overload_threshold_config(OverloadThresholdConfig {
             max_txn_age_in_queue: Duration::from_secs(60),
-            ..Default::default()
         })
         .build()
         .await;
