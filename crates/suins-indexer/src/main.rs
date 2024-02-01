@@ -37,7 +37,7 @@ impl SuinsIndexerWorker {
     /// - The second query is a bulk delete of all deletions.
     ///
     /// You can safely call this with empty updates/deletions as it will return Ok.
-    fn commit_to_db(&self, updates: &[VerifiedDomain], removals: &Vec<String>) -> Result<()> {
+    fn commit_to_db(&self, updates: &[VerifiedDomain], removals: &[String]) -> Result<()> {
         if updates.is_empty() && removals.is_empty() {
             return Ok(());
         }
