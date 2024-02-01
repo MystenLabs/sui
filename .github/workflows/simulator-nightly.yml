@@ -96,7 +96,19 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
-        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
+        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
+
+    - name: Get current sui-core oncall
+      id: pagerduty
+      uses: mxie/pagerduty-oncall-action@main 
+      with:
+        token: ${{ secrets.PAGERDUTY_ACCESS_KEY }}
+        schedule-id: PGCQ3YS # sui-core
+
+    - name: Get slack id for the oncall
+      run: |
+        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg ONCALL "${{ steps.pagerduty.outputs.person }}" '.[] | if .name == $ONCALL then .slack_id else empty end')
+        echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV        
 
     - name: Post to slack
       if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
@@ -135,7 +147,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "@sui-core, to debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results"
+                  "text": "<@${{ env.slack_id }}> (current sui-core oncall), to debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results"
                 }
               }
             ]
