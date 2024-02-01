@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 aya-bpf = { git = "https://github.com/aya-rs/aya" }
-# aya-bpf-bindings = { git = "https://github.com/aya-rs/aya" }
 aya-log-ebpf = { git = "https://github.com/aya-rs/aya" }
 nodefw-common = { path = "../nodefw-common" }
 network-types = "0.0.5"
