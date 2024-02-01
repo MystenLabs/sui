@@ -11,3 +11,4 @@ pub mod setup;
 pub mod simple_store;
 pub mod sw_agent;
 pub mod types;
+pub mod queue_manager;
