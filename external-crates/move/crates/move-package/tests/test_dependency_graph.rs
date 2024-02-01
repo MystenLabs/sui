@@ -49,11 +49,11 @@ fn no_dep_graph() {
         .expect("Creating DependencyGraph");
 
     assert!(
-        graph.package_graph.contains_node(graph.root_package),
+        graph.package_graph.contains_node(graph.root_package_id),
         "A graph for a package with no dependencies should still contain the root package",
     );
 
-    assert_eq!(graph.topological_order(), vec![graph.root_package]);
+    assert_eq!(graph.topological_order(), vec![graph.root_package_id]);
 }
 
 #[test]
@@ -70,11 +70,11 @@ fn no_dep_graph_from_lock() {
     .expect("Reading DependencyGraph");
 
     assert!(
-        graph.package_graph.contains_node(graph.root_package),
+        graph.package_graph.contains_node(graph.root_package_id),
         "A graph for a package with no dependencies should still contain the root package",
     );
 
-    assert_eq!(graph.topological_order(), vec![graph.root_package]);
+    assert_eq!(graph.topological_order(), vec![graph.root_package_id]);
 }
 
 #[test]

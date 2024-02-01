@@ -1,8 +1,8 @@
 ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/parsing_edition_2024_alpha",
-        root_package: "name",
-        root_package_orig_name: "name",
+        root_package_id: "name",
+        root_package_name: "name",
         package_graph: {
             "name": [],
         },
