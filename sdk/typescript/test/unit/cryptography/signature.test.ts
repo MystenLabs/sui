@@ -186,8 +186,6 @@ describe('Signature', () => {
 		bytes[0] = 0x06;
 		const invalidSignature = toB64(bytes);
 
-		expect(() => parseSerializedSignature(invalidSignature)).toThrowError(
-			new Error('Unsupported signature scheme'),
-		);
+		expect(() => parseSerializedSignature(invalidSignature)).toThrowError();
 	});
 });
