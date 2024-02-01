@@ -55,12 +55,20 @@ pub struct BridgeNodeConfig {
     pub db_path: Option<PathBuf>,
     /// The sui modules of bridge packages for client to watch for. Need to contain at least one item when `run_client` is true.
     pub sui_bridge_modules: Option<Vec<String>>,
+    // TODO: we need to hardcode the starting blocks for eth networks for cold start.
     /// Override the start block number for each eth address. Key must be in `eth_addresses`.
-    /// When set, EthSyncer will start from this block number instead of the one in storage.
+    /// When set, EthSyncer will start from this block number (inclusively) instead of the one in storage.
+    /// Key: eth address, Value:  block number to start from
+    /// Note: This field should be rarely used. Only use it when you understand how to follow up.
     pub eth_bridge_contracts_start_block_override: Option<BTreeMap<String, u64>>,
-    /// Override the start transaction digest for each bridge module. Key must be in `sui_bridge_modules`.
-    /// When set, SuiSyncer will start from this transaction digest instead of the one in storage.
-    pub sui_bridge_modules_start_tx_override: Option<BTreeMap<String, (String, u64)>>,
+    /// Override the last processed EventID for each bridge module. Key must be in `sui_bridge_modules`.
+    /// When set, SuiSyncer will start from this cursor (exclusively) instead of the one in storage.
+    /// Key: sui module, Value: last processed EventID (tx_digest, event_seq).
+    /// Note 1: This field should be rarely used. Only use it when you understand how to follow up.
+    /// Note 2: the EventID needs to be valid, namely it must exist and matches the filter.
+    /// Otherwise, it will miss one event because of how EventID cursor works.
+    pub sui_bridge_modules_last_processed_event_id_override:
+        Option<BTreeMap<String, (String, u64)>>,
 }
 
 impl Config for BridgeNodeConfig {}
@@ -159,14 +167,14 @@ impl BridgeNodeConfig {
             }
         };
 
-        let mut sui_bridge_modules_start_tx_override = BTreeMap::new();
-        match &self.sui_bridge_modules_start_tx_override {
+        let mut sui_bridge_modules_last_processed_event_id_override = BTreeMap::new();
+        match &self.sui_bridge_modules_last_processed_event_id_override {
             Some(overrides) => {
                 for (module, cursor) in overrides {
                     let module = Identifier::from_str(module)?;
                     if sui_bridge_modules.contains(&module) {
                         let tx_digest = TransactionDigest::from_str(&cursor.0)?;
-                        sui_bridge_modules_start_tx_override.insert(
+                        sui_bridge_modules_last_processed_event_id_override.insert(
                             module,
                             EventID {
                                 tx_digest,
@@ -206,7 +214,7 @@ impl BridgeNodeConfig {
             eth_bridge_contracts,
             sui_bridge_modules,
             eth_bridge_contracts_start_block_override,
-            sui_bridge_modules_start_tx_override,
+            sui_bridge_modules_last_processed_event_id_override,
         };
 
         Ok((bridge_server_config, Some(bridge_client_config)))
@@ -233,8 +241,7 @@ pub struct BridgeClientConfig {
     pub eth_bridge_contracts: Vec<EthAddress>,
     pub sui_bridge_modules: Vec<Identifier>,
     pub eth_bridge_contracts_start_block_override: BTreeMap<EthAddress, u64>,
-    /// The EventID needs to be valid, namely it exists and matches the filter. Otherwise, it will miss one event.
-    pub sui_bridge_modules_start_tx_override: BTreeMap<Identifier, EventID>,
+    pub sui_bridge_modules_last_processed_event_id_override: BTreeMap<Identifier, EventID>,
 }
 
 /// Read Bridge Authority key (Secp256k1KeyPair) from a file.
