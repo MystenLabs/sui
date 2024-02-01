@@ -588,6 +588,7 @@ async fn test_txn_age_overload() {
             gas_objects.clone(),
             OverloadThresholdConfig {
                 max_txn_age_in_queue: Duration::from_secs(5),
+                ..Default::default()
             },
         )
         .await;
