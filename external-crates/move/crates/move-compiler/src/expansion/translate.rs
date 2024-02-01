@@ -2908,7 +2908,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 EE::UnresolvedError
             }
         },
-        pdotted_ @ PE::Dot(_, _) => match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
+        pdotted_ @ (PE::Dot(_, _) | PE::Index(_, _)) => match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
             Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, edotted),
             None => {
                 assert!(context.env().has_errors());
@@ -3040,7 +3040,7 @@ fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: Box<P::Exp>) ->
                 return None;
             }
         }
-        E::ExpDotted_::Dot(_, _) => {
+        E::ExpDotted_::Dot(_, _) | E::ExpDotted_::Index(_, _) => {
             let current_package = context.current_package;
             context
                 .env()
@@ -3061,6 +3061,11 @@ fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpD
         PE::Dot(plhs, field) => {
             let lhs = exp_dotted(context, plhs)?;
             EE::Dot(lhs, field)
+        }
+        PE::Index(plhs, sp!(argloc, args)) => {
+            let lhs = exp_dotted(context, plhs)?;
+            let args = args.into_iter().map(|arg| *exp(context, Box::new(arg))).collect::<Vec<_>>();
+            EE::Index(lhs, sp(argloc, args))
         }
         pe_ => EE::Exp(exp(context, Box::new(sp(loc, pe_)))),
     };
@@ -3274,6 +3279,10 @@ fn lvalues(context: &mut Context, e: Box<P::Exp>) -> Option<LValue> {
         pdotted_ @ PE::Dot(_, _) => {
             let dotted = exp_dotted(context, Box::new(sp(loc, pdotted_)))?;
             L::FieldMutate(dotted)
+        }
+        pdotted_ @ PE::Index(_, _) => {
+            context.env().add_diag(diag!(Syntax::InvalidLValue, (loc, "Cannot use index in left-hand positions")));
+            return None
         }
         _ => L::Assigns(sp(loc, vec![assign(context, sp(loc, e_))?])),
     };

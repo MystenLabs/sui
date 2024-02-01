@@ -289,11 +289,11 @@ pub type LambdaLValues = Spanned<LambdaLValues_>;
 pub enum ExpDotted_ {
     Exp(Box<Exp>),
     Dot(Box<ExpDotted>, Name),
+    Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-
 pub enum DottedUsage {
     Move(Loc),
     Copy(Loc),
@@ -1536,6 +1536,10 @@ impl AstDebug for ExpDotted_ {
         match self {
             D::Exp(e) => e.ast_debug(w),
             D::Dot(e, n) => {
+                e.ast_debug(w);
+                w.write(&format!(".{}", n))
+            }
+            D::Inner(e, n) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n))
             }

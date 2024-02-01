@@ -677,7 +677,7 @@ pub enum Exp_ {
         Spanned<Vec<Exp>>,
     ),
     // e[e']
-    Index(Box<Exp>, Box<Exp>), // spec only
+    Index(Box<Exp>, Spanned<Vec<Exp>>), // spec only
 
     // (e as t)
     Cast(Box<Exp>, Type),

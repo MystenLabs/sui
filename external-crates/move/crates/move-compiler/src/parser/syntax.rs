@@ -1552,6 +1552,26 @@ fn parse_call_args(context: &mut Context) -> Result<Spanned<Vec<Exp>>, Box<Diagn
     ))
 }
 
+// Parse the arguments to an index: "[" Comma<Exp> "]"
+fn parse_index_args(context: &mut Context) -> Result<Spanned<Vec<Exp>>, Box<Diagnostic>> {
+    let start_loc = context.tokens.start_loc();
+    let args = parse_comma_list(
+        context,
+        Tok::LBracket,
+        Tok::RBracket,
+        parse_exp,
+        "an index operation expression",
+    )?;
+    let end_loc = context.tokens.previous_end_loc();
+    Ok(spanned(
+        context.tokens.file_hash(),
+        start_loc,
+        end_loc,
+        args,
+    ))
+}
+
+
 // Return true if the current token is one that might occur after an Exp.
 // This is needed, for example, to check for the optional Exp argument to
 // a return (where "return" is itself an Exp).
@@ -1920,10 +1940,8 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                 }
             }
             Tok::LBracket => {
-                context.tokens.advance()?;
-                let index = parse_exp(context)?;
-                let exp = Exp_::Index(Box::new(lhs), Box::new(index));
-                consume_token(context.tokens, Tok::RBracket)?;
+                let index_args = parse_index_args(context)?;
+                let exp = Exp_::Index(Box::new(lhs), index_args);
                 exp
             }
             _ => break,
