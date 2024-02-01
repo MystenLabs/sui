@@ -104,6 +104,8 @@ pub async fn execution_process(
             }
         }
 
+        authority.metrics.execution_rate_tracker.lock().record();
+
         // Certificate execution can take significant time, so run it in a separate task.
         spawn_monitored_task!(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
