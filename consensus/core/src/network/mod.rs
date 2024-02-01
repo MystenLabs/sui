@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -22,6 +23,7 @@ where
 }
 
 /// Network client for communicating with peers.
+#[async_trait]
 pub(crate) trait NetworkClient: Send + Sync {
     /// Sends a serialized SignedBlock to a peer.
     async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()>;
@@ -35,6 +37,7 @@ pub(crate) trait NetworkClient: Send + Sync {
 }
 
 /// Network service for handling requests from peers.
+#[async_trait]
 pub(crate) trait NetworkService: Send + Sync {
     async fn handle_send_block(&self, peer: AuthorityIndex, block: Bytes) -> ConsensusResult<()>;
     async fn handle_fetch_blocks(

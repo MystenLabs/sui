@@ -12,7 +12,7 @@ use tracing::info;
 
 use crate::block_verifier::BlockVerifier;
 use crate::context::Context;
-use crate::core::{Core, CoreOptions, CoreSignals};
+use crate::core::{Core, CoreSignals};
 use crate::metrics::initialise_metrics;
 use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
@@ -47,7 +47,7 @@ impl AuthorityNode {
 
         // Create the transactions client and the transactions consumer
         let (client, tx_receiver) = TransactionsClient::new(context.clone());
-        let tx_consumer = TransactionsConsumer::new(tx_receiver);
+        let tx_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
 
         // Construct Core
         let (core_signals, _signals_receivers) = CoreSignals::new();
@@ -57,7 +57,6 @@ impl AuthorityNode {
             tx_consumer,
             block_manager,
             core_signals,
-            CoreOptions::default(),
             block_signer,
         );
 
@@ -92,10 +91,10 @@ mod tests {
     use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
     use fastcrypto::traits::ToFromBytes;
     use prometheus::Registry;
-    use sui_protocol_config::ProtocolConfig;
 
     use crate::authority_node::AuthorityNode;
     use crate::block_verifier::TestBlockVerifier;
+    use crate::context::Context;
 
     #[tokio::test]
     async fn start_and_stop() {
@@ -112,7 +111,7 @@ mod tests {
             own_index,
             committee,
             parameters,
-            ProtocolConfig::get_for_min_version(),
+            Context::default_protocol_config_for_testing(),
             block_signer,
             signer,
             block_verifier,

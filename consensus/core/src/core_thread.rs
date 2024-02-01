@@ -154,7 +154,7 @@ mod test {
     use super::*;
     use crate::block_manager::BlockManager;
     use crate::context::Context;
-    use crate::core::{CoreOptions, CoreSignals};
+    use crate::core::CoreSignals;
     use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
     #[tokio::test]
@@ -163,14 +163,13 @@ mod test {
         let context = Arc::new(context);
         let block_manager = BlockManager::new();
         let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
-        let transactions_consumer = TransactionsConsumer::new(tx_receiver);
+        let transactions_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
         let core = Core::new(
             context.clone(),
             transactions_consumer,
             block_manager,
             signals,
-            CoreOptions::default(),
             key_pairs.remove(context.own_index.value()).0,
         );
 
