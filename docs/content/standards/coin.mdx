@@ -14,7 +14,7 @@ See the [coin module](https://github.com/MystenLabs/sui/blob/main/crates/sui-fra
 
 ## Fungible tokens
 
-Coins on Sui are fungible tokens by definition, which means there are many of a specific type (`Coin`) and each token of that type is the same as the next. If you created a regulated coin and named it REGCOIN, then you could mint as many of those tokens as you wanted and each REGCOIN would have the same properties as the next.
+Coins on Sui are fungible tokens by definition, which means there are many of a specific type (`Coin`) and each token of that type is the same as the next. If you created a regulated coin and named it REGCOIN, then you could mint as many of those coins as you wanted and each REGCOIN would have the same properties as the next.
 
 :::info
 
@@ -28,7 +28,7 @@ The documentation refers to fungible tokens created on Sui using the Coin standa
 
 When you create a coin using the `coin::create_currency` function, the publisher of the smart contract that creates the coin receives a `TreasuryCap` object. The `TreasuryCap` object is required to mint new coins or to burn current ones. Consequently, only the address that owns this object is able to maintain the coin balance on the Sui network. 
 
-The `TreasuryCap` object is transferrable, so a third party can take over the management of a coin that you create if you transfer the `TreasuryCap`. After transferring the ability, however, you are no longer able to mint and burn tokens yourself.  
+The `TreasuryCap` object is transferable, so a third party can take over the management of a coin that you create if you transfer the `TreasuryCap`. After transferring the ability, however, you are no longer able to mint and burn tokens yourself.  
 
 ## Regulated coins
 
