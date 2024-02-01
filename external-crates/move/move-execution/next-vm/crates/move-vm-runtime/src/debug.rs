@@ -18,8 +18,11 @@ use std::{
 enum DebugCommand {
     PrintStack,
     Step,
+    StepSC,
     Continue,
+    ContinueSC,
     Breakpoint(String),
+    BreakpointSC(String),
     DeleteBreakpoint(String),
     PrintBreakpoints,
     Help,
@@ -29,8 +32,11 @@ impl DebugCommand {
     pub fn debug_string(&self) -> &str {
         match self {
             Self::PrintStack => "stack",
+            Self::StepSC => "s",
             Self::Step => "step",
+            Self::ContinueSC => "c",
             Self::Continue => "continue",
+            Self::BreakpointSC(_) => "b ",
             Self::Breakpoint(_) => "breakpoint ",
             Self::DeleteBreakpoint(_) => "delete ",
             Self::PrintBreakpoints => "breakpoints",
@@ -59,13 +65,17 @@ impl FromStr for DebugCommand {
         if s.starts_with(PrintStack.debug_string()) {
             return Ok(PrintStack);
         }
-        if s.starts_with(Step.debug_string()) {
+        if s.starts_with(Step.debug_string())  || s.eq(StepSC.debug_string()) {
             return Ok(Step);
         }
-        if s.starts_with(Continue.debug_string()) {
+        if s.starts_with(Continue.debug_string()) || s.eq(ContinueSC.debug_string()) {
             return Ok(Continue);
         }
         if let Some(breakpoint) = s.strip_prefix(Breakpoint("".to_owned()).debug_string()) {
+            return Ok(Breakpoint(breakpoint.to_owned()));
+        }
+
+        if let Some(breakpoint) = s.strip_prefix(BreakpointSC("".to_owned()).debug_string()) {
             return Ok(Breakpoint(breakpoint.to_owned()));
         }
         if let Some(breakpoint) = s.strip_prefix(DeleteBreakpoint("".to_owned()).debug_string()) {
@@ -118,6 +128,31 @@ impl DebugContext {
             .collect();
     }
 
+    fn print_stack(function_desc: &Function, locals: &Locals, pc: u16, interp: &Interpreter, resolver: &Loader ) {
+        let function_string = function_desc.pretty_string();
+        let mut s = String::new();
+        interp.debug_print_stack_trace(&mut s, resolver).unwrap();
+        println!("{}", s);
+        println!("Current frame: {}\n", function_string);
+        let code = function_desc.code();
+        println!("        Code:");
+        for (i, instr) in code.iter().enumerate() {
+            if i as u16 == pc {
+                println!("          > [{}] {:?}", pc, instr);
+            } else {
+                println!("            [{}] {:?}", i, instr);
+            }
+        }
+        println!("        Locals:");
+        if function_desc.local_count() > 0 {
+            let mut s = String::new();
+            values::debug::print_locals(&mut s, locals).unwrap();
+            println!("{}", s);
+        } else {
+            println!("            (none)");
+        }
+    }
+
     pub(crate) fn debug_loop(
         &mut self,
         function_desc: &Function,
@@ -151,6 +186,7 @@ impl DebugContext {
                 "function >> {}\ninstruction >> {:?}\nprogram counter >> {}",
                 function_string, instr, pc
             );
+            Self::print_stack(function_desc, locals, pc, interp, resolver);
             loop {
                 print!("> ");
                 std::io::stdout().flush().unwrap();
@@ -159,15 +195,15 @@ impl DebugContext {
                     Ok(_) => match input.parse::<DebugCommand>() {
                         Err(err) => println!("{}", err),
                         Ok(command) => match command {
-                            DebugCommand::Step => {
+                            DebugCommand::Step | DebugCommand::StepSC => {
                                 self.should_take_input = true;
                                 break;
                             }
-                            DebugCommand::Continue => {
+                            DebugCommand::Continue | DebugCommand::ContinueSC => {
                                 self.should_take_input = false;
                                 break;
                             }
-                            DebugCommand::Breakpoint(breakpoint) => {
+                            DebugCommand::Breakpoint(breakpoint) | DebugCommand::BreakpointSC(breakpoint)=> {
                                 self.breakpoints.insert(breakpoint.to_string());
                             }
                             DebugCommand::DeleteBreakpoint(breakpoint) => {
@@ -183,35 +219,15 @@ impl DebugContext {
                                 .enumerate()
                                 .for_each(|(i, bp)| println!("[{}] {}", i, bp)),
                             DebugCommand::PrintStack => {
-                                let mut s = String::new();
-                                interp.debug_print_stack_trace(&mut s, resolver).unwrap();
-                                println!("{}", s);
-                                println!("Current frame: {}\n", function_string);
-                                let code = function_desc.code();
-                                println!("        Code:");
-                                for (i, instr) in code.iter().enumerate() {
-                                    if i as u16 == pc {
-                                        println!("          > [{}] {:?}", pc, instr);
-                                    } else {
-                                        println!("            [{}] {:?}", i, instr);
-                                    }
-                                }
-                                println!("        Locals:");
-                                if function_desc.local_count() > 0 {
-                                    let mut s = String::new();
-                                    values::debug::print_locals(&mut s, locals).unwrap();
-                                    println!("{}", s);
-                                } else {
-                                    println!("            (none)");
-                                }
+                                Self::print_stack(function_desc, locals, pc, interp, resolver);
                             }
                             DebugCommand::Help => {
                                 println!(
                                     "Available commands:\n\
                                     \tstack: print the current state of the call and value stacks\n\
-                                    \tstep: step forward one instruction\n\
-                                    \tcontinue: continue execution until the next breakpoint\n\
-                                    \tbreakpoint <string>:\n\
+                                    \tstep (s): step forward one instruction\n\
+                                    \tcontinue (c): continue execution until the next breakpoint\n\
+                                    \tbreakpoint (b) <string>:\n\
                                     \t\t1. set a breakpoint at the given bytecode instruction that starts with <string>, e.g., Call or CallGeneric\n\
                                     \t\t2. set a breakpoint at the function that matches <string>, e.g., 0x2::vector::pop_back\n\
                                     \t\t3. set a breakpoint at the given code offset, e.g., 10 will stop execution if a code offset of 10 is encountered\n\
@@ -232,3 +248,4 @@ impl DebugContext {
         }
     }
 }
+
