@@ -109,7 +109,26 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
-        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
+        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
+
+    - name: Get current sui-core oncall
+      id: pagerduty
+      uses: mxie/pagerduty-oncall-action@main 
+      with:
+        token: ${{ secrets.PAGERDUTY_ACCESS_KEY }}
+        schedule-id: PGCQ3YS # sui-core
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838 # pin@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+
+    - name: Get slack id for the oncall
+      run: |
+        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg ONCALL "${{ steps.pagerduty.outputs.person }}" '.[] | if .name == $ONCALL then .slack_id else empty end')
+        echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV
 
     - name: Post to slack
       uses: slackapi/slack-github-action@v1.24.0 # pin@v1.21.0
@@ -149,7 +168,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "@sui-core, Please look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo."
+                  "text": "<@${{ env.slack_id }}> (current sui-core oncall), please look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo."
                 }
               }
             ]
