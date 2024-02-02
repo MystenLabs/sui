@@ -75,7 +75,7 @@ pub struct DependencyGraph {
     /// is always a dependency of P or only in dev-mode.
     pub package_graph: DiGraphMap<PackageIdentifier, Dependency>,
 
-    /// The dependency that each package (keyed by name) originates from.  The root package is the
+    /// The dependency that each package (keyed by id) originates from. The root package is the
     /// only node in `package_graph` that does not have an entry in `package_table`.
     pub package_table: BTreeMap<PackageIdentifier, Package>,
 
