@@ -18,7 +18,6 @@ use sui_sdk::SuiClient as SuiSdkClient;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::SuiKeyPair;
-use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::object::Owner;
 use sui_types::Identifier;
@@ -67,8 +66,7 @@ pub struct BridgeNodeConfig {
     /// Note 1: This field should be rarely used. Only use it when you understand how to follow up.
     /// Note 2: the EventID needs to be valid, namely it must exist and matches the filter.
     /// Otherwise, it will miss one event because of how EventID cursor works.
-    pub sui_bridge_modules_last_processed_event_id_override:
-        Option<BTreeMap<String, (String, u64)>>,
+    pub sui_bridge_modules_last_processed_event_id_override: Option<BTreeMap<String, EventID>>,
 }
 
 impl Config for BridgeNodeConfig {}
@@ -173,14 +171,7 @@ impl BridgeNodeConfig {
                 for (module, cursor) in overrides {
                     let module = Identifier::from_str(module)?;
                     if sui_bridge_modules.contains(&module) {
-                        let tx_digest = TransactionDigest::from_str(&cursor.0)?;
-                        sui_bridge_modules_last_processed_event_id_override.insert(
-                            module,
-                            EventID {
-                                tx_digest,
-                                event_seq: cursor.1,
-                            },
-                        );
+                        sui_bridge_modules_last_processed_event_id_override.insert(module, *cursor);
                     } else {
                         return Err(anyhow!(
                             "Override start tx digest for module {:?} is not in `sui_bridge_modules`",
