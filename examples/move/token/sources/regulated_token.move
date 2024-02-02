@@ -125,7 +125,7 @@ module examples::regulated_token_tests {
     use sui::token::{Self, TokenPolicy, TokenPolicyCap};
     use sui::token_test_utils::{Self as test, TEST};
 
-    use examples::regulated_coin::set_rules;
+    use examples::regulated_token::set_rules;
 
     use examples::allowlist_rule as allowlist;
     use examples::denylist_rule as denylist;
