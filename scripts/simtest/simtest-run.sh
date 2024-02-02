@@ -70,6 +70,19 @@ done
 # wait for all the jobs to end
 wait
 
+# Check for determinism in stress simtests
+LOG_FILE="$LOG_DIR/determinism-log"
+
+MSIM_TEST_SEED="$SEED" \
+MSIM_WATCHDOG_TIMEOUT_MS=60000 \
+MSIM_TEST_CHECK_DETERMINISM=1
+scripts/simtest/cargo-simtest simtest \
+  --color always \
+  --test-threads "$NUM_CPUS" \
+  --package sui-benchmark \
+  --profile simtestnightly \
+  -E "$TEST_FILTER" 2>&1 | tee "$LOG_FILE"
+
 echo "All tests completed, checking for failures..."
 grep -qHn FAIL "$LOG_DIR"/*
 
