@@ -185,23 +185,13 @@ impl NetworkManager {
                         let serialized_message= Bytes::from(bincode::serialize(&message).unwrap());
                         message.src = self.my_id; // set source to self
                         for dst in message.dst.iter() {
-                            
-                        // if dst == self.my_id {
-                        //     self.application_in
-                        //         .send(message)
-                        //         .await
-                        //         .expect("send to self failed");
-                        // } else {
-                            // get address from id
                             let address = self.addr_table.get(&dst).unwrap();
                             let cancel_handler = sender
                                 .send(*address, serialized_message.clone())
                                 .await;
                             waiting.push(cancel_handler);
-
-                        // }
-                    }
-                },
+                        }
+                    },
                     Some(_result) = waiting.next() => {
                         // Ignore the result. We do not expect failures in this example.
                     },

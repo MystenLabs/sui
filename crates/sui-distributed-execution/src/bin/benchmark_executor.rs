@@ -1,4 +1,5 @@
 use clap::*;
+use futures::future;
 use prometheus::Registry;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
@@ -149,7 +150,7 @@ async fn main() {
                 .expect("Failed to run executor");
         }
         Operation::Testbed { execution_workers } => {
-            deploy_testbed(tx_count, execution_workers).await;
+            deploy_testbed(tx_count, duration.as_secs(), execution_workers).await;
         }
         Operation::Genesis {
             ips,
@@ -177,7 +178,7 @@ async fn main() {
 }
 
 /// Deploy a local testbed of executor shards.
-async fn deploy_testbed(tx_count: u64, execution_workers: usize) -> GlobalConfig {
+async fn deploy_testbed(tx_count: u64, duration: u64, execution_workers: usize) -> GlobalConfig {
     let sequence_workers = 1;
     let ips = vec![IpAddr::V4(Ipv4Addr::LOCALHOST); execution_workers + 1];
     let mut global_configs = GlobalConfig::new_for_benchmark(ips, sequence_workers);
@@ -186,8 +187,11 @@ async fn deploy_testbed(tx_count: u64, execution_workers: usize) -> GlobalConfig
     for id in 0..execution_workers + 1 {
         global_configs.0.entry(id as UniqueId).and_modify(|e| {
             e.attrs.insert("tx_count".to_string(), tx_count.to_string());
+            e.attrs.insert("duration".to_string(), duration.to_string());
         });
     }
+
+    println!("Global configs: {:?}", global_configs);
 
     // Spawn sequence worker.
     let configs = global_configs.clone();
@@ -195,10 +199,14 @@ async fn deploy_testbed(tx_count: u64, execution_workers: usize) -> GlobalConfig
     let _sequence_worker = ExecutorShard::start(configs, id);
 
     // Spawn execution workers.
-    for id in 1..execution_workers + 1 {
+    let handles = (1..execution_workers + 1).map(|id| {
         let configs = global_configs.clone();
-        let _worker = ExecutorShard::start(configs, id as UniqueId);
-    }
+        async move {
+            let worker = ExecutorShard::start(configs, id as UniqueId);
+            worker.await_completion().await.unwrap()
+        }
+    });
+    future::join_all(handles).await;
 
     global_configs
 }
@@ -208,6 +216,7 @@ mod test {
     use std::time::Duration;
 
     use sui_distributed_execution::sw_agent::SWAgent;
+    use sui_single_node_benchmark::{command::WorkloadKind, workload::Workload};
     use tokio::time::sleep;
 
     use crate::deploy_testbed;
@@ -216,8 +225,9 @@ mod test {
     async fn smoke_test() {
         let tx_count = 300;
         let execution_workers = 4;
+        let duration = 60;
         let workload = "default";
-        let configs = deploy_testbed(tx_count, execution_workers).await;
+        let configs = deploy_testbed(tx_count, duration, execution_workers).await;
 
         loop {
             sleep(Duration::from_secs(1)).await;

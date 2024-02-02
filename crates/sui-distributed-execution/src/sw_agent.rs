@@ -57,7 +57,11 @@ impl Agent<SailfishMessage> for SWAgent {
             let tx_count = my_attrs["tx_count"].parse::<u64>().unwrap();
             let duration_secs = my_attrs["duration"].parse::<u64>().unwrap();
             let duration = Duration::from_secs(duration_secs);
-            let working_dir = my_attrs["working_dir"].parse::<PathBuf>().unwrap();
+            let working_dir = my_attrs
+                .get("working_dir")
+                .map_or("", String::as_str)
+                .parse::<PathBuf>()
+                .unwrap();
             SequenceWorkerState::run_with_channel(
                 &self.out_channel,
                 ew_ids,

@@ -4,10 +4,9 @@ use sui_types::base_types::ObjectID;
 use sui_types::digests::TransactionDigest;
 use tokio::sync::mpsc;
 
-
 use super::types::*;
 
-const MANAGER_CHANNEL_SIZE: usize = 1_000;
+pub const MANAGER_CHANNEL_SIZE: usize = 1_000;
 
 pub struct QueuesManager {
     tx_store: HashMap<TransactionDigest, TransactionWithEffects>,
@@ -21,8 +20,11 @@ pub struct QueuesManager {
 
 // The methods of the QueuesManager are called from a single thread, so no need for locks
 impl QueuesManager {
-    pub fn new(new_tx_receiver: mpsc::Receiver<TransactionWithEffects>, ready_tx_sender: mpsc::Sender<TransactionWithEffects>, 
-        done_tx_receiver: mpsc::Receiver<TransactionDigest>) -> QueuesManager {
+    pub fn new(
+        new_tx_receiver: mpsc::Receiver<TransactionWithEffects>,
+        ready_tx_sender: mpsc::Sender<TransactionWithEffects>,
+        done_tx_receiver: mpsc::Receiver<TransactionDigest>,
+    ) -> QueuesManager {
         QueuesManager {
             tx_store: HashMap::new(),
             writing_tx: HashMap::new(),
@@ -34,12 +36,10 @@ impl QueuesManager {
         }
     }
 
-
     pub async fn run(&mut self) {
-
         loop {
             tokio::select! {
-                //TODO can we make sure we only process new_tx if done_tx is empty? 
+                //TODO can we make sure we only process new_tx if done_tx is empty?
                 Some(done_tx) = self.done.recv() => {
                     self.clean_up(&done_tx).await;
                 }
@@ -49,13 +49,10 @@ impl QueuesManager {
                 else => {
                     eprintln!("QD error, abort");
                     break
-                }      
+                }
 
             }
         }
-
-
-
     }
 
     /// Enqueues a transaction on the manager
@@ -68,7 +65,7 @@ impl QueuesManager {
         let mut wait_ctr = 0;
 
         // Add tx to wait lists
-        r_set.union(&w_set).for_each(|obj| {    
+        r_set.union(&w_set).for_each(|obj| {
             let prev_write = self.writing_tx.insert(*obj, *txid);
             if let Some(other_txid) = prev_write {
                 self.wait_table.entry(*txid).or_default().insert(other_txid);
@@ -117,9 +114,9 @@ impl QueuesManager {
                     if waiting_tx_set.is_empty() {
                         self.wait_table.remove(&other_txid);
                         let ready_tx = self.get_tx(&other_txid).clone();
-                    self.ready.send(ready_tx).await.expect("send failed");
+                        self.ready.send(ready_tx).await.expect("send failed");
+                    }
                 }
-            }
             }
         }
     }

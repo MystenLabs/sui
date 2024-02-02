@@ -90,7 +90,11 @@ impl Agent<SailfishMessage> for EWAgent {
 
         let _working_directory = {
             if my_attrs["mode"] == "channel" {
-                my_attrs.get("working_dir").unwrap().parse().unwrap()
+                my_attrs
+                    .get("working_dir")
+                    .map_or("", String::as_str)
+                    .parse::<PathBuf>()
+                    .unwrap()
             } else {
                 PathBuf::new()
             }

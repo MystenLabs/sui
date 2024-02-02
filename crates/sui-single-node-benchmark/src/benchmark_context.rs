@@ -232,8 +232,8 @@ impl BenchmarkContext {
         &self,
         mut transactions: Vec<Transaction>,
     ) {
-        // self.execute_sample_transaction(transactions.pop().unwrap())
-        //     .await;
+        self.execute_sample_transaction(transactions.pop().unwrap())
+            .await;
 
         let tx_count = transactions.len();
         let in_memory_store = self.validator.create_in_memory_store();

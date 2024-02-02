@@ -16,7 +16,6 @@ use sui_single_node_benchmark::benchmark_context::BenchmarkContext;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
-use sui_types::committee::EpochId;
 use sui_types::digests::{ChainIdentifier, ObjectDigest, TransactionDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::epoch_data::EpochData;
@@ -41,13 +40,11 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
 
+use super::types::*;
+use crate::queue_manager::{QueuesManager, MANAGER_CHANNEL_SIZE};
 use crate::setup::generate_benchmark_ctx_workload;
 use crate::setup::generate_benchmark_txs;
-use crate::queue_manager::QueuesManager;
 use crate::{metrics::Metrics, types::WritableObjectStore};
-use super::types::*;
-const MANAGER_CHANNEL_SIZE: usize = 1_000;
-
 
 /*****************************************************************************************
  *                                    Execution Worker                                   *
@@ -212,8 +209,8 @@ impl<
                 full_tx.tx.digest(),
                 full_tx.checkpoint_seq.unwrap()
             );
-            let old_effects = ground_truth_effects.clone();
-            println!("Past effects: {:?}", old_effects);
+            // let old_effects = ground_truth_effects.clone();
+            println!("Past effects: {:?}", ground_truth_effects);
             println!("New effects: {:?}", effects);
             panic!("Effects digest mismatch");
         }
@@ -279,100 +276,6 @@ impl<
         );
     }
 
-    // async fn _async_exec(
-    //     full_tx: TransactionWithEffects,
-    //     memory_store: Arc<S>,
-    //     child_inputs: HashSet<ObjectID>,
-    //     move_vm: Arc<MoveVM>,
-    //     reference_gas_price: u64,
-    //     epoch_id: EpochId,
-    //     epoch_start_timestamp: u64,
-    //     protocol_config: ProtocolConfig,
-    //     metrics: Arc<LimitsMetrics>,
-    //     my_id: u8,
-    //     ew_ids: &Vec<UniqueId>,
-    // ) -> TransactionWithResults {
-    //     // DELETE THIS
-    //     // return TransactionWithResults {
-    //     //     full_tx: full_tx.clone(),
-    //     //     tx_effects: TransactionEffects::default(),
-    //     //     deleted: BTreeMap::new(),
-    //     //     written: BTreeMap::new(),
-    //     //     missing_objs: HashSet::new(),
-    //     // };
-
-    //     let tx = &full_tx.tx;
-    //     let txid = tx.digest();
-    //     let tx_data = tx.transaction_data();
-    //     let (kind, signer, gas) = tx_data.execution_parts();
-    //     let input_objects = Self::read_input_objects_from_store(memory_store.clone(), &tx).await;
-    //     let gas_status =
-    //         Self::get_gas_status(&tx, &input_objects, &protocol_config, reference_gas_price).await;
-    //     let shared_object_refs = input_objects.filter_shared_objects();
-    //     let transaction_dependencies = input_objects.transaction_dependencies();
-    //     let mut gas_charger = GasCharger::new(*tx.digest(), gas, gas_status, &protocol_config);
-    //     // println!(
-    //     //     "Dependencies for tx {}: {:?}",
-    //     //     txid, transaction_dependencies
-    //     // );
-    //     let temporary_store = TemporaryStore::new(
-    //         memory_store.clone(),
-    //         input_objects.clone(),
-    //         *txid,
-    //         &protocol_config,
-    //     );
-
-    //     let (inner_temp_store, tx_effects, _execution_error) =
-    //         execution_engine::execute_transaction_to_effects::<execution_mode::Normal>(
-    //             shared_object_refs,
-    //             temporary_store,
-    //             kind,
-    //             signer,
-    //             &mut gas_charger,
-    //             *txid,
-    //             transaction_dependencies,
-    //             &move_vm,
-    //             &epoch_id,
-    //             epoch_start_timestamp,
-    //             &protocol_config,
-    //             metrics.clone(),
-    //             false,
-    //             &HashSet::new(),
-    //         );
-
-    //     let mut missing_objs = HashSet::new();
-    //     let input_object_map = input_objects.into_object_map();
-    //     for read_obj_id in &inner_temp_store.runtime_read_objects {
-    //         if !input_object_map.contains_key(read_obj_id) && !child_inputs.contains(read_obj_id) {
-    //             missing_objs.insert(*read_obj_id);
-    //         }
-    //     }
-
-    //     if !missing_objs.is_empty() {
-    //         panic!("Missing objects for tx {}: {:?}", txid, missing_objs);
-    //     }
-
-    //     if missing_objs.is_empty()
-    //         && get_ews_for_tx(&full_tx, ew_ids).contains(&(my_id as UniqueId))
-    //     {
-    //         Self::write_updates_to_store(
-    //             memory_store,
-    //             inner_temp_store.deleted.clone(),
-    //             inner_temp_store.written.clone(),
-    //             my_id,
-    //             ew_ids,
-    //         );
-    //     }
-
-    //     return TransactionWithResults {
-    //         full_tx,
-    //         tx_effects,
-    //         deleted: BTreeMap::from_iter(inner_temp_store.deleted),
-    //         written: BTreeMap::from_iter(inner_temp_store.written),
-    //         missing_objs,
-    //     };
-    // }
-
     /// Helper: Receive and process an EpochStart message.
     /// Returns new (move_vm, protocol_config, epoch_data, reference_gas_price)
     async fn process_epoch_start(
@@ -380,7 +283,7 @@ impl<
         in_channel: &mut mpsc::Receiver<NetworkMessage>,
     ) -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64) {
         let msg = in_channel.recv().await.expect("Receiving doesn't work");
-        let SailfishMessage::EpochStart{
+        let SailfishMessage::EpochStart {
             version: protocol_version,
             data: epoch_data,
             ref_gas_price: reference_gas_price,
@@ -436,27 +339,11 @@ impl<
         );
     }
 
-    // async fn process_genesis_objects(&self, in_channel: &mut mpsc::Receiver<NetworkMessage>) {
-    //     let msg = in_channel.recv().await.expect("Receiving doesn't work");
-    //     let SailfishMessage::GenesisObjects(genesis_objects) = msg.payload
-    //     else {
-    //         eprintln!("EW got unexpected message: {:?}", msg.payload);
-    //         panic!("unexpected message");
-    //     };
-    //     println!("EW got genesis objects message");
-
-    //     for obj in genesis_objects {
-    //         self.memory_store
-    //             .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
-    //     }
-    // }
-
     async fn init_genesis_objects(
         &self,
         tx_count: u64,
         duration: Duration,
     ) -> (Vec<Transaction>, BenchmarkContext) {
-        // let (_, objects, _) = import_from_files(working_directory);
         let (ctx, workload) = generate_benchmark_ctx_workload(tx_count, duration).await;
         let (ctx, _, txs) = generate_benchmark_txs(workload, ctx).await;
 
@@ -476,13 +363,6 @@ impl<
                 .insert(id, (obj.compute_object_reference(), obj));
         }
 
-        // insert the genesis objects into the store
-        // let objects = ctx.get_genesis_objects();
-        // for obj in objects {
-        //     self.memory_store
-        //         .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
-        // }
-
         (txs, ctx)
     }
 
@@ -501,8 +381,8 @@ impl<
     ) {
         // Initialize channels
         let (ready_tx_sender, mut ready_tx_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
-        let (new_tx_sender,  new_tx_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
-        let (done_tx_sender,  done_tx_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
+        let (new_tx_sender, new_tx_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
+        let (done_tx_sender, done_tx_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
 
         let mut manager = QueuesManager::new(new_tx_receiver, ready_tx_sender, done_tx_receiver);
 
@@ -588,7 +468,7 @@ impl<
 
                     // 2. Update object queues
                     done_tx_sender.send(*txid).await.expect("send failed");
-                    
+
 
                     // println!("Sending TxResults message for tx {}", txid);
                     // TODO send only to owners of objects in deleted & written
@@ -603,7 +483,7 @@ impl<
                         if out_channel.send(msg).await.is_err() {
                             eprintln!("EW {} could not send LockedExec.", my_id);
                         }
-                    
+
                     if num_tx % 10_000 == 0 {
                         tracing::debug!("[task-queue] EW {my_id} executed {num_tx} txs");
                     }
@@ -617,19 +497,6 @@ impl<
                 // Received a tx from the queue mananger -> the tx is ready to be executed
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
                 Some(full_tx) = ready_tx_receiver.recv() => {
-                    // JUST FOR TESTING --- COMMENT THIS OUT FOR REAL EXECUTION
-                    // num_tx += 1;
-                    // if num_tx == 1 {
-                    //     // Expose the start time as a metric. Should be done only once.
-                    //     worker_metrics.register_start_time();
-                    // }
-                    // let full_tx = manager.get_tx(&txid);
-                    // self.update_metrics(&full_tx, &worker_metrics);
-                    // if let Some(_) = self.ready_txs.remove(&txid) {
-                    //     manager.clean_up(&txid).await;
-                    // }
-
-
                     // UNCOMMENT THIS PART FOR REAL EXECUTION
                     let txid = full_tx.tx.digest();
                     self.ready_txs.insert(*txid, ());
@@ -747,29 +614,7 @@ impl<
                                     }
                                 }
 
-                                // a loop that repeatedly hashes some initial value
-                                // simulates a more compute intensive execution
-                                // let mut buf: [u8; 32] = [0u8; 32];
-                                // let iterations = 1_000;
-                                // for _ in 0..iterations {
-                                //     buf = sha3::Sha3_256::digest(&buf).into();
-                                // }
-
                                 Self::async_exec2(tx, memstore, &protocol_config, reference_gas_price, &context_copy)
-                                // println!("EW {} executing tx {}", my_id, txid);
-                                // Self::async_exec(
-                                //     tx,
-                                //     mem_store,
-                                //     child_inputs,
-                                //     move_vm,
-                                //     reference_gas_price,
-                                //     epoch_data.epoch_id(),
-                                //     epoch_data.epoch_start_timestamp(),
-                                //     protocol_config,
-                                //     metrics,
-                                //     my_id as u8,
-                                //     &ew_ids_copy,
-                                // ).await
                             });
                         }
                     } else if let SailfishMessage::TxResults { txid, .. } = msg {
@@ -797,16 +642,6 @@ impl<
                         // epoch_txs_semaphore -= 1;
                         // assert!(epoch_txs_semaphore >= 0);
                     } else if let SailfishMessage::ProposeExec(full_tx) = msg {
-
-                        // JUST FOR TESTING --- COMMENT THIS OUT FOR REAL EXECUTION
-                        // num_tx += 1;
-                        // if num_tx == 1 {
-                        //     // Expose the start time as a metric. Should be done only once.
-                        //     worker_metrics.register_start_time();
-                        // }
-                        // self.update_metrics(&full_tx, &worker_metrics);
-
-                        // AND THEN UNCOMMENT THIS
                         if full_tx.is_epoch_change() {
                             // don't queue to manager, but store to epoch_change_tx
                             epoch_change_tx = Some(full_tx);
@@ -877,15 +712,6 @@ impl<
         //     "EW {} finished, executed {} txs ({:.2} tps)",
         //     my_id, num_tx, tps
         // );
-
-        // // todo - hack to get metrics (we should report live metrics instead)
-        // for _ in 0..num_tx {
-        //     worker_metrics
-        //         .latency_s
-        //         .with_label_values(&["default"])
-        //         .observe(elapsed);
-        // }
-
         sleep(Duration::from_millis(1_000)).await;
     }
 
