@@ -279,99 +279,99 @@ impl<
         );
     }
 
-    async fn _async_exec(
-        full_tx: TransactionWithEffects,
-        memory_store: Arc<S>,
-        child_inputs: HashSet<ObjectID>,
-        move_vm: Arc<MoveVM>,
-        reference_gas_price: u64,
-        epoch_id: EpochId,
-        epoch_start_timestamp: u64,
-        protocol_config: ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
-        my_id: u8,
-        ew_ids: &Vec<UniqueId>,
-    ) -> TransactionWithResults {
-        // DELETE THIS
-        // return TransactionWithResults {
-        //     full_tx: full_tx.clone(),
-        //     tx_effects: TransactionEffects::default(),
-        //     deleted: BTreeMap::new(),
-        //     written: BTreeMap::new(),
-        //     missing_objs: HashSet::new(),
-        // };
+    // async fn _async_exec(
+    //     full_tx: TransactionWithEffects,
+    //     memory_store: Arc<S>,
+    //     child_inputs: HashSet<ObjectID>,
+    //     move_vm: Arc<MoveVM>,
+    //     reference_gas_price: u64,
+    //     epoch_id: EpochId,
+    //     epoch_start_timestamp: u64,
+    //     protocol_config: ProtocolConfig,
+    //     metrics: Arc<LimitsMetrics>,
+    //     my_id: u8,
+    //     ew_ids: &Vec<UniqueId>,
+    // ) -> TransactionWithResults {
+    //     // DELETE THIS
+    //     // return TransactionWithResults {
+    //     //     full_tx: full_tx.clone(),
+    //     //     tx_effects: TransactionEffects::default(),
+    //     //     deleted: BTreeMap::new(),
+    //     //     written: BTreeMap::new(),
+    //     //     missing_objs: HashSet::new(),
+    //     // };
 
-        let tx = &full_tx.tx;
-        let txid = tx.digest();
-        let tx_data = tx.transaction_data();
-        let (kind, signer, gas) = tx_data.execution_parts();
-        let input_objects = Self::read_input_objects_from_store(memory_store.clone(), &tx).await;
-        let gas_status =
-            Self::get_gas_status(&tx, &input_objects, &protocol_config, reference_gas_price).await;
-        let shared_object_refs = input_objects.filter_shared_objects();
-        let transaction_dependencies = input_objects.transaction_dependencies();
-        let mut gas_charger = GasCharger::new(*tx.digest(), gas, gas_status, &protocol_config);
-        // println!(
-        //     "Dependencies for tx {}: {:?}",
-        //     txid, transaction_dependencies
-        // );
-        let temporary_store = TemporaryStore::new(
-            memory_store.clone(),
-            input_objects.clone(),
-            *txid,
-            &protocol_config,
-        );
+    //     let tx = &full_tx.tx;
+    //     let txid = tx.digest();
+    //     let tx_data = tx.transaction_data();
+    //     let (kind, signer, gas) = tx_data.execution_parts();
+    //     let input_objects = Self::read_input_objects_from_store(memory_store.clone(), &tx).await;
+    //     let gas_status =
+    //         Self::get_gas_status(&tx, &input_objects, &protocol_config, reference_gas_price).await;
+    //     let shared_object_refs = input_objects.filter_shared_objects();
+    //     let transaction_dependencies = input_objects.transaction_dependencies();
+    //     let mut gas_charger = GasCharger::new(*tx.digest(), gas, gas_status, &protocol_config);
+    //     // println!(
+    //     //     "Dependencies for tx {}: {:?}",
+    //     //     txid, transaction_dependencies
+    //     // );
+    //     let temporary_store = TemporaryStore::new(
+    //         memory_store.clone(),
+    //         input_objects.clone(),
+    //         *txid,
+    //         &protocol_config,
+    //     );
 
-        let (inner_temp_store, tx_effects, _execution_error) =
-            execution_engine::execute_transaction_to_effects::<execution_mode::Normal>(
-                shared_object_refs,
-                temporary_store,
-                kind,
-                signer,
-                &mut gas_charger,
-                *txid,
-                transaction_dependencies,
-                &move_vm,
-                &epoch_id,
-                epoch_start_timestamp,
-                &protocol_config,
-                metrics.clone(),
-                false,
-                &HashSet::new(),
-            );
+    //     let (inner_temp_store, tx_effects, _execution_error) =
+    //         execution_engine::execute_transaction_to_effects::<execution_mode::Normal>(
+    //             shared_object_refs,
+    //             temporary_store,
+    //             kind,
+    //             signer,
+    //             &mut gas_charger,
+    //             *txid,
+    //             transaction_dependencies,
+    //             &move_vm,
+    //             &epoch_id,
+    //             epoch_start_timestamp,
+    //             &protocol_config,
+    //             metrics.clone(),
+    //             false,
+    //             &HashSet::new(),
+    //         );
 
-        let mut missing_objs = HashSet::new();
-        let input_object_map = input_objects.into_object_map();
-        for read_obj_id in &inner_temp_store.runtime_read_objects {
-            if !input_object_map.contains_key(read_obj_id) && !child_inputs.contains(read_obj_id) {
-                missing_objs.insert(*read_obj_id);
-            }
-        }
+    //     let mut missing_objs = HashSet::new();
+    //     let input_object_map = input_objects.into_object_map();
+    //     for read_obj_id in &inner_temp_store.runtime_read_objects {
+    //         if !input_object_map.contains_key(read_obj_id) && !child_inputs.contains(read_obj_id) {
+    //             missing_objs.insert(*read_obj_id);
+    //         }
+    //     }
 
-        if !missing_objs.is_empty() {
-            panic!("Missing objects for tx {}: {:?}", txid, missing_objs);
-        }
+    //     if !missing_objs.is_empty() {
+    //         panic!("Missing objects for tx {}: {:?}", txid, missing_objs);
+    //     }
 
-        if missing_objs.is_empty()
-            && get_ews_for_tx(&full_tx, ew_ids).contains(&(my_id as UniqueId))
-        {
-            Self::write_updates_to_store(
-                memory_store,
-                inner_temp_store.deleted.clone(),
-                inner_temp_store.written.clone(),
-                my_id,
-                ew_ids,
-            );
-        }
+    //     if missing_objs.is_empty()
+    //         && get_ews_for_tx(&full_tx, ew_ids).contains(&(my_id as UniqueId))
+    //     {
+    //         Self::write_updates_to_store(
+    //             memory_store,
+    //             inner_temp_store.deleted.clone(),
+    //             inner_temp_store.written.clone(),
+    //             my_id,
+    //             ew_ids,
+    //         );
+    //     }
 
-        return TransactionWithResults {
-            full_tx,
-            tx_effects,
-            deleted: BTreeMap::from_iter(inner_temp_store.deleted),
-            written: BTreeMap::from_iter(inner_temp_store.written),
-            missing_objs,
-        };
-    }
+    //     return TransactionWithResults {
+    //         full_tx,
+    //         tx_effects,
+    //         deleted: BTreeMap::from_iter(inner_temp_store.deleted),
+    //         written: BTreeMap::from_iter(inner_temp_store.written),
+    //         missing_objs,
+    //     };
+    // }
 
     /// Helper: Receive and process an EpochStart message.
     /// Returns new (move_vm, protocol_config, epoch_data, reference_gas_price)
@@ -415,7 +415,7 @@ impl<
         out_channel
             .send(NetworkMessage {
                 src: 0,
-                dst: sw_id,
+                dst: vec![sw_id],
                 payload: SailfishMessage::EpochEnd {
                     new_epoch_start_state,
                 },
@@ -592,19 +592,18 @@ impl<
 
                     // println!("Sending TxResults message for tx {}", txid);
                     // TODO send only to owners of objects in deleted & written
-                    for ew_id in &ew_ids {
-                        if *ew_id == my_id {
-                            continue;
-                        }
-                        let msg = NetworkMessage { src: 0, dst: *ew_id, payload: SailfishMessage::TxResults {
+                        let msg = NetworkMessage { src: 0, dst: ew_ids.iter()
+                            .filter(|&&id| id != my_id)
+                            .cloned()
+                            .collect(), payload: SailfishMessage::TxResults {
                             txid: *txid,
                             deleted: tx_with_results.deleted.clone(),
                             written: tx_with_results.written.clone(),
                         }};
                         if out_channel.send(msg).await.is_err() {
-                            eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, ew_id);
+                            eprintln!("EW {} could not send LockedExec.", my_id);
                         }
-                    }
+                    
                     if num_tx % 10_000 == 0 {
                         tracing::debug!("[task-queue] EW {my_id} executed {num_tx} txs");
                     }
@@ -651,14 +650,13 @@ impl<
                     }
                     // println!("Sending LockedExec for tx {}, locked_objs: {:?}", txid, locked_objs);
 
-                    let execute_on_ew = get_designated_executor_for_tx(*txid, &full_tx,&ew_ids);
                     let msg = NetworkMessage{
                         src:0,
-                        dst:execute_on_ew as u16,
+                        dst:vec![get_designated_executor_for_tx(*txid, &full_tx,&ew_ids)],
                         payload: SailfishMessage::LockedExec { full_tx: full_tx.clone(), objects: locked_objs.clone(), child_objects: Vec::new() }};
                     // println!("EW {} Sending LockedExec for tx {} to EW {}", my_id, txid, execute_on_ew);
                     if out_channel.send(msg).await.is_err() {
-                        eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, execute_on_ew);
+                        eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, get_designated_executor_for_tx(*txid, &full_tx,&ew_ids));
                     }
                 },
                 Some(msg) = in_channel.recv() => {

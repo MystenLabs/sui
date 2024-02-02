@@ -154,7 +154,7 @@ impl NetworkManager {
             'inner: loop {
                 let ping_message = NetworkMessage {
                     src: 0,
-                    dst: 0,
+                    dst: vec![0],
                     payload: SailfishMessage::Handshake {},
                 };
                 tracing::debug!("[{}] Sending handshake to {:?}", self.my_id, addr);
@@ -182,8 +182,10 @@ impl NetworkManager {
                 tokio::select! {
                     Some(message) = application_out.recv() => {
                         let mut message = message;
+                        let serialized_message= Bytes::from(bincode::serialize(&message).unwrap());
                         message.src = self.my_id; // set source to self
-                        let dst = message.dst;
+                        for dst in message.dst.iter() {
+                            
                         // if dst == self.my_id {
                         //     self.application_in
                         //         .send(message)
@@ -193,12 +195,13 @@ impl NetworkManager {
                             // get address from id
                             let address = self.addr_table.get(&dst).unwrap();
                             let cancel_handler = sender
-                                .send(*address, Bytes::from(bincode::serialize(&message).unwrap()))
+                                .send(*address, serialized_message.clone())
                                 .await;
                             waiting.push(cancel_handler);
 
                         // }
-                    },
+                    }
+                },
                     Some(_result) = waiting.next() => {
                         // Ignore the result. We do not expect failures in this example.
                     },
