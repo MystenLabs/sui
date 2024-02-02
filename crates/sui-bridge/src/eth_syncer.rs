@@ -158,8 +158,8 @@ where
             };
             let len = events.len();
 
-            // Note 1: we send an empty list of events to the channel. This is because of how
-            // `eth_getLogs` api is designed - we want cursor to move forward continuously.
+            // Note 1: we always events to the channel even when it is empty. This is because of
+            // how `eth_getLogs` api is designed - we want cursor to move forward continuously.
 
             // Note 2: it's extremely critical to make sure the Logs we send via this channel
             // are complete per block height. Namely, we should never send a partial list

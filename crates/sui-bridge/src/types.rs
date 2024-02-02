@@ -20,15 +20,22 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
 use sui_types::base_types::SuiAddress;
-use sui_types::collection_types::{Bag, LinkedTable, VecMap};
+use sui_types::collection_types::{Bag, LinkedTable, LinkedTableNode, VecMap};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::StakeUnit;
 use sui_types::digests::{Digest, TransactionDigest};
+use sui_types::dynamic_field::Field;
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 use sui_types::{base_types::SUI_ADDRESS_LENGTH, committee::EpochId};
 
 pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
+
+pub type BridgeInnerDynamicField = Field<u64, MoveTypeBridgeInner>;
+pub type BridgeRecordDyanmicField = Field<
+    MoveTypeBridgeMessageKey,
+    LinkedTableNode<MoveTypeBridgeMessageKey, MoveTypeBridgeRecord>,
+>;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct BridgeAuthority {
@@ -166,12 +173,26 @@ pub enum BridgeChainId {
     SuiMainnet = 0,
     SuiTestnet = 1,
     SuiDevnet = 2,
+    SuiLocalTest = 3,
 
     EthMainnet = 10,
     EthSepolia = 11,
+    EthLocalTest = 12,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TryFromPrimitive, Hash)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    TryFromPrimitive,
+    Hash,
+    Ord,
+    PartialOrd,
+)]
 #[repr(u8)]
 pub enum TokenId {
     Sui = 0,
@@ -179,6 +200,14 @@ pub enum TokenId {
     ETH = 2,
     USDC = 3,
     USDT = 4,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum BridgeActionStatus {
+    RecordNotFound,
+    Pending,
+    Approved,
+    Claimed,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -284,6 +313,29 @@ impl BridgeAction {
         let mut hasher = Keccak256::default();
         hasher.update(&self.to_bytes());
         BridgeActionDigest::new(hasher.finalize().into())
+    }
+
+    pub fn source_chain_id(&self) -> BridgeChainId {
+        match self {
+            BridgeAction::SuiToEthBridgeAction(a) => a.sui_bridge_event.sui_chain_id,
+            BridgeAction::EthToSuiBridgeAction(a) => a.eth_bridge_event.eth_chain_id,
+        }
+    }
+
+    // Also called `message_type`
+    pub fn action_type(&self) -> BridgeActionType {
+        match self {
+            BridgeAction::SuiToEthBridgeAction(_) => BridgeActionType::TokenTransfer,
+            BridgeAction::EthToSuiBridgeAction(_) => BridgeActionType::TokenTransfer,
+        }
+    }
+
+    // Also called `nonce`
+    pub fn seq_number(&self) -> u64 {
+        match self {
+            BridgeAction::SuiToEthBridgeAction(a) => a.sui_bridge_event.nonce,
+            BridgeAction::EthToSuiBridgeAction(a) => a.eth_bridge_event.nonce,
+        }
     }
 }
 
