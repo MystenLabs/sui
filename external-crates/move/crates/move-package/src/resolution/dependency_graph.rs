@@ -66,6 +66,7 @@ use super::{
 pub struct DependencyGraph {
     /// Path to the root package and its name (according to its manifest)
     pub root_path: PathBuf,
+    /// Root package identifier as resolved by the package id resolution hook.
     pub root_package_id: PackageIdentifier,
     /// Root package name as defined in its manifest (can be different from the resolved identifier).
     pub root_package_name: PM::PackageName,
