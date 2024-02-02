@@ -10,6 +10,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{block::BlockRef, error::ConsensusResult};
 
+// Anemo generated stubs for RPCs.
+mod anemo_gen {
+    include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusRpc.rs"));
+}
 mod anemo_network;
 
 /// Network client for communicating with peers.

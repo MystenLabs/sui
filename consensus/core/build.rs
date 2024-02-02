@@ -8,6 +8,7 @@ use std::{
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
+// Build script to generate anemo RPC stubs.
 fn main() -> Result<()> {
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
     build_anemo_services(&out_dir);

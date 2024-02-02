@@ -24,8 +24,8 @@ pub enum ConsensusError {
     #[error("Authority {0} is disconnected.")]
     Disconnected(String),
 
-    #[error("Error from network: {0:?}")]
-    AnemoNetworkError(String),
+    #[error("Network error: {0:?}")]
+    NetworkError(String),
 }
 
 #[allow(unused)]

@@ -13,9 +13,11 @@ use fastcrypto::traits::KeyPair as _;
 use mysten_network::multiaddr::Protocol;
 use tracing::error;
 
-use self::anemo_gen::consensus_rpc_server::ConsensusRpc;
-
 use super::{
+    anemo_gen::{
+        consensus_rpc_client::ConsensusRpcClient,
+        consensus_rpc_server::{ConsensusRpc, ConsensusRpcServer},
+    },
     FetchBlocksRequest, FetchBlocksResponse, NetworkClient, NetworkManager, NetworkService,
     SendBlockRequest, SendBlockResponse,
 };
@@ -25,21 +27,10 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
 };
 
-// Anemo generated traits for RPCs.
-mod anemo_gen {
-    include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusRpc.rs"));
-}
-use anemo_gen::{
-    consensus_rpc_client::ConsensusRpcClient, consensus_rpc_server::ConsensusRpcServer,
-};
-
+/// Implements RPC client for Consensus.
 pub(crate) struct AnemoClient {
-    inner: Arc<AnemoClientInner>,
-}
-
-struct AnemoClientInner {
     context: Arc<Context>,
-    network: ArcSwapOption<anemo::Network>,
+    network: Arc<ArcSwapOption<anemo::Network>>,
 }
 
 impl AnemoClient {
@@ -50,15 +41,13 @@ impl AnemoClient {
     #[allow(unused)]
     pub(crate) fn new(context: Arc<Context>) -> Self {
         Self {
-            inner: Arc::new(AnemoClientInner {
-                context,
-                network: ArcSwapOption::default(),
-            }),
+            context,
+            network: Arc::new(ArcSwapOption::default()),
         }
     }
 
     pub(crate) fn set_network(&self, network: anemo::Network) {
-        self.inner.network.store(Some(Arc::new(network)));
+        self.network.store(Some(Arc::new(network)));
     }
 
     async fn get_anemo_client(
@@ -66,14 +55,14 @@ impl AnemoClient {
         peer: AuthorityIndex,
     ) -> ConsensusResult<ConsensusRpcClient<anemo::Peer>> {
         let network = loop {
-            if let Some(network) = self.inner.network.load_full() {
+            if let Some(network) = self.network.load_full() {
                 break network;
             } else {
                 tokio::time::sleep(Self::GET_CLIENT_INTERVAL).await;
             }
         };
 
-        let authority = self.inner.context.committee.authority(peer);
+        let authority = self.context.committee.authority(peer);
         let peer_id = anemo::PeerId(authority.network_key.0.into());
         let Some(peer) = network.peer(peer_id) else {
             return Err(ConsensusError::Disconnected(authority.hostname.clone()));
@@ -91,7 +80,7 @@ impl NetworkClient for AnemoClient {
         client
             .send_block(anemo::Request::new(request).with_timeout(Self::SEND_BLOCK_TIMEOUT))
             .await
-            .map_err(|e| ConsensusError::AnemoNetworkError(format!("{e:?}")))?;
+            .map_err(|e| ConsensusError::NetworkError(format!("{e:?}")))?;
         Ok(())
     }
 
@@ -105,11 +94,13 @@ impl NetworkClient for AnemoClient {
         let response = client
             .fetch_blocks(anemo::Request::new(request).with_timeout(Self::FETCH_BLOCK_TIMEOUT))
             .await
-            .map_err(|e| ConsensusError::AnemoNetworkError(format!("{e:?}")))?;
+            .map_err(|e| ConsensusError::NetworkError(format!("{e:?}")))?;
         Ok(response.into_body().blocks)
     }
 }
 
+/// Implements RPC service for Consensus.
+/// TODO: implement handlers.
 #[allow(unused)]
 pub(crate) struct AnemoService {
     context: Arc<Context>,
@@ -136,6 +127,7 @@ impl NetworkService for AnemoService {
     }
 }
 
+/// Proxies Anemo RPC handlers to AnemoService.
 #[allow(unused)]
 struct ServiceProxy {
     context: Arc<Context>,
@@ -223,6 +215,12 @@ impl ConsensusRpc for ServiceProxy {
     }
 }
 
+/// Manages the lifecycle of Anemo network. Typical usage during initialization:
+/// 1. Create a new `AnemoManager`.
+/// 2. Take `AnemoClient` from `AnemoManager::client()`.
+/// 3. Create consensus components.
+/// 4. Create `AnemoService` for consensus RPC handler.
+/// 5. Install `AnemoService` to `AnemoManager` with `AnemoManager::install_service()`.
 pub(crate) struct AnemoManager {
     context: Arc<Context>,
     client: Arc<AnemoClient>,
@@ -256,15 +254,14 @@ impl NetworkManager<AnemoClient, AnemoService> for AnemoManager {
             .committee
             .authorities()
             .map(|(_i, authority)| anemo::PeerId(authority.network_key.0.to_bytes()));
+        // TODO: add layers for metrics and additional filters.
         let routes = anemo::Router::new()
             .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
                 all_peer_ids,
             )))
             .add_rpc_service(server);
-        // TODO: add layers.
         let service = tower::ServiceBuilder::new().service(routes);
 
-        // TODO: add peer filter.
         // TODO: instrument with metrics and failpoints.
 
         let anemo_config = {
