@@ -695,6 +695,14 @@ pub enum SuiClientCommands {
         /// Log information about each programmable transaction command
         #[arg(long)]
         ptb_info: bool,
+
+        /// Optional version of the executor to use, if not specified defaults to the one originally used for the transaction.
+        #[arg(long, short, allow_hyphen_values = true)]
+        executor_version: Option<i64>,
+
+        /// Optional protocol version to use, if not specified defaults to the one originally used for the transaction.
+        #[arg(long, short, allow_hyphen_values = true)]
+        protocol_version: Option<i64>,
     },
 
     /// Replay transactions listed in a file.
@@ -764,13 +772,15 @@ impl SuiClientCommands {
                 tx_digest,
                 gas_info: _,
                 ptb_info: _,
+                executor_version,
+                protocol_version,
             } => {
                 let cmd = ReplayToolCommand::ReplayTransaction {
                     tx_digest,
                     show_effects: true,
                     diag: false,
-                    executor_version: None,
-                    protocol_version: None,
+                    executor_version,
+                    protocol_version,
                 };
 
                 let rpc = context.config.get_active_env()?.rpc.clone();
