@@ -19,7 +19,7 @@ use sui_types::transaction::Transaction;
 use sui_types::Identifier;
 
 use crate::sui_client::SuiClientInner;
-use crate::types::{BridgeAction, BridgeActionStatus, MoveTypeBridgeCommittee};
+use crate::types::{BridgeAction, BridgeActionDigest, BridgeActionStatus, MoveTypeBridgeCommittee};
 
 /// Mock client used in test environments.
 #[allow(clippy::type_complexity)]
@@ -35,6 +35,7 @@ pub struct SuiMockClient {
         Arc<Mutex<HashMap<TransactionDigest, BridgeResult<SuiTransactionBlockResponse>>>>,
     wildcard_transaction_response: Arc<Mutex<Option<BridgeResult<SuiTransactionBlockResponse>>>>,
     get_object_info: Arc<Mutex<HashMap<ObjectID, (GasCoin, ObjectRef, Owner)>>>,
+    onchain_status: Arc<Mutex<HashMap<BridgeActionDigest, BridgeActionStatus>>>,
 
     requested_transactions_tx: tokio::sync::broadcast::Sender<TransactionDigest>,
 }
@@ -50,6 +51,7 @@ impl SuiMockClient {
             transaction_responses: Default::default(),
             wildcard_transaction_response: Default::default(),
             get_object_info: Default::default(),
+            onchain_status: Default::default(),
             requested_transactions_tx: tokio::sync::broadcast::channel(10000).0,
         }
     }
@@ -83,6 +85,13 @@ impl SuiMockClient {
             .lock()
             .unwrap()
             .insert(tx_digest, response);
+    }
+
+    pub fn set_action_onchain_status(&self, action: &BridgeAction, status: BridgeActionStatus) {
+        self.onchain_status
+            .lock()
+            .unwrap()
+            .insert(action.digest(), status);
     }
 
     pub fn set_wildcard_transaction_response(
@@ -166,9 +175,15 @@ impl SuiClientInner for SuiMockClient {
 
     async fn get_action_onchain_status(
         &self,
-        _action: &BridgeAction,
+        action: &BridgeAction,
     ) -> Result<BridgeActionStatus, BridgeError> {
-        unimplemented!()
+        Ok(self
+            .onchain_status
+            .lock()
+            .unwrap()
+            .get(&action.digest())
+            .cloned()
+            .unwrap_or(BridgeActionStatus::Pending))
     }
 
     async fn execute_transaction_block_with_effects(

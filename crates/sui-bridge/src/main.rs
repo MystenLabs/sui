@@ -186,7 +186,7 @@ async fn start_client_components(
 
     let committee = Arc::new(
         sui_client
-            .get_committee()
+            .get_bridge_committee()
             .await
             .expect("Failed to get committee"),
     );

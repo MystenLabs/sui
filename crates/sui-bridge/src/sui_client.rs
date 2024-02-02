@@ -41,11 +41,14 @@ use sui_types::{
     Identifier,
 };
 use tap::TapFallible;
-use tracing::warn;
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
+use tokio_retry::Retry;
+use tracing::{error, warn};
 
 use crate::crypto::BridgeAuthorityPublicKey;
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::SuiBridgeEvent;
+use crate::retry_with_max_delay;
 use crate::sui_transaction_builder::get_bridge_package_id;
 use crate::types::BridgeActionStatus;
 use crate::types::BridgeInnerDynamicField;
@@ -201,6 +204,23 @@ where
         self.inner.execute_transaction_block_with_effects(tx).await
     }
 
+    pub async fn get_action_onchain_status_until_success(
+        &self,
+        action: &BridgeAction,
+    ) -> BridgeActionStatus {
+        loop {
+            let Ok(status) = retry_with_max_delay!(
+                self.inner.get_action_onchain_status(action),
+                Duration::from_secs(600)
+            ) else {
+                // TODO: add metrics and fire alert
+                error!("Failed to get action onchain status for: {:?}", action);
+                continue;
+            };
+            return status;
+        }
+    }
+
     pub async fn get_gas_data_panic_if_not_gas(
         &self,
         gas_object_id: ObjectID,
@@ -208,10 +228,6 @@ where
         self.inner
             .get_gas_data_panic_if_not_gas(gas_object_id)
             .await
-    }
-
-    pub async fn get_committee(&self) -> BridgeResult<BridgeCommittee> {
-        self.get_bridge_committee().await
     }
 }
 
