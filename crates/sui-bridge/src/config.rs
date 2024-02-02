@@ -65,7 +65,7 @@ pub struct BridgeNodeConfig {
     /// Key: sui module, Value: last processed EventID (tx_digest, event_seq).
     /// Note 1: This field should be rarely used. Only use it when you understand how to follow up.
     /// Note 2: the EventID needs to be valid, namely it must exist and matches the filter.
-    /// Otherwise, it will miss one event because of how EventID cursor works.
+    /// Otherwise, it will miss one event because of fullnode Event query semantics.
     pub sui_bridge_modules_last_processed_event_id_override: Option<BTreeMap<String, EventID>>,
 }
 

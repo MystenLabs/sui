@@ -16,7 +16,7 @@ module bridge::bridge {
     use sui::vec_map::{Self, VecMap};
     use sui::versioned::{Self, Versioned};
 
-    use bridge::chain_ids::{Self, sui_testnet};
+    use bridge::chain_ids::{Self, sui_local_test};
     use bridge::committee::{Self, BridgeCommittee};
     use bridge::message::{Self, BridgeMessage, BridgeMessageKey};
     use bridge::message_types;
@@ -101,7 +101,7 @@ module bridge::bridge {
         let bridge_inner = BridgeInner {
             bridge_version: CURRENT_VERSION,
             // TODO: how do we make this configurable?
-            chain_id: sui_testnet(),
+            chain_id: sui_local_test(),
             sequence_nums: vec_map::empty<u8, u64>(),
             committee: committee::create(ctx),
             treasury: treasury,
