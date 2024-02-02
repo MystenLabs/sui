@@ -301,7 +301,7 @@ impl AuthorityStore {
             .map_err(|e| e.into())
     }
 
-    pub(crate) fn get_events(
+    pub fn get_events(
         &self,
         event_digest: &TransactionEventsDigest,
     ) -> Result<Option<TransactionEvents>, TypedStoreError> {

@@ -110,7 +110,7 @@ fn unexpected_lambda_type(context: &mut Context, loc: Loc) {
 // Expressions
 //**************************************************************************************************
 
-fn sequence(context: &mut Context, seq: &mut T::Sequence) {
+fn sequence(context: &mut Context, (_, seq): &mut T::Sequence) {
     for item in seq {
         sequence_item(context, item)
     }

@@ -130,7 +130,7 @@ pub trait TypingVisitorContext {
         self.pop_warning_filter_scope();
     }
 
-    fn visit_seq(&mut self, seq: &mut T::Sequence) {
+    fn visit_seq(&mut self, (_, seq): &mut T::Sequence) {
         for s in seq {
             self.visit_seq_item(s);
         }

@@ -51,4 +51,6 @@ shared-crypto.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
 sui-json-rpc-types = { workspace = true, features = ["test-utils"] }
 sui-config.workspace = true
+sui-test-transaction-builder.workspace = true
+test-cluster.workspace = true
 hex-literal = "0.3.4"

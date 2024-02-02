@@ -6,7 +6,7 @@ module bridge::eth {
 
     use sui::coin;
     use sui::transfer;
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{Self, TxContext};
 
     friend bridge::treasury;
 
@@ -24,6 +24,6 @@ module bridge::eth {
             ctx
         );
         transfer::public_freeze_object(metadata);
-        transfer::public_transfer(treasury_cap, @0xf82999a527fe455c8379a9132fa7f8a0e024575810bcef69e26d4d6dc2830647);
+        transfer::public_transfer(treasury_cap, tx_context::sender(ctx));
     }
 }
