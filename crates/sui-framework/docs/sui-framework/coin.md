@@ -882,7 +882,7 @@ with the coin as input objects.
 
 ## Function `mint`
 
-Create a coin worth <code>value</code>. and increase the total supply
+Create a coin worth <code>value</code> and increase the total supply
 in <code>cap</code> accordingly.
 
 
