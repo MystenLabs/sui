@@ -40,7 +40,7 @@ Response: {
               "owner": {
                 "__typename": "AddressOwner",
                 "owner": {
-                  "address": "0x0000000000000000000000000000000000000000000000000000000000000042"
+                  "address": "A"
                 }
               }
             }
@@ -62,7 +62,7 @@ Response: {
               "owner": {
                 "__typename": "AddressOwner",
                 "owner": {
-                  "address": "0x0000000000000000000000000000000000000000000000000000000000000042"
+                  "address": "A"
                 }
               }
             }
@@ -95,7 +95,7 @@ Response: {
               "owner": {
                 "__typename": "AddressOwner",
                 "owner": {
-                  "address": "0x0000000000000000000000000000000000000000000000000000000000000042"
+                  "address": "A"
                 }
               }
             }

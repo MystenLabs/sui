@@ -45,7 +45,7 @@ task 9 'run-graphql'. lines 105-167:
 Response: {
   "data": {
     "parent_version_2_no_dof": {
-      "address": "0x1c72ae4e567eaf432973f7bed599f96b8256465e82599b1b1fd6749db375a92b",
+      "address": "fake(2,1)",
       "dynamicFields": {
         "edges": []
       }
@@ -65,7 +65,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x64cf03102291cf3259814899d62e47a21c2d96110729afb7565ab4824ad41f54",
+                    "id": "fake(2,0)",
                     "count": "1"
                   }
                 }
@@ -76,13 +76,13 @@ Response: {
       }
     },
     "child_version_2_no_parent": {
-      "address": "0x64cf03102291cf3259814899d62e47a21c2d96110729afb7565ab4824ad41f54",
+      "address": "fake(2,0)",
       "owner": {}
     },
     "child_version_3_has_parent": {
       "owner": {
         "parent": {
-          "address": "0x21845463b0840b56338227e57b97a04e9180351a4b672509ef34cfdda7a39475"
+          "address": "fake(5,0)"
         }
       }
     }
@@ -125,7 +125,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x64cf03102291cf3259814899d62e47a21c2d96110729afb7565ab4824ad41f54",
+                    "id": "fake(2,0)",
                     "count": "1"
                   }
                 }
@@ -138,7 +138,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMw==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -152,7 +152,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -166,7 +166,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -192,7 +192,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x64cf03102291cf3259814899d62e47a21c2d96110729afb7565ab4824ad41f54",
+                    "id": "fake(2,0)",
                     "count": "1"
                   }
                 }
@@ -216,7 +216,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMw==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -230,7 +230,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -244,7 +244,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -282,7 +282,7 @@ Response: {
         "value": {
           "contents": {
             "json": {
-              "id": "0x64cf03102291cf3259814899d62e47a21c2d96110729afb7565ab4824ad41f54",
+              "id": "fake(2,0)",
               "count": "1"
             }
           }
@@ -301,7 +301,7 @@ Response: {
         "value": {
           "contents": {
             "json": {
-              "id": "0x64cf03102291cf3259814899d62e47a21c2d96110729afb7565ab4824ad41f54",
+              "id": "fake(2,0)",
               "count": "1"
             }
           }
@@ -311,7 +311,7 @@ Response: {
         "name": {
           "bcs": "A2RmMQ==",
           "type": {
-            "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+            "repr": "std::string::String"
           }
         },
         "value": {
@@ -358,7 +358,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x64cf03102291cf3259814899d62e47a21c2d96110729afb7565ab4824ad41f54",
+                    "id": "fake(2,0)",
                     "count": "1"
                   }
                 }
@@ -371,7 +371,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMw==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -385,7 +385,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -399,7 +399,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -419,7 +419,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMw==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -433,7 +433,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -447,7 +447,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -473,7 +473,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x64cf03102291cf3259814899d62e47a21c2d96110729afb7565ab4824ad41f54",
+                    "id": "fake(2,0)",
                     "count": "1"
                   }
                 }
@@ -486,7 +486,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMw==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -500,7 +500,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -514,7 +514,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -528,7 +528,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -542,7 +542,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNA==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -556,7 +556,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -576,7 +576,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMw==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -590,7 +590,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -604,7 +604,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -618,7 +618,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -632,7 +632,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNA==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -646,7 +646,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -696,7 +696,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x64cf03102291cf3259814899d62e47a21c2d96110729afb7565ab4824ad41f54",
+                    "id": "fake(2,0)",
                     "count": "1"
                   }
                 }
@@ -709,7 +709,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMw==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -723,7 +723,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -737,7 +737,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -757,7 +757,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMw==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -771,7 +771,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -785,7 +785,7 @@ Response: {
               "name": {
                 "bcs": "A2RmMg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -811,7 +811,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x64cf03102291cf3259814899d62e47a21c2d96110729afb7565ab4824ad41f54",
+                    "id": "fake(2,0)",
                     "count": "1"
                   }
                 }
@@ -824,7 +824,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -838,7 +838,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNA==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -852,7 +852,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -872,7 +872,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -886,7 +886,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNA==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -900,7 +900,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -922,7 +922,7 @@ Response: {
         "name": {
           "bcs": "A2RmMQ==",
           "type": {
-            "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+            "repr": "std::string::String"
           }
         },
         "value": {
@@ -974,7 +974,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -988,7 +988,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNA==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -1002,7 +1002,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -1022,7 +1022,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNQ==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -1036,7 +1036,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNA==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {
@@ -1050,7 +1050,7 @@ Response: {
               "name": {
                 "bcs": "A2RmNg==",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                  "repr": "std::string::String"
                 }
               },
               "value": {

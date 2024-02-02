@@ -30,7 +30,7 @@ Response: {
                     "asMoveObject": {
                       "contents": {
                         "type": {
-                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                          "repr": "sui::coin::Coin<sui::sui::SUI>"
                         },
                         "data": {
                           "Struct": [
@@ -89,7 +89,7 @@ Response: {
                           ]
                         },
                         "json": {
-                          "id": "0x19ff9f7ed802094c20dcbc1740726c83215fc20ae707e7a9b1521da7ee202e08",
+                          "id": "fake(0,1)",
                           "balance": {
                             "value": "299999988444520"
                           }
@@ -103,7 +103,7 @@ Response: {
                     "asMoveObject": {
                       "contents": {
                         "type": {
-                          "repr": "0x67168ff94c2a622105ef73e5a602005d56d89321bf1407b5bb90ea63a188437d::m::Foo"
+                          "repr": "P0::m::Foo"
                         },
                         "data": {
                           "Struct": [
@@ -269,15 +269,15 @@ Response: {
                           ]
                         },
                         "json": {
-                          "id": "0xf9a9cef482bbc220c4cd9a1bd84c867c5a29acce6328ff488f0a4ec5e16b49cd",
-                          "f0": "0xf9a9cef482bbc220c4cd9a1bd84c867c5a29acce6328ff488f0a4ec5e16b49cd",
+                          "id": "fake(2,0)",
+                          "f0": "fake(2,0)",
                           "f1": true,
                           "f2": 42,
                           "f3": "43",
                           "f4": "hello",
                           "f5": "world",
                           "f6": [
-                            "0xf9a9cef482bbc220c4cd9a1bd84c867c5a29acce6328ff488f0a4ec5e16b49cd"
+                            "fake(2,0)"
                           ],
                           "f7": 44
                         }

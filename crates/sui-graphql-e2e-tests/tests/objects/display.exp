@@ -159,7 +159,7 @@ Response: {
               },
               {
                 "key": "buyer",
-                "value": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                "value": "A",
                 "error": null
               },
               {
@@ -179,7 +179,7 @@ Response: {
               },
               {
                 "key": "project_url",
-                "value": "Unique Boar from the Boars collection with First Boar and 0xa4f96bb0630f4f40971b3e15f42f07660e07470ddeea9b25fc20614f432cea9e",
+                "value": "Unique Boar from the Boars collection with First Boar and fake(4,0)",
                 "error": null
               },
               {

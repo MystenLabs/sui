@@ -37,10 +37,10 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xcb0c195606f2cf51dd41b7d4b592d801c2c22d4f8a90bc785512d290c293c4c6::M1::EventA"
+              "repr": "Test::M1::EventA"
             },
             "sender": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "A"
             },
             "json": {
               "new_value": "0"
@@ -55,10 +55,10 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xcb0c195606f2cf51dd41b7d4b592d801c2c22d4f8a90bc785512d290c293c4c6::M1::EventA"
+              "repr": "Test::M1::EventA"
             },
             "sender": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "A"
             },
             "json": {
               "new_value": "1"
@@ -73,10 +73,10 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xcb0c195606f2cf51dd41b7d4b592d801c2c22d4f8a90bc785512d290c293c4c6::M1::EventA"
+              "repr": "Test::M1::EventA"
             },
             "sender": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "A"
             },
             "json": {
               "new_value": "2"
@@ -105,10 +105,10 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xcb0c195606f2cf51dd41b7d4b592d801c2c22d4f8a90bc785512d290c293c4c6::M1::EventA"
+              "repr": "Test::M1::EventA"
             },
             "sender": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "A"
             },
             "json": {
               "new_value": "1"
@@ -123,10 +123,10 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xcb0c195606f2cf51dd41b7d4b592d801c2c22d4f8a90bc785512d290c293c4c6::M1::EventA"
+              "repr": "Test::M1::EventA"
             },
             "sender": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "A"
             },
             "json": {
               "new_value": "2"
@@ -155,10 +155,10 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xcb0c195606f2cf51dd41b7d4b592d801c2c22d4f8a90bc785512d290c293c4c6::M1::EventA"
+              "repr": "Test::M1::EventA"
             },
             "sender": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "A"
             },
             "json": {
               "new_value": "0"
@@ -173,10 +173,10 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xcb0c195606f2cf51dd41b7d4b592d801c2c22d4f8a90bc785512d290c293c4c6::M1::EventA"
+              "repr": "Test::M1::EventA"
             },
             "sender": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "A"
             },
             "json": {
               "new_value": "1"
@@ -205,10 +205,10 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xcb0c195606f2cf51dd41b7d4b592d801c2c22d4f8a90bc785512d290c293c4c6::M1::EventA"
+              "repr": "Test::M1::EventA"
             },
             "sender": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "A"
             },
             "json": {
               "new_value": "1"
@@ -223,10 +223,10 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xcb0c195606f2cf51dd41b7d4b592d801c2c22d4f8a90bc785512d290c293c4c6::M1::EventA"
+              "repr": "Test::M1::EventA"
             },
             "sender": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "A"
             },
             "json": {
               "new_value": "2"

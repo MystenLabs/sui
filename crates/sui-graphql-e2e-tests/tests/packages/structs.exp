@@ -25,12 +25,12 @@ Response: {
               {
                 "name": "id",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID",
+                  "repr": "sui::object::UID",
                   "signature": {
                     "ref": null,
                     "body": {
                       "datatype": {
-                        "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                        "package": "sui",
                         "module": "object",
                         "type": "UID",
                         "typeParameters": []
@@ -42,12 +42,12 @@ Response: {
               {
                 "name": "balance",
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<$0>",
+                  "repr": "sui::balance::Balance<$0>",
                   "signature": {
                     "ref": null,
                     "body": {
                       "datatype": {
-                        "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                        "package": "sui",
                         "module": "balance",
                         "type": "Balance",
                         "typeParameters": [
@@ -150,13 +150,13 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x80328b5daa35663d3658b0b11e62339f2454d389a7faa095f6d0ccc933e7dcd7",
+                    "address": "fake(2,1)",
                     "asMovePackage": null
                   }
                 },
                 {
                   "outputState": {
-                    "address": "0x88d8d24e62a86310f465b763c4297e996f6dbb1f43e4cdde707b470bb1946e63",
+                    "address": "P0",
                     "asMovePackage": {
                       "module": {
                         "struct": {
@@ -185,7 +185,7 @@ Response: {
                 },
                 {
                   "outputState": {
-                    "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                    "address": "fake(0,0)",
                     "asMovePackage": null
                   }
                 }
@@ -217,19 +217,19 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x80328b5daa35663d3658b0b11e62339f2454d389a7faa095f6d0ccc933e7dcd7",
+                    "address": "fake(2,1)",
                     "asMovePackage": null
                   }
                 },
                 {
                   "outputState": {
-                    "address": "0xa68d2f19e08a31ed0ba754072a41fa86246fff4a42343ec79d2c6ef2bc9d9e83",
+                    "address": "P1",
                     "asMovePackage": {
                       "module": {
                         "s": {
                           "module": {
                             "package": {
-                              "address": "0x88d8d24e62a86310f465b763c4297e996f6dbb1f43e4cdde707b470bb1946e63"
+                              "address": "P0"
                             }
                           },
                           "name": "S",
@@ -254,7 +254,7 @@ Response: {
                         "t": {
                           "module": {
                             "package": {
-                              "address": "0xa68d2f19e08a31ed0ba754072a41fa86246fff4a42343ec79d2c6ef2bc9d9e83"
+                              "address": "P1"
                             }
                           },
                           "name": "T",
@@ -281,12 +281,12 @@ Response: {
                             {
                               "name": "s",
                               "type": {
-                                "repr": "0x88d8d24e62a86310f465b763c4297e996f6dbb1f43e4cdde707b470bb1946e63::m::S",
+                                "repr": "P0::m::S",
                                 "signature": {
                                   "ref": null,
                                   "body": {
                                     "datatype": {
-                                      "package": "0x88d8d24e62a86310f465b763c4297e996f6dbb1f43e4cdde707b470bb1946e63",
+                                      "package": "P0",
                                       "module": "m",
                                       "type": "S",
                                       "typeParameters": []
@@ -315,7 +315,7 @@ Response: {
                             {
                               "name": "t",
                               "type": {
-                                "repr": "0x88d8d24e62a86310f465b763c4297e996f6dbb1f43e4cdde707b470bb1946e63::m::T<0x88d8d24e62a86310f465b763c4297e996f6dbb1f43e4cdde707b470bb1946e63::m::S>"
+                                "repr": "P0::m::T<P0::m::S>"
                               }
                             }
                           ]
@@ -326,7 +326,7 @@ Response: {
                 },
                 {
                   "outputState": {
-                    "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                    "address": "fake(0,0)",
                     "asMovePackage": null
                   }
                 }
@@ -401,13 +401,13 @@ Response: {
                   {
                     "name": "id",
                     "type": {
-                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                      "repr": "sui::object::UID"
                     }
                   },
                   {
                     "name": "balance",
                     "type": {
-                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<$0>"
+                      "repr": "sui::balance::Balance<$0>"
                     }
                   }
                 ]
@@ -418,7 +418,7 @@ Response: {
                   {
                     "name": "id",
                     "type": {
-                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                      "repr": "sui::object::UID"
                     }
                   },
                   {
@@ -430,25 +430,25 @@ Response: {
                   {
                     "name": "name",
                     "type": {
-                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                      "repr": "std::string::String"
                     }
                   },
                   {
                     "name": "symbol",
                     "type": {
-                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::ascii::String"
+                      "repr": "std::ascii::String"
                     }
                   },
                   {
                     "name": "description",
                     "type": {
-                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                      "repr": "std::string::String"
                     }
                   },
                   {
                     "name": "icon_url",
                     "type": {
-                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::option::Option<0x0000000000000000000000000000000000000000000000000000000000000002::url::Url>"
+                      "repr": "std::option::Option<sui::url::Url>"
                     }
                   }
                 ]
@@ -470,7 +470,7 @@ Response: {
                   {
                     "name": "id",
                     "type": {
-                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                      "repr": "sui::object::UID"
                     }
                   }
                 ]
@@ -481,19 +481,19 @@ Response: {
                   {
                     "name": "id",
                     "type": {
-                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                      "repr": "sui::object::UID"
                     }
                   },
                   {
                     "name": "coin_metadata_object",
                     "type": {
-                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID"
+                      "repr": "sui::object::ID"
                     }
                   },
                   {
                     "name": "deny_cap_object",
                     "type": {
-                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID"
+                      "repr": "sui::object::ID"
                     }
                   }
                 ]
@@ -504,13 +504,13 @@ Response: {
                   {
                     "name": "id",
                     "type": {
-                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                      "repr": "sui::object::UID"
                     }
                   },
                   {
                     "name": "total_supply",
                     "type": {
-                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Supply<$0>"
+                      "repr": "sui::balance::Supply<$0>"
                     }
                   }
                 ]

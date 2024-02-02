@@ -19,19 +19,19 @@ Response: {
         {
           "digest": "Fcoh7a9khpCKQLv5g1veCqBp8fzEdC7H7HpN8EoAZyw7",
           "sender": {
-            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            "address": "A"
           },
           "signatures": [
             "AHjcKr11G8hymuXyDildyJhbOxVAE4v728pvW595Hi/8gzHdxerQ25xKWoAbsE8XV8P7/Jze0zE5Hq5oN6rbBgl/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
           ],
           "gasInput": {
             "gasSponsor": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "A"
             },
             "gasPayment": {
               "nodes": [
                 {
-                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                  "address": "fake(0,0)"
                 }
               ]
             },
@@ -61,8 +61,8 @@ Response: {
                       "oRzrCwYAAAAIAQAGAgYMAxIKBRwRBy0wCF1ACp0BCQymAQ8ABAEGAQcAAAwAAQIEAAIBAgAABQABAAEFAwQAAgoDBwgCAQgAAAEHCAIBCAEDRm9vCVR4Q29udGV4dANVSUQCaWQBbQNuZXcGb2JqZWN0CnR4X2NvbnRleHQCeHMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAICAwgBCAoDAAEAAAIFCwERAQsAEgACAA=="
                     ],
                     "dependencies": [
-                      "0x0000000000000000000000000000000000000000000000000000000000000001",
-                      "0x0000000000000000000000000000000000000000000000000000000000000002"
+                      "std",
+                      "sui"
                     ]
                   }
                 },
@@ -101,11 +101,11 @@ Response: {
               "nodes": [
                 {
                   "owner": {
-                    "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+                    "address": "A"
                   },
                   "amount": "-7315600",
                   "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                    "repr": "sui::sui::SUI"
                   }
                 }
               ]
@@ -113,29 +113,29 @@ Response: {
             "objectChanges": {
               "nodes": [
                 {
-                  "address": "0x6f4533bc7b0fad7dc586bade57e1aa41d85221fb25d50c1fa33a32a9074cfa30",
+                  "address": "fake(1,1)",
                   "idCreated": true,
                   "idDeleted": false,
                   "outputState": {
-                    "address": "0x6f4533bc7b0fad7dc586bade57e1aa41d85221fb25d50c1fa33a32a9074cfa30",
+                    "address": "fake(1,1)",
                     "digest": "6HKnJpH6Q87Zgpd7RrGsxfbxWUmnH5TmfuyX6Ew3suLX"
                   }
                 },
                 {
-                  "address": "0x74ac081d11bc4cc28c6e8f394d0ca4c207989311bccfecc6fa01f45406753cb0",
+                  "address": "P0",
                   "idCreated": true,
                   "idDeleted": false,
                   "outputState": {
-                    "address": "0x74ac081d11bc4cc28c6e8f394d0ca4c207989311bccfecc6fa01f45406753cb0",
+                    "address": "P0",
                     "digest": "Dje4id6JANNMnX7kPihSLxsSjWVK1vGT7CxCSjp3JUxi"
                   }
                 },
                 {
-                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                  "address": "fake(0,0)",
                   "idCreated": false,
                   "idDeleted": false,
                   "outputState": {
-                    "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                    "address": "fake(0,0)",
                     "digest": "3dXexmiTRe6LPWV439QsbBy7iaDsaHYr9M3cvbvFc8ne"
                   }
                 }
@@ -143,7 +143,7 @@ Response: {
             },
             "gasEffects": {
               "gasObject": {
-                "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                "address": "fake(0,0)"
               },
               "gasSummary": {
                 "computationCost": "1000000",
@@ -186,19 +186,19 @@ Response: {
         {
           "digest": "GA3mKfu2utNtLuM8yBWzhzK1y884scSGXtUWBK128niP",
           "sender": {
-            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            "address": "A"
           },
           "signatures": [
             "AIbA8wuA50K/DX9n03MY7LMZpq4FDpMBxVAYIccR9MYURJozQY3QhSZ/2v+9b/7ah+TDTATA21YNVgdbi340kwd/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
           ],
           "gasInput": {
             "gasSponsor": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "A"
             },
             "gasPayment": {
               "nodes": [
                 {
-                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                  "address": "fake(0,0)"
                 }
               ]
             },
@@ -213,21 +213,21 @@ Response: {
                   "cursor": "eyJpIjowLCJjIjoyfQ",
                   "node": {
                     "__typename": "OwnedOrImmutable",
-                    "address": "0x6f4533bc7b0fad7dc586bade57e1aa41d85221fb25d50c1fa33a32a9074cfa30",
+                    "address": "fake(1,1)",
                     "version": 2,
                     "digest": "6HKnJpH6Q87Zgpd7RrGsxfbxWUmnH5TmfuyX6Ew3suLX",
                     "object": {
-                      "address": "0x6f4533bc7b0fad7dc586bade57e1aa41d85221fb25d50c1fa33a32a9074cfa30",
+                      "address": "fake(1,1)",
                       "version": 2,
                       "digest": "6HKnJpH6Q87Zgpd7RrGsxfbxWUmnH5TmfuyX6Ew3suLX",
                       "asMoveObject": {
                         "contents": {
                           "type": {
-                            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap"
+                            "repr": "sui::package::UpgradeCap"
                           },
                           "json": {
-                            "id": "0x6f4533bc7b0fad7dc586bade57e1aa41d85221fb25d50c1fa33a32a9074cfa30",
-                            "package": "0x74ac081d11bc4cc28c6e8f394d0ca4c207989311bccfecc6fa01f45406753cb0",
+                            "id": "fake(1,1)",
+                            "package": "fake(1,0)",
                             "version": "1",
                             "policy": 0
                           }
@@ -258,7 +258,7 @@ Response: {
                   "cursor": "eyJpIjowLCJjIjoyfQ",
                   "node": {
                     "__typename": "MoveCallTransaction",
-                    "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                    "package": "sui",
                     "module": "package",
                     "functionName": "authorize_upgrade",
                     "typeArguments": [],
@@ -281,7 +281,7 @@ Response: {
                       "typeParameters": [],
                       "parameters": [
                         {
-                          "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap"
+                          "repr": "&mut sui::package::UpgradeCap"
                         },
                         {
                           "repr": "u8"
@@ -292,7 +292,7 @@ Response: {
                       ],
                       "return": [
                         {
-                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeTicket"
+                          "repr": "sui::package::UpgradeTicket"
                         }
                       ]
                     }
@@ -306,10 +306,10 @@ Response: {
                       "oRzrCwYAAAAIAQAGAgYMAxIUBSYRBzc8CHNACrMBCQy8AR0ABgEIAQkAAAwAAQIEAAIBAgAABwABAAADAQIAAQQEAgABBwMEAAIKAwcIAgEIAAABBwgCAQgBA0ZvbwlUeENvbnRleHQDVUlEBGJ1cm4GZGVsZXRlAmlkAW0DbmV3Bm9iamVjdAp0eF9jb250ZXh0AnhzAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgACAgUIAQoKAwABAAACBQsBEQMLABIAAgEBAAACBQsAEwABEQICAA=="
                     ],
                     "dependencies": [
-                      "0x0000000000000000000000000000000000000000000000000000000000000001",
-                      "0x0000000000000000000000000000000000000000000000000000000000000002"
+                      "std",
+                      "sui"
                     ],
-                    "currentPackage": "0x74ac081d11bc4cc28c6e8f394d0ca4c207989311bccfecc6fa01f45406753cb0",
+                    "currentPackage": "fake(1,0)",
                     "upgradeTicket": {
                       "__typename": "Result",
                       "cmd": 0,
@@ -321,7 +321,7 @@ Response: {
                   "cursor": "eyJpIjoyLCJjIjoyfQ",
                   "node": {
                     "__typename": "MoveCallTransaction",
-                    "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                    "package": "sui",
                     "module": "package",
                     "functionName": "commit_upgrade",
                     "typeArguments": [],
@@ -341,10 +341,10 @@ Response: {
                       "typeParameters": [],
                       "parameters": [
                         {
-                          "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap"
+                          "repr": "&mut sui::package::UpgradeCap"
                         },
                         {
-                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeReceipt"
+                          "repr": "sui::package::UpgradeReceipt"
                         }
                       ],
                       "return": []
@@ -372,11 +372,11 @@ Response: {
               "nodes": [
                 {
                   "owner": {
-                    "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+                    "address": "A"
                   },
                   "amount": "-4993420",
                   "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                    "repr": "sui::sui::SUI"
                   }
                 }
               ]
@@ -384,29 +384,29 @@ Response: {
             "objectChanges": {
               "nodes": [
                 {
-                  "address": "0x6f4533bc7b0fad7dc586bade57e1aa41d85221fb25d50c1fa33a32a9074cfa30",
+                  "address": "fake(1,1)",
                   "idCreated": false,
                   "idDeleted": false,
                   "outputState": {
-                    "address": "0x6f4533bc7b0fad7dc586bade57e1aa41d85221fb25d50c1fa33a32a9074cfa30",
+                    "address": "fake(1,1)",
                     "digest": "Ci1pzdZM8sdrJC1JLMULfA3nzHPkJcWBqwRRoA8wHFXY"
                   }
                 },
                 {
-                  "address": "0xd4a3bb6dbcad1086208a5c0355dd9f6cc4e70fef1c1c3cdecbf5ca61202a76fb",
+                  "address": "P0",
                   "idCreated": true,
                   "idDeleted": false,
                   "outputState": {
-                    "address": "0xd4a3bb6dbcad1086208a5c0355dd9f6cc4e70fef1c1c3cdecbf5ca61202a76fb",
+                    "address": "P0",
                     "digest": "96q8ZkiFQqPkJHzKjSSRkDAzEbF5RNqLBhZFQNjS5uXC"
                   }
                 },
                 {
-                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                  "address": "fake(0,0)",
                   "idCreated": false,
                   "idDeleted": false,
                   "outputState": {
-                    "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                    "address": "fake(0,0)",
                     "digest": "CR2NSHxRthxwGrDB4BXUSMMgpuKRhGJf2pBcmuEmTpFP"
                   }
                 }
@@ -414,7 +414,7 @@ Response: {
             },
             "gasEffects": {
               "gasObject": {
-                "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                "address": "fake(0,0)"
               },
               "gasSummary": {
                 "computationCost": "1000000",
@@ -462,19 +462,19 @@ Response: {
         {
           "digest": "8J7p6zFzbaQG1r4ts6pB6mtXQV1kb5ogKhqnCHP97GHL",
           "sender": {
-            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            "address": "A"
           },
           "signatures": [
             "ADcN7ooAweizbjMTpZwsXXkzOVQeecMk8E4/F8CudRKuuo2JrWCxnF6j+HofCMP1LYzi0LrfTYE3sffSHMc57wB/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
           ],
           "gasInput": {
             "gasSponsor": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "A"
             },
             "gasPayment": {
               "nodes": [
                 {
-                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                  "address": "fake(0,0)"
                 }
               ]
             },
@@ -569,7 +569,7 @@ Response: {
                   "cursor": "eyJpIjozLCJjIjozfQ",
                   "node": {
                     "__typename": "MoveCallTransaction",
-                    "package": "0xd4a3bb6dbcad1086208a5c0355dd9f6cc4e70fef1c1c3cdecbf5ca61202a76fb",
+                    "package": "P0",
                     "module": "m",
                     "functionName": "new",
                     "typeArguments": [],
@@ -588,12 +588,12 @@ Response: {
                           "repr": "vector<u64>"
                         },
                         {
-                          "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                          "repr": "&mut sui::tx_context::TxContext"
                         }
                       ],
                       "return": [
                         {
-                          "repr": "0x74ac081d11bc4cc28c6e8f394d0ca4c207989311bccfecc6fa01f45406753cb0::m::Foo"
+                          "repr": "fake(1,0)::m::Foo"
                         }
                       ]
                     }
@@ -620,7 +620,7 @@ Response: {
                   "cursor": "eyJpIjo1LCJjIjozfQ",
                   "node": {
                     "__typename": "MoveCallTransaction",
-                    "package": "0xd4a3bb6dbcad1086208a5c0355dd9f6cc4e70fef1c1c3cdecbf5ca61202a76fb",
+                    "package": "P0",
                     "module": "m",
                     "functionName": "new",
                     "typeArguments": [],
@@ -639,12 +639,12 @@ Response: {
                           "repr": "vector<u64>"
                         },
                         {
-                          "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                          "repr": "&mut sui::tx_context::TxContext"
                         }
                       ],
                       "return": [
                         {
-                          "repr": "0x74ac081d11bc4cc28c6e8f394d0ca4c207989311bccfecc6fa01f45406753cb0::m::Foo"
+                          "repr": "fake(1,0)::m::Foo"
                         }
                       ]
                     }
@@ -654,7 +654,7 @@ Response: {
                   "cursor": "eyJpIjo2LCJjIjozfQ",
                   "node": {
                     "__typename": "MoveCallTransaction",
-                    "package": "0xd4a3bb6dbcad1086208a5c0355dd9f6cc4e70fef1c1c3cdecbf5ca61202a76fb",
+                    "package": "P0",
                     "module": "m",
                     "functionName": "burn",
                     "typeArguments": [],
@@ -670,7 +670,7 @@ Response: {
                       "typeParameters": [],
                       "parameters": [
                         {
-                          "repr": "0x74ac081d11bc4cc28c6e8f394d0ca4c207989311bccfecc6fa01f45406753cb0::m::Foo"
+                          "repr": "fake(1,0)::m::Foo"
                         }
                       ],
                       "return": []
@@ -733,11 +733,11 @@ Response: {
               "nodes": [
                 {
                   "owner": {
-                    "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+                    "address": "A"
                   },
                   "amount": "-3350680",
                   "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                    "repr": "sui::sui::SUI"
                   }
                 }
               ]
@@ -745,19 +745,19 @@ Response: {
             "objectChanges": {
               "nodes": [
                 {
-                  "address": "0x77e073fe82e9b6ca42180b2381379e1708f03802e72079b9ef05efee1627483f",
+                  "address": "fake(8,1)",
                   "idCreated": true,
                   "idDeleted": false,
                   "outputState": {
-                    "address": "0x77e073fe82e9b6ca42180b2381379e1708f03802e72079b9ef05efee1627483f",
+                    "address": "fake(8,1)",
                     "digest": "89BP5LLsCgQuHWmr6979yNtkSwPUKZSmaHsPPPVXCHfQ",
                     "asMoveObject": {
                       "contents": {
                         "type": {
-                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                          "repr": "sui::coin::Coin<sui::sui::SUI>"
                         },
                         "json": {
-                          "id": "0x77e073fe82e9b6ca42180b2381379e1708f03802e72079b9ef05efee1627483f",
+                          "id": "fake(8,1)",
                           "balance": {
                             "value": "2000"
                           }
@@ -767,19 +767,19 @@ Response: {
                   }
                 },
                 {
-                  "address": "0xdec7858dc68221b522a58c64119281c5d7479edde7968b2eda7b71cc47bf7d1b",
+                  "address": "fake(8,0)",
                   "idCreated": true,
                   "idDeleted": false,
                   "outputState": {
-                    "address": "0xdec7858dc68221b522a58c64119281c5d7479edde7968b2eda7b71cc47bf7d1b",
+                    "address": "fake(8,0)",
                     "digest": "AGc3pT4tRJrxnQYMWh2M72t1Qxr7BEYBsLg5A6TbnPQb",
                     "asMoveObject": {
                       "contents": {
                         "type": {
-                          "repr": "0x74ac081d11bc4cc28c6e8f394d0ca4c207989311bccfecc6fa01f45406753cb0::m::Foo"
+                          "repr": "fake(1,0)::m::Foo"
                         },
                         "json": {
-                          "id": "0xdec7858dc68221b522a58c64119281c5d7479edde7968b2eda7b71cc47bf7d1b",
+                          "id": "fake(8,0)",
                           "xs": [
                             "42",
                             "43"
@@ -790,19 +790,19 @@ Response: {
                   }
                 },
                 {
-                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                  "address": "fake(0,0)",
                   "idCreated": false,
                   "idDeleted": false,
                   "outputState": {
-                    "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                    "address": "fake(0,0)",
                     "digest": "7DDJ6mCREtRFy6JXPKEYqLsFcxaxJ13NHTGA64dzwvae",
                     "asMoveObject": {
                       "contents": {
                         "type": {
-                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                          "repr": "sui::coin::Coin<sui::sui::SUI>"
                         },
                         "json": {
-                          "id": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                          "id": "fake(0,0)",
                           "balance": {
                             "value": "299999982036420"
                           }
@@ -815,7 +815,7 @@ Response: {
             },
             "gasEffects": {
               "gasObject": {
-                "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                "address": "fake(0,0)"
               },
               "gasSummary": {
                 "computationCost": "1000000",
@@ -857,19 +857,19 @@ Response: {
         {
           "digest": "8aWxv1TbL8kTh73GPHcV725nDkMf1mZn8TGzE2Kwkz2Z",
           "sender": {
-            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            "address": "A"
           },
           "signatures": [
             "ANbFZ7YEsrV6CzBarQCE9lDnY3gomR48zeqc21vNeauZ+QkBJ6DeASzb8bAWcZp8w0JIeYohMKTIDVXui/zC3gR/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
           ],
           "gasInput": {
             "gasSponsor": {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "A"
             },
             "gasPayment": {
               "nodes": [
                 {
-                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                  "address": "fake(0,0)"
                 }
               ]
             },
@@ -924,11 +924,11 @@ Response: {
               "nodes": [
                 {
                   "owner": {
-                    "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+                    "address": "A"
                   },
                   "amount": "-1009880",
                   "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                    "repr": "sui::sui::SUI"
                   }
                 }
               ]
@@ -936,11 +936,11 @@ Response: {
             "objectChanges": {
               "nodes": [
                 {
-                  "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                  "address": "fake(0,0)",
                   "idCreated": false,
                   "idDeleted": false,
                   "outputState": {
-                    "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                    "address": "fake(0,0)",
                     "digest": "2Yg9AX9vwmTMwi2AAsCgNSEbGUaYzSGWf54BzDo6VEEc"
                   }
                 }
@@ -948,7 +948,7 @@ Response: {
             },
             "gasEffects": {
               "gasObject": {
-                "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8"
+                "address": "fake(0,0)"
               },
               "gasSummary": {
                 "computationCost": "1000000",

@@ -57,7 +57,7 @@ Response: {
             "asMoveObject": {
               "asStakedSui": {
                 "principal": "20000000000000000",
-                "poolId": "0x4c7a4284a346b4d241c72819e5c367f45ed8f2c8466482eb4fc10efb713c7202"
+                "poolId": "_"
               }
             }
           }
@@ -68,7 +68,7 @@ Response: {
             "asMoveObject": {
               "asStakedSui": {
                 "principal": "10000000000",
-                "poolId": "0x4c7a4284a346b4d241c72819e5c367f45ed8f2c8466482eb4fc10efb713c7202"
+                "poolId": "_"
               }
             }
           }
@@ -79,7 +79,7 @@ Response: {
             "asMoveObject": {
               "asStakedSui": {
                 "principal": "40000",
-                "poolId": "0x4c7a4284a346b4d241c72819e5c367f45ed8f2c8466482eb4fc10efb713c7202"
+                "poolId": "_"
               }
             }
           }

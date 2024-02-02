@@ -37,7 +37,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui"
+                  "repr": "sui_system::staking_pool::StakedSui"
                 }
               }
             }
@@ -48,7 +48,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui"
+                  "repr": "sui_system::staking_pool::StakedSui"
                 }
               }
             }
@@ -59,7 +59,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui"
+                  "repr": "sui_system::staking_pool::StakedSui"
                 }
               }
             }
@@ -80,7 +80,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                  "repr": "sui::clock::Clock"
                 }
               }
             }
@@ -91,7 +91,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::authenticator_state::AuthenticatorState"
+                  "repr": "sui::authenticator_state::AuthenticatorState"
                 }
               }
             }
@@ -102,7 +102,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::random::Random"
+                  "repr": "sui::random::Random"
                 }
               }
             }
@@ -113,7 +113,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::deny_list::DenyList"
+                  "repr": "sui::deny_list::DenyList"
                 }
               }
             }
@@ -124,7 +124,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::PoolTokenExchangeRate>"
+                  "repr": "sui::dynamic_field::Field<u64,sui_system::staking_pool::PoolTokenExchangeRate>"
                 }
               }
             }
@@ -135,7 +135,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::Coin<sui::sui::SUI>"
                 }
               }
             }
@@ -146,7 +146,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::PoolTokenExchangeRate>"
+                  "repr": "sui::dynamic_field::Field<u64,sui_system::staking_pool::PoolTokenExchangeRate>"
                 }
               }
             }
@@ -157,7 +157,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinMetadata<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::CoinMetadata<sui::sui::SUI>"
                 }
               }
             }
@@ -168,7 +168,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<0x0000000000000000000000000000000000000000000000000000000000000002::object::ID,address>"
+                  "repr": "sui::dynamic_field::Field<sui::object::ID,address>"
                 }
               }
             }
@@ -179,7 +179,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000002::deny_list::PerTypeList>"
+                  "repr": "sui::dynamic_field::Field<u64,sui::deny_list::PerTypeList>"
                 }
               }
             }
@@ -190,7 +190,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::sui_system_state_inner::SuiSystemStateInnerV2>"
+                  "repr": "sui::dynamic_field::Field<u64,sui_system::sui_system_state_inner::SuiSystemStateInnerV2>"
                 }
               }
             }
@@ -201,7 +201,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::Coin<sui::sui::SUI>"
                 }
               }
             }
@@ -212,7 +212,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000002::random::RandomInner>"
+                  "repr": "sui::dynamic_field::Field<u64,sui::random::RandomInner>"
                 }
               }
             }
@@ -223,7 +223,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::PoolTokenExchangeRate>"
+                  "repr": "sui::dynamic_field::Field<u64,sui_system::staking_pool::PoolTokenExchangeRate>"
                 }
               }
             }
@@ -234,7 +234,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000002::authenticator_state::AuthenticatorStateInner>"
+                  "repr": "sui::dynamic_field::Field<u64,sui::authenticator_state::AuthenticatorStateInner>"
                 }
               }
             }
@@ -245,7 +245,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::Coin<sui::sui::SUI>"
                 }
               }
             }
@@ -266,7 +266,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::Coin<sui::sui::SUI>"
                 }
               }
             }
@@ -277,7 +277,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinMetadata<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::CoinMetadata<sui::sui::SUI>"
                 }
               }
             }
@@ -288,7 +288,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::Coin<sui::sui::SUI>"
                 }
               }
             }
@@ -299,7 +299,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::Coin<sui::sui::SUI>"
                 }
               }
             }
@@ -320,7 +320,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::Coin<sui::sui::SUI>"
                 }
               }
             }
@@ -331,7 +331,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::Coin<sui::sui::SUI>"
                 }
               }
             }
@@ -342,7 +342,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::Coin<sui::sui::SUI>"
                 }
               }
             }
@@ -363,7 +363,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::Coin<sui::sui::SUI>"
                 }
               }
             }
@@ -374,7 +374,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::Coin<sui::sui::SUI>"
                 }
               }
             }
@@ -385,7 +385,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "sui::coin::Coin<sui::sui::SUI>"
                 }
               }
             }

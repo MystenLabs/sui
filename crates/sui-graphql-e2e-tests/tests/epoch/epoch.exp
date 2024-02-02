@@ -52,7 +52,7 @@ Response: {
           ]
         },
         "validatorCandidatesSize": 0,
-        "inactivePoolsId": "0xdb6da0f931cea26ea17af59a6ba01eebf2ac833694cd8c040c20e4b2238ca8de"
+        "inactivePoolsId": "_"
       },
       "totalGasFees": "1000000",
       "totalStakeRewards": "1000000",

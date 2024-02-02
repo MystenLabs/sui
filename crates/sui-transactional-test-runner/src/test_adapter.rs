@@ -606,7 +606,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 }
                 output.push(format!("Response: {}", resp.response_body_json_pretty()));
 
-                Ok(Some(output.join("\n")))
+                let result = output.join("\n");
+
+                Ok(Some(self.stabilize_str(result)))
+                // Ok(Some(output.join("\n")))
             }
             SuiSubcommand::ViewCheckpoint => {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;

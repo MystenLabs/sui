@@ -20,7 +20,7 @@ Response: {
             ],
             "parameters": [
               {
-                "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::coin::TreasuryCap<$0>"
+                "repr": "&sui::coin::TreasuryCap<$0>"
               }
             ],
             "return": [
@@ -40,10 +40,10 @@ Response: {
             ],
             "parameters": [
               {
-                "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<$0>"
+                "repr": "&mut sui::coin::Coin<$0>"
               },
               {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<$0>"
+                "repr": "sui::coin::Coin<$0>"
               }
             ],
             "return": []
@@ -57,12 +57,12 @@ Response: {
             "typeParameters": [],
             "parameters": [
               {
-                "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                "repr": "&mut sui::tx_context::TxContext"
               }
             ],
             "return": [
               {
-                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                "repr": "sui::balance::Balance<sui::sui::SUI>"
               }
             ]
           }
@@ -91,13 +91,13 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x08ff46b6c7c166440b72bd29539834b2061ad8bd18613f920a6d6339f763f78e",
+                    "address": "P0",
                     "asMovePackage": {
                       "module": {
                         "function": {
                           "module": {
                             "package": {
-                              "address": "0x08ff46b6c7c166440b72bd29539834b2061ad8bd18613f920a6d6339f763f78e"
+                              "address": "P0"
                             }
                           },
                           "name": "f",
@@ -130,13 +130,13 @@ Response: {
                 },
                 {
                   "outputState": {
-                    "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                    "address": "fake(0,0)",
                     "asMovePackage": null
                   }
                 },
                 {
                   "outputState": {
-                    "address": "0xf9f58db38f40eeff4aef1cfb33f056f6847797a06be8fa9436c1c8f2c23343ae",
+                    "address": "fake(2,1)",
                     "asMovePackage": null
                   }
                 }
@@ -168,13 +168,13 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0xe9f3601e4f3104248045c30c7932ae54f554e103334e971e260697a66670b492",
+                    "address": "P0",
                     "asMovePackage": {
                       "module": {
                         "f": {
                           "module": {
                             "package": {
-                              "address": "0xe9f3601e4f3104248045c30c7932ae54f554e103334e971e260697a66670b492"
+                              "address": "P0"
                             }
                           },
                           "name": "f",
@@ -204,7 +204,7 @@ Response: {
                         "g": {
                           "module": {
                             "package": {
-                              "address": "0xe9f3601e4f3104248045c30c7932ae54f554e103334e971e260697a66670b492"
+                              "address": "P0"
                             }
                           },
                           "name": "g",
@@ -224,13 +224,13 @@ Response: {
                 },
                 {
                   "outputState": {
-                    "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                    "address": "fake(0,0)",
                     "asMovePackage": null
                   }
                 },
                 {
                   "outputState": {
-                    "address": "0xf9f58db38f40eeff4aef1cfb33f056f6847797a06be8fa9436c1c8f2c23343ae",
+                    "address": "fake(2,1)",
                     "asMovePackage": null
                   }
                 }
@@ -258,13 +258,13 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                      "repr": "&mut sui::clock::Clock"
                     },
                     {
                       "repr": "u64"
                     },
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                      "repr": "&sui::tx_context::TxContext"
                     }
                   ],
                   "return": []
@@ -277,7 +277,7 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                      "repr": "&sui::tx_context::TxContext"
                     }
                   ],
                   "return": []
@@ -290,7 +290,7 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                      "repr": "&sui::clock::Clock"
                     }
                   ],
                   "return": [
@@ -315,7 +315,7 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                      "repr": "&sui::tx_context::TxContext"
                     }
                   ],
                   "return": []
@@ -328,7 +328,7 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                      "repr": "&sui::clock::Clock"
                     }
                   ],
                   "return": [
@@ -353,13 +353,13 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                      "repr": "&mut sui::clock::Clock"
                     },
                     {
                       "repr": "u64"
                     },
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                      "repr": "&sui::tx_context::TxContext"
                     }
                   ],
                   "return": []
@@ -372,7 +372,7 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                      "repr": "&sui::tx_context::TxContext"
                     }
                   ],
                   "return": []
@@ -405,7 +405,7 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                      "repr": "&sui::tx_context::TxContext"
                     }
                   ],
                   "return": []
@@ -426,7 +426,7 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                      "repr": "&sui::tx_context::TxContext"
                     }
                   ],
                   "return": []
@@ -439,7 +439,7 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                      "repr": "&sui::clock::Clock"
                     }
                   ],
                   "return": [
@@ -464,7 +464,7 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                      "repr": "&sui::tx_context::TxContext"
                     }
                   ],
                   "return": []
@@ -477,7 +477,7 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                      "repr": "&sui::clock::Clock"
                     }
                   ],
                   "return": [
@@ -502,7 +502,7 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                      "repr": "&sui::tx_context::TxContext"
                     }
                   ],
                   "return": []
@@ -523,13 +523,13 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                      "repr": "&mut sui::clock::Clock"
                     },
                     {
                       "repr": "u64"
                     },
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                      "repr": "&sui::tx_context::TxContext"
                     }
                   ],
                   "return": []
@@ -542,7 +542,7 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                      "repr": "&sui::tx_context::TxContext"
                     }
                   ],
                   "return": []
@@ -563,13 +563,13 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                      "repr": "&mut sui::clock::Clock"
                     },
                     {
                       "repr": "u64"
                     },
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                      "repr": "&sui::tx_context::TxContext"
                     }
                   ],
                   "return": []
@@ -582,7 +582,7 @@ Response: {
                   "typeParameters": [],
                   "parameters": [
                     {
-                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                      "repr": "&sui::tx_context::TxContext"
                     }
                   ],
                   "return": []
