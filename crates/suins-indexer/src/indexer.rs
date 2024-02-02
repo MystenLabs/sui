@@ -83,9 +83,10 @@ impl SuinsIndexer {
     pub fn parse_name_record_changes(
         &self,
         objects: &[&Object],
-        name_record_changes: &mut Vec<NameRecordChange>,
-        sub_domain_wrappers: &mut HashMap<String, String>,
-    ) {
+    ) -> (Vec<NameRecordChange>, HashMap<String, String>) {
+        let mut name_records: Vec<NameRecordChange> = vec![];
+        let mut subdomain_wrappers: HashMap<String, String> = HashMap::new();
+
         for &object in objects {
             // Parse all the changes to a `NameRecord`
             if self.is_name_record(object) {
@@ -93,7 +94,7 @@ impl SuinsIndexer {
                     .to_rust()
                     .unwrap_or_else(|| panic!("Failed to parse name record for {:?}", object));
 
-                name_record_changes.push(NameRecordChange {
+                name_records.push(NameRecordChange {
                     field: name_record,
                     field_id: object.id(),
                 });
@@ -104,22 +105,22 @@ impl SuinsIndexer {
             // that the wrapper will be created on the same checkpoint as the name record and vice versa.
             if self.is_subdomain_wrapper(object) {
                 let sub_domain: SubDomainRegistration = object.to_rust().unwrap();
-                sub_domain_wrappers.insert(
+                subdomain_wrappers.insert(
                     sub_domain.nft.domain_name,
                     sub_domain.id.id.bytes.to_string(),
                 );
             };
         }
+
+        (name_records, subdomain_wrappers)
     }
 
     /// For each input object, we're parsing the name record deletions
     /// A deletion we want to track is a deleted object which is of `NameRecord` type.
     /// Domain replacements do not count as deletions, but instead are an update to the latest state.
-    pub fn parse_name_record_deletions(
-        &self,
-        checkpoint: &CheckpointData,
-        removals: &mut Vec<String>,
-    ) {
+    pub fn parse_name_record_deletions(&self, checkpoint: &CheckpointData) -> Vec<String> {
+        let mut removals: Vec<String> = vec![];
+
         // Gather all object ids that got deleted.
         // This way, we can delete removed name records
         // (detects burning of expired names or leaf names removal).
@@ -135,6 +136,8 @@ impl SuinsIndexer {
                 removals.push(input.id().to_string());
             }
         }
+
+        removals
     }
 
     /// Processes a checkpoint and produces a list of `updates` and a list of `removals`
@@ -148,17 +151,10 @@ impl SuinsIndexer {
         &self,
         checkpoint: CheckpointData,
     ) -> (Vec<VerifiedDomain>, Vec<String>) {
-        let mut name_records: Vec<NameRecordChange> = vec![];
-        let mut subdomain_wrappers: HashMap<String, String> = HashMap::new();
-        let mut removals: Vec<String> = vec![];
+        let (name_records, subdomain_wrappers) =
+            self.parse_name_record_changes(&checkpoint.output_objects());
 
-        self.parse_name_record_changes(
-            &checkpoint.output_objects(),
-            &mut name_records,
-            &mut subdomain_wrappers,
-        );
-
-        self.parse_name_record_deletions(&checkpoint, &mut removals);
+        let removals = self.parse_name_record_deletions(&checkpoint);
 
         let updates = prepare_db_updates(
             &name_records,
