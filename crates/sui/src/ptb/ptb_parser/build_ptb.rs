@@ -39,7 +39,7 @@ use crate::{
     err, error,
     ptb::ptb_parser::{
         argument::Argument as PTBArg,
-        command_token::{CommandToken, ASSIGN, GAS_BUDGET, MOVE_CALL},
+        command_token::{CommandToken, ASSIGN, GAS_BUDGET, MOVE_CALL, PICK_GAS_BUDGET},
         context::{FileScope, PTBContext},
         errors::{span, PTBError, PTBResult, Span, Spanned},
         parser::ParsedPTBCommand,
@@ -48,15 +48,18 @@ use crate::{
     sp,
 };
 
+use super::utils::to_ordinal_contraction;
+
 /// The gas budget is a list of gas budgets that can be used to set the gas budget for a PTB along
 /// with a gas picker that can be used to pick the budget from the list if it is set in a PTB.
 /// A PTB may have multiple gas budgets but the gas picker can only be set once.
 pub struct GasBudget {
-    pub gas_budgets: Vec<u64>,
-    pub picker: Option<GasPicker>,
+    pub gas_budgets: Vec<Spanned<(FileScope, u64)>>,
+    pub picker: Vec<Spanned<(FileScope, GasPicker)>>,
 }
 
 /// Types of gas pickers that can be used to pick a gas budget from a list of gas budgets.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GasPicker {
     Max,
     Min,
@@ -242,49 +245,65 @@ pub struct PTBBuilder<'a> {
     pub errors: Vec<PTBError>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GasBudgetError {
+    NoGasBudget,
+    NoGasPicker(Vec<Spanned<(FileScope, u64)>>),
+    MultipleGasPickers(Vec<Spanned<(FileScope, GasPicker)>>),
+}
+
 impl GasBudget {
     pub fn new() -> Self {
         Self {
             gas_budgets: vec![],
-            picker: None,
+            picker: vec![],
         }
     }
 
     /// Finalize the gas budget. This will return an error if there are no gas budgets or if the
     /// gas budget is set to 0.
-    pub fn finalize(&self) -> anyhow::Result<u64> {
+    pub fn finalize(self) -> Result<u64, GasBudgetError> {
         if self.gas_budgets.is_empty() {
-            anyhow::bail!("No gas budget set");
+            return Err(GasBudgetError::NoGasBudget);
+        }
+
+        if self.picker.len() > 1 {
+            return Err(GasBudgetError::MultipleGasPickers(self.picker));
         }
 
         let budget = if self.gas_budgets.len() == 1 {
-            self.gas_budgets[0]
+            self.gas_budgets[0].value.1
         } else {
-            match self.picker {
-                Some(GasPicker::Max) => self.gas_budgets.iter().max().unwrap().clone(),
-                Some(GasPicker::Min) => self.gas_budgets.iter().min().unwrap().clone(),
-                Some(GasPicker::Sum) => self.gas_budgets.iter().sum(),
-                None => anyhow::bail!("No gas picker set"),
+            match self.picker.get(0).map(|x| &x.value.1) {
+                Some(GasPicker::Max) => self
+                    .gas_budgets
+                    .iter()
+                    .map(|x| x.value.1)
+                    .max()
+                    .unwrap()
+                    .clone(),
+                Some(GasPicker::Min) => self
+                    .gas_budgets
+                    .iter()
+                    .map(|x| x.value.1)
+                    .min()
+                    .unwrap()
+                    .clone(),
+                Some(GasPicker::Sum) => self.gas_budgets.iter().map(|x| x.value.1).sum(),
+                None => return Err(GasBudgetError::NoGasPicker(self.gas_budgets)),
             }
         };
 
-        if budget == 0 {
-            anyhow::bail!("Invalid gas budget");
-        }
         Ok(budget)
     }
 
-    pub fn add_gas_budget(&mut self, budget: u64) {
-        self.gas_budgets.push(budget);
+    pub fn add_gas_budget(&mut self, budget: u64, scope: FileScope, sp: Span) {
+        self.gas_budgets.push(span(sp, (scope, budget)));
     }
 
     /// Set the gas picker. This will return an error if the gas picker has already been set.
-    pub fn set_gas_picker(&mut self, picker: GasPicker) -> Result<()> {
-        if self.picker.is_some() {
-            anyhow::bail!("Gas picker already set");
-        }
-        self.picker = Some(picker);
-        Ok(())
+    pub fn set_gas_picker(&mut self, picker: GasPicker, scope: FileScope, sp: Span) {
+        self.picker.push(span(sp, (scope, picker)));
     }
 }
 
@@ -366,7 +385,7 @@ impl<'a> PTBBuilder<'a> {
                     if i == 0 {
                         self.errors.push(PTBError::WithSource {
                             file_scope: fscope.clone(),
-                            message: format!("Identifier '{}' first declared here", ident,),
+                            message: format!("Identifier '{}' first declared here", ident),
                             span: Some(*command_loc),
                             help: None,
                         });
@@ -374,21 +393,70 @@ impl<'a> PTBBuilder<'a> {
                         self.errors.push(PTBError::WithSource {
                             file_scope: fscope.clone(),
                             message: format!(
-                                "Identifier '{}' used again here (shadowed). This is usage number {}.",
-                                ident, i + 1
+                                "Identifier '{}' used again here (shadowed) for the {} time.",
+                                ident, to_ordinal_contraction(i + 1)
                             ),
                             span: Some(*command_loc),
-                            help: Some(format!("You can either rename this variable, or do not pass the `warn-shadows` flag to ignore these types of errors.")),
+                            help: Some("You can either rename this variable, or do not \
+                                       pass the `warn-shadows` flag to ignore these types of errors.".to_string()),
                         });
                     }
                 }
             }
         }
 
-        let budget = match self.gas_budget.finalize().map_err(|e| err!(self, "{e}")) {
+        let budget = match self.gas_budget.finalize().map_err(|e| match e {
+            GasBudgetError::NoGasBudget => self.errors.push(err!(self, "No gas budget set for transaction")),
+            GasBudgetError::NoGasPicker(budgets) => {
+                for (i, sp!(bsp, (fscope, _))) in budgets.into_iter().enumerate() {
+                    let err_msg = if i == 0 {
+                        // NB: this could span multiple files, so we use the filescope saved with
+                        // the budget.
+                        PTBError::WithSource {
+                            file_scope: fscope,
+                            message: "Multiple gas budgets set for transaction with no gas picker. \
+                                Gas budget is set for the first time here.".to_string(),
+                            span: Some(bsp),
+                            help: Some(format!("You should either remove all but one usage of setting the gas budget, or use the \
+                                '{PICK_GAS_BUDGET}' command to handle multiple gas budgets")),
+                        }
+                    } else {
+                        PTBError::WithSource {
+                            file_scope: fscope,
+                            message: format!("Gas budget is set for the {} time here.", to_ordinal_contraction(i + 1)),
+                            span: Some(bsp),
+                            help: None,
+                        }
+                    };
+                self.errors.push(err_msg);
+                }
+            }
+            GasBudgetError::MultipleGasPickers(pickers) => {
+                for (i, sp!(bsp, (fscope, _))) in pickers.into_iter().enumerate() {
+                    let err_msg = if i == 0 {
+                        // NB: this could span multiple files, so we use the filescope saved with
+                        // the picker.
+                        PTBError::WithSource {
+                            file_scope: fscope,
+                            message: "Multiple gas pickers set for transaction. \
+                                First usage of the 'gas-picker' command here.".to_string(),
+                            span: Some(bsp),
+                            help: Some(format!("You should either remove all but one usage of '{PICK_GAS_BUDGET}'.")),
+                        }
+                    } else {
+                        PTBError::WithSource {
+                            file_scope: fscope,
+                            message: format!("'{PICK_GAS_BUDGET}' used here for the {} time.", to_ordinal_contraction(i + 1)),
+                            span: Some(bsp),
+                            help: None,
+                        }
+                    };
+                self.errors.push(err_msg);
+                }
+            },
+        }) {
             Ok(b) => b,
-            Err(e) => {
-                self.errors.push(e);
+            Err(_) => {
                 return Err(self.errors);
             }
         };
@@ -417,7 +485,7 @@ impl<'a> PTBBuilder<'a> {
         let Some(SuiRawData::Package(package)) = object.bcs else {
             error!(
                 self,
-                "Bcs field in object [{}] is missing or not a package.", package_id
+                "BCS field in object '{}' is missing or not a package.", package_id
             );
         };
         let package: MovePackage = MovePackage::new(
@@ -889,19 +957,19 @@ impl<'a> PTBBuilder<'a> {
                     "sum" => GasPicker::Sum,
                     x => error!(sp: ident_loc, self, "invalid gas picker: {}", x,),
                 };
-                self.gas_budget
-                    .set_gas_picker(picker)
-                    .map_err(|e| err!(sp: ident_loc, self, "{e}"))?;
+                let context = self.context.current_file_scope().clone();
+                self.gas_budget.set_gas_picker(picker, context, ident_loc);
             }
             CommandToken::GasBudget => {
                 bind!(
-                    _b_loc,
+                    budget_loc,
                     PTBArg::U64(budget) = command.args.pop().unwrap(),
                     |loc| {
                         error!(sp: loc, self, "expected gas budget");
                     }
                 );
-                self.gas_budget.add_gas_budget(budget);
+                let context = self.context.current_file_scope().clone();
+                self.gas_budget.add_gas_budget(budget, context, budget_loc);
             }
             CommandToken::File => {
                 error!(self, "File commands should be removed at this point");
