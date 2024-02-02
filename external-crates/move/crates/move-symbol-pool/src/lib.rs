@@ -88,6 +88,7 @@ static_symbols!(
     "%implicit",
     "%macro",
     "lint",
+    "migration",
 );
 
 /// The global, unique cache of strings.

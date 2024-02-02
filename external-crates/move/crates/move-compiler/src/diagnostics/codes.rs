@@ -337,6 +337,10 @@ codes!(
             msg: "feature is not supported in specified edition",
             severity: BlockingError,
         },
+    ],
+    Migration: [
+        NeedsPublic: { msg: "move 2024 migration: public struct", severity: BlockingError },
+        NeedsLetMut: { msg: "move 2024 migration: let mut", severity: BlockingError },
     ]
 );
 

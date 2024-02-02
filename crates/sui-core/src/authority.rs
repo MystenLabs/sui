@@ -140,9 +140,7 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_driver::execution_process;
 use crate::in_mem_execution_cache::{ExecutionCache, ExecutionCacheRead, ExecutionCacheWrite};
 use crate::metrics::LatencyObserver;
-use crate::metrics::RateTracker;
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::overload_monitor::{overload_monitor, AuthorityOverloadInfo};
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::{StateAccumulator, WrappedObject};
 use crate::subscription_handler::SubscriptionHandler;
@@ -239,9 +237,6 @@ pub struct AuthorityMetrics {
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
 
-    pub(crate) authority_overload_status: IntGauge,
-    pub(crate) authority_load_shedding_percentage: IntGauge,
-
     /// Post processing metrics
     post_processing_total_events_emitted: IntCounter,
     post_processing_total_tx_indexed: IntCounter,
@@ -274,18 +269,6 @@ pub struct AuthorityMetrics {
     // Tracks recent average txn queueing delay between when it is ready for execution
     // until it starts executing.
     pub execution_queueing_latency: LatencyObserver,
-
-    // Tracks the rate of transactions become ready for execution in transaction manager.
-    // The need for the Mutex is that the tracker is updated in transaction manager and read
-    // in the overload_monitor. There should be low mutex contention because
-    // transaction manager is single threaded and the read rate in overload_monitor is
-    // low. In the case where transaction manager becomes multi-threaded, we can
-    // create one rate tracker per thread.
-    pub txn_ready_rate_tracker: Arc<Mutex<RateTracker>>,
-
-    // Tracks the rate of transactions starts execution in execution driver.
-    // Similar reason for using a Mutex here as to `txn_ready_rate_tracker`.
-    pub execution_rate_tracker: Arc<Mutex<RateTracker>>,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -470,16 +453,6 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            authority_overload_status: register_int_gauge_with_registry!(
-                "authority_overload_status",
-                "Whether authority is current experiencing overload and enters load shedding mode.",
-                registry)
-            .unwrap(),
-            authority_load_shedding_percentage: register_int_gauge_with_registry!(
-                "authority_load_shedding_percentage",
-                "The percentage of transactions is shed when the authority is in load shedding mode.",
-                registry)
-            .unwrap(),
             transaction_manager_object_cache_misses: register_int_counter_with_registry!(
                 "transaction_manager_object_cache_misses",
                 "Number of object-availability cache misses in TransactionManager",
@@ -645,8 +618,6 @@ impl AuthorityMetrics {
                 registry
             ).unwrap(),
             execution_queueing_latency: LatencyObserver::new(),
-            txn_ready_rate_tracker: Arc::new(Mutex::new(RateTracker::new(Duration::from_secs(10)))),
-            execution_rate_tracker: Arc::new(Mutex::new(RateTracker::new(Duration::from_secs(10)))),
         }
     }
 }
@@ -713,9 +684,6 @@ pub struct AuthorityState {
 
     /// Config for when we consider the node overloaded.
     overload_threshold_config: OverloadThresholdConfig,
-
-    /// Current overload status in this authority. Updated periodically.
-    pub overload_info: AuthorityOverloadInfo,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -2484,8 +2452,7 @@ impl AuthorityState {
             transaction_deny_config,
             certificate_deny_config,
             debug_dump_config,
-            overload_threshold_config: overload_threshold_config.clone(),
-            overload_info: AuthorityOverloadInfo::default(),
+            overload_threshold_config,
         });
 
         // Start a task to execute ready certificates.
@@ -2493,11 +2460,8 @@ impl AuthorityState {
         spawn_monitored_task!(execution_process(
             authority_state,
             rx_ready_certificates,
-            rx_execution_shutdown,
+            rx_execution_shutdown
         ));
-
-        let authority_state = Arc::downgrade(&state);
-        spawn_monitored_task!(overload_monitor(authority_state, overload_threshold_config));
 
         // TODO: This doesn't belong to the constructor of AuthorityState.
         state

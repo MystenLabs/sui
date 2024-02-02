@@ -757,8 +757,8 @@ impl SuiClientCommands {
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
-
-                SuiClientCommandResult::ProfileTransaction
+                // this will be displayed via trace info, so no output is needed here
+                SuiClientCommandResult::NoOutput
             }
             SuiClientCommands::ReplayTransaction {
                 tx_digest,
@@ -776,7 +776,8 @@ impl SuiClientCommands {
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
-                SuiClientCommandResult::ReplayTransaction
+                // this will be displayed via trace info, so no output is needed here
+                SuiClientCommandResult::NoOutput
             }
             SuiClientCommands::ReplayBatch {
                 path,
@@ -790,7 +791,8 @@ impl SuiClientCommands {
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
-                SuiClientCommandResult::ReplayBatch
+                // this will be displayed via trace info, so no output is needed here
+                SuiClientCommandResult::NoOutput
             }
             SuiClientCommands::ReplayCheckpoints {
                 start,
@@ -806,7 +808,8 @@ impl SuiClientCommands {
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
-                SuiClientCommandResult::ReplayCheckpoints
+                // this will be displayed via trace info, so no output is needed here
+                SuiClientCommandResult::NoOutput
             }
             SuiClientCommands::Addresses { sort_by_alias } => {
                 let active_address = context.active_address()?;
@@ -1905,10 +1908,6 @@ impl Display for SuiClientCommandResult {
                 table.with(tabled::settings::style::BorderSpanCorrection);
                 writeln!(f, "{}", table)?;
             }
-            SuiClientCommandResult::ProfileTransaction => {}
-            SuiClientCommandResult::ReplayTransaction => {}
-            SuiClientCommandResult::ReplayBatch => {}
-            SuiClientCommandResult::ReplayCheckpoints => {}
             SuiClientCommandResult::NoOutput => {}
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
@@ -2183,10 +2182,6 @@ pub enum SuiClientCommandResult {
         used_module_ticks: u128,
     },
     VerifySource,
-    ProfileTransaction,
-    ReplayTransaction,
-    ReplayBatch,
-    ReplayCheckpoints,
 }
 
 #[derive(Serialize, Clone)]

@@ -687,22 +687,6 @@ pub struct TransactionKeyValueStoreWriteConfig {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct OverloadThresholdConfig {
     pub max_txn_age_in_queue: Duration,
-
-    // The interval of checking overload signal.
-    pub overload_monitor_interval: Duration,
-
-    // The execution queueing latency when entering load shedding mode.
-    pub execution_queue_latency_soft_limit: Duration,
-
-    // The execution queueing latency when entering aggressive load shedding mode.
-    pub execution_queue_latency_hard_limit: Duration,
-
-    // The maximum percentage of transactions to shed in load shedding mode.
-    pub max_load_shedding_percentage: u32,
-
-    // When in aggressive load shedding mode, the the minimum percentage of
-    // transactions to shed.
-    pub min_load_shedding_percentage_above_hard_limit: u32,
     // TODO: Move other thresholds here as well, including `MAX_TM_QUEUE_LENGTH`
     // and `MAX_PER_OBJECT_QUEUE_LENGTH`.
 }
@@ -711,11 +695,6 @@ impl Default for OverloadThresholdConfig {
     fn default() -> Self {
         Self {
             max_txn_age_in_queue: Duration::from_secs(1), // 1 second
-            overload_monitor_interval: Duration::from_secs(10),
-            execution_queue_latency_soft_limit: Duration::from_secs(1),
-            execution_queue_latency_hard_limit: Duration::from_secs(10),
-            max_load_shedding_percentage: 95,
-            min_load_shedding_percentage_above_hard_limit: 50,
         }
     }
 }

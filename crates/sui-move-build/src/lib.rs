@@ -32,7 +32,7 @@ use move_package::{
     compilation::{
         build_plan::BuildPlan, compiled_package::CompiledPackage as MoveCompiledPackage,
     },
-    package_hooks::PackageHooks,
+    package_hooks::{PackageHooks, PackageIdentifier},
     resolution::resolution_graph::ResolvedGraph,
     BuildConfig as MoveBuildConfig,
 };
@@ -617,7 +617,10 @@ impl PackageHooks for SuiPackageHooks {
         Ok(())
     }
 
-    fn custom_resolve_pkg_name(&self, manifest: &SourceManifest) -> anyhow::Result<Symbol> {
+    fn custom_resolve_pkg_id(
+        &self,
+        manifest: &SourceManifest,
+    ) -> anyhow::Result<PackageIdentifier> {
         Ok(manifest.package.name)
     }
 
