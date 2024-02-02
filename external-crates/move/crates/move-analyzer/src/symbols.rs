@@ -912,7 +912,7 @@ impl UseDefMap {
 
     fn extend(&mut self, use_defs: BTreeMap<u32, BTreeSet<UseDef>>) {
         for (k, v) in use_defs {
-            self.0.entry(k).or_insert_with(BTreeSet::new).extend(v);
+            self.0.entry(k).or_default().extend(v);
         }
     }
 }
@@ -1620,8 +1620,8 @@ impl<'a> ParsingSymbolicator<'a> {
                 ty,
                 method: _,
             } => {
-                self.chain_symbols(&function);
-                self.chain_symbols(&ty);
+                self.chain_symbols(function);
+                self.chain_symbols(ty);
             }
         }
     }
@@ -1742,7 +1742,6 @@ impl<'a> ParsingSymbolicator<'a> {
                 );
                 self.use_defs.insert(alias_start.line, ud);
             }
-            return;
         }
     }
 
@@ -1989,7 +1988,7 @@ impl<'a> TypingSymbolicator<'a> {
 
         match &fun.body.value {
             FunctionBody_::Defined((use_funs, sequence)) => {
-                self.use_funs_symbols(&use_funs);
+                self.use_funs_symbols(use_funs);
                 for seq_item in sequence {
                     self.seq_item_symbols(&mut scope, seq_item);
                 }
@@ -2135,7 +2134,7 @@ impl<'a> TypingSymbolicator<'a> {
                 self.exp_symbols(body, scope);
             }
             E::NamedBlock(_, (use_funs, sequence)) => {
-                self.use_funs_symbols(&use_funs);
+                self.use_funs_symbols(use_funs);
                 // a named block is a new var scope
                 let mut new_scope = scope.clone();
                 for seq_item in sequence {
@@ -2143,7 +2142,7 @@ impl<'a> TypingSymbolicator<'a> {
                 }
             }
             E::Block((use_funs, sequence)) => {
-                self.use_funs_symbols(&use_funs);
+                self.use_funs_symbols(use_funs);
                 // a block is a new var scope
                 let mut new_scope = scope.clone();
                 for seq_item in sequence {
