@@ -4,9 +4,9 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use sui_types::digests::TransactionDigest;
 use sui_types::Identifier;
 
+use sui_types::event::EventID;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
@@ -20,9 +20,9 @@ use crate::types::{BridgeAction, BridgeActionDigest};
 pub struct BridgeOrchestratorTables {
     /// pending BridgeActions that orchestrator received but not yet executed
     pub(crate) pending_actions: DBMap<BridgeActionDigest, BridgeAction>,
-    /// module identifier to starting transaction digest
-    pub(crate) sui_syncer_cursors: DBMap<Identifier, TransactionDigest>,
-    /// contract address to starting block
+    /// module identifier to the last processed EventID
+    pub(crate) sui_syncer_cursors: DBMap<Identifier, EventID>,
+    /// contract address to the last processed block
     pub(crate) eth_syncer_cursors: DBMap<ethers::types::Address, u64>,
 }
 
@@ -71,7 +71,7 @@ impl BridgeOrchestratorTables {
     pub(crate) fn update_sui_event_cursor(
         &self,
         module: Identifier,
-        cursor: TransactionDigest,
+        cursor: EventID,
     ) -> BridgeResult<()> {
         let mut batch = self.sui_syncer_cursors.batch();
 
@@ -117,7 +117,7 @@ impl BridgeOrchestratorTables {
     pub fn get_sui_event_cursors(
         &self,
         identifiers: &[Identifier],
-    ) -> BridgeResult<Vec<Option<TransactionDigest>>> {
+    ) -> BridgeResult<Vec<Option<EventID>>> {
         self.sui_syncer_cursors.multi_get(identifiers).map_err(|e| {
             BridgeError::StorageError(format!("Couldn't get sui_syncer_cursors: {:?}", e))
         })
@@ -138,6 +138,8 @@ impl BridgeOrchestratorTables {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+
+    use sui_types::digests::TransactionDigest;
 
     use crate::test_utils::get_test_sui_to_eth_bridge_action;
 
@@ -217,7 +219,10 @@ mod tests {
 
         // update sui event cursor
         let sui_module = Identifier::from_str("test").unwrap();
-        let sui_cursor = TransactionDigest::random();
+        let sui_cursor = EventID {
+            tx_digest: TransactionDigest::random(),
+            event_seq: 1,
+        };
         assert!(store.get_sui_event_cursors(&[sui_module.clone()]).unwrap()[0].is_none());
         store
             .update_sui_event_cursor(sui_module.clone(), sui_cursor)
