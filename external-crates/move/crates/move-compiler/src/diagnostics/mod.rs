@@ -25,13 +25,16 @@ use codespan_reporting::{
         Config,
     },
 };
+use csr::files::Files;
 use move_command_line_common::{env::read_env_var, files::FileHash};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    io::Write,
     iter::FromIterator,
     ops::Range,
+    path::PathBuf,
 };
 
 use self::codes::UnusedItem;
@@ -88,8 +91,21 @@ enum UnprefixedWarningFilters {
     Empty,
 }
 
+#[derive(PartialEq, Eq, Clone, Debug)]
+enum MigrationChange {
+    AddMut,
+    AddPublic,
+}
+
+// All of the migration changes
+pub struct Migration {
+    files: SimpleFiles<Symbol, String>,
+    file_mapping: FileMapping,
+    changes: BTreeMap<FileId, BTreeMap<usize, Vec<(usize, MigrationChange)>>>,
+}
+
 //**************************************************************************************************
-// Reporting
+// Diagnostic Reporting
 //**************************************************************************************************
 
 pub fn report_diagnostics(files: &FilesSourceText, diags: Diagnostics) -> ! {
@@ -165,6 +181,10 @@ fn render_diagnostics(
     let Diagnostics(Some(mut diags)) = diags else {
         return;
     };
+
+    // Do not render / report migration diagnostics.
+    diags.diagnostics.retain(|diag| !diag.is_migration());
+
     diags.diagnostics.sort_by(|e1, e2| {
         let loc1: &Loc = &e1.primary_label.0;
         let loc2: &Loc = &e2.primary_label.0;
@@ -216,6 +236,40 @@ fn render_diagnostic(
     );
     diag = diag.with_notes(notes);
     diag
+}
+
+//**************************************************************************************************
+// Migration Diff Reporting
+//**************************************************************************************************
+
+pub fn generate_migration_diff(files: &FilesSourceText, diags: &Diagnostics) -> Option<Migration> {
+    match diags {
+        Diagnostics(Some(inner)) => {
+            let migration_diags = inner
+                .diagnostics
+                .iter()
+                .filter(|diag| diag.is_migration())
+                .cloned()
+                .collect::<Vec<_>>();
+            if migration_diags.is_empty() {
+                return None;
+            }
+            let migration = Migration::new(files.clone(), migration_diags);
+            Some(migration)
+        }
+        _ => None,
+    }
+}
+
+// Used in test harness for unit testing
+pub fn report_migration_to_buffer(files: &FilesSourceText, diags: Diagnostics) -> Vec<u8> {
+    let mut writer = Buffer::no_color();
+    if let Some(mut diff) = generate_migration_diff(files, &diags) {
+        let _ = writer.write_all(diff.render_output().as_bytes());
+    } else {
+        let _ = writer.write_all("No migration report".as_bytes());
+    }
+    writer.into_inner()
 }
 
 //**************************************************************************************************
@@ -289,7 +343,7 @@ impl Diagnostics {
         for (sev, count) in severity_count {
             *inner.severity_count.entry(sev).or_insert(0) += count;
         }
-        inner.diagnostics.extend(diagnostics)
+        inner.diagnostics.extend(diagnostics);
     }
 
     pub fn into_vec(self) -> Vec<Diagnostic> {
@@ -414,6 +468,11 @@ impl Diagnostic {
 
     pub fn info(&self) -> &DiagnosticInfo {
         &self.info
+    }
+
+    pub fn is_migration(&self) -> bool {
+        const MIGRATION_CATEGORY: u8 = codes::Category::Migration as u8;
+        self.info.category() == MIGRATION_CATEGORY
     }
 }
 
@@ -612,6 +671,141 @@ impl UnprefixedWarningFilters {
             categories: BTreeMap::new(),
             codes: filtered_codes,
         }
+    }
+}
+
+impl Migration {
+    pub fn new(sources: FilesSourceText, diags: Vec<Diagnostic>) -> Migration {
+        let mut files = SimpleFiles::new();
+        let mut file_mapping = HashMap::new();
+        for (fhash, (fname, source)) in sources {
+            let id = files.add(fname, source);
+            file_mapping.insert(fhash, id);
+        }
+        let mut mig = Migration {
+            files,
+            file_mapping,
+            changes: BTreeMap::new(),
+        };
+
+        for diag in diags {
+            mig.add_diagnostic(diag);
+        }
+
+        mig
+    }
+
+    fn add_diagnostic(&mut self, diag: Diagnostic) {
+        const NEEDS_MUT: u8 = codes::Migration::NeedsLetMut as u8;
+        const NEEDS_PUBLIC: u8 = codes::Migration::NeedsPublic as u8;
+
+        let (file_id, line, col) = self.find_file_location(&diag);
+        let file_change_entry = self.changes.entry(file_id).or_default();
+        let line_change_entry = file_change_entry.entry(line).or_default();
+        match diag.info().code() {
+            NEEDS_MUT => line_change_entry.push((col, MigrationChange::AddMut)),
+            NEEDS_PUBLIC => line_change_entry.push((col, MigrationChange::AddPublic)),
+            _ => unreachable!(),
+        }
+    }
+
+    fn find_file_location(&mut self, diag: &Diagnostic) -> (usize, usize, usize) {
+        let (loc, _msg) = &diag.primary_label;
+        let start_loc = loc.start() as usize;
+        let file_id = *self.file_mapping.get(&loc.file_hash()).unwrap();
+        let file_loc = self.files.location(file_id, start_loc).unwrap();
+        (file_id, file_loc.line_number, file_loc.column_number - 1)
+    }
+
+    fn get_line(&self, file_id: FileId, line_index: usize) -> String {
+        let line_range = self.files.line_range(file_id, line_index).unwrap();
+        self.files.source(file_id).unwrap()[line_range].to_string()
+    }
+
+    fn render_line(line_text: String, changes: &[(usize, MigrationChange)]) -> String {
+        let mut line_prefix: &str = &line_text[..];
+        let mut output = "".to_string();
+        for (col, change) in changes.iter().rev() {
+            let rest = &line_prefix[*col..];
+            match change {
+                MigrationChange::AddMut => {
+                    output = format!("mut {}{}", rest, output);
+                    line_prefix = &line_prefix[..*col];
+                }
+                MigrationChange::AddPublic => {
+                    output = format!("public {}{}", rest, output);
+                    line_prefix = &line_prefix[..*col];
+                }
+            }
+        }
+        output = format!("{}{}", line_prefix, output);
+        output
+    }
+
+    pub fn render_output(&mut self) -> String {
+        let mut changes = std::mem::take(&mut self.changes);
+
+        let mut output = vec![];
+        let mut names = changes
+            .keys()
+            .map(|id| (*id, *self.files.get(*id).unwrap().name()))
+            .collect::<Vec<_>>();
+        names.sort_by_key(|(_, name)| *name);
+        for (file_id, name) in names {
+            let file_changes = changes.get_mut(&file_id).unwrap();
+            output.push(format!("--- {}\n+++ {}\n", name, name));
+            for (line_number, line_changes) in file_changes.iter_mut() {
+                line_changes.sort_by_key(|(col, _)| *col);
+                let line = self.get_line(file_id, *line_number - 1).to_string();
+                output.push(format!("@@ -{line_number},1 +{line_number},1 @@\n"));
+                output.push(format!("-{}", line));
+                let new_line = Self::render_line(line.to_string(), line_changes);
+                output.push(format!("+{}", new_line));
+            }
+        }
+
+        let _ = std::mem::replace(&mut self.changes, changes);
+
+        output.join("")
+    }
+
+    pub fn record_diff(&mut self, path: PathBuf) -> anyhow::Result<String> {
+        let output_path = path.join("migration.patch");
+        let string_result = output_path.to_str().unwrap_or("invalid path").to_string();
+        std::fs::write(output_path, self.render_output())?;
+        Ok(string_result)
+    }
+
+    pub fn apply_changes<W: Write>(&mut self, w: &mut W) -> anyhow::Result<()> {
+        writeln!(w)?;
+        let mut names = self
+            .changes
+            .keys()
+            .map(|id| (*id, self.files.get(*id).unwrap()))
+            .collect::<Vec<_>>();
+        names.sort_by_key(|(_, file)| file.name());
+        for (file_id, file) in names {
+            let file_changes = self.changes.get_mut(&file_id).unwrap();
+            let name = file.name();
+            let path = PathBuf::from(name.to_string());
+            let mut output = vec![];
+            for (ndx, line) in file.source().lines().enumerate() {
+                if let Some(line_changes) = file_changes.get_mut(&(ndx + 1)) {
+                    line_changes.sort_by_key(|(col, _)| *col);
+                    output.push(Self::render_line(line.to_string(), line_changes))
+                } else {
+                    output.push(line.to_string());
+                }
+            }
+            writeln!(w, "Updating {:#?} . . .", path)?;
+            // let out_writer = std::fs::write(path, contents)
+            let mut buf: Vec<u8> = Vec::new();
+            for line in output {
+                writeln!(&mut buf, "{}", line)?;
+            }
+            std::fs::write(path, buf)?;
+        }
+        Ok(())
     }
 }
 

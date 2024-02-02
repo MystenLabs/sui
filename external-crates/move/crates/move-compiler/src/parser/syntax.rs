@@ -13,7 +13,7 @@ use move_symbol_pool::{symbol, Symbol};
 use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
-    editions::FeatureGate,
+    editions::{Edition, FeatureGate},
     parser::{ast::*, lexer::*},
     shared::*,
     MatchedFileCommentMap,
@@ -2514,6 +2514,11 @@ fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context
                 "Invalid struct declaration. {vis_str} struct declarations are not yet supported"
             );
             let note = "Visibility annotations are required on struct declarations from the Move 2024 edition onwards.";
+            if context.env.edition(current_package) == Edition::E2024_MIGRATION {
+                context
+                    .env
+                    .add_diag(diag!(Migration::NeedsPublic, (loc, msg.clone())))
+            }
             let mut err = diag!(Syntax::InvalidModifier, (loc, msg));
             err.add_note(note);
             context.env.add_diag(err);

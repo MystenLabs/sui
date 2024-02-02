@@ -31,6 +31,8 @@ pub const VERIFY_SHORT: char = 'v';
 
 pub const WARNINGS_ARE_ERRORS: &str = "warnings-are-errors";
 
+pub const GENERATE_MIGRATION_DIFF: &str = "generate-migration-diff";
+
 pub const BYTECODE_VERSION: &str = "bytecode-version";
 
 pub const COLOR_MODE_ENV_VAR: &str = "COLOR_MODE";

@@ -1,0 +1,49 @@
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/migration/all_migrations.move:2:5
+  │
+2 │     struct S { f: u64 }
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/migration/all_migrations.move:4:5
+  │
+4 │     struct LongerName {
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/migration/all_migrations.move:9:5
+  │
+9 │     struct Positional(u64, u64, u64)
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+warning[W09003]: unused assignment
+   ┌─ tests/move_2024/migration/all_migrations.move:12:20
+   │
+12 │         let S { f: fin } = s;
+   │                    ^^^ Unused assignment for variable 'fin'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_fin')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/move_2024/migration/all_migrations.move:13:9
+   │
+12 │         let S { f: fin } = s;
+   │                    --- To use the variable mutably, it must be declared 'mut', e.g. 'mut fin'
+13 │         fin = 10;
+   │         ^^^ Invalid assignment of immutable variable 'fin'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/move_2024/migration/all_migrations.move:14:9
+   │
+11 │     fun t0(x: u64, s: S): u64 {
+   │            - To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
+   ·
+14 │         x = 20;
+   │         ^ Invalid assignment of immutable variable 'x'
+

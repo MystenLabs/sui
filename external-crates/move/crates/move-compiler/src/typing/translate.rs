@@ -9,7 +9,7 @@ use super::{
 use crate::{
     diag,
     diagnostics::{codes::*, Diagnostic},
-    editions::{FeatureGate, Flavor},
+    editions::{Edition, FeatureGate, Flavor},
     expansion::ast::{
         Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend, ModuleAccess_,
         ModuleIdent, ModuleIdent_, Value_, Visibility,
@@ -1821,6 +1821,11 @@ fn check_mutability(context: &mut Context, eloc: Loc, usage: &str, v: &N::Var) {
         let usage_msg = format!("Invalid {usage} of immutable variable '{v}'");
         let decl_msg =
             format!("To use the variable mutably, it must be declared 'mut', e.g. 'mut {v}'");
+        if context.env.edition(context.current_package()) == Edition::E2024_MIGRATION {
+            context
+                .env
+                .add_diag(diag!(Migration::NeedsLetMut, (decl_loc, decl_msg.clone()),))
+        }
         context.env.add_diag(diag!(
             TypeSafety::InvalidImmVariableUsage,
             (eloc, usage_msg),

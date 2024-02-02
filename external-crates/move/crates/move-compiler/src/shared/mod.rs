@@ -359,7 +359,7 @@ impl CompilationEnv {
                     );
                     diag.add_note(help)
                 }
-                if self.flags().warnings_are_errors() {
+                if self.flags.warnings_are_errors() {
                     diag = diag.set_severity(Severity::NonblockingError)
                 }
             }
