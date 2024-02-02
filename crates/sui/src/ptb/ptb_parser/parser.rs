@@ -595,7 +595,7 @@ impl<'a> ValueParser<'a> {
                 span(total_span, V::Array(values))
             }
             (Tok::Ident, contents) if matches!(self.peek_tok(), Some(Tok::Dot)) => {
-                let sp!(_, prefix) = self.with_span(tl_loc, |_| Identifier::new(contents))?;
+                // let sp!(_, prefix) = self.with_span(tl_loc, |_| contents)?;
                 let mut fields = vec![];
                 self.spanned(|p| p.advance(Tok::Dot))?;
                 while let Ok(sp!(sp, (_, contents))) = self.spanned(|p| p.advance_any()) {
@@ -609,12 +609,12 @@ impl<'a> ValueParser<'a> {
                     self.spanned(|p| p.advance(Tok::Dot))?;
                 }
                 let sp = tl_loc.union_with(fields.iter().map(|f| f.span).collect::<Vec<_>>());
-                span(sp, V::VariableAccess(span(tl_loc, prefix), fields))
+                span(
+                    sp,
+                    V::VariableAccess(span(tl_loc, contents.to_string()), fields),
+                )
             }
-            (Tok::Ident, contents) => span(
-                tl_loc,
-                V::Identifier(self.with_span(tl_loc, |_| Identifier::new(contents))?.value),
-            ),
+            (Tok::Ident, contents) => span(tl_loc, V::Identifier(contents.to_string())),
             (Tok::TypeArgString, contents) => self.with_span(tl_loc, |_| {
                 let type_tokens: Vec<_> = TypeToken::tokenize(contents)?
                     .into_iter()

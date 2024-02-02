@@ -15,7 +15,10 @@ use move_binary_format::{
     access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
     file_format_common::VERSION_MAX,
 };
-use move_command_line_common::address::ParsedAddress;
+use move_command_line_common::{
+    address::{NumericalAddress, ParsedAddress},
+    parser::NumberFormat,
+};
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
 use serde::Serialize;
@@ -219,13 +222,13 @@ pub struct PTBBuilder<'a> {
     pub addresses: BTreeMap<String, AccountAddress>,
     /// A map from identifiers to the file scopes in which they were declared. This is used
     /// for reporting shadowing warnings.
-    pub identifiers: BTreeMap<Identifier, Vec<Spanned<FileScope>>>,
+    pub identifiers: BTreeMap<String, Vec<Spanned<FileScope>>>,
     /// The arguments that we need to resolve. This is a map from identifiers to the argument
     /// values -- they haven't been resolved to a transaction argument yet.
-    pub arguments_to_resolve: BTreeMap<Identifier, Spanned<PTBArg>>,
+    pub arguments_to_resolve: BTreeMap<String, Spanned<PTBArg>>,
     /// The arguments that we have resolved. This is a map from identifiers to the actual
     /// transaction arguments.
-    pub resolved_arguments: BTreeMap<Identifier, Tx::Argument>,
+    pub resolved_arguments: BTreeMap<String, Tx::Argument>,
     /// The actual PTB that we are building up.
     pub ptb: ProgrammableTransactionBuilder,
     /// Read API for reading objects from chain. Needed for object resolution.
@@ -325,9 +328,9 @@ fn is_pure(t: &TypeTag) -> anyhow::Result<bool> {
 }
 
 impl<'a> PTBBuilder<'a> {
-    pub fn new(reader: &'a ReadApi) -> Self {
+    pub fn new(starting_env: BTreeMap<String, AccountAddress>, reader: &'a ReadApi) -> Self {
         Self {
-            addresses: BTreeMap::new(),
+            addresses: starting_env,
             identifiers: BTreeMap::new(),
             arguments_to_resolve: BTreeMap::new(),
             resolved_arguments: BTreeMap::new(),
@@ -343,7 +346,7 @@ impl<'a> PTBBuilder<'a> {
     }
 
     /// Declare and identifier. This is used to support shadowing warnings.
-    pub fn declare_identifier(&mut self, ident: Identifier, ident_loc: Span) {
+    pub fn declare_identifier(&mut self, ident: String, ident_loc: Span) {
         let current_context = self.context.current_file_scope().clone();
         let e = self.identifiers.entry(ident).or_default();
         e.push(Spanned {
@@ -356,12 +359,21 @@ impl<'a> PTBBuilder<'a> {
     /// `possible_addr` is not an address, then this is a no-op.
     pub fn declare_possible_address_binding(
         &mut self,
-        ident: Identifier,
+        ident: String,
         possible_addr: &Spanned<PTBArg>,
     ) {
         match possible_addr.value {
             PTBArg::Address(addr) => {
                 self.addresses.insert(ident.to_string(), addr.into_inner());
+            }
+            PTBArg::Identifier(ref i) => {
+                // We do a one-hop resolution here to see if we can resolve the identifier to an
+                // externally-bound address (i.e., one coming in through the initial environment).
+                // This will also handle direct aliasing of addresses throughout the ptb.
+                // Note that we don't do this recursively so no need to worry about loops/cycles.
+                if let Some(addr) = self.addresses.get(i) {
+                    self.addresses.insert(ident.to_string(), *addr);
+                }
             }
             _ => (),
         }
@@ -385,7 +397,7 @@ impl<'a> PTBBuilder<'a> {
                     if i == 0 {
                         self.errors.push(PTBError::WithSource {
                             file_scope: fscope.clone(),
-                            message: format!("Identifier '{}' first declared here", ident),
+                            message: format!("Variable '{}' first declared here", ident),
                             span: Some(*command_loc),
                             help: None,
                         });
@@ -393,7 +405,7 @@ impl<'a> PTBBuilder<'a> {
                         self.errors.push(PTBError::WithSource {
                             file_scope: fscope.clone(),
                             message: format!(
-                                "Identifier '{}' used again here (shadowed) for the {} time.",
+                                "Variable '{}' used again here (shadowed) for the {} time.",
                                 ident, to_ordinal_contraction(i + 1)
                             ),
                             span: Some(*command_loc),
@@ -667,6 +679,24 @@ impl<'a> PTBBuilder<'a> {
             }
             PTBArg::Identifier(i) if self.resolved_arguments.contains_key(&i) => {
                 Ok(self.resolved_arguments[&i].clone())
+            }
+            PTBArg::Identifier(i) if self.addresses.contains_key(&i) => {
+                // We now have a location for this address (which may have come from the keystore
+                // so we didnt' have an address for it before), so we tag it with its first usage
+                // location put it in the arguments to resolve and resolve away.
+                let addr = self.addresses[&i];
+                self.arguments_to_resolve.insert(
+                    i.clone(),
+                    span(
+                        arg_loc,
+                        PTBArg::Address(NumericalAddress::new(
+                            addr.into_bytes(),
+                            NumberFormat::Hex,
+                        )),
+                    ),
+                );
+                self.resolve(span(arg_loc, PTBArg::Identifier(i)), ctx)
+                    .await
             }
             PTBArg::Bool(b) => ctx.pure(self, arg_loc, b).await,
             PTBArg::U8(u) => ctx.pure(self, arg_loc, u).await,
