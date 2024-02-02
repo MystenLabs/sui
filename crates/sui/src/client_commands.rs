@@ -42,10 +42,8 @@ use sui_move_build::{
 };
 use sui_replay::ReplayToolCommand;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
+use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
-use sui_sdk::{
-    wallet_context::WalletContext, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
-};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
@@ -217,19 +215,6 @@ pub enum SuiClientCommands {
         #[clap(long)]
         signed_tx_bytes: String,
     },
-
-    /// Request gas coin from faucet. By default, it will use the active address and the active network.
-    #[clap[name = "faucet"]]
-    Faucet {
-        /// Address (or its alias)
-        #[clap(long)]
-        #[arg(value_parser)]
-        address: Option<KeyIdentity>,
-        /// The url to the faucet
-        #[clap(long)]
-        url: Option<String>,
-    },
-
     /// Obtain all gas objects owned by the address.
     /// An address' alias can be used instead of the address.
     #[clap(name = "gas")]
@@ -620,7 +605,6 @@ pub enum SuiClientCommands {
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
         /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
         /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
-        #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
@@ -695,6 +679,14 @@ pub enum SuiClientCommands {
         /// Log information about each programmable transaction command
         #[arg(long)]
         ptb_info: bool,
+
+        /// Optional version of the executor to use, if not specified defaults to the one originally used for the transaction.
+        #[arg(long, short, allow_hyphen_values = true)]
+        executor_version: Option<i64>,
+
+        /// Optional protocol version to use, if not specified defaults to the one originally used for the transaction.
+        #[arg(long, short, allow_hyphen_values = true)]
+        protocol_version: Option<i64>,
     },
 
     /// Replay transactions listed in a file.
@@ -726,11 +718,6 @@ pub enum SuiClientCommands {
     },
 }
 
-#[derive(serde::Deserialize)]
-struct FaucetResponse {
-    error: Option<String>,
-}
-
 impl SuiClientCommands {
     pub async fn execute(
         self,
@@ -741,12 +728,9 @@ impl SuiClientCommands {
                 tx_digest,
                 profile_output,
             } => {
-                move_vm_profiler::gas_profiler_feature_disabled! {
-                    bail!(
-                        "gas-profiler feature is not enabled, rebuild or reinstall with \
-                         --features gas-profiler"
-                    );
-                };
+                if !cfg!(feature = "gas-profiler") {
+                    bail!("gas-profiler feature is not enabled, rebuild or reinstall with --features gas-profiler");
+                }
 
                 let cmd = ReplayToolCommand::ProfileTransaction {
                     tx_digest,
@@ -764,13 +748,15 @@ impl SuiClientCommands {
                 tx_digest,
                 gas_info: _,
                 ptb_info: _,
+                executor_version,
+                protocol_version,
             } => {
                 let cmd = ReplayToolCommand::ReplayTransaction {
                     tx_digest,
                     show_effects: true,
                     diag: false,
-                    executor_version: None,
-                    protocol_version: None,
+                    executor_version,
+                    protocol_version,
                 };
 
                 let rpc = context.config.get_active_env()?.rpc.clone();
@@ -1304,29 +1290,6 @@ impl SuiClientCommands {
                     .collect();
                 SuiClientCommandResult::Gas(coins)
             }
-            SuiClientCommands::Faucet { address, url } => {
-                let address = get_identity_address(address, context)?;
-                let url = if let Some(url) = url {
-                    url
-                } else {
-                    let active_env = context.config.get_active_env();
-
-                    if let Ok(env) = active_env {
-                        let network = match env.rpc.as_str() {
-                            SUI_DEVNET_URL => "https://faucet.devnet.sui.io/v1/gas",
-                            SUI_TESTNET_URL => "https://faucet.testnet.sui.io/v1/gas",
-                            // TODO when using sui-test-validator, and 5003 when using sui start
-                            SUI_LOCAL_NETWORK_URL => "http://127.0.0.1:9123/gas",
-                            _ => bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
-                        };
-                        network.to_string()
-                    } else {
-                        bail!("No URL for faucet was provided and there is no active network.")
-                    }
-                };
-                request_tokens_from_faucet(address, url).await?;
-                SuiClientCommandResult::NoOutput
-            }
             SuiClientCommands::ChainIdentifier => {
                 let ci = context
                     .get_client()
@@ -1406,7 +1369,7 @@ impl SuiClientCommands {
                     ));
                 }
 
-                if let Some(address) = address {
+                if let Some(address) = address.clone() {
                     let address = get_identity_address(Some(address), context)?;
                     if !context.config.keystore.addresses().contains(&address) {
                         return Err(anyhow!("Address {} not managed by wallet", address));
@@ -1909,7 +1872,6 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::ReplayTransaction => {}
             SuiClientCommandResult::ReplayBatch => {}
             SuiClientCommandResult::ReplayCheckpoints => {}
-            SuiClientCommandResult::NoOutput => {}
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -2058,7 +2020,7 @@ pub struct ObjectOutput {
     pub digest: String,
     pub obj_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub owner: Option<Owner>,
+    pub owner_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prev_tx: Option<TransactionDigest>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2069,6 +2031,13 @@ pub struct ObjectOutput {
 
 impl From<&SuiObjectData> for ObjectOutput {
     fn from(obj: &SuiObjectData) -> Self {
+        let owner_type = match obj.owner {
+            Some(Owner::AddressOwner(_)) => Some("AddressOwner".to_string()),
+            Some(Owner::ObjectOwner(_)) => Some("ObjectOwner".to_string()),
+            Some(Owner::Shared { .. }) => Some("Shared".to_string()),
+            Some(Owner::Immutable) => Some("Immutable".to_string()),
+            None => None,
+        };
         let obj_type = match obj.type_.as_ref() {
             Some(x) => x.to_string(),
             None => "unknown".to_string(),
@@ -2078,7 +2047,7 @@ impl From<&SuiObjectData> for ObjectOutput {
             version: obj.version,
             digest: obj.digest.to_string(),
             obj_type,
-            owner: obj.owner,
+            owner_type,
             prev_tx: obj.previous_transaction,
             storage_rebate: obj.storage_rebate,
             content: obj.content.clone(),
@@ -2159,7 +2128,6 @@ pub enum SuiClientCommandResult {
     MergeCoin(SuiTransactionBlockResponse),
     NewAddress(NewAddressOutput),
     NewEnv(SuiEnv),
-    NoOutput,
     Object(SuiObjectResponse),
     Objects(Vec<SuiObjectResponse>),
     Pay(SuiTransactionBlockResponse),
@@ -2208,37 +2176,4 @@ impl Display for SwitchResponse {
         }
         write!(f, "{}", writer)
     }
-}
-
-/// Request tokens from the Faucet for the given address
-pub async fn request_tokens_from_faucet(
-    address: SuiAddress,
-    url: String,
-) -> Result<(), anyhow::Error> {
-    let address_str = address.to_string();
-    let json_body = json![{
-        "FixedAmountRequest": {
-            "recipient": &address_str
-        }
-    }];
-
-    // make the request to the faucet JSON RPC API for coin
-    let client = reqwest::Client::new();
-    let resp = client
-        .post(&url)
-        .header("Content-Type", "application/json")
-        .json(&json_body)
-        .send()
-        .await?;
-    if resp.status() == 429 {
-        bail!("Faucet received too many requests from this IP address. Please try again after 60 minutes.");
-    }
-    let faucet_resp: FaucetResponse = resp.json().await?;
-
-    if let Some(err) = faucet_resp.error {
-        bail!("Faucet request was unsuccessful: {err}")
-    } else {
-        println!("Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins.");
-    }
-    Ok(())
 }
