@@ -11730,6 +11730,7 @@ dependencies = [
  "sui-rest-api",
  "sui-storage",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "tempfile",
  "thiserror",
