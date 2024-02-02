@@ -210,6 +210,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             loc,
             attributes,
             is_public,
+            tname: tn.clone(),
             target_function: (target_m, target_f),
             kind,
             used,

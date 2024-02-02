@@ -59,6 +59,7 @@ pub struct UseFun {
     pub loc: Loc,
     pub attributes: Attributes,
     pub is_public: Option<Loc>,
+    pub tname: TypeName,
     pub target_function: (ModuleIdent, FunctionName),
     // If None, disregard any use/unused information.
     // If Some, we track whether or not the associated function alias was used prior to receiver
@@ -764,6 +765,7 @@ impl AstDebug for UseFun {
             loc: _,
             attributes,
             is_public,
+            tname: _,
             target_function: (target_m, target_f),
             kind,
             used,
