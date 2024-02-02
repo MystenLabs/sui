@@ -283,7 +283,7 @@ pub async fn metadata(
         }
     };
 
-    // Get budget for suggested fee.
+    // Get budget for suggested_fee and metadata.budget
     let budget = match budget {
         Some(budget) => budget,
         None => {
