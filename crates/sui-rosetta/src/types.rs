@@ -556,7 +556,7 @@ pub struct ConstructionPreprocessRequest {
     pub metadata: Option<PreprocessMetadata>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct PreprocessMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub budget: Option<u64>,

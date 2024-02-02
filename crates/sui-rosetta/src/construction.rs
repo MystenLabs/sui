@@ -283,35 +283,38 @@ pub async fn metadata(
         }
     };
 
-    // Dry run the transaction to get the gas used, amount doesn't really matter here when using mock coins.
-    // get gas estimation from dry-run, this will also return any tx error.
-    let data = option
-        .internal_operation
-        .try_into_data(ConstructionMetadata {
-            sender,
-            coins: vec![],
-            objects: objects.clone(),
-            // Mock coin have 1B SUI
-            total_coin_value: 1_000_000_000 * 1_000_000_000,
-            gas_price,
-            // MAX BUDGET
-            budget: 50_000_000_000,
-        })?;
+    // Get budget for suggested fee.
+    let budget = match budget {
+        Some(budget) => budget,
+        None => {
+            // Dry run the transaction to get the gas used, amount doesn't really matter here when using mock coins.
+            // get gas estimation from dry-run, this will also return any tx error.
+            let data = option
+                .internal_operation
+                .try_into_data(ConstructionMetadata {
+                    sender,
+                    coins: vec![],
+                    objects: objects.clone(),
+                    // Mock coin have 1B SUI
+                    total_coin_value: 1_000_000_000 * 1_000_000_000,
+                    gas_price,
+                    // MAX BUDGET
+                    budget: 50_000_000_000,
+                })?;
 
-    let dry_run = context
-        .client
-        .read_api()
-        .dry_run_transaction_block(data)
-        .await?;
-    let effects = dry_run.effects;
+            let dry_run = context
+                .client
+                .read_api()
+                .dry_run_transaction_block(data)
+                .await?;
+            let effects = dry_run.effects;
 
-    if let SuiExecutionStatus::Failure { error } = effects.status() {
-        return Err(Error::TransactionDryRunError(error.to_string()));
-    }
-
-    let budget = budget.unwrap_or(
-        effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost,
-    );
+            if let SuiExecutionStatus::Failure { error } = effects.status() {
+                return Err(Error::TransactionDryRunError(error.to_string()));
+            }
+            effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost
+        }
+    };
 
     // Try select coins for required amounts
     let coins = if let Some(amount) = total_required_amount {
