@@ -332,12 +332,11 @@ impl SequenceWorkerState {
         let mut now = Instant::now();
 
         // Epoch Start
-        for ew_id in &ew_ids {
-            println!("SW sending epoch start to {}", ew_id);
+
             out_channel
                 .send(NetworkMessage {
                     src: 0,
-                    dst: *ew_id,
+                    dst: ew_ids.clone(),
                     payload: SailfishMessage::EpochStart {
                         version: protocol_config.version,
                         data: epoch_start_config.epoch_data(),
@@ -346,7 +345,9 @@ impl SequenceWorkerState {
                 })
                 .await
                 .expect("Sending doesn't work");
-        }
+            for ew_id in &ew_ids {
+                println!("SW sending epoch start to {}", ew_id);
+            }
 
         if let Some(watermark) = self.execute {
             for checkpoint_seq in genesis_seq..cmp::min(watermark, highest_synced_seq) {
@@ -391,16 +392,15 @@ impl SequenceWorkerState {
                         timestamp: Metrics::now().as_secs_f64(),
                     };
 
-                    for ew_id in &ew_ids {
                         out_channel
                             .send(NetworkMessage {
                                 src: 0,
-                                dst: *ew_id,
+                                dst: ew_ids.clone(),
                                 payload: SailfishMessage::ProposeExec(full_tx.clone()),
                             })
                             .await
                             .expect("sending failed");
-                    }
+                    
 
                     if let TransactionKind::ChangeEpoch(_) = tx.data().transaction_data().kind() {
                         // wait for epoch end message from execution worker
@@ -460,7 +460,7 @@ impl SequenceWorkerState {
                             out_channel
                                 .send(NetworkMessage {
                                     src: 0,
-                                    dst: *ew_id,
+                                    dst: vec![*ew_id],
                                     payload: SailfishMessage::EpochStart {
                                         version: protocol_config.version,
                                         data: epoch_start_config.epoch_data(),
@@ -514,16 +514,16 @@ impl SequenceWorkerState {
                     checkpoint_seq: None,
                     timestamp: now,
                 };
-                for ew_id in get_ews_for_tx(&full_tx, &ew_ids) {
+                
                     out_to_network
                         .send(NetworkMessage {
                             src: 0,
-                            dst: ew_id,
+                            dst: get_ews_for_tx(&full_tx, &ew_ids).into_iter().collect(),
                             payload: SailfishMessage::ProposeExec(full_tx.clone()),
                         })
                         .await
                         .expect("sending failed");
-                }
+                
             }
             counter += 1;
             interval.tick().await;

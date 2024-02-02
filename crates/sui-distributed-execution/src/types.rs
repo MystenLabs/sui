@@ -147,7 +147,7 @@ impl Message for std::string::String {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NetworkMessage {
     pub src: UniqueId,
-    pub dst: UniqueId,
+    pub dst: Vec<UniqueId>,
     pub payload: SailfishMessage,
 }
 
