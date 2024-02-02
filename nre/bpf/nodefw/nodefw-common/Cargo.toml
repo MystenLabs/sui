@@ -1,0 +1,14 @@
+[package]
+name = "nodefw-common"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+user = ["aya"]
+
+[dependencies]
+aya = { git = "https://github.com/aya-rs/aya", optional = true }
+
+[lib]
+path = "src/lib.rs"
