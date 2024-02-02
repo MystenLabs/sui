@@ -609,7 +609,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let result = output.join("\n");
 
                 Ok(Some(self.stabilize_str(result)))
-                // Ok(Some(output.join("\n")))
             }
             SuiSubcommand::ViewCheckpoint => {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
