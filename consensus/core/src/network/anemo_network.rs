@@ -99,44 +99,16 @@ impl NetworkClient for AnemoClient {
     }
 }
 
-/// Implements RPC service for Consensus.
-/// TODO: implement handlers.
-#[allow(unused)]
-pub(crate) struct AnemoService {
-    context: Arc<Context>,
-}
-
-#[allow(unused)]
-impl AnemoService {
-    pub(crate) fn new(context: Arc<Context>) -> Self {
-        Self { context }
-    }
-}
-
-impl NetworkService for AnemoService {
-    async fn handle_send_block(&self, _peer: AuthorityIndex, _block: Bytes) -> ConsensusResult<()> {
-        unimplemented!()
-    }
-
-    async fn handle_fetch_blocks(
-        &self,
-        _peer: AuthorityIndex,
-        _block_refs: Vec<BlockRef>,
-    ) -> ConsensusResult<Vec<Bytes>> {
-        unimplemented!()
-    }
-}
-
 /// Proxies Anemo RPC handlers to AnemoService.
 #[allow(unused)]
-struct ServiceProxy {
+struct AnemoServiceProxy<S: NetworkService> {
     context: Arc<Context>,
     peer_map: BTreeMap<anemo::PeerId, AuthorityIndex>,
-    service: Box<AnemoService>,
+    service: Arc<S>,
 }
 
-impl ServiceProxy {
-    fn new(context: Arc<Context>, service: Box<AnemoService>) -> Self {
+impl<S: NetworkService> AnemoServiceProxy<S> {
+    fn new(context: Arc<Context>, service: Arc<S>) -> Self {
         let peer_map = context
             .committee
             .authorities()
@@ -154,7 +126,7 @@ impl ServiceProxy {
 }
 
 #[async_trait]
-impl ConsensusRpc for ServiceProxy {
+impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
     async fn send_block(
         &self,
         request: anemo::Request<SendBlockRequest>,
@@ -236,13 +208,13 @@ impl AnemoManager {
     }
 }
 
-impl NetworkManager<AnemoClient, AnemoService> for AnemoManager {
+impl<S: NetworkService> NetworkManager<AnemoClient, S> for AnemoManager {
     fn client(&self) -> Arc<AnemoClient> {
         self.client.clone()
     }
 
-    fn install_service(&self, network_signer: NetworkKeyPair, service: Box<AnemoService>) {
-        let server = ConsensusRpcServer::new(ServiceProxy::new(self.context.clone(), service));
+    fn install_service(&self, network_signer: NetworkKeyPair, service: Arc<S>) {
+        let server = ConsensusRpcServer::new(AnemoServiceProxy::new(self.context.clone(), service));
         let authority = self.context.committee.authority(self.context.own_index);
         let address = authority
             .address

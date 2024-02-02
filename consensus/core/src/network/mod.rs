@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_trait::async_trait;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,6 @@ mod anemo_gen {
 mod anemo_network;
 
 /// Network client for communicating with peers.
-#[async_trait]
 pub(crate) trait NetworkClient: Send + Sync {
     /// Sends a serialized SignedBlock to a peer.
     async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()>;
@@ -31,8 +30,10 @@ pub(crate) trait NetworkClient: Send + Sync {
 }
 
 /// Network service for handling requests from peers.
+/// NOTE: using `async_trait` macro because `NetworkService` methods are called in the trait impl
+/// of `anemo_gen::ConsensusRpc`, which itself is annotated with `async_trait`.
 #[async_trait]
-pub(crate) trait NetworkService: Send + Sync {
+pub(crate) trait NetworkService: Send + Sync + 'static {
     async fn handle_send_block(&self, peer: AuthorityIndex, block: Bytes) -> ConsensusResult<()>;
     async fn handle_fetch_blocks(
         &self,
@@ -52,7 +53,7 @@ where
     fn client(&self) -> Arc<C>;
 
     /// Installs network service.
-    fn install_service(&self, network_signer: NetworkKeyPair, service: Box<S>);
+    fn install_service(&self, network_signer: NetworkKeyPair, service: Arc<S>);
 }
 
 /// Network message types.
