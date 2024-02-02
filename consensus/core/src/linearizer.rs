@@ -10,7 +10,7 @@ use std::{
 use parking_lot::RwLock;
 
 use crate::{
-    block::{BlockAPI, BlockRef, BlockTimestampMs, VerifiedBlock},
+    block::{BlockAPI, BlockRef, BlockTimestampMs, Round, VerifiedBlock},
     commit::{Commit, CommitIndex},
     dag_state::DagState,
     storage::Store,
@@ -49,6 +49,7 @@ impl CommittedSubDag {
         }
     }
 
+    // Used for recovery, which is why we need to get the data from block store.
     pub fn new_from_commit_data(commit_data: Commit, block_store: Arc<dyn Store>) -> Self {
         let mut leader_block_idx = None;
         let commit_blocks = block_store
@@ -72,9 +73,14 @@ impl CommittedSubDag {
         CommittedSubDag::new(leader_block_ref, blocks, timestamp_ms, commit_data.index)
     }
 
-    /// Sort the blocks of the sub-dag by round number. Any deterministic algorithm works.
+    /// Sort the blocks of the sub-dag by round number then authority index. Any
+    /// deterministic & stable algorithm works.
     pub fn sort(&mut self) {
-        self.blocks.sort_by_key(|x| x.round());
+        self.blocks.sort_by(|a, b| {
+            a.round()
+                .cmp(&b.round())
+                .then_with(|| a.author().cmp(&b.author()))
+        });
     }
 }
 
@@ -123,23 +129,22 @@ impl Linearizer {
     fn collect_sub_dag(
         &mut self,
         leader_block: VerifiedBlock,
-        committed: &HashSet<BlockRef>,
-        last_commit_index: u64,
-        last_committed_rounds: Vec<u32>,
+        committed: &mut HashSet<BlockRef>,
+        last_commit_index: CommitIndex,
+        last_committed_rounds: Vec<Round>,
     ) -> CommittedSubDag {
         let mut to_commit = Vec::new();
-        let mut committed = committed.clone();
 
         let timestamp_ms = leader_block.timestamp_ms();
         let leader_block_ref = leader_block.reference();
         let mut buffer = vec![leader_block];
         assert!(committed.insert(leader_block_ref));
 
-        let read_lock = self.dag_state.read();
+        let dag_state = self.dag_state.read();
         while let Some(x) = buffer.pop() {
             to_commit.push(x.clone());
 
-            let ancestors: Vec<VerifiedBlock> = read_lock
+            let ancestors: Vec<VerifiedBlock> = dag_state
                 .get_uncommitted_blocks(
                     x.ancestors()
                         .iter()
@@ -148,7 +153,7 @@ impl Linearizer {
                             // We skip the block if we already committed it or we reached a
                             // round that we already committed.
                             !committed.contains(ancestor)
-                                && last_committed_rounds[ancestor.author.value()] < ancestor.round
+                                && last_committed_rounds[ancestor.author] < ancestor.round
                         })
                         .collect::<Vec<_>>(),
                 )
@@ -185,7 +190,7 @@ impl Linearizer {
             // Collect the sub-dag generated using each of these leaders.
             let mut sub_dag = self.collect_sub_dag(
                 leader_block,
-                &committed_blocks,
+                &mut committed_blocks,
                 last_commit_index,
                 last_committed_rounds.clone(),
             );
@@ -195,7 +200,6 @@ impl Linearizer {
 
             // Update running commit state. This will be persisted in dag state
             // after handle commit is completed.
-            committed_blocks.extend(sub_dag.blocks.iter().map(|x| x.reference()));
             last_commit_index = sub_dag.commit_index;
 
             committed_sub_dags.push(sub_dag);
@@ -408,11 +412,17 @@ mod tests {
         assert_eq!(subdag[0].leader, second_leader);
         assert_eq!(subdag[0].timestamp_ms, second_leader_block.timestamp_ms());
         assert_eq!(subdag[0].commit_index, expected_second_commit_data.index);
-        // Subdag will be missing the leader block from the first committed subdag
-        // but will have its own leader.
+
+        // Using the same sorting as used in CommittedSubDag::sort
+        blocks.sort_by(|a, b| a.round.cmp(&b.round).then_with(|| a.author.cmp(&b.author)));
         assert_eq!(
-            subdag[0].blocks.len(),
-            (num_authorities * wave_length) as usize
+            subdag[0]
+                .blocks
+                .clone()
+                .into_iter()
+                .map(|b| b.reference())
+                .collect::<Vec<_>>(),
+            blocks
         );
         for block in subdag[0].blocks.iter() {
             assert!(block.round() <= expected_second_commit_data.leader.round);
