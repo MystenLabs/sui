@@ -2232,17 +2232,8 @@ fn method_call(
         _ => exp_dotted_to_owned_value(context, DottedUsage::Use, loc, edotted, edotted_ty),
     };
     args.insert(0, first_arg);
-    let call = module_call_impl(
-        context,
-        loc,
-        m,
-        f,
-        targs,
-        parameters,
-        argloc,
-        args,
-        Some(method),
-    );
+    let mut call = module_call_impl(context, loc, m, f, targs, parameters, argloc, args);
+    call.method_name = Some(method);
     Some((ret_ty, TE::ModuleCall(Box::new(call))))
 }
 
@@ -2269,9 +2260,7 @@ fn module_call(
 ) -> (Type, T::UnannotatedExp_) {
     let (_, ty_args, parameters, ret_ty) =
         core::make_function_type(context, loc, &m, &f, ty_args_opt);
-    let call = module_call_impl(
-        context, loc, m, f, ty_args, parameters, argloc, args, /* method_name */ None,
-    );
+    let call = module_call_impl(context, loc, m, f, ty_args, parameters, argloc, args);
     (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
 }
 
@@ -2284,7 +2273,6 @@ fn module_call_impl(
     parameters: Vec<(N::Var, Type)>,
     argloc: Loc,
     args: Vec<T::Exp>,
-    method_name: Option<Name>,
 ) -> T::ModuleCall {
     let (arguments, arg_tys) = call_args(
         context,
@@ -2311,7 +2299,7 @@ fn module_call_impl(
         type_arguments: ty_args,
         arguments,
         parameter_types: params_ty_list,
-        method_name,
+        method_name: None,
     };
     context
         .used_module_members
