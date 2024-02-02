@@ -232,4 +232,6 @@ pub(crate) struct MovePackageEntry {
     pub(crate) bcs: String,
     // txn publishing the package
     pub(crate) transaction_digest: String,
+    pub(crate) package_version: Option<u64>,
+    pub(crate) original_package_id: Option<String>,
 }
