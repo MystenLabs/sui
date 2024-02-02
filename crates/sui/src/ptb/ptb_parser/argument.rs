@@ -3,7 +3,10 @@
 
 use anyhow::{bail, Context, Result};
 use core::fmt::{self, Debug};
-use move_command_line_common::{address::NumericalAddress, types::ParsedType};
+use move_command_line_common::{
+    address::{NumericalAddress, ParsedAddress},
+    types::ParsedType,
+};
 use move_core_types::annotated_value::MoveValue;
 use sui_types::{resolve_address, Identifier};
 
@@ -29,7 +32,7 @@ pub enum Argument {
     Array(Vec<Spanned<Argument>>),
     Option(Spanned<Option<Box<Argument>>>),
     ModuleAccess {
-        address: Spanned<NumericalAddress>,
+        address: Spanned<ParsedAddress>,
         module_name: Spanned<Identifier>,
         function_name: Spanned<Identifier>,
     },
@@ -86,10 +89,14 @@ impl fmt::Display for Argument {
                 module_name,
                 function_name,
             } => {
+                let addr_string = match &address.value {
+                    ParsedAddress::Named(name) => format!("{}", name),
+                    ParsedAddress::Numerical(addr) => format!("{}", addr),
+                };
                 write!(
                     f,
                     "{}::{}::{}",
-                    address.value, module_name.value, function_name.value
+                    addr_string, module_name.value, function_name.value
                 )
             }
             Argument::TyArgs(ts) => {

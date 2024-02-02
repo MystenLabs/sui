@@ -15,7 +15,8 @@ use move_binary_format::{
     access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
     file_format_common::VERSION_MAX,
 };
-use move_core_types::ident_str;
+use move_command_line_common::address::ParsedAddress;
+use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
 use serde::Serialize;
 use sui_json::is_receiving_argument;
@@ -212,6 +213,7 @@ impl<'a> Resolver<'a> for NoResolution {
 ///   list of gas budgets.
 /// - A way to bind the result of a command to an identifier.
 pub struct PTBBuilder<'a> {
+    pub addresses: BTreeMap<String, AccountAddress>,
     /// A map from identifiers to the file scopes in which they were declared. This is used
     /// for reporting shadowing warnings.
     pub identifiers: BTreeMap<Identifier, Vec<Spanned<FileScope>>>,
@@ -307,6 +309,7 @@ fn is_pure(t: &TypeTag) -> anyhow::Result<bool> {
 impl<'a> PTBBuilder<'a> {
     pub fn new(reader: &'a ReadApi) -> Self {
         Self {
+            addresses: BTreeMap::new(),
             identifiers: BTreeMap::new(),
             arguments_to_resolve: BTreeMap::new(),
             resolved_arguments: BTreeMap::new(),
@@ -329,6 +332,21 @@ impl<'a> PTBBuilder<'a> {
             span: ident_loc,
             value: current_context,
         });
+    }
+
+    /// Declare a possible address binding. This is used to support address resolution. If the
+    /// `possible_addr` is not an address, then this is a no-op.
+    pub fn declare_possible_address_binding(
+        &mut self,
+        ident: Identifier,
+        possible_addr: &Spanned<PTBArg>,
+    ) {
+        match possible_addr.value {
+            PTBArg::Address(addr) => {
+                self.addresses.insert(ident.to_string(), addr.into_inner());
+            }
+            _ => (),
+        }
     }
 
     /// Finalize a PTB. If there were errors during the construction of the PTB these are returned
@@ -763,6 +781,7 @@ impl<'a> PTBBuilder<'a> {
                     }
                 );
                 self.declare_identifier(i.clone(), ident_loc);
+                self.declare_possible_address_binding(i.clone(), &arg_w_loc);
                 self.arguments_to_resolve.insert(i, arg_w_loc);
             }
             CommandToken::Assign => error!(self, "expected 1 or 2 arguments for assignment",),
@@ -943,7 +962,25 @@ impl<'a> PTBBuilder<'a> {
                         args.push(span(arg_loc, arg));
                     }
                 }
-                let package_id = ObjectID::from_address(address.value.into_inner());
+                // TODO(tzakian): Handle addresses in scope here.
+                let resolved_address = address.value.clone().into_account_address(&|s| {
+                    self.addresses.get(s).cloned().or_else(|| resolve_address(s))
+                }).map_err(|e| {
+                    let help_message = if let ParsedAddress::Named(name) = address.value {
+                        Some(format!("This is most likely because the named address '{name}' is not in scope. \
+                                     You can either bind a variable to the address that you want to use or use the address in the command."))
+                    } else {
+                        None
+                    };
+                    let e = err!(sp: address.span, self, "{e}");
+
+                    if let Some(help_message) = help_message {
+                        e.with_help(help_message)
+                    } else {
+                        e
+                    }
+                })?;
+                let package_id = ObjectID::from_address(resolved_address);
                 let package = self.resolve_to_package(package_id, address.span).await?;
                 let args = self
                     .resolve_move_call_args(

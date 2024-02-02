@@ -4,7 +4,7 @@
 use crate::{ptb::ptb::PTBCommand, sp};
 
 use move_command_line_common::{
-    address::NumericalAddress,
+    address::{NumericalAddress, ParsedAddress},
     parser::{parse_u128, parse_u16, parse_u256, parse_u32, parse_u64, parse_u8, Parser, Token},
     types::TypeToken,
 };
@@ -424,14 +424,25 @@ impl<'a> ValueParser<'a> {
     }
 
     /// Parse a numerical address.
-    fn parse_address(sp: Span, contents: &str) -> ParsingResult<Spanned<NumericalAddress>> {
-        let parsed = NumericalAddress::parse_str(contents)
-            .map_err(|s| anyhow!("Failed to parse address '{}'. Got error: {}", contents, s));
-        parsed.map(|addr| span(sp, addr)).map_err(|e| ParsingErr {
-            span: sp,
-            message: e.into(),
-            help: None,
-        })
+    fn parse_address(
+        sp: Span,
+        tok: ArgumentToken,
+        contents: &str,
+    ) -> ParsingResult<Spanned<ParsedAddress>> {
+        let p_address = match tok {
+            ArgumentToken::Ident => Ok(ParsedAddress::Named(contents.to_owned())),
+            ArgumentToken::Number => NumericalAddress::parse_str(contents)
+                .map_err(|s| anyhow!("Failed to parse address '{}'. Got error: {}", contents, s))
+                .map(ParsedAddress::Numerical),
+            _ => unreachable!(),
+        };
+        p_address
+            .map(|addr| span(sp, addr))
+            .map_err(|e| ParsingErr {
+                span: sp,
+                message: e.into(),
+                help: None,
+            })
     }
 
     /// Parse a single PTB argument. This is the main parsing function for PTB arguments.
@@ -443,8 +454,10 @@ impl<'a> ValueParser<'a> {
         Ok(match arg {
             (Tok::Ident, "true") => span(tl_loc, V::Bool(true)),
             (Tok::Ident, "false") => span(tl_loc, V::Bool(false)),
-            (Tok::Number, contents) if matches!(self.peek_tok(), Some(Tok::ColonColon)) => {
-                let address = Self::parse_address(tl_loc, contents)?;
+            (tok @ (Tok::Number | Tok::Ident), contents)
+                if matches!(self.peek_tok(), Some(Tok::ColonColon)) =>
+            {
+                let address = Self::parse_address(tl_loc, tok, contents)?;
                 self.spanned(|p| p.advance(Tok::ColonColon))?;
                 let module_name = self.spanned(|parser| {
                     Identifier::new(
@@ -504,10 +517,15 @@ impl<'a> ValueParser<'a> {
                 })?
             }
             (Tok::At, _) => {
-                let sp!(addr_span, (_, contents)) = self.spanned(|p| p.advance_any())?;
+                let sp!(addr_span, (tok, contents)) = self.spanned(|p| p.advance_any())?;
                 let sp = tl_loc.union_with([addr_span]);
-                let address = Self::parse_address(sp, contents)?;
-                span(address.span, V::Address(address.value))
+                let address = Self::parse_address(sp, tok, contents)?;
+                match address.value {
+                    ParsedAddress::Named(n) => {
+                        return self.with_span(sp, |_| bail!("Expected a numerical address at this position but got a named address {n}"));
+                    }
+                    ParsedAddress::Numerical(addr) => span(addr_span, V::Address(addr)),
+                }
             }
             (Tok::Some_, _) => {
                 self.spanned(|p| p.advance(Tok::LParen))?;
@@ -627,7 +645,7 @@ mod tests {
 
     #[test]
     fn parse_address() {
-        let values = vec!["@0x0", "@1234"];
+        let values = vec!["@0x0", "@1234", "@foo"];
         for s in &values {
             assert!(PTBParser::parse_values(s, 0).is_ok());
         }
