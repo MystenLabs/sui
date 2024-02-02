@@ -40,3 +40,20 @@ error[E03009]: unbound variable
 10 │         yes = x + f;
    │                   ^ Unbound variable 'f'
 
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/move_2024/migration/let_mut_migrate.move:16:9
+   │
+15 │         let x = 5; let y = 10;
+   │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
+16 │         x = x + 1;
+   │         ^ Invalid assignment of immutable variable 'x'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/move_2024/migration/let_mut_migrate.move:17:9
+   │
+15 │         let x = 5; let y = 10;
+   │                        - To use the variable mutably, it must be declared 'mut', e.g. 'mut y'
+16 │         x = x + 1;
+17 │         y = x + 1;
+   │         ^ Invalid assignment of immutable variable 'y'
+

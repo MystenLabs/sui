@@ -10,4 +10,11 @@ module a::m {
         yes = x + f;
         yes
     }
+
+    public fun t2(): u64 {
+        let x = 5; let y = 10;
+        x = x + 1;
+        y = x + 1;
+        x + y
+    }
 }

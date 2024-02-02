@@ -21,11 +21,11 @@ pub const EDITION_SELECT_PROMPT: &str = "Please select one of the following edit
 pub static EDITION_OPTIONS: Lazy<BTreeMap<String, Edition>> = Lazy::new(|| {
     let mut map = BTreeMap::new();
     map.insert("1".to_string(), Edition::E2024_ALPHA);
-    map.insert("3".to_string(), Edition::LEGACY);
+    map.insert("2".to_string(), Edition::LEGACY);
     map
 });
 
-pub const EDITION_RECORDED_MSG: &str = "Recorded edition in Move.toml";
+pub const EDITION_RECORDED_MSG: &str = "Recorded edition in 'Move.toml'";
 
 pub const MIGRATION_PROMPT: &str =
     "Would you like the Move compiler to migrate your code to Move 2024?";
@@ -33,7 +33,7 @@ pub const MIGRATION_PROMPT: &str =
 pub const NOMIGRATION_HELP_MSG: &str = "No migration was performed.";
 
 pub const MIGRATION_RERUN: &str = "You can rerun this migration by calling 'move migrate' \
-    or removing the edition from your package's 'Move.toml' file.";
+    or removing the edition from your package's 'Move.toml' file and rerun 'move build'.";
 
 pub const MIGRATION_DIFF_START_MSG: &str = "Generated changes . . .";
 

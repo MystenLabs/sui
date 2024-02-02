@@ -243,21 +243,21 @@ fn render_diagnostic(
 //**************************************************************************************************
 
 pub fn generate_migration_diff(files: &FilesSourceText, diags: &Diagnostics) -> Option<Migration> {
-    let mut migration_diags = vec![];
-
-    if let Diagnostics(Some(inner)) = diags {
-        for diag in &inner.diagnostics {
-            if diag.is_migration() {
-                migration_diags.push(diag.clone());
+    match diags {
+        Diagnostics(Some(inner)) => {
+            let migration_diags = inner
+                .diagnostics
+                .iter()
+                .filter(|diag| diag.is_migration())
+                .cloned()
+                .collect::<Vec<_>>();
+            if migration_diags.is_empty() {
+                return None;
             }
+            let migration = Migration::new(files.clone(), migration_diags);
+            Some(migration)
         }
-        if migration_diags.is_empty() {
-            return None;
-        }
-        let migration = Migration::new(files.clone(), migration_diags);
-        Some(migration)
-    } else {
-        None
+        _ => None,
     }
 }
 
@@ -696,9 +696,10 @@ impl Migration {
     }
 
     fn add_diagnostic(&mut self, diag: Diagnostic) {
-        let (file_id, line, col) = self.find_file_location(&diag);
         const NEEDS_MUT: u8 = codes::Migration::NeedsLetMut as u8;
         const NEEDS_PUBLIC: u8 = codes::Migration::NeedsPublic as u8;
+
+        let (file_id, line, col) = self.find_file_location(&diag);
         let file_change_entry = self.changes.entry(file_id).or_default();
         let line_change_entry = file_change_entry.entry(line).or_default();
         match diag.info().code() {
