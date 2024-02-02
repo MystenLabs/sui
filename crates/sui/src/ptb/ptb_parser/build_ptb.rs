@@ -222,7 +222,6 @@ pub struct PTBBuilder<'a> {
     pub arguments_to_resolve: BTreeMap<Identifier, Spanned<PTBArg>>,
     /// The arguments that we have resolved. This is a map from identifiers to the actual
     /// transaction arguments.
-    // TODO(tzakian): Maybe make these spanned as well.
     pub resolved_arguments: BTreeMap<Identifier, Tx::Argument>,
     /// The actual PTB that we are building up.
     pub ptb: ProgrammableTransactionBuilder,

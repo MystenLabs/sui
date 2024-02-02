@@ -228,6 +228,10 @@ pub struct Spanner<'a> {
     pub current_location: usize,
     pub arg_idx: usize,
     pub tokens: Vec<(ArgumentToken, &'a str)>,
+    /// Some arguments may permit non-whitespace delimitation (e.g., or move-calls). So after
+    /// parsng an arguments that permits no whitespace delimitation, we set this flag to true and
+    /// the next token is guaranteed to be whitespace (inserted if not present).
+    pub insert_non_whitespace_next_if_none: bool,
 }
 
 impl<'a> Spanner<'a> {
@@ -237,10 +241,26 @@ impl<'a> Spanner<'a> {
             current_location: 0,
             arg_idx,
             tokens,
+            insert_non_whitespace_next_if_none: false,
         }
     }
 
+    pub fn insert_whitespace_next_if_none(&mut self) {
+        self.insert_non_whitespace_next_if_none = true;
+    }
+
     pub fn next(&mut self) -> Option<(ArgumentToken, &'a str)> {
+        if self.insert_non_whitespace_next_if_none {
+            self.insert_non_whitespace_next_if_none = false;
+            if self
+                .tokens
+                .last()
+                .map(|t| !t.0.is_whitespace())
+                .unwrap_or(false)
+            {
+                return Some((ArgumentToken::Whitespace, " "));
+            }
+        }
         if let Some((tok, contents)) = self.tokens.pop() {
             self.current_location += contents.len();
             Some((tok, contents))
@@ -250,7 +270,17 @@ impl<'a> Spanner<'a> {
     }
 
     pub fn peek(&self) -> Option<(ArgumentToken, &'a str)> {
-        self.tokens.last().copied()
+        if self.insert_non_whitespace_next_if_none
+            && self
+                .tokens
+                .last()
+                .map(|t| !t.0.is_whitespace())
+                .unwrap_or(false)
+        {
+            Some((ArgumentToken::Whitespace, " "))
+        } else {
+            self.tokens.last().copied()
+        }
     }
 
     pub fn current_location(&self) -> usize {
@@ -478,6 +508,8 @@ impl<'a> ValueParser<'a> {
                             .with_context(|| format!("Unable to parse function name"))?,
                     )
                 })?;
+                // Insert a whitepace before the type argument token if none is present.
+                self.inner.insert_whitespace_next_if_none();
                 self.sp(
                     begin_loc,
                     V::ModuleAccess {
