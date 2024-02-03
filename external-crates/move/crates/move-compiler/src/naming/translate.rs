@@ -1543,12 +1543,12 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             if let Some(loop_name) = name_opt {
                 context
                     .resolve_nominal_label(NominalBlockUsage::Break, loop_name)
-                    .map(|name| NE::Give(NominalBlockUsage::Return, name, out_rhs))
+                    .map(|name| NE::Give(NominalBlockUsage::Break, name, out_rhs))
                     .unwrap_or_else(|| NE::UnresolvedError)
             } else {
                 context
                     .current_break(eloc)
-                    .map(|name| NE::Give(NominalBlockUsage::Return, name, out_rhs))
+                    .map(|name| NE::Give(NominalBlockUsage::Break, name, out_rhs))
                     .unwrap_or_else(|| NE::UnresolvedError)
             }
         }
