@@ -8,6 +8,7 @@ use crate::error::{BridgeError, BridgeResult};
 use crate::server::APPLICATION_JSON;
 use crate::types::{BridgeAction, BridgeCommittee, VerifiedSignedBridgeAction};
 use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::traits::ToFromBytes;
 use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
@@ -48,7 +49,7 @@ impl BridgeClient {
         self.committee = committee;
     }
 
-    // Important: the paths need to match the ones in server.rs
+    // Important: the paths need to match the ones in mod.rs
     fn bridge_action_to_path(event: &BridgeAction) -> String {
         match event {
             BridgeAction::SuiToEthBridgeAction(e) => format!(
@@ -60,6 +61,18 @@ impl BridgeClient {
                 Hex::encode(e.eth_tx_hash.0),
                 e.eth_event_index
             ),
+            BridgeAction::BlocklistCommitteeAction(a) => {
+                let chain_id = (a.chain_id as u8).to_string();
+                let nonce = a.nonce.to_string();
+                let type_ = (a.blocklist_type as u8).to_string();
+                let keys = a
+                    .blocklisted_members
+                    .iter()
+                    .map(|k| Hex::encode(k.as_bytes()))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!("sign/update_committee_blocklist/{chain_id}/{nonce}/{type_}/{keys}")
+            }
         }
     }
 
@@ -349,6 +362,40 @@ mod tests {
                 Hex::encode(eth_tx_hash.0),
                 eth_event_index
             )
+        );
+
+        let pub_key_bytes = BridgeAuthorityPublicKeyBytes::from_bytes(
+            &Hex::decode("027f1178ff417fc9f5b8290bd8876f0a157a505a6c52db100a8492203ddd1d4279")
+                .unwrap(),
+        )
+        .unwrap();
+
+        let action =
+            BridgeAction::BlocklistCommitteeAction(crate::types::BlocklistCommitteeAction {
+                chain_id: BridgeChainId::EthSepolia,
+                nonce: 1,
+                blocklist_type: crate::types::BlocklistType::Blocklist,
+                blocklisted_members: vec![pub_key_bytes.clone()],
+            });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/update_committee_blocklist/11/1/0/027f1178ff417fc9f5b8290bd8876f0a157a505a6c52db100a8492203ddd1d4279",
+        );
+        let pub_key_bytes2 = BridgeAuthorityPublicKeyBytes::from_bytes(
+            &Hex::decode("02321ede33d2c2d7a8a152f275a1484edef2098f034121a602cb7d767d38680aa4")
+                .unwrap(),
+        )
+        .unwrap();
+        let action =
+            BridgeAction::BlocklistCommitteeAction(crate::types::BlocklistCommitteeAction {
+                chain_id: BridgeChainId::EthSepolia,
+                nonce: 1,
+                blocklist_type: crate::types::BlocklistType::Blocklist,
+                blocklisted_members: vec![pub_key_bytes.clone(), pub_key_bytes2.clone()],
+            });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/update_committee_blocklist/11/1/0/027f1178ff417fc9f5b8290bd8876f0a157a505a6c52db100a8492203ddd1d4279,02321ede33d2c2d7a8a152f275a1484edef2098f034121a602cb7d767d38680aa4",
         );
     }
 }
