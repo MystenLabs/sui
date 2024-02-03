@@ -3367,14 +3367,14 @@ fn check_valid_address_name(
 }
 
 fn check_valid_function_parameter_name(context: &mut Context, is_macro: Option<Loc>, v: &Var) {
-    const MACRO_IDENTIFIER_NOTE: &str =
+    const SYNTAX_IDENTIFIER_NOTE: &str =
         "'macro' parameters start with '$' to indicate that their arguments are not evaluated \
         before the macro is expanded, meaning the entire expression is substituted. \
         This is different from regular function parameters that are evaluated before the \
         function is called.";
-    let is_macro_identifier = v.is_macro_identifier();
+    let is_syntax_identifier = v.is_syntax_identifier();
     if let Some(macro_loc) = is_macro {
-        if !is_macro_identifier && !v.is_underscore() {
+        if !is_syntax_identifier && !v.is_underscore() {
             let msg = format!(
                 "Invalid parameter name '{}'. '{}' parameter names must start with '$' (or must be '_')",
                 v, MACRO_MODIFIER,
@@ -3385,17 +3385,17 @@ fn check_valid_function_parameter_name(context: &mut Context, is_macro: Option<L
                 (v.loc(), msg),
                 (macro_loc, macro_msg),
             );
-            diag.add_note(MACRO_IDENTIFIER_NOTE);
+            diag.add_note(SYNTAX_IDENTIFIER_NOTE);
             context.env().add_diag(diag);
         }
     } else {
-        if is_macro_identifier {
+        if is_syntax_identifier {
             let msg = format!(
                 "Invalid parameter name '{}'. Non-'{}' parameter names cannot start with '$'",
                 v, MACRO_MODIFIER,
             );
             let mut diag = diag!(Declarations::InvalidName, (v.loc(), msg));
-            diag.add_note(MACRO_IDENTIFIER_NOTE);
+            diag.add_note(SYNTAX_IDENTIFIER_NOTE);
             context.env().add_diag(diag);
         } else if !is_valid_local_variable_name(v.value()) {
             let msg = format!(
@@ -3426,7 +3426,7 @@ fn check_valid_local_name(context: &mut Context, v: &Var) {
 }
 
 fn is_valid_local_variable_name(s: Symbol) -> bool {
-    Var::is_valid_name(s) && !Var::is_macro_identifier_name(s)
+    Var::is_valid_name(s) && !Var::is_syntax_identifier_name(s)
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -3580,13 +3580,13 @@ fn check_valid_type_parameter_name(
     is_macro: Option<Loc>,
     n: &Name,
 ) -> Result<(), ()> {
-    const MACRO_IDENTIFIER_NOTE: &str = "Type parameter names starting with '$' indicate that \
+    const SYNTAX_IDENTIFIER_NOTE: &str = "Type parameter names starting with '$' indicate that \
         their arguments do not have to satisfy certain constraints before the macro is expanded, \
         meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.";
 
-    let is_macro_ident = Var::is_macro_identifier_name(n.value);
+    let is_syntax_ident = Var::is_syntax_identifier_name(n.value);
     if let Some(macro_loc) = is_macro {
-        if !is_macro_ident {
+        if !is_syntax_ident {
             let msg = format!(
                 "Invalid type parameter name. \
                 '{} fun' type parameter names must start with '$'",
@@ -3598,18 +3598,18 @@ fn check_valid_type_parameter_name(
                 (n.loc, msg),
                 (macro_loc, macro_msg),
             );
-            diag.add_note(MACRO_IDENTIFIER_NOTE);
+            diag.add_note(SYNTAX_IDENTIFIER_NOTE);
             context.env().add_diag(diag);
         }
     } else {
-        if is_macro_ident {
+        if is_syntax_ident {
             let msg = format!(
                 "Invalid type parameter name. \
                 Only '{} fun' type parameter names cat start with '$'",
                 MACRO_MODIFIER
             );
             let mut diag = diag!(Declarations::InvalidName, (n.loc, msg));
-            diag.add_note(MACRO_IDENTIFIER_NOTE);
+            diag.add_note(SYNTAX_IDENTIFIER_NOTE);
             context.env().add_diag(diag);
         }
     }
@@ -3656,7 +3656,7 @@ fn check_restricted_name_all_cases(
         | NameCase::ModuleMemberAlias(_)
         | NameCase::ModuleAlias
         | NameCase::Address => {
-            if Var::is_macro_identifier_name(n.value) {
+            if Var::is_syntax_identifier_name(n.value) {
                 let msg = format!(
                     "Invalid {} name '{}'. Identifiers starting with '$' can be used only for \
                     parameters and type paramters",

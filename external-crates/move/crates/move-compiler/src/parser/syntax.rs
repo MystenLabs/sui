@@ -381,8 +381,9 @@ fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
     Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, id))
 }
 
-// Parse a macro identifier. The name comes from the usage of the identifier to perform expression
-// substitution in a macro invocation, i.e. a syntactic substitution.:
+// Parse a macro parameter identifier.
+// The name, SyntaxIdentifier, comes from the usage of the identifier to perform expression
+// substitution in a macro invocation, i.e. a syntactic substitution.
 //      SyntaxIdentifier = <SyntaxIdentifierValue>
 fn parse_syntax_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
     if context.tokens.peek() != Tok::SyntaxIdentifier {

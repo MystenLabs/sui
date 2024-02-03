@@ -785,7 +785,7 @@ impl ModuleName {
 }
 
 impl Var {
-    pub const MACRO_IDENT_START: char = '$';
+    pub const SYNTAX_IDENT_START: char = '$';
 
     pub fn is_underscore(&self) -> bool {
         self.0.value == symbol!("_")
@@ -799,12 +799,12 @@ impl Var {
         n.starts_with('_') || n.starts_with("$_")
     }
 
-    pub fn is_macro_identifier(&self) -> bool {
-        Self::is_macro_identifier_name(self.0.value)
+    pub fn is_syntax_identifier(&self) -> bool {
+        Self::is_syntax_identifier_name(self.0.value)
     }
 
-    pub fn is_macro_identifier_name(n: Symbol) -> bool {
-        n.starts_with(Self::MACRO_IDENT_START)
+    pub fn is_syntax_identifier_name(n: Symbol) -> bool {
+        n.starts_with(Self::SYNTAX_IDENT_START)
     }
 
     pub fn is_valid(&self) -> bool {
@@ -814,7 +814,7 @@ impl Var {
     pub fn is_valid_name(s: Symbol) -> bool {
         s.starts_with('_')
             || s.starts_with(|c: char| c.is_ascii_lowercase())
-            || Self::is_macro_identifier_name(s)
+            || Self::is_syntax_identifier_name(s)
     }
 }
 

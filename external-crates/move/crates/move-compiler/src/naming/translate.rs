@@ -1057,7 +1057,7 @@ fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::Fu
                 check_mut_underscore(context, mut_);
                 mut_ = None
             };
-            if param.is_macro_identifier()
+            if param.is_syntax_identifier()
                 && context
                     .env
                     .supports_feature(context.current_package, FeatureGate::LetMut)
@@ -1069,7 +1069,7 @@ fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::Fu
                         MACRO_MODIFIER
                     );
                     let mut diag = diag!(NameResolution::InvalidMacroParameter, (mutloc, msg));
-                    diag.add_note(ASSIGN_MACRO_IDENTIFIER_NOTE);
+                    diag.add_note(ASSIGN_SYNTAX_IDENTIFIER_NOTE);
                     context.env.add_diag(diag);
                     mut_ = None
                 }
@@ -1105,7 +1105,7 @@ fn function_body(context: &mut Context, sp!(loc, b_): E::FunctionBody) -> N::Fun
     }
 }
 
-const ASSIGN_MACRO_IDENTIFIER_NOTE: &'static str = "'macro' parameters are substituted without \
+const ASSIGN_SYNTAX_IDENTIFIER_NOTE: &'static str = "'macro' parameters are substituted without \
     being evaluated. There is no local variable to assign to";
 
 //**************************************************************************************************
@@ -1852,14 +1852,14 @@ fn lvalue(
                         .env
                         .add_diag(diag!(Declarations::DuplicateItem, primary, secondary));
                 }
-                if matches!(case, C::Assign) && v.is_macro_identifier() {
+                if matches!(case, C::Assign) && v.is_syntax_identifier() {
                     let msg = format!(
                         "Cannot assign to argument for parameter '{}'. \
                         Arguments must be used in value positions",
                         v.0
                     );
                     let mut diag = diag!(TypeSafety::CannotExpandMacro, (loc, msg));
-                    diag.add_note(ASSIGN_MACRO_IDENTIFIER_NOTE);
+                    diag.add_note(ASSIGN_SYNTAX_IDENTIFIER_NOTE);
                     context.env.add_diag(diag);
                     return None;
                 }
