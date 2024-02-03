@@ -95,6 +95,10 @@ pub fn build_transaction(
             // TODO: handle this case
             unimplemented!()
         }
+        BridgeAction::EmergencyAction(_) => {
+            // TODO: handle this case
+            unimplemented!()
+        }
     }
 }
 
