@@ -2677,9 +2677,9 @@ fn check_call_target(
         )
     };
     let decl_msg = if decl_is_macro {
-        "Declared a normal (non-macro) function here"
-    } else {
         "Declared a macro function here"
+    } else {
+        "Declared a normal (non-macro) function here"
     };
     context.env.add_diag(diag!(
         TypeSafety::InvalidCallTarget,

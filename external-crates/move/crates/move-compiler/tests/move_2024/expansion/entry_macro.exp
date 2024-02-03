@@ -4,5 +4,5 @@ error[E02007]: invalid 'fun' declaration
 3 │     entry macro fun foo() {}
   │     ^^^^^ ----- Function declared as 'macro' here
   │     │      
-  │     Invalid function declaration. It is meaningless for 'macro' functions to be 'entry' since they do not persist after compilation
+  │     Invalid function declaration. It is meaningless for 'macro' functions to be 'entry' since they are fully-expanded inline during compilation
 

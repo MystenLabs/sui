@@ -32,7 +32,7 @@ error[E04014]: invalid loop control
 17 │ │ │             });
    │ ╰─│─────────────' Inside this lambda
 18 │   │         };
-   │   ╰─────────' To 'break' to this loop, add a label, e.g. `'label: loop` and `break'label`
+   │   ╰─────────' To 'break' to this loop, add a label, e.g. `'label: loop` and `break 'label`
 
 error[E04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:16:28
@@ -46,7 +46,7 @@ error[E04014]: invalid loop control
 17 │ │ │             });
    │ ╰─│─────────────' Inside this lambda
 18 │   │         };
-   │   ╰─────────' To 'continue' to this loop, add a label, e.g. `'label: loop` and `continue'label`
+   │   ╰─────────' To 'continue' to this loop, add a label, e.g. `'label: loop` and `continue 'label`
 
 error[E04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:22:28
@@ -60,7 +60,7 @@ error[E04014]: invalid loop control
 24 │ │ │             });
    │ ╰─│─────────────' Inside this lambda
 25 │   │         }
-   │   ╰─────────' To 'break' to this loop, add a label, e.g. `'label: while` and `break'label`
+   │   ╰─────────' To 'break' to this loop, add a label, e.g. `'label: while` and `break 'label`
 
 error[E04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:23:28
@@ -74,7 +74,7 @@ error[E04014]: invalid loop control
 24 │ │ │             });
    │ ╰─│─────────────' Inside this lambda
 25 │   │         }
-   │   ╰─────────' To 'continue' to this loop, add a label, e.g. `'label: while` and `continue'label`
+   │   ╰─────────' To 'continue' to this loop, add a label, e.g. `'label: while` and `continue 'label`
 
 error[E04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:31:28
@@ -88,7 +88,7 @@ error[E04014]: invalid loop control
 33 │ │ │             });
    │ ╰─│─────────────' Inside this lambda
 34 │   │         };
-   │   ╰─────────' To 'break' to this loop, specify the label, e.g. `break'a`
+   │   ╰─────────' To 'break' to this loop, specify the label, e.g. `break 'a`
 
 error[E04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:32:28
@@ -102,7 +102,7 @@ error[E04014]: invalid loop control
 33 │ │ │             });
    │ ╰─│─────────────' Inside this lambda
 34 │   │         };
-   │   ╰─────────' To 'continue' to this loop, specify the label, e.g. `continue'a`
+   │   ╰─────────' To 'continue' to this loop, specify the label, e.g. `continue 'a`
 
 error[E04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:38:28
@@ -116,7 +116,7 @@ error[E04014]: invalid loop control
 40 │ │ │             });
    │ ╰─│─────────────' Inside this lambda
 41 │   │         }
-   │   ╰─────────' To 'break' to this loop, specify the label, e.g. `break'b`
+   │   ╰─────────' To 'break' to this loop, specify the label, e.g. `break 'b`
 
 error[E04014]: invalid loop control
    ┌─ tests/move_2024/naming/lambda_captures_break_and_continue.move:39:28
@@ -130,5 +130,5 @@ error[E04014]: invalid loop control
 40 │ │ │             });
    │ ╰─│─────────────' Inside this lambda
 41 │   │         }
-   │   ╰─────────' To 'continue' to this loop, specify the label, e.g. `continue'b`
+   │   ╰─────────' To 'continue' to this loop, specify the label, e.g. `continue 'b`
 

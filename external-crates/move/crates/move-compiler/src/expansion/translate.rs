@@ -2445,7 +2445,7 @@ fn function_(
         let e_msg = format!(
             "Invalid function declaration. \
             It is meaningless for '{MACRO_MODIFIER}' functions to be '{ENTRY_MODIFIER}' since they \
-            do not persist after compilation"
+            are fully-expanded inline during compilation"
         );
         let m_msg = format!("Function declared as '{MACRO_MODIFIER}' here");
         context.env().add_diag(diag!(

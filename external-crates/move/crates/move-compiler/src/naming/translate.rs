@@ -483,9 +483,9 @@ impl<'env> Context<'env> {
         );
         let id = self.nominal_block_id;
         self.nominal_block_id += 1;
-        let block_label = block_label(loc, name.map(|n| n.value()), id);
-        self.nominal_blocks
-            .push((name.map(|n| n.value()), block_label, name_type));
+        let name = name.map(|n| n.value());
+        let block_label = block_label(loc, name, id);
+        self.nominal_blocks.push((name, block_label, name_type));
     }
 
     fn current_loop(&mut self, loc: Loc, usage: NominalBlockUsage) -> Option<BlockLabel> {
@@ -530,12 +530,12 @@ impl<'env> Context<'env> {
                 let msg = if let Some(loop_label) = name {
                     format!(
                         "To '{usage}' to this loop, specify the label, \
-                        e.g. `{usage}'{loop_label}`",
+                        e.g. `{usage} '{loop_label}`",
                     )
                 } else {
                     format!(
                         "To '{usage}' to this loop, add a label, \
-                        e.g. `'label: {loop_type}` and `{usage}'label`",
+                        e.g. `'label: {loop_type}` and `{usage} 'label`",
                     )
                 };
                 diag.add_secondary_label((loop_label.label.loc, msg));
@@ -729,10 +729,10 @@ fn module(
     // Silence unused use fun warnings if a module has macros.
     // For public macros, the macro will pull in the use fun, and we will which case we will be
     //   unable to tell if it is used or not
-    //   TODO we could approximate this by just checking for the name, regardless of the type
     // For private macros, we duplicate the scope of the module and when resolving the method
     //   fail to mark the outer scope as used (instead we only mark the modules scope cloned
     //   into the macro)
+    // TODO we should approximate this by just checking for the name, regardless of the type
     let has_macro = functions.iter().any(|(_, _, f)| f.macro_.is_some());
     if has_macro {
         mark_all_use_funs_as_used(&mut use_funs);
@@ -818,11 +818,7 @@ fn explicit_use_fun(
             None
         }
         ResolvedFunction::Var(_) => {
-            let msg = "Invalid 'use fun'. Cannot use a local variable as a method";
-            context
-                .env
-                .add_diag(diag!(Declarations::InvalidUseFun, (loc, msg)));
-            None
+            unreachable!("ICE this case should be excluded from ResolveFunctionCase::UseFun")
         }
         ResolvedFunction::Unbound => {
             assert!(context.env.has_errors());
@@ -1527,14 +1523,16 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         }
 
         EE::Abort(es) => NE::Abort(exp(context, es)),
-        EE::Return(name_opt, es) => {
+        EE::Return(Some(block_name), es) => {
             let out_rhs = exp(context, es);
-            if let Some(block_name) = name_opt {
-                context
-                    .resolve_nominal_label(NominalBlockUsage::Return, block_name)
-                    .map(|name| NE::Give(NominalBlockUsage::Return, name, out_rhs))
-                    .unwrap_or_else(|| NE::UnresolvedError)
-            } else if let Some(return_name) = context.current_return(eloc) {
+            context
+                .resolve_nominal_label(NominalBlockUsage::Return, block_name)
+                .map(|name| NE::Give(NominalBlockUsage::Return, name, out_rhs))
+                .unwrap_or_else(|| NE::UnresolvedError)
+        }
+        EE::Return(None, es) => {
+            let out_rhs = exp(context, es);
+            if let Some(return_name) = context.current_return(eloc) {
                 NE::Give(NominalBlockUsage::Return, return_name, out_rhs)
             } else {
                 NE::Return(out_rhs)
