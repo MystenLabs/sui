@@ -1,9 +1,10 @@
 ---
 name: Sui Code Bug
 about: Create a new software bug for issues encountered running Sui
-title: 'Sui Code Bug or Feature Request'
+title: Sui Code Bug or Feature Request
 labels: bug
 assignees: ''
+
 ---
 
 ## Steps to Reproduce Issue
