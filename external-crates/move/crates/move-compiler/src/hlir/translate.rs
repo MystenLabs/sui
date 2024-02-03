@@ -861,7 +861,7 @@ fn value(
         // Expansion-y things
         // These could likely be discharged during expansion instead.
         //
-        E::Builtin(bt, arguments) if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(false))) => {
+        E::Builtin(bt, arguments) if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(None))) => {
             use T::ExpListItem as TI;
             let [cond_item, code_item]: [TI; 2] = match arguments.exp.value {
                 E::ExpList(arg_list) => arg_list.try_into().unwrap(),
@@ -887,7 +887,9 @@ fn value(
             ));
             unit_exp(eloc)
         }
-        E::Builtin(bt, arguments) if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(true))) => {
+        E::Builtin(bt, arguments)
+            if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(Some(_)))) =>
+        {
             use T::ExpListItem as TI;
             let [cond_item, code_item]: [TI; 2] = match arguments.exp.value {
                 E::ExpList(arg_list) => arg_list.try_into().unwrap(),

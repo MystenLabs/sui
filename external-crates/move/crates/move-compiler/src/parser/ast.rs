@@ -598,7 +598,12 @@ pub enum Exp_ {
 
     // f(earg,*)
     // f!(earg,*)
-    Call(NameAccessChain, bool, Option<Vec<Type>>, Spanned<Vec<Exp>>),
+    Call(
+        NameAccessChain,
+        Option<Loc>,
+        Option<Vec<Type>>,
+        Spanned<Vec<Exp>>,
+    ),
 
     // tn {f1: e1, ... , f_n: e_n }
     Pack(NameAccessChain, Option<Vec<Type>>, Vec<(Field, Exp)>),
@@ -667,7 +672,7 @@ pub enum Exp_ {
     DotCall(
         Box<Exp>,
         Name,
-        /* is_macro */ bool,
+        /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
     ),
@@ -1783,7 +1788,7 @@ impl AstDebug for Exp_ {
             }
             E::Call(ma, is_macro, tys_opt, sp!(_, rhs)) => {
                 ma.ast_debug(w);
-                if *is_macro {
+                if is_macro.is_some() {
                     w.write("!");
                 }
                 if let Some(ss) = tys_opt {
@@ -1929,7 +1934,7 @@ impl AstDebug for Exp_ {
             E::DotCall(e, n, is_macro, tys_opt, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n));
-                if *is_macro {
+                if is_macro.is_some() {
                     w.write("!");
                 }
                 if let Some(ss) = tys_opt {

@@ -141,7 +141,7 @@ pub struct ModuleCall {
 #[allow(clippy::large_enum_variant)]
 pub enum BuiltinFunction_ {
     Freeze(Type),
-    Assert(/* is_macro */ bool),
+    Assert(/* is_macro */ Option<Loc>),
 }
 pub type BuiltinFunction = Spanned<BuiltinFunction_>;
 

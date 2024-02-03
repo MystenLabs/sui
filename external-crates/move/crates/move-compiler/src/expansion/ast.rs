@@ -334,14 +334,14 @@ pub enum Exp_ {
     Name(ModuleAccess, Option<Vec<Type>>),
     Call(
         ModuleAccess,
-        /* is_macro */ bool,
+        /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
     ),
     MethodCall(
         Box<ExpDotted>,
         Name,
-        /* is_macro */ bool,
+        /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
     ),
@@ -1339,7 +1339,7 @@ impl AstDebug for Exp_ {
             }
             E::Call(ma, is_macro, tys_opt, sp!(_, rhs)) => {
                 ma.ast_debug(w);
-                if *is_macro {
+                if is_macro.is_some() {
                     w.write("!");
                 }
                 if let Some(ss) = tys_opt {
@@ -1354,7 +1354,7 @@ impl AstDebug for Exp_ {
             E::MethodCall(e, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", f));
-                if *is_macro {
+                if is_macro.is_some() {
                     w.write("!");
                 }
                 if let Some(ss) = tys_opt {

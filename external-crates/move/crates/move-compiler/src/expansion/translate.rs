@@ -3288,7 +3288,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
                 EL::Unpack(en, tys_opt, E::FieldBindings::Named(efields)),
             ))
         }
-        PE::Call(pn, false, ptys_opt, sp!(_, exprs)) => {
+        PE::Call(pn, None, ptys_opt, sp!(_, exprs)) => {
             let pkg = context.current_package;
             context
                 .env()

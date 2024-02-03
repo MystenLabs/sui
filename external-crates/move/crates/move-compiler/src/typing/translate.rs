@@ -1201,7 +1201,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             let ty = context.get_local_type(&var);
             (ty, TE::Use(var))
         }
-        NE::MethodCall(ndotted, f, /* is_macro */ false, ty_args_opt, sp!(argloc, nargs_)) => {
+        NE::MethodCall(ndotted, f, /* is_macro */ None, ty_args_opt, sp!(argloc, nargs_)) => {
             let (edotted, last_ty) = exp_dotted(context, None, ndotted);
             let args = exp_vec(context, nargs_);
             let ty_call_opt = method_call(
@@ -1222,11 +1222,11 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 Some(ty_call) => ty_call,
             }
         }
-        NE::ModuleCall(m, f, /* is_macro */ false, ty_args_opt, sp!(argloc, nargs_)) => {
+        NE::ModuleCall(m, f, /* is_macro */ None, ty_args_opt, sp!(argloc, nargs_)) => {
             let args = exp_vec(context, nargs_);
             module_call(context, eloc, m, f, ty_args_opt, argloc, args)
         }
-        NE::MethodCall(ndotted, f, /* is_macro */ true, ty_args_opt, sp!(argloc, nargs_)) => {
+        NE::MethodCall(ndotted, f, Some(macro_call_loc), ty_args_opt, sp!(argloc, nargs_)) => {
             let (edotted, last_ty) = exp_dotted(context, None, ndotted);
             let ty_call_opt = macro_method_call(
                 context,
@@ -1234,6 +1234,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 edotted,
                 last_ty,
                 f,
+                macro_call_loc,
                 ty_args_opt,
                 argloc,
                 nargs_,
@@ -1246,8 +1247,17 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 Some(ty_call) => ty_call,
             }
         }
-        NE::ModuleCall(m, f, /* is_macro */ true, ty_args_opt, sp!(argloc, nargs_)) => {
-            macro_module_call(context, eloc, m, f, ty_args_opt, argloc, nargs_)
+        NE::ModuleCall(m, f, Some(macro_call_loc), ty_args_opt, sp!(argloc, nargs_)) => {
+            macro_module_call(
+                context,
+                eloc,
+                m,
+                f,
+                macro_call_loc,
+                ty_args_opt,
+                argloc,
+                nargs_,
+            )
         }
         NE::VarCall(_, sp!(_, nargs_)) => {
             exp_vec(context, nargs_);
@@ -2459,7 +2469,7 @@ fn module_call_impl(
         return_,
     } = fty;
     check_call_target(
-        context, loc, /* is_macro_call */ false, macro_, declared, f,
+        context, loc, /* is_macro_call */ None, macro_, declared, f,
     );
     let (arguments, arg_tys) = call_args(
         context,
@@ -2643,16 +2653,17 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
 fn check_call_target(
     context: &mut Context,
     call_loc: Loc,
-    is_macro_call: bool,
+    is_macro_call: Option<Loc>,
     declared_macro_modifier: Option<Loc>,
     declared: Loc,
     f: FunctionName,
 ) {
     let decl_is_macro = declared_macro_modifier.is_some();
-    if is_macro_call == decl_is_macro {
+    if is_macro_call.is_some() == decl_is_macro {
         return;
     }
 
+    let macro_call_loc = is_macro_call.unwrap_or(call_loc);
     let decl_loc = declared_macro_modifier.unwrap_or(declared);
     let call_msg = if decl_is_macro {
         format!(
@@ -2672,7 +2683,7 @@ fn check_call_target(
     };
     context.env.add_diag(diag!(
         TypeSafety::InvalidCallTarget,
-        (call_loc, call_msg),
+        (macro_call_loc, call_msg),
         (decl_loc, decl_msg),
     ));
 }
@@ -2687,6 +2698,7 @@ fn macro_method_call(
     edotted: ExpDotted,
     edotted_ty: Type,
     method: Name,
+    macro_call_loc: Loc,
     ty_args_opt: Option<Vec<Type>>,
     argloc: Loc,
     nargs: Vec<N::Exp>,
@@ -2699,7 +2711,8 @@ fn macro_method_call(
             .into_iter()
             .map(|e| macro_expand::EitherArg::ByName(block_macro_arg(context, e))),
     );
-    let (type_arguments, args, return_ty) = macro_call_impl(context, loc, m, f, fty, argloc, args);
+    let (type_arguments, args, return_ty) =
+        macro_call_impl(context, loc, m, f, macro_call_loc, fty, argloc, args);
     Some(expand_macro(
         context,
         loc,
@@ -2716,6 +2729,7 @@ fn macro_module_call(
     loc: Loc,
     m: ModuleIdent,
     f: FunctionName,
+    macro_call_loc: Loc,
     ty_args_opt: Option<Vec<Type>>,
     argloc: Loc,
     nargs: Vec<N::Exp>,
@@ -2725,7 +2739,8 @@ fn macro_module_call(
         .into_iter()
         .map(|e| macro_expand::EitherArg::ByName(block_macro_arg(context, e)))
         .collect();
-    let (type_arguments, args, return_ty) = macro_call_impl(context, loc, m, f, fty, argloc, args);
+    let (type_arguments, args, return_ty) =
+        macro_call_impl(context, loc, m, f, macro_call_loc, fty, argloc, args);
     expand_macro(context, loc, m, f, type_arguments, args, return_ty)
 }
 
@@ -2734,6 +2749,7 @@ fn macro_call_impl(
     loc: Loc,
     m: ModuleIdent,
     f: FunctionName,
+    macro_call_loc: Loc,
     fty: ResolvedFunctionType,
     argloc: Loc,
     mut args: Vec<macro_expand::EitherArg<T::Exp, N::Exp>>,
@@ -2747,7 +2763,12 @@ fn macro_call_impl(
         return_,
     } = fty;
     check_call_target(
-        context, loc, /* is_macro_call */ true, macro_, declared, f,
+        context,
+        loc,
+        /* is_macro_call */ Some(macro_call_loc),
+        macro_,
+        declared,
+        f,
     );
     core::check_call_arity(
         context,

@@ -1633,11 +1633,11 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             context
                 .env
                 .check_feature(FeatureGate::PositionalFields, context.current_package, eloc);
-            if is_macro {
+            if let Some(mloc) = is_macro {
                 let msg = "Unexpected macro invocation. Structs cannot be invoked as macros";
                 context
                     .env
-                    .add_diag(diag!(NameResolution::PositionalCallMismatch, (eloc, msg)));
+                    .add_diag(diag!(NameResolution::PositionalCallMismatch, (mloc, msg)));
             }
             let nes = call_args(context, rhs);
             match context.resolve_struct_name(eloc, "construction", ma, tys_opt) {
@@ -1674,7 +1674,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             let nes = call_args(context, rhs);
             match resolve_function(context, ResolveFunctionCase::Call, eloc, ma, ty_args) {
                 ResolvedFunction::Builtin(sp!(bloc, BF::Assert(_))) => {
-                    if !is_macro {
+                    if is_macro.is_none() {
                         let dep_msg = format!(
                             "'{}' function syntax has been deprecated and will be removed",
                             BF::ASSERT_MACRO
@@ -1694,7 +1694,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                     NE::Builtin(sp(bloc, BF::Assert(is_macro)), nes)
                 }
                 ResolvedFunction::Builtin(bf @ sp!(_, BF::Freeze(_))) => {
-                    if is_macro {
+                    if let Some(mloc) = is_macro {
                         let msg = format!(
                             "Unexpected macro invocation. '{}' cannot be invoked as a \
                                    macro",
@@ -1702,17 +1702,17 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                         );
                         context
                             .env
-                            .add_diag(diag!(TypeSafety::InvalidCallTarget, (eloc, msg)));
+                            .add_diag(diag!(TypeSafety::InvalidCallTarget, (mloc, msg)));
                     }
                     NE::Builtin(bf, nes)
                 }
 
                 ResolvedFunction::Module(mf) => {
-                    if is_macro {
+                    if let Some(mloc) = is_macro {
                         context.env.check_feature(
                             FeatureGate::Macros,
                             context.current_package,
-                            eloc,
+                            mloc,
                         );
                     }
                     let ResolvedModuleFunction {
@@ -1723,12 +1723,12 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                     NE::ModuleCall(module, function, is_macro, ty_args, nes)
                 }
                 ResolvedFunction::Var(v) => {
-                    if is_macro {
+                    if let Some(mloc) = is_macro {
                         let msg = "Unexpected macro invocation. Variables cannot be invoked as a \
                             macro";
                         context
                             .env
-                            .add_diag(diag!(TypeSafety::InvalidCallTarget, (eloc, msg)));
+                            .add_diag(diag!(TypeSafety::InvalidCallTarget, (mloc, msg)));
                     }
                     NE::VarCall(v, nes)
                 }
@@ -1746,7 +1746,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             Some(d) => {
                 let ty_args = tys_opt.map(|tys| types(context, tys));
                 let nes = call_args(context, rhs);
-                if is_macro {
+                if is_macro.is_some() {
                     context
                         .env
                         .check_feature(FeatureGate::Macros, context.current_package, eloc);
@@ -2057,7 +2057,7 @@ fn resolve_builtin_function(
         B::FREEZE => Freeze(check_builtin_ty_arg(context, loc, b, ty_args)),
         B::ASSERT_MACRO => {
             check_builtin_ty_args(context, loc, b, 0, ty_args);
-            Assert(/* is_macro, set by caller */ false)
+            Assert(/* is_macro, set by caller */ None)
         }
         _ => {
             context.env.add_diag(diag!(

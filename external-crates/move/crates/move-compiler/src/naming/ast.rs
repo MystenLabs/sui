@@ -288,7 +288,7 @@ pub type ExpDotted = Spanned<ExpDotted_>;
 #[allow(clippy::large_enum_variant)]
 pub enum BuiltinFunction_ {
     Freeze(Option<Type>),
-    Assert(/* is_macro */ bool),
+    Assert(/* is_macro */ Option<Loc>),
 }
 pub type BuiltinFunction = Spanned<BuiltinFunction_>;
 
@@ -331,14 +331,14 @@ pub enum Exp_ {
     ModuleCall(
         ModuleIdent,
         FunctionName,
-        /* is_macro */ bool,
+        /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
     ),
     MethodCall(
         ExpDotted,
         Name,
-        /* is_macro */ bool,
+        /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
     ),
@@ -1271,7 +1271,7 @@ impl AstDebug for Exp_ {
             E::Constant(m, c) => w.write(&format!("{}::{}", m, c)),
             E::ModuleCall(m, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 w.write(&format!("{}::{}", m, f));
-                if *is_macro {
+                if is_macro.is_some() {
                     w.write("!");
                 }
                 if let Some(ss) = tys_opt {
@@ -1286,7 +1286,7 @@ impl AstDebug for Exp_ {
             E::MethodCall(e, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", f));
-                if *is_macro {
+                if is_macro.is_some() {
                     w.write("!");
                 }
                 if let Some(ss) = tys_opt {

@@ -381,10 +381,11 @@ fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
     Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, id))
 }
 
-// Parse a macro identifier:
-//      MacroIdentifier = <MacroIdentifierValue>
-fn parse_macro_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
-    if context.tokens.peek() != Tok::MacroIdentifier {
+// Parse a macro identifier. The name comes from the usage of the identifier to perform expression
+// substitution in a macro invocation, i.e. a syntactic substitution.:
+//      SyntaxIdentifier = <SyntaxIdentifierValue>
+fn parse_syntax_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
+    if context.tokens.peek() != Tok::SyntaxIdentifier {
         return Err(unexpected_token_error(
             context.tokens,
             "an identifier prefixed by '$'",
@@ -418,7 +419,7 @@ fn parse_address_bytes(
 }
 
 // Parse the beginning of an access, either an address or an identifier:
-//      LeadingNameAccess = <NumericalAddress> | <Identifier> | <MacroIdentifier>
+//      LeadingNameAccess = <NumericalAddress> | <Identifier> | <SyntaxIdentifier>
 fn parse_leading_name_access(context: &mut Context) -> Result<LeadingNameAccess, Box<Diagnostic>> {
     parse_leading_name_access_(context, false, || "an address or an identifier")
 }
@@ -440,9 +441,9 @@ fn parse_leading_name_access_<'a, F: FnOnce() -> &'a str>(
             };
             Ok(sp(loc, name))
         }
-        Tok::MacroIdentifier => {
+        Tok::SyntaxIdentifier => {
             let loc = current_token_loc(context.tokens);
-            let n = parse_macro_identifier(context)?;
+            let n = parse_syntax_identifier(context)?;
             let name = if global_name {
                 LeadingNameAccess_::GlobalAddress(n)
             } else {
@@ -459,10 +460,10 @@ fn parse_leading_name_access_<'a, F: FnOnce() -> &'a str>(
 }
 
 // Parse a variable name:
-//      Var = <Identifier> | <MacroIdentifier>
+//      Var = <Identifier> | <SyntaxIdentifier>
 fn parse_var(context: &mut Context) -> Result<Var, Box<Diagnostic>> {
     Ok(Var(match context.tokens.peek() {
-        Tok::MacroIdentifier => parse_macro_identifier(context)?,
+        Tok::SyntaxIdentifier => parse_syntax_identifier(context)?,
         _ => parse_identifier(context)?,
     }))
 }
@@ -1188,7 +1189,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
                 ));
             }
         }
-        Tok::Identifier | Tok::RestrictedIdentifier | Tok::MacroIdentifier => {
+        Tok::Identifier | Tok::RestrictedIdentifier | Tok::SyntaxIdentifier => {
             parse_name_exp(context)?
         }
 
@@ -1458,10 +1459,11 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
     })?;
 
     let is_macro = if let Tok::Exclaim = context.tokens.peek() {
+        let loc = current_token_loc(context.tokens);
         context.tokens.advance()?;
-        true
+        Some(loc)
     } else {
-        false
+        None
     };
 
     // There's an ambiguity if the name is followed by a '<'.
@@ -1470,14 +1472,16 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
     // Otherwise, assume that the '<' is a boolean operator.
     let mut tys = None;
     let start_loc = context.tokens.start_loc();
-    if context.tokens.peek() == Tok::Less && (name.loc.end() as usize == start_loc || is_macro) {
+    if context.tokens.peek() == Tok::Less
+        && (name.loc.end() as usize == start_loc || is_macro.is_some())
+    {
         let loc = make_loc(context.tokens.file_hash(), start_loc, start_loc);
         tys = parse_optional_type_args(context)
             .map_err(|diag| add_type_args_ambiguity_label(loc, diag))?;
     }
 
     match context.tokens.peek() {
-        _ if is_macro => {
+        _ if is_macro.is_some() => {
             // if in a macro, we must have a call
             let rhs = parse_call_args(context)?;
             Ok(Exp_::Call(name, is_macro, tys, rhs))
@@ -1497,9 +1501,9 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
 
         // Call: "(" Comma<Exp> ")"
         Tok::LParen => {
-            debug_assert!(!is_macro);
+            debug_assert!(is_macro.is_none());
             let rhs = parse_call_args(context)?;
-            Ok(Exp_::Call(name, false, tys, rhs))
+            Ok(Exp_::Call(name, None, tys, rhs))
         }
 
         // Other name reference...
@@ -1856,10 +1860,11 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                         if is_start_of_call_after_function_name(context, &n) {
                             let call_start = context.tokens.start_loc();
                             let is_macro = if let Tok::Exclaim = context.tokens.peek() {
+                                let loc = current_token_loc(context.tokens);
                                 context.tokens.advance()?;
-                                true
+                                Some(loc)
                             } else {
-                                false
+                                None
                             };
                             let mut tys = None;
                             if context.tokens.peek() == Tok::Less
@@ -2073,7 +2078,7 @@ fn parse_quant_binding(context: &mut Context) -> Result<Spanned<(Bind, Exp)>, Bo
 
 fn make_builtin_call(loc: Loc, name: Symbol, type_args: Option<Vec<Type>>, args: Vec<Exp>) -> Exp {
     let maccess = sp(loc, NameAccessChain_::One(sp(loc, name)));
-    sp(loc, Exp_::Call(maccess, false, type_args, sp(loc, args)))
+    sp(loc, Exp_::Call(maccess, None, type_args, sp(loc, args)))
 }
 
 //**************************************************************************************************
@@ -2200,13 +2205,13 @@ fn parse_ability(context: &mut Context) -> Result<Ability, Box<Diagnostic>> {
 
 // Parse a type parameter:
 //      TypeParameter =
-//          <MacroIdentifier> <Constraint>?
+//          <SyntaxIdentifier> <Constraint>?
 //        | <Identifier> <Constraint>?
 //      Constraint =
 //          ":" <Ability> (+ <Ability>)*
 fn parse_type_parameter(context: &mut Context) -> Result<(Name, Vec<Ability>), Box<Diagnostic>> {
-    let n = if context.tokens.peek() == Tok::MacroIdentifier {
-        parse_macro_identifier(context)?
+    let n = if context.tokens.peek() == Tok::SyntaxIdentifier {
+        parse_syntax_identifier(context)?
     } else {
         parse_identifier(context)?
     };

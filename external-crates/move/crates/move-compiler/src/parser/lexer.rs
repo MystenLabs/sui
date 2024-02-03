@@ -21,7 +21,7 @@ pub enum Tok {
     NumTypedValue,
     ByteStringValue,
     Identifier,
-    MacroIdentifier,
+    SyntaxIdentifier,
     Exclaim,
     ExclaimEqual,
     Percent,
@@ -102,7 +102,7 @@ impl fmt::Display for Tok {
             NumTypedValue => "[NumTyped]",
             ByteStringValue => "[ByteString]",
             Identifier => "[Identifier]",
-            MacroIdentifier => "[MacroIdentifier]",
+            SyntaxIdentifier => "[SyntaxIdentifier]",
             Exclaim => "!",
             ExclaimEqual => "!=",
             Percent => "%",
@@ -675,7 +675,7 @@ fn find_token(
             if text.len() > 1 && text[1..].starts_with(|c| matches!(c,'A'..='Z' | 'a'..='z' | '_'))
             {
                 let len = get_name_len(&text[1..]);
-                (Ok(Tok::MacroIdentifier), len + 1)
+                (Ok(Tok::SyntaxIdentifier), len + 1)
             } else {
                 let loc = make_loc(file_hash, start_offset, start_offset);
                 let diag = maybe_diag! { Box::new(diag!(
