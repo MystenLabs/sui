@@ -15,7 +15,11 @@ use move_binary_format::{
     access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
     file_format_common::VERSION_MAX,
 };
-use move_core_types::ident_str;
+use move_command_line_common::{
+    address::{NumericalAddress, ParsedAddress},
+    parser::NumberFormat,
+};
+use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
 use serde::Serialize;
 use sui_json::is_receiving_argument;
@@ -38,7 +42,7 @@ use crate::{
     err, error,
     ptb::ptb_parser::{
         argument::Argument as PTBArg,
-        command_token::{CommandToken, ASSIGN, GAS_BUDGET, MOVE_CALL},
+        command_token::{CommandToken, ASSIGN, GAS_BUDGET, MOVE_CALL, PICK_GAS_BUDGET},
         context::{FileScope, PTBContext},
         errors::{span, PTBError, PTBResult, Span, Spanned},
         parser::ParsedPTBCommand,
@@ -47,15 +51,18 @@ use crate::{
     sp,
 };
 
+use super::utils::to_ordinal_contraction;
+
 /// The gas budget is a list of gas budgets that can be used to set the gas budget for a PTB along
 /// with a gas picker that can be used to pick the budget from the list if it is set in a PTB.
 /// A PTB may have multiple gas budgets but the gas picker can only be set once.
 pub struct GasBudget {
-    pub gas_budgets: Vec<u64>,
-    pub picker: Option<GasPicker>,
+    pub gas_budgets: Vec<Spanned<(FileScope, u64)>>,
+    pub picker: Vec<Spanned<(FileScope, GasPicker)>>,
 }
 
 /// Types of gas pickers that can be used to pick a gas budget from a list of gas budgets.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GasPicker {
     Max,
     Min,
@@ -212,16 +219,16 @@ impl<'a> Resolver<'a> for NoResolution {
 ///   list of gas budgets.
 /// - A way to bind the result of a command to an identifier.
 pub struct PTBBuilder<'a> {
+    pub addresses: BTreeMap<String, AccountAddress>,
     /// A map from identifiers to the file scopes in which they were declared. This is used
     /// for reporting shadowing warnings.
-    pub identifiers: BTreeMap<Identifier, Vec<Spanned<FileScope>>>,
+    pub identifiers: BTreeMap<String, Vec<Spanned<FileScope>>>,
     /// The arguments that we need to resolve. This is a map from identifiers to the argument
     /// values -- they haven't been resolved to a transaction argument yet.
-    pub arguments_to_resolve: BTreeMap<Identifier, Spanned<PTBArg>>,
+    pub arguments_to_resolve: BTreeMap<String, Spanned<PTBArg>>,
     /// The arguments that we have resolved. This is a map from identifiers to the actual
     /// transaction arguments.
-    // TODO(tzakian): Maybe make these spanned as well.
-    pub resolved_arguments: BTreeMap<Identifier, Tx::Argument>,
+    pub resolved_arguments: BTreeMap<String, Tx::Argument>,
     /// The actual PTB that we are building up.
     pub ptb: ProgrammableTransactionBuilder,
     /// Read API for reading objects from chain. Needed for object resolution.
@@ -241,49 +248,65 @@ pub struct PTBBuilder<'a> {
     pub errors: Vec<PTBError>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GasBudgetError {
+    NoGasBudget,
+    NoGasPicker(Vec<Spanned<(FileScope, u64)>>),
+    MultipleGasPickers(Vec<Spanned<(FileScope, GasPicker)>>),
+}
+
 impl GasBudget {
     pub fn new() -> Self {
         Self {
             gas_budgets: vec![],
-            picker: None,
+            picker: vec![],
         }
     }
 
     /// Finalize the gas budget. This will return an error if there are no gas budgets or if the
     /// gas budget is set to 0.
-    pub fn finalize(&self) -> anyhow::Result<u64> {
+    pub fn finalize(self) -> Result<u64, GasBudgetError> {
         if self.gas_budgets.is_empty() {
-            anyhow::bail!("No gas budget set");
+            return Err(GasBudgetError::NoGasBudget);
+        }
+
+        if self.picker.len() > 1 {
+            return Err(GasBudgetError::MultipleGasPickers(self.picker));
         }
 
         let budget = if self.gas_budgets.len() == 1 {
-            self.gas_budgets[0]
+            self.gas_budgets[0].value.1
         } else {
-            match self.picker {
-                Some(GasPicker::Max) => self.gas_budgets.iter().max().unwrap().clone(),
-                Some(GasPicker::Min) => self.gas_budgets.iter().min().unwrap().clone(),
-                Some(GasPicker::Sum) => self.gas_budgets.iter().sum(),
-                None => anyhow::bail!("No gas picker set"),
+            match self.picker.get(0).map(|x| &x.value.1) {
+                Some(GasPicker::Max) => self
+                    .gas_budgets
+                    .iter()
+                    .map(|x| x.value.1)
+                    .max()
+                    .unwrap()
+                    .clone(),
+                Some(GasPicker::Min) => self
+                    .gas_budgets
+                    .iter()
+                    .map(|x| x.value.1)
+                    .min()
+                    .unwrap()
+                    .clone(),
+                Some(GasPicker::Sum) => self.gas_budgets.iter().map(|x| x.value.1).sum(),
+                None => return Err(GasBudgetError::NoGasPicker(self.gas_budgets)),
             }
         };
 
-        if budget == 0 {
-            anyhow::bail!("Invalid gas budget");
-        }
         Ok(budget)
     }
 
-    pub fn add_gas_budget(&mut self, budget: u64) {
-        self.gas_budgets.push(budget);
+    pub fn add_gas_budget(&mut self, budget: u64, scope: FileScope, sp: Span) {
+        self.gas_budgets.push(span(sp, (scope, budget)));
     }
 
     /// Set the gas picker. This will return an error if the gas picker has already been set.
-    pub fn set_gas_picker(&mut self, picker: GasPicker) -> Result<()> {
-        if self.picker.is_some() {
-            anyhow::bail!("Gas picker already set");
-        }
-        self.picker = Some(picker);
-        Ok(())
+    pub fn set_gas_picker(&mut self, picker: GasPicker, scope: FileScope, sp: Span) {
+        self.picker.push(span(sp, (scope, picker)));
     }
 }
 
@@ -305,8 +328,9 @@ fn is_pure(t: &TypeTag) -> anyhow::Result<bool> {
 }
 
 impl<'a> PTBBuilder<'a> {
-    pub fn new(reader: &'a ReadApi) -> Self {
+    pub fn new(starting_env: BTreeMap<String, AccountAddress>, reader: &'a ReadApi) -> Self {
         Self {
+            addresses: starting_env,
             identifiers: BTreeMap::new(),
             arguments_to_resolve: BTreeMap::new(),
             resolved_arguments: BTreeMap::new(),
@@ -322,13 +346,37 @@ impl<'a> PTBBuilder<'a> {
     }
 
     /// Declare and identifier. This is used to support shadowing warnings.
-    pub fn declare_identifier(&mut self, ident: Identifier, ident_loc: Span) {
+    pub fn declare_identifier(&mut self, ident: String, ident_loc: Span) {
         let current_context = self.context.current_file_scope().clone();
         let e = self.identifiers.entry(ident).or_default();
         e.push(Spanned {
             span: ident_loc,
             value: current_context,
         });
+    }
+
+    /// Declare a possible address binding. This is used to support address resolution. If the
+    /// `possible_addr` is not an address, then this is a no-op.
+    pub fn declare_possible_address_binding(
+        &mut self,
+        ident: String,
+        possible_addr: &Spanned<PTBArg>,
+    ) {
+        match possible_addr.value {
+            PTBArg::Address(addr) => {
+                self.addresses.insert(ident.to_string(), addr.into_inner());
+            }
+            PTBArg::Identifier(ref i) => {
+                // We do a one-hop resolution here to see if we can resolve the identifier to an
+                // externally-bound address (i.e., one coming in through the initial environment).
+                // This will also handle direct aliasing of addresses throughout the ptb.
+                // Note that we don't do this recursively so no need to worry about loops/cycles.
+                if let Some(addr) = self.addresses.get(i) {
+                    self.addresses.insert(ident.to_string(), *addr);
+                }
+            }
+            _ => (),
+        }
     }
 
     /// Finalize a PTB. If there were errors during the construction of the PTB these are returned
@@ -349,7 +397,7 @@ impl<'a> PTBBuilder<'a> {
                     if i == 0 {
                         self.errors.push(PTBError::WithSource {
                             file_scope: fscope.clone(),
-                            message: format!("Identifier '{}' first declared here", ident,),
+                            message: format!("Variable '{}' first declared here", ident),
                             span: Some(*command_loc),
                             help: None,
                         });
@@ -357,21 +405,70 @@ impl<'a> PTBBuilder<'a> {
                         self.errors.push(PTBError::WithSource {
                             file_scope: fscope.clone(),
                             message: format!(
-                                "Identifier '{}' used again here (shadowed). This is usage number {}.",
-                                ident, i + 1
+                                "Variable '{}' used again here (shadowed) for the {} time.",
+                                ident, to_ordinal_contraction(i + 1)
                             ),
                             span: Some(*command_loc),
-                            help: Some(format!("You can either rename this variable, or do not pass the `warn-shadows` flag to ignore these types of errors.")),
+                            help: Some("You can either rename this variable, or do not \
+                                       pass the `warn-shadows` flag to ignore these types of errors.".to_string()),
                         });
                     }
                 }
             }
         }
 
-        let budget = match self.gas_budget.finalize().map_err(|e| err!(self, "{e}")) {
+        let budget = match self.gas_budget.finalize().map_err(|e| match e {
+            GasBudgetError::NoGasBudget => self.errors.push(err!(self, "No gas budget set for transaction")),
+            GasBudgetError::NoGasPicker(budgets) => {
+                for (i, sp!(bsp, (fscope, _))) in budgets.into_iter().enumerate() {
+                    let err_msg = if i == 0 {
+                        // NB: this could span multiple files, so we use the filescope saved with
+                        // the budget.
+                        PTBError::WithSource {
+                            file_scope: fscope,
+                            message: "Multiple gas budgets set for transaction with no gas picker. \
+                                Gas budget is set for the first time here.".to_string(),
+                            span: Some(bsp),
+                            help: Some(format!("You should either remove all but one usage of setting the gas budget, or use the \
+                                '{PICK_GAS_BUDGET}' command to handle multiple gas budgets")),
+                        }
+                    } else {
+                        PTBError::WithSource {
+                            file_scope: fscope,
+                            message: format!("Gas budget is set for the {} time here.", to_ordinal_contraction(i + 1)),
+                            span: Some(bsp),
+                            help: None,
+                        }
+                    };
+                self.errors.push(err_msg);
+                }
+            }
+            GasBudgetError::MultipleGasPickers(pickers) => {
+                for (i, sp!(bsp, (fscope, _))) in pickers.into_iter().enumerate() {
+                    let err_msg = if i == 0 {
+                        // NB: this could span multiple files, so we use the filescope saved with
+                        // the picker.
+                        PTBError::WithSource {
+                            file_scope: fscope,
+                            message: "Multiple gas pickers set for transaction. \
+                                First usage of the 'gas-picker' command here.".to_string(),
+                            span: Some(bsp),
+                            help: Some(format!("You should either remove all but one usage of '{PICK_GAS_BUDGET}'.")),
+                        }
+                    } else {
+                        PTBError::WithSource {
+                            file_scope: fscope,
+                            message: format!("'{PICK_GAS_BUDGET}' used here for the {} time.", to_ordinal_contraction(i + 1)),
+                            span: Some(bsp),
+                            help: None,
+                        }
+                    };
+                self.errors.push(err_msg);
+                }
+            },
+        }) {
             Ok(b) => b,
-            Err(e) => {
-                self.errors.push(e);
+            Err(_) => {
                 return Err(self.errors);
             }
         };
@@ -400,7 +497,7 @@ impl<'a> PTBBuilder<'a> {
         let Some(SuiRawData::Package(package)) = object.bcs else {
             error!(
                 self,
-                "Bcs field in object [{}] is missing or not a package.", package_id
+                "BCS field in object '{}' is missing or not a package.", package_id
             );
         };
         let package: MovePackage = MovePackage::new(
@@ -583,6 +680,24 @@ impl<'a> PTBBuilder<'a> {
             PTBArg::Identifier(i) if self.resolved_arguments.contains_key(&i) => {
                 Ok(self.resolved_arguments[&i].clone())
             }
+            PTBArg::Identifier(i) if self.addresses.contains_key(&i) => {
+                // We now have a location for this address (which may have come from the keystore
+                // so we didnt' have an address for it before), so we tag it with its first usage
+                // location put it in the arguments to resolve and resolve away.
+                let addr = self.addresses[&i];
+                self.arguments_to_resolve.insert(
+                    i.clone(),
+                    span(
+                        arg_loc,
+                        PTBArg::Address(NumericalAddress::new(
+                            addr.into_bytes(),
+                            NumberFormat::Hex,
+                        )),
+                    ),
+                );
+                self.resolve(span(arg_loc, PTBArg::Identifier(i)), ctx)
+                    .await
+            }
             PTBArg::Bool(b) => ctx.pure(self, arg_loc, b).await,
             PTBArg::U8(u) => ctx.pure(self, arg_loc, u).await,
             PTBArg::U16(u) => ctx.pure(self, arg_loc, u).await,
@@ -763,6 +878,7 @@ impl<'a> PTBBuilder<'a> {
                     }
                 );
                 self.declare_identifier(i.clone(), ident_loc);
+                self.declare_possible_address_binding(i.clone(), &arg_w_loc);
                 self.arguments_to_resolve.insert(i, arg_w_loc);
             }
             CommandToken::Assign => error!(self, "expected 1 or 2 arguments for assignment",),
@@ -871,19 +987,19 @@ impl<'a> PTBBuilder<'a> {
                     "sum" => GasPicker::Sum,
                     x => error!(sp: ident_loc, self, "invalid gas picker: {}", x,),
                 };
-                self.gas_budget
-                    .set_gas_picker(picker)
-                    .map_err(|e| err!(sp: ident_loc, self, "{e}"))?;
+                let context = self.context.current_file_scope().clone();
+                self.gas_budget.set_gas_picker(picker, context, ident_loc);
             }
             CommandToken::GasBudget => {
                 bind!(
-                    _b_loc,
+                    budget_loc,
                     PTBArg::U64(budget) = command.args.pop().unwrap(),
                     |loc| {
                         error!(sp: loc, self, "expected gas budget");
                     }
                 );
-                self.gas_budget.add_gas_budget(budget);
+                let context = self.context.current_file_scope().clone();
+                self.gas_budget.add_gas_budget(budget, context, budget_loc);
             }
             CommandToken::File => {
                 error!(self, "File commands should be removed at this point");
@@ -943,7 +1059,25 @@ impl<'a> PTBBuilder<'a> {
                         args.push(span(arg_loc, arg));
                     }
                 }
-                let package_id = ObjectID::from_address(address.value.into_inner());
+                // TODO(tzakian): Handle addresses in scope here.
+                let resolved_address = address.value.clone().into_account_address(&|s| {
+                    self.addresses.get(s).cloned().or_else(|| resolve_address(s))
+                }).map_err(|e| {
+                    let help_message = if let ParsedAddress::Named(name) = address.value {
+                        Some(format!("This is most likely because the named address '{name}' is not in scope. \
+                                     You can either bind a variable to the address that you want to use or use the address in the command."))
+                    } else {
+                        None
+                    };
+                    let e = err!(sp: address.span, self, "{e}");
+
+                    if let Some(help_message) = help_message {
+                        e.with_help(help_message)
+                    } else {
+                        e
+                    }
+                })?;
+                let package_id = ObjectID::from_address(resolved_address);
                 let package = self.resolve_to_package(package_id, address.span).await?;
                 let args = self
                     .resolve_move_call_args(
