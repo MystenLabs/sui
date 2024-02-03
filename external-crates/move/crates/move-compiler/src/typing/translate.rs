@@ -2891,7 +2891,8 @@ fn expand_macro(
             let body = exp(context, body);
             let ty = body.ty.clone();
             seq.push_back(sp(body.exp.loc, TS::Seq(body)));
-            let e_ = TE::Block(seq);
+            let use_funs = N::UseFuns::new(context.current_call_color());
+            let e_ = TE::Block((use_funs, seq));
             (ty, e_)
         }
     };

@@ -217,12 +217,11 @@ impl<'env> Context<'env> {
         let cur = self.use_funs.last_mut().unwrap();
         if cur.count > 1 {
             cur.count -= 1;
-            return N::UseFuns {
-                resolved: N::ResolvedUseFuns::new(),
-                implicit_candidates: UniqueMap::new(),
-            };
+            return N::UseFuns::new(cur.color.unwrap_or(0));
         }
-        let UseFunsScope { use_funs, .. } = self.use_funs.pop().unwrap();
+        let UseFunsScope {
+            use_funs, color, ..
+        } = self.use_funs.pop().unwrap();
         for (tn, methods) in use_funs.iter() {
             let unused = methods.iter().filter(|(_, _, uf)| !uf.used);
             for (_, method, use_fun) in unused {
@@ -251,6 +250,7 @@ impl<'env> Context<'env> {
         }
         N::UseFuns {
             resolved: use_funs,
+            color: color.unwrap_or(0),
             implicit_candidates: UniqueMap::new(),
         }
     }
