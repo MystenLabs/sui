@@ -17,20 +17,21 @@ use anyhow::{anyhow, bail, Context, Result as AResult};
 use super::{
     argument::Argument,
     command_token::{CommandToken, ALL_PUBLIC_COMMAND_TOKENS},
-    context::PTBContext,
+    context::{FileScope, PTBContext},
     errors::{span, PTBError, Span, Spanned},
 };
 
 /// A parsed PTB command consisting of the command and the parsed arguments to the command.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ParsedPTBCommand {
-    pub name: CommandToken,
+    pub name: Spanned<CommandToken>,
     pub args: Vec<Spanned<Argument>>,
 }
 
 /// The parser for PTB command arguments.
 pub struct ValueParser<'a> {
     inner: Spanner<'a>,
+    current_scope: FileScope,
 }
 
 /// The PTB parsing context used when parsing PTB commands. This consists of:
@@ -64,11 +65,11 @@ impl PTBParser {
     /// `errors`.
     pub fn parse(&mut self, mut cmd: PTBCommand) {
         let name = CommandToken::from_str(&cmd.name);
+        let name_span = Span::cmd_span(cmd.name.len(), self.context.current_file_scope());
         if let Err(e) = name {
             self.errors.push(PTBError::WithSource {
-                file_scope: self.context.current_file_scope().clone(),
                 message: format!("Failed to parse command name: {e}"),
-                span: None,
+                span: name_span,
                 help: Some(format!(
                     "Valid commands are: {}",
                     ALL_PUBLIC_COMMAND_TOKENS.join(", ")
@@ -76,9 +77,9 @@ impl PTBParser {
             });
             return;
         };
-        let name = name.unwrap();
+        let name = span(name_span, name.unwrap());
 
-        match name {
+        match &name.value {
             CommandToken::FileEnd => {
                 let fname = cmd.values.pop().unwrap();
                 if let Err(e) = self.context.pop_file_scope(&fname) {
@@ -86,7 +87,10 @@ impl PTBParser {
                 }
                 self.parsed.push(ParsedPTBCommand {
                     name,
-                    args: vec![span(Span::new(0, fname.len(), 0), Argument::String(fname))],
+                    args: vec![span(
+                        Span::new(0, fname.len(), 0, self.context.current_file_scope()),
+                        Argument::String(fname),
+                    )],
                 });
                 return;
             }
@@ -95,19 +99,21 @@ impl PTBParser {
                 self.context.push_file_scope(fname.clone());
                 self.parsed.push(ParsedPTBCommand {
                     name,
-                    args: vec![span(Span::new(0, fname.len(), 0), Argument::String(fname))],
+                    args: vec![span(
+                        Span::new(0, fname.len(), 0, self.context.current_file_scope()),
+                        Argument::String(fname),
+                    )],
                 });
                 return;
             }
             CommandToken::Publish => {
                 if cmd.values.len() != 1 {
                     self.errors.push(PTBError::WithSource {
-                        file_scope: self.context.current_file_scope().clone(),
                         message: format!(
                             "Invalid command -- expected 1 argument, got {}",
                             cmd.values.len()
                         ),
-                        span: None,
+                        span: name_span,
                         help: None,
                     });
                     self.context.increment_file_command_index();
@@ -120,6 +126,7 @@ impl PTBParser {
                             start: 0,
                             end: cmd.values[0].len(),
                             arg_idx: 0,
+                            file_scope: self.context.current_file_scope(),
                         },
                         value: Argument::String(cmd.values[0].clone()),
                     }],
@@ -130,23 +137,25 @@ impl PTBParser {
             CommandToken::Upgrade => {
                 if cmd.values.len() != 2 {
                     self.errors.push(PTBError::WithSource {
-                        file_scope: self.context.current_file_scope().clone(),
                         message: format!(
                             "Invalid command -- expected 2 arguments, got {}",
                             cmd.values.len()
                         ),
-                        span: None,
+                        span: name_span,
                         help: None,
                     });
                     self.context.increment_file_command_index();
                     return;
                 }
-                let mut upgrade_args = match Self::parse_values(&cmd.values[0], 0) {
+                let mut upgrade_args = match Self::parse_values(
+                    &cmd.values[0],
+                    0,
+                    self.context.current_file_scope(),
+                ) {
                     Err(e) => {
                         self.errors.push(PTBError::WithSource {
-                            file_scope: self.context.current_file_scope().clone(),
                             message: format!("Failed to parse argument command. {}", e.message,),
-                            span: Some(e.span),
+                            span: e.span,
                             help: e.help,
                         });
                         self.context.increment_file_command_index();
@@ -159,6 +168,7 @@ impl PTBParser {
                         start: 0,
                         end: cmd.values[1].len(),
                         arg_idx: 1,
+                        file_scope: self.context.current_file_scope(),
                     },
                     value: Argument::String(cmd.values[1].clone()),
                 });
@@ -175,15 +185,14 @@ impl PTBParser {
             .values
             .iter()
             .enumerate()
-            .map(|(i, v)| Self::parse_values(&v, i))
+            .map(|(i, v)| Self::parse_values(&v, i, self.context.current_file_scope()))
             .collect::<ParsingResult<Vec<_>>>()
             .map_err(|e| PTBError::WithSource {
-                file_scope: self.context.current_file_scope().clone(),
                 message: format!(
                     "Failed to parse arguments for '{}' command. {}",
                     cmd.name, e.message
                 ),
-                span: Some(e.span),
+                span: e.span,
                 help: e.help,
             });
 
@@ -201,14 +210,18 @@ impl PTBParser {
     }
 
     /// Parse a string to a list of values. Values are separated by whitespace.
-    pub fn parse_values(s: &str, arg_idx: usize) -> ParsingResult<Vec<Spanned<Argument>>> {
+    pub fn parse_values(
+        s: &str,
+        arg_idx: usize,
+        fscope: FileScope,
+    ) -> ParsingResult<Vec<Spanned<Argument>>> {
         let tokens: Vec<_> = ArgumentToken::tokenize(s).map_err(|e| ParsingErr {
-            span: Span::new(0, s.len(), arg_idx),
+            span: Span::new(0, s.len(), arg_idx, fscope),
             message: e.into(),
             help: None,
         })?;
         let stokens = Spanner::new(tokens, arg_idx);
-        let mut parser = ValueParser::new(stokens);
+        let mut parser = ValueParser::new(stokens, fscope);
         let res = parser.parse_arguments()?;
         if let Ok(sp!(sp, (_, contents))) = parser.spanned(|p| p.advance_any()) {
             return Err(ParsingErr {
@@ -297,8 +310,11 @@ impl<'a> Iterator for Spanner<'a> {
 }
 
 impl<'a> ValueParser<'a> {
-    pub fn new(v: Spanner<'a>) -> Self {
-        Self { inner: v }
+    pub fn new(v: Spanner<'a>, current_scope: FileScope) -> Self {
+        Self {
+            inner: v,
+            current_scope,
+        }
     }
 
     pub fn advance_any(&mut self) -> AResult<(ArgumentToken, &'a str)> {
@@ -418,6 +434,7 @@ impl<'a> ValueParser<'a> {
             start,
             end,
             arg_idx: self.inner.arg_idx,
+            file_scope: self.current_scope,
         };
         let arg = arg.map_err(|e| ParsingErr {
             span: sp,
@@ -448,6 +465,7 @@ impl<'a> ValueParser<'a> {
                 start: start_loc,
                 end,
                 arg_idx: self.inner.arg_idx,
+                file_scope: self.current_scope,
             },
             x,
         )
@@ -599,10 +617,7 @@ impl<'a> ValueParser<'a> {
                 let mut fields = vec![];
                 self.spanned(|p| p.advance(Tok::Dot))?;
                 while let Ok(sp!(sp, (_, contents))) = self.spanned(|p| p.advance_any()) {
-                    let num = self.with_span(tl_loc, |_| {
-                        u16::from_str(contents).context("Invalid field access -- expected a number")
-                    })?;
-                    fields.push(span(sp, num.value));
+                    fields.push(span(sp, contents.to_string()));
                     if !matches!(self.peek_tok(), Some(Tok::Dot)) {
                         break;
                     }
@@ -640,7 +655,16 @@ impl<'a> ValueParser<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::ptb::ptb_parser::context::FileScope;
     use crate::ptb::ptb_parser::parser::PTBParser;
+
+    fn dummy_file_scope() -> FileScope {
+        FileScope {
+            file_command_index: 0,
+            name: "console".into(),
+            name_index: 0,
+        }
+    }
 
     #[test]
     fn parse_value() {
@@ -658,7 +682,7 @@ mod tests {
             "none",
         ];
         for s in &values {
-            assert!(PTBParser::parse_values(s, 0).is_ok());
+            assert!(PTBParser::parse_values(s, 0, dummy_file_scope()).is_ok());
         }
     }
 
@@ -671,15 +695,15 @@ mod tests {
             "true @0x0 false 1 1u8 some_ident another ident some(123) none vector[] [] [vector[]] [vector[1]] [vector[1,2]] [vector[1,2,]]",
         ];
         for s in &values {
-            assert!(PTBParser::parse_values(s, 0).is_ok());
+            assert!(PTBParser::parse_values(s, 0, dummy_file_scope()).is_ok());
         }
     }
 
     #[test]
     fn parse_address() {
-        let values = vec!["@0x0", "@1234", "@foo"];
+        let values = vec!["@0x0", "@1234", "foo"];
         for s in &values {
-            assert!(PTBParser::parse_values(s, 0).is_ok());
+            assert!(PTBParser::parse_values(s, 0, dummy_file_scope()).is_ok());
         }
     }
 
@@ -687,7 +711,7 @@ mod tests {
     fn parse_string() {
         let values = vec!["\"hello world\"", "'hello world'"];
         for s in &values {
-            assert!(PTBParser::parse_values(s, 0).is_ok());
+            assert!(PTBParser::parse_values(s, 0, dummy_file_scope()).is_ok());
         }
     }
 
@@ -695,7 +719,7 @@ mod tests {
     fn parse_vector() {
         let values = vec!["vector[]", "vector[1]", "vector[1,2]", "vector[1,2,]"];
         for s in &values {
-            assert!(PTBParser::parse_values(s, 0).is_ok());
+            assert!(PTBParser::parse_values(s, 0, dummy_file_scope()).is_ok());
         }
     }
 
@@ -703,7 +727,7 @@ mod tests {
     fn parse_vector_with_spaces() {
         let values = vec!["vector[ ]", "vector[1 ]", "vector[1, 2]", "vector[1, 2, ]"];
         for s in &values {
-            assert!(PTBParser::parse_values(s, 0).is_ok());
+            assert!(PTBParser::parse_values(s, 0, dummy_file_scope()).is_ok());
         }
     }
 
@@ -711,7 +735,7 @@ mod tests {
     fn parse_array() {
         let values = vec!["[]", "[1]", "[1,2]", "[1,2,]"];
         for s in &values {
-            assert!(PTBParser::parse_values(s, 0).is_ok());
+            assert!(PTBParser::parse_values(s, 0, dummy_file_scope()).is_ok());
         }
     }
 
@@ -719,7 +743,7 @@ mod tests {
     fn parse_array_with_spaces() {
         let values = vec!["[ ]", "[1 ]", "[1, 2]", "[1, 2, ]"];
         for s in &values {
-            assert!(PTBParser::parse_values(s, 0).is_ok());
+            assert!(PTBParser::parse_values(s, 0, dummy_file_scope()).is_ok());
         }
     }
 
@@ -727,7 +751,7 @@ mod tests {
     fn module_access() {
         let values = vec!["123::b::c", "0x0::b::c"];
         for s in &values {
-            assert!(PTBParser::parse_values(s, 0).is_ok());
+            assert!(PTBParser::parse_values(s, 0, dummy_file_scope()).is_ok());
         }
     }
 
@@ -735,7 +759,7 @@ mod tests {
     fn type_args() {
         let values = vec!["<u64>", "<0x0::b::c>", "<0x0::b::c, 1234::g::f>"];
         for s in &values {
-            assert!(PTBParser::parse_values(s, 0).is_ok());
+            assert!(PTBParser::parse_values(s, 0, dummy_file_scope()).is_ok());
         }
     }
 
@@ -747,23 +771,23 @@ mod tests {
             "1 2u32 vector[]",
         ];
         for s in &values {
-            assert!(PTBParser::parse_values(s, 0).is_ok());
+            assert!(PTBParser::parse_values(s, 0, dummy_file_scope()).is_ok());
         }
     }
 
     #[test]
     fn dotted_accesses() {
-        let values = vec!["a.0", "a.1.2", "a.0.1.2"];
+        let values = vec!["a.0", "a.1.2", "a.0.1.2", "a.b.c", "a.b.c.d", "a.b.c.d.e"];
         for s in &values {
-            assert!(PTBParser::parse_values(s, 0).is_ok());
+            assert!(PTBParser::parse_values(s, 0, dummy_file_scope()).is_ok());
         }
     }
 
     #[test]
-    fn dotted_accesses_invalid() {
-        let values = vec!["a.b.c", "a.b.c.d", "a.b.c.d.e", "a.1,2"];
+    fn dotted_accesses_errs() {
+        let values = vec!["a,1", "a.1,2"];
         for s in &values {
-            assert!(PTBParser::parse_values(s, 0).is_err());
+            assert!(PTBParser::parse_values(s, 0, dummy_file_scope()).is_err());
         }
     }
 }
