@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use miette::{miette, LabeledSpan};
 use thiserror::Error;
 
-use crate::ptb::ptb::PTBCommand;
+use crate::ptb::{ptb::PTBCommand, ptb_parser::utils::to_ordinal_contraction};
 
 use super::{
     command_token::{FILE_END, FILE_START},
@@ -275,7 +275,7 @@ impl DisplayableError {
                 let usage_string = if file_scope.name_index == 0 {
                     "".to_string()
                 } else {
-                    format!("(usage {} of file)", file_scope.name_index + 1)
+                    format!("({} usage of the file)", to_ordinal_contraction(file_scope.name_index + 1))
                 };
                 format!("in PTB file '{}' {usage_string}", file_scope.name)
             }

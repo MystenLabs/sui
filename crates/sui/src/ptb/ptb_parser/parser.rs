@@ -4,7 +4,7 @@
 use crate::{ptb::ptb::PTBCommand, sp};
 
 use move_command_line_common::{
-    address::NumericalAddress,
+    address::{NumericalAddress, ParsedAddress},
     parser::{parse_u128, parse_u16, parse_u256, parse_u32, parse_u64, parse_u8, Parser, Token},
     types::TypeToken,
 };
@@ -228,6 +228,10 @@ pub struct Spanner<'a> {
     pub current_location: usize,
     pub arg_idx: usize,
     pub tokens: Vec<(ArgumentToken, &'a str)>,
+    /// Some arguments may permit non-whitespace delimitation (e.g., or move-calls). So after
+    /// parsng an arguments that permits no whitespace delimitation, we set this flag to true and
+    /// the next token is guaranteed to be whitespace (inserted if not present).
+    pub insert_non_whitespace_next_if_none: bool,
 }
 
 impl<'a> Spanner<'a> {
@@ -237,10 +241,26 @@ impl<'a> Spanner<'a> {
             current_location: 0,
             arg_idx,
             tokens,
+            insert_non_whitespace_next_if_none: false,
         }
     }
 
+    pub fn insert_whitespace_next_if_none(&mut self) {
+        self.insert_non_whitespace_next_if_none = true;
+    }
+
     pub fn next(&mut self) -> Option<(ArgumentToken, &'a str)> {
+        if self.insert_non_whitespace_next_if_none {
+            self.insert_non_whitespace_next_if_none = false;
+            if self
+                .tokens
+                .last()
+                .map(|t| !t.0.is_whitespace())
+                .unwrap_or(false)
+            {
+                return Some((ArgumentToken::Whitespace, " "));
+            }
+        }
         if let Some((tok, contents)) = self.tokens.pop() {
             self.current_location += contents.len();
             Some((tok, contents))
@@ -250,7 +270,17 @@ impl<'a> Spanner<'a> {
     }
 
     pub fn peek(&self) -> Option<(ArgumentToken, &'a str)> {
-        self.tokens.last().copied()
+        if self.insert_non_whitespace_next_if_none
+            && self
+                .tokens
+                .last()
+                .map(|t| !t.0.is_whitespace())
+                .unwrap_or(false)
+        {
+            Some((ArgumentToken::Whitespace, " "))
+        } else {
+            self.tokens.last().copied()
+        }
     }
 
     pub fn current_location(&self) -> usize {
@@ -424,14 +454,25 @@ impl<'a> ValueParser<'a> {
     }
 
     /// Parse a numerical address.
-    fn parse_address(sp: Span, contents: &str) -> ParsingResult<Spanned<NumericalAddress>> {
-        let parsed = NumericalAddress::parse_str(contents)
-            .map_err(|s| anyhow!("Failed to parse address '{}'. Got error: {}", contents, s));
-        parsed.map(|addr| span(sp, addr)).map_err(|e| ParsingErr {
-            span: sp,
-            message: e.into(),
-            help: None,
-        })
+    fn parse_address(
+        sp: Span,
+        tok: ArgumentToken,
+        contents: &str,
+    ) -> ParsingResult<Spanned<ParsedAddress>> {
+        let p_address = match tok {
+            ArgumentToken::Ident => Ok(ParsedAddress::Named(contents.to_owned())),
+            ArgumentToken::Number => NumericalAddress::parse_str(contents)
+                .map_err(|s| anyhow!("Failed to parse address '{}'. Got error: {}", contents, s))
+                .map(ParsedAddress::Numerical),
+            _ => unreachable!(),
+        };
+        p_address
+            .map(|addr| span(sp, addr))
+            .map_err(|e| ParsingErr {
+                span: sp,
+                message: e.into(),
+                help: None,
+            })
     }
 
     /// Parse a single PTB argument. This is the main parsing function for PTB arguments.
@@ -443,8 +484,10 @@ impl<'a> ValueParser<'a> {
         Ok(match arg {
             (Tok::Ident, "true") => span(tl_loc, V::Bool(true)),
             (Tok::Ident, "false") => span(tl_loc, V::Bool(false)),
-            (Tok::Number, contents) if matches!(self.peek_tok(), Some(Tok::ColonColon)) => {
-                let address = Self::parse_address(tl_loc, contents)?;
+            (tok @ (Tok::Number | Tok::Ident), contents)
+                if matches!(self.peek_tok(), Some(Tok::ColonColon)) =>
+            {
+                let address = Self::parse_address(tl_loc, tok, contents)?;
                 self.spanned(|p| p.advance(Tok::ColonColon))?;
                 let module_name = self.spanned(|parser| {
                     Identifier::new(
@@ -465,6 +508,8 @@ impl<'a> ValueParser<'a> {
                             .with_context(|| format!("Unable to parse function name"))?,
                     )
                 })?;
+                // Insert a whitepace before the type argument token if none is present.
+                self.inner.insert_whitespace_next_if_none();
                 self.sp(
                     begin_loc,
                     V::ModuleAccess {
@@ -504,10 +549,15 @@ impl<'a> ValueParser<'a> {
                 })?
             }
             (Tok::At, _) => {
-                let sp!(addr_span, (_, contents)) = self.spanned(|p| p.advance_any())?;
+                let sp!(addr_span, (tok, contents)) = self.spanned(|p| p.advance_any())?;
                 let sp = tl_loc.union_with([addr_span]);
-                let address = Self::parse_address(sp, contents)?;
-                span(address.span, V::Address(address.value))
+                let address = Self::parse_address(sp, tok, contents)?;
+                match address.value {
+                    ParsedAddress::Named(n) => {
+                        return self.with_span(sp, |_| bail!("Expected a numerical address at this position but got a named address {n}"));
+                    }
+                    ParsedAddress::Numerical(addr) => span(addr_span, V::Address(addr)),
+                }
             }
             (Tok::Some_, _) => {
                 self.spanned(|p| p.advance(Tok::LParen))?;
@@ -545,7 +595,7 @@ impl<'a> ValueParser<'a> {
                 span(total_span, V::Array(values))
             }
             (Tok::Ident, contents) if matches!(self.peek_tok(), Some(Tok::Dot)) => {
-                let sp!(_, prefix) = self.with_span(tl_loc, |_| Identifier::new(contents))?;
+                // let sp!(_, prefix) = self.with_span(tl_loc, |_| contents)?;
                 let mut fields = vec![];
                 self.spanned(|p| p.advance(Tok::Dot))?;
                 while let Ok(sp!(sp, (_, contents))) = self.spanned(|p| p.advance_any()) {
@@ -559,12 +609,12 @@ impl<'a> ValueParser<'a> {
                     self.spanned(|p| p.advance(Tok::Dot))?;
                 }
                 let sp = tl_loc.union_with(fields.iter().map(|f| f.span).collect::<Vec<_>>());
-                span(sp, V::VariableAccess(span(tl_loc, prefix), fields))
+                span(
+                    sp,
+                    V::VariableAccess(span(tl_loc, contents.to_string()), fields),
+                )
             }
-            (Tok::Ident, contents) => span(
-                tl_loc,
-                V::Identifier(self.with_span(tl_loc, |_| Identifier::new(contents))?.value),
-            ),
+            (Tok::Ident, contents) => span(tl_loc, V::Identifier(contents.to_string())),
             (Tok::TypeArgString, contents) => self.with_span(tl_loc, |_| {
                 let type_tokens: Vec<_> = TypeToken::tokenize(contents)?
                     .into_iter()
@@ -627,7 +677,7 @@ mod tests {
 
     #[test]
     fn parse_address() {
-        let values = vec!["@0x0", "@1234"];
+        let values = vec!["@0x0", "@1234", "@foo"];
         for s in &values {
             assert!(PTBParser::parse_values(s, 0).is_ok());
         }

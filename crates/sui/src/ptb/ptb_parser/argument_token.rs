@@ -239,11 +239,11 @@ impl Token for ArgumentToken {
             c if c.is_ascii_alphabetic() || c == '_' => {
                 // c + remaining
                 let len = 1 + chars
-                    .take_while(|c| identifier::is_valid_identifier_char(*c))
+                    .take_while(|c| identifier::is_valid_identifier_char(*c) || *c == '-')
                     .count();
                 (Self::Ident, len)
             }
-            c => bail!("Unrecognized char: {}'", c),
+            c => bail!("Unrecognized character: {}'", c),
         }))
     }
 }

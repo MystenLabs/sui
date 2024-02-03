@@ -75,3 +75,17 @@ pub fn display_did_you_mean(possibles: Vec<&str>) -> Option<String> {
 
     Some(format!("{preposition}{}?", strs.join(", ")))
 }
+
+pub fn to_ordinal_contraction(num: usize) -> String {
+    let suffix = match num % 100 {
+        // exceptions
+        11 | 12 | 13 => "th",
+        _ => match num % 10 {
+            1 => "st",
+            2 => "nd",
+            3 => "rd",
+            _ => "th",
+        },
+    };
+    format!("{}{}", num, suffix)
+}

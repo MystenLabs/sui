@@ -9,6 +9,7 @@ use clap::parser::ValuesRef;
 use clap::ArgMatches;
 use clap::CommandFactory;
 use clap::Parser;
+use move_core_types::account_address::AccountAddress;
 use petgraph::prelude::DiGraphMap;
 use serde::Serialize;
 use shared_crypto::intent::Intent;
@@ -359,9 +360,12 @@ impl PTB {
         // We need to resolve object IDs, so we need a fullnode to access
         let config_path = sui_config::sui_config_dir()?.join(sui_config::SUI_CLIENT_CONFIG);
         let context = WalletContext::new(&config_path, None, None).await?;
+        let starting_addresses = context.config.keystore.addresses_with_alias().into_iter().map(|(sa, alias)| {
+            (alias.alias.clone(), AccountAddress::from(*sa))
+        }).collect();
 
         let client = context.get_client().await?;
-        let mut builder = PTBBuilder::new(client.read_api());
+        let mut builder = PTBBuilder::new(starting_addresses, client.read_api());
 
         for p in parsed.into_iter() {
             builder.handle_command(p).await;
