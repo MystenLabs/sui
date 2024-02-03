@@ -100,6 +100,15 @@ pub struct PTBPreview {
     cmds: Vec<PTBCommand>,
 }
 
+impl PTBCommand {
+    fn is_preview_false(&self) -> bool {
+        self.name == "preview" && self.values == ["false".to_string()]
+    }
+    fn is_warn_shadows_false(&self) -> bool {
+        self.name == "warn_shadows" && self.values == ["false".to_string()]
+    }
+}
+
 impl PTB {
     /// Get the passed arguments for this PTB and construct
     /// a map where the key is the command index,
@@ -116,12 +125,10 @@ impl PTB {
             if matches.try_get_many::<clap::Id>(arg_name.as_str()).is_ok() {
                 continue;
             }
-
             // we need to skip the json as this is handled in the execute fn
             if arg_name.as_str() == "json" {
                 continue;
             }
-
             if arg_name.as_str() == "pick_gas_budget" {
                 insert_value::<PTBGas>(arg_name, &matches, &mut order)?;
             } else if arg_name.as_str() == "preview" || arg_name.as_str() == "warn_shadows" {
@@ -151,7 +158,6 @@ impl PTB {
         let mut curr_idx = 0;
         let mut cmd_idx = 0;
 
-        // println!("{:?}", ptb);
         for (idx, val) in ptb.iter() {
             // these bool commands do not take any values
             // so handle them separately
@@ -333,7 +339,7 @@ impl PTB {
             .is_some();
         if preview {
             let ptb_preview = PTBPreview {
-                cmds: commands.clone().into_values().collect::<Vec<_>>(),
+                cmds: commands.into_values().collect::<Vec<_>>(),
             };
             println!("{}", ptb_preview);
             return Ok(());
@@ -360,9 +366,13 @@ impl PTB {
         // We need to resolve object IDs, so we need a fullnode to access
         let config_path = sui_config::sui_config_dir()?.join(sui_config::SUI_CLIENT_CONFIG);
         let context = WalletContext::new(&config_path, None, None).await?;
-        let starting_addresses = context.config.keystore.addresses_with_alias().into_iter().map(|(sa, alias)| {
-            (alias.alias.clone(), AccountAddress::from(*sa))
-        }).collect();
+        let starting_addresses = context
+            .config
+            .keystore
+            .addresses_with_alias()
+            .into_iter()
+            .map(|(sa, alias)| (alias.alias.clone(), AccountAddress::from(*sa)))
+            .collect();
 
         let client = context.get_client().await?;
         let mut builder = PTBBuilder::new(starting_addresses, client.read_api());
@@ -450,16 +460,20 @@ impl Display for PTBPreview {
         let columns = vec!["command", "from", "value(s)"];
         builder.set_header(columns);
         let mut from = "console";
-        let num_cmds = &self.cmds.len();
 
-        for cmd in &self.cmds[0..num_cmds - 2] {
+        for cmd in &self.cmds {
             if cmd.name == "file-include-start" {
                 from = cmd.values.get(0).unwrap();
                 continue;
             } else if cmd.name == "file-include-end" {
                 from = "console";
                 continue;
+            } else if cmd.name == "preview" && cmd.is_preview_false() {
+                continue;
+            } else if cmd.name == "warn_shadows" && cmd.is_warn_shadows_false() {
+                continue;
             }
+
             builder.push_record([
                 cmd.name.to_string(),
                 from.to_string(),
@@ -501,13 +515,14 @@ where
     let values: ValuesRef<'_, T> = matches
         .get_many(arg_name.as_str())
         .ok_or_else(|| anyhow!("Cannot parse the args for the PTB"))?;
+    let idx = order.len();
     for (value, index) in values.zip(
         matches
             .indices_of(arg_name.as_str())
             .expect("id came from matches"),
     ) {
         order.insert(
-            index,
+            idx + index,
             PTBCommand {
                 name: arg_name.to_string(),
                 values: vec![value.to_string()],
