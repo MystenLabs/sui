@@ -61,17 +61,18 @@ pub struct Local {
 }
 
 #[derive(Debug)]
+pub struct MacroCall {
+    pub module: ModuleIdent,
+    pub function: FunctionName,
+    pub invocation: Loc,
+    pub scope_color: Color,
+}
+
+#[derive(Debug)]
 pub enum MacroExpansion {
-    Call {
-        module: ModuleIdent,
-        function: FunctionName,
-        invocation: Loc,
-        scope_color: Color,
-    },
+    Call(Box<MacroCall>),
     // An argument to a macro, where the entire expression was substituted in
-    Argument {
-        scope_color: Color,
-    },
+    Argument { scope_color: Color },
 }
 
 pub struct Context<'env> {
@@ -289,12 +290,13 @@ impl<'env> Context<'env> {
                         break;
                     }
                 }
-                MacroExpansion::Call {
-                    module,
-                    function,
-                    scope_color,
-                    ..
-                } => {
+                MacroExpansion::Call(c) => {
+                    let MacroCall {
+                        module,
+                        function,
+                        scope_color,
+                        ..
+                    } = &**c;
                     // If we find a call (same module/fn) above us at a shallower expansion depth,
                     // without an interceding macro arg/lambda, we are in a macro calling itself.
                     // If it was a deeper depth, that's fine -- it must have come from elsewhere.
@@ -315,12 +317,7 @@ impl<'env> Context<'env> {
             let cycle = self.macro_expansion[idx..]
                 .iter()
                 .filter_map(|case| match case {
-                    MacroExpansion::Call {
-                        module,
-                        function,
-                        invocation,
-                        ..
-                    } => Some((module, function, invocation)),
+                    MacroExpansion::Call(c) => Some((&c.module, &c.function, &c.invocation)),
                     MacroExpansion::Argument { .. } => None,
                 });
             for (prev_m, prev_f, prev_loc) in cycle {
@@ -334,23 +331,24 @@ impl<'env> Context<'env> {
             self.env.add_diag(diag);
             false
         } else {
-            self.macro_expansion.push(MacroExpansion::Call {
-                module: m,
-                function: f,
-                invocation: loc,
-                scope_color: current_call_color,
-            });
+            self.macro_expansion
+                .push(MacroExpansion::Call(Box::new(MacroCall {
+                    module: m,
+                    function: f,
+                    invocation: loc,
+                    scope_color: current_call_color,
+                })));
             true
         }
     }
 
     pub fn pop_macro_expansion(&mut self, m: &ModuleIdent, f: &FunctionName) {
-        let Some(MacroExpansion::Call {
-            module, function, ..
-        }) = self.macro_expansion.pop()
-        else {
+        let Some(MacroExpansion::Call(c)) = self.macro_expansion.pop() else {
             panic!("ICE macro expansion stack should have a call when leaving a macro expansion")
         };
+        let MacroCall {
+            module, function, ..
+        } = *c;
         assert!(
             m == &module && f == &function,
             "ICE macro expansion stack should be popped in reverse order"
@@ -596,13 +594,13 @@ impl<'env> Context<'env> {
     }
 
     pub fn next_variable_color(&mut self) -> Color {
-        let max_variable_color: &mut u16 = &mut *self.max_variable_color.borrow_mut();
+        let max_variable_color: &mut u16 = &mut self.max_variable_color.borrow_mut();
         *max_variable_color += 1;
         *max_variable_color
     }
 
     pub fn set_max_variable_color(&self, color: Color) {
-        let max_variable_color: &mut u16 = &mut *self.max_variable_color.borrow_mut();
+        let max_variable_color: &mut u16 = &mut self.max_variable_color.borrow_mut();
         assert!(
             *max_variable_color <= color,
             "ICE a new, lower color means reusing variables \
@@ -1163,13 +1161,11 @@ pub fn make_function_type(
                 (loc, format!("Invalid call to internal function '{m}::{f}'")),
                 (defined_loc, internal_msg),
             );
-            ()
         }
         Visibility::Package(loc)
             if in_current_module || context.current_module_shares_package_and_address(m) =>
         {
             context.record_current_module_as_friend(m, loc);
-            ()
         }
         Visibility::Package(vis_loc) => {
             let msg = format!(
@@ -1204,11 +1200,8 @@ pub fn make_function_type(
                 (loc, msg),
                 (vis_loc, internal_msg),
             );
-            ()
         }
-        Visibility::Friend(_) if in_current_module || context.current_module_is_a_friend_of(m) => {
-            ()
-        }
+        Visibility::Friend(_) if in_current_module || context.current_module_is_a_friend_of(m) => {}
         Visibility::Friend(vis_loc) => {
             let msg = format!(
                 "Invalid call to '{}' visible function '{m}::{f}'",
@@ -1222,7 +1215,6 @@ pub fn make_function_type(
                 (loc, msg),
                 (vis_loc, internal_msg),
             );
-            ()
         }
         Visibility::Public(_) => (),
     };

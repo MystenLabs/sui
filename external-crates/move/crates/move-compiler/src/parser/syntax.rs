@@ -654,7 +654,7 @@ fn check_no_modifier(
     modifier_loc: Option<Loc>,
     module_member: &str,
 ) {
-    const LOCATIONS: &[(&'static str, &'static str)] = &[
+    const LOCATIONS: &[(&str, &str)] = &[
         (NATIVE_MODIFIER, "functions or structs"),
         (ENTRY_MODIFIER, "functions"),
         (MACRO_MODIFIER, "functions"),

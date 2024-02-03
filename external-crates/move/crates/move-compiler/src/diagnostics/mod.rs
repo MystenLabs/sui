@@ -525,6 +525,7 @@ macro_rules! ice {
     }}
 }
 
+#[allow(clippy::wildcard_in_or_patterns)]
 pub fn print_stack_trace() {
     use std::backtrace::{Backtrace, BacktraceStatus};
     let stacktrace = Backtrace::capture();
@@ -533,7 +534,7 @@ pub fn print_stack_trace() {
             eprintln!("stacktrace:");
             eprintln!("{}", stacktrace);
         }
-        _ => (),
+        BacktraceStatus::Unsupported | BacktraceStatus::Disabled | _ => (),
     }
 }
 

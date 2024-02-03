@@ -2930,10 +2930,8 @@ fn maybe_labeled_exp(
             E::Exp_::Block(Some(label), seq)
         }
         _ => {
-            let msg = format!(
-                "Invalid label. Labels can only be used on 'while', 'loop', or block '{{}}' \
-                 expressions"
-            );
+            let msg = "Invalid label. Labels can only be used on 'while', 'loop', or block '{{}}' \
+                 expressions";
             context
                 .env()
                 .add_diag(diag!(Syntax::InvalidLabel, (loc, msg)));
@@ -3388,25 +3386,23 @@ fn check_valid_function_parameter_name(context: &mut Context, is_macro: Option<L
             diag.add_note(SYNTAX_IDENTIFIER_NOTE);
             context.env().add_diag(diag);
         }
-    } else {
-        if is_syntax_identifier {
-            let msg = format!(
-                "Invalid parameter name '{}'. Non-'{}' parameter names cannot start with '$'",
-                v, MACRO_MODIFIER,
-            );
-            let mut diag = diag!(Declarations::InvalidName, (v.loc(), msg));
-            diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-            context.env().add_diag(diag);
-        } else if !is_valid_local_variable_name(v.value()) {
-            let msg = format!(
-                "Invalid parameter name '{}'. Local variable names must start with 'a'..'z' or \
+    } else if is_syntax_identifier {
+        let msg = format!(
+            "Invalid parameter name '{}'. Non-'{}' parameter names cannot start with '$'",
+            v, MACRO_MODIFIER,
+        );
+        let mut diag = diag!(Declarations::InvalidName, (v.loc(), msg));
+        diag.add_note(SYNTAX_IDENTIFIER_NOTE);
+        context.env().add_diag(diag);
+    } else if !is_valid_local_variable_name(v.value()) {
+        let msg = format!(
+            "Invalid parameter name '{}'. Local variable names must start with 'a'..'z' or \
                  '_'",
-                v,
-            );
-            context
-                .env()
-                .add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
-        }
+            v,
+        );
+        context
+            .env()
+            .add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
     }
     let _ = check_restricted_name_all_cases(&mut context.defn_context, NameCase::Variable, &v.0);
 }
@@ -3601,17 +3597,15 @@ fn check_valid_type_parameter_name(
             diag.add_note(SYNTAX_IDENTIFIER_NOTE);
             context.env().add_diag(diag);
         }
-    } else {
-        if is_syntax_ident {
-            let msg = format!(
-                "Invalid type parameter name. \
+    } else if is_syntax_ident {
+        let msg = format!(
+            "Invalid type parameter name. \
                 Only '{} fun' type parameter names cat start with '$'",
-                MACRO_MODIFIER
-            );
-            let mut diag = diag!(Declarations::InvalidName, (n.loc, msg));
-            diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-            context.env().add_diag(diag);
-        }
+            MACRO_MODIFIER
+        );
+        let mut diag = diag!(Declarations::InvalidName, (n.loc, msg));
+        diag.add_note(SYNTAX_IDENTIFIER_NOTE);
+        context.env().add_diag(diag);
     }
 
     // TODO move these names to a more central place?

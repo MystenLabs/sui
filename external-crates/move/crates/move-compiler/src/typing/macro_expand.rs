@@ -220,7 +220,7 @@ fn recolor_macro(
     };
     let recolor_use_funs = true;
     let recolor = &mut Recolor::new(color, Some(return_label), recolor_use_funs);
-    recolor.add_params(&parameters);
+    recolor.add_params(parameters);
     let parameters = parameters
         .iter()
         .map(|(mut_, v, t)| (*mut_, recolor_var_owned(recolor, *v), t.clone()))
@@ -783,7 +783,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 },
                 param_tys,
                 result_ty,
-            ) = context.lambdas.get(&v_).unwrap().clone();
+            ) = context.lambdas.get(v_).unwrap().clone();
             // recolor in case the lambda is used more than once
             let next_color = context.core.next_variable_color();
             let recolor_use_funs = false;

@@ -83,10 +83,7 @@ fn extract_macros(context: &mut Context, modules: &UniqueMap<ModuleIdent, N::Mod
             implicit_candidates,
         } = module_use_funs;
         for (tn, module_methods) in resolved {
-            let macro_methods = macro_use_funs
-                .resolved
-                .entry(tn.clone())
-                .or_insert_with(UniqueMap::new);
+            let macro_methods = macro_use_funs.resolved.entry(tn.clone()).or_default();
             for (name, method) in module_methods.key_cloned_iter() {
                 if !macro_methods.contains_key(&name) {
                     macro_methods.add(name, method.clone()).unwrap();
@@ -105,9 +102,7 @@ fn extract_macros(context: &mut Context, modules: &UniqueMap<ModuleIdent, N::Mod
     }
     let all_macro_definitions = modules.ref_map(|_mident, mdef| {
         mdef.functions.ref_filter_map(|_name, f| {
-            if f.macro_.is_none() {
-                return None;
-            }
+            let _macro_loc = f.macro_?;
             if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
                 let use_funs = merge_use_funs(&mdef.use_funs, use_funs.clone());
                 Some((use_funs, body.clone()))

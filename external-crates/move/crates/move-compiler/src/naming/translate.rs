@@ -1101,7 +1101,7 @@ fn function_body(context: &mut Context, sp!(loc, b_): E::FunctionBody) -> N::Fun
     }
 }
 
-const ASSIGN_SYNTAX_IDENTIFIER_NOTE: &'static str = "'macro' parameters are substituted without \
+const ASSIGN_SYNTAX_IDENTIFIER_NOTE: &str = "'macro' parameters are substituted without \
     being evaluated. There is no local variable to assign to";
 
 //**************************************************************************************************
