@@ -67,7 +67,7 @@ impl<'a> ConciseableName<'a> for BridgeAuthorityPublicKeyBytes {
 }
 
 // TODO: include epoch ID here to reduce race conditions?
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct BridgeAuthoritySignInfo {
     pub authority_pub_key: BridgeAuthorityPublicKey,
     pub signature: BridgeAuthorityRecoverableSignature,
