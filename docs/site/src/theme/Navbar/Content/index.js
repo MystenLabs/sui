@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from "@docusaurus/Link";
 import {useThemeConfig, ErrorCauseBoundary} from '@docusaurus/theme-common';
 import {
   splitNavbarItems,
@@ -48,6 +49,7 @@ export default function NavbarContent() {
   const items = useNavbarItems();
   const [leftItems, rightItems] = splitNavbarItems(items);
   const searchBarItem = items.find((item) => item.type === 'search');
+  const isHomePage = window.location.pathname === '/';
   return (
     <NavbarContentLayout
       left={
@@ -63,11 +65,15 @@ export default function NavbarContent() {
         // Ask the user to add the respective navbar items => more flexible
         <>
           <NavbarItems items={rightItems} />
-          <NavbarColorModeToggle className={styles.colorModeToggle} />
+          { !isHomePage && (<NavbarColorModeToggle className={styles.colorModeToggle} />) }
           {!searchBarItem && (
             <NavbarSearch>
               <SearchBar />
-              <a href="/" className="button-cta">Get started</a>
+              { isHomePage && (
+                <Link to="/guides#get-started-developing-on-sui" className="button-cta">
+                Get started
+              </Link>)
+              }
             </NavbarSearch>
           )}
         </>
