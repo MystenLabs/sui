@@ -932,7 +932,6 @@ impl ProgrammableTransaction {
                 value: config.max_programmable_tx_commands().to_string()
             }
         );
-
         let total_inputs = self.input_objects()?.len() + self.receiving_objects().len();
         fp_ensure!(
             total_inputs <= config.max_input_objects() as usize,
