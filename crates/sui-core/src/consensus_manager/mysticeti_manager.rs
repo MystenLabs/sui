@@ -1,18 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::{path::PathBuf, sync::Arc};
-
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
-use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
-use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, NetworkType, Round};
-use fastcrypto::ed25519;
+use consensus_core::NetworkType;
+use fastcrypto::bls12381::min_sig::BLS12381PublicKey;
+use fastcrypto::traits::{KeyPair, ToFromBytes};
+use itertools::Itertools;
 use mysten_metrics::{RegistryID, RegistryService};
+use mysticeti_core::commit_observer::SimpleCommitObserver;
+use mysticeti_core::committee::{Authority, Committee};
+use mysticeti_core::config::{Identifier, Parameters, PrivateConfig, SynchronizerParameters};
+use mysticeti_core::types::AuthorityIndex;
+use mysticeti_core::validator::Validator;
+use mysticeti_core::{CommitConsumer, PublicKey, Signer, SimpleBlockHandler};
 use narwhal_executor::ExecutionState;
 use prometheus::Registry;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 use sui_config::NodeConfig;
+use sui_types::base_types::AuthorityName;
 use sui_types::{
-    committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
+    committee::EpochId,
+    crypto::{AuthorityKeyPair, NetworkKeyPair},
+    sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
 use tokio::sync::{mpsc::unbounded_channel, Mutex};
 
@@ -23,7 +35,7 @@ use crate::{
         ConsensusManagerMetrics, ConsensusManagerTrait, Running, RunningLockGuard,
     },
     consensus_validator::SuiTxValidator,
-    mysticeti_adapter::LazyMysticetiClient,
+    mysticeti_adapter::{LazyMysticetiClient, MysticetiClient},
 };
 
 #[cfg(test)]
@@ -31,13 +43,16 @@ use crate::{
 pub mod mysticeti_manager_tests;
 
 pub struct MysticetiManager {
-    protocol_keypair: ProtocolKeyPair,
-    network_keypair: NetworkKeyPair,
+    keypair: AuthorityKeyPair,
+    _network_keypair: NetworkKeyPair,
     storage_base_path: PathBuf,
     running: Mutex<Running>,
     metrics: ConsensusManagerMetrics,
     registry_service: RegistryService,
-    authority: ArcSwapOption<(ConsensusAuthority, RegistryID)>,
+    validator: ArcSwapOption<(
+        Validator<SimpleBlockHandler, SimpleCommitObserver>,
+        RegistryID,
+    )>,
     // Use a shared lazy mysticeti client so we can update the internal mysticeti
     // client that gets created for every new epoch.
     client: Arc<LazyMysticetiClient>,
@@ -48,21 +63,21 @@ impl MysticetiManager {
     /// NOTE: Mysticeti protocol key uses Ed25519 instead of BLS.
     /// But for security, the protocol keypair must be different from the network keypair.
     pub fn new(
-        protocol_keypair: ed25519::Ed25519KeyPair,
-        network_keypair: ed25519::Ed25519KeyPair,
+        keypair: AuthorityKeyPair,
+        _network_keypair: NetworkKeyPair,
         storage_base_path: PathBuf,
         metrics: ConsensusManagerMetrics,
         registry_service: RegistryService,
         client: Arc<LazyMysticetiClient>,
     ) -> Self {
         Self {
-            protocol_keypair: ProtocolKeyPair::new(protocol_keypair),
-            network_keypair: NetworkKeyPair::new(network_keypair),
+            keypair,
+            _network_keypair,
             storage_base_path,
             running: Mutex::new(Running::False),
             metrics,
             registry_service,
-            authority: ArcSwapOption::empty(),
+            validator: ArcSwapOption::empty(),
             client,
             consensus_handler: ArcSwapOption::empty(),
         }
@@ -86,10 +101,10 @@ impl ConsensusManagerTrait for MysticetiManager {
         tx_validator: SuiTxValidator,
     ) {
         let system_state = epoch_store.epoch_start_state();
-        let committee: Committee = system_state.get_mysticeti_committee();
+        let committee: narwhal_config::Committee = system_state.get_narwhal_committee();
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
-        let network_type = match std::env::var("CONSENSUS_NETWORK") {
+        let _network_type = match std::env::var("CONSENSUS_NETWORK") {
             Ok(type_str) => {
                 if type_str.to_lowercase() == "tonic" {
                     NetworkType::Tonic
@@ -111,67 +126,77 @@ impl ConsensusManagerTrait for MysticetiManager {
             return;
         };
 
-        // TODO(mysticeti): Fill in the other fields
-        let parameters = Parameters {
-            db_path: Some(self.get_store_path(epoch)),
-            ..Default::default()
-        };
+        let parameters = mysticeti_parameters(&committee);
+        let committee = mysticeti_committee(&committee);
 
-        let own_protocol_key = self.protocol_keypair.public();
-        let (own_index, _) = committee
-            .authorities()
-            .find(|(_, a)| a.protocol_key == own_protocol_key)
-            .expect("Own authority should be among the consensus authorities!");
+        let name: AuthorityName = self.keypair.public().into();
+        let authority_index: AuthorityIndex = epoch_store
+            .committee()
+            .authority_index(&name)
+            .unwrap()
+            .into();
+        let config = PrivateConfig::new(self.get_store_path(epoch), authority_index);
 
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
-        // TODO: that should be replaced by a metered channel. We can discuss if unbounded approach
-        // is the one we want to go with.
-        #[allow(clippy::disallowed_methods)]
-        let (commit_sender, commit_receiver) = unbounded_channel();
+        const MAX_RETRIES: u32 = 2;
+        let mut retries = 0;
 
-        let consensus_handler = consensus_handler_initializer.new_consensus_handler();
-        let consumer = CommitConsumer::new(
-            commit_sender,
-            // TODO(mysticeti): remove dependency on narwhal executor
-            consensus_handler.last_executed_sub_dag_round() as Round,
-            consensus_handler.last_executed_sub_dag_index() as CommitIndex,
-        );
+        loop {
+            // TODO: that should be replaced by a metered channel. We can discuss if unbounded approach
+            // is the one we want to go with.
+            #[allow(clippy::disallowed_methods)]
+            let (commit_sender, commit_receiver) = unbounded_channel();
 
-        // TODO(mysticeti): Investigate if we need to return potential errors from
-        // AuthorityNode and add retries here?
-        let authority = ConsensusAuthority::start(
-            network_type,
-            own_index,
-            committee.clone(),
-            parameters.clone(),
-            protocol_config.clone(),
-            self.protocol_keypair.clone(),
-            self.network_keypair.clone(),
-            Arc::new(tx_validator.clone()),
-            consumer,
-            registry.clone(),
-        )
-        .await;
+            let consensus_handler = consensus_handler_initializer.new_consensus_handler();
+            let consumer = CommitConsumer::new(
+                commit_sender,
+                consensus_handler.last_executed_sub_dag_index(),
+            );
 
-        let registry_id = self.registry_service.add(registry.clone());
+            match Validator::start_production(
+                authority_index,
+                committee.clone(),
+                &parameters,
+                config.clone(),
+                registry.clone(),
+                Signer(Box::new(self.keypair.copy())),
+                consumer,
+                tx_validator.clone(),
+            )
+            .await
+            {
+                Ok((validator, tx_sender)) => {
+                    let registry_id = self.registry_service.add(registry);
 
-        self.authority
-            .swap(Some(Arc::new((authority, registry_id))));
+                    self.validator
+                        .swap(Some(Arc::new((validator, registry_id))));
 
-        // create the client to send transactions to Mysticeti and update it.
-        self.client.set(
-            self.authority
-                .load()
-                .as_ref()
-                .expect("ConsensusAuthority should have been created by now.")
-                .0
-                .transaction_client(),
-        );
+                    // create the client to send transactions to Mysticeti and update it.
+                    self.client.set(MysticetiClient::new(tx_sender));
 
-        // spin up the new mysticeti consensus handler to listen for committed sub dags
-        let handler = MysticetiConsensusHandler::new(consensus_handler, commit_receiver);
-        self.consensus_handler.store(Some(Arc::new(handler)));
+                    // spin up the new mysticeti consensus handler to listen for committed sub dags
+                    let handler =
+                        MysticetiConsensusHandler::new(consensus_handler, commit_receiver);
+                    self.consensus_handler.store(Some(Arc::new(handler)));
+
+                    break;
+                }
+                Err(err) => {
+                    retries += 1;
+
+                    if retries >= MAX_RETRIES {
+                        panic!(
+                            "Failed starting Mysticeti, maxed out retries {}: {:?}",
+                            retries, err
+                        );
+                    }
+
+                    tracing::error!("Failed starting Mysticeti, retry {}: {:?}", retries, err);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+            }
+        }
     }
 
     async fn shutdown(&self) {
@@ -181,7 +206,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         };
 
         // swap with empty to ensure there is no other reference to authority and we can safely do Arc unwrap
-        let r = self.authority.swap(None).unwrap();
+        let r = self.validator.swap(None).unwrap();
         let Ok((authority, registry_id)) = Arc::try_unwrap(r) else {
             panic!("Failed to retrieve the mysticeti authority");
         };
@@ -202,5 +227,55 @@ impl ConsensusManagerTrait for MysticetiManager {
 
     fn get_storage_base_path(&self) -> PathBuf {
         self.storage_base_path.clone()
+    }
+}
+
+fn mysticeti_committee(committee: &narwhal_config::Committee) -> Arc<Committee> {
+    let authorities = committee
+        .authorities()
+        .map(|authority| {
+            Authority::new(
+                authority.stake(),
+                PublicKey(
+                    BLS12381PublicKey::from_bytes(authority.protocol_key().as_bytes()).unwrap(),
+                ),
+                authority.hostname().to_string(),
+            )
+        })
+        .collect_vec();
+    Committee::new(authorities.clone(), committee.epoch())
+}
+
+fn mysticeti_parameters(committee: &narwhal_config::Committee) -> Parameters {
+    let identifiers = committee
+        .authorities()
+        .map(|authority| {
+            // By converting first to anemo address it ensures that best effort parsing is done
+            // to extract ip & port irrespective of the dictated protocol.
+            let addr = authority.primary_address().to_anemo_address().unwrap();
+            let network_address = addr.to_socket_addrs().unwrap().collect_vec().pop().unwrap();
+
+            Identifier {
+                public_key: PublicKey(
+                    BLS12381PublicKey::from_bytes(authority.protocol_key().as_bytes()).unwrap(),
+                ),
+                network_address,
+                metrics_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0), // not relevant as it won't be used
+            }
+        })
+        .collect_vec();
+
+    //TODO: for now fallback to default parameters - will read from properties
+    Parameters {
+        identifiers,
+        enable_pipelining: true,
+        leader_timeout: Duration::from_millis(250),
+        enable_cleanup: true,
+        synchronizer_parameters: SynchronizerParameters {
+            sample_precision: Duration::from_millis(300),
+            batch_size: 20,
+            ..Default::default()
+        },
+        ..Default::default()
     }
 }

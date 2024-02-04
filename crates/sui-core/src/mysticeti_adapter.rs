@@ -1,22 +1,46 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
-
 use arc_swap::{ArcSwapOption, Guard};
-use consensus_core::TransactionClient;
-use sui_types::{
-    error::{SuiError, SuiResult},
-    messages_consensus::ConsensusTransaction,
-};
+use std::sync::Arc;
+use std::time::Duration;
+
+use sui_types::error::{SuiError, SuiResult};
 use tap::prelude::*;
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::{sleep, timeout};
+
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::consensus_adapter::SubmitToConsensus;
+use sui_types::messages_consensus::ConsensusTransaction;
 use tracing::warn;
 
-use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    consensus_adapter::SubmitToConsensus,
-};
+#[derive(Clone)]
+pub struct MysticetiClient {
+    // channel to transport bcs-serialized bytes of ConsensusTransaction
+    sender: mpsc::Sender<(Vec<u8>, oneshot::Sender<()>)>,
+}
+
+impl MysticetiClient {
+    pub fn new(sender: mpsc::Sender<(Vec<u8>, oneshot::Sender<()>)>) -> MysticetiClient {
+        MysticetiClient { sender }
+    }
+
+    async fn submit_transaction(&self, transaction: &ConsensusTransaction) -> SuiResult {
+        let (sender, receiver) = oneshot::channel();
+        let tx_bytes = bcs::to_bytes(&transaction).expect("Serialization should not fail.");
+        self.sender
+            .send((tx_bytes, sender))
+            .await
+            .tap_err(|e| warn!("Submit transaction failed with {:?}", e))
+            .map_err(|e| SuiError::FailedToSubmitToConsensus(format!("{:?}", e)))?;
+        // Give a little bit backpressure if BlockHandler is not able to keep up.
+        receiver
+            .await
+            .tap_err(|e| warn!("Block Handler failed to ack: {:?}", e))
+            .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
+    }
+}
 
 /// Basically a wrapper struct that reads from the LOCAL_MYSTICETI_CLIENT variable where the latest
 /// MysticetiClient is stored in order to communicate with Mysticeti. The LazyMysticetiClient is considered
@@ -24,7 +48,7 @@ use crate::{
 /// local client is set first.
 #[derive(Default, Clone)]
 pub struct LazyMysticetiClient {
-    client: Arc<ArcSwapOption<TransactionClient>>,
+    client: Arc<ArcSwapOption<MysticetiClient>>,
 }
 
 impl LazyMysticetiClient {
@@ -34,7 +58,7 @@ impl LazyMysticetiClient {
         }
     }
 
-    async fn get(&self) -> Guard<Option<Arc<TransactionClient>>> {
+    async fn get(&self) -> Guard<Option<Arc<MysticetiClient>>> {
         let client = self.client.load();
         if client.is_some() {
             return client;
@@ -65,8 +89,8 @@ impl LazyMysticetiClient {
         );
     }
 
-    pub fn set(&self, client: Arc<TransactionClient>) {
-        self.client.store(Some(client));
+    pub fn set(&self, client: MysticetiClient) {
+        self.client.store(Some(Arc::new(client)));
     }
 }
 
@@ -77,21 +101,18 @@ impl SubmitToConsensus for LazyMysticetiClient {
         transaction: &ConsensusTransaction,
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        // TODO(mysticeti): confirm comment is still true
-        // The retrieved TransactionClient can be from the past epoch. Submit would fail after
+        // The retrieved MysticetiClient can be from the past epoch. Submit would fail after
         // Mysticeti shuts down, so there should be no correctness issue.
         let client = self.get().await;
-        let tx_bytes = bcs::to_bytes(&transaction).expect("Serialization should not fail.");
         client
             .as_ref()
             .expect("Client should always be returned")
-            .submit(tx_bytes)
+            .submit_transaction(transaction)
             .await
             .tap_err(|r| {
                 // Will be logged by caller as well.
                 warn!("Submit transaction failed with: {:?}", r);
-            })
-            .map_err(|err| SuiError::FailedToSubmitToConsensus(err.to_string()))?;
+            })?;
         Ok(())
     }
 }

@@ -83,7 +83,7 @@ impl ConsensusManager {
         let metrics = ConsensusManagerMetrics::new(&registry_service.default_registry());
 
         Self::Mysticeti(MysticetiManager::new(
-            config.worker_key_pair().copy(),
+            config.protocol_key_pair().copy(),
             config.network_key_pair().copy(),
             consensus_config.db_path().to_path_buf(),
             metrics,

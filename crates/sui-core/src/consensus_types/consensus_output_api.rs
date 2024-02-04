@@ -3,7 +3,6 @@
 use std::fmt::Display;
 
 use crate::consensus_types::AuthorityIndex;
-use consensus_core::BlockAPI;
 use fastcrypto::hash::Hash;
 use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutputDigest, HeaderAPI};
 use sui_types::{digests::ConsensusCommitDigest, messages_consensus::ConsensusTransaction};
@@ -102,18 +101,18 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
     }
 }
 
-impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
+impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubDag {
     fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
         // TODO: Implement this in Mysticeti.
         None
     }
 
     fn leader_round(&self) -> u64 {
-        self.leader.round as u64
+        self.anchor.round
     }
 
     fn leader_author_index(&self) -> AuthorityIndex {
-        self.leader.author.value() as AuthorityIndex
+        self.anchor.authority as AuthorityIndex
     }
 
     fn commit_timestamp_ms(&self) -> u64 {
@@ -122,7 +121,7 @@ impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
     }
 
     fn commit_sub_dag_index(&self) -> u64 {
-        self.commit_index.into()
+        self.height
     }
 
     fn transactions(&self) -> ConsensusOutputTransactions {
@@ -130,11 +129,10 @@ impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
             .iter()
             .map(|block| {
                 let round = block.round();
-                let author = block.author().value() as AuthorityIndex;
+                let author = block.author() as AuthorityIndex;
                 let transactions: Vec<_> = block
-                    .transactions()
-                    .iter()
-                    .flat_map(|tx| {
+                    .shared_transactions()
+                    .flat_map(|(_loc, tx)| {
                         let transaction = bcs::from_bytes::<ConsensusTransaction>(tx.data());
                         match transaction {
                             Ok(transaction) => Some((
