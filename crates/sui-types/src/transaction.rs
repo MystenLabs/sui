@@ -800,6 +800,19 @@ impl Command {
         }
     }
 
+    fn contains_random_object(&self) -> bool {
+        match self {
+            Command::MoveCall(c) => c.input_objects().iter().any(|obj| {
+                if let InputObjectKind::SharedMoveObject { id, .. } = obj {
+                    *id == SUI_RANDOMNESS_STATE_OBJECT_ID
+                } else {
+                    false
+                }
+            }),
+            _ => false,
+        }
+    }
+
     fn non_system_packages_to_be_published(&self) -> Option<&Vec<Vec<u8>>> {
         match self {
             Command::Upgrade(v, _, _, _) => Some(v),
@@ -919,6 +932,7 @@ impl ProgrammableTransaction {
                 value: config.max_programmable_tx_commands().to_string()
             }
         );
+
         let total_inputs = self.input_objects()?.len() + self.receiving_objects().len();
         fp_ensure!(
             total_inputs <= config.max_input_objects() as usize,
@@ -945,6 +959,22 @@ impl ProgrammableTransaction {
         }
         for command in commands {
             command.validity_check(config)?;
+        }
+
+        // A command that uses Random can only be followed by TransferObjects or MergeCoins.
+        let mut used_random_object = false;
+        for command in commands {
+            if !used_random_object {
+                used_random_object = command.contains_random_object();
+            } else {
+                fp_ensure!(
+                    matches!(
+                        command,
+                        Command::TransferObjects(_, _) | Command::MergeCoins(_, _)
+                    ),
+                    UserInputError::PostRandomCommandLimits
+                );
+            }
         }
 
         Ok(())
