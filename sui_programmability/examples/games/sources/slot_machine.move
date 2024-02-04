@@ -56,25 +56,22 @@ module games::slot_machine {
 
     /// Play one turn of the game.
     ///
-    /// The function follows the same steps whether the user won or lost to make sure the gas consumption
-    /// is the same.
-    // TODO: confirm the above statement.
+    /// The function consumes more gas in the "winning" case than the "losing" case, thus gas consumption attacks are
+    /// not possible.
     entry fun play(game: &mut Game, r: &Random, coin: Coin<SUI>, ctx: &mut TxContext) {
         assert!(tx_context::epoch(ctx) == game.epoch, EInvalidEpoch);
         assert!(coin::value(&coin) > 0, EInvalidAmount);
 
-        let bet = math::min(coin::value(&coin), balance::value(&game.balance));
-        // If lost, return the rest to the user.
-        let amount_lost = coin::value(&coin) - bet;
-        // If won, return entire input balance and the reward to the user.
-        let amount_won = coin::value(&coin) + bet;
+        let coin_value = coin::value(&coin);
+        let bet_amount = math::min(coin_value, balance::value(&game.balance));
         coin::put(&mut game.balance, coin);
 
         let generator = new_generator(r, ctx);
         let bet = random::generate_u8_in_range(&mut generator, 1, 100);
         let won = bet <= 49;
 
-        let amount = if (won) { amount_won } else { amount_lost };
+        let amount = coin_value - bet_amount;
+        if (won) { amount = amount + 2 * bet_amount; };
         let to_user_coin = coin::take(&mut game.balance, amount, ctx);
         transfer::public_transfer(to_user_coin, tx_context::sender(ctx));
     }
