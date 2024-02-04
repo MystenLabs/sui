@@ -21,7 +21,13 @@
   --ifm-navbar-background-color: #030F1C;
   --ifm-navbar-link-color: #F7F7F8;
   --ifm-navbar-height: 4.5rem;
-  --ifm-spacing-horizontal: 1.375rem;
+  --ifm-spacing-horizontal: 1.875rem;
+  --ifm-font-size-base: .9375rem;
+  --ifm-line-height-base: 1.5rem;
+  --ifm-font-family-base: 'Inter', sans-serif;
+  --ifm-menu-color: #011829;
+  --ifm-menu-color-background-active: rgba(247, 247, 248, 1);
+
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
   --sui-black: #090B1A;
   --sui-blue: #6fbcf0;
@@ -74,9 +80,11 @@
   --sui-button-hover: #1a88ff;
   --sui-line: rgba(247, 247, 248, .1);
   --sui-max-width-desktop: 1162px;
+  --sui-dark-blue-bkg: #011829;
 
   --primaryFont: 'Inter', sans-serif;
   --headerFont: 'Twkeverett', sans-serif;
+  --monoFont: "Twkeverett Mono", monospace;
 }
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
@@ -88,7 +96,9 @@
   --ifm-color-primary-light: #6db3ff;
   --ifm-color-primary-lighter: #7ebcff;
   --ifm-color-primary-lightest: #afd6ff;
-  --ifm-background-color: #011829;
+  --ifm-background-color: #030F1C;
+  --ifm-menu-color: var(--sui-white);
+  --ifm-menu-color-background-active: rgba(247, 247, 248, .05);
 }
 
 .active-scroll-spy {
@@ -214,12 +224,24 @@
   font-display: swap;
 }
 
+html[data-theme=dark] {
+  background-color: var(--ifm-navbar-background-color);
+}
 /** setup global style overrides */
 body { 
   font-family: var(--primaryFont);
 }
 
-h1, .h1 {
+h1 {
+  font-size: 3.375rem;
+  line-height: 3.5rem;
+  font-family: var(--primaryFont);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  text-align: left;
+  
+}
+.h1 {
   letter-spacing: -2.88px;
   margin-top: 0;
   margin-bottom: 0;
@@ -229,7 +251,14 @@ h1, .h1 {
   line-height: 1.1;
 }
 
-h2, .h2 {
+h2 {
+  font-family: var(--primaryFont);
+  font-size: 2rem;
+  font-weight: 500;
+  line-height: 2.125rem;
+  letter-spacing: -0.04em;
+}
+.h2 {
   letter-spacing: -1.62px;
   margin-top: 0;
   margin-bottom: 0;
@@ -239,7 +268,16 @@ h2, .h2 {
   line-height: 1.1;
 }
 
-h3, .h3 {
+h3 {
+  font-family: var(--primaryFont);
+  font-size: 1.5rem;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1.625rem;
+  letter-spacing: -0.04em;
+}
+
+.h3 {
   font-family: var(--headerFont);
   font-size: 1.375rem;
   font-style: normal;
@@ -248,7 +286,14 @@ h3, .h3 {
   letter-spacing: -0.02em;
 }
 
-h4, .h4 {
+h4 {
+  font-family: var(--headerFont);
+  font-size: 1.5rem;
+  font-style: normal;
+  font-weight: 400;
+}
+
+.h4 {
   font-family: var(--headerFont);
   font-size: 1.5rem;
   font-style: normal;
@@ -256,20 +301,35 @@ h4, .h4 {
   line-height: 1.75rem;
   letter-spacing: -2%;
 }
-
-.sui-card {
-  display: flex;
-  padding: 30px 0px;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-shrink: 0;
-  align-self: stretch;
-  border-radius: 30px;
-  border: 1px solid var(--Card---Outline, #FFF);
-  background: rgba(247, 247, 248, 0.05);
-  backdrop-filter: blur(40px);
+@media screen and (max-width: 767px) {
+  h1 , .h1{
+    font-size: 3.5rem;
+  }
+  h2, .h2 {
+    font-size: 2rem;
+  }
+  h3, .h3 {
+    font-size: 1.5rem;
+  }
+  h4, .h4 {
+    font-size: 1.2rem;
+  }
 }
+@media screen and (max-width: 599px) {
+  h1 , .h1{
+    font-size: 2.5rem;
+  }
+  h2, .h2 {
+    font-size: 1.7rem;
+  }
+  h3, .h3 {
+    font-size: 1.2rem;
+  }
+  h4, .h4 {
+    font-size: 1rem;
+  }
+}
+
 
 /** Navbar overrides **/
 .navbar {
@@ -277,6 +337,9 @@ h4, .h4 {
 }
 .navbar__title {
   visibility: hidden;
+}
+.navbar__toggle path {
+  stroke: var(--sui-white);
 }
 .navbar__items {
   justify-content: space-between;
@@ -310,6 +373,11 @@ h4, .h4 {
   background: linear-gradient(0deg, rgba(247, 247, 248, 0.1), rgba(247, 247, 248, 0.1)),
   linear-gradient(0deg, rgba(247, 247, 248, 0.05), rgba(247, 247, 248, 0.05)) !important;
 }
+@media screen and (max-width: 599px) {
+  .DocSearch-Button {
+    width: initial;
+  }
+}
 .DocSearch-Search-Icon {
   order: 2;
   margin-left: auto;
@@ -342,6 +410,11 @@ h4, .h4 {
   background-color: var(--sui-button-hover);
   color: var(--sui-white);
   text-decoration: none;
+}
+@media (max-width: 1050px) {
+  .navbar .button-cta {
+    display: none;
+  }
 }
 
 /** colors **/

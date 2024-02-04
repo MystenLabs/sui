@@ -80,7 +80,7 @@
 .cardB {
   height: 200px;
   background-color: rgba(247, 247, 248, .05);
-  padding: 1.5rem;
+  padding: 1.7rem;
   font-family: var(--headerFont);
   font-size: 1.5rem;
   font-weight: 400;
@@ -89,14 +89,35 @@
   text-align: left;
   color: var(--sui-white);
   border-radius: 36px;
+  display: flex;
+  flex-direction: column;
+  row-gap: 1.5rem;
+}
+.cardB svg {
+  width: 32px;
+  height: 32px;
+}
+.cardB span {
+  max-width: 19rem;
+}
+
+.sectionHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  row-gap: 2.5rem;
+  margin: 5rem auto 4.5rem auto;
+  padding: 0 1rem;
 }
 
 .why {
   display: grid;
+  width: 100%;
   max-width: var(--sui-max-width-desktop);
   grid-template-columns: 2fr 4fr;
   column-gap: .5rem;
   margin: 0 auto;
+  padding: 0 1rem;
 }
 
 .TwoColParagraph {
@@ -104,6 +125,7 @@
   flex-direction: column;
   max-width: var(--sui-max-width-desktop);
   margin: 5rem auto;
+  padding: 0 1rem;
 }
 
 .TwoColItem {
@@ -135,10 +157,21 @@
   line-height: 1.6875rem;
   letter-spacing: -0.02em;
   text-align: left;
+  margin: 0;
 }
 
 
 @media screen and (max-width: 996px) {
+  .why {
+    grid-template-columns: 1fr;
+  }
+  .cardsB {
+    grid-template-columns: 1fr;
+  }
+  .TwoColItem {
+    flex-direction: column;
+    row-gap: 2rem;
+  }
   .heroBanner {
     padding: 2rem;
   }
