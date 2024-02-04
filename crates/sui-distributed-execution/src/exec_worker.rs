@@ -166,7 +166,7 @@ impl<
         memory_store: Arc<S>,
         deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
         written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
-        my_id: u8,
+        my_id: UniqueId,
         ew_ids: &Vec<UniqueId>,
     ) {
         // And now we mutate the store.
@@ -584,7 +584,7 @@ impl<
                             .map(|r| r.clone())
                             .unwrap_or_default();
                             // Push execution task to futures queue
-                            // let ew_ids_copy = ew_ids.clone();
+                            let ew_ids_copy = ew_ids.clone();
                             let context_copy = context.clone();
 
                             self.ready_txs.remove(&txid);
@@ -614,10 +614,10 @@ impl<
                                     }
                                 }
 
-                                Self::async_exec2(tx, memstore, &protocol_config, reference_gas_price, &context_copy)
+                                Self::async_exec2(tx, memstore, &protocol_config, reference_gas_price, &context_copy, my_id, &ew_ids_copy)
                             });
                         }
-                    } else if let SailfishMessage::TxResults { txid, .. } = msg {
+                    } else if let SailfishMessage::TxResults { txid, deleted, written } = msg {
                         if let Some(_) = self.ready_txs.remove(&txid) {
                             done_tx_sender.send(txid).await.expect("send failed");
                         }
@@ -625,8 +625,10 @@ impl<
                         //     unreachable!("tx already executed though we did not send LockedExec");
                         // }
 
-                        // TODO re-enable writing to store
-                        // Self::write_updates_to_store(self.memory_store.clone(), deleted, written, my_id as u8, &ew_ids);
+                        if get_ews_for_deleted_written(&deleted, &written, &ew_ids).contains(&(my_id as UniqueId)) {
+                            Self::write_updates_to_store(self.memory_store.clone(), deleted, written, my_id, &ew_ids);
+                        }
+
                         num_tx += 1;
                         if num_tx % 10_000 == 0 {
                             tracing::debug!("[tx-results] EW {my_id} executed {num_tx} txs");
@@ -726,6 +728,8 @@ impl<
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         ctx: &BenchmarkContext,
+        my_id: UniqueId,
+        ew_ids: &Vec<UniqueId>,
     ) -> TransactionWithResults {
         let tx = full_tx.tx.clone();
         let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
@@ -775,16 +779,21 @@ impl<
             );
         assert!(tx_effects.status().is_ok());
 
-        // TODO write updates to store here?
-        // if get_ews_for_tx(&full_tx, ew_ids).contains(&(my_id as UniqueId)) {
-        //     Self::write_updates_to_store(
-        //         memory_store,
-        //         inner_temp_store.deleted.clone(),
-        //         inner_temp_store.written.clone(),
-        //         my_id,
-        //         ew_ids,
-        //     );
-        // }
+        if get_ews_for_deleted_written(
+            &inner_temp_store.deleted,
+            &inner_temp_store.written,
+            &ew_ids,
+        )
+        .contains(&(my_id as UniqueId))
+        {
+            Self::write_updates_to_store(
+                memstore,
+                inner_temp_store.deleted.clone(),
+                inner_temp_store.written.clone(),
+                my_id,
+                ew_ids,
+            );
+        }
 
         TransactionWithResults {
             full_tx,
