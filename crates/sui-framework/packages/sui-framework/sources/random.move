@@ -145,7 +145,7 @@ module sui::random {
     /// Create a generator. Can be used to derive up to MAX_U16 * 32 random bytes.
     public fun new_generator(r: &Random, ctx: &mut TxContext): RandomGenerator {
         let inner = load_inner(r);
-        let seed = hmac_sha3_256(&inner.random_bytes,&to_bytes(fresh_object_address(ctx)));
+        let seed = hmac_sha3_256(&inner.random_bytes, &to_bytes(fresh_object_address(ctx)));
         RandomGenerator { seed, counter: 0, buffer: vector[] }
     }
 

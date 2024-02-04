@@ -402,7 +402,7 @@ Create a generator. Can be used to derive up to MAX_U16 * 32 random bytes.
 
 <pre><code><b>public</b> <b>fun</b> <a href="random.md#0x2_random_new_generator">new_generator</a>(r: &<a href="random.md#0x2_random_Random">Random</a>, ctx: &<b>mut</b> TxContext): <a href="random.md#0x2_random_RandomGenerator">RandomGenerator</a> {
     <b>let</b> inner = <a href="random.md#0x2_random_load_inner">load_inner</a>(r);
-    <b>let</b> seed = hmac_sha3_256(&inner.random_bytes,&to_bytes(fresh_object_address(ctx)));
+    <b>let</b> seed = hmac_sha3_256(&inner.random_bytes, &to_bytes(fresh_object_address(ctx)));
     <a href="random.md#0x2_random_RandomGenerator">RandomGenerator</a> { seed, counter: 0, buffer: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[] }
 }
 </code></pre>
