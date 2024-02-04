@@ -749,6 +749,7 @@ fn explicit_use_fun(
         loc,
         attributes,
         is_public,
+        tname: tn.clone(),
         target_function,
         kind: N::UseFunKind::Explicit,
         used: is_public.is_some(), // suppress unused warning for public use funs

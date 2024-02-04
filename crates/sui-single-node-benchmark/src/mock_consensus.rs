@@ -69,7 +69,7 @@ impl MockConsensusClient {
                             .process_consensus_transactions_for_tests(
                                 mem::take(&mut transactions),
                                 &checkpoint_service,
-                                &validator.database,
+                                validator.get_cache_reader().as_ref(),
                                 &counter,
                             )
                             .await

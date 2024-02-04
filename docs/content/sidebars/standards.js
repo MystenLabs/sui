@@ -4,6 +4,7 @@
 const standards = [
 	'standards',
 	'standards/kiosk',
+	`standards/kiosk-apps`,
 	{
 		type: 'category',
 		label: 'DeepBook',

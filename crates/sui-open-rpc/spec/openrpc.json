@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.17.0"
+    "version": "1.19.0"
   },
   "methods": [
     {
@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "35",
+              "maxSupportedProtocolVersion": "36",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1374,6 +1374,7 @@
                 "disallow_change_struct_type_params_on_upgrade": false,
                 "enable_coin_deny_list": false,
                 "enable_effects_v2": false,
+                "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_poseidon": false,
                 "end_of_epoch_transaction_supported": false,
@@ -1443,6 +1444,8 @@
                 "check_zklogin_id_cost_base": null,
                 "check_zklogin_issuer_cost_base": null,
                 "consensus_bad_nodes_stake_threshold": null,
+                "consensus_max_transaction_size_bytes": null,
+                "consensus_max_transactions_in_block_bytes": null,
                 "crypto_invalid_arguments_cost": {
                   "u64": "100"
                 },
@@ -1631,6 +1634,36 @@
                 "groth16_verify_groth16_proof_internal_public_input_cost_per_byte": {
                   "u64": "2"
                 },
+                "group_ops_bls12381_decode_g1_cost": null,
+                "group_ops_bls12381_decode_g2_cost": null,
+                "group_ops_bls12381_decode_gt_cost": null,
+                "group_ops_bls12381_decode_scalar_cost": null,
+                "group_ops_bls12381_g1_add_cost": null,
+                "group_ops_bls12381_g1_div_cost": null,
+                "group_ops_bls12381_g1_hash_to_base_cost": null,
+                "group_ops_bls12381_g1_hash_to_cost_per_byte": null,
+                "group_ops_bls12381_g1_msm_base_cost": null,
+                "group_ops_bls12381_g1_msm_base_cost_per_input": null,
+                "group_ops_bls12381_g1_mul_cost": null,
+                "group_ops_bls12381_g1_sub_cost": null,
+                "group_ops_bls12381_g2_add_cost": null,
+                "group_ops_bls12381_g2_div_cost": null,
+                "group_ops_bls12381_g2_hash_to_base_cost": null,
+                "group_ops_bls12381_g2_hash_to_cost_per_byte": null,
+                "group_ops_bls12381_g2_msm_base_cost": null,
+                "group_ops_bls12381_g2_msm_base_cost_per_input": null,
+                "group_ops_bls12381_g2_mul_cost": null,
+                "group_ops_bls12381_g2_sub_cost": null,
+                "group_ops_bls12381_gt_add_cost": null,
+                "group_ops_bls12381_gt_div_cost": null,
+                "group_ops_bls12381_gt_mul_cost": null,
+                "group_ops_bls12381_gt_sub_cost": null,
+                "group_ops_bls12381_msm_max_len": null,
+                "group_ops_bls12381_pairing_cost": null,
+                "group_ops_bls12381_scalar_add_cost": null,
+                "group_ops_bls12381_scalar_div_cost": null,
+                "group_ops_bls12381_scalar_mul_cost": null,
+                "group_ops_bls12381_scalar_sub_cost": null,
                 "hash_blake2b256_cost_base": {
                   "u64": "52"
                 },
@@ -5672,6 +5705,13 @@
               }
             ]
           },
+          "showRawTxnDataAndEffects": {
+            "description": "Whether to return the raw transaction data and effects.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "skipChecks": {
             "description": "Whether to skip transaction checks for the transaction.",
             "type": [
@@ -5709,6 +5749,24 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Event"
+            }
+          },
+          "rawEffects": {
+            "description": "The raw effects of the transaction that was dev inspected.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "rawTxnData": {
+            "description": "The raw transaction data that was dev inspected.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
             }
           },
           "results": {

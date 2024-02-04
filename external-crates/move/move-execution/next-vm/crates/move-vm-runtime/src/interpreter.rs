@@ -19,7 +19,7 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
-#[cfg(debug_assertions)]
+#[cfg(feature = "gas-profiler")]
 use move_vm_profiler::GasProfiler;
 use move_vm_profiler::{
     profile_close_frame, profile_close_instr, profile_open_frame, profile_open_instr,
@@ -29,8 +29,8 @@ use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
     loaded_data::runtime_types::Type,
     values::{
-        self, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value,
-        Vector, VectorRef,
+        self, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value, Vector,
+        VectorRef,
     },
     views::TypeView,
 };
@@ -187,10 +187,9 @@ impl Interpreter {
             .map_err(|err| self.set_location(err))?;
         loop {
             let resolver = current_frame.resolver(link_context, loader);
-            let exit_code =
-                current_frame //self
-                    .execute_code(&resolver, &mut self, gas_meter)
-                    .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
+            let exit_code = current_frame //self
+                .execute_code(&resolver, &mut self, gas_meter)
+                .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
             match exit_code {
                 ExitCode::Return => {
                     let non_ref_vals = current_frame
@@ -202,8 +201,8 @@ impl Interpreter {
                     gas_meter
                         .charge_drop_frame(non_ref_vals.into_iter())
                         .map_err(|e| self.set_location(e))?;
+                        profile_close_frame!(gas_meter, current_frame.function.pretty_string());
 
-                    profile_close_frame!(gas_meter, current_frame.function.pretty_string());
                     if let Some(frame) = self.call_stack.pop() {
                         // Note: the caller will find the callee's return values at the top of the shared operand stack
                         current_frame = frame;
@@ -215,9 +214,9 @@ impl Interpreter {
                 }
                 ExitCode::Call(fh_idx) => {
                     let func = resolver.function_from_handle(fh_idx);
-                    // Compiled out in release mode
-                    #[cfg(debug_assertions)]
+                    #[cfg(feature = "gas-profiler")]
                     let func_name = func.pretty_string();
+
                     profile_open_frame!(gas_meter, func_name.clone());
 
                     // Charge gas
@@ -234,16 +233,9 @@ impl Interpreter {
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
                     if func.is_native() {
-                        self.call_native(
-                            &resolver,
-                            gas_meter,
-                            extensions,
-                            func,
-                            vec![],
-                        )?;
+                        self.call_native(&resolver, gas_meter, extensions, func, vec![])?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
-
-                        profile_close_frame!(gas_meter, func_name);
+                        profile_close_frame!(gas_meter, func_name.clone());
                         continue;
                     }
                     let frame = self
@@ -264,8 +256,7 @@ impl Interpreter {
                         .instantiate_generic_function(idx, current_frame.ty_args())
                         .map_err(|e| set_err_info!(current_frame, e))?;
                     let func = resolver.function_from_instantiation(idx);
-                    // Compiled out in release mode
-                    #[cfg(debug_assertions)]
+                    #[cfg(feature = "gas-profiler")]
                     let func_name = func.pretty_string();
                     profile_open_frame!(gas_meter, func_name.clone());
 
@@ -286,8 +277,7 @@ impl Interpreter {
                     if func.is_native() {
                         self.call_native(&resolver, gas_meter, extensions, func, ty_args)?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
-
-                        profile_close_frame!(gas_meter, func_name);
+                        profile_close_frame!(gas_meter, func_name.clone());
 
                         continue;
                     }
@@ -358,23 +348,17 @@ impl Interpreter {
         ty_args: Vec<Type>,
     ) -> VMResult<()> {
         // Note: refactor if native functions push a frame on the stack
-        self.call_native_impl(
-            resolver,
-            gas_meter,
-            extensions,
-            function.clone(),
-            ty_args,
-        )
-        .map_err(|e| {
-            let id = function.module_id();
-            let e = if resolver.loader().vm_config().error_execution_state {
-                e.with_exec_state(self.get_internal_state())
-            } else {
-                e
-            };
-            e.at_code_offset(function.index(), 0)
-                .finish(Location::Module(id.clone()))
-        })
+        self.call_native_impl(resolver, gas_meter, extensions, function.clone(), ty_args)
+            .map_err(|e| {
+                let id = function.module_id();
+                let e = if resolver.loader().vm_config().error_execution_state {
+                    e.with_exec_state(self.get_internal_state())
+                } else {
+                    e
+                };
+                e.at_code_offset(function.index(), 0)
+                    .finish(Location::Module(id.clone()))
+            })
     }
 
     fn call_native_impl(
@@ -417,12 +401,8 @@ impl Interpreter {
             args.push_front(self.operand_stack.pop()?);
         }
 
-        let mut native_context = NativeContext::new(
-            self,
-            resolver,
-            extensions,
-            gas_meter.remaining_gas(),
-        );
+        let mut native_context =
+            NativeContext::new(self, resolver, extensions, gas_meter.remaining_gas());
         let native_function = function.get_native()?;
 
         gas_meter.charge_native_function_before_execution(

@@ -86,7 +86,7 @@ module Test::M1 {
           address
           digest
           owner {
-            __typename
+              __typename
           }
         }
       }
@@ -103,7 +103,7 @@ module Test::M1 {
           address
           digest
           owner {
-            __typename
+              __typename
           }
         }
       }
@@ -116,7 +116,7 @@ module Test::M1 {
           address
           digest
           owner {
-            __typename
+              __typename
           }
         }
       }
@@ -130,7 +130,7 @@ module Test::M1 {
           address
           digest
           owner {
-            __typename
+              __typename
           }
         }
       }
@@ -156,8 +156,10 @@ module Test::M1 {
   epoch {
     validatorSet {
       activeValidators {
-        address {
-          address
+        nodes {
+          address {
+            address
+          }
         }
       }
     }

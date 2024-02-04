@@ -76,6 +76,9 @@ pub struct EpochMetrics {
 
     /// Buffer stake current in effect for this epoch
     pub effective_buffer_stake: IntGauge,
+
+    /// The number of shares held by this node after the random beacon DKG protocol completed.
+    pub epoch_random_beacon_dkg_num_shares: IntGauge,
 }
 
 impl EpochMetrics {
@@ -158,6 +161,12 @@ impl EpochMetrics {
                 "Buffer stake current in effect for this epoch",
                 registry,
             ).unwrap(),
+            epoch_random_beacon_dkg_num_shares: register_int_gauge_with_registry!(
+                "epoch_random_beacon_dkg_num_shares",
+                "The number of shares held by this node after the random beacon DKG protocol completed",
+                registry
+            )
+            .unwrap(),
         };
         Arc::new(this)
     }

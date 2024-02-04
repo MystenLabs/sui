@@ -11,8 +11,8 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
-use std::path::PathBuf;
 use std::sync::Arc;
+use sui_test_transaction_builder::PublishData;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::HandleTransactionResponse;
@@ -32,10 +32,14 @@ impl BenchmarkContext {
         workload: Workload,
         benchmark_component: Component,
         checkpoint_size: usize,
+        print_sample_tx: bool,
     ) -> Self {
         // Increase by 2 so that we could generate one extra sample transaction before benchmarking.
         // as well as reserve 1 account for package publishing.
-        let num_accounts = workload.num_accounts() + 2;
+        let mut num_accounts = workload.num_accounts() + 1;
+        if print_sample_tx {
+            num_accounts += 1;
+        }
         let gas_object_num_per_account = workload.gas_object_num_per_account();
         let total = num_accounts * gas_object_num_per_account;
 
@@ -64,14 +68,12 @@ impl BenchmarkContext {
         self.validator.clone()
     }
 
-    pub(crate) async fn publish_package(&mut self) -> ObjectRef {
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.extend(["move_package"]);
+    pub(crate) async fn publish_package(&mut self, publish_data: PublishData) -> ObjectRef {
         let mut gas_objects = self.admin_account.gas_objects.deref().clone();
         let (package, updated_gas) = self
             .validator
             .publish_package(
-                path,
+                publish_data,
                 self.admin_account.sender,
                 &self.admin_account.keypair,
                 gas_objects[0],
@@ -170,10 +172,16 @@ impl BenchmarkContext {
         results.into_iter().map(|r| r.unwrap()).collect()
     }
 
-    pub(crate) async fn benchmark_transaction_execution(&self, transactions: Vec<Transaction>) {
+    pub(crate) async fn benchmark_transaction_execution(
+        &self,
+        transactions: Vec<Transaction>,
+        print_sample_tx: bool,
+    ) {
         let mut transactions = self.certify_transactions(transactions).await;
-        self.execute_sample_transaction(transactions.pop().unwrap().into_unsigned())
-            .await;
+        if print_sample_tx {
+            self.execute_sample_transaction(transactions.pop().unwrap().into_unsigned())
+                .await;
+        }
 
         let tx_count = transactions.len();
         let start_time = std::time::Instant::now();
@@ -206,9 +214,12 @@ impl BenchmarkContext {
     pub(crate) async fn benchmark_transaction_execution_in_memory(
         &self,
         mut transactions: Vec<Transaction>,
+        print_sample_tx: bool,
     ) {
-        self.execute_sample_transaction(transactions.pop().unwrap())
-            .await;
+        if print_sample_tx {
+            self.execute_sample_transaction(transactions.pop().unwrap())
+                .await;
+        }
 
         let tx_count = transactions.len();
         let in_memory_store = self.validator.create_in_memory_store();
@@ -257,9 +268,15 @@ impl BenchmarkContext {
     }
 
     /// Benchmark parallel signing a vector of transactions and measure the TPS.
-    pub(crate) async fn benchmark_transaction_signing(&self, transactions: Vec<Transaction>) {
-        let sample_transaction = &transactions[0];
-        info!("Sample transaction: {:?}", sample_transaction.data());
+    pub(crate) async fn benchmark_transaction_signing(
+        &self,
+        transactions: Vec<Transaction>,
+        print_sample_tx: bool,
+    ) {
+        if print_sample_tx {
+            let sample_transaction = &transactions[0];
+            info!("Sample transaction: {:?}", sample_transaction.data());
+        }
 
         let tx_count = transactions.len();
         let start_time = std::time::Instant::now();

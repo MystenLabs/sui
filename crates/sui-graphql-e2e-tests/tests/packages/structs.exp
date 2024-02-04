@@ -150,19 +150,13 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x449dbcb2f915f1ea1357dce1adfb11677a60f0e903bacf65dbead34f36c974b3",
+                    "address": "0x80328b5daa35663d3658b0b11e62339f2454d389a7faa095f6d0ccc933e7dcd7",
                     "asMovePackage": null
                   }
                 },
                 {
                   "outputState": {
-                    "address": "0x8505f08fef00f4d24b84052c8da636814de039c600b7f3030b9a84dfe956bc5b",
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0xe891855165c8eaae42985dea34d160bd32e833a05805bfb683c87372f8295b86",
+                    "address": "0x88d8d24e62a86310f465b763c4297e996f6dbb1f43e4cdde707b470bb1946e63",
                     "asMovePackage": {
                       "module": {
                         "struct": {
@@ -187,6 +181,12 @@ Response: {
                         }
                       }
                     }
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                    "asMovePackage": null
                   }
                 }
               ]
@@ -217,15 +217,19 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x01b002c07a457b73fb0f2effd2f02fd5ff49436d43fe41332b69358925c76e0b",
+                    "address": "0x80328b5daa35663d3658b0b11e62339f2454d389a7faa095f6d0ccc933e7dcd7",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xa68d2f19e08a31ed0ba754072a41fa86246fff4a42343ec79d2c6ef2bc9d9e83",
                     "asMovePackage": {
                       "module": {
                         "s": {
                           "module": {
                             "package": {
-                              "asObject": {
-                                "address": "0xe891855165c8eaae42985dea34d160bd32e833a05805bfb683c87372f8295b86"
-                              }
+                              "address": "0x88d8d24e62a86310f465b763c4297e996f6dbb1f43e4cdde707b470bb1946e63"
                             }
                           },
                           "name": "S",
@@ -250,9 +254,7 @@ Response: {
                         "t": {
                           "module": {
                             "package": {
-                              "asObject": {
-                                "address": "0x01b002c07a457b73fb0f2effd2f02fd5ff49436d43fe41332b69358925c76e0b"
-                              }
+                              "address": "0xa68d2f19e08a31ed0ba754072a41fa86246fff4a42343ec79d2c6ef2bc9d9e83"
                             }
                           },
                           "name": "T",
@@ -279,12 +281,12 @@ Response: {
                             {
                               "name": "s",
                               "type": {
-                                "repr": "0xe891855165c8eaae42985dea34d160bd32e833a05805bfb683c87372f8295b86::m::S",
+                                "repr": "0x88d8d24e62a86310f465b763c4297e996f6dbb1f43e4cdde707b470bb1946e63::m::S",
                                 "signature": {
                                   "ref": null,
                                   "body": {
                                     "datatype": {
-                                      "package": "0xe891855165c8eaae42985dea34d160bd32e833a05805bfb683c87372f8295b86",
+                                      "package": "0x88d8d24e62a86310f465b763c4297e996f6dbb1f43e4cdde707b470bb1946e63",
                                       "module": "m",
                                       "type": "S",
                                       "typeParameters": []
@@ -313,7 +315,7 @@ Response: {
                             {
                               "name": "t",
                               "type": {
-                                "repr": "0xe891855165c8eaae42985dea34d160bd32e833a05805bfb683c87372f8295b86::m::T<0xe891855165c8eaae42985dea34d160bd32e833a05805bfb683c87372f8295b86::m::S>"
+                                "repr": "0x88d8d24e62a86310f465b763c4297e996f6dbb1f43e4cdde707b470bb1946e63::m::T<0x88d8d24e62a86310f465b763c4297e996f6dbb1f43e4cdde707b470bb1946e63::m::S>"
                               }
                             }
                           ]
@@ -324,13 +326,7 @@ Response: {
                 },
                 {
                   "outputState": {
-                    "address": "0x449dbcb2f915f1ea1357dce1adfb11677a60f0e903bacf65dbead34f36c974b3",
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0x8505f08fef00f4d24b84052c8da636814de039c600b7f3030b9a84dfe956bc5b",
+                    "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
                     "asMovePackage": null
                   }
                 }
@@ -354,6 +350,11 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
                     "asMovePackage": {
                       "module": {
                         "s": {
@@ -370,11 +371,6 @@ Response: {
                         }
                       }
                     }
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": null
                   }
                 },
                 {
@@ -528,31 +524,31 @@ Response: {
           "after": {
             "edges": [
               {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "CoinMetadata"
                 }
               },
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
               },
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
               },
               {
-                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "RegulatedCoinMetadata"
                 }
               },
               {
-                "cursor": "IlRyZWFzdXJ5Q2FwIg",
+                "cursor": "eyJuIjoiVHJlYXN1cnlDYXAiLCJjIjoyfQ",
                 "node": {
                   "name": "TreasuryCap"
                 }
@@ -566,31 +562,31 @@ Response: {
           "before": {
             "edges": [
               {
-                "cursor": "IkNvaW4i",
+                "cursor": "eyJuIjoiQ29pbiIsImMiOjJ9",
                 "node": {
                   "name": "Coin"
                 }
               },
               {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "CoinMetadata"
                 }
               },
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
               },
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
               },
               {
-                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "RegulatedCoinMetadata"
                 }
@@ -616,13 +612,13 @@ Response: {
           "prefix": {
             "edges": [
               {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "CoinMetadata"
                 }
               },
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
@@ -636,19 +632,19 @@ Response: {
           "prefixAll": {
             "edges": [
               {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "CoinMetadata"
                 }
               },
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
               },
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
@@ -662,31 +658,31 @@ Response: {
           "prefixExcess": {
             "edges": [
               {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "CoinMetadata"
                 }
               },
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
               },
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
               },
               {
-                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "RegulatedCoinMetadata"
                 }
               },
               {
-                "cursor": "IlRyZWFzdXJ5Q2FwIg",
+                "cursor": "eyJuIjoiVHJlYXN1cnlDYXAiLCJjIjoyfQ",
                 "node": {
                   "name": "TreasuryCap"
                 }
@@ -700,13 +696,13 @@ Response: {
           "suffix": {
             "edges": [
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
               },
               {
-                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "RegulatedCoinMetadata"
                 }
@@ -720,19 +716,19 @@ Response: {
           "suffixAll": {
             "edges": [
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
               },
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
               },
               {
-                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "RegulatedCoinMetadata"
                 }
@@ -746,31 +742,31 @@ Response: {
           "suffixExcess": {
             "edges": [
               {
-                "cursor": "IkNvaW4i",
+                "cursor": "eyJuIjoiQ29pbiIsImMiOjJ9",
                 "node": {
                   "name": "Coin"
                 }
               },
               {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "CoinMetadata"
                 }
               },
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
                 "node": {
                   "name": "CurrencyCreated"
                 }
               },
               {
-                "cursor": "IkRlbnlDYXAi",
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
                 "node": {
                   "name": "DenyCap"
                 }
               },
               {
-                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
                 "node": {
                   "name": "RegulatedCoinMetadata"
                 }

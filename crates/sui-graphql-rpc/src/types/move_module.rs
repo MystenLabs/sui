@@ -8,6 +8,7 @@ use move_binary_format::binary_views::BinaryIndexedView;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Loc;
 
+use crate::consistency::{ConsistentIndexCursor, ConsistentNamedCursor};
 use crate::data::Db;
 use crate::error::Error;
 use sui_package_resolver::Module as ParsedMoveModule;
@@ -15,6 +16,7 @@ use sui_package_resolver::Module as ParsedMoveModule;
 use super::cursor::{JsonCursor, Page};
 use super::move_function::MoveFunction;
 use super::move_struct::MoveStruct;
+use super::object::ObjectLookupKey;
 use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
 
 #[derive(Clone)]
@@ -22,11 +24,13 @@ pub(crate) struct MoveModule {
     pub storage_id: SuiAddress,
     pub native: Vec<u8>,
     pub parsed: ParsedMoveModule,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
-pub(crate) type CFriend = JsonCursor<usize>;
-pub(crate) type CStruct = JsonCursor<String>;
-pub(crate) type CFunction = JsonCursor<String>;
+pub(crate) type CFriend = JsonCursor<ConsistentIndexCursor>;
+pub(crate) type CStruct = JsonCursor<ConsistentNamedCursor>;
+pub(crate) type CFunction = JsonCursor<ConsistentNamedCursor>;
 
 /// Represents a module in Move, a library that defines struct types
 /// and functions that operate on these types.
@@ -34,17 +38,21 @@ pub(crate) type CFunction = JsonCursor<String>;
 impl MoveModule {
     /// The package that this Move module was defined in
     async fn package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
-        MovePackage::query(ctx.data_unchecked(), self.storage_id, None)
-            .await
-            .extend()?
-            .ok_or_else(|| {
-                Error::Internal(format!(
-                    "Cannot load package for module {}::{}",
-                    self.storage_id,
-                    self.parsed.name(),
-                ))
-            })
-            .extend()
+        MovePackage::query(
+            ctx.data_unchecked(),
+            self.storage_id,
+            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
+        )
+        .await
+        .extend()?
+        .ok_or_else(|| {
+            Error::Internal(format!(
+                "Cannot load package for module {}::{}",
+                self.storage_id,
+                self.parsed.name(),
+            ))
+        })
+        .extend()
     }
 
     /// The module's (unqualified) name.
@@ -71,7 +79,9 @@ impl MoveModule {
         let bytecode = self.parsed.bytecode();
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) = page.paginate_indices(bytecode.friend_decls.len()) else {
+        let Some((prev, next, checkpoint_viewed_at, cs)) = page
+            .paginate_consistent_indices(bytecode.friend_decls.len(), self.checkpoint_viewed_at)?
+        else {
             return Ok(connection);
         };
 
@@ -79,9 +89,13 @@ impl MoveModule {
         connection.has_next_page = next;
 
         let runtime_id = *bytecode.self_id().address();
-        let Some(package) = MovePackage::query(ctx.data_unchecked(), self.storage_id, None)
-            .await
-            .extend()?
+        let Some(package) = MovePackage::query(
+            ctx.data_unchecked(),
+            self.storage_id,
+            ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+        )
+        .await
+        .extend()?
         else {
             return Err(Error::Internal(format!(
                 "Failed to load package for module: {}",
@@ -93,7 +107,7 @@ impl MoveModule {
         // Select `friend_decls[lo..hi]` using iterators to enumerate before taking a sub-sequence
         // from it, to get pairs `(i, friend_decls[i])`.
         for c in cs {
-            let decl = &bytecode.friend_decls[*c];
+            let decl = &bytecode.friend_decls[c.ix];
             let friend_pkg = bytecode.address_identifier_at(decl.address);
             let friend_mod = bytecode.identifier_at(decl.name);
 
@@ -139,9 +153,12 @@ impl MoveModule {
         before: Option<CStruct>,
     ) -> Result<Option<Connection<String, MoveStruct>>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        let after = page.after().map(|a| (*a).as_str());
-        let before = page.before().map(|b| (*b).as_str());
+        let after = page.after().map(|a| a.name.as_str());
+        let before = page.before().map(|b| b.name.as_str());
         let struct_range = self.parsed.structs(after, before);
+
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(self.checkpoint_viewed_at);
 
         let mut connection = Connection::new(false, false);
         let struct_names = if page.is_from_front() {
@@ -170,7 +187,11 @@ impl MoveModule {
                 .extend();
             };
 
-            let cursor = JsonCursor::new(name.to_string()).encode_cursor();
+            let cursor = JsonCursor::new(ConsistentNamedCursor {
+                name: name.to_string(),
+                c: checkpoint_viewed_at,
+            })
+            .encode_cursor();
             connection.edges.push(Edge::new(cursor, struct_));
         }
 
@@ -196,9 +217,12 @@ impl MoveModule {
         before: Option<CFunction>,
     ) -> Result<Option<Connection<String, MoveFunction>>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        let after = page.after().map(|a| (*a).as_str());
-        let before = page.before().map(|b| (*b).as_str());
+        let after = page.after().map(|a| a.name.as_str());
+        let before = page.before().map(|b| b.name.as_str());
         let function_range = self.parsed.functions(after, before);
+
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(self.checkpoint_viewed_at);
 
         let mut connection = Connection::new(false, false);
         let function_names = if page.is_from_front() {
@@ -227,7 +251,11 @@ impl MoveModule {
                 .extend();
             };
 
-            let cursor = JsonCursor::new(name.to_string()).encode_cursor();
+            let cursor = JsonCursor::new(ConsistentNamedCursor {
+                name: name.to_string(),
+                c: checkpoint_viewed_at,
+            })
+            .encode_cursor();
             connection.edges.push(Edge::new(cursor, function));
         }
 
@@ -269,6 +297,7 @@ impl MoveModule {
             self.parsed.name().to_string(),
             name,
             def,
+            self.checkpoint_viewed_at,
         )))
     }
 
@@ -284,6 +313,7 @@ impl MoveModule {
             self.parsed.name().to_string(),
             name,
             def,
+            self.checkpoint_viewed_at,
         )))
     }
 
@@ -291,8 +321,12 @@ impl MoveModule {
         db: &Db,
         address: SuiAddress,
         name: &str,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
-        let Some(package) = MovePackage::query(db, address, None).await? else {
+        let Some(package) =
+            MovePackage::query(db, address, ObjectLookupKey::LatestAt(checkpoint_viewed_at))
+                .await?
+        else {
             return Ok(None);
         };
 

@@ -863,17 +863,18 @@ impl Command {
     }
 }
 
-fn write_sep<T: Display>(
+pub fn write_sep<T: Display>(
     f: &mut Formatter<'_>,
     items: impl IntoIterator<Item = T>,
     sep: &str,
 ) -> std::fmt::Result {
-    let mut xs = items.into_iter().peekable();
-    while let Some(x) = xs.next() {
-        if xs.peek().is_some() {
-            write!(f, "{sep}")?;
-        }
-        write!(f, "{x}")?;
+    let mut xs = items.into_iter();
+    let Some(x) = xs.next() else {
+        return Ok(());
+    };
+    write!(f, "{x}")?;
+    for x in xs {
+        write!(f, "{sep}{x}")?;
     }
     Ok(())
 }
@@ -2148,14 +2149,17 @@ impl SenderSignedData {
         SenderSignedDataDigest::new(hash.into())
     }
 
+    pub fn serialized_size(&self) -> SuiResult<usize> {
+        bcs::serialized_size(self).map_err(|e| SuiError::TransactionSerializationError {
+            error: e.to_string(),
+        })
+    }
+
     /// Perform cheap validity checks on the sender signed transaction, including its size,
     /// input count, command count, etc.
     pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
         // Enforce overall transaction size limit.
-        let tx_size =
-            bcs::serialized_size(self).map_err(|e| SuiError::TransactionSerializationError {
-                error: e.to_string(),
-            })?;
+        let tx_size = self.serialized_size()?;
         let max_tx_size_bytes = config.max_tx_size_bytes();
 
         fp_ensure!(

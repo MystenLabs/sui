@@ -18,12 +18,12 @@ import {
 } from '../types/index.js';
 import { SUI_TYPE_ARG } from '../utils/index.js';
 import { normalizeSuiAddress, normalizeSuiObjectId } from '../utils/sui-types.js';
-import type { ObjectCallArg } from './Inputs.js';
 import {
 	BuilderCallArg,
 	getIdFromCallArg,
 	Inputs,
 	isMutableSharedObjectInput,
+	ObjectCallArg,
 	PureCallArg,
 } from './Inputs.js';
 import { createPure } from './pure.js';
@@ -312,10 +312,23 @@ export class TransactionBlock {
 		}
 
 		const id = getIdFromCallArg(value);
-		// deduplicate
+
 		const inserted = this.#blockData.inputs.find(
 			(i) => i.type === 'object' && id === getIdFromCallArg(i.value),
 		) as Extract<TransactionArgument, { type?: 'object' }> | undefined;
+
+		// Upgrade shared object inputs to mutable if needed:
+		if (
+			inserted &&
+			is(inserted.value, ObjectCallArg) &&
+			'Shared' in inserted.value.Object &&
+			is(value, ObjectCallArg) &&
+			'Shared' in value.Object
+		) {
+			inserted.value.Object.Shared.mutable =
+				inserted.value.Object.Shared.mutable || value.Object.Shared.mutable;
+		}
+
 		return (
 			inserted ??
 			this.#input('object', typeof value === 'string' ? normalizeSuiAddress(value) : value)

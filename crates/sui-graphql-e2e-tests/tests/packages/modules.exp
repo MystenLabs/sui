@@ -19,26 +19,24 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x9dab6eff01734a7030671a671d1752ba5445710aab39969cf112a769c292add3",
-                    "asMovePackage": {
-                      "module": {
-                        "name": "m",
-                        "package": {
-                          "asObject": {
-                            "address": "0x9dab6eff01734a7030671a671d1752ba5445710aab39969cf112a769c292add3"
-                          }
-                        },
-                        "fileFormatVersion": 6,
-                        "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1ZZ2rbv8Bc0pwMGcaZx0XUrpURXEKqzmWnPESp2nCkq3TAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",
-                        "disassembly": "// Move bytecode v6\nmodule 9dab6eff01734a7030671a671d1752ba5445710aab39969cf112a769c292add3.m {\nuse 0000000000000000000000000000000000000000000000000000000000000002::coin;\nuse 0000000000000000000000000000000000000000000000000000000000000002::sui;\n\n\n\n\npublic foo<Ty0: drop>(Arg0: u64, Arg1: &Coin<Ty0>): u64 {\nB0:\n\t0: MoveLoc[1](Arg1: &Coin<Ty0>)\n\t1: Call coin::value<Ty0>(&Coin<Ty0>): u64\n\t2: MoveLoc[0](Arg0: u64)\n\t3: Add\n\t4: Ret\n}\npublic bar(Arg0: &Coin<SUI>): u64 {\nB0:\n\t0: LdU64(42)\n\t1: CopyLoc[0](Arg0: &Coin<SUI>)\n\t2: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t3: LdU64(43)\n\t4: MoveLoc[0](Arg0: &Coin<SUI>)\n\t5: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t6: Mul\n\t7: Ret\n}\n}"
-                      }
-                    }
+                    "address": "0x3bc8d2f8d49cf6417eb5a6b50378ca609f2b9606258cf8185e7050221002f13e",
+                    "asMovePackage": null
                   }
                 },
                 {
                   "outputState": {
-                    "address": "0xffafc325fd7e3624007874223fe8d5484d611b5c62d5fbf61afe1546300af364",
-                    "asMovePackage": null
+                    "address": "0xadf3a014d8481a8fcad934bef3d1697021b19a89649fb752fd3a404a032c4b77",
+                    "asMovePackage": {
+                      "module": {
+                        "name": "m",
+                        "package": {
+                          "address": "0xadf3a014d8481a8fcad934bef3d1697021b19a89649fb752fd3a404a032c4b77"
+                        },
+                        "fileFormatVersion": 6,
+                        "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1Za3zoBTYSBqPytk0vvPRaXAhsZqJZJ+3Uv06QEoDLEt3AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",
+                        "disassembly": "// Move bytecode v6\nmodule adf3a014d8481a8fcad934bef3d1697021b19a89649fb752fd3a404a032c4b77.m {\nuse 0000000000000000000000000000000000000000000000000000000000000002::coin;\nuse 0000000000000000000000000000000000000000000000000000000000000002::sui;\n\n\n\n\npublic foo<Ty0: drop>(Arg0: u64, Arg1: &Coin<Ty0>): u64 {\nB0:\n\t0: MoveLoc[1](Arg1: &Coin<Ty0>)\n\t1: Call coin::value<Ty0>(&Coin<Ty0>): u64\n\t2: MoveLoc[0](Arg0: u64)\n\t3: Add\n\t4: Ret\n}\npublic bar(Arg0: &Coin<SUI>): u64 {\nB0:\n\t0: LdU64(42)\n\t1: CopyLoc[0](Arg0: &Coin<SUI>)\n\t2: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t3: LdU64(43)\n\t4: MoveLoc[0](Arg0: &Coin<SUI>)\n\t5: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t6: Mul\n\t7: Ret\n}\n}"
+                      }
+                    }
                   }
                 }
               ]
@@ -61,24 +59,30 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x9dab6eff01734a7030671a671d1752ba5445710aab39969cf112a769c292add3",
+                    "address": "0x3bc8d2f8d49cf6417eb5a6b50378ca609f2b9606258cf8185e7050221002f13e",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xadf3a014d8481a8fcad934bef3d1697021b19a89649fb752fd3a404a032c4b77",
                     "asMovePackage": {
                       "all": {
                         "edges": [
                           {
-                            "cursor": "Im0i",
+                            "cursor": "eyJuIjoibSIsImMiOjF9",
                             "node": {
                               "name": "m"
                             }
                           },
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
                           },
                           {
-                            "cursor": "Im8i",
+                            "cursor": "eyJuIjoibyIsImMiOjF9",
                             "node": {
                               "name": "o"
                             }
@@ -92,13 +96,13 @@ Response: {
                       "after": {
                         "edges": [
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
                           },
                           {
-                            "cursor": "Im8i",
+                            "cursor": "eyJuIjoibyIsImMiOjF9",
                             "node": {
                               "name": "o"
                             }
@@ -112,13 +116,13 @@ Response: {
                       "before": {
                         "edges": [
                           {
-                            "cursor": "Im0i",
+                            "cursor": "eyJuIjoibSIsImMiOjF9",
                             "node": {
                               "name": "m"
                             }
                           },
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
@@ -130,12 +134,6 @@ Response: {
                         }
                       }
                     }
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0xffafc325fd7e3624007874223fe8d5484d611b5c62d5fbf61afe1546300af364",
-                    "asMovePackage": null
                   }
                 }
               ]
@@ -158,12 +156,18 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x9dab6eff01734a7030671a671d1752ba5445710aab39969cf112a769c292add3",
+                    "address": "0x3bc8d2f8d49cf6417eb5a6b50378ca609f2b9606258cf8185e7050221002f13e",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xadf3a014d8481a8fcad934bef3d1697021b19a89649fb752fd3a404a032c4b77",
                     "asMovePackage": {
                       "prefix": {
                         "edges": [
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
@@ -177,13 +181,13 @@ Response: {
                       "prefixAll": {
                         "edges": [
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
                           },
                           {
-                            "cursor": "Im8i",
+                            "cursor": "eyJuIjoibyIsImMiOjF9",
                             "node": {
                               "name": "o"
                             }
@@ -197,13 +201,13 @@ Response: {
                       "prefixExcess": {
                         "edges": [
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
                           },
                           {
-                            "cursor": "Im8i",
+                            "cursor": "eyJuIjoibyIsImMiOjF9",
                             "node": {
                               "name": "o"
                             }
@@ -217,7 +221,7 @@ Response: {
                       "suffix": {
                         "edges": [
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
@@ -231,13 +235,13 @@ Response: {
                       "suffixAll": {
                         "edges": [
                           {
-                            "cursor": "Im0i",
+                            "cursor": "eyJuIjoibSIsImMiOjF9",
                             "node": {
                               "name": "m"
                             }
                           },
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
@@ -251,13 +255,13 @@ Response: {
                       "suffixExcess": {
                         "edges": [
                           {
-                            "cursor": "Im0i",
+                            "cursor": "eyJuIjoibSIsImMiOjF9",
                             "node": {
                               "name": "m"
                             }
                           },
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
@@ -269,12 +273,6 @@ Response: {
                         }
                       }
                     }
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0xffafc325fd7e3624007874223fe8d5484d611b5c62d5fbf61afe1546300af364",
-                    "asMovePackage": null
                   }
                 }
               ]

@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{string_input::impl_string_input, sui_address::SuiAddress};
-use crate::data::{DieselBackend, Query};
+use crate::raw_query::RawQuery;
+use crate::{
+    data::{DieselBackend, Query},
+    filter,
+};
 use async_graphql::*;
 use diesel::{
     expression::{is_aggregate::No, ValidGrouping},
@@ -11,10 +15,15 @@ use diesel::{
     AppearsOnTable, BoolExpressionMethods, Expression, ExpressionMethods, QueryDsl, QuerySource,
     TextExpressionMethods,
 };
-use std::{fmt, str::FromStr};
+use move_core_types::language_storage::StructTag;
+use std::{fmt, result::Result, str::FromStr};
 use sui_types::{
     parse_sui_address, parse_sui_fq_name, parse_sui_module_id, parse_sui_type_tag, TypeTag,
 };
+
+/// A GraphQL scalar containing a filter on types that requires an exact match.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ExactTypeFilter(pub TypeTag);
 
 /// GraphQL scalar containing a filter on types.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -97,6 +106,43 @@ impl TypeFilter {
                 query.filter(field.eq(exact))
             }
         }
+    }
+
+    /// Modify `query` to apply this filter to `field`, returning the new query.
+    pub(crate) fn apply_raw(&self, mut query: RawQuery, field: &str) -> RawQuery {
+        match self {
+            TypeFilter::ByModule(ModuleFilter::ByPackage(p)) => {
+                let pattern = format!("{p}::%");
+                let statement = field.to_string() + " LIKE {}";
+                query = filter!(query, statement, pattern);
+            }
+
+            TypeFilter::ByModule(ModuleFilter::ByModule(p, m)) => {
+                let pattern = format!("{p}::{m}::%");
+                let statement = field.to_string() + " LIKE {}";
+                query = filter!(query, statement, pattern);
+            }
+
+            // A type filter without type parameters is interpreted as either an exact match, or a
+            // match for all generic instantiations of the type.
+            TypeFilter::ByType(TypeTag::Struct(tag)) if tag.type_params.is_empty() => {
+                let exact_pattern = tag.to_canonical_string(/* with_prefix */ true);
+                let generic_pattern =
+                    format!("{}<%", tag.to_canonical_display(/* with_prefix */ true));
+
+                let statement = field.to_string() + " = {} OR " + field + " LIKE {}";
+
+                query = filter!(query, statement, exact_pattern, generic_pattern);
+            }
+
+            TypeFilter::ByType(tag) => {
+                let exact_pattern = tag.to_canonical_string(/* with_prefix */ true);
+                let statement = field.to_string() + " = {}";
+                query = filter!(query, statement, exact_pattern);
+            }
+        }
+
+        query
     }
 
     /// Try to create a filter whose results are the intersection of the results of the input
@@ -252,9 +298,24 @@ impl ModuleFilter {
     }
 }
 
+impl_string_input!(ExactTypeFilter);
 impl_string_input!(TypeFilter);
 impl_string_input!(FqNameFilter);
 impl_string_input!(ModuleFilter);
+
+impl FromStr for ExactTypeFilter {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Error> {
+        if let Ok(tag) = parse_sui_type_tag(s) {
+            Ok(ExactTypeFilter(tag))
+        } else {
+            Err(Error::InvalidFormat(
+                "package::module::type<type_params> or primitive type",
+            ))
+        }
+    }
+}
 
 impl FromStr for TypeFilter {
     type Err = Error;
@@ -333,10 +394,56 @@ impl fmt::Display for TypeFilter {
     }
 }
 
+impl fmt::Display for ExactTypeFilter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.to_canonical_display(/* with_prefix */ true))
+    }
+}
+
+impl From<TypeTag> for TypeFilter {
+    fn from(tag: TypeTag) -> Self {
+        TypeFilter::ByType(tag)
+    }
+}
+
+impl From<StructTag> for TypeFilter {
+    fn from(tag: StructTag) -> Self {
+        TypeFilter::ByType(tag.into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use expect_test::expect;
+
+    #[test]
+    fn test_valid_exact_type_filters() {
+        let inputs = [
+            "u8",
+            "address",
+            "bool",
+            "0x2::coin::Coin",
+            "0x2::coin::Coin<0x2::sui::SUI>",
+            "vector<u256>",
+            "vector<0x3::staking_pool::StakedSui>",
+        ]
+        .into_iter();
+
+        let filters: Vec<_> = inputs
+            .map(|i| TypeFilter::from_str(i).unwrap().to_string())
+            .collect();
+
+        let expect = expect![[r#"
+            u8
+            address
+            bool
+            0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin
+            0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>
+            vector<u256>
+            vector<0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui>"#]];
+        expect.assert_eq(&filters.join("\n"))
+    }
 
     #[test]
     fn test_valid_type_filters() {
@@ -400,6 +507,21 @@ mod tests {
             "vector<0x3::staking_pool::StakedSui>",
         ] {
             assert!(FqNameFilter::from_str(invalid_function_filter).is_err());
+        }
+    }
+
+    #[test]
+    fn test_invalid_exact_type_filters() {
+        for invalid_exact_type_filter in [
+            "not_a_real_type",
+            "0x1:missing::colon",
+            "0x2",
+            "0x2::coin",
+            "0x2::trailing::",
+            "0x3::mismatched::bra<0x4::ke::ts",
+            "vector",
+        ] {
+            assert!(ExactTypeFilter::from_str(invalid_exact_type_filter).is_err());
         }
     }
 

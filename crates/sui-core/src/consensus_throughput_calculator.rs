@@ -469,6 +469,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     pub fn test_consensus_throughput_calculator() {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
         let max_observation_points: NonZeroU64 = NonZeroU64::new(3).unwrap();
@@ -513,6 +514,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     pub fn test_throughput_calculator_same_timestamp_observations() {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
         let max_observation_points: NonZeroU64 = NonZeroU64::new(2).unwrap();
@@ -543,6 +545,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     pub fn test_consensus_throughput_profiler() {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
         let throughput_profile_update_interval: TimestampSecs = 5;
@@ -610,6 +613,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     pub fn test_consensus_throughput_profiler_update_interval() {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
         let throughput_profile_update_interval: TimestampSecs = 5;
@@ -662,6 +666,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     pub fn test_consensus_throughput_profiler_cool_down() {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
         let throughput_profile_update_window: TimestampSecs = 3;

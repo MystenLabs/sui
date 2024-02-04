@@ -393,7 +393,15 @@ impl TestCluster {
                     loop {
                         let epoch = node.state().epoch_store_for_testing().epoch();
                         if epoch == target_epoch {
-                            break;
+                            if let Some(agg) = node.clone_authority_aggregator() {
+                                // This is a fullnode, we need to wait for its auth aggregator to reconfigure as well.
+                                if agg.committee.epoch() == target_epoch {
+                                    break;
+                                }
+                            } else {
+                                // This is a validator, we don't need to check the auth aggregator.
+                                break;
+                            }
                         }
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         retries += 1;

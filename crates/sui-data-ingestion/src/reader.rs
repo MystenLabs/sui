@@ -23,7 +23,6 @@ use tracing::{debug, info};
 use url::Url;
 
 pub(crate) const ENV_VAR_LOCAL_READ_TIMEOUT_MS: &str = "LOCAL_READ_TIMEOUT_MS";
-const REMOTE_READ_BATCH_SIZE: usize = 100;
 
 /// Implements a checkpoint reader that monitors a local directory.
 /// Designed for setups where the indexer daemon is colocated with FN.
@@ -31,6 +30,7 @@ const REMOTE_READ_BATCH_SIZE: usize = 100;
 pub struct CheckpointReader {
     path: PathBuf,
     remote_store: Option<Box<dyn ObjectStore>>,
+    remote_read_batch_size: usize,
     current_checkpoint_number: CheckpointSequenceNumber,
     last_pruned_watermark: CheckpointSequenceNumber,
     checkpoint_sender: mpsc::Sender<CheckpointData>,
@@ -68,17 +68,24 @@ impl CheckpointReader {
     async fn remote_fetch(&self) -> Result<Vec<CheckpointData>> {
         let mut checkpoints = vec![];
         if let Some(ref store) = self.remote_store {
-            let futures = (self.current_checkpoint_number
-                ..(REMOTE_READ_BATCH_SIZE as u64 + self.last_pruned_watermark))
-                .map(|checkpoint_number| async move {
+            let limit = std::cmp::min(
+                self.current_checkpoint_number + self.remote_read_batch_size as u64,
+                self.last_pruned_watermark + MAX_CHECKPOINTS_IN_PROGRESS as u64,
+            );
+            let futures =
+                (self.current_checkpoint_number..limit).map(|checkpoint_number| async move {
                     let path = Path::from(format!("{}.chk", checkpoint_number));
                     match store.get(&path).await {
-                        Ok(resp) => resp.bytes().await,
+                        Ok(resp) => resp.bytes().await.map(Some),
+                        Err(err) if err.to_string().contains("404") => Ok(None),
                         Err(err) => Err(err),
                     }
                 });
             for bytes in try_join_all(futures).await? {
-                let checkpoint = Blob::from_bytes::<CheckpointData>(&bytes)?;
+                if bytes.is_none() {
+                    break;
+                }
+                let checkpoint = Blob::from_bytes::<CheckpointData>(&bytes.unwrap())?;
                 checkpoints.push(checkpoint);
             }
         }
@@ -103,6 +110,10 @@ impl CheckpointReader {
             self.current_checkpoint_number, self.last_pruned_watermark, checkpoints.len(),
         );
         for checkpoint in checkpoints {
+            assert_eq!(
+                checkpoint.checkpoint_summary.sequence_number,
+                self.current_checkpoint_number
+            );
             if (MAX_CHECKPOINTS_IN_PROGRESS as u64 + self.last_pruned_watermark)
                 <= checkpoint.checkpoint_summary.sequence_number
             {
@@ -142,6 +153,7 @@ impl CheckpointReader {
         starting_checkpoint_number: CheckpointSequenceNumber,
         remote_store_url: Option<String>,
         remote_store_options: Vec<(String, String)>,
+        remote_read_batch_size: usize,
     ) -> (
         Self,
         mpsc::Receiver<CheckpointData>,
@@ -152,12 +164,21 @@ impl CheckpointReader {
         let (processed_sender, processed_receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
         let (exit_sender, exit_receiver) = oneshot::channel();
         let remote_store = remote_store_url.map(|url| {
-            parse_url_opts(
-                &Url::parse(&url).expect("failed to parse remote store url"),
-                remote_store_options,
-            )
-            .expect("failed to parse remote store config")
-            .0
+            if remote_store_options.is_empty() {
+                let builder = object_store::http::HttpBuilder::new().with_url(url);
+                Box::new(
+                    builder
+                        .build()
+                        .expect("failed to parse remote store config"),
+                )
+            } else {
+                parse_url_opts(
+                    &Url::parse(&url).expect("failed to parse remote store url"),
+                    remote_store_options,
+                )
+                .expect("failed to parse remote store config")
+                .0
+            }
         });
         let reader = Self {
             path,
@@ -166,6 +187,7 @@ impl CheckpointReader {
             last_pruned_watermark: starting_checkpoint_number,
             checkpoint_sender,
             processed_receiver,
+            remote_read_batch_size,
             exit_receiver,
         };
         (reader, checkpoint_recv, processed_sender, exit_sender)

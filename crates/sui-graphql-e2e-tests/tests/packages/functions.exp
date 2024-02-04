@@ -91,27 +91,13 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x353311e3b82f5f12a7f32b9dfdedaf1cdbbb4ff7a53a457c065cd078d5df9039",
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0x8505f08fef00f4d24b84052c8da636814de039c600b7f3030b9a84dfe956bc5b",
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0xdbeef2078b7cc0e735192a6536a348213ebdff814d6bc281a18dc00e910a068e",
+                    "address": "0x08ff46b6c7c166440b72bd29539834b2061ad8bd18613f920a6d6339f763f78e",
                     "asMovePackage": {
                       "module": {
                         "function": {
                           "module": {
                             "package": {
-                              "asObject": {
-                                "address": "0xdbeef2078b7cc0e735192a6536a348213ebdff814d6bc281a18dc00e910a068e"
-                              }
+                              "address": "0x08ff46b6c7c166440b72bd29539834b2061ad8bd18613f920a6d6339f763f78e"
                             }
                           },
                           "name": "f",
@@ -140,6 +126,18 @@ Response: {
                         }
                       }
                     }
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xf9f58db38f40eeff4aef1cfb33f056f6847797a06be8fa9436c1c8f2c23343ae",
+                    "asMovePackage": null
                   }
                 }
               ]
@@ -170,27 +168,13 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x353311e3b82f5f12a7f32b9dfdedaf1cdbbb4ff7a53a457c065cd078d5df9039",
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0x8505f08fef00f4d24b84052c8da636814de039c600b7f3030b9a84dfe956bc5b",
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0xa60541a851229bdfc6bf7c5a2256563cb430ab6d4a03c077d53066be580d6ef8",
+                    "address": "0xe9f3601e4f3104248045c30c7932ae54f554e103334e971e260697a66670b492",
                     "asMovePackage": {
                       "module": {
                         "f": {
                           "module": {
                             "package": {
-                              "asObject": {
-                                "address": "0xa60541a851229bdfc6bf7c5a2256563cb430ab6d4a03c077d53066be580d6ef8"
-                              }
+                              "address": "0xe9f3601e4f3104248045c30c7932ae54f554e103334e971e260697a66670b492"
                             }
                           },
                           "name": "f",
@@ -220,9 +204,7 @@ Response: {
                         "g": {
                           "module": {
                             "package": {
-                              "asObject": {
-                                "address": "0xa60541a851229bdfc6bf7c5a2256563cb430ab6d4a03c077d53066be580d6ef8"
-                              }
+                              "address": "0xe9f3601e4f3104248045c30c7932ae54f554e103334e971e260697a66670b492"
                             }
                           },
                           "name": "g",
@@ -238,6 +220,18 @@ Response: {
                         }
                       }
                     }
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xf4c7bd7dcb63d72a3537dd992e2e70418e4c7352e5e68d624230a178dff29ae8",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xf9f58db38f40eeff4aef1cfb33f056f6847797a06be8fa9436c1c8f2c23343ae",
+                    "asMovePackage": null
                   }
                 }
               ]
@@ -258,7 +252,7 @@ Response: {
           "all": {
             "edges": [
               {
-                "cursor": "ImNvbnNlbnN1c19jb21taXRfcHJvbG9ndWUi",
+                "cursor": "eyJuIjoiY29uc2Vuc3VzX2NvbW1pdF9wcm9sb2d1ZSIsImMiOjJ9",
                 "node": {
                   "name": "consensus_commit_prologue",
                   "typeParameters": [],
@@ -277,7 +271,7 @@ Response: {
                 }
               },
               {
-                "cursor": "ImNyZWF0ZSI",
+                "cursor": "eyJuIjoiY3JlYXRlIiwiYyI6Mn0",
                 "node": {
                   "name": "create",
                   "typeParameters": [],
@@ -290,7 +284,7 @@ Response: {
                 }
               },
               {
-                "cursor": "InRpbWVzdGFtcF9tcyI",
+                "cursor": "eyJuIjoidGltZXN0YW1wX21zIiwiYyI6Mn0",
                 "node": {
                   "name": "timestamp_ms",
                   "typeParameters": [],
@@ -315,7 +309,7 @@ Response: {
           "after": {
             "edges": [
               {
-                "cursor": "ImNyZWF0ZSI",
+                "cursor": "eyJuIjoiY3JlYXRlIiwiYyI6Mn0",
                 "node": {
                   "name": "create",
                   "typeParameters": [],
@@ -328,7 +322,7 @@ Response: {
                 }
               },
               {
-                "cursor": "InRpbWVzdGFtcF9tcyI",
+                "cursor": "eyJuIjoidGltZXN0YW1wX21zIiwiYyI6Mn0",
                 "node": {
                   "name": "timestamp_ms",
                   "typeParameters": [],
@@ -353,7 +347,7 @@ Response: {
           "before": {
             "edges": [
               {
-                "cursor": "ImNvbnNlbnN1c19jb21taXRfcHJvbG9ndWUi",
+                "cursor": "eyJuIjoiY29uc2Vuc3VzX2NvbW1pdF9wcm9sb2d1ZSIsImMiOjJ9",
                 "node": {
                   "name": "consensus_commit_prologue",
                   "typeParameters": [],
@@ -372,7 +366,7 @@ Response: {
                 }
               },
               {
-                "cursor": "ImNyZWF0ZSI",
+                "cursor": "eyJuIjoiY3JlYXRlIiwiYyI6Mn0",
                 "node": {
                   "name": "create",
                   "typeParameters": [],
@@ -405,7 +399,7 @@ Response: {
           "prefix": {
             "edges": [
               {
-                "cursor": "ImNyZWF0ZSI",
+                "cursor": "eyJuIjoiY3JlYXRlIiwiYyI6Mn0",
                 "node": {
                   "name": "create",
                   "typeParameters": [],
@@ -426,7 +420,7 @@ Response: {
           "prefixAll": {
             "edges": [
               {
-                "cursor": "ImNyZWF0ZSI",
+                "cursor": "eyJuIjoiY3JlYXRlIiwiYyI6Mn0",
                 "node": {
                   "name": "create",
                   "typeParameters": [],
@@ -439,7 +433,7 @@ Response: {
                 }
               },
               {
-                "cursor": "InRpbWVzdGFtcF9tcyI",
+                "cursor": "eyJuIjoidGltZXN0YW1wX21zIiwiYyI6Mn0",
                 "node": {
                   "name": "timestamp_ms",
                   "typeParameters": [],
@@ -464,7 +458,7 @@ Response: {
           "prefixExcess": {
             "edges": [
               {
-                "cursor": "ImNyZWF0ZSI",
+                "cursor": "eyJuIjoiY3JlYXRlIiwiYyI6Mn0",
                 "node": {
                   "name": "create",
                   "typeParameters": [],
@@ -477,7 +471,7 @@ Response: {
                 }
               },
               {
-                "cursor": "InRpbWVzdGFtcF9tcyI",
+                "cursor": "eyJuIjoidGltZXN0YW1wX21zIiwiYyI6Mn0",
                 "node": {
                   "name": "timestamp_ms",
                   "typeParameters": [],
@@ -502,7 +496,7 @@ Response: {
           "suffix": {
             "edges": [
               {
-                "cursor": "ImNyZWF0ZSI",
+                "cursor": "eyJuIjoiY3JlYXRlIiwiYyI6Mn0",
                 "node": {
                   "name": "create",
                   "typeParameters": [],
@@ -523,7 +517,7 @@ Response: {
           "suffixAll": {
             "edges": [
               {
-                "cursor": "ImNvbnNlbnN1c19jb21taXRfcHJvbG9ndWUi",
+                "cursor": "eyJuIjoiY29uc2Vuc3VzX2NvbW1pdF9wcm9sb2d1ZSIsImMiOjJ9",
                 "node": {
                   "name": "consensus_commit_prologue",
                   "typeParameters": [],
@@ -542,7 +536,7 @@ Response: {
                 }
               },
               {
-                "cursor": "ImNyZWF0ZSI",
+                "cursor": "eyJuIjoiY3JlYXRlIiwiYyI6Mn0",
                 "node": {
                   "name": "create",
                   "typeParameters": [],
@@ -563,7 +557,7 @@ Response: {
           "suffixExcess": {
             "edges": [
               {
-                "cursor": "ImNvbnNlbnN1c19jb21taXRfcHJvbG9ndWUi",
+                "cursor": "eyJuIjoiY29uc2Vuc3VzX2NvbW1pdF9wcm9sb2d1ZSIsImMiOjJ9",
                 "node": {
                   "name": "consensus_commit_prologue",
                   "typeParameters": [],
@@ -582,7 +576,7 @@ Response: {
                 }
               },
               {
-                "cursor": "ImNyZWF0ZSI",
+                "cursor": "eyJuIjoiY3JlYXRlIiwiYyI6Mn0",
                 "node": {
                   "name": "create",
                   "typeParameters": [],

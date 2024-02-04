@@ -6,10 +6,11 @@ use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{Address, Attributes, Fields, Friend, ModuleIdent, Value, Visibility},
     naming::ast::{
-        BlockLabel, FunctionSignature, Neighbor, StructDefinition, Type, TypeName_, Type_, Var,
+        BlockLabel, FunctionSignature, Neighbor, StructDefinition, Type, TypeName_, Type_, UseFuns,
+        Var,
     },
     parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
-    shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap},
+    shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name},
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -50,6 +51,7 @@ pub struct ModuleDefinition {
     pub dependency_order: usize,
     pub immediate_neighbors: UniqueMap<ModuleIdent, Neighbor>,
     pub used_addresses: BTreeSet<Address>,
+    pub use_funs: UseFuns,
     pub friends: UniqueMap<ModuleIdent, Friend>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
@@ -127,6 +129,7 @@ pub struct ModuleCall {
     pub type_arguments: Vec<Type>,
     pub arguments: Box<Exp>,
     pub parameter_types: Vec<Type>,
+    pub method_name: Option<Name>, // if translated from method call
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -200,7 +203,7 @@ pub fn exp(ty: Type, exp: UnannotatedExp) -> Exp {
     Exp { ty, exp }
 }
 
-pub type Sequence = VecDeque<SequenceItem>;
+pub type Sequence = (UseFuns, VecDeque<SequenceItem>);
 #[derive(Debug, PartialEq, Clone)]
 pub enum SequenceItem_ {
     Seq(Box<Exp>),
@@ -287,6 +290,7 @@ impl AstDebug for ModuleDefinition {
             dependency_order,
             immediate_neighbors,
             used_addresses,
+            use_funs,
             friends,
             structs,
             constants,
@@ -312,6 +316,7 @@ impl AstDebug for ModuleDefinition {
             w.write(&format!("uses address {};", addr));
             w.new_line()
         }
+        use_funs.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
             w.new_line();
@@ -388,7 +393,11 @@ impl AstDebug for (ConstantName, &Constant) {
 
 impl AstDebug for Sequence {
     fn ast_debug(&self, w: &mut AstWriter) {
-        w.block(|w| w.semicolon(self, |w, item| item.ast_debug(w)))
+        w.block(|w| {
+            let (use_funs, items) = self;
+            use_funs.ast_debug(w);
+            w.semicolon(items, |w, item| item.ast_debug(w))
+        })
     }
 }
 
@@ -638,6 +647,7 @@ impl AstDebug for ModuleCall {
             type_arguments,
             parameter_types,
             arguments,
+            method_name: _,
         } = self;
         w.write(&format!("{}::{}", module, name));
         if !parameter_types.is_empty() {

@@ -9,21 +9,18 @@ use super::{
 use crate::{
     diag,
     diagnostics::{codes::*, Diagnostic},
-    editions::{FeatureGate, Flavor},
+    editions::{Edition, FeatureGate, Flavor},
     expansion::ast::{
-        AttributeName_, AttributeValue_, Attribute_, Attributes, DottedUsage, Fields, Friend,
-        ModuleAccess_, ModuleIdent, ModuleIdent_, Value_, Visibility,
+        Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend, ModuleAccess_,
+        ModuleIdent, ModuleIdent_, Value_, Visibility,
     },
     naming::ast::{self as N, BlockLabel, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_,
     },
     shared::{
-        known_attributes::{KnownAttribute, TestingAttribute},
-        process_binops,
-        program_info::TypingProgramInfo,
-        unique_map::UniqueMap,
-        *,
+        known_attributes::TestingAttribute, process_binops, program_info::TypingProgramInfo,
+        unique_map::UniqueMap, *,
     },
     sui_mode,
     typing::{
@@ -143,7 +140,7 @@ fn module(
     let functions = nfunctions.map(|name, f| function(context, name, f));
     assert!(context.constraints.is_empty());
     context.current_package = None;
-    context.pop_use_funs_scope();
+    let use_funs = context.pop_use_funs_scope();
     context.env.pop_warning_filter_scope();
     let typed_module = T::ModuleDefinition {
         loc,
@@ -154,6 +151,7 @@ fn module(
         dependency_order: 0,
         immediate_neighbors: UniqueMap::new(),
         used_addresses: BTreeSet::new(),
+        use_funs,
         friends,
         structs,
         constants,
@@ -230,7 +228,8 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
             let seq = sequence(context, es);
             let ety = sequence_type(&seq);
             let ret_ty = context.return_type.clone().unwrap();
-            let sloc = seq.back().unwrap().loc;
+            let (_, seq_items) = &seq;
+            let sloc = seq_items.back().unwrap().loc;
             subtype(
                 context,
                 sloc,
@@ -507,7 +506,7 @@ mod check_valid_constant {
         }
     }
 
-    fn sequence(context: &mut Context, seq: &T::Sequence) {
+    fn sequence(context: &mut Context, (_, seq): &T::Sequence) {
         for item in seq {
             sequence_item(context, item)
         }
@@ -985,7 +984,6 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
 
     context.add_use_funs_scope(use_funs);
     let mut work_queue = VecDeque::new();
-    let mut resulting_sequence = T::Sequence::new();
 
     let len = seq.len();
     for (idx, sp!(loc, ns_)) in seq.into_iter().enumerate() {
@@ -1023,21 +1021,22 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
         }
     }
 
+    let mut seq_items = VecDeque::new();
     for case in work_queue {
         match case {
-            SeqCase::Seq(loc, e) => resulting_sequence.push_front(sp(loc, TS::Seq(e))),
-            SeqCase::Declare { loc, b } => resulting_sequence.push_front(sp(loc, TS::Declare(b))),
+            SeqCase::Seq(loc, e) => seq_items.push_front(sp(loc, TS::Seq(e))),
+            SeqCase::Declare { loc, b } => seq_items.push_front(sp(loc, TS::Declare(b))),
             SeqCase::Bind { loc, b, e } => {
                 let lvalue_ty = lvalues_expected_types(context, &b);
-                resulting_sequence.push_front(sp(loc, TS::Bind(b, lvalue_ty, e)))
+                seq_items.push_front(sp(loc, TS::Bind(b, lvalue_ty, e)))
             }
         }
     }
-    context.pop_use_funs_scope();
-    resulting_sequence
+    let use_funs = context.pop_use_funs_scope();
+    (use_funs, seq_items)
 }
 
-fn sequence_type(seq: &T::Sequence) -> &Type {
+fn sequence_type((_, seq): &T::Sequence) -> &Type {
     use T::SequenceItem_ as TS;
     match seq.back().unwrap() {
         sp!(_, TS::Bind(_, _, _)) | sp!(_, TS::Declare(_)) => {
@@ -1824,6 +1823,11 @@ fn check_mutability(context: &mut Context, eloc: Loc, usage: &str, v: &N::Var) {
         let usage_msg = format!("Invalid {usage} of immutable variable '{v}'");
         let decl_msg =
             format!("To use the variable mutably, it must be declared 'mut', e.g. 'mut {v}'");
+        if context.env.edition(context.current_package()) == Edition::E2024_MIGRATION {
+            context
+                .env
+                .add_diag(diag!(Migration::NeedsLetMut, (decl_loc, decl_msg.clone()),))
+        }
         context.env.add_diag(diag!(
             TypeSafety::InvalidImmVariableUsage,
             (eloc, usage_msg),
@@ -2228,7 +2232,8 @@ fn method_call(
         _ => exp_dotted_to_owned_value(context, DottedUsage::Use, loc, edotted, edotted_ty),
     };
     args.insert(0, first_arg);
-    let call = module_call_impl(context, loc, m, f, targs, parameters, argloc, args);
+    let mut call = module_call_impl(context, loc, m, f, targs, parameters, argloc, args);
+    call.method_name = Some(method);
     Some((ret_ty, TE::ModuleCall(Box::new(call))))
 }
 
@@ -2294,6 +2299,7 @@ fn module_call_impl(
         type_arguments: ty_args,
         arguments,
         parameter_types: params_ty_list,
+        method_name: None,
     };
     context
         .used_module_members
@@ -2468,7 +2474,7 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
 // Utils
 //**************************************************************************************************
 
-fn process_attributes(context: &mut Context, all_attributes: &Attributes) {
+fn process_attributes<T: TName>(context: &mut Context, all_attributes: &UniqueMap<T, Attribute>) {
     for (_, _, attr) in all_attributes {
         match &attr.value {
             Attribute_::Name(_) => (),
@@ -2551,9 +2557,7 @@ fn unused_module_members(context: &mut Context, mident: &ModuleIdent_, mdef: &T:
     }
 
     for (loc, name, fun) in &mdef.functions {
-        if fun.attributes.iter().any(|(_, n, _)| {
-            n == &AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::Test))
-        }) {
+        if fun.attributes.contains_key_(&TestingAttribute::Test.into()) {
             // functions with #[test] attribute are implicitly used
             continue;
         }

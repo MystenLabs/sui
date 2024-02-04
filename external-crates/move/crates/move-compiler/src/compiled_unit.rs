@@ -48,6 +48,7 @@ pub struct NamedCompiledModule {
 #[derive(Debug, Clone)]
 pub struct AnnotatedCompiledModule {
     pub loc: Loc,
+    pub attributes: Attributes,
     pub module_name_loc: Loc,
     pub address_name: Option<Name>,
     pub named_module: NamedCompiledModule,

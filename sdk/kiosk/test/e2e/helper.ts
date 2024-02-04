@@ -83,7 +83,7 @@ export async function testLockItemFlow(
 	kioskTx
 		.lock({
 			itemType,
-			itemId,
+			item: itemId,
 			policy: policies[0].id,
 		})
 		.finalize();

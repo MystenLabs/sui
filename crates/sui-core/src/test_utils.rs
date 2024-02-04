@@ -1,13 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::{
-    test_authority_builder::TestAuthorityBuilder, AuthorityState, EffectsNotifyRead,
-};
-use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
-use crate::epoch::committee_store::CommitteeStore;
-use crate::state_accumulator::StateAccumulator;
-use crate::test_authority_clients::LocalAuthorityClient;
 use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
@@ -24,6 +17,7 @@ use sui_config::local_ip_utils;
 use sui_config::node::OverloadThresholdConfig;
 use sui_framework::BuiltInFramework;
 use sui_genesis_builder::validator_info::ValidatorInfo;
+use sui_macros::nondeterministic;
 use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
@@ -50,6 +44,12 @@ use sui_types::{
 };
 use tokio::time::timeout;
 use tracing::{info, warn};
+
+use crate::authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState};
+use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
+use crate::epoch::committee_store::CommitteeStore;
+use crate::state_accumulator::StateAccumulator;
+use crate::test_authority_clients::LocalAuthorityClient;
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -108,7 +108,7 @@ pub(crate) fn init_state_parameters_from_rng<R>(rng: &mut R) -> (Genesis, Author
 where
     R: rand::CryptoRng + rand::RngCore,
 {
-    let dir = tempfile::TempDir::new().unwrap();
+    let dir = nondeterministic!(tempfile::TempDir::new().unwrap());
     let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
         .rng(rng)
         .build();
@@ -123,7 +123,9 @@ where
 pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) {
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
-        state.database.notify_read_executed_effects(vec![digest]),
+        state
+            .get_cache_reader()
+            .notify_read_executed_effects(&[digest]),
     )
     .await
     {
@@ -138,7 +140,9 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
 pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
-        state.database.notify_read_executed_effects(digests.clone()),
+        state
+            .get_cache_reader()
+            .notify_read_executed_effects(&digests),
     )
     .await
     {

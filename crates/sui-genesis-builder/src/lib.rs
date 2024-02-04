@@ -847,7 +847,8 @@ fn create_genesis_transaction(
     // execute txn to effects
     let (effects, events, objects) = {
         let silent = true;
-        let executor = sui_execution::executor(protocol_config, silent)
+
+        let executor = sui_execution::executor(protocol_config, silent, None)
             .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
@@ -855,7 +856,7 @@ fn create_genesis_transaction(
         let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, _) = transaction_data.execution_parts();
         let input_objects = CheckedInputObjects::new_for_genesis(vec![]);
-        let (inner_temp_store, effects, _execution_error) = executor
+        let (inner_temp_store, _, effects, _execution_error) = executor
             .execute_transaction_to_effects(
                 &InMemoryStorage::new(Vec::new()),
                 protocol_config,
@@ -905,7 +906,7 @@ fn create_genesis_objects(
     );
 
     let silent = true;
-    let executor = sui_execution::executor(&protocol_config, silent)
+    let executor = sui_execution::executor(&protocol_config, silent, None)
         .expect("Creating an executor should not fail here");
 
     for system_package in system_packages.into_iter() {

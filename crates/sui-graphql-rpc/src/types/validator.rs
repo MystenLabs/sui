@@ -1,10 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::consistency::ConsistentIndexCursor;
 use crate::context_data::db_data_provider::PgManager;
+use crate::types::cursor::{JsonCursor, Page};
+use async_graphql::connection::{Connection, CursorType, Edge};
 
 use super::big_int::BigInt;
 use super::move_object::MoveObject;
+use super::object::ObjectLookupKey;
 use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
@@ -16,7 +20,11 @@ pub(crate) struct Validator {
     pub validator_summary: NativeSuiValidatorSummary,
     pub at_risk: Option<u64>,
     pub report_records: Option<Vec<Address>>,
+    /// The checkpoint sequence number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
+
+type CAddr = JsonCursor<ConsistentIndexCursor>;
 
 #[Object]
 impl Validator {
@@ -24,6 +32,7 @@ impl Validator {
     async fn address(&self) -> Address {
         Address {
             address: SuiAddress::from(self.validator_summary.sui_address),
+            checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
         }
     }
 
@@ -86,25 +95,37 @@ impl Validator {
     /// the operation ability to another address. The address holding this `Cap` object
     /// can then update the reference gas price and tallying rule on behalf of the validator.
     async fn operation_cap(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
-        MoveObject::query(ctx.data_unchecked(), self.operation_cap_id(), None)
-            .await
-            .extend()
+        MoveObject::query(
+            ctx.data_unchecked(),
+            self.operation_cap_id(),
+            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
+        )
+        .await
+        .extend()
     }
 
     /// The validator's current staking pool object, used to track the amount of stake
     /// and to compound staking rewards.
     async fn staking_pool(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
-        MoveObject::query(ctx.data_unchecked(), self.staking_pool_id(), None)
-            .await
-            .extend()
+        MoveObject::query(
+            ctx.data_unchecked(),
+            self.staking_pool_id(),
+            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
+        )
+        .await
+        .extend()
     }
 
     /// The validator's current exchange object. The exchange rate is used to determine
     /// the amount of SUI tokens that each past SUI staker can withdraw in the future.
     async fn exchange_rates(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
-        MoveObject::query(ctx.data_unchecked(), self.exchange_rates_id(), None)
-            .await
-            .extend()
+        MoveObject::query(
+            ctx.data_unchecked(),
+            self.exchange_rates_id(),
+            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
+        )
+        .await
+        .extend()
     }
 
     /// Number of exchange rates in the table.
@@ -193,8 +214,41 @@ impl Validator {
     }
 
     /// The addresses of other validators this validator has reported.
-    async fn report_records(&self) -> &Option<Vec<Address>> {
-        &self.report_records
+    async fn report_records(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        before: Option<CAddr>,
+        last: Option<u64>,
+        after: Option<CAddr>,
+    ) -> Result<Connection<String, Address>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
+        let mut connection = Connection::new(false, false);
+        let Some(addresses) = &self.report_records else {
+            return Ok(connection);
+        };
+
+        let Some((prev, next, _, cs)) =
+            page.paginate_consistent_indices(addresses.len(), self.checkpoint_viewed_at)?
+        else {
+            return Ok(connection);
+        };
+
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
+
+        for c in cs {
+            connection.edges.push(Edge::new(
+                c.encode_cursor(),
+                Address {
+                    address: addresses[c.ix].address,
+                    checkpoint_viewed_at: Some(c.c),
+                },
+            ));
+        }
+
+        Ok(connection)
     }
 
     /// The APY of this validator in basis points.

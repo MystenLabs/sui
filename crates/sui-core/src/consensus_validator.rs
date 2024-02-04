@@ -72,7 +72,9 @@ impl SuiTxValidator {
                 ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::CapabilityNotification(_)
                 | ConsensusTransactionKind::NewJWKFetched(_, _, _)
-                | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
+                | ConsensusTransactionKind::RandomnessStateUpdate(_, _)
+                | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _) => {}
             }
         }
 

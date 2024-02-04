@@ -5,7 +5,7 @@ use move_core_types::ident_str;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::path::PathBuf;
 use sui_genesis_builder::validator_info::GenesisValidatorMetadata;
-use sui_move_build::BuildConfig;
+use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_sdk::rpc_types::{
     get_new_package_obj_from_response, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
 };
@@ -50,6 +50,7 @@ impl TestTransactionBuilder {
         self.gas_object
     }
 
+    // Use `with_type_args` below to provide type args if any
     pub fn move_call(
         mut self,
         package_id: ObjectID,
@@ -65,6 +66,16 @@ impl TestTransactionBuilder {
             args,
             type_args: vec![],
         });
+        self
+    }
+
+    pub fn with_type_args(mut self, type_args: Vec<TypeTag>) -> Self {
+        if let TestTransactionData::Move(data) = &mut self.test_data {
+            assert!(data.type_args.is_empty());
+            data.type_args = type_args;
+        } else {
+            panic!("Cannot set type args for non-move call");
+        }
         self
     }
 
@@ -209,16 +220,6 @@ impl TestTransactionBuilder {
         )
     }
 
-    pub fn with_type_args(mut self, type_args: Vec<TypeTag>) -> Self {
-        if let TestTransactionData::Move(data) = &mut self.test_data {
-            assert!(data.type_args.is_empty());
-            data.type_args = type_args;
-        } else {
-            panic!("Cannot set type args for non-move call");
-        }
-        self
-    }
-
     pub fn transfer(mut self, object: ObjectRef, recipient: SuiAddress) -> Self {
         self.test_data = TestTransactionData::Transfer(TransferData { object, recipient });
         self
@@ -231,19 +232,19 @@ impl TestTransactionBuilder {
 
     pub fn publish(mut self, path: PathBuf) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(PublishData {
-            path,
-            with_unpublished_deps: false,
-        });
+        self.test_data = TestTransactionData::Publish(PublishData::Source(path, false));
         self
     }
 
     pub fn publish_with_deps(mut self, path: PathBuf) -> Self {
         assert!(matches!(self.test_data, TestTransactionData::Empty));
-        self.test_data = TestTransactionData::Publish(PublishData {
-            path,
-            with_unpublished_deps: true,
-        });
+        self.test_data = TestTransactionData::Publish(PublishData::Source(path, true));
+        self
+    }
+
+    pub fn publish_with_data(mut self, data: PublishData) -> Self {
+        assert!(matches!(self.test_data, TestTransactionData::Empty));
+        self.test_data = TestTransactionData::Publish(data);
         self
     }
 
@@ -296,10 +297,21 @@ impl TestTransactionBuilder {
                 self.gas_price,
             ),
             TestTransactionData::Publish(data) => {
-                let compiled_package = BuildConfig::new_for_testing().build(data.path).unwrap();
-                let all_module_bytes =
-                    compiled_package.get_package_bytes(data.with_unpublished_deps);
-                let dependencies = compiled_package.get_dependency_original_package_ids();
+                let (all_module_bytes, dependencies) = match data {
+                    PublishData::Source(path, with_unpublished_deps) => {
+                        let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
+                        let all_module_bytes =
+                            compiled_package.get_package_bytes(with_unpublished_deps);
+                        let dependencies = compiled_package.get_dependency_original_package_ids();
+                        (all_module_bytes, dependencies)
+                    }
+                    PublishData::ModuleBytes(bytecode) => (bytecode, vec![]),
+                    PublishData::CompiledPackage(compiled_package) => {
+                        let all_module_bytes = compiled_package.get_package_bytes(false);
+                        let dependencies = compiled_package.get_dependency_original_package_ids();
+                        (all_module_bytes, dependencies)
+                    }
+                };
 
                 TransactionData::new_module(
                     self.sender,
@@ -385,10 +397,12 @@ struct MoveData {
     type_args: Vec<TypeTag>,
 }
 
-struct PublishData {
-    path: PathBuf,
-    /// Whether to publish unpublished dependencies in the same transaction or not.
-    with_unpublished_deps: bool,
+pub enum PublishData {
+    /// Path to source code directory and with_unpublished_deps.
+    /// with_unpublished_deps indicates whether to publish unpublished dependencies in the same transaction or not.
+    Source(PathBuf, bool),
+    ModuleBytes(Vec<Vec<u8>>),
+    CompiledPackage(CompiledPackage),
 }
 
 struct TransferData {

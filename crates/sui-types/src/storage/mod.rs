@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod error;
 mod object_store_trait;
 mod read_store;
 mod shared_in_memory_store;
@@ -459,6 +460,12 @@ impl From<&ObjectRef> for ObjectKey {
 pub enum ObjectOrTombstone {
     Object(Object),
     Tombstone(ObjectRef),
+}
+
+impl From<Object> for ObjectOrTombstone {
+    fn from(object: Object) -> Self {
+        ObjectOrTombstone::Object(object)
+    }
 }
 
 /// Fetch the `ObjectKey`s (IDs and versions) for non-shared input objects.  Includes owned,

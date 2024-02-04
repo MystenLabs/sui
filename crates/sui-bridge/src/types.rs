@@ -20,15 +20,22 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
 use sui_types::base_types::SuiAddress;
-use sui_types::collection_types::{Bag, LinkedTable, VecMap};
+use sui_types::collection_types::{Bag, LinkedTable, LinkedTableNode, VecMap};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::StakeUnit;
 use sui_types::digests::{Digest, TransactionDigest};
+use sui_types::dynamic_field::Field;
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 use sui_types::{base_types::SUI_ADDRESS_LENGTH, committee::EpochId};
 
 pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
+
+pub type BridgeInnerDynamicField = Field<u64, MoveTypeBridgeInner>;
+pub type BridgeRecordDyanmicField = Field<
+    MoveTypeBridgeMessageKey,
+    LinkedTableNode<MoveTypeBridgeMessageKey, MoveTypeBridgeRecord>,
+>;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct BridgeAuthority {
@@ -166,12 +173,26 @@ pub enum BridgeChainId {
     SuiMainnet = 0,
     SuiTestnet = 1,
     SuiDevnet = 2,
+    SuiLocalTest = 3,
 
     EthMainnet = 10,
     EthSepolia = 11,
+    EthLocalTest = 12,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TryFromPrimitive, Hash)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    TryFromPrimitive,
+    Hash,
+    Ord,
+    PartialOrd,
+)]
 #[repr(u8)]
 pub enum TokenId {
     Sui = 0,
@@ -179,6 +200,14 @@ pub enum TokenId {
     ETH = 2,
     USDC = 3,
     USDT = 4,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum BridgeActionStatus {
+    RecordNotFound,
+    Pending,
+    Approved,
+    Claimed,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -226,7 +255,7 @@ impl BridgeAction {
                 // Add message version
                 bytes.push(TOKEN_TRANSFER_MESSAGE_VERSION);
                 // Add nonce
-                bytes.extend_from_slice(&e.nonce.to_le_bytes());
+                bytes.extend_from_slice(&e.nonce.to_be_bytes());
                 // Add source chain id
                 bytes.push(e.sui_chain_id as u8);
 
@@ -245,7 +274,7 @@ impl BridgeAction {
                 bytes.push(e.token_id as u8);
 
                 // Add token amount
-                bytes.extend_from_slice(&e.amount.to_le_bytes());
+                bytes.extend_from_slice(&e.amount.to_be_bytes());
             }
             BridgeAction::EthToSuiBridgeAction(a) => {
                 let e = &a.eth_bridge_event;
@@ -254,7 +283,7 @@ impl BridgeAction {
                 // Add message version
                 bytes.push(TOKEN_TRANSFER_MESSAGE_VERSION);
                 // Add nonce
-                bytes.extend_from_slice(&e.nonce.to_le_bytes());
+                bytes.extend_from_slice(&e.nonce.to_be_bytes());
                 // Add source chain id
                 bytes.push(e.eth_chain_id as u8);
 
@@ -273,7 +302,7 @@ impl BridgeAction {
                 bytes.push(e.token_id as u8);
 
                 // Add token amount
-                bytes.extend_from_slice(&e.amount.to_le_bytes());
+                bytes.extend_from_slice(&e.amount.to_be_bytes());
             } // TODO add formats for other events
         }
         bytes
@@ -284,6 +313,29 @@ impl BridgeAction {
         let mut hasher = Keccak256::default();
         hasher.update(&self.to_bytes());
         BridgeActionDigest::new(hasher.finalize().into())
+    }
+
+    pub fn source_chain_id(&self) -> BridgeChainId {
+        match self {
+            BridgeAction::SuiToEthBridgeAction(a) => a.sui_bridge_event.sui_chain_id,
+            BridgeAction::EthToSuiBridgeAction(a) => a.eth_bridge_event.eth_chain_id,
+        }
+    }
+
+    // Also called `message_type`
+    pub fn action_type(&self) -> BridgeActionType {
+        match self {
+            BridgeAction::SuiToEthBridgeAction(_) => BridgeActionType::TokenTransfer,
+            BridgeAction::EthToSuiBridgeAction(_) => BridgeActionType::TokenTransfer,
+        }
+    }
+
+    // Also called `nonce`
+    pub fn seq_number(&self) -> u64 {
+        match self {
+            BridgeAction::SuiToEthBridgeAction(a) => a.sui_bridge_event.nonce,
+            BridgeAction::EthToSuiBridgeAction(a) => a.eth_bridge_event.nonce,
+        }
     }
 }
 
@@ -390,6 +442,24 @@ pub struct MoveTypeBridgeMessageKey {
     pub bridge_seq_num: u64,
 }
 
+/// Rust version of the Move message::BridgeMessage type.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MoveTypeBridgeMessage {
+    pub message_type: u8,
+    pub message_version: u8,
+    pub seq_num: u64,
+    pub source_chain: u8,
+    pub payload: Vec<u8>,
+}
+
+/// Rust version of the Move message::BridgeMessage type.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MoveTypeBridgeRecord {
+    pub message: MoveTypeBridgeMessage,
+    pub verified_signatures: Option<Vec<Vec<u8>>>,
+    pub claimed: bool,
+}
+
 /////////////////////////// Move Types End //////////////////////////
 
 #[cfg(test)]
@@ -444,7 +514,7 @@ mod tests {
         let prefix_bytes = BRIDGE_MESSAGE_PREFIX.to_vec(); // len: 18
         let message_type = vec![BridgeActionType::TokenTransfer as u8]; // len: 1
         let message_version = vec![TOKEN_TRANSFER_MESSAGE_VERSION]; // len: 1
-        let nonce_bytes = nonce.to_le_bytes().to_vec(); // len: 8
+        let nonce_bytes = nonce.to_be_bytes().to_vec(); // len: 8
         let source_chain_id_bytes = vec![sui_chain_id as u8]; // len: 1
 
         let sui_address_length_bytes = vec![SUI_ADDRESS_LENGTH as u8]; // len: 1
@@ -454,7 +524,7 @@ mod tests {
         let eth_address_bytes = eth_address.as_bytes().to_vec(); // len: 20
 
         let token_id_bytes = vec![token_id as u8]; // len: 1
-        let token_amount_bytes = amount.to_le_bytes().to_vec(); // len: 8
+        let token_amount_bytes = amount.to_be_bytes().to_vec(); // len: 8
 
         let mut combined_bytes = Vec::new();
         combined_bytes.extend_from_slice(&prefix_bytes);
@@ -517,16 +587,15 @@ mod tests {
             sui_bridge_event,
         })
         .to_bytes();
-
         assert_eq!(
             encoded_bytes,
-            Hex::decode("5355495f4252494447455f4d45535341474500010a00000000000000012000000000000000000000000000000000000000000000000000000000000000640b1400000000000000000000000000000000000000c8033930000000000000").unwrap(),
+            Hex::decode("5355495f4252494447455f4d4553534147450001000000000000000a012000000000000000000000000000000000000000000000000000000000000000640b1400000000000000000000000000000000000000c8030000000000003039").unwrap(),
         );
 
         let hash = Keccak256::digest(encoded_bytes).digest;
         assert_eq!(
             hash.to_vec(),
-            Hex::decode("1f308fdc0a7e73701370bf1ecbac91cc0605a2be000c52431c4f9546545ead5b")
+            Hex::decode("6ab34c52b6264cbc12fe8c3874f9b08f8481d2e81530d136386646dbe2f8baf4")
                 .unwrap(),
         );
         Ok(())
@@ -570,13 +639,13 @@ mod tests {
 
         assert_eq!(
             encoded_bytes,
-            Hex::decode("5355495f4252494447455f4d45535341474500010a000000000000000b1400000000000000000000000000000000000000c801200000000000000000000000000000000000000000000000000000000000000064033930000000000000").unwrap(),
+            Hex::decode("5355495f4252494447455f4d4553534147450001000000000000000a0b1400000000000000000000000000000000000000c801200000000000000000000000000000000000000000000000000000000000000064030000000000003039").unwrap(),
         );
 
         let hash = Keccak256::digest(encoded_bytes).digest;
         assert_eq!(
             hash.to_vec(),
-            Hex::decode("e9ea9aef6729a3274ebb77acb835039f71a8910e90eb14a2c479bf5901159cc5")
+            Hex::decode("b352508c301a37bb1b68a75dd0fc42b6f692b2650818631c8f8a4d4d3e5bef46")
                 .unwrap(),
         );
         Ok(())

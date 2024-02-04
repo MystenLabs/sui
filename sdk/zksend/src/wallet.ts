@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs } from '@mysten/sui.js/bcs';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import { toB64 } from '@mysten/sui.js/utils';
 import type {
 	StandardConnectFeature,
@@ -35,7 +34,6 @@ export const ZKSEND_WALLET_NAME = 'zkSend' as const;
 export class ZkSendWallet implements Wallet {
 	#events: Emitter<WalletEventsMap>;
 	#accounts: ReadonlyWalletAccount[];
-	#client: SuiClient;
 	#origin: string;
 	#name: string;
 
@@ -89,19 +87,16 @@ export class ZkSendWallet implements Wallet {
 	}
 
 	constructor({
-		client,
 		name,
 		address,
 		origin = DEFAULT_ZKSEND_ORIGIN,
 	}: {
-		client: SuiClient;
 		origin?: string;
 		address?: string | null;
 		name: string;
 	}) {
 		this.#accounts = [];
 		this.#events = mitt();
-		this.#client = client;
 		this.#origin = origin;
 		this.#name = name;
 
@@ -113,21 +108,17 @@ export class ZkSendWallet implements Wallet {
 	#signTransactionBlock: SuiSignTransactionBlockMethod = async ({ transactionBlock, account }) => {
 		transactionBlock.setSenderIfNotSet(account.address);
 
-		const bytes = toB64(
-			await transactionBlock.build({
-				client: this.#client,
-			}),
-		);
+		const data = transactionBlock.serialize();
 
 		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
 		const response = await popup.createRequest({
 			type: 'sign-transaction-block',
-			bytes,
+			data,
 			address: account.address,
 		});
 
 		return {
-			transactionBlockBytes: bytes,
+			transactionBlockBytes: response.bytes,
 			signature: response.signature,
 		};
 	};
@@ -211,7 +202,6 @@ export function registerZkSendWallet(
 	},
 ) {
 	const wallets = getWallets();
-	const client = new SuiClient({ url: getFullnodeUrl('mainnet') });
 
 	let addressFromRedirect: string | null = null;
 	try {
@@ -222,7 +212,6 @@ export function registerZkSendWallet(
 	}
 
 	const wallet = new ZkSendWallet({
-		client,
 		name,
 		origin,
 		address: addressFromRedirect,

@@ -29,12 +29,51 @@ pub const MANIFEST_FILENAME: &str = "MANIFEST";
 #[derive(Serialize, Deserialize)]
 
 pub struct Manifest {
-    available_epochs: Vec<u64>,
+    pub available_epochs: Vec<u64>,
 }
 
 impl Manifest {
     pub fn new(available_epochs: Vec<u64>) -> Self {
         Manifest { available_epochs }
+    }
+
+    pub fn epoch_exists(&self, epoch: u64) -> bool {
+        self.available_epochs.contains(&epoch)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PerEpochManifest {
+    pub lines: Vec<String>,
+}
+
+impl PerEpochManifest {
+    pub fn new(lines: Vec<String>) -> Self {
+        PerEpochManifest { lines }
+    }
+
+    pub fn serialize_as_newline_delimited(&self) -> String {
+        self.lines.join("\n")
+    }
+
+    pub fn deserialize_from_newline_delimited(s: &str) -> PerEpochManifest {
+        PerEpochManifest {
+            lines: s.lines().map(String::from).collect(),
+        }
+    }
+
+    // Method to filter lines by a given prefix
+    pub fn filter_by_prefix(&self, prefix: &str) -> PerEpochManifest {
+        let filtered_lines = self
+            .lines
+            .iter()
+            .filter(|line| line.starts_with(prefix))
+            .cloned()
+            .collect();
+
+        PerEpochManifest {
+            lines: filtered_lines,
+        }
     }
 }
 
@@ -358,7 +397,8 @@ pub async fn write_snapshot_manifest<S: ObjectStoreListExt + ObjectStorePutExt>(
         }
     }
 
-    let bytes = Bytes::from(file_names.join("\n"));
+    let epoch_manifest = PerEpochManifest::new(file_names);
+    let bytes = Bytes::from(epoch_manifest.serialize_as_newline_delimited());
     put(
         store,
         &Path::from(format!("{}/{}", dir, MANIFEST_FILENAME)),
@@ -374,10 +414,10 @@ mod tests {
     use crate::object_store::util::{
         copy_recursively, delete_recursively, write_snapshot_manifest, MANIFEST_FILENAME,
     };
-    use crate::object_store::{ObjectStoreConfig, ObjectStoreType};
     use object_store::path::Path;
     use std::fs;
     use std::num::NonZeroUsize;
+    use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
     use tempfile::TempDir;
 
     #[tokio::test]

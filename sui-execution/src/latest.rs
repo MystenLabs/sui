@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
 use std::{collections::HashSet, sync::Arc};
 
 use move_binary_format::CompiledModule;
@@ -45,10 +46,15 @@ pub(crate) struct Verifier<'m> {
 }
 
 impl Executor {
-    pub(crate) fn new(protocol_config: &ProtocolConfig, silent: bool) -> Result<Self, SuiError> {
+    pub(crate) fn new(
+        protocol_config: &ProtocolConfig,
+        silent: bool,
+        enable_profiler: Option<PathBuf>,
+    ) -> Result<Self, SuiError> {
         Ok(Executor(Arc::new(new_move_vm(
             all_natives(silent),
             protocol_config,
+            enable_profiler,
         )?)))
     }
 }
@@ -87,6 +93,7 @@ impl executor::Executor for Executor {
         transaction_digest: TransactionDigest,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<(), ExecutionError>,
     ) {
@@ -126,6 +133,7 @@ impl executor::Executor for Executor {
         skip_all_checks: bool,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {

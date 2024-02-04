@@ -1,21 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::genesis_config::{AccountConfig, ValidatorGenesisConfigBuilder, DEFAULT_GAS_AMOUNT};
-use crate::genesis_config::{GenesisConfig, ValidatorGenesisConfig};
-use crate::network_config::NetworkConfig;
-use crate::node_config_builder::ValidatorConfigBuilder;
-use rand::rngs::OsRng;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::{num::NonZeroUsize, path::Path, sync::Arc};
+
+use rand::rngs::OsRng;
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_config::node::OverloadThresholdConfig;
+use sui_macros::nondeterministic;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, KeypairTraits, PublicKey};
 use sui_types::object::Object;
+
+use crate::genesis_config::{AccountConfig, ValidatorGenesisConfigBuilder, DEFAULT_GAS_AMOUNT};
+use crate::genesis_config::{GenesisConfig, ValidatorGenesisConfig};
+use crate::network_config::NetworkConfig;
+use crate::node_config_builder::ValidatorConfigBuilder;
 
 pub enum CommitteeConfig {
     Size(NonZeroUsize),
@@ -79,7 +82,7 @@ impl ConfigBuilder {
     }
 
     pub fn new_with_temp_dir() -> Self {
-        Self::new(tempfile::tempdir().unwrap().into_path())
+        Self::new(nondeterministic!(tempfile::tempdir().unwrap()).into_path())
     }
 }
 
@@ -480,7 +483,7 @@ mod test {
         let genesis_digest = *genesis_transaction.digest();
 
         let silent = true;
-        let executor = sui_execution::executor(&protocol_config, silent)
+        let executor = sui_execution::executor(&protocol_config, silent, None)
             .expect("Creating an executor should not fail here");
 
         // Use a throwaway metrics registry for genesis transaction execution.
@@ -493,7 +496,7 @@ mod test {
         let (kind, signer, _) = transaction_data.execution_parts();
         let input_objects = CheckedInputObjects::new_for_genesis(vec![]);
 
-        let (_inner_temp_store, effects, _execution_error) = executor
+        let (_inner_temp_store, _, effects, _execution_error) = executor
             .execute_transaction_to_effects(
                 &InMemoryStorage::new(Vec::new()),
                 &protocol_config,

@@ -133,6 +133,10 @@ impl Committee {
             .map(|(i, a)| (AuthorityIndex(i as u32), a))
     }
 
+    pub fn exists(&self, index: AuthorityIndex) -> bool {
+        index.value() < self.size()
+    }
+
     pub fn size(&self) -> usize {
         self.authorities.len()
     }
@@ -148,7 +152,7 @@ pub struct Authority {
     pub stake: Stake,
     /// Network address for communicating with the authority.
     pub address: Multiaddr,
-    /// The validator's hostname, for metrics and logging.
+    /// The authority's hostname, for metrics and logging.
     pub hostname: String,
     /// The authority's ed25519 publicKey for signing network messages and blocks.
     pub network_key: NetworkPublicKey,
@@ -159,13 +163,18 @@ pub struct Authority {
 /// Each authority is uniquely identified by its AuthorityIndex in the Committee.
 /// AuthorityIndex is between 0 (inclusive) and the total number of authorities (exclusive).
 ///
-/// NOTE: AuthorityIndex should not need to be created outside of this file or incremented.
+/// NOTE: for safety, invalid AuthorityIndex should be impossible to create. So AuthorityIndex
+/// should not be created or incremented outside of this file. AuthorityIndex received from peers
+/// should be validated before use.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Default, Hash, Serialize, Deserialize,
 )]
 pub struct AuthorityIndex(u32);
 
 impl AuthorityIndex {
+    // Minimum committee size is 4, so 0 index is always valid.
+    pub const ZERO: AuthorityIndex = AuthorityIndex(0);
+
     pub fn value(&self) -> usize {
         self.0 as usize
     }
@@ -177,9 +186,15 @@ impl AuthorityIndex {
     }
 }
 
+// TODO: re-evaluate formats for production debugging.
 impl Display for AuthorityIndex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.0.to_string().as_str())
+        if self.value() < 26 {
+            let c = (b'A' + self.value() as u8) as char;
+            f.write_str(c.to_string().as_str())
+        } else {
+            write!(f, "[{:02}]", self.value())
+        }
     }
 }
 

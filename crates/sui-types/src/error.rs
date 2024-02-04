@@ -467,10 +467,14 @@ pub enum SuiError {
         authority: AuthorityName,
         reason: String,
     },
-    #[error("Storage error")]
-    StorageError(#[from] TypedStoreError),
-    #[error("Non-RocksDB Storage error: {0}")]
-    GenericStorageError(String),
+    #[allow(non_camel_case_types)]
+    #[serde(rename = "StorageError")]
+    #[error("DEPRECATED")]
+    DEPRECATED_StorageError,
+    #[allow(non_camel_case_types)]
+    #[serde(rename = "GenericStorageError")]
+    #[error("DEPRECATED")]
+    DEPRECATED_GenericStorageError,
     #[error(
         "Attempted to access {object} through parent {given_parent}, \
         but it's actual parent is {actual_owner}"
@@ -481,10 +485,14 @@ pub enum SuiError {
         actual_owner: Owner,
     },
 
-    #[error("Missing fields/data in storage error: {0}")]
-    StorageMissingFieldError(String),
-    #[error("Corrupted fields/data in storage error: {0}")]
-    StorageCorruptedFieldError(String),
+    #[allow(non_camel_case_types)]
+    #[serde(rename = "StorageMissingFieldError")]
+    #[error("DEPRECATED")]
+    DEPRECATED_StorageMissingFieldError,
+    #[allow(non_camel_case_types)]
+    #[serde(rename = "StorageCorruptedFieldError")]
+    #[error("DEPRECATED")]
+    DEPRECATED_StorageCorruptedFieldError,
 
     #[error("Authority Error: {error:?}")]
     GenericAuthorityError { error: String },
@@ -601,6 +609,9 @@ pub enum SuiError {
 
     #[error("Failed to get JWK")]
     JWKRetrievalError,
+
+    #[error("Storage error: {0}")]
+    Storage(String),
 }
 
 #[repr(u64)]
@@ -654,6 +665,18 @@ impl From<Status> for SuiError {
                 status.code().description().to_owned(),
             )
         }
+    }
+}
+
+impl From<TypedStoreError> for SuiError {
+    fn from(e: TypedStoreError) -> Self {
+        Self::Storage(e.to_string())
+    }
+}
+
+impl From<crate::storage::error::Error> for SuiError {
+    fn from(e: crate::storage::error::Error) -> Self {
+        Self::Storage(e.to_string())
     }
 }
 

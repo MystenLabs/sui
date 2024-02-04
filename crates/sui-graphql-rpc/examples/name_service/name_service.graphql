@@ -1,5 +1,5 @@
 {
-  resolveNameServiceAddress(name: "example.sui") {
+  resolveSuinsAddress(domain: "example.sui") {
     address
   }
   address(
@@ -13,6 +13,6 @@
       coinObjectCount
       totalBalance
     }
-    defaultNameServiceName
+    defaultSuinsName
   }
 }

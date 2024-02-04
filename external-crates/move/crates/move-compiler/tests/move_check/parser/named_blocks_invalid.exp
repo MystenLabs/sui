@@ -7,3 +7,9 @@ error[E01002]: unexpected token
   │             Unexpected ':'
   │             Expected ';'
 
+error[E01001]: invalid character
+  ┌─ tests/move_check/parser/named_blocks_invalid.move:5:32
+  │
+5 │             if (cond) { return 'name 10 };
+  │                                ^^^^^ Unexpected character (')
+

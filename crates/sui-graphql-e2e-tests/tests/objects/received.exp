@@ -1,0 +1,35 @@
+processed 5 tasks
+
+task 1 'run-graphql'. lines 6-15:
+Response: {
+  "data": {
+    "object": {
+      "receivedTransactionBlocks": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 2 'publish'. lines 17-31:
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6353600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'create-checkpoint'. lines 33-33:
+Checkpoint created: 1
+
+task 4 'run-graphql'. lines 35-44:
+Response: {
+  "data": {
+    "object": {
+      "receivedTransactionBlocks": {
+        "nodes": [
+          {
+            "digest": "EVK8o9ZkDJtk6TWJxtK89uZi4yN5wiPxLdY2X5VX9C86"
+          }
+        ]
+      }
+    }
+  }
+}

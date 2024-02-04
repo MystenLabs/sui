@@ -12,8 +12,9 @@ use prometheus::{
 };
 use rocksdb::LiveFile;
 use std::cmp::{max, min};
-use std::collections::{HashMap, HashSet};
-use std::time::SystemTime;
+use std::collections::{BTreeSet, HashMap};
+use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{sync::Arc, time::Duration};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::node::AuthorityStorePruningConfig;
@@ -36,7 +37,7 @@ use typed_store::{Map, TypedStoreError};
 
 use super::authority_store_tables::AuthorityPerpetualTables;
 
-static PERIODIC_PRUNING_TABLES: Lazy<HashSet<String>> = Lazy::new(|| {
+static PERIODIC_PRUNING_TABLES: Lazy<BTreeSet<String>> = Lazy::new(|| {
     [
         "objects",
         "effects",
@@ -422,6 +423,7 @@ impl AuthorityStorePruner {
                 .effects
                 .multi_get(content.iter().map(|tx| tx.effects))?;
 
+            info!("scheduling pruning for checkpoint {:?}", checkpoint_number);
             checkpoints_to_prune.push(*checkpoint.digest());
             checkpoint_content_to_prune.push(content);
             effects_to_prune.extend(effects.into_iter().flatten());
@@ -489,8 +491,12 @@ impl AuthorityStorePruner {
     fn compact_next_sst_file(
         perpetual_db: Arc<AuthorityPerpetualTables>,
         delay_days: usize,
+        last_processed: Arc<Mutex<HashMap<String, SystemTime>>>,
     ) -> anyhow::Result<Option<LiveFile>> {
         let db_path = perpetual_db.objects.rocksdb.path();
+        let mut state = last_processed
+            .lock()
+            .expect("failed to obtain a lock for last processed SST files");
         let mut sst_file_for_compaction: Option<LiveFile> = None;
         let time_threshold =
             SystemTime::now() - Duration::from_secs(delay_days as u64 * 24 * 60 * 60);
@@ -502,6 +508,7 @@ impl AuthorityStorePruner {
                 || sst_file.start_key.is_none()
                 || sst_file.end_key.is_none()
                 || last_modified > time_threshold
+                || state.get(&sst_file.name).unwrap_or(&UNIX_EPOCH) > &time_threshold
             {
                 continue;
             }
@@ -524,6 +531,7 @@ impl AuthorityStorePruner {
             sst_file.start_key.clone().unwrap(),
             sst_file.end_key.clone().unwrap(),
         )?;
+        state.insert(sst_file.name.clone(), SystemTime::now());
         Ok(Some(sst_file))
     }
 
@@ -557,10 +565,12 @@ impl AuthorityStorePruner {
         let perpetual_db_for_compaction = perpetual_db.clone();
         if let Some(delay_days) = config.periodic_compaction_threshold_days {
             spawn_monitored_task!(async move {
+                let last_processed = Arc::new(Mutex::new(HashMap::new()));
                 loop {
                     let db = perpetual_db_for_compaction.clone();
+                    let state = Arc::clone(&last_processed);
                     let result = tokio::task::spawn_blocking(move || {
-                        Self::compact_next_sst_file(db, delay_days)
+                        Self::compact_next_sst_file(db, delay_days, state)
                     })
                     .await;
                     let mut sleep_interval_secs = 1;

@@ -27,29 +27,24 @@ Response: {
                 },
                 {
                   "outputState": {
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
                     "asMovePackage": {
                       "module": {
                         "all": {
                           "edges": [
                             {
-                              "cursor": "MA",
+                              "cursor": "eyJpIjowLCJjIjoxfQ",
                               "node": {
                                 "name": "m0"
                               }
                             },
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
                             },
                             {
-                              "cursor": "Mg",
+                              "cursor": "eyJpIjoyLCJjIjoxfQ",
                               "node": {
                                 "name": "m2"
                               }
@@ -63,13 +58,13 @@ Response: {
                         "after": {
                           "edges": [
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
                             },
                             {
-                              "cursor": "Mg",
+                              "cursor": "eyJpIjoyLCJjIjoxfQ",
                               "node": {
                                 "name": "m2"
                               }
@@ -83,13 +78,13 @@ Response: {
                         "before": {
                           "edges": [
                             {
-                              "cursor": "MA",
+                              "cursor": "eyJpIjowLCJjIjoxfQ",
                               "node": {
                                 "name": "m0"
                               }
                             },
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
@@ -102,6 +97,11 @@ Response: {
                         }
                       }
                     }
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
                   }
                 }
               ]
@@ -129,14 +129,14 @@ Response: {
                 },
                 {
                   "outputState": {
-                    "asMovePackage": null
+                    "asMovePackage": {
+                      "module": null
+                    }
                   }
                 },
                 {
                   "outputState": {
-                    "asMovePackage": {
-                      "module": null
-                    }
+                    "asMovePackage": null
                   }
                 }
               ]
@@ -162,7 +162,7 @@ Response: {
         "effects",
         "objectChanges",
         "nodes",
-        2,
+        1,
         "outputState",
         "asMovePackage",
         "module",
@@ -191,17 +191,12 @@ Response: {
                 },
                 {
                   "outputState": {
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
                     "asMovePackage": {
                       "module": {
                         "prefix": {
                           "edges": [
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
@@ -215,13 +210,13 @@ Response: {
                         "prefixAll": {
                           "edges": [
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
                             },
                             {
-                              "cursor": "Mg",
+                              "cursor": "eyJpIjoyLCJjIjoxfQ",
                               "node": {
                                 "name": "m2"
                               }
@@ -235,7 +230,7 @@ Response: {
                         "suffix": {
                           "edges": [
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
@@ -249,13 +244,13 @@ Response: {
                         "suffixAll": {
                           "edges": [
                             {
-                              "cursor": "MA",
+                              "cursor": "eyJpIjowLCJjIjoxfQ",
                               "node": {
                                 "name": "m0"
                               }
                             },
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
@@ -268,6 +263,11 @@ Response: {
                         }
                       }
                     }
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
                   }
                 }
               ]
@@ -303,35 +303,30 @@ Response: {
                 },
                 {
                   "outputState": {
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
                     "asMovePackage": {
                       "module": {
                         "friends": {
                           "edges": [
                             {
-                              "cursor": "MA",
+                              "cursor": "eyJpIjowLCJjIjoyfQ",
                               "node": {
                                 "name": "m0"
                               }
                             },
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoyfQ",
                               "node": {
                                 "name": "m1"
                               }
                             },
                             {
-                              "cursor": "Mg",
+                              "cursor": "eyJpIjoyLCJjIjoyfQ",
                               "node": {
                                 "name": "m2"
                               }
                             },
                             {
-                              "cursor": "Mw",
+                              "cursor": "eyJpIjozLCJjIjoyfQ",
                               "node": {
                                 "name": "m3"
                               }
@@ -340,6 +335,11 @@ Response: {
                         }
                       }
                     }
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
                   }
                 }
               ]

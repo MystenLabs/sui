@@ -3,7 +3,8 @@
 
 use clap::*;
 use colored::Colorize;
-use sui::client_commands::SuiClientCommands::ReplayTransaction;
+use sui::client_commands::SuiClientCommands::{ProfileTransaction, ReplayTransaction};
+
 use sui::sui_commands::SuiCommand;
 use sui_types::exit_main;
 use tracing::debug;
@@ -55,23 +56,34 @@ async fn main() {
                 .with_env()
                 .init()
         }
+
         SuiCommand::Client {
-            cmd: Some(ReplayTransaction { gas_info, .. }),
+            cmd: Some(ReplayTransaction {
+                gas_info, ptb_info, ..
+            }),
             ..
         } => {
+            let mut config = telemetry_subscribers::TelemetryConfig::new()
+                .with_log_level("info")
+                .with_env();
             if gas_info {
-                telemetry_subscribers::TelemetryConfig::new()
-                    .with_log_level("info")
-                    .with_trace_target("replay")
-                    .with_env()
-                    .init()
-            } else {
-                telemetry_subscribers::TelemetryConfig::new()
-                    .with_log_level("info")
-                    .with_env()
-                    .init()
+                config = config.with_trace_target("replay_gas_info");
             }
+            if ptb_info {
+                config = config.with_trace_target("replay_ptb_info");
+            }
+            config.init()
         }
+        SuiCommand::Client {
+            cmd: Some(ProfileTransaction { .. }),
+            ..
+        } => {
+            // enable full logging for ProfileTransaction and ReplayTransaction
+            telemetry_subscribers::TelemetryConfig::new()
+                .with_env()
+                .init()
+        }
+
         _ => telemetry_subscribers::TelemetryConfig::new()
             .with_log_level("error")
             .with_env()

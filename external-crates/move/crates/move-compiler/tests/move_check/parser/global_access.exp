@@ -1,3 +1,9 @@
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_check/parser/global_access.move:9:9
+  │
+9 │     fun freeze(): u64 { 0 }
+  │         ^^^^^^ Invalid function name 'freeze'. 'freeze' is restricted and cannot be used to name a function
+
 error[E01002]: unexpected token
    ┌─ tests/move_check/parser/global_access.move:13:24
    │

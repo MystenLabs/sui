@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use diesel::connection::SimpleConnection;
 use mysten_metrics::init_metrics;
 use prometheus::Registry;
 use tokio::task::JoinHandle;
@@ -13,16 +14,53 @@ use tracing::info;
 
 use crate::errors::IndexerError;
 use crate::indexer_v2::IndexerV2;
+use crate::processors_v2::objects_snapshot_processor::SnapshotLagConfig;
 use crate::store::{PgIndexerStore, PgIndexerStoreV2};
 use crate::utils::reset_database;
 use crate::{new_pg_connection_pool, Indexer, IndexerConfig};
 use crate::{new_pg_connection_pool_impl, IndexerMetrics};
 
+pub enum ReaderWriterConfig {
+    Reader { reader_mode_rpc_url: String },
+    Writer { snapshot_config: SnapshotLagConfig },
+}
+
+impl ReaderWriterConfig {
+    pub fn reader_mode(reader_mode_rpc_url: String) -> Self {
+        Self::Reader {
+            reader_mode_rpc_url,
+        }
+    }
+
+    pub fn writer_mode(snapshot_config: Option<SnapshotLagConfig>) -> Self {
+        Self::Writer {
+            snapshot_config: snapshot_config.unwrap_or_default(),
+        }
+    }
+}
+
 pub async fn start_test_indexer_v2(
     db_url: Option<String>,
     rpc_url: String,
-    reader_mode_rpc_url: Option<String>,
     use_indexer_experimental_methods: bool,
+    reader_writer_config: ReaderWriterConfig,
+) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
+    start_test_indexer_v2_impl(
+        db_url,
+        rpc_url,
+        use_indexer_experimental_methods,
+        reader_writer_config,
+        None,
+    )
+    .await
+}
+
+pub async fn start_test_indexer_v2_impl(
+    db_url: Option<String>,
+    rpc_url: String,
+    use_indexer_experimental_methods: bool,
+    reader_writer_config: ReaderWriterConfig,
+    new_database: Option<String>,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
     // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
@@ -54,39 +92,94 @@ pub async fn start_test_indexer_v2(
         ..Default::default()
     };
 
-    if let Some(reader_mode_rpc_url) = &reader_mode_rpc_url {
-        let reader_mode_rpc_url = reader_mode_rpc_url
-            .parse::<SocketAddr>()
-            .expect("Unable to parse fullnode address");
-        config.fullnode_sync_worker = false;
-        config.rpc_server_worker = true;
-        config.rpc_server_url = reader_mode_rpc_url.ip().to_string();
-        config.rpc_server_port = reader_mode_rpc_url.port();
-    }
-
-    let parsed_url = config.get_db_url().unwrap();
-    let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(5)).unwrap();
-    if config.reset_db && reader_mode_rpc_url.is_none() {
-        reset_database(&mut blocking_pool.get().unwrap(), true, config.use_v2).unwrap();
-    }
-
     let registry = prometheus::Registry::default();
 
     init_metrics(&registry);
 
     let indexer_metrics = IndexerMetrics::new(&registry);
 
-    let store = PgIndexerStoreV2::new(blocking_pool, indexer_metrics.clone());
-    let store_clone = store.clone();
-    let handle = if reader_mode_rpc_url.is_some() {
-        tokio::spawn(async move { IndexerV2::start_reader(&config, &registry, db_url).await })
-    } else {
-        tokio::spawn(
-            async move { IndexerV2::start_writer(&config, store_clone, indexer_metrics).await },
-        )
+    let mut parsed_url = config.get_db_url().unwrap();
+
+    if let Some(new_database) = new_database {
+        // Switch to default to create a new database
+        let (default_db_url, _) = replace_db_name(&parsed_url, "postgres");
+
+        // Open in default mode
+        let blocking_pool = new_pg_connection_pool_impl(&default_db_url, Some(5)).unwrap();
+        let mut default_conn = blocking_pool.get().unwrap();
+
+        // Delete the old db if it exists
+        default_conn
+            .batch_execute(&format!("DROP DATABASE IF EXISTS {}", new_database))
+            .unwrap();
+
+        // Create the new db
+        default_conn
+            .batch_execute(&format!("CREATE DATABASE {}", new_database))
+            .unwrap();
+        parsed_url = replace_db_name(&parsed_url, &new_database).0;
+    }
+
+    let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(5)).unwrap();
+    let store = PgIndexerStoreV2::new(blocking_pool.clone(), indexer_metrics.clone());
+
+    let handle = match reader_writer_config {
+        ReaderWriterConfig::Reader {
+            reader_mode_rpc_url,
+        } => {
+            let reader_mode_rpc_url = reader_mode_rpc_url
+                .parse::<SocketAddr>()
+                .expect("Unable to parse fullnode address");
+            config.fullnode_sync_worker = false;
+            config.rpc_server_worker = true;
+            config.rpc_server_url = reader_mode_rpc_url.ip().to_string();
+            config.rpc_server_port = reader_mode_rpc_url.port();
+
+            tokio::spawn(async move { IndexerV2::start_reader(&config, &registry, db_url).await })
+        }
+        ReaderWriterConfig::Writer { snapshot_config } => {
+            if config.reset_db {
+                reset_database(&mut blocking_pool.get().unwrap(), true, config.use_v2).unwrap();
+            }
+            let store_clone = store.clone();
+
+            tokio::spawn(async move {
+                IndexerV2::start_writer_with_config(
+                    &config,
+                    store_clone,
+                    indexer_metrics,
+                    snapshot_config,
+                )
+                .await
+            })
+        }
     };
 
     (store, handle)
+}
+
+fn replace_db_name(db_url: &str, new_db_name: &str) -> (String, String) {
+    let pos = db_url.rfind('/').expect("Unable to find / in db_url");
+    let old_db_name = &db_url[pos + 1..];
+
+    (
+        format!("{}/{}", &db_url[..pos], new_db_name),
+        old_db_name.to_string(),
+    )
+}
+
+pub async fn force_delete_database(db_url: String) {
+    // Replace the database name with the default `postgres`, which should be the last string after `/`
+    // This is necessary because you can't drop a database while being connected to it.
+    // Hence switch to the default `postgres` database to drop the active database.
+    let (default_db_url, db_name) = replace_db_name(&db_url, "postgres");
+
+    let blocking_pool = new_pg_connection_pool_impl(&default_db_url, Some(5)).unwrap();
+    blocking_pool
+        .get()
+        .unwrap()
+        .batch_execute(&format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", db_name))
+        .unwrap();
 }
 
 /// Spawns an indexer thread with provided Postgres DB url

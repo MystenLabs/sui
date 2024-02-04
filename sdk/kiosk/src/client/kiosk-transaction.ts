@@ -285,12 +285,25 @@ export class KioskTransaction {
 	 * A function to take lock an item in the kiosk.
 
 	 * @param itemType The type `T` of the item
-	 * @param itemId The ID of the item
+	 * @param item The ID or Transaction Argument of the item
+	 * @param itemId The ID of the item - Deprecated: Use `item` instead.
 	 * @param policy The Policy ID or Transaction Argument for item T
 	 */
-	lock({ itemType, itemId, policy }: ItemId & { policy: ObjectArgument }) {
+	lock({
+		itemType,
+		item,
+		itemId,
+		policy,
+	}: ItemReference & { policy: ObjectArgument; itemId?: string }) {
 		this.#validateKioskIsSet();
-		kioskTx.lock(this.transactionBlock, itemType, this.kiosk!, this.kioskCap!, policy, itemId);
+		kioskTx.lock(
+			this.transactionBlock,
+			itemType,
+			this.kiosk!,
+			this.kioskCap!,
+			policy,
+			itemId ?? item,
+		);
 		return this;
 	}
 

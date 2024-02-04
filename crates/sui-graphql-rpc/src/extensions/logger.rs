@@ -1,20 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{error::code, metrics::Metrics};
 use async_graphql::{
     extensions::{
-        Extension, ExtensionContext, ExtensionFactory, NextExecute, NextParseQuery,
-        NextPrepareRequest, NextValidation,
+        Extension, ExtensionContext, ExtensionFactory, NextExecute, NextParseQuery, NextResolve,
+        NextValidation, ResolveInfo,
     },
     parser::types::{ExecutableDocument, OperationType, Selection},
-    PathSegment, Request, Response, ServerError, ServerResult, ValidationResult, Variables,
+    PathSegment, Response, ServerError, ServerResult, ValidationResult, Variables,
 };
+use async_graphql_value::ConstValue;
 use std::{fmt::Write, net::SocketAddr, sync::Arc};
-use tokio::sync::Mutex;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-
-// TODO: mode in-depth logging to debug
 
 #[derive(Clone, Debug)]
 pub struct LoggerConfig {
@@ -26,7 +25,7 @@ pub struct LoggerConfig {
 impl Default for LoggerConfig {
     fn default() -> Self {
         Self {
-            log_request_query: true,
+            log_request_query: false,
             log_response: true,
             log_complexity: true,
         }
@@ -41,41 +40,33 @@ pub struct Logger {
 impl ExtensionFactory for Logger {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(LoggerExtension {
-            session_id: "".to_string().into(),
             config: self.config.clone(),
         })
     }
 }
 
 struct LoggerExtension {
-    session_id: Mutex<String>,
     config: LoggerConfig,
-}
-
-impl LoggerExtension {
-    async fn set_session_id(&self, ip: Option<SocketAddr>) {
-        let ip_component = ip.map(|ip| format!("{}-", ip)).unwrap_or_default();
-        let uuid_component = format!("{}", Uuid::new_v4());
-        *self.session_id.lock().await = format!("{}{}", ip_component, uuid_component);
-    }
-
-    async fn session_id(&self) -> String {
-        self.session_id.lock().await.clone()
-    }
 }
 
 #[async_trait::async_trait]
 impl Extension for LoggerExtension {
-    /// Called at prepare request.
-    async fn prepare_request(
+    // This hook is used to get the top level node name for recording in the metrics which top
+    // level nodes are being called.
+    async fn resolve(
         &self,
         ctx: &ExtensionContext<'_>,
-        request: Request,
-        next: NextPrepareRequest<'_>,
-    ) -> ServerResult<Request> {
-        self.set_session_id(ctx.data_opt::<SocketAddr>().copied())
-            .await;
-        next.run(ctx, request).await
+        info: ResolveInfo<'_>,
+        next: NextResolve<'_>,
+    ) -> ServerResult<Option<ConstValue>> {
+        if info.path_node.parent.is_none() {
+            ctx.data_unchecked::<Metrics>()
+                .request_metrics
+                .num_queries_top_level
+                .with_label_values(&[info.name])
+                .inc();
+        }
+        next.run(ctx, info).await
     }
 
     async fn parse_query(
@@ -91,10 +82,14 @@ impl Extension for LoggerExtension {
             .iter()
             .filter(|(_, operation)| operation.node.ty == OperationType::Query)
             .any(|(_, operation)| operation.node.selection_set.node.items.iter().any(|selection| matches!(&selection.node, Selection::Field(field) if field.node.name.node == "__schema")));
+        let query_id: &Uuid = ctx.data_unchecked();
+        let session_id: &SocketAddr = ctx.data_unchecked();
         if !is_schema && self.config.log_request_query {
             info!(
-                target: "async-graphql",
-                "[Query] {}: {}", self.session_id().await, ctx.stringify_execute_doc(&document, variables)
+                %query_id,
+                %session_id,
+                "[Query] {}",
+                ctx.stringify_execute_doc(&document, variables)
             );
         }
         Ok(document)
@@ -106,12 +101,16 @@ impl Extension for LoggerExtension {
         next: NextValidation<'_>,
     ) -> Result<ValidationResult, Vec<ServerError>> {
         let res = next.run(ctx).await?;
+        let query_id: &Uuid = ctx.data_unchecked();
+        let session_id: &SocketAddr = ctx.data_unchecked();
         if self.config.log_complexity {
             info!(
-                target: "async-graphql",
+                %query_id,
+                %session_id,
                 complexity = res.complexity,
                 depth = res.depth,
-                "[Validation] {}", self.session_id().await);
+                "[Validation]",
+            );
         }
         Ok(res)
     }
@@ -123,8 +122,11 @@ impl Extension for LoggerExtension {
         next: NextExecute<'_>,
     ) -> Response {
         let resp = next.run(ctx, operation_name).await;
+        let query_id: &Uuid = ctx.data_unchecked();
+        let session_id: &SocketAddr = ctx.data_unchecked();
         if resp.is_err() {
             for err in &resp.errors {
+                let error_code = &err.extensions.as_ref().and_then(|x| x.get("code"));
                 if !err.path.is_empty() {
                     let mut path = String::new();
                     for (idx, s) in err.path.iter().enumerate() {
@@ -141,28 +143,63 @@ impl Extension for LoggerExtension {
                         }
                     }
 
-                    error!(
-                        target: "async-graphql",
-                        "[Response] path={} message={}", path, err.message,
-                    );
+                    if let Some(async_graphql_value::ConstValue::String(error_code)) = error_code {
+                        if error_code.as_str() == code::INTERNAL_SERVER_ERROR {
+                            error!(
+                                %query_id,
+                                %session_id,
+                                error_code,
+                                "[Response] path={} message={}",
+                                path,
+                                err.message,
+                            );
+                        } else {
+                            info!(
+                                %query_id,
+                                %session_id,
+                                error_code,
+                                "[Response] path={} message={}",
+                                path,
+                                err.message,
+                            );
+                        }
+                    } else {
+                        warn!(
+                            %query_id,
+                            %session_id,
+                            error_code = code::UNKNOWN,
+                            "[Response] path={} message={}",
+                            path,
+                            err.message,
+                        );
+                    }
                 } else {
-                    error!(
-                        target: "async-graphql",
-                        "[Response] message={}", err.message,
-                    );
+                    let error_code = if let Some(error_code) = error_code {
+                        error_code.to_string()
+                    } else {
+                        code::UNKNOWN.to_string()
+                    };
+                    info!(
+                        %query_id,
+                        %session_id,
+                        error_code,
+                        "[Response] message={}", err.message
+                    )
                 }
             }
         } else if self.config.log_response {
             match operation_name {
                 Some("IntrospectionQuery") => {
                     debug!(
-                        target: "async-graphql",
-                        "[Schema] {}: {}", self.session_id().await, resp.data
+                        %query_id,
+                        %session_id,
+                        "[Schema] {}", resp.data
                     );
                 }
                 _ => info!(
-                    target: "async-graphql",
-                    "[Response] {}: {}", self.session_id().await, resp.data
+                        %query_id,
+                        %session_id,
+                        "[Response] {}", resp.data
                 ),
             }
         }

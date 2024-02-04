@@ -38,6 +38,9 @@ use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::{self, Write};
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -48,13 +51,11 @@ use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_graphql_rpc::config::ConnectionConfig;
-use sui_graphql_rpc::test_infra::cluster::serve_executor;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
-use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
+use sui_graphql_rpc::test_infra::cluster::{serve_executor, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
-use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
@@ -63,11 +64,11 @@ use sui_types::base_types::{SequenceNumber, VersionNumber};
 use sui_types::crypto::get_authority_key_pair;
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
-use sui_types::storage::{ObjectKey, ObjectStore};
+use sui_types::storage::ObjectStore;
+use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::DEEPBOOK_PACKAGE_ID;
@@ -179,7 +180,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
     fn default_syntax(&self) -> SyntaxChoice {
         self.default_syntax
     }
-
+    async fn cleanup_resources(&mut self) -> anyhow::Result<()> {
+        if let Some(cluster) = self.cluster.take() {
+            cluster.cleanup_resources().await;
+        }
+        Ok(())
+    }
     async fn init(
         default_syntax: SyntaxChoice,
         pre_compiled_deps: Option<&'a FullyCompiledProgram>,
@@ -189,6 +195,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 Self::ExtraInitArgs,
             )>,
         >,
+        path: &Path,
     ) -> (Self, Option<String>) {
         let rng = StdRng::from_seed(RNG_SEED);
         assert!(
@@ -205,6 +212,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             custom_validator_account,
             reference_gas_price,
             default_gas_price,
+            object_snapshot_min_checkpoint_lag,
+            object_snapshot_max_checkpoint_lag,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -217,6 +226,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
+                    object_snapshot_min_checkpoint_lag,
+                    object_snapshot_max_checkpoint_lag,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -244,6 +255,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 if reference_gas_price.is_some() && !simulator {
                     panic!("Can only set reference gas price in simulator mode");
                 }
+
                 (
                     map,
                     accounts,
@@ -252,6 +264,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
+                    object_snapshot_min_checkpoint_lag,
+                    object_snapshot_max_checkpoint_lag,
                 )
             }
             None => {
@@ -262,6 +276,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     protocol_config,
                     false,
                     false,
+                    None,
+                    None,
                     None,
                     None,
                 )
@@ -286,6 +302,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 &protocol_config,
                 custom_validator_account,
                 reference_gas_price,
+                object_snapshot_min_checkpoint_lag,
+                object_snapshot_max_checkpoint_lag,
+                path.to_path_buf(),
             )
             .await
         } else {
@@ -528,6 +547,30 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }};
         }
         match command {
+            SuiSubcommand::ForceObjectSnapshotCatchup(ForceObjectSnapshotCatchup {
+                start_cp,
+                end_cp,
+            }) => {
+                let cluster = self.cluster.as_ref().unwrap();
+                let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
+
+                if end_cp > highest_checkpoint {
+                    bail!(
+                        "end_cp {} is greater than highest checkpoint {}",
+                        end_cp,
+                        highest_checkpoint,
+                    );
+                }
+
+                cluster
+                    .force_objects_snapshot_catchup(start_cp, end_cp)
+                    .await;
+
+                Ok(Some(format!(
+                    "Objects snapshot updated to [{} to {})",
+                    start_cp, end_cp
+                )))
+            }
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
                 show_usage,
                 show_headers,
@@ -542,7 +585,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(30))
                     .await;
 
-                let interpolated = self.interpolate_query(&contents, &cursors)?;
+                cluster
+                    .wait_for_objects_snapshot_catchup(Duration::from_secs(60))
+                    .await;
+
+                let interpolated =
+                    self.interpolate_query(&contents, &cursors, highest_checkpoint)?;
                 let resp = cluster
                     .graphql_client
                     .execute_to_graphql(interpolated.trim().to_owned(), show_usage, vec![], vec![])
@@ -563,7 +611,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 let chk = self
                     .executor
-                    .get_verified_checkpoint_by_sequence_number(latest_chk)?;
+                    .get_checkpoint_by_sequence_number(latest_chk)?
+                    .unwrap();
                 Ok(Some(format!("{}", chk.data())))
             }
             SuiSubcommand::CreateCheckpoint(CreateCheckpointCommand { count }) => {
@@ -1040,35 +1089,21 @@ impl<'a> SuiTestAdapter<'a> {
         self.executor
     }
 
-    fn named_variables(&self, cursors: &[String]) -> BTreeMap<String, String> {
+    fn named_variables(
+        &self,
+        cursors: &[String],
+        highest_checkpoint: u64,
+    ) -> BTreeMap<String, String> {
         let mut variables = BTreeMap::new();
+        let mut objects_mapping: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+
         let named_addrs = self
             .compiled_state
             .named_address_mapping
             .iter()
             .map(|(name, addr)| (name.clone(), format!("{:#02x}", addr)));
 
-        let objects = self
-            .object_enumeration
-            .iter()
-            .flat_map(|(oid, fid)| match fid {
-                FakeID::Known(_) => vec![],
-                FakeID::Enumerated(x, y) => vec![
-                    (format!("obj_{x}_{y}"), oid.to_string()),
-                    // Add a binding to treat this object as a cursor
-                    (
-                        format!("obj_{x}_{y}_cursor"),
-                        Base64::encode(bcs::to_bytes(&oid.to_vec()).unwrap_or_default()),
-                    ),
-                ],
-            });
-
-        let cursors = cursors
-            .iter()
-            .enumerate()
-            .map(|(idx, c)| (format!("cursor_{idx}"), Base64::encode(c)));
-
-        for (name, addr) in named_addrs.chain(objects).chain(cursors) {
+        for (name, addr) in named_addrs {
             let addr = addr.to_string();
 
             // Required variant
@@ -1077,11 +1112,54 @@ impl<'a> SuiTestAdapter<'a> {
             let name = name.to_string() + "_opt";
             variables.insert(name.clone(), addr.clone());
         }
+
+        for (oid, fid) in &self.object_enumeration {
+            if let FakeID::Enumerated(x, y) = fid {
+                objects_mapping.insert(format!("obj_{x}_{y}"), oid.to_vec());
+                variables.insert(format!("obj_{x}_{y}"), oid.to_string());
+                variables.insert(format!("obj_{x}_{y}_opt"), oid.to_string());
+            }
+        }
+
+        for (idx, s) in cursors.iter().enumerate() {
+            // an object cursor may be either @{obj_x_y} or @{obj_x_y,n}
+            // if the former, then use highest_checkpoint
+            if s.starts_with("@{obj_") && s.ends_with('}') {
+                let end_of_key = s.find(',').unwrap_or(s.len() - 1);
+                let obj_lookup = s[2..end_of_key].to_string();
+
+                let obj_id = objects_mapping.get(&obj_lookup).unwrap_or_else(|| {
+                    panic!(
+                        "Unknown object lookup: {}\nAllowed variable mappings are {:#?}",
+                        obj_lookup, variables
+                    )
+                });
+
+                let checkpoint = if end_of_key == s.len() - 1 {
+                    highest_checkpoint
+                } else {
+                    s[end_of_key + 1..s.len() - 1].parse::<u64>().unwrap()
+                };
+
+                let bcsd = bcs::to_bytes(&(obj_id.clone(), checkpoint)).unwrap_or_default();
+                let base64d = Base64::encode(bcsd);
+
+                variables.insert(format!("cursor_{idx}"), base64d);
+            } else {
+                variables.insert(format!("cursor_{idx}"), Base64::encode(s));
+            }
+        }
+
         variables
     }
 
-    fn interpolate_query(&self, contents: &str, cursors: &[String]) -> anyhow::Result<String> {
-        let variables = self.named_variables(cursors);
+    fn interpolate_query(
+        &self,
+        contents: &str,
+        cursors: &[String],
+        highest_checkpoint: u64,
+    ) -> anyhow::Result<String> {
+        let variables = self.named_variables(cursors, highest_checkpoint);
         let mut interpolated_query = contents.to_string();
 
         let re = regex::Regex::new(r"@\{([^\}]+)\}").unwrap();
@@ -1837,6 +1915,9 @@ async fn init_sim_executor(
     protocol_config: &ProtocolConfig,
     custom_validator_account: bool,
     reference_gas_price: Option<u64>,
+    object_snapshot_min_checkpoint_lag: Option<usize>,
+    object_snapshot_max_checkpoint_lag: Option<usize>,
+    test_file_path: PathBuf,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -1902,10 +1983,31 @@ async fn init_sim_executor(
         None,
     );
 
+    // Hash the file path to create custom unique DB name
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    test_file_path.hash(&mut hasher);
+    let hash = hasher.finish();
+    let db_name = format!("sui_graphql_test_{}", hash);
+
+    // Use the hash as a seed to generate a random port number
+    let base_port = hash as u16 % 8192;
+
+    let graphql_port = 20000 + base_port;
+    let graphql_prom_port = graphql_port + 1;
+    let internal_data_port = graphql_prom_port + 1;
     let cluster = serve_executor(
-        ConnectionConfig::ci_integration_test_cfg(),
-        DEFAULT_INTERNAL_DATA_SOURCE_PORT,
+        ConnectionConfig::ci_integration_test_cfg_with_db_name(
+            db_name,
+            graphql_port,
+            graphql_prom_port,
+        ),
+        internal_data_port,
         Arc::new(read_replica),
+        Some(SnapshotLagConfig::new(
+            object_snapshot_min_checkpoint_lag,
+            object_snapshot_max_checkpoint_lag,
+            Some(1),
+        )),
     )
     .await;
 
@@ -2011,63 +2113,120 @@ async fn update_named_address_mapping(
     }
 }
 
-impl NodeStateGetter for SuiTestAdapter<'_> {
-    fn get_verified_checkpoint_by_sequence_number(
+impl ObjectStore for SuiTestAdapter<'_> {
+    fn get_object(
         &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> SuiResult<VerifiedCheckpoint> {
-        self.executor
-            .get_verified_checkpoint_by_sequence_number(sequence_number)
-    }
-
-    fn get_latest_checkpoint_sequence_number(&self) -> SuiResult<CheckpointSequenceNumber> {
-        self.executor.get_latest_checkpoint_sequence_number()
-    }
-
-    fn get_checkpoint_contents(
-        &self,
-        content_digest: CheckpointContentsDigest,
-    ) -> SuiResult<CheckpointContents> {
-        self.executor.get_checkpoint_contents(content_digest)
-    }
-
-    fn multi_get_transaction_blocks(
-        &self,
-        tx_digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
-        self.executor.multi_get_transaction_blocks(tx_digests)
-    }
-
-    fn multi_get_executed_effects(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        self.executor.multi_get_executed_effects(digests)
-    }
-
-    fn multi_get_events(
-        &self,
-        event_digests: &[TransactionEventsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        self.executor.multi_get_events(event_digests)
-    }
-
-    fn multi_get_object_by_key(
-        &self,
-        object_keys: &[ObjectKey],
-    ) -> Result<Vec<Option<Object>>, SuiError> {
-        self.executor.multi_get_object_by_key(object_keys)
+        object_id: &ObjectID,
+    ) -> sui_types::storage::error::Result<Option<Object>> {
+        ObjectStore::get_object(&*self.executor, object_id)
     }
 
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> sui_types::storage::error::Result<Option<Object>> {
         ObjectStore::get_object_by_key(&*self.executor, object_id, version)
     }
+}
 
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        ObjectStore::get_object(&*self.executor, object_id)
+impl ReadStore for SuiTestAdapter<'_> {
+    fn get_committee(
+        &self,
+        epoch: sui_types::committee::EpochId,
+    ) -> sui_types::storage::error::Result<Option<Arc<sui_types::committee::Committee>>> {
+        self.executor.get_committee(epoch)
+    }
+
+    fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        ReadStore::get_latest_checkpoint(&self.executor)
+    }
+
+    fn get_highest_verified_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        self.executor.get_highest_verified_checkpoint()
+    }
+
+    fn get_highest_synced_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        self.executor.get_highest_synced_checkpoint()
+    }
+
+    fn get_lowest_available_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
+        self.executor.get_lowest_available_checkpoint()
+    }
+
+    fn get_checkpoint_by_digest(
+        &self,
+        digest: &sui_types::messages_checkpoint::CheckpointDigest,
+    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
+        self.executor.get_checkpoint_by_digest(digest)
+    }
+
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
+        self.executor
+            .get_checkpoint_by_sequence_number(sequence_number)
+    }
+
+    fn get_checkpoint_contents_by_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> sui_types::storage::error::Result<Option<CheckpointContents>> {
+        self.executor.get_checkpoint_contents_by_digest(digest)
+    }
+
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<Option<CheckpointContents>> {
+        self.executor
+            .get_checkpoint_contents_by_sequence_number(sequence_number)
+    }
+
+    fn get_transaction(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<VerifiedTransaction>> {
+        self.executor.get_transaction(tx_digest)
+    }
+
+    fn get_transaction_effects(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<TransactionEffects>> {
+        self.executor.get_transaction_effects(tx_digest)
+    }
+
+    fn get_events(
+        &self,
+        event_digest: &TransactionEventsDigest,
+    ) -> sui_types::storage::error::Result<Option<TransactionEvents>> {
+        self.executor.get_events(event_digest)
+    }
+
+    fn get_full_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
+    > {
+        self.executor
+            .get_full_checkpoint_contents_by_sequence_number(sequence_number)
+    }
+
+    fn get_full_checkpoint_contents(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
+    > {
+        self.executor.get_full_checkpoint_contents(digest)
     }
 }

@@ -38,6 +38,7 @@ pub enum FeatureGate {
     Move2024Keywords,
     BlockLabels,
     Move2024Paths,
+    Move2024Migration,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -90,7 +91,7 @@ pub fn create_feature_error(edition: Edition, feature: FeatureGate, loc: Loc) ->
 }
 
 pub fn valid_editions_for_feature(feature: FeatureGate) -> Vec<Edition> {
-    Edition::ALL
+    Edition::VALID
         .iter()
         .filter(|e| e.supports(feature))
         .copied()
@@ -117,6 +118,8 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::Move2024Paths,
 ];
 
+const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
+
 impl Edition {
     pub const LEGACY: Self = Self {
         edition: symbol!("legacy"),
@@ -126,10 +129,15 @@ impl Edition {
         edition: symbol!("2024"),
         release: Some(symbol!("alpha")),
     };
+    pub const E2024_MIGRATION: Self = Self {
+        edition: symbol!("2024"),
+        release: Some(symbol!("migration")),
+    };
 
     const SEP: &'static str = ".";
 
-    pub const ALL: &'static [Self] = &[Self::LEGACY, Self::E2024_ALPHA];
+    pub const ALL: &'static [Self] = &[Self::LEGACY, Self::E2024_ALPHA, Self::E2024_MIGRATION];
+    pub const VALID: &'static [Self] = &[Self::LEGACY, Self::E2024_ALPHA];
 
     pub fn supports(&self, feature: FeatureGate) -> bool {
         SUPPORTED_FEATURES.get(self).unwrap().contains(&feature)
@@ -140,6 +148,7 @@ impl Edition {
         match *self {
             Self::LEGACY => None,
             Self::E2024_ALPHA => Some(Self::LEGACY),
+            Self::E2024_MIGRATION => Some(Self::E2024_ALPHA),
             _ => self.unknown_edition_panic(),
         }
     }
@@ -154,6 +163,11 @@ impl Edition {
                 features.extend(E2024_ALPHA_FEATURES);
                 features
             }
+            Self::E2024_MIGRATION => {
+                let mut features = self.prev().unwrap().features();
+                features.extend(E2024_MIGRATION_FEATURES);
+                features
+            }
             _ => self.unknown_edition_panic(),
         }
     }
@@ -165,7 +179,7 @@ impl Edition {
     fn unknown_edition_error(&self) -> anyhow::Error {
         anyhow::anyhow!(
             "Unsupported edition \"{self}\". Current supported editions include: {}",
-            Self::ALL
+            Self::VALID
                 .iter()
                 .map(|e| format!("\"{}\"", e))
                 .collect::<Vec<_>>()
@@ -194,6 +208,7 @@ impl FeatureGate {
             FeatureGate::Move2024Keywords => "Move 2024 keywords are",
             FeatureGate::BlockLabels => "Block labels are",
             FeatureGate::Move2024Paths => "Move 2024 paths are",
+            FeatureGate::Move2024Migration => "Move 2024 migration is",
         }
     }
 }
@@ -216,7 +231,7 @@ impl FromStr for Edition {
             edition: Symbol::from(edition),
             release: release.map(Symbol::from),
         };
-        if !Self::ALL.iter().any(|e| e == &edition) {
+        if !Self::VALID.iter().any(|e| e == &edition) {
             return Err(edition.unknown_edition_error());
         }
         Ok(edition)

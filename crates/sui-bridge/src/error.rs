@@ -3,7 +3,7 @@
 
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BridgeError {
     // The input is not an invalid transaction digest/hash
     InvalidTxHash,

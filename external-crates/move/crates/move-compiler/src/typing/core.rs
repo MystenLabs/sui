@@ -155,14 +155,17 @@ impl<'env> Context<'env> {
         })
     }
 
-    pub fn pop_use_funs_scope(&mut self) {
+    pub fn pop_use_funs_scope(&mut self) -> N::UseFuns {
         let cur = self.use_funs.last_mut().unwrap();
         if cur.count > 1 {
             cur.count -= 1;
-            return;
+            return N::UseFuns {
+                resolved: N::ResolvedUseFuns::new(),
+                implicit_candidates: UniqueMap::new(),
+            };
         }
         let UseFunsScope { use_funs, .. } = self.use_funs.pop().unwrap();
-        for (tn, methods) in use_funs {
+        for (tn, methods) in use_funs.iter() {
             let unused = methods.iter().filter(|(_, _, uf)| !uf.used);
             for (_, method, use_fun) in unused {
                 let N::UseFun {
@@ -170,6 +173,7 @@ impl<'env> Context<'env> {
                     kind,
                     attributes: _,
                     is_public: _,
+                    tname: _,
                     target_function: _,
                     used: _,
                 } = use_fun;
@@ -186,6 +190,10 @@ impl<'env> Context<'env> {
                 };
                 self.env.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
             }
+        }
+        N::UseFuns {
+            resolved: use_funs,
+            implicit_candidates: UniqueMap::new(),
         }
     }
 

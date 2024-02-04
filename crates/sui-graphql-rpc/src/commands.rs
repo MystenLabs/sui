@@ -18,6 +18,7 @@ pub enum Command {
         #[clap(short, long)]
         path: Option<PathBuf>,
     },
+    GenerateDocsExamples,
     GenerateSchema {
         /// Path to output GraphQL schema to, in SDL format.
         #[clap(short, long)]

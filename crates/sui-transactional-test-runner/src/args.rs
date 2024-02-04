@@ -60,6 +60,10 @@ pub struct SuiInitArgs {
     pub reference_gas_price: Option<u64>,
     #[clap(long = "default-gas-price")]
     pub default_gas_price: Option<u64>,
+    #[clap(long = "object-snapshot-min-checkpoint-lag")]
+    pub object_snapshot_min_checkpoint_lag: Option<usize>,
+    #[clap(long = "object-snapshot-max-checkpoint-lag")]
+    pub object_snapshot_max_checkpoint_lag: Option<usize>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -161,6 +165,14 @@ pub struct RunGraphqlCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct ForceObjectSnapshotCatchup {
+    #[clap(long = "start-cp")]
+    pub start_cp: u64,
+    #[clap(long = "end-cp")]
+    pub end_cp: u64,
+}
+
+#[derive(Debug, clap::Parser)]
 pub struct CreateCheckpointCommand {
     pub count: Option<u64>,
 }
@@ -210,6 +222,8 @@ pub enum SuiSubcommand {
     ViewCheckpoint,
     #[clap(name = "run-graphql")]
     RunGraphql(RunGraphqlCommand),
+    #[clap(name = "force-object-snapshot-catchup")]
+    ForceObjectSnapshotCatchup(ForceObjectSnapshotCatchup),
 }
 
 #[derive(Clone, Debug)]

@@ -27,8 +27,6 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
-#[cfg(debug_assertions)]
-use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
@@ -462,8 +460,8 @@ impl VMRuntime {
         ) = self
             .loader
             .load_script(script.borrow(), &type_arguments, data_store)?;
-        #[cfg(debug_assertions)]
-        {
+        move_vm_profiler::gas_profiler_feature_enabled! {
+            use move_vm_profiler::GasProfiler;
             let rem = gas_meter.remaining_gas().into();
             gas_meter.set_profiler(GasProfiler::init_default_cfg(func.pretty_string(), rem));
         }
@@ -526,8 +524,8 @@ impl VMRuntime {
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
     ) -> VMResult<SerializedReturnValues> {
-        #[cfg(debug_assertions)]
-        {
+        move_vm_profiler::gas_profiler_feature_enabled! {
+            use move_vm_profiler::GasProfiler;
             if gas_meter.get_profiler_mut().is_none() {
                 gas_meter.set_profiler(GasProfiler::init_default_cfg(
                     function_name.to_string(),

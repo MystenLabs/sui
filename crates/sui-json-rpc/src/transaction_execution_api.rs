@@ -158,9 +158,10 @@ impl TransactionExecutionApi {
         let mut events: Option<SuiTransactionBlockEvents> = None;
         if opts.show_events {
             let epoch_store = self.state.load_epoch_store_one_call_per_task();
+            let backing_package_store = self.state.get_backing_package_store();
             let mut layout_resolver = epoch_store
                 .executor()
-                .type_layout_resolver(Box::new(self.state.get_db()));
+                .type_layout_resolver(Box::new(backing_package_store.as_ref()));
             events = Some(SuiTransactionBlockEvents::try_from(
                 transaction_events,
                 digest,
@@ -293,7 +294,7 @@ impl WriteApiServer for TransactionExecutionApi {
         sender_address: SuiAddress,
         tx_bytes: Base64,
         gas_price: Option<BigInt<u64>>,
-        epoch: Option<BigInt<u64>>,
+        _epoch: Option<BigInt<u64>>,
         additional_args: Option<DevInspectArgs>,
     ) -> RpcResult<DevInspectResults> {
         with_tracing!(async move {
@@ -301,6 +302,7 @@ impl WriteApiServer for TransactionExecutionApi {
                 gas_sponsor,
                 gas_budget,
                 gas_objects,
+                show_raw_txn_data_and_effects,
                 skip_checks,
             } = additional_args.unwrap_or_default();
             let tx_kind: TransactionKind = self.convert_bytes(tx_bytes)?;
@@ -312,7 +314,7 @@ impl WriteApiServer for TransactionExecutionApi {
                     gas_budget.map(|i| *i),
                     gas_sponsor,
                     gas_objects,
-                    epoch.map(|i| *i),
+                    show_raw_txn_data_and_effects,
                     skip_checks,
                 )
                 .await

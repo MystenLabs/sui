@@ -115,7 +115,7 @@ type Query {
     filter: ObjectFilter,
   ): ObjectConnection!
 
-  resolveNameServiceAddress(name: String!): Address
+  resolveSuinsAddress(name: String!): Address
 
   # NB. Will be moved into a private, explorer-specific extension.
   networkMetrics: NetworkMetrics
@@ -269,9 +269,10 @@ scalar OpenMoveTypeSignature
 # `TransactionData` in a dry-run.
 input TransactionMetadata {
   sender: SuiAddress
-  gasPrice: BigInt
-  gasBudget: BigInt
+  gasPrice: Int
+  gasBudget: Int
   gasObjects: [ObjectRef!]
+  gasSponsor: SuiAddress
 }
 
 # A reference to a particular version of an object.
@@ -483,7 +484,7 @@ interface IOwner {
     filter: DynamicFieldFilter,
   ): DynamicFieldConnection!
 
-  defaultNameServiceName: String
+  defaultSuinsName: String
   suinsRegistrations(
     first: Int,
     after: String,
@@ -780,7 +781,7 @@ type Checkpoint {
 }
 
 type TransactionBlock {
-  digest: String!
+  digest: String
 
   sender: Address
   gasInput: GasInput
@@ -1075,11 +1076,11 @@ type Balance {
 }
 
 type Coin implements IOwner & IObject {
-  balance: BigInt
+  coinBalance: BigInt
 }
 
 type StakedSui implements IOwner & IObject {
-  status: StakeStatus!
+  stakeStatus: StakeStatus!
   requestEpoch: Epoch
   activeEpoch: Epoch
   principal: BigInt
@@ -1119,6 +1120,7 @@ type MoveObject implements IOwner & IObject & IMoveObject {
   asCoin: Coin
   asStakedSui: StakedSui
   asCoinMetadata: CoinMetadata
+  asSuinsRegistration: SuinsRegistration
 }
 
 type MovePackage implements IOwner & IObject {
@@ -1274,8 +1276,6 @@ type ExecutionResult {
 type DryRunResult {
   transaction: TransactionBlock
   error: String
-
-  events: [Event!]
   results: [DryRunEffect!]
 }
 
@@ -1289,7 +1289,7 @@ type DryRunEffect {
 }
 
 type DryRunMutation {
-  input: TransactionInput
+  input: TransactionArgument
   type: MoveType
   bcs: Base64
 }

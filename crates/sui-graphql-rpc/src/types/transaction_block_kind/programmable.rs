@@ -1,30 +1,37 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+    consistency::ConsistentIndexCursor,
+    types::{
+        base64::Base64,
+        cursor::{JsonCursor, Page},
+        move_function::MoveFunction,
+        move_type::MoveType,
+        object_read::ObjectRead,
+        sui_address::SuiAddress,
+    },
+};
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
     *,
 };
+use sui_json_rpc_types::SuiArgument;
 use sui_types::transaction::{
     Argument as NativeArgument, CallArg as NativeCallArg, Command as NativeProgrammableTransaction,
     ObjectArg as NativeObjectArg, ProgrammableMoveCall as NativeMoveCallTransaction,
     ProgrammableTransaction as NativeProgrammableTransactionBlock,
 };
 
-use crate::types::{
-    base64::Base64,
-    cursor::{JsonCursor, Page},
-    move_function::MoveFunction,
-    move_type::MoveType,
-    object_read::ObjectRead,
-    sui_address::SuiAddress,
-};
-
 #[derive(Clone, Eq, PartialEq)]
-pub(crate) struct ProgrammableTransactionBlock(pub NativeProgrammableTransactionBlock);
+pub(crate) struct ProgrammableTransactionBlock {
+    pub native: NativeProgrammableTransactionBlock,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
+}
 
-pub(crate) type CInput = JsonCursor<usize>;
-pub(crate) type CTxn = JsonCursor<usize>;
+pub(crate) type CInput = JsonCursor<ConsistentIndexCursor>;
+pub(crate) type CTxn = JsonCursor<ConsistentIndexCursor>;
 
 #[derive(Union, Clone, Eq, PartialEq)]
 enum TransactionInput {
@@ -82,7 +89,10 @@ enum ProgrammableTransaction {
 }
 
 #[derive(Clone, Eq, PartialEq)]
-struct MoveCallTransaction(NativeMoveCallTransaction);
+struct MoveCallTransaction {
+    native: NativeMoveCallTransaction,
+    checkpoint_viewed_at: u64,
+}
 
 /// Transfers `inputs` to `address`. All inputs must have the `store` ability (allows public
 /// transfer) and must not be previously immutable or shared.
@@ -154,8 +164,8 @@ struct MakeMoveVecTransaction {
 }
 
 /// An argument to a programmable transaction command.
-#[derive(Union, Clone, Eq, PartialEq)]
-enum TransactionArgument {
+#[derive(Union, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum TransactionArgument {
     GasCoin(GasCoin),
     Input(Input),
     Result(TxResult),
@@ -163,24 +173,24 @@ enum TransactionArgument {
 
 /// Access to the gas inputs, after they have been smashed into one coin. The gas coin can only be
 /// used by reference, except for with `TransferObjectsTransaction` that can accept it by value.
-#[derive(SimpleObject, Clone, Eq, PartialEq)]
-struct GasCoin {
+#[derive(SimpleObject, Clone, Debug, Eq, PartialEq)]
+pub(crate) struct GasCoin {
     /// A workaround to define an empty variant of a GraphQL union.
     #[graphql(name = "_")]
     dummy: Option<bool>,
 }
 
 /// One of the input objects or primitive values to the programmable transaction block.
-#[derive(SimpleObject, Clone, Eq, PartialEq)]
-struct Input {
+#[derive(SimpleObject, Clone, Debug, Eq, PartialEq)]
+pub(crate) struct Input {
     /// Index of the programmable transaction block input (0-indexed).
     ix: u16,
 }
 
 /// The result of another transaction command.
-#[derive(SimpleObject, Clone, Eq, PartialEq)]
+#[derive(SimpleObject, Clone, Debug, Eq, PartialEq)]
 #[graphql(name = "Result")]
-struct TxResult {
+pub(crate) struct TxResult {
     /// The index of the previous command (0-indexed) that returned this result.
     cmd: u16,
 
@@ -205,7 +215,9 @@ impl ProgrammableTransactionBlock {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) = page.paginate_indices(self.0.inputs.len()) else {
+        let Some((prev, next, _, cs)) =
+            page.paginate_consistent_indices(self.native.inputs.len(), self.checkpoint_viewed_at)?
+        else {
             return Ok(connection);
         };
 
@@ -213,7 +225,7 @@ impl ProgrammableTransactionBlock {
         connection.has_next_page = next;
 
         for c in cs {
-            let input = TransactionInput::from(self.0.inputs[*c].clone());
+            let input = TransactionInput::from(self.native.inputs[c.ix].clone(), c.c);
             connection.edges.push(Edge::new(c.encode_cursor(), input));
         }
 
@@ -232,7 +244,9 @@ impl ProgrammableTransactionBlock {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) = page.paginate_indices(self.0.commands.len()) else {
+        let Some((prev, next, _, cs)) = page
+            .paginate_consistent_indices(self.native.commands.len(), self.checkpoint_viewed_at)?
+        else {
             return Ok(connection);
         };
 
@@ -240,7 +254,7 @@ impl ProgrammableTransactionBlock {
         connection.has_next_page = next;
 
         for c in cs {
-            let txn = ProgrammableTransaction::from(self.0.commands[*c].clone());
+            let txn = ProgrammableTransaction::from(self.native.commands[c.ix].clone(), c.c);
             connection.edges.push(Edge::new(c.encode_cursor(), txn));
         }
 
@@ -253,26 +267,27 @@ impl ProgrammableTransactionBlock {
 impl MoveCallTransaction {
     /// The storage ID of the package the function being called is defined in.
     async fn package(&self) -> SuiAddress {
-        self.0.package.into()
+        self.native.package.into()
     }
 
     /// The name of the module the function being called is defined in.
     async fn module(&self) -> &str {
-        self.0.module.as_str()
+        self.native.module.as_str()
     }
 
     /// The name of the function being called.
     async fn function_name(&self) -> &str {
-        self.0.function.as_str()
+        self.native.function.as_str()
     }
 
     /// The function being called, resolved.
     async fn function(&self, ctx: &Context<'_>) -> Result<Option<MoveFunction>> {
         MoveFunction::query(
             ctx.data_unchecked(),
-            self.0.package.into(),
-            self.0.module.as_str(),
-            self.0.function.as_str(),
+            self.native.package.into(),
+            self.native.module.as_str(),
+            self.native.function.as_str(),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -280,7 +295,7 @@ impl MoveCallTransaction {
 
     /// The actual type parameters passed in for this move call.
     async fn type_arguments(&self) -> Vec<MoveType> {
-        self.0
+        self.native
             .type_arguments
             .iter()
             .map(|tag| MoveType::new(tag.clone()))
@@ -289,7 +304,7 @@ impl MoveCallTransaction {
 
     /// The actual function parameters passed in for this move call.
     async fn arguments(&self) -> Vec<TransactionArgument> {
-        self.0
+        self.native
             .arguments
             .iter()
             .map(|arg| TransactionArgument::from(*arg))
@@ -297,8 +312,8 @@ impl MoveCallTransaction {
     }
 }
 
-impl From<NativeCallArg> for TransactionInput {
-    fn from(argument: NativeCallArg) -> Self {
+impl TransactionInput {
+    fn from(argument: NativeCallArg, checkpoint_viewed_at: u64) -> Self {
         use NativeCallArg as N;
         use NativeObjectArg as O;
         use TransactionInput as I;
@@ -309,7 +324,10 @@ impl From<NativeCallArg> for TransactionInput {
             }),
 
             N::Object(O::ImmOrOwnedObject(oref)) => I::OwnedOrImmutable(OwnedOrImmutable {
-                read: ObjectRead(oref),
+                read: ObjectRead {
+                    native: oref,
+                    checkpoint_viewed_at,
+                },
             }),
 
             N::Object(O::SharedObject {
@@ -323,18 +341,24 @@ impl From<NativeCallArg> for TransactionInput {
             }),
 
             N::Object(O::Receiving(oref)) => I::Receiving(Receiving {
-                read: ObjectRead(oref),
+                read: ObjectRead {
+                    native: oref,
+                    checkpoint_viewed_at,
+                },
             }),
         }
     }
 }
 
-impl From<NativeProgrammableTransaction> for ProgrammableTransaction {
-    fn from(pt: NativeProgrammableTransaction) -> Self {
+impl ProgrammableTransaction {
+    fn from(pt: NativeProgrammableTransaction, checkpoint_viewed_at: u64) -> Self {
         use NativeProgrammableTransaction as N;
         use ProgrammableTransaction as P;
         match pt {
-            N::MoveCall(call) => P::MoveCall(MoveCallTransaction(*call)),
+            N::MoveCall(call) => P::MoveCall(MoveCallTransaction {
+                native: *call,
+                checkpoint_viewed_at,
+            }),
 
             N::TransferObjects(inputs, address) => P::TransferObjects(TransferObjectsTransaction {
                 inputs: inputs.into_iter().map(TransactionArgument::from).collect(),
@@ -385,6 +409,19 @@ impl From<NativeArgument> for TransactionArgument {
             N::Input(ix) => A::Input(Input { ix }),
             N::Result(cmd) => A::Result(TxResult { cmd, ix: None }),
             N::NestedResult(cmd, ix) => A::Result(TxResult { cmd, ix: Some(ix) }),
+        }
+    }
+}
+
+impl From<SuiArgument> for TransactionArgument {
+    fn from(argument: SuiArgument) -> Self {
+        use SuiArgument as S;
+        use TransactionArgument as A;
+        match argument {
+            S::GasCoin => A::GasCoin(GasCoin { dummy: None }),
+            S::Input(ix) => A::Input(Input { ix }),
+            S::Result(cmd) => A::Result(TxResult { cmd, ix: None }),
+            S::NestedResult(cmd, ix) => A::Result(TxResult { cmd, ix: Some(ix) }),
         }
     }
 }

@@ -1130,12 +1130,13 @@ impl AstDebug for Statement_ {
                 if *has_break {
                     w.write("#has_break");
                 }
+                w.write(" ");
                 name.ast_debug(w);
                 w.write(": ");
                 w.block(|w| block.ast_debug(w))
             }
             S::NamedBlock { name, block } => {
-                w.write("loop");
+                w.write("named-block ");
                 name.ast_debug(w);
                 w.write(": ");
                 w.block(|w| block.ast_debug(w))

@@ -94,16 +94,13 @@
 >      coinObjectCount
 >      totalBalance
 >    }
->    coinConnection {
+>    coins {
 >      nodes {
->        asMoveObject {
->          contents {
->            type {
->              repr
->            }
+>        contents {
+>          type {
+>            repr
 >          }
 >        }
->
 >      }
 >    }
 >  }
@@ -158,7 +155,7 @@
 >      coinObjectCount
 >      totalBalance
 >    }
->    balanceConnection {
+>    balances {
 >      nodes {
 >        coinType {
 >          repr
@@ -306,7 +303,6 @@
 >    timestamp
 >    validatorSignatures
 >    previousCheckpointDigest
->    liveObjectSetDigest
 >    networkTotalTransactions
 >    rollingGasSummary {
 >      computationCost
@@ -316,6 +312,7 @@
 >    }
 >    epoch {
 >      epochId
+>      liveObjectSetDigest
 >    }
 >    transactionBlocks {
 >      edges {
@@ -335,14 +332,13 @@
 
 ### <a id=196610></a>
 ### With Timestamp Tx Block Live Objects
-####  Latest checkpoint's timestamp, liveObjectSetDigest, and transaction block data
+####  Latest checkpoint's timestamp, and transaction block data
 
 ><pre>{
 >  checkpoint {
 >    digest
 >    sequenceNumber
 >    timestamp
->    liveObjectSetDigest
 >    transactionBlocks {
 >      edges {
 >        node {
@@ -368,7 +364,6 @@
 >    digest
 >    sequenceNumber
 >    timestamp
->    liveObjectSetDigest
 >    transactionBlocks(
 >      filter: {
 >        signAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
@@ -421,10 +416,10 @@
 
 ### <a id=262141></a>
 ### First Ten After Checkpoint
-####  Fetch the digest and sequence number of the first 10 checkpoints after the cursor, which in this example is set to be checkpoint 11. Note that the cursor is opaque.
+####  Fetch the digest and sequence number of the first 10 checkpoints after the cursor, which in this example is set to be checkpoint 0. Note that the cursor is opaque.
 
 ><pre>{
->  checkpoints(first: 10, after: "MTE=") {
+>  checkpoints(first: 10, after: "eyJjIjoyMjgwMDU4MCwicyI6MH0") {
 >    nodes {
 >      sequenceNumber
 >      digest
@@ -437,7 +432,7 @@
 ####  Fetch the digest and the sequence number of the last 20 checkpoints before the cursor
 
 ><pre>{
->  checkpoints(last: 20, before: "MTAw") {
+>  checkpoints(last: 20, before: "eyJjIjoyMjgwMDY1MSwicyI6MjI4MDA2MzJ9") {
 >    nodes {
 >      sequenceNumber
 >      digest
@@ -449,15 +444,15 @@
 ## Coin Connection
 ### <a id=327675></a>
 ### Coin Connection
-####  Get last 3 coins before coins at cursor 13034947
+####  Get last 3 coins owned by `0x0`.
 
 ><pre>{
 >  address(
 >    address: "0x0000000000000000000000000000000000000000000000000000000000000000"
 >  ) {
->    coinConnection(last: 3, before: "0x13034947") {
+>    coins(last: 3) {
 >      nodes {
->        balance
+>        coinBalance
 >      }
 >      pageInfo {
 >        endCursor
@@ -480,9 +475,7 @@
 >    description
 >    iconUrl
 >    supply
->    asMoveObject {
->      hasPublicTransfer
->    }
+>    hasPublicTransfer
 >  }
 >}</pre>
 
@@ -520,36 +513,36 @@
 >    validatorSet {
 >      totalStake
 >      pendingActiveValidatorsSize
->      stakePoolMappingsSize
+>      stakingPoolMappingsSize
 >      inactivePoolsSize
 >      validatorCandidatesSize
 >      activeValidators {
->        name
->        description
->        imageUrl
->        projectUrl
->        exchangeRates {
->          asObject {
+>        nodes {
+>          name
+>          description
+>          imageUrl
+>          projectUrl
+>          exchangeRates {
 >            storageRebate
 >            bcs
+>            hasPublicTransfer
 >          }
->          hasPublicTransfer
+>          exchangeRatesSize
+>          stakingPoolActivationEpoch
+>          stakingPoolSuiBalance
+>          rewardsPool
+>          poolTokenBalance
+>          pendingStake
+>          pendingTotalSuiWithdraw
+>          pendingPoolTokenWithdraw
+>          votingPower
+>          gasPrice
+>          commissionRate
+>          nextEpochStake
+>          nextEpochGasPrice
+>          nextEpochCommissionRate
+>          atRisk
 >        }
->        exchangeRatesSize
->        stakingPoolActivationEpoch
->        stakingPoolSuiBalance
->        rewardsPool
->        poolTokenBalance
->        pendingStake
->        pendingTotalSuiWithdraw
->        pendingPoolTokenWithdraw
->        votingPower
->        gasPrice
->        commissionRate
->        nextEpochStake
->        nextEpochGasPrice
->        nextEpochCommissionRate
->        atRisk
 >      }
 >    }
 >  }
@@ -594,12 +587,12 @@
 
 ### <a id=458748></a>
 ### With Tx Block Connection
-####  Fetch the first 20 transactions after 231220100 (encoded as a
+####  Fetch the first 20 transactions after 885733467 (encoded as a
 ####  cursor) in epoch 97.
 
 ><pre>{
 >  epoch(id: 97) {
->    transactionBlocks(first: 20, after:"MjMxMjIwMTAw") {
+>    transactionBlocks(first: 20, after:"eyJjIjoyMjgwMDY5MiwidCI6ODg1NzMzNDY3fQ") {
 >      pageInfo {
 >        hasNextPage
 >        endCursor
@@ -631,11 +624,11 @@
 ### <a id=458749></a>
 ### With Tx Block Connection Latest Epoch
 ####  the last checkpoint of epoch 97 is 8097645, and the last transaction
-####  number of the checkpoint is 261225985 (encoded as a cursor).
+####  number of the checkpoint is 261225985.
 
 ><pre>{
 >  epoch {
->    transactionBlocks(first: 20, after: "MjYxMjI1OTg1") {
+>    transactionBlocks(first: 20, after: "eyJjIjo4MDk3NjQ1LCJ0IjoyNjEyMjU5ODV9") {
 >      pageInfo {
 >        hasNextPage
 >        endCursor
@@ -677,11 +670,7 @@
 >    nodes {
 >      sendingModule {
 >        name
->        package {
->          asObject {
->            digest
->          }
->        }
+>        package { digest }
 >      }
 >      type {
 >        repr
@@ -702,7 +691,7 @@
 ><pre>query ByEmittingPackageModuleAndEventType {
 >  events(
 >    first: 1
->    after: "eyJ0eCI6ODUxNzMsImUiOjB9"
+>    after: "eyJ0eCI6Njc2MywiZSI6MCwiYyI6MjI4MDA3NDJ9"
 >    filter: {
 >      emittingModule: "0x3::sui_system",
 >      eventType: "0x3::validator::StakingRequestEvent"
@@ -766,7 +755,7 @@
 ### Name Service
 
 ><pre>{
->  resolveNameServiceAddress(name: "example.sui") {
+>  resolveSuinsAddress(domain: "example.sui") {
 >    address
 >  }
 >  address(
@@ -780,7 +769,7 @@
 >      coinObjectCount
 >      totalBalance
 >    }
->    defaultNameServiceName
+>    defaultSuinsName
 >  }
 >}</pre>
 
@@ -866,9 +855,7 @@
 >      node {
 >        asMoveObject {
 >          contents {
->            type {
->              repr
->            }
+>            type { repr }
 >          }
 >        }
 >      }
@@ -940,9 +927,7 @@
 >      storageRebate
 >      previousTransactionBlock {
 >        digest
->        sender {
->          defaultNameServiceName
->        }
+>        sender { defaultSuinsName }
 >        gasInput {
 >          gasPrice
 >          gasBudget
@@ -1050,11 +1035,11 @@
 >  }
 >}
 >
->query DynamicFieldConnection {
+>query DynamicFields {
 >  object(
 >    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
 >  ) {
->    dynamicFieldConnection {
+>    dynamicFields {
 >      pageInfo {
 >        hasNextPage
 >        endCursor
@@ -1222,7 +1207,7 @@
 >      }
 >      totalBalance
 >    }
->    stakedSuiConnection {
+>    stakedSuis {
 >      nodes {
 >        status
 >        principal
@@ -1232,9 +1217,11 @@
 >          referenceGasPrice
 >          validatorSet {
 >            activeValidators {
->              name
->              description
->              exchangeRatesSize
+>              nodes {
+>                name
+>                description
+>                exchangeRatesSize
+>              }
 >            }
 >            totalStake
 >          }

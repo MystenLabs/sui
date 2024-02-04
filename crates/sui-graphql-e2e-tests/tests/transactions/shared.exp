@@ -31,7 +31,7 @@ Response: {
             "transactions": {
               "nodes": [
                 {
-                  "package": "0xd01f94a13ef231248f3c439973a9d714e04f81d2fb42c59d8496695a45e801ec",
+                  "package": "0xa3877af8ee85ffec6fb970478b8e4cd0f655d48768f3fd7c90b2197f12268339",
                   "module": "m",
                   "functionName": "get"
                 }
@@ -44,10 +44,22 @@ Response: {
               "nodes": [
                 {
                   "__typename": "SharedObjectRead",
-                  "address": "0x304d95705285484dfdce6d2c93b322bf4bb53254b3c4a21513cf3632a61a77f6",
+                  "address": "0x87c5e6641d6e86acfaf6b83ae2be99bdd463821d6720eecd8803163cb553d744",
                   "version": 2,
-                  "digest": "2oW3VzQMCk6AtwLWeD1z1NZVSCZGsHxhus6Xpt2NxB7e",
-                  "object": null
+                  "digest": "EqykqLFc5MmD7URxRPRogEohgXXMnKFkk4CZG2eijQJJ",
+                  "object": {
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0xa3877af8ee85ffec6fb970478b8e4cd0f655d48768f3fd7c90b2197f12268339::m::Foo"
+                        },
+                        "json": {
+                          "id": "0x87c5e6641d6e86acfaf6b83ae2be99bdd463821d6720eecd8803163cb553d744",
+                          "x": "0"
+                        }
+                      }
+                    }
+                  }
                 }
               ]
             }
@@ -59,7 +71,7 @@ Response: {
             "transactions": {
               "nodes": [
                 {
-                  "package": "0xd01f94a13ef231248f3c439973a9d714e04f81d2fb42c59d8496695a45e801ec",
+                  "package": "0xa3877af8ee85ffec6fb970478b8e4cd0f655d48768f3fd7c90b2197f12268339",
                   "module": "m",
                   "functionName": "inc"
                 }
@@ -79,12 +91,12 @@ Response: {
             "transactions": {
               "nodes": [
                 {
-                  "package": "0xd01f94a13ef231248f3c439973a9d714e04f81d2fb42c59d8496695a45e801ec",
+                  "package": "0xa3877af8ee85ffec6fb970478b8e4cd0f655d48768f3fd7c90b2197f12268339",
                   "module": "m",
                   "functionName": "get"
                 },
                 {
-                  "package": "0xd01f94a13ef231248f3c439973a9d714e04f81d2fb42c59d8496695a45e801ec",
+                  "package": "0xa3877af8ee85ffec6fb970478b8e4cd0f655d48768f3fd7c90b2197f12268339",
                   "module": "m",
                   "functionName": "inc"
                 }

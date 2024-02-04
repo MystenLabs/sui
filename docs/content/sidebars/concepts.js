@@ -6,6 +6,21 @@ const concepts = [
 	'concepts/components',
 	{
 		type: 'category',
+		label: 'Sui GraphQL RPC',
+		link: {
+			type: 'doc',
+			id: 'concepts/graphql-rpc',
+		},
+		items: [
+			'concepts/graphql-rpc/headers',
+			'concepts/graphql-rpc/variables',
+			'concepts/graphql-rpc/fragments',
+			'concepts/graphql-rpc/pagination',
+			'concepts/graphql-rpc/limits',
+		],
+	},
+	{
+		type: 'category',
 		label: 'App Developers',
 		link: {
 			type: 'doc',
@@ -103,6 +118,7 @@ const concepts = [
 							'concepts/sui-move-concepts/patterns/app-extensions',
 						],
 					},
+					'concepts/sui-move-concepts/conventions',
 				],
 			},
 			{
@@ -176,6 +192,7 @@ const concepts = [
 		},
 		items: [
 			'concepts/sui-architecture/high-level',
+			'concepts/sui-architecture/sui-security',
 			'concepts/transactions/transaction-lifecycle',
 			'concepts/sui-architecture/consensus',
 			'concepts/sui-architecture/indexer-functions',

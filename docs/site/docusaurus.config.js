@@ -39,6 +39,18 @@ const config = {
   plugins: [
     // ....
     [
+      "@graphql-markdown/docusaurus",
+      {
+        schema:
+          "../../crates/sui-graphql-rpc/schema/current_progress_schema.graphql",
+        rootPath: "../content", // docs will be generated under rootPath/baseURL
+        baseURL: "references/sui-graphql/reference",
+        loaders: {
+          GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
+        },
+      },
+    ],
+    [
       "docusaurus-plugin-includes",
       {
         postBuildDeletedFolders: ["../snippets"],

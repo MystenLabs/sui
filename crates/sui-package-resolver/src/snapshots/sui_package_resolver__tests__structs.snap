@@ -1,0 +1,83 @@
+---
+source: crates/sui-package-resolver/src/lib.rs
+expression: "format!(\"a0::m::T0: {t0:#?}\\n\\\n             a0::m::T1: {t1:#?}\\n\\\n             a0::m::T2: {t2:#?}\",)"
+---
+a0::m::T0: StructDef {
+    defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
+    abilities: [],
+    type_params: [],
+    fields: [
+        (
+            "b",
+            Bool,
+        ),
+        (
+            "v",
+            Vector(
+                Datatype(
+                    DatatypeRef {
+                        package: 00000000000000000000000000000000000000000000000000000000000000a0,
+                        module: "m",
+                        name: "T1",
+                    },
+                    [
+                        Datatype(
+                            DatatypeRef {
+                                package: 00000000000000000000000000000000000000000000000000000000000000a0,
+                                module: "m",
+                                name: "T2",
+                            },
+                            [],
+                        ),
+                        U128,
+                    ],
+                ),
+            ),
+        ),
+    ],
+}
+a0::m::T1: StructDef {
+    defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
+    abilities: [],
+    type_params: [
+        StructTypeParameter {
+            constraints: [],
+            is_phantom: false,
+        },
+        StructTypeParameter {
+            constraints: [],
+            is_phantom: false,
+        },
+    ],
+    fields: [
+        (
+            "a",
+            Address,
+        ),
+        (
+            "p",
+            TypeParameter(
+                0,
+            ),
+        ),
+        (
+            "q",
+            Vector(
+                TypeParameter(
+                    1,
+                ),
+            ),
+        ),
+    ],
+}
+a0::m::T2: StructDef {
+    defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
+    abilities: [],
+    type_params: [],
+    fields: [
+        (
+            "x",
+            U8,
+        ),
+    ],
+}

@@ -1,10 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::{MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD};
+use crate::config::{
+    ConnectionConfig, MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
+};
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
+
+use crate::metrics::Metrics;
 use crate::mutation::Mutation;
+use crate::types::move_object::IMoveObject;
+use crate::types::object::IObject;
+use crate::types::owner::IOwner;
 use crate::{
     config::ServerConfig,
     context_data::db_data_provider::PgManager,
@@ -15,7 +22,6 @@ use crate::{
         query_limits_checker::{QueryLimitsChecker, ShowUsage},
         timeout::Timeout,
     },
-    metrics::RequestMetrics,
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
@@ -24,25 +30,26 @@ use async_graphql::extensions::Tracing;
 use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::http::HeaderMap;
+use axum::extract::FromRef;
+use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
+use axum::http::{HeaderMap, StatusCode};
+use axum::middleware::{self};
 use axum::response::IntoResponse;
 use axum::routing::{post, MethodRouter, Route};
-use axum::{
-    extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo},
-    middleware,
-};
 use axum::{headers::Header, Router};
 use http::Request;
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
 use hyper::Server as HyperServer;
 use std::convert::Infallible;
-use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
+use std::net::TcpStream;
+use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
-use tracing::warn;
+use tracing::{info, warn};
+use uuid::Uuid;
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
@@ -58,25 +65,52 @@ impl Server {
 }
 
 pub(crate) struct ServerBuilder {
-    port: u16,
-    host: String,
-
+    state: AppState,
     schema: SchemaBuilder<Query, Mutation, EmptySubscription>,
     router: Option<Router>,
 }
 
-impl ServerBuilder {
-    pub fn new(port: u16, host: String) -> Self {
+#[derive(Clone)]
+pub(crate) struct AppState {
+    connection: ConnectionConfig,
+    metrics: Metrics,
+}
+
+impl AppState {
+    fn new(connection: ConnectionConfig, metrics: Metrics) -> Self {
         Self {
-            port,
-            host,
-            schema: async_graphql::Schema::build(Query, Mutation, EmptySubscription),
+            connection,
+            metrics,
+        }
+    }
+}
+
+impl FromRef<AppState> for ConnectionConfig {
+    fn from_ref(app_state: &AppState) -> ConnectionConfig {
+        app_state.connection.clone()
+    }
+}
+
+impl FromRef<AppState> for Metrics {
+    fn from_ref(app_state: &AppState) -> Metrics {
+        app_state.metrics.clone()
+    }
+}
+
+impl ServerBuilder {
+    pub fn new(state: AppState) -> Self {
+        Self {
+            state,
+            schema: schema_builder(),
             router: None,
         }
     }
 
     pub fn address(&self) -> String {
-        format!("{}:{}", self.host, self.port)
+        format!(
+            "{}:{}",
+            self.state.connection.host, self.state.connection.port
+        )
     }
 
     pub fn context_data(mut self, context_data: impl Any + Send + Sync) -> Self {
@@ -109,7 +143,11 @@ impl ServerBuilder {
                 .route("/", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
                 .route("/health", axum::routing::get(health_checks))
-                .layer(middleware::from_fn(check_version_middleware))
+                .with_state(self.state.clone())
+                .route_layer(middleware::from_fn_with_state(
+                    self.state.metrics.clone(),
+                    check_version_middleware,
+                ))
                 .layer(middleware::from_fn(set_version_middleware));
             self.router = Some(router);
         }
@@ -157,8 +195,26 @@ impl ServerBuilder {
     }
 
     pub async fn from_config(config: &ServerConfig) -> Result<Self, Error> {
-        let mut builder =
-            ServerBuilder::new(config.connection.port, config.connection.host.clone());
+        // PROMETHEUS
+        let prom_addr: SocketAddr = format!(
+            "{}:{}",
+            config.connection.prom_url, config.connection.prom_port
+        )
+        .parse()
+        .map_err(|_| {
+            Error::Internal(format!(
+                "Failed to parse url {}, port {} into socket address",
+                config.connection.prom_url, config.connection.prom_port
+            ))
+        })?;
+        let registry_service = mysten_metrics::start_prometheus_server(prom_addr);
+        info!("Starting Prometheus HTTP endpoint at {}", prom_addr);
+        let registry = registry_service.default_registry();
+
+        // METRICS
+        let metrics = Metrics::new(&registry);
+        let state = AppState::new(config.connection.clone(), metrics.clone());
+        let mut builder = ServerBuilder::new(state);
 
         let name_service_config = config.name_service.clone();
         let reader = PgManager::reader_with_config(
@@ -166,8 +222,10 @@ impl ServerBuilder {
             config.connection.db_pool_size,
         )
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
-        let db = Db::new(reader.clone(), config.service.limits);
-        let pg_conn_pool = PgManager::new(reader.clone(), config.service.limits);
+
+        // DB
+        let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
+        let pg_conn_pool = PgManager::new(reader.clone());
         let package_store = DbPackageStore(reader);
         let package_cache = PackageStoreWithLruCache::new(package_store);
 
@@ -183,26 +241,9 @@ impl ServerBuilder {
                     .map_err(|e| Error::Internal(format!("Failed to create SuiClient: {}", e)))?,
             )
         } else {
-            warn!("No fullnode url found in config. Mutations will not work");
+            warn!("No fullnode url found in config. `dryRunTransactionBlock` and `executeTransactionBlock` will not work");
             None
         };
-
-        let prom_addr: SocketAddr = format!(
-            "{}:{}",
-            config.connection.prom_url, config.connection.prom_port
-        )
-        .parse()
-        .map_err(|_| {
-            Error::Internal(format!(
-                "Failed to parse url {}, port {} into socket address",
-                config.connection.prom_url, config.connection.prom_port
-            ))
-        })?;
-        let registry_service = mysten_metrics::start_prometheus_server(prom_addr);
-        println!("Starting Prometheus HTTP endpoint at {}", prom_addr);
-        let registry = registry_service.default_registry();
-
-        let metrics = RequestMetrics::new(&registry);
 
         builder = builder
             .context_data(config.service.clone())
@@ -214,7 +255,7 @@ impl ServerBuilder {
             ))
             .context_data(sui_sdk_client)
             .context_data(name_service_config)
-            .context_data(Arc::new(metrics))
+            .context_data(metrics.clone())
             .context_data(config.clone());
 
         if config.internal_features.feature_gate {
@@ -237,54 +278,73 @@ impl ServerBuilder {
         }
 
         // TODO: uncomment once impl
-        // if config.internal_features.open_telemetry {
-        //     let tracer;
-        //     builder = builder.extension(OpenTelemetry::new(tracer));
-        // }
+        // if config.internal_features.open_telemetry { }
 
         Ok(builder)
     }
 }
 
+fn schema_builder() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
+    async_graphql::Schema::build(Query, Mutation, EmptySubscription)
+        .register_output_type::<IMoveObject>()
+        .register_output_type::<IObject>()
+        .register_output_type::<IOwner>()
+}
+
+/// Return the string representation of the schema used by this server.
+pub fn export_schema() -> String {
+    schema_builder().finish().sdl()
+}
+
 async fn graphql_handler(
+    State(metrics): State<Metrics>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
+    metrics.request_metrics.inflight_requests.inc();
+    metrics.inc_num_queries();
+    let instant = Instant::now();
     let mut req = req.into_inner();
+    req.data.insert(Uuid::new_v4());
     if headers.contains_key(ShowUsage::name()) {
         req.data.insert(ShowUsage)
     }
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
-    schema.execute(req).await.into()
+    let result = schema.execute(req).await;
+    let elapsed = instant.elapsed().as_millis() as u64;
+    metrics.query_latency(elapsed);
+    if result.is_err() {
+        metrics.inc_errors(result.errors.clone());
+    }
+    metrics.request_metrics.inflight_requests.dec();
+    result.into()
 }
 
-async fn health_checks(
-    schema: axum::Extension<SuiGraphQLSchema>,
-) -> impl axum::response::IntoResponse {
-    // Simple request to check if the DB is up
-    // TODO: add more checks
-    let req = r#"
-        query {
-            chainIdentifier
-        }
-        "#;
-    let db_up = match schema.execute(req).await.is_ok() {
-        true => "UP",
-        false => "DOWN",
+/// Connect via a TCPStream to the DB to check if it is alive
+async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode {
+    let Ok(url) = reqwest::Url::parse(connection.db_url.as_str()) else {
+        return StatusCode::INTERNAL_SERVER_ERROR;
     };
-    let uptime = get_or_init_server_start_time()
-        .await
-        .elapsed()
-        .as_secs_f64();
-    format!(
-        r#"{{"status": "UP","uptime": {},"checks": {{"DB": "{}",}}}}
-        "#,
-        uptime, db_up
-    )
+
+    let Some(host) = url.host_str() else {
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    };
+
+    let tcp_url = if let Some(port) = url.port() {
+        format!("{host}:{port}")
+    } else {
+        host.to_string()
+    };
+
+    if TcpStream::connect(tcp_url).is_err() {
+        StatusCode::INTERNAL_SERVER_ERROR
+    } else {
+        StatusCode::OK
+    }
 }
 
 // One server per proc, so this is okay
@@ -300,7 +360,6 @@ pub mod tests {
         context_data::db_data_provider::PgManager,
         extensions::query_limits_checker::QueryLimitsChecker,
         extensions::timeout::Timeout,
-        metrics::RequestMetrics,
         test_infra::cluster::{serve_executor, ExecutorCluster, DEFAULT_INTERNAL_DATA_SOURCE_PORT},
     };
     use async_graphql::{
@@ -311,6 +370,7 @@ pub mod tests {
     use simulacrum::Simulacrum;
     use std::sync::Arc;
     use std::time::Duration;
+    use uuid::Uuid;
 
     async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {
         let rng = StdRng::from_seed([12; 32]);
@@ -326,9 +386,25 @@ pub mod tests {
                 connection_config,
                 DEFAULT_INTERNAL_DATA_SOURCE_PORT,
                 Arc::new(sim),
+                None,
             )
             .await,
         )
+    }
+
+    fn metrics() -> Metrics {
+        let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
+        let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
+        Metrics::new(&registry)
+    }
+
+    fn ip_address() -> SocketAddr {
+        let binding_address: SocketAddr = "0.0.0.0:51515".parse().unwrap();
+        binding_address
+    }
+
+    fn query_id() -> Uuid {
+        Uuid::new_v4()
     }
 
     pub async fn test_timeout_impl() {
@@ -369,17 +445,22 @@ pub mod tests {
             let mut cfg = ServiceConfig::default();
             cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
 
-            let db = Db::new(reader.clone(), cfg.limits);
-            let pg_conn_pool = PgManager::new(reader, cfg.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            let metrics = metrics();
+            let db = Db::new(reader.clone(), cfg.limits, metrics.clone());
+            let pg_conn_pool = PgManager::new(reader);
+            let state = AppState::new(connection_config.clone(), metrics.clone());
+            let schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(cfg)
+                .context_data(query_id())
+                .context_data(ip_address())
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
                 .extension(Timeout)
                 .build_schema();
+
             schema.execute("{ chainIdentifier }").await
         }
 
@@ -419,12 +500,17 @@ pub mod tests {
                 },
                 ..Default::default()
             };
-            let db = Db::new(reader.clone(), service_config.limits);
-            let pg_conn_pool = PgManager::new(reader, service_config.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            let metrics = metrics();
+            let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
+            let pg_conn_pool = PgManager::new(reader);
+            let state = AppState::new(connection_config.clone(), metrics.clone());
+            let schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
+                .context_data(query_id())
+                .context_data(ip_address())
+                .context_data(metrics.clone())
                 .extension(QueryLimitsChecker::default())
                 .build_schema();
             schema.execute(query).await
@@ -452,7 +538,7 @@ pub mod tests {
 
         assert_eq!(
             errs,
-            vec!["Query has too many levels of nesting. The maximum allowed is 0".to_string()]
+            vec!["Query has too many levels of nesting 1. The maximum allowed is 0".to_string()]
         );
         let errs: Vec<_> = exec_query_depth_limit(
             2,
@@ -467,7 +553,7 @@ pub mod tests {
         .collect();
         assert_eq!(
             errs,
-            vec!["Query has too many levels of nesting. The maximum allowed is 2".to_string()]
+            vec!["Query has too many levels of nesting 3. The maximum allowed is 2".to_string()]
         );
     }
 
@@ -488,12 +574,17 @@ pub mod tests {
                 },
                 ..Default::default()
             };
-            let db = Db::new(reader.clone(), service_config.limits);
-            let pg_conn_pool = PgManager::new(reader, service_config.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            let metrics = metrics();
+            let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
+            let pg_conn_pool = PgManager::new(reader);
+            let state = AppState::new(connection_config.clone(), metrics.clone());
+            let schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
+                .context_data(query_id())
+                .context_data(ip_address())
+                .context_data(metrics.clone())
                 .extension(QueryLimitsChecker::default())
                 .build_schema();
             schema.execute(query).await
@@ -520,7 +611,7 @@ pub mod tests {
             .collect();
         assert_eq!(
             err,
-            vec!["Query has too many nodes. The maximum allowed is 0".to_string()]
+            vec!["Query has too many nodes 1. The maximum allowed is 0".to_string()]
         );
 
         let err: Vec<_> = exec_query_node_limit(
@@ -536,7 +627,7 @@ pub mod tests {
         .collect();
         assert_eq!(
             err,
-            vec!["Query has too many nodes. The maximum allowed is 4".to_string()]
+            vec!["Query has too many nodes 5. The maximum allowed is 4".to_string()]
         );
     }
 
@@ -555,14 +646,19 @@ pub mod tests {
             },
             ..Default::default()
         };
+        let metrics = metrics();
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let db = Db::new(reader.clone(), service_config.limits);
-        let pg_conn_pool = PgManager::new(reader, service_config.limits);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+        let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
+        let pg_conn_pool = PgManager::new(reader);
+        let state = AppState::new(connection_config.clone(), metrics.clone());
+        let schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
+            .context_data(query_id())
+            .context_data(ip_address())
+            .context_data(metrics.clone())
             .build_schema();
 
         let resp = schema
@@ -606,12 +702,17 @@ pub mod tests {
         let service_config = ServiceConfig::default();
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let db = Db::new(reader.clone(), service_config.limits);
-        let pg_conn_pool = PgManager::new(reader, service_config.limits);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+        let metrics = metrics();
+        let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
+        let pg_conn_pool = PgManager::new(reader);
+        let state = AppState::new(connection_config.clone(), metrics.clone());
+        let schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
+            .context_data(query_id())
+            .context_data(ip_address())
+            .context_data(metrics.clone())
             .build_schema();
 
         // Should complete successfully
@@ -640,24 +741,25 @@ pub mod tests {
 
         let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
         let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
-        let metrics = RequestMetrics::new(&registry);
-        let metrics = Arc::new(metrics);
-        let metrics2 = metrics.clone();
+        let metrics = Metrics::new(&registry);
 
         let service_config = ServiceConfig::default();
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let db = Db::new(reader.clone(), service_config.limits);
-        let pg_conn_pool = PgManager::new(reader, service_config.limits);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+        let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
+        let pg_conn_pool = PgManager::new(reader);
+        let state = AppState::new(connection_config.clone(), metrics.clone());
+        let schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
-            .context_data(metrics)
+            .context_data(query_id())
+            .context_data(ip_address())
+            .context_data(metrics.clone())
             .extension(QueryLimitsChecker::default())
             .build_schema();
         let _ = schema.execute("{ chainIdentifier }").await;
-
+        let metrics2 = metrics.request_metrics;
         assert_eq!(metrics2.input_nodes.get_sample_count(), 1);
         assert_eq!(metrics2.output_nodes.get_sample_count(), 1);
         assert_eq!(metrics2.query_depth.get_sample_count(), 1);

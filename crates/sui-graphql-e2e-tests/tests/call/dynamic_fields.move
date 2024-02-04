@@ -64,7 +64,7 @@ module Test::m {
 //# run-graphql
 {
   object(address: "@{obj_2_0}") {
-    dynamicFieldConnection {
+    dynamicFields {
       nodes {
         name {
           type {
@@ -93,7 +93,7 @@ module Test::m {
 //# run-graphql
 {
   object(address: "@{obj_2_0}") {
-    dynamicFieldConnection {
+    dynamicFields {
       nodes {
         name {
           type {
@@ -118,7 +118,7 @@ module Test::m {
 //# run-graphql
 {
   owner(address: "@{obj_2_0}") {
-    dynamicFieldConnection {
+    dynamicFields {
       nodes {
         name {
           type {

@@ -4,8 +4,9 @@
 use crate::executor::MAX_CHECKPOINTS_IN_PROGRESS;
 use crate::workers::Worker;
 use mysten_metrics::spawn_monitored_task;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet, VecDeque};
 use std::sync::Arc;
+use std::time::Instant;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::mpsc;
@@ -40,13 +41,16 @@ impl<W: Worker + 'static> WorkerPool<W> {
 
         let (progress_sender, mut progress_receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
         let mut workers = vec![];
+        let mut idle: BTreeSet<_> = (0..self.concurrency).collect();
+        let mut checkpoints = VecDeque::new();
 
         // spawn child workers
-        for _ in 0..self.concurrency {
+        for worker_id in 0..self.concurrency {
             let (worker_sender, mut worker_recv) =
                 mpsc::channel::<CheckpointData>(MAX_CHECKPOINTS_IN_PROGRESS);
             let (term_sender, mut term_receiver) = oneshot::channel::<()>();
             let cloned_progress_sender = progress_sender.clone();
+            let task_name = self.task_name.clone();
             workers.push((worker_sender, term_sender));
 
             let worker = self.worker.clone();
@@ -55,6 +59,9 @@ impl<W: Worker + 'static> WorkerPool<W> {
                     tokio::select! {
                         _ = &mut term_receiver => break,
                         Some(checkpoint) = worker_recv.recv() => {
+                            let sequence_number = checkpoint.checkpoint_summary.sequence_number;
+                            info!("received checkpoint for processing {} for workflow {}", sequence_number, task_name);
+                            let start_time = Instant::now();
                             let backoff = backoff::ExponentialBackoff::default();
                             backoff::future::retry(backoff, || async {
                                 worker
@@ -62,16 +69,14 @@ impl<W: Worker + 'static> WorkerPool<W> {
                                     .process_checkpoint(checkpoint.clone())
                                     .await
                                     .map_err(|err| {
-                                        info!("transient worker execution error {:?}", err);
+                                        info!("transient worker execution error {:?} for checkpoint {}", err, sequence_number);
                                         backoff::Error::transient(err)
                                     })
                             })
                             .await
                             .expect("checkpoint processing failed for checkpoint");
-                            cloned_progress_sender
-                                .send(checkpoint.checkpoint_summary.sequence_number)
-                                .await
-                                .expect("failed to update progress");
+                            info!("finished checkpoint processing {} for workflow {} in {:?}", sequence_number, task_name, start_time.elapsed());
+                            cloned_progress_sender.send((worker_id, sequence_number)).await.expect("failed to update progress");
                         }
                     }
                 }
@@ -85,12 +90,15 @@ impl<W: Worker + 'static> WorkerPool<W> {
                     if sequence_number < current_checkpoint_number {
                         continue;
                     }
-                    let worker_id = (sequence_number % self.concurrency as u64) as usize;
-                    info!("received checkpoint for processing {} for workflow {}", sequence_number, self.task_name);
-                    workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
+                    if idle.is_empty() {
+                        checkpoints.push_back(checkpoint);
+                    } else {
+                        let worker_id = idle.pop_first().unwrap();
+                        workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
+                    }
                 }
-                Some(status_update) = progress_receiver.recv() => {
-                    info!("finished checkpoint processing {} for workflow {}", status_update, self.task_name);
+                Some((worker_id, status_update)) = progress_receiver.recv() => {
+                    idle.insert(worker_id);
                     updates.insert(status_update);
                     if status_update == current_checkpoint_number {
                         while updates.remove(&current_checkpoint_number) {
@@ -100,6 +108,11 @@ impl<W: Worker + 'static> WorkerPool<W> {
                             .send((self.task_name.clone(), current_checkpoint_number))
                             .await
                             .expect("Failed to send progress update to the executor");
+                    }
+                    while !checkpoints.is_empty() && !idle.is_empty() {
+                        let checkpoint = checkpoints.pop_front().unwrap();
+                        let worker_id = idle.pop_first().unwrap();
+                        workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
                     }
                 }
             }

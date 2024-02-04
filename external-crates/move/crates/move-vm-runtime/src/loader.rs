@@ -1751,6 +1751,7 @@ impl Function {
         )
     }
 
+    #[cfg(any(debug_assertions, feature = "debugging"))]
     pub(crate) fn pretty_short_string(&self) -> String {
         let id = &self.module;
         format!(
@@ -1803,7 +1804,7 @@ struct FunctionInstantiation {
 struct StructDef {
     // struct field count
     field_count: u16,
-    // `ModuelCache::structs` global table index
+    // `ModuleCache::structs` global table index
     idx: CachedStructIndex,
 }
 
@@ -1811,7 +1812,7 @@ struct StructDef {
 struct StructInstantiation {
     // struct field count
     field_count: u16,
-    // `ModuelCache::structs` global table index. It is the generic type.
+    // `ModuleCache::structs` global table index. It is the generic type.
     def: CachedStructIndex,
     instantiation: Vec<Type>,
 }
@@ -1820,7 +1821,7 @@ struct StructInstantiation {
 #[derive(Debug)]
 struct FieldHandle {
     offset: usize,
-    // `ModuelCache::structs` global table index. It is the generic type.
+    // `ModuleCache::structs` global table index. It is the generic type.
     owner: CachedStructIndex,
 }
 
@@ -1828,7 +1829,7 @@ struct FieldHandle {
 #[derive(Debug)]
 struct FieldInstantiation {
     offset: usize,
-    // `ModuelCache::structs` global table index. It is the generic type.
+    // `ModuleCache::structs` global table index. It is the generic type.
     #[allow(unused)]
     owner: CachedStructIndex,
 }

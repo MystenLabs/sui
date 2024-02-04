@@ -35,6 +35,7 @@ Commands:
                          	coin is required
   pay-sui            	Pay SUI coins to recipients following following specified amounts, with input coins. Length of recipients must be the same as that of amounts. The input coins also
                          	include the coin for gas payment, so no extra gas coin is required
+  profile-transaction   Profile the gas usage of a transaction. If an output filepath is not specified, it will output a file `gas_profile_{tx_digest}_{unix_timestamp}.json` which can be opened in a flamegraph tool such as speedscope.
   publish            	Publish Move modules
   replay-transaction    Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
   replay-batch          Replay transactions listed in a file.
@@ -97,7 +98,7 @@ Active environment switched to [mainnet]
 
 If you run `sui client envs` after this command, you see the asterisk in the `active` column on the `mainnet` row of the table.
 
-### Get current active environment
+### Get current active address
 
 Use the `sui client active-address` command to reveal the current address. The CLI uses the current active address to execute address-specific CLI commands (like `sui client objects`) when you don't provide them with a Sui address value.
 
@@ -190,6 +191,8 @@ This command will fetch the transaction dependencies from the fullnode specified
 the past, it is advised to set the client fullnode to one that has non-pruned chain data for that transaction.
 This will also verify that the resulting effects from the locally executed transaction match the effects of the transaction stored on-chain.
 
+You can add additional flags `--gas-info` and `--ptb-info` to this command to see more information about the transaction.
+
 ```
 $ sui client replay-transaction --tx-digest 51MzJP2Uesvza8vXGpPCGbfLrY6UCfdvdoErN1z4oXPW
 ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -237,19 +240,64 @@ Execution finished successfully. Local and on-chain effects match.
 Use `sui client replay-batch --path <FILEPATH>` to replay several transactions listed in a newline-separated file. This
 will verify that all transactions local execution results match the effects on-chain.
 
+### Profile a transaction
+
+Use the `sui client profile-transaction --tx-digest <TRANSACTION-DIGEST>` command to re-execute a transaction locally
+and produce a gas profile. Similarly to the `replay` command, this command fetches the transaction dependencies from the
+full node specified in the client environment that are needed to execute the transaction. During the local execution of the transaction,
+this command records all the Move function invocations and the gas cost breakdown for each invocation.
+
+To enable the profiler, you must either install or build the Sui Client binary locally with the `--features gas-profiler` flag.
+
+```shell
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRANCH-NAME> --features gas-profiler sui
+```
+
+The command outputs a profile to the current working directory in the format `gas_profile_{tx_digest}_{unix_timestamp}.json`.
+You can include the optional flag `--profile-output </PATH/OUTPUT.json>` to write the profile to `/PATH/OUTPUT_{tx_digest}_{unix_timestamp}.json` instead.
+This profile can then be inspected using speedscope.
+
+To install speedscope run
+
+```bash
+npm install -g speedscope
+```
+
+To open a profile in speedscope run
+
+```bash
+speedscope <PATH/PROFILE-OUTPUT-FILE>
+```
+
+When looking at the profile in speedscope, there are three different views available from the top left menu: **Timer Order**,
+**Left Heavy**, and **Sandwich**. In each view, each bar's vertical width corresponds to the percentage of gas consumption incurred by the function,
+and you can hover your mouse over a bar or click a bar to see the precise amount of gas consumed in MIST (nano-SUI).
+
+**Time Order** shows the callstack of function invocations from left to right in the order
+of invocation, while **Left Heavy** combines repeated sequences of nested invocations into a single combined call stack. **Left Heavy** 
+displays these sequences from left to right by total incurred gas consumption per combined call stack. This is useful when there have
+been hundreds of repeated calls to the same function to quickly observe the total gas consumption over all calls to that function.
+In both these views, you can click the top section and drag to zoom in and out over different sections of the profile.
+
+**Sandwich** view shows a list of discrete values that correspond to gas consumption per function, with **Total** showing
+gas cost incurred in all the functions called by the function, and **Self** showing the gas cost done by only the given function.
+
+Observing a transaction's gas consumption provides useful insight of expected gas cost usage of a smart contract.
+When developing a smart contract, you can [run a local network](../../guides/developer/getting-started/local-network.mdx) and publish the package to the local network. Then create a transaction that calls
+your published smart contract, and finally run the profiler on the transaction to see a breakdown of the gas cost.
 
 ## Publish a Move package
 
-One of the main uses of the `sui client` command is to publish smart contracts on the Sui network. This example switches the current environment to the Devnet network, then builds, tests, and publishes one of the existing Move examples available in the Sui repository: `https://github.com/MystenLabs/sui/tree/main/examples/move`
+One of the main uses of the `sui client` command is to publish smart contracts on the Sui network. This example switches the current environment to the Devnet network, then builds, tests, and publishes one of the existing Move examples available in the Sui repository: [sui/examples/move](https://github.com/MystenLabs/sui/tree/main/examples/move)
 
 This example also makes use of `sui move` commands. To learn more about those commands, see [Sui Move CLI](./move.mdx).
 
-1. Open a terminal or console to the root of your local Sui repository and navigate to the move_tutorial example.
+1. Open a terminal or console to the root of your local Sui repository and navigate to the `move_tutorial` example.
     ```shell
     cd examples/move
     cd first_package
     ```
-1. Switch to the Devnet network. This command uses an alias, so the `devnet` value might be different for you, depending on the alias name set in your configuration.
+1. Switch to the Devnet network. This command uses an alias, so the `devnet` value might be different for you, depending on the alias name set in your configuration (use `sui client envs` for a list of your defined networks and their aliases).
     ```shell
     sui client switch --env devnet
     ```
@@ -271,7 +319,7 @@ This example also makes use of `sui move` commands. To learn more about those co
     [ PASS    ] 0x0::example::test_sword_transactions
     Test result: OK. Total tests: 2; passed: 2; failed: 0
      ```
-1. Use the `sui client verify-bytecode-meter` to check if the module passes the bytecode meter. The console responds with the maximum allowed values as well as the amount the package uses.
+1. Use the `sui client verify-bytecode-meter` to check if the module passes the bytecode meter. The console responds with the maximum allowed values, as well as the amount the package uses.
     ```shell
     $ sui client verify-bytecode-meter
     Running bytecode verifier for 1 modules
@@ -420,9 +468,9 @@ Options:
   	--gas <GAS>                   	ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas object with at least gas_budget value will be selected
   	--gas-budget <GAS_BUDGET>     	Gas budget for this call
   	--serialize-unsigned-transaction  Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data (TransactionData) using base64 encoding, and print out
-                                    	the string
+                                    	the string <TX_BYTES>. The string can be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
   	--serialize-signed-transaction	Instead of executing the transaction, serialize the bcs bytes of the signed transaction data (SenderSignedData) using base64 encoding, and print out the
-                                    	string
+                                    	string <SIGNED_TX_BYTES>. The string can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED_TX_BYTES>`.
   	--json                        	Return command outputs in json format
   -h, --help                        	Print help
 ```

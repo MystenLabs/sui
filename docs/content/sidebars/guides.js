@@ -29,6 +29,7 @@ const guides = [
 					'guides/developer/getting-started/local-network',
 					'guides/developer/getting-started/get-address',
 					'guides/developer/getting-started/get-coins',
+					'guides/developer/getting-started/graphql-rpc',
 				],
 			},
 			{
@@ -89,7 +90,10 @@ const guides = [
 			{
 				type: 'category',
 				label: 'Advanced Topics',
-				items: ['guides/developer/advanced/asset-tokenization'],
+				items: [
+					'guides/developer/advanced/asset-tokenization',
+					'guides/developer/advanced/graphql-migration',
+				],
 			},
 			/*{
 				type: 'category',
@@ -167,7 +171,6 @@ const guides = [
 			'guides/operator/validator-committee',
 			'guides/operator/validator-tasks',
 			'guides/operator/node-tools',
-			'guides/operator/formal-snapshot',
 			'guides/operator/exchange-integration',
 		],
 	},

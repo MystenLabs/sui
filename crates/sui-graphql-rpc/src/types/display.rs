@@ -3,11 +3,20 @@
 
 use async_graphql::*;
 
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use move_core_types::annotated_value::{MoveStruct, MoveValue};
-use sui_types::collection_types::VecMap;
+use sui_indexer::{models_v2::display::StoredDisplay, schema_v2::display};
+use sui_types::TypeTag;
 
-use crate::error::Error;
+use crate::{
+    data::{Db, DbConnection, QueryExecutor},
+    error::Error,
+};
 use sui_json_rpc_types::SuiMoveValue;
+
+pub(crate) struct Display {
+    pub stored: StoredDisplay,
+}
 
 /// The set of named templates defined on-chain for the type of this object,
 /// to be handled off-chain. The server substitutes data from the object
@@ -36,6 +45,43 @@ pub(crate) enum DisplayRenderError {
     UnexpectedMoveValue,
 }
 
+impl Display {
+    /// Query for a `Display` object by the type that it is displaying
+    pub(crate) async fn query(db: &Db, type_: TypeTag) -> Result<Option<Display>, Error> {
+        let stored: Option<StoredDisplay> = db
+            .execute(move |conn| {
+                conn.first(move || {
+                    use display::dsl;
+                    dsl::display.filter(
+                        dsl::object_type.eq(type_.to_canonical_string(/* with_prefix */ true)),
+                    )
+                })
+                .optional()
+            })
+            .await?;
+
+        Ok(stored.map(|stored| Display { stored }))
+    }
+
+    /// Render the fields defined by this `Display` from the contents of `struct_`.
+    pub(crate) fn render(&self, struct_: &MoveStruct) -> Result<Vec<DisplayEntry>, Error> {
+        let event = self
+            .stored
+            .to_display_update_event()
+            .map_err(|e| Error::Internal(e.to_string()))?;
+
+        let mut rendered = vec![];
+        for entry in event.fields.contents {
+            rendered.push(match parse_template(&entry.value, struct_) {
+                Ok(v) => DisplayEntry::create_value(entry.key, v),
+                Err(e) => DisplayEntry::create_error(entry.key, e.to_string()),
+            });
+        }
+
+        Ok(rendered)
+    }
+}
+
 impl DisplayEntry {
     pub(crate) fn create_value(key: String, value: String) -> Self {
         Self {
@@ -52,23 +98,6 @@ impl DisplayEntry {
             error: Some(error),
         }
     }
-}
-
-pub(crate) fn get_rendered_fields(
-    fields: VecMap<String, String>,
-    move_struct: &MoveStruct,
-) -> Result<Vec<DisplayEntry>, Error> {
-    let mut rendered_fields: Vec<DisplayEntry> = vec![];
-
-    for entry in fields.contents.iter() {
-        let rendered_value = match parse_template(&entry.value, move_struct) {
-            Ok(value) => DisplayEntry::create_value(entry.key.clone(), value),
-            Err(e) => DisplayEntry::create_error(entry.key.clone(), e.to_string()),
-        };
-        rendered_fields.push(rendered_value);
-    }
-
-    Ok(rendered_fields)
 }
 
 /// Handles the PART of the grammar, defined as:

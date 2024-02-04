@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Instant;
+
 use super::QueryExecutor;
-use crate::{config::Limits, error::Error};
+use crate::{config::Limits, error::Error, metrics::Metrics};
 use async_trait::async_trait;
 use diesel::{
     pg::Pg,
@@ -12,9 +14,12 @@ use diesel::{
 };
 use sui_indexer::indexer_reader::IndexerReader;
 
+use tracing::error;
+
 pub(crate) struct PgExecutor {
     pub inner: IndexerReader,
     pub limits: Limits,
+    pub metrics: Metrics,
 }
 
 pub(crate) struct PgConnection<'c> {
@@ -23,8 +28,12 @@ pub(crate) struct PgConnection<'c> {
 }
 
 impl PgExecutor {
-    pub(crate) fn new(inner: IndexerReader, limits: Limits) -> Self {
-        Self { inner, limits }
+    pub(crate) fn new(inner: IndexerReader, limits: Limits, metrics: Metrics) -> Self {
+        Self {
+            inner,
+            limits,
+            metrics,
+        }
     }
 }
 
@@ -43,10 +52,18 @@ impl QueryExecutor for PgExecutor {
         E: Send + 'static,
     {
         let max_cost = self.limits.max_db_query_cost;
-        self.inner
+        let instant = Instant::now();
+        let result = self
+            .inner
             .run_query_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
-            .await
-            .map_err(|e| Error::Internal(e.to_string()))
+            .await;
+        let elapsed = instant.elapsed();
+        self.metrics
+            .observe_db_data(elapsed.as_secs(), result.is_ok());
+        if let Err(e) = &result {
+            error!("DB query error: {e:?}");
+        }
+        result.map_err(|e| Error::Internal(e.to_string()))
     }
 
     async fn execute_repeatable<T, U, E>(&self, txn: T) -> Result<U, Error>
@@ -58,10 +75,18 @@ impl QueryExecutor for PgExecutor {
         E: Send + 'static,
     {
         let max_cost = self.limits.max_db_query_cost;
-        self.inner
+        let instant = Instant::now();
+        let result = self
+            .inner
             .run_query_repeatable_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
-            .await
-            .map_err(|e| Error::Internal(e.to_string()))
+            .await;
+        let elapsed = instant.elapsed();
+        self.metrics
+            .observe_db_data(elapsed.as_secs(), result.is_ok());
+        if let Err(e) = &result {
+            error!("DB query error: {e:?}");
+        }
+        result.map_err(|e| Error::Internal(e.to_string()))
     }
 }
 

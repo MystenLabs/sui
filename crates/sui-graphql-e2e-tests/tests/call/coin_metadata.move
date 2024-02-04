@@ -30,9 +30,7 @@ module test::fake {
     description
     iconUrl
     supply
-    asMoveObject {
-      hasPublicTransfer
-    }
+    hasPublicTransfer
   }
 }
 
@@ -52,8 +50,6 @@ module test::fake {
     description
     iconUrl
     supply
-    asMoveObject {
-      hasPublicTransfer
-    }
+    hasPublicTransfer
   }
 }

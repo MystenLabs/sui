@@ -26,7 +26,7 @@ use sui_types::committee::Committee;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
-use sui_types::storage::{ReadStore, WriteStore};
+use sui_types::storage::WriteStore;
 use tracing::debug;
 
 pub mod blob;
@@ -168,7 +168,7 @@ pub fn verify_checkpoint_with_committee(
 ) -> Result<VerifiedCheckpoint, CertifiedCheckpointSummary> {
     assert_eq!(
         *checkpoint.sequence_number(),
-        current.sequence_number().saturating_add(1)
+        current.sequence_number().checked_add(1).unwrap()
     );
 
     if Some(*current.digest()) != checkpoint.previous_digest {
@@ -184,7 +184,8 @@ pub fn verify_checkpoint_with_committee(
     }
 
     let current_epoch = current.epoch();
-    if checkpoint.epoch() != current_epoch && checkpoint.epoch() != current_epoch.saturating_add(1)
+    if checkpoint.epoch() != current_epoch
+        && checkpoint.epoch() != current_epoch.checked_add(1).unwrap()
     {
         debug!(
             checkpoint_seq = checkpoint.sequence_number(),
@@ -196,7 +197,7 @@ pub fn verify_checkpoint_with_committee(
         return Err(checkpoint);
     }
 
-    if checkpoint.epoch() == current_epoch.saturating_add(1)
+    if checkpoint.epoch() == current_epoch.checked_add(1).unwrap()
         && current.next_epoch_committee().is_none()
     {
         debug!(
@@ -226,7 +227,6 @@ pub fn verify_checkpoint<S>(
 ) -> Result<VerifiedCheckpoint, CertifiedCheckpointSummary>
 where
     S: WriteStore,
-    <S as ReadStore>::Error: std::error::Error,
 {
     let committee = store
         .get_committee(checkpoint.epoch())
@@ -249,7 +249,6 @@ pub async fn verify_checkpoint_range<S>(
     max_concurrency: usize,
 ) where
     S: WriteStore + Clone,
-    <S as ReadStore>::Error: std::error::Error,
 {
     let range_clone = checkpoint_range.clone();
     futures::stream::iter(range_clone.into_iter().tuple_windows())

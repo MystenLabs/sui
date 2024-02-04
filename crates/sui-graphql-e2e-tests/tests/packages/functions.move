@@ -49,7 +49,7 @@ module P0::m {
 
 # Get the signature of a function published in a third-party package
 fragment Signature on MoveFunction {
-    module { package { asObject { address } } }
+    module { package { address } }
     name
     visibility
     isEntry
@@ -98,7 +98,7 @@ module P0::m {
 
 # Get the signature of a function published in a third-party package
 fragment Signature on MoveFunction {
-    module { package { asObject { address } } }
+    module { package { address } }
     name
     visibility
     isEntry
@@ -135,7 +135,7 @@ fragment Functions on Object {
     }
 }
 
-//# run-graphql --cursors "consensus_commit_prologue" "timestamp_ms"
+//# run-graphql --cursors {"n":"consensus_commit_prologue","c":2} {"n":"timestamp_ms","c":2}
 
 fragment Signatures on MoveFunctionConnection {
     edges {
@@ -172,7 +172,7 @@ fragment Signatures on MoveFunctionConnection {
     }
 }
 
-//# run-graphql --cursors "consensus_commit_prologue" "timestamp_ms"
+//# run-graphql --cursors {"n":"consensus_commit_prologue","c":2} {"n":"timestamp_ms","c":2}
 
 fragment Signatures on MoveFunctionConnection {
     edges {

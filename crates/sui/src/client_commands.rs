@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, ensure};
+use anyhow::{anyhow, bail, ensure};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
@@ -42,15 +42,18 @@ use sui_move_build::{
 };
 use sui_replay::ReplayToolCommand;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
-use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
+use sui_sdk::{
+    wallet_context::WalletContext, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
+};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
-    crypto::SignatureScheme,
+    crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
     dynamic_field::DynamicFieldInfo,
     error::SuiError,
     gas_coin::GasCoin,
+    message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
     move_package::UpgradeCap,
     object::Owner,
@@ -66,9 +69,14 @@ use tabled::{
         Modify as TableModify, Panel as TablePanel, Style as TableStyle,
     },
 };
+
 use tracing::info;
 
 use crate::key_identity::{get_identity_address, KeyIdentity};
+
+#[path = "unit_tests/profiler_tests.rs"]
+#[cfg(test)]
+mod profiler_tests;
 
 macro_rules! serialize_or_execute {
     ($tx_data:expr, $serialize_unsigned:expr, $serialize_signed:expr, $context:expr, $result_variant:ident) => {{
@@ -159,12 +167,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -192,13 +203,31 @@ pub enum SuiClientCommands {
 
     /// Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute.
     ExecuteSignedTx {
-        /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
+        /// BCS serialized transaction data bytes without its type tag, as base64 encoded string. This is the output of sui client command using --serialize-unsigned-transaction.
         #[clap(long)]
         tx_bytes: String,
 
         /// A list of Base64 encoded signatures `flag || signature || pubkey`.
         #[clap(long)]
         signatures: Vec<String>,
+    },
+    /// Execute a combined serialized SenderSignedData string.
+    ExecuteCombinedSignedTx {
+        /// BCS serialized sender signed data, as base64 encoded string. This is the output of sui client command using --serialize-signed-transaction.
+        #[clap(long)]
+        signed_tx_bytes: String,
+    },
+
+    /// Request gas coin from faucet. By default, it will use the active address and the active network.
+    #[clap[name = "faucet"]]
+    Faucet {
+        /// Address (or its alias)
+        #[clap(long)]
+        #[arg(value_parser)]
+        address: Option<KeyIdentity>,
+        /// The url to the faucet
+        #[clap(long)]
+        url: Option<String>,
     },
 
     /// Obtain all gas objects owned by the address.
@@ -228,12 +257,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -308,12 +340,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -334,12 +369,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -366,12 +404,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -406,12 +447,15 @@ pub enum SuiClientCommands {
         with_unpublished_dependencies: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -437,12 +481,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -489,12 +536,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -521,12 +571,15 @@ pub enum SuiClientCommands {
         amount: Option<u64>,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -565,12 +618,15 @@ pub enum SuiClientCommands {
         with_unpublished_dependencies: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -612,6 +668,19 @@ pub enum SuiClientCommands {
         address_override: Option<ObjectID>,
     },
 
+    /// Profile the gas usage of a transaction. Unless an output filepath is not specified, outputs a file `gas_profile_{tx_digest}_{unix_timestamp}.json` which can be opened in a flamegraph tool such as speedscope.
+    #[clap(name = "profile-transaction")]
+    ProfileTransaction {
+        /// The digest of the transaction to replay
+        #[arg(long, short)]
+        tx_digest: String,
+
+        /// If specified, overrides the filepath of the output profile, for example -- /temp/my_profile_name.json will write output to `/temp/my_profile_name_{tx_digest}_{unix_timestamp}.json`
+        /// If an output filepath is not specified, it will output a file `gas_profile_{tx_digest}_{unix_timestamp}.json` to the working directory
+        #[arg(long, short)]
+        profile_output: Option<PathBuf>,
+    },
+
     /// Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
     #[clap(name = "replay-transaction")]
     ReplayTransaction {
@@ -620,8 +689,20 @@ pub enum SuiClientCommands {
         tx_digest: String,
 
         /// Log extra gas-related information
-        #[arg(long, short)]
+        #[arg(long)]
         gas_info: bool,
+
+        /// Log information about each programmable transaction command
+        #[arg(long)]
+        ptb_info: bool,
+
+        /// Optional version of the executor to use, if not specified defaults to the one originally used for the transaction.
+        #[arg(long, short, allow_hyphen_values = true)]
+        executor_version: Option<i64>,
+
+        /// Optional protocol version to use, if not specified defaults to the one originally used for the transaction.
+        #[arg(long, short, allow_hyphen_values = true)]
+        protocol_version: Option<i64>,
     },
 
     /// Replay transactions listed in a file.
@@ -653,28 +734,60 @@ pub enum SuiClientCommands {
     },
 }
 
+#[derive(serde::Deserialize)]
+struct FaucetResponse {
+    error: Option<String>,
+}
+
 impl SuiClientCommands {
     pub async fn execute(
         self,
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = Ok(match self {
+            SuiClientCommands::ProfileTransaction {
+                tx_digest,
+                profile_output,
+            } => {
+                move_vm_profiler::gas_profiler_feature_disabled! {
+                    bail!(
+                        "gas-profiler feature is not enabled, rebuild or reinstall with \
+                         --features gas-profiler"
+                    );
+                };
+
+                let cmd = ReplayToolCommand::ProfileTransaction {
+                    tx_digest,
+                    executor_version: None,
+                    protocol_version: None,
+                    profile_output,
+                };
+                let rpc = context.config.get_active_env()?.rpc.clone();
+                let _command_result =
+                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
+                // this will be displayed via trace info, so no output is needed here
+                SuiClientCommandResult::NoOutput
+            }
             SuiClientCommands::ReplayTransaction {
                 tx_digest,
                 gas_info: _,
+                ptb_info: _,
+                executor_version,
+                protocol_version,
             } => {
                 let cmd = ReplayToolCommand::ReplayTransaction {
                     tx_digest,
                     show_effects: true,
                     diag: false,
-                    executor_version_override: None,
-                    protocol_version_override: None,
+                    executor_version,
+                    protocol_version,
                 };
 
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
-                SuiClientCommandResult::ReplayTransaction
+                // this will be displayed via trace info, so no output is needed here
+                SuiClientCommandResult::NoOutput
             }
             SuiClientCommands::ReplayBatch {
                 path,
@@ -688,7 +801,8 @@ impl SuiClientCommands {
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
-                SuiClientCommandResult::ReplayBatch
+                // this will be displayed via trace info, so no output is needed here
+                SuiClientCommandResult::NoOutput
             }
             SuiClientCommands::ReplayCheckpoints {
                 start,
@@ -704,7 +818,8 @@ impl SuiClientCommands {
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
-                SuiClientCommandResult::ReplayCheckpoints
+                // this will be displayed via trace info, so no output is needed here
+                SuiClientCommandResult::NoOutput
             }
             SuiClientCommands::Addresses { sort_by_alias } => {
                 let active_address = context.active_address()?;
@@ -1202,6 +1317,29 @@ impl SuiClientCommands {
                     .collect();
                 SuiClientCommandResult::Gas(coins)
             }
+            SuiClientCommands::Faucet { address, url } => {
+                let address = get_identity_address(address, context)?;
+                let url = if let Some(url) = url {
+                    url
+                } else {
+                    let active_env = context.config.get_active_env();
+
+                    if let Ok(env) = active_env {
+                        let network = match env.rpc.as_str() {
+                            SUI_DEVNET_URL => "https://faucet.devnet.sui.io/v1/gas",
+                            SUI_TESTNET_URL => "https://faucet.testnet.sui.io/v1/gas",
+                            // TODO when using sui-test-validator, and 5003 when using sui start
+                            SUI_LOCAL_NETWORK_URL => "http://127.0.0.1:9123/gas",
+                            _ => bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
+                        };
+                        network.to_string()
+                    } else {
+                        bail!("No URL for faucet was provided and there is no active network.")
+                    }
+                };
+                request_tokens_from_faucet(address, url).await?;
+                SuiClientCommandResult::NoOutput
+            }
             SuiClientCommands::ChainIdentifier => {
                 let ci = context
                     .get_client()
@@ -1281,7 +1419,7 @@ impl SuiClientCommands {
                     ));
                 }
 
-                if let Some(address) = address.clone() {
+                if let Some(address) = address {
                     let address = get_identity_address(Some(address), context)?;
                     if !context.config.keystore.addresses().contains(&address) {
                         return Err(anyhow!("Address {} not managed by wallet", address));
@@ -1306,25 +1444,36 @@ impl SuiClientCommands {
             } => {
                 let data = bcs::from_bytes(
                     &Base64::try_from(tx_bytes)
-                        .map_err(|e| anyhow!(e))?
-                        .to_vec()
-                        .map_err(|e| anyhow!(e))?,
-                )?;
+                    .map_err(|_| anyhow!("Invalid Base64 encoding"))?
+                    .to_vec()
+                    .map_err(|_| anyhow!("Invalid Base64 encoding"))?
+                ).map_err(|_| anyhow!("Failed to parse tx bytes, check if it matches the output of sui client commands with --serialize-unsigned-transaction"))?;
 
                 let mut sigs = Vec::new();
                 for sig in signatures {
                     sigs.push(
                         GenericSignature::from_bytes(
                             &Base64::try_from(sig)
-                                .map_err(|e| anyhow!(e))?
+                                .map_err(|_| anyhow!("Invalid Base64 encoding"))?
                                 .to_vec()
                                 .map_err(|e| anyhow!(e))?,
                         )
-                        .map_err(|e| anyhow!(e))?,
+                        .map_err(|_| anyhow!("Invalid generic signature"))?,
                     );
                 }
                 let transaction = Transaction::from_generic_sig_data(data, sigs);
 
+                let response = context.execute_transaction_may_fail(transaction).await?;
+                SuiClientCommandResult::ExecuteSignedTx(response)
+            }
+            SuiClientCommands::ExecuteCombinedSignedTx { signed_tx_bytes } => {
+                let data: SenderSignedData = bcs::from_bytes(
+                    &Base64::try_from(signed_tx_bytes)
+                        .map_err(|_| anyhow!("Invalid Base64 encoding"))?
+                        .to_vec()
+                        .map_err(|_| anyhow!("Invalid Base64 encoding"))?
+                ).map_err(|_| anyhow!("Failed to parse SenderSignedData bytes, check if it matches the output of sui client commands with --serialize-signed-transaction"))?;
+                let transaction = Envelope::<SenderSignedData, EmptySignInfo>::new(data);
                 let response = context.execute_transaction_may_fail(transaction).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
             }
@@ -1769,9 +1918,7 @@ impl Display for SuiClientCommandResult {
                 table.with(tabled::settings::style::BorderSpanCorrection);
                 writeln!(f, "{}", table)?;
             }
-            SuiClientCommandResult::ReplayTransaction => {}
-            SuiClientCommandResult::ReplayBatch => {}
-            SuiClientCommandResult::ReplayCheckpoints => {}
+            SuiClientCommandResult::NoOutput => {}
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -1920,7 +2067,7 @@ pub struct ObjectOutput {
     pub digest: String,
     pub obj_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub owner_type: Option<String>,
+    pub owner: Option<Owner>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prev_tx: Option<TransactionDigest>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1931,13 +2078,6 @@ pub struct ObjectOutput {
 
 impl From<&SuiObjectData> for ObjectOutput {
     fn from(obj: &SuiObjectData) -> Self {
-        let owner_type = match obj.owner {
-            Some(Owner::AddressOwner(_)) => Some("AddressOwner".to_string()),
-            Some(Owner::ObjectOwner(_)) => Some("ObjectOwner".to_string()),
-            Some(Owner::Shared { .. }) => Some("Shared".to_string()),
-            Some(Owner::Immutable) => Some("Immutable".to_string()),
-            None => None,
-        };
         let obj_type = match obj.type_.as_ref() {
             Some(x) => x.to_string(),
             None => "unknown".to_string(),
@@ -1947,7 +2087,7 @@ impl From<&SuiObjectData> for ObjectOutput {
             version: obj.version,
             digest: obj.digest.to_string(),
             obj_type,
-            owner_type,
+            owner: obj.owner,
             prev_tx: obj.previous_transaction,
             storage_rebate: obj.storage_rebate,
             content: obj.content.clone(),
@@ -2028,6 +2168,7 @@ pub enum SuiClientCommandResult {
     MergeCoin(SuiTransactionBlockResponse),
     NewAddress(NewAddressOutput),
     NewEnv(SuiEnv),
+    NoOutput,
     Object(SuiObjectResponse),
     Objects(Vec<SuiObjectResponse>),
     Pay(SuiTransactionBlockResponse),
@@ -2051,9 +2192,6 @@ pub enum SuiClientCommandResult {
         used_module_ticks: u128,
     },
     VerifySource,
-    ReplayTransaction,
-    ReplayBatch,
-    ReplayCheckpoints,
 }
 
 #[derive(Serialize, Clone)]
@@ -2075,4 +2213,37 @@ impl Display for SwitchResponse {
         }
         write!(f, "{}", writer)
     }
+}
+
+/// Request tokens from the Faucet for the given address
+pub async fn request_tokens_from_faucet(
+    address: SuiAddress,
+    url: String,
+) -> Result<(), anyhow::Error> {
+    let address_str = address.to_string();
+    let json_body = json![{
+        "FixedAmountRequest": {
+            "recipient": &address_str
+        }
+    }];
+
+    // make the request to the faucet JSON RPC API for coin
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .json(&json_body)
+        .send()
+        .await?;
+    if resp.status() == 429 {
+        bail!("Faucet received too many requests from this IP address. Please try again after 60 minutes.");
+    }
+    let faucet_resp: FaucetResponse = resp.json().await?;
+
+    if let Some(err) = faucet_resp.error {
+        bail!("Faucet request was unsuccessful: {err}")
+    } else {
+        println!("Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins.");
+    }
+    Ok(())
 }

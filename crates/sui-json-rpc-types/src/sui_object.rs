@@ -585,12 +585,10 @@ impl SuiObjectResponse {
     /// Returns a reference to the object if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
     pub fn object(&self) -> Result<&SuiObjectData, SuiObjectResponseError> {
-        let data = &self.data;
-        let error = self.error.clone();
-        if let Some(data) = data {
+        if let Some(data) = &self.data {
             Ok(data)
-        } else if let Some(error) = error {
-            Err(error)
+        } else if let Some(error) = &self.error {
+            Err(error.clone())
         } else {
             // We really shouldn't reach this code block since either data, or error field should always be filled.
             Err(SuiObjectResponseError::Unknown)
@@ -600,15 +598,9 @@ impl SuiObjectResponse {
     /// Returns the object value if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
     pub fn into_object(self) -> Result<SuiObjectData, SuiObjectResponseError> {
-        let data = self.data.clone();
-        let error = self.error;
-        if let Some(data) = data {
-            Ok(data)
-        } else if let Some(error) = error {
-            Err(error)
-        } else {
-            // We really shouldn't reach this code block since either data, or error field should always be filled.
-            Err(SuiObjectResponseError::Unknown)
+        match self.object() {
+            Ok(data) => Ok(data.clone()),
+            Err(error) => Err(error),
         }
     }
 }
@@ -700,6 +692,7 @@ pub trait SuiData: Sized {
         -> Result<Self, anyhow::Error>;
     fn try_from_package(package: MovePackage) -> Result<Self, anyhow::Error>;
     fn try_as_move(&self) -> Option<&Self::ObjectType>;
+    fn try_into_move(self) -> Option<Self::ObjectType>;
     fn try_as_package(&self) -> Option<&Self::PackageType>;
     fn type_(&self) -> Option<&StructTag>;
 }
@@ -725,6 +718,13 @@ impl SuiData for SuiRawData {
     }
 
     fn try_as_move(&self) -> Option<&Self::ObjectType> {
+        match self {
+            Self::MoveObject(o) => Some(o),
+            Self::Package(_) => None,
+        }
+    }
+
+    fn try_into_move(self) -> Option<Self::ObjectType> {
         match self {
             Self::MoveObject(o) => Some(o),
             Self::Package(_) => None,
@@ -774,6 +774,13 @@ impl SuiData for SuiParsedData {
     }
 
     fn try_as_move(&self) -> Option<&Self::ObjectType> {
+        match self {
+            Self::MoveObject(o) => Some(o),
+            Self::Package(_) => None,
+        }
+    }
+
+    fn try_into_move(self) -> Option<Self::ObjectType> {
         match self {
             Self::MoveObject(o) => Some(o),
             Self::Package(_) => None,

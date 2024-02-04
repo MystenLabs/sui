@@ -35,6 +35,13 @@
   epoch(id: 2) {
     validatorSet {
       totalStake
+      activeValidators {
+        nodes {
+          name
+        }
+      }
+      validatorCandidatesSize
+      inactivePoolsId
     }
     totalGasFees
     totalStakeRewards
@@ -43,5 +50,13 @@
     fundInflow
     fundOutflow
     netInflow
+    transactionBlocks {
+      nodes {
+        kind {
+          __typename
+        }
+        digest
+      }
+    }
   }
 }

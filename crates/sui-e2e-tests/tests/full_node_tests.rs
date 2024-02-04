@@ -12,7 +12,6 @@ use serde_json::json;
 use std::sync::Arc;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::node::RunWithRange;
-use sui_core::authority::EffectsNotifyRead;
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiExecutionStatus,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -72,7 +71,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
     fullnode
         .state()
-        .db()
+        .get_effects_notify_read()
         .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
@@ -118,7 +117,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     handle
         .sui_node
         .state()
-        .db()
+        .get_effects_notify_read()
         .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
@@ -511,7 +510,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 
     fullnode
         .state()
-        .db()
+        .get_effects_notify_read()
         .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
@@ -529,7 +528,16 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
-async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
+async fn test_full_node_sync_flood() {
+    do_test_full_node_sync_flood().await
+}
+
+#[sim_test(check_determinism)]
+async fn test_full_node_sync_flood_determinism() {
+    do_test_full_node_sync_flood().await
+}
+
+async fn do_test_full_node_sync_flood() {
     let mut test_cluster = TestClusterBuilder::new().build().await;
 
     // Start a new fullnode that is not on the write path
@@ -621,12 +629,10 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         .collect();
     fullnode
         .state()
-        .db()
+        .get_effects_notify_read()
         .notify_read_executed_effects(digests)
         .await
         .unwrap();
-
-    Ok(())
 }
 
 #[sim_test]
@@ -659,7 +665,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 
     let (sender, object_id, digest) = create_devnet_nft(context, package_id).await;
     node.state()
-        .db()
+        .get_effects_notify_read()
         .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
@@ -900,7 +906,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     assert!(!is_executed_locally);
     fullnode
         .state()
-        .db()
+        .get_effects_notify_read()
         .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
@@ -1200,7 +1206,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
         .sui_node;
 
     node.state()
-        .db()
+        .get_effects_notify_read()
         .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
@@ -1220,7 +1226,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
     let (_transferred_object, _, _, digest_after_restore, ..) =
         transfer_coin(&test_cluster.wallet).await?;
     node.state()
-        .db()
+        .get_effects_notify_read()
         .notify_read_executed_effects(vec![digest_after_restore])
         .await
         .unwrap();

@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub use checked::*;
-
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    #[cfg(feature = "gas-profiler")]
+    use move_vm_config::runtime::VMProfilerConfig;
+    use std::path::PathBuf;
     use std::{collections::BTreeMap, sync::Arc};
 
     use anyhow::Result;
@@ -39,7 +41,16 @@ mod checked {
     pub fn new_move_vm(
         natives: NativeFunctionTable,
         protocol_config: &ProtocolConfig,
+        _enable_profiler: Option<PathBuf>,
     ) -> Result<MoveVM, SuiError> {
+        #[cfg(not(feature = "gas-profiler"))]
+        let vm_profiler_config = None;
+        #[cfg(feature = "gas-profiler")]
+        let vm_profiler_config = _enable_profiler.clone().map(|path| VMProfilerConfig {
+            full_path: path,
+            track_bytecode_instructions: false,
+            use_long_function_name: false,
+        });
         MoveVM::new_with_config(
             natives,
             VMConfig {
@@ -57,8 +68,7 @@ mod checked {
                     .disable_invariant_violation_check_in_swap_loc(),
                 check_no_extraneous_bytes_during_deserialization: protocol_config
                     .no_extraneous_module_bytes(),
-                #[cfg(debug_assertions)]
-                profiler_config: std::default::Default::default(),
+                profiler_config: vm_profiler_config,
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,
             },

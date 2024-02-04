@@ -127,7 +127,7 @@ async fn submit_transaction_to_consensus_adapter() {
                 .process_consensus_transactions_for_tests(
                     vec![SequencedConsensusTransaction::new_test(transaction.clone())],
                     &Arc::new(CheckpointServiceNoop {}),
-                    self.0.db(),
+                    self.0.get_cache_reader().as_ref(),
                     &self.0.metrics.skipped_consensus_txns,
                 )
                 .await?;

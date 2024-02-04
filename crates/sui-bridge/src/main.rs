@@ -112,16 +112,18 @@ async fn start_client_components(
         .zip(stored_module_cursors)
     {
         if client_config
-            .sui_bridge_modules_start_tx_override
+            .sui_bridge_modules_last_processed_event_id_override
             .contains_key(module)
         {
             sui_modules_to_watch.insert(
                 module.clone(),
-                client_config.sui_bridge_modules_start_tx_override[module],
+                client_config.sui_bridge_modules_last_processed_event_id_override[module],
             );
             info!(
-                "Overriding cursor for sui bridge module {} to {}. Stored cursor: {:?}",
-                module, client_config.sui_bridge_modules_start_tx_override[module], cursor
+                "Overriding cursor for sui bridge module {} to {:?}. Stored cursor: {:?}",
+                module,
+                client_config.sui_bridge_modules_last_processed_event_id_override[module],
+                cursor
             );
         } else if let Some(cursor) = cursor {
             sui_modules_to_watch.insert(module.clone(), cursor);
@@ -155,7 +157,8 @@ async fn start_client_components(
                 contract, client_config.eth_bridge_contracts_start_block_override[contract], cursor
             );
         } else if let Some(cursor) = cursor {
-            eth_contracts_to_watch.insert(*contract, cursor);
+            // +1: The stored value is the last block that was processed, so we start from the next block.
+            eth_contracts_to_watch.insert(*contract, cursor + 1);
         } else {
             return Err(anyhow::anyhow!(
                 "No cursor found for eth contract {} in storage or config override",
@@ -183,7 +186,7 @@ async fn start_client_components(
 
     let committee = Arc::new(
         sui_client
-            .get_committee()
+            .get_bridge_committee()
             .await
             .expect("Failed to get committee"),
     );

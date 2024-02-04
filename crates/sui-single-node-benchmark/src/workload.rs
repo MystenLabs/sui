@@ -3,10 +3,14 @@
 
 use crate::benchmark_context::BenchmarkContext;
 use crate::command::WorkloadKind;
-use crate::tx_generator::{MoveTxGenerator, NonMoveTxGenerator, TxGenerator};
+use crate::tx_generator::{
+    MoveTxGenerator, NonMoveTxGenerator, PackagePublishTxGenerator, TxGenerator,
+};
+use std::path::PathBuf;
 use std::sync::Arc;
+use sui_test_transaction_builder::PublishData;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Workload {
     pub tx_count: u64,
     pub workload_kind: WorkloadKind,
@@ -38,7 +42,7 @@ impl Workload {
             self.num_input_objects >= 1,
             "Each transaction requires at least 1 input object"
         );
-        match self.workload_kind {
+        match &self.workload_kind {
             WorkloadKind::NoMove => Arc::new(NonMoveTxGenerator::new(self.num_input_objects)),
             WorkloadKind::Move {
                 num_dynamic_fields,
@@ -48,17 +52,22 @@ impl Workload {
                     self.num_input_objects >= 2,
                     "Move transaction requires at least 2 input objects"
                 );
-                let move_package = ctx.publish_package().await;
+                let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                path.extend(["move_package"]);
+                let move_package = ctx.publish_package(PublishData::Source(path, false)).await;
                 let root_objects = ctx
-                    .preparing_dynamic_fields(move_package.0, num_dynamic_fields)
+                    .preparing_dynamic_fields(move_package.0, *num_dynamic_fields)
                     .await;
                 Arc::new(MoveTxGenerator::new(
                     move_package.0,
                     self.num_input_objects,
-                    computation,
+                    *computation,
                     root_objects,
                 ))
             }
+            WorkloadKind::Publish {
+                manifest_file: manifest_path,
+            } => Arc::new(PackagePublishTxGenerator::new(ctx, manifest_path.clone()).await),
         }
     }
 }

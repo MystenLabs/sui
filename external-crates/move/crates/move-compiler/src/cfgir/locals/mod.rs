@@ -219,24 +219,37 @@ fn lvalue(context: &mut Context, sp!(loc, l_): &LValue) {
                             LocalState::MaybeUnavailable { .. } => "might contain",
                         };
                         let available = *available;
-                        let vstr = match display_var(v.value()) {
-                            DisplayVar::Tmp => panic!("ICE invalid assign tmp local"),
-                            DisplayVar::Orig(s) => s,
+                        match display_var(v.value()) {
+                            DisplayVar::Tmp => {
+                                let msg = format!(
+                                    "This expression without the '{}' ability must be used",
+                                    Ability_::Drop,
+                                );
+                                let mut diag = diag!(
+                                    MoveSafety::UnusedUndroppable,
+                                    (*loc, "Invalid usage of undroppable value".to_string()),
+                                    (available, msg),
+                                );
+                                add_drop_ability_tip(context, &mut diag, ty.clone());
+                                context.add_diag(diag)
+                            }
+                            DisplayVar::Orig(s) => {
+                                let msg = format!(
+                                    "The variable {} a value due to this assignment. The value \
+                                    does not have the '{}' ability and must be used before you \
+                                    assign to this variable again",
+                                    verb,
+                                    Ability_::Drop,
+                                );
+                                let mut diag = diag!(
+                                    MoveSafety::UnusedUndroppable,
+                                    (*loc, format!("Invalid assignment to variable '{}'", s)),
+                                    (available, msg),
+                                );
+                                add_drop_ability_tip(context, &mut diag, ty.clone());
+                                context.add_diag(diag)
+                            }
                         };
-                        let msg = format!(
-                            "The variable {} a value due to this assignment. The value does not \
-                             have the '{}' ability and must be used before you assign to this \
-                             variable again",
-                            verb,
-                            Ability_::Drop,
-                        );
-                        let mut diag = diag!(
-                            MoveSafety::UnusedUndroppable,
-                            (*loc, format!("Invalid assignment to variable '{}'", vstr)),
-                            (available, msg),
-                        );
-                        add_drop_ability_tip(context, &mut diag, ty.clone());
-                        context.add_diag(diag)
                     }
                 }
             }
