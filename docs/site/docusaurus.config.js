@@ -87,7 +87,9 @@ const config = {
           rehypePlugins: [katex],
         },
         theme: {
-          customCss: require.resolve("./src/css/custom.css"),
+          customCss: [
+                    require.resolve("./src/css/custom.css"),
+          ],
         },
         googleTagManager: {
           containerId: "GTM-TTZ5J8V",
@@ -95,8 +97,11 @@ const config = {
       }),
     ],
   ],
-
   stylesheets: [
+    {
+      href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap",
+      type: "text/css",
+    },
     {
       href: "https://cdn.jsdelivr.net/npm/katex@0.13.24/dist/katex.min.css",
       type: "text/css",
@@ -148,7 +153,7 @@ const config = {
         title: "Sui Documentation",
         logo: {
           alt: "Sui Docs Logo",
-          src: "img/logo.svg",
+          src: "img/sui-logo.svg",
         },
         items: [
           {
