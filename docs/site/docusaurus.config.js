@@ -187,6 +187,11 @@ const config = {
         ],
       },
       footer: {
+        logo: {
+          alt: "Sui Logo",
+          src: "img/sui-logo-footer.svg",
+          href: "https://sui.io",
+        },
         style: "dark",
         copyright: `© ${new Date().getFullYear()} Sui Foundation | Documentation distributed under <a href="https://github.com/sui-foundation/sui-docs/blob/main/LICENSE">CC BY 4.0</a>`,
       },
