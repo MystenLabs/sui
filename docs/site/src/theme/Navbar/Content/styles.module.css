@@ -1,0 +1,16 @@
+/*
+Hide color mode toggle in small viewports
+ */
+.navbar__items_wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: 8;
+  column-gap: 4rem;
+}
+
+@media (max-width: 996px) {
+  .colorModeToggle {
+    display: none;
+  }
+}
