@@ -1788,12 +1788,14 @@ impl<'a> ParsingSymbolicator<'a> {
                     v.iter().for_each(|t| self.type_symbols(t));
                 }
                 match bindings {
-                    P::FieldBindings::Named(v) => {
-                        v.iter().for_each(|(_, bind)| self.bind_symbols(bind))
-                    }
-                    P::FieldBindings::Positional(v) => {
-                        v.iter().for_each(|bind| self.bind_symbols(bind))
-                    }
+                    P::FieldBindings::Named(v) => v.iter().for_each(|p| match p {
+                        P::Ellipsis::Binder((_, bind)) => self.bind_symbols(bind),
+                        P::Ellipsis::Ellipsis(_) => (),
+                    }),
+                    P::FieldBindings::Positional(v) => v.iter().for_each(|p| match p {
+                        P::Ellipsis::Binder(bind) => self.bind_symbols(bind),
+                        P::Ellipsis::Ellipsis(_) => (),
+                    }),
                 }
             }
             B::Var(..) => (),

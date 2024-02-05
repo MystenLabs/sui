@@ -7,7 +7,7 @@ use crate::{
     diagnostics::codes::*,
     editions::FeatureGate,
     expansion::{
-        ast::{self as E, AbilitySet, Ellipsis, ModuleIdent, Visibility},
+        ast::{self as E, AbilitySet, ModuleIdent, Visibility},
         translate::is_valid_struct_constant_or_schema_name as is_constant_name,
     },
     naming::{
