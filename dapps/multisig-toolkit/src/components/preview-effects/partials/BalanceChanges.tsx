@@ -24,8 +24,9 @@ function ChangedBalance({ change }: { change: BalanceChange }) {
 
 	const amount = () => {
 		if (!coinMetadata) return '-';
+		const amt = onChainAmountToFloat(change.amount, coinMetadata.decimals);
 
-		return onChainAmountToFloat(change.amount, coinMetadata.decimals);
+		return `${amt && amt > 0.0 ? '+' : ''}${amt}`;
 	};
 	if (!coinMetadata) return <div>Loading...</div>;
 
