@@ -53,7 +53,8 @@ impl Context {
     pub(crate) fn new_for_test(
         committee_size: usize,
     ) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
-        let (committee, keypairs) = Committee::new_for_test(0, vec![1; committee_size]);
+        let (committee, keypairs) =
+            consensus_config::local_committee_and_keys(0, vec![1; committee_size]);
         let metrics = test_metrics();
 
         let context = Context::new(

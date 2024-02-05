@@ -6,12 +6,10 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use fastcrypto::traits::KeyPair;
 use mysten_network::Multiaddr;
-use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 
-use crate::{NetworkKeyPair, NetworkPublicKey, ProtocolKeyPair, ProtocolPublicKey};
+use crate::{NetworkPublicKey, ProtocolPublicKey};
 
 /// Committee of the consensus protocol is updated each epoch.
 pub type Epoch = u64;
@@ -56,30 +54,6 @@ impl Committee {
             validity_threshold,
             authorities,
         }
-    }
-
-    pub fn new_for_test(
-        epoch: Epoch,
-        authorities_stake: Vec<Stake>,
-    ) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
-        let mut authorities = vec![];
-        let mut key_pairs = vec![];
-        let mut rng = StdRng::from_seed([0; 32]);
-        for (i, stake) in authorities_stake.into_iter().enumerate() {
-            let network_keypair = NetworkKeyPair::generate(&mut rng);
-            let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
-            authorities.push(Authority {
-                stake,
-                address: Multiaddr::empty(),
-                hostname: format!("test_host {i}").to_string(),
-                network_key: network_keypair.public().clone(),
-                protocol_key: protocol_keypair.public().clone(),
-            });
-            key_pairs.push((network_keypair, protocol_keypair));
-        }
-
-        let committee = Committee::new(epoch, authorities);
-        (committee, key_pairs)
     }
 
     /// Public accessors for Committee fields.
@@ -228,7 +202,7 @@ impl<T> IndexMut<AuthorityIndex> for Vec<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Committee, Stake};
+    use crate::{local_committee_and_keys, Stake};
 
     #[test]
     fn committee_basic() {
@@ -236,7 +210,7 @@ mod tests {
         let epoch = 100;
         let num_of_authorities = 9;
         let authority_stakes = (1..=9).map(|s| s as Stake).collect();
-        let (committee, _) = Committee::new_for_test(epoch, authority_stakes);
+        let (committee, _) = local_committee_and_keys(epoch, authority_stakes);
 
         // THEN make sure the output Committee fields are populated correctly.
         assert_eq!(committee.size(), num_of_authorities);

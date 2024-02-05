@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, net::Ipv4Addr, sync::Arc, thread::sleep, time::Duration};
+use std::{collections::BTreeMap, panic, sync::Arc, thread::sleep, time::Duration};
 
 use anemo::Response;
 use anemo_tower::auth::{AllowedPeers, RequireAuthorizationLayer};
@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use fastcrypto::traits::KeyPair as _;
-use mysten_network::multiaddr::Protocol;
 use tracing::error;
 
 use super::{
@@ -216,11 +215,7 @@ impl<S: NetworkService> NetworkManager<AnemoClient, S> for AnemoManager {
     fn install_service(&self, network_signer: NetworkKeyPair, service: Arc<S>) {
         let server = ConsensusRpcServer::new(AnemoServiceProxy::new(self.context.clone(), service));
         let authority = self.context.committee.authority(self.context.own_index);
-        let address = authority
-            .address
-            .clone()
-            .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
-            .unwrap();
+        let address = authority.address.clone();
         let all_peer_ids = self
             .context
             .committee
@@ -253,6 +248,7 @@ impl<S: NetworkService> NetworkManager<AnemoClient, S> for AnemoManager {
             quic_config.max_idle_timeout_ms = Some(30_000);
             // Enable keep alives every 5s
             quic_config.keep_alive_interval_ms = Some(5_000);
+
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
             // Set the max_frame_size to be 1 GB to work around the issue of there being too many
@@ -268,10 +264,11 @@ impl<S: NetworkService> NetworkManager<AnemoClient, S> for AnemoManager {
             config
         };
 
-        let network;
         let mut retries_left = 90;
-        let addr = address.to_anemo_address().unwrap();
-        loop {
+        let addr = address
+            .to_anemo_address()
+            .unwrap_or_else(|op| panic!("{op}: {address}"));
+        let network = loop {
             let network_result = anemo::Network::bind(addr.clone())
                 .server_name("consensus")
                 .private_key(network_signer.copy().private().0.to_bytes())
@@ -280,14 +277,13 @@ impl<S: NetworkService> NetworkManager<AnemoClient, S> for AnemoManager {
                 .start(service.clone());
             match network_result {
                 Ok(n) => {
-                    network = n;
-                    break;
+                    break n;
                 }
                 Err(e) => {
                     retries_left -= 1;
 
                     if retries_left <= 0 {
-                        panic!("Failed to initialize Network!");
+                        panic!("Failed to initialize AnemoNetwork at {addr}! Last error: {e:#?}");
                     }
                     error!(
                         "Address {addr} should be available for the primary Narwhal service, retrying in one second: {e:#?}",
@@ -295,7 +291,7 @@ impl<S: NetworkService> NetworkManager<AnemoClient, S> for AnemoManager {
                     sleep(Duration::from_secs(1));
                 }
             }
-        }
+        };
 
         self.client.set_network(network);
     }
@@ -307,10 +303,9 @@ mod test {
 
     use async_trait::async_trait;
     use bytes::Bytes;
-    use consensus_config::{Authority, AuthorityIndex, Committee, NetworkKeyPair, ProtocolKeyPair};
+    use consensus_config::AuthorityIndex;
     use fastcrypto::traits::KeyPair;
     use parking_lot::Mutex;
-    use rand::{rngs::StdRng, SeedableRng};
 
     use crate::{
         block::BlockRef,
@@ -359,30 +354,12 @@ mod test {
 
     #[tokio::test]
     async fn test_basics() {
-        let authorities_stake = vec![100, 100, 100, 100];
-        let mut authorities = vec![];
-        let mut key_pairs = vec![];
-        let mut rng = StdRng::from_seed([0; 32]);
-        for (i, stake) in authorities_stake.into_iter().enumerate() {
-            let network_keypair = NetworkKeyPair::generate(&mut rng);
-            let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
-            authorities.push(Authority {
-                stake,
-                address: format!("/ip4/127.0.0.1/udp/{}", 9090 + i).parse().unwrap(),
-                hostname: format!("test_host {i}").to_string(),
-                network_key: network_keypair.public().clone(),
-                protocol_key: protocol_keypair.public().clone(),
-            });
-            key_pairs.push((network_keypair, protocol_keypair));
-        }
-        let committee = Committee::new(0, authorities);
         let (context, keys) = Context::new_for_test(4);
 
         let context_0 = Arc::new(
             context
                 .clone()
-                .with_committee(committee.clone())
-                .with_authority_index(committee.to_authority_index(0).unwrap()),
+                .with_authority_index(context.committee.to_authority_index(0).unwrap()),
         );
         let manager_0 = AnemoManager::new(context_0.clone());
         let client_0 =
@@ -393,25 +370,24 @@ mod test {
         let context_1 = Arc::new(
             context
                 .clone()
-                .with_committee(committee.clone())
-                .with_authority_index(committee.to_authority_index(1).unwrap()),
+                .with_authority_index(context.committee.to_authority_index(1).unwrap()),
         );
         let manager_1 = AnemoManager::new(context_1.clone());
         let client_1 =
             <AnemoManager as NetworkManager<AnemoClient, Mutex<TestService>>>::client(&manager_1);
         let service_1 = Arc::new(Mutex::new(TestService::new()));
-        manager_0.install_service(keys[1].0.copy(), service_1.clone());
+        manager_1.install_service(keys[1].0.copy(), service_1.clone());
 
         client_0
             .send_block(
-                committee.to_authority_index(1).unwrap(),
+                context.committee.to_authority_index(1).unwrap(),
                 &Bytes::from_static(b"msg 0"),
             )
             .await
             .unwrap();
         client_1
             .send_block(
-                committee.to_authority_index(0).unwrap(),
+                context.committee.to_authority_index(0).unwrap(),
                 &Bytes::from_static(b"msg 1"),
             )
             .await

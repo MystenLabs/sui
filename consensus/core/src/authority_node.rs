@@ -100,7 +100,7 @@ impl AuthorityNode {
 
 #[cfg(test)]
 mod tests {
-    use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
+    use consensus_config::{local_committee_and_keys, NetworkKeyPair, Parameters, ProtocolKeyPair};
     use fastcrypto::traits::ToFromBytes;
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
@@ -110,7 +110,7 @@ mod tests {
 
     #[tokio::test]
     async fn start_and_stop() {
-        let (committee, keypairs) = Committee::new_for_test(0, vec![1]);
+        let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
         let registry = Registry::new();
         let parameters = Parameters::default();
         let block_verifier = TestBlockVerifier {};
