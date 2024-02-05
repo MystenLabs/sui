@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use fastcrypto::traits::KeyPair as _;
+use tokio::sync::broadcast::error::RecvError;
 use tracing::error;
 
 use super::{
@@ -52,6 +53,7 @@ impl AnemoClient {
     async fn get_anemo_client(
         &self,
         peer: AuthorityIndex,
+        timeout: Duration,
     ) -> ConsensusResult<ConsensusRpcClient<anemo::Peer>> {
         let network = loop {
             if let Some(network) = self.network.load_full() {
@@ -63,16 +65,55 @@ impl AnemoClient {
 
         let authority = self.context.committee.authority(peer);
         let peer_id = anemo::PeerId(authority.network_key.0.into());
-        let Some(peer) = network.peer(peer_id) else {
-            return Err(ConsensusError::Disconnected(authority.hostname.clone()));
+        if let Some(peer) = network.peer(peer_id) {
+            return Ok(ConsensusRpcClient::new(peer));
         };
-        Ok(ConsensusRpcClient::new(peer))
+
+        // If we're not connected we'll need to check to see if the Peer is a KnownPeer
+        if network.known_peers().get(&peer_id).is_none() {
+            return Err(ConsensusError::UnknownNetworkPeer(format!("{}", peer_id)));
+        }
+
+        let (mut subscriber, _) = network.subscribe().map_err(|e| {
+            ConsensusError::NetworkError(format!("Cannot subscribe to AnemoNetwork updates: {e:?}"))
+        })?;
+
+        let sleep = tokio::time::sleep(timeout);
+        tokio::pin!(sleep);
+        loop {
+            tokio::select! {
+                recv = subscriber.recv() => match recv {
+                    Ok(anemo::types::PeerEvent::NewPeer(pid)) if pid == peer_id => {
+                        // We're now connected with the peer, lets try to make a network request
+                        if let Some(peer) = network.peer(peer_id) {
+                            return Ok(ConsensusRpcClient::new(peer));
+                        }
+                        error!("Peer {} should be connected.", peer_id)
+                    }
+                    Err(RecvError::Closed) => return Err(ConsensusError::Shutdown),
+                    Err(RecvError::Lagged(_)) => {
+                        subscriber = subscriber.resubscribe();
+                        // We lagged behind so we may have missed the connection event
+                        if let Some(peer) = network.peer(peer_id) {
+                            return Ok(ConsensusRpcClient::new(peer));
+                        }
+                    }
+                    // Just do another iteration
+                    _ => {}
+                },
+                _ = &mut sleep => {
+                    return Err(ConsensusError::PeerDisconnected(format!("{}", peer_id)));
+                },
+            }
+        }
     }
 }
 
 impl NetworkClient for AnemoClient {
     async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()> {
-        let mut client = self.get_anemo_client(peer).await?;
+        let mut client = self
+            .get_anemo_client(peer, Self::SEND_BLOCK_TIMEOUT)
+            .await?;
         let request = SendBlockRequest {
             block: block.clone(),
         };
@@ -88,7 +129,9 @@ impl NetworkClient for AnemoClient {
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
     ) -> ConsensusResult<Vec<Bytes>> {
-        let mut client = self.get_anemo_client(peer).await?;
+        let mut client = self
+            .get_anemo_client(peer, Self::FETCH_BLOCK_TIMEOUT)
+            .await?;
         let request = FetchBlocksRequest { block_refs };
         let response = client
             .fetch_blocks(anemo::Request::new(request).with_timeout(Self::FETCH_BLOCK_TIMEOUT))
