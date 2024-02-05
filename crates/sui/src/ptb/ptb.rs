@@ -5,6 +5,7 @@ use crate::ptb::ptb_parser::build_ptb::PTBBuilder;
 use crate::ptb::ptb_parser::errors::render_errors;
 use crate::ptb::ptb_parser::parser::PTBParser;
 use anyhow::anyhow;
+use anyhow::Error;
 use clap::parser::ValuesRef;
 use clap::ArgMatches;
 use clap::CommandFactory;
@@ -17,6 +18,8 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::path::Path;
+use std::path::PathBuf;
 
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::AccountKeystore;
@@ -116,10 +119,10 @@ impl PTB {
     /// This is ordered as per how these args are given at the command line
     pub fn from_matches(
         &self,
+        cwd: PathBuf,
         matches: &ArgMatches,
-        parent_file: Option<String>,
-        included_files: &mut BTreeMap<String, Vec<String>>,
-    ) -> Result<BTreeMap<usize, PTBCommand>, anyhow::Error> {
+        included_files: &mut BTreeMap<PathBuf, Vec<PathBuf>>,
+    ) -> Result<BTreeMap<usize, PTBCommand>, Error> {
         let mut order = BTreeMap::<usize, PTBCommand>::new();
         for arg_name in matches.ids() {
             if matches.try_get_many::<clap::Id>(arg_name.as_str()).is_ok() {
@@ -139,16 +142,16 @@ impl PTB {
                 insert_value::<String>(arg_name, &matches, &mut order)?;
             }
         }
-        Ok(self.build_ptb_for_parsing(order, &parent_file, included_files)?)
+        Ok(self.build_ptb_for_parsing(cwd, order, included_files)?)
     }
 
     /// Builds a sequential list of ptb commands that should be fed into the parser
     pub fn build_ptb_for_parsing(
         &self,
+        cwd: PathBuf,
         ptb: BTreeMap<usize, PTBCommand>,
-        parent_file: &Option<String>,
-        included_files: &mut BTreeMap<String, Vec<String>>,
-    ) -> Result<BTreeMap<usize, PTBCommand>, anyhow::Error> {
+        included_files: &mut BTreeMap<PathBuf, Vec<PathBuf>>,
+    ) -> Result<BTreeMap<usize, PTBCommand>, Error> {
         // the ptb input is a list of commands  and values, where the key is the index
         // of that value / command as it appearead in the args list on the CLI.
         // A command can have multiple values, and these values will appear sequential
@@ -185,11 +188,17 @@ impl PTB {
                 // check if the command is a file inclusion, as we need to sequentially
                 // insert that in the array of PTBCommands
                 if val.name == "file" {
+                    let current_file: PathBuf = [
+                        cwd.clone(),
+                        Path::new(val.values.first().unwrap()).to_path_buf(),
+                    ]
+                    .iter()
+                    .collect();
                     let new_index = self.resolve_file(
-                        parent_file,
+                        cwd.clone(),
                         val.values.clone(),
                         included_files,
-                        val.values.get(0).unwrap().to_string(),
+                        current_file,
                         cmd_idx,
                         &mut output,
                     )?;
@@ -208,29 +217,29 @@ impl PTB {
     /// next command
     fn resolve_file(
         &self,
-        parent_file: &Option<String>,
+        cwd: PathBuf,
         filename: Vec<String>,
-        included_files: &mut BTreeMap<String, Vec<String>>,
-        current_file: String,
+        included_files: &mut BTreeMap<PathBuf, Vec<PathBuf>>,
+        current_file: PathBuf,
         start_index: usize,
         output: &mut BTreeMap<usize, PTBCommand>,
-    ) -> Result<usize, anyhow::Error> {
+    ) -> Result<usize, Error> {
         if filename.len() != 1 {
             return Err(anyhow!("The --file options should only pass one filename"));
         }
-        let filename = filename.get(0).unwrap();
-        let file_path = std::path::Path::new(filename);
+        let filename = filename
+            .first()
+            .ok_or_else(|| anyhow!("Empty input file list."))?;
+        let file_path = std::path::Path::new(&cwd).join(filename);
+        // TODO we might want to figure out how to handle missing symlinks, as canonicalize will
+        // error on a missing file. Prb we need to use path_abs.
+        let file_path = std::fs::canonicalize(file_path)
+            .map_err(|_| anyhow!("Cannot find the absolute path of this file {}", filename))?;
         if !file_path.exists() {
-            if let Some(parent_file) = parent_file {
-                return Err(anyhow!(
-                    "{parent_file} includes {filename}, which does not exist"
-                ));
-            } else {
-                return Err(anyhow!("{filename} does not exist"));
-            }
+            return Err(anyhow!("{filename} does not exist"));
         }
 
-        let file_content = std::fs::read_to_string(file_path)?.replace("\\", "");
+        let file_content = std::fs::read_to_string(file_path.clone())?.replace("\\", "");
         let ignore_comments = file_content
             .lines()
             .filter(|x| !x.starts_with("#"))
@@ -241,33 +250,35 @@ impl PTB {
             ));
         }
 
-        let files_to_resolve = ignore_comments
+        let parent_folder = if let Some(p) = file_path.parent() {
+            p.to_path_buf()
+        } else {
+            std::env::current_dir().map_err(|_| anyhow!("Cannot get current working directory."))?
+        };
+
+        let mut files_to_resolve = vec![];
+        for file in ignore_comments
             .iter()
-            .flat_map(|x| x.split_inclusive("--"))
-            .filter(|x| x.starts_with("--file"))
-            .map(|x| x.to_string().replace("--file", "").replace(" ", ""))
-            .collect::<Vec<_>>();
+            .flat_map(|x| x.split("--"))
+            .filter(|x| x.starts_with("file"))
+            .map(|x| x.to_string().replace("file", "").replace(" ", ""))
+        {
+            let mut p = PathBuf::new();
+            p.push(parent_folder.clone());
+            p.push(file.clone());
+            let file = std::fs::canonicalize(p).map_err(|_| {
+                anyhow!("{} includes file {} which does not exist.", filename, file)
+            })?;
+            files_to_resolve.push(file);
+        }
+
         if let Some(files) = included_files.get_mut(&current_file) {
             files.extend(files_to_resolve);
         } else {
-            included_files.insert(current_file, files_to_resolve);
+            included_files.insert(file_path, files_to_resolve);
         }
 
-        let edges = included_files.iter().flat_map(|(k, vs)| {
-            let vs = vs.iter().map(|v| v.as_str());
-            std::iter::repeat(k.as_str()).zip(vs)
-        });
-
-        // find if there is a circular file inclusion
-        // we use toposort as it will return which file includes a file that was already included
-        let graph: DiGraphMap<_, ()> = edges.collect();
-        let sort = petgraph::algo::toposort(&graph, None);
-        sort.map_err(|x| {
-            anyhow!(
-                "Cannot have circular file inclusions. It appears that the issue is in the {:?} file",
-                x.node_id()
-            )
-        })?;
+        check_for_cyclic_file_inclusions(&included_files)?;
 
         let lines = ignore_comments
             .iter()
@@ -276,13 +287,8 @@ impl PTB {
 
         // in a file the first arg will not be the binary's name, so exclude it
         let input = PTB::command().no_binary_name(true);
-        // .arg(Arg::new("--gas-budget").required(false));
-        // TODO do not require --gas-budget to exist in files???
-        // the issue is that we could pass a --gas-budget from the CLI and then a --file
-        // and in the file there is no --gas-budget. For now, --gas-budget is always required
-        // so we might want to figure out the best way to handle this case
         let args = input.get_matches_from(lines);
-        let ptb_commands = self.from_matches(&args, Some(filename.to_string()), included_files)?;
+        let ptb_commands = self.from_matches(parent_folder, &args, included_files)?;
         let len_cmds = ptb_commands.len();
 
         // add a pseudo command to tag where does the file include start and end
@@ -311,14 +317,16 @@ impl PTB {
     }
 
     /// Parses and executes the PTB with the sender as the current active address
-    pub async fn execute(self, matches: ArgMatches) -> Result<(), anyhow::Error> {
+    pub async fn execute(self, matches: ArgMatches) -> Result<(), Error> {
         let ptb_args_matches = matches
             .subcommand_matches("client")
             .ok_or_else(|| anyhow!("Expected the client command but got a different command"))?
             .subcommand_matches("ptb")
             .ok_or_else(|| anyhow!("Expected the ptb subcommand but got a different command"))?;
         let json = ptb_args_matches.get_flag("json");
-        let commands = self.from_matches(ptb_args_matches, None, &mut BTreeMap::new())?;
+        let cwd =
+            std::env::current_dir().map_err(|_| anyhow!("Cannot get the working directory."))?;
+        let commands = self.from_matches(cwd, ptb_args_matches, &mut BTreeMap::new())?;
 
         // If there are only 2 commands, they are likely the default
         // --preview and --warn-shadows set to false by clap,
@@ -508,7 +516,7 @@ fn insert_value<T>(
     arg_name: &clap::Id,
     matches: &ArgMatches,
     order: &mut BTreeMap<usize, PTBCommand>,
-) -> Result<(), anyhow::Error>
+) -> Result<(), Error>
 where
     T: Clone + Display + Send + Sync + 'static,
 {
@@ -529,5 +537,27 @@ where
             },
         );
     }
+    Ok(())
+}
+
+/// Check for circular file inclusion.
+/// It uses toposort algorithm and returns an error on finding a cycle,
+/// describing which file includes a file that was already included.
+fn check_for_cyclic_file_inclusions(
+    included_files: &BTreeMap<PathBuf, Vec<PathBuf>>,
+) -> Result<(), Error> {
+    let edges = included_files.iter().flat_map(|(k, vs)| {
+        let vs = vs.iter().map(|v| v.to_str().unwrap());
+        std::iter::repeat(k.to_str().unwrap()).zip(vs)
+    });
+
+    let graph: DiGraphMap<_, ()> = edges.collect();
+    let sort = petgraph::algo::toposort(&graph, None);
+    sort.map_err(|node| {
+        anyhow!(
+            "Cannot have circular file inclusions. It appears that the issue is in the {} file",
+            node.node_id()
+        )
+    })?;
     Ok(())
 }
