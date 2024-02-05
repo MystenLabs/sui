@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use miette::{miette, LabeledSpan};
+use move_symbol_pool::Symbol;
 use thiserror::Error;
 
 use crate::ptb::{ptb::PTBCommand, ptb_parser::utils::to_ordinal_contraction};
@@ -16,40 +17,27 @@ use super::{
 
 #[macro_export]
 macro_rules! error {
-    ($x:expr, $($arg:tt)*) => {
-        return Err($crate::err!($x, $($arg)*))
+    ($l:expr, $($arg:tt)*) => {
+        return Err($crate::err!($l, $($arg)*))
     };
-    (sp: $l:expr, $x:expr, $($arg:tt)*) => {
-        return Err($crate::err!(sp: $l, $x, $($arg)*))
-    };
-    (sp: $l:expr, help: { $($h:expr),* }, $x:expr, $($arg:tt)*) => {
-        return Err($crate::err!(sp: $l, help: { $($h),* }, $x, $($arg)*))
+    ($l:expr => help: { $($h:expr),* }, $($arg:tt)*) => {
+        return Err($crate::err!($l => help: { $($h),* }, $($arg)*))
     };
 }
 
 #[macro_export]
 macro_rules! err {
-    ($x:expr, $($arg:tt)*) => {
+    ($l:expr, $($arg:tt)*) => {
         $crate::ptb::ptb_parser::errors::PTBError::WithSource {
-            file_scope: $x.context.current_file_scope().clone(),
             message: format!($($arg)*),
-            span: None,
+            span: $l,
             help: None,
         }
     };
-    (sp: $l:expr, $x:expr, $($arg:tt)*) => {
+    ($l:expr => help: { $($h:expr),* }, $($arg:tt)*) => {
         $crate::ptb::ptb_parser::errors::PTBError::WithSource {
-            file_scope: $x.context.current_file_scope().clone(),
             message: format!($($arg)*),
-            span: Some($l),
-            help: None,
-        }
-    };
-    (sp: $l:expr, help: { $($h:expr),* }, $x:expr, $($arg:tt)*) => {
-        $crate::ptb::ptb_parser::errors::PTBError::WithSource {
-            file_scope: $x.context.current_file_scope().clone(),
-            message: format!($($arg)*),
-            span: Some($l),
+            span: $l,
             help: Some(format!($($h),*)),
         }
     };
@@ -88,11 +76,10 @@ pub type PTBResult<T> = Result<T, PTBError>;
 /// with the file scope (file name and command index) where the error occurred.
 #[derive(Debug, Clone, Error)]
 pub enum PTBError {
-    #[error("{message} at command {} in file '{}' {:?}", file_scope.file_command_index, file_scope.name, span)]
+    #[error("{message} at command {} in file '{}'", span.file_scope.file_command_index, span.file_scope.name)]
     WithSource {
-        file_scope: FileScope,
         message: String,
-        span: Option<Span>,
+        span: Span,
         help: Option<String>,
     },
 }
@@ -104,6 +91,7 @@ pub struct Span {
     pub start: usize,
     pub end: usize,
     pub arg_idx: usize,
+    pub file_scope: FileScope,
 }
 
 /// Represents a value in a PTB file along with its span.
@@ -117,13 +105,7 @@ impl PTBError {
     /// Add a help message to an error.
     pub fn with_help(self, help: String) -> Self {
         match self {
-            PTBError::WithSource {
-                file_scope,
-                message,
-                span,
-                ..
-            } => PTBError::WithSource {
-                file_scope,
+            PTBError::WithSource { message, span, .. } => PTBError::WithSource {
                 message,
                 span,
                 help: Some(help),
@@ -179,17 +161,18 @@ impl FileIndexedErrors {
 
     pub fn get(&self, file_scope: &FileScope) -> Option<&PTBCommand> {
         self.0
-            .get(&(file_scope.name.clone(), file_scope.name_index))
+            .get(&(file_scope.name.to_string(), file_scope.name_index))
             .and_then(|commands| commands.get(file_scope.file_command_index))
     }
 }
 
 impl Span {
-    pub fn new(start: usize, end: usize, arg_idx: usize) -> Self {
+    pub fn new(start: usize, end: usize, arg_idx: usize, file_scope: FileScope) -> Self {
         Self {
             start,
             end,
             arg_idx,
+            file_scope,
         }
     }
 
@@ -202,11 +185,60 @@ impl Span {
             start = start.min(s.start);
             end = end.max(s.end);
         }
+
         Span {
             start,
             end,
             arg_idx: self.arg_idx,
+            file_scope: self.file_scope,
         }
+    }
+
+    /// Union a (possibly empty) set of spans into a single span. If the set of spans is empty,
+    /// `None` is returned.
+    pub fn union_spans(others: impl IntoIterator<Item = Span>) -> Option<Span> {
+        let mut iter = others.into_iter();
+        if let Some(first) = iter.next() {
+            Some(first.union_with(iter))
+        } else {
+            None
+        }
+    }
+
+    /// A span representing the command string of whichever file scope this span is in.
+    pub fn cmd_span(cmd_len: usize, file_scope: FileScope) -> Span {
+        Span {
+            start: 0,
+            end: cmd_len,
+            // We add 1 to indices sometimes, so we need to subtract 1 here to make sure we don't
+            // accidentally overflow.
+            arg_idx: usize::MAX - 1,
+            file_scope,
+        }
+    }
+
+    pub fn is_cmd_span(&self) -> bool {
+        self.arg_idx == usize::MAX - 1
+    }
+
+    /// Create a special span to represent an out-of-band error. These are errors that arise that
+    /// cannot be directly attributed to a specific command in the PTB file. E.g., failing to set a
+    /// gas budget.
+    pub fn out_of_band_span() -> Span {
+        Span {
+            start: usize::MAX,
+            end: usize::MAX,
+            arg_idx: usize::MAX,
+            file_scope: FileScope {
+                file_command_index: 0,
+                name: Symbol::from("console"),
+                name_index: 0,
+            },
+        }
+    }
+
+    pub fn is_out_of_band_span(&self) -> bool {
+        self.start == usize::MAX
     }
 }
 
@@ -228,54 +260,56 @@ impl DisplayableError {
     pub fn new(original_command: PTBCommand, error: PTBError) -> Self {
         let PTBError::WithSource {
             span,
-            file_scope,
             message,
             help,
         } = error;
-        let (range, command_string) = match span {
-            // No span -- point to the command name
-            None => (
+        let (range, command_string) = if span.is_out_of_band_span() {
+            // Point to the command name
+            (
                 0..original_command.name.len(),
                 original_command.name + " " + &original_command.values.join(" "),
-            ),
-            Some(span) => {
-                // Convert the character offset within the given argument index to the offset in the
-                // whole string.
-                let mut offset = original_command.name.len();
-                let mut final_string = original_command.name.clone();
-                let mut range = (span.start, span.end);
-                for (i, arg) in original_command.values.iter().enumerate() {
-                    offset += 1;
-                    final_string.push_str(" ");
-                    if i != span.arg_idx {
-                        offset += arg.len();
-                        final_string.push_str(arg);
-                    } else {
-                        range.0 += offset;
-                        range.1 += offset;
-                        offset += arg.len();
-                        final_string.push_str(arg);
-                    }
-                }
-
-                // Handle range boundaries for e.g., unexpected tokens at the end of the token stream
-                // by pushing on a space at the end of the string. This will capture any unexpected
-                // token errors and allow us to point "to the end" of the argument.
+            )
+        } else {
+            // Convert the character offset within the given argument index to the offset in the
+            // whole string.
+            let mut offset = original_command.name.len();
+            let mut final_string = original_command.name.clone();
+            let mut range = (span.start, span.end);
+            for (i, arg) in original_command.values.iter().enumerate() {
+                offset += 1;
                 final_string.push_str(" ");
-                (range.0..range.1, final_string)
+                if i != span.arg_idx {
+                    offset += arg.len();
+                    final_string.push_str(arg);
+                } else {
+                    range.0 += offset;
+                    range.1 += offset;
+                    offset += arg.len();
+                    final_string.push_str(arg);
+                }
             }
+
+            // Handle range boundaries for e.g., unexpected tokens at the end of the token stream
+            // by pushing on a space at the end of the string. This will capture any unexpected
+            // token errors and allow us to point "to the end" of the argument.
+            final_string.push_str(" ");
+            (range.0..range.1, final_string)
         };
         let label = LabeledSpan::at(range, message.clone());
+        let file_scope = span.file_scope;
         let error_string = format!(
             "{} {}",
             file_scope.file_command_index,
-            if file_scope.name == "console" {
+            if &*file_scope.name == "console" {
                 "from console input".to_string()
             } else {
                 let usage_string = if file_scope.name_index == 0 {
                     "".to_string()
                 } else {
-                    format!("({} usage of the file)", to_ordinal_contraction(file_scope.name_index + 1))
+                    format!(
+                        "({} usage of the file)",
+                        to_ordinal_contraction(file_scope.name_index + 1)
+                    )
                 };
                 format!("in PTB file '{}' {usage_string}", file_scope.name)
             }
@@ -313,20 +347,19 @@ pub fn render_errors(
     let file_indexed_commands = FileIndexedErrors::new(&commands);
     let mut rendered = vec![];
     for error in errors {
-        let file_scope = match &error {
-            PTBError::WithSource { file_scope, .. } => file_scope,
-        };
-        match file_indexed_commands.get(&file_scope) {
-            Some(command) => {
-                rendered.push(DisplayableError::new(command.clone(), error).create_report())
-            }
-            None => rendered.push(miette!(
+        let PTBError::WithSource { span, .. } = &error;
+        let command_opt = file_indexed_commands.get(&span.file_scope);
+        if span.is_out_of_band_span() || command_opt.is_none() {
+            rendered.push(miette!(
                 labels = vec![],
                 "Error at command {} in PTB file '{}': {}",
-                file_scope.file_command_index,
-                file_scope.name,
+                span.file_scope.file_command_index,
+                span.file_scope.name,
                 error
-            )),
+            ))
+        } else {
+            rendered
+                .push(DisplayableError::new(command_opt.unwrap().clone(), error).create_report())
         }
     }
     rendered

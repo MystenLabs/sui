@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO:
-// * [x] Handle more pure arguments (especially addresses)
-// * [ ] Handle passing non-direct arrays of values to commands.
-// * [ ] Integrate keytool for resolution of addresses
-
 use std::collections::BTreeMap;
 
 use anyhow::Result;
@@ -43,7 +38,6 @@ use crate::{
     ptb::ptb_parser::{
         argument::Argument as PTBArg,
         command_token::{CommandToken, ASSIGN, GAS_BUDGET, MOVE_CALL, PICK_GAS_BUDGET},
-        context::{FileScope, PTBContext},
         errors::{span, PTBError, PTBResult, Span, Spanned},
         parser::ParsedPTBCommand,
         utils::{display_did_you_mean, find_did_you_means},
@@ -57,8 +51,8 @@ use super::utils::to_ordinal_contraction;
 /// with a gas picker that can be used to pick the budget from the list if it is set in a PTB.
 /// A PTB may have multiple gas budgets but the gas picker can only be set once.
 pub struct GasBudget {
-    pub gas_budgets: Vec<Spanned<(FileScope, u64)>>,
-    pub picker: Vec<Spanned<(FileScope, GasPicker)>>,
+    pub gas_budgets: Vec<Spanned<u64>>,
+    pub picker: Vec<Spanned<GasPicker>>,
 }
 
 /// Types of gas pickers that can be used to pick a gas budget from a list of gas budgets.
@@ -85,10 +79,7 @@ trait Resolver<'a>: Send {
         loc: Span,
         x: T,
     ) -> PTBResult<Tx::Argument> {
-        builder
-            .ptb
-            .pure(x)
-            .map_err(|e| err!(sp: loc, builder, "{e}"))
+        builder.ptb.pure(x).map_err(|e| err!(loc, "{e}"))
     }
 
     async fn resolve_object_id(
@@ -139,9 +130,9 @@ impl<'a> Resolver<'a> for ToObject {
         obj_id: ObjectID,
     ) -> PTBResult<Tx::Argument> {
         let obj = builder.get_object(obj_id, loc).await?;
-        let owner = obj.owner.ok_or_else(
-            || err!(sp: loc, builder, "Unable to get owner info for object {obj_id}"),
-        )?;
+        let owner = obj
+            .owner
+            .ok_or_else(|| err!(loc, "Unable to get owner info for object {obj_id}"))?;
         let object_ref = obj.object_ref();
         let obj_arg = match owner {
             Owner::AddressOwner(_) if self.is_receiving => ObjectArg::Receiving(object_ref),
@@ -153,16 +144,11 @@ impl<'a> Resolver<'a> for ToObject {
                 initial_shared_version,
                 mutable: self.is_mut,
             },
-            Owner::ObjectOwner(_) => error!(
-                sp: loc,
-                builder,
-                "Tried to use an object-owned object as an argument",
-            ),
+            Owner::ObjectOwner(_) => {
+                error!(loc, "Tried to use an object-owned object as an argument",)
+            }
         };
-        builder
-            .ptb
-            .obj(obj_arg)
-            .map_err(|e| err!(sp: loc, builder, "{e}"))
+        builder.ptb.obj(obj_arg).map_err(|e| err!(loc, "{e}"))
     }
 }
 
@@ -177,10 +163,7 @@ impl<'a> Resolver<'a> for ToPure {
         loc: Span,
         x: ObjectID,
     ) -> PTBResult<Tx::Argument> {
-        builder
-            .ptb
-            .pure(x)
-            .map_err(|e| err!(sp: loc, builder, "{e}"))
+        builder.ptb.pure(x).map_err(|e| err!(loc, "{e}"))
     }
 }
 
@@ -192,11 +175,11 @@ struct NoResolution;
 impl<'a> Resolver<'a> for NoResolution {
     async fn resolve_object_id(
         &mut self,
-        builder: &mut PTBBuilder<'a>,
+        _builder: &mut PTBBuilder<'a>,
         loc: Span,
         _x: ObjectID,
     ) -> PTBResult<Tx::Argument> {
-        error!(sp: loc, builder, "Don't resolve arguments and that's fine");
+        error!(loc, "Don't resolve arguments and that's fine");
     }
 }
 
@@ -222,21 +205,19 @@ pub struct PTBBuilder<'a> {
     pub addresses: BTreeMap<String, AccountAddress>,
     /// A map from identifiers to the file scopes in which they were declared. This is used
     /// for reporting shadowing warnings.
-    pub identifiers: BTreeMap<String, Vec<Spanned<FileScope>>>,
+    pub identifiers: BTreeMap<String, Vec<Span>>,
     /// The arguments that we need to resolve. This is a map from identifiers to the argument
     /// values -- they haven't been resolved to a transaction argument yet.
     pub arguments_to_resolve: BTreeMap<String, Spanned<PTBArg>>,
     /// The arguments that we have resolved. This is a map from identifiers to the actual
     /// transaction arguments.
     pub resolved_arguments: BTreeMap<String, Tx::Argument>,
-    /// The actual PTB that we are building up.
-    pub ptb: ProgrammableTransactionBuilder,
     /// Read API for reading objects from chain. Needed for object resolution.
     pub reader: &'a ReadApi,
     /// The last command that we have added. This is used to support assignment commands.
     pub last_command: Option<Tx::Argument>,
-    /// The current file/command context. For error reporting.
-    pub context: PTBContext,
+    /// The actual PTB that we are building up.
+    pub ptb: ProgrammableTransactionBuilder,
     /// The gas budget for the transaction. Built-up as we go, and then finalized at the end.
     pub gas_budget: GasBudget,
     /// Flag to say if we encountered a preview command.
@@ -251,8 +232,14 @@ pub struct PTBBuilder<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GasBudgetError {
     NoGasBudget,
-    NoGasPicker(Vec<Spanned<(FileScope, u64)>>),
-    MultipleGasPickers(Vec<Spanned<(FileScope, GasPicker)>>),
+    NoGasPicker(Vec<Spanned<u64>>),
+    MultipleGasPickers(Vec<Spanned<GasPicker>>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolvedAccess {
+    ResultAccess(u16),
+    DottedString(String),
 }
 
 impl GasBudget {
@@ -275,24 +262,24 @@ impl GasBudget {
         }
 
         let budget = if self.gas_budgets.len() == 1 {
-            self.gas_budgets[0].value.1
+            self.gas_budgets[0].value
         } else {
-            match self.picker.get(0).map(|x| &x.value.1) {
+            match self.picker.get(0).map(|x| &x.value) {
                 Some(GasPicker::Max) => self
                     .gas_budgets
                     .iter()
-                    .map(|x| x.value.1)
+                    .map(|x| x.value)
                     .max()
                     .unwrap()
                     .clone(),
                 Some(GasPicker::Min) => self
                     .gas_budgets
                     .iter()
-                    .map(|x| x.value.1)
+                    .map(|x| x.value)
                     .min()
                     .unwrap()
                     .clone(),
-                Some(GasPicker::Sum) => self.gas_budgets.iter().map(|x| x.value.1).sum(),
+                Some(GasPicker::Sum) => self.gas_budgets.iter().map(|x| x.value).sum(),
                 None => return Err(GasBudgetError::NoGasPicker(self.gas_budgets)),
             }
         };
@@ -300,13 +287,13 @@ impl GasBudget {
         Ok(budget)
     }
 
-    pub fn add_gas_budget(&mut self, budget: u64, scope: FileScope, sp: Span) {
-        self.gas_budgets.push(span(sp, (scope, budget)));
+    pub fn add_gas_budget(&mut self, budget: u64, sp: Span) {
+        self.gas_budgets.push(span(sp, budget));
     }
 
     /// Set the gas picker. This will return an error if the gas picker has already been set.
-    pub fn set_gas_picker(&mut self, picker: GasPicker, scope: FileScope, sp: Span) {
-        self.picker.push(span(sp, (scope, picker)));
+    pub fn set_gas_picker(&mut self, picker: GasPicker, sp: Span) {
+        self.picker.push(span(sp, picker));
     }
 }
 
@@ -323,7 +310,7 @@ fn is_pure(t: &TypeTag) -> anyhow::Result<bool> {
         | TypeTag::U256 => true,
         TypeTag::Vector(t) => is_pure(t)?,
         TypeTag::Struct(_) => false,
-        TypeTag::Signer => anyhow::bail!("Signer is not a valid type"),
+        TypeTag::Signer => anyhow::bail!("'signer' is not a valid type"),
     })
 }
 
@@ -337,7 +324,6 @@ impl<'a> PTBBuilder<'a> {
             ptb: ProgrammableTransactionBuilder::new(),
             reader,
             last_command: None,
-            context: PTBContext::new(),
             gas_budget: GasBudget::new(),
             errors: Vec::new(),
             preview_set: false,
@@ -347,12 +333,8 @@ impl<'a> PTBBuilder<'a> {
 
     /// Declare and identifier. This is used to support shadowing warnings.
     pub fn declare_identifier(&mut self, ident: String, ident_loc: Span) {
-        let current_context = self.context.current_file_scope().clone();
         let e = self.identifiers.entry(ident).or_default();
-        e.push(Spanned {
-            span: ident_loc,
-            value: current_context,
-        });
+        e.push(ident_loc);
     }
 
     /// Declare a possible address binding. This is used to support address resolution. If the
@@ -375,6 +357,22 @@ impl<'a> PTBBuilder<'a> {
                     self.addresses.insert(ident.to_string(), *addr);
                 }
             }
+            // If we encounter a dotted string e.g., "foo.0" or "sui.io" or something like that
+            // this see if we can find an address for it in the environment and bind to it.
+            PTBArg::VariableAccess(ref head, ref fields) => {
+                let key = format!(
+                    "{}.{}",
+                    head.value,
+                    fields
+                        .into_iter()
+                        .map(|f| f.value.clone())
+                        .collect::<Vec<_>>()
+                        .join(".")
+                );
+                if let Some(addr) = self.addresses.get(&key) {
+                    self.addresses.insert(ident, *addr);
+                }
+            }
             _ => (),
         }
     }
@@ -391,24 +389,22 @@ impl<'a> PTBBuilder<'a> {
                     continue;
                 }
 
-                for (i, sp!(command_loc, fscope)) in commands.iter().enumerate() {
+                for (i, command_loc) in commands.iter().enumerate() {
                     // NB: We use the file scope of the command, and _not_ the current file
                     // scope for these errors!
                     if i == 0 {
                         self.errors.push(PTBError::WithSource {
-                            file_scope: fscope.clone(),
                             message: format!("Variable '{}' first declared here", ident),
-                            span: Some(*command_loc),
+                            span: *command_loc,
                             help: None,
                         });
                     } else {
                         self.errors.push(PTBError::WithSource {
-                            file_scope: fscope.clone(),
                             message: format!(
                                 "Variable '{}' used again here (shadowed) for the {} time.",
                                 ident, to_ordinal_contraction(i + 1)
                             ),
-                            span: Some(*command_loc),
+                            span: *command_loc,
                             help: Some("You can either rename this variable, or do not \
                                        pass the `warn-shadows` flag to ignore these types of errors.".to_string()),
                         });
@@ -418,25 +414,23 @@ impl<'a> PTBBuilder<'a> {
         }
 
         let budget = match self.gas_budget.finalize().map_err(|e| match e {
-            GasBudgetError::NoGasBudget => self.errors.push(err!(self, "No gas budget set for transaction")),
+            GasBudgetError::NoGasBudget => self.errors.push(err!(Span::out_of_band_span(), "No gas budget set for transaction")),
             GasBudgetError::NoGasPicker(budgets) => {
-                for (i, sp!(bsp, (fscope, _))) in budgets.into_iter().enumerate() {
+                for (i, sp!(bsp, _)) in budgets.into_iter().enumerate() {
                     let err_msg = if i == 0 {
                         // NB: this could span multiple files, so we use the filescope saved with
                         // the budget.
                         PTBError::WithSource {
-                            file_scope: fscope,
                             message: "Multiple gas budgets set for transaction with no gas picker. \
                                 Gas budget is set for the first time here.".to_string(),
-                            span: Some(bsp),
+                            span: bsp,
                             help: Some(format!("You should either remove all but one usage of setting the gas budget, or use the \
                                 '{PICK_GAS_BUDGET}' command to handle multiple gas budgets")),
                         }
                     } else {
                         PTBError::WithSource {
-                            file_scope: fscope,
                             message: format!("Gas budget is set for the {} time here.", to_ordinal_contraction(i + 1)),
-                            span: Some(bsp),
+                            span: bsp,
                             help: None,
                         }
                     };
@@ -444,22 +438,20 @@ impl<'a> PTBBuilder<'a> {
                 }
             }
             GasBudgetError::MultipleGasPickers(pickers) => {
-                for (i, sp!(bsp, (fscope, _))) in pickers.into_iter().enumerate() {
+                for (i, sp!(bsp, _)) in pickers.into_iter().enumerate() {
                     let err_msg = if i == 0 {
                         // NB: this could span multiple files, so we use the filescope saved with
                         // the picker.
                         PTBError::WithSource {
-                            file_scope: fscope,
                             message: "Multiple gas pickers set for transaction. \
                                 First usage of the 'gas-picker' command here.".to_string(),
-                            span: Some(bsp),
+                            span: bsp,
                             help: Some(format!("You should either remove all but one usage of '{PICK_GAS_BUDGET}'.")),
                         }
                     } else {
                         PTBError::WithSource {
-                            file_scope: fscope,
                             message: format!("'{PICK_GAS_BUDGET}' used here for the {} time.", to_ordinal_contraction(i + 1)),
-                            span: Some(bsp),
+                            span: bsp,
                             help: None,
                         }
                     };
@@ -491,12 +483,12 @@ impl<'a> PTBBuilder<'a> {
             .reader
             .get_object_with_options(package_id, SuiObjectDataOptions::bcs_lossless())
             .await
-            .map_err(|e| err!(sp: loc, self, "{e}"))?
+            .map_err(|e| err!(loc, "{e}"))?
             .into_object()
-            .map_err(|e| err!(sp: loc, self, "{e}"))?;
+            .map_err(|e| err!(loc, "{e}"))?;
         let Some(SuiRawData::Package(package)) = object.bcs else {
             error!(
-                self,
+                loc,
                 "BCS field in object '{}' is missing or not a package.", package_id
             );
         };
@@ -508,7 +500,7 @@ impl<'a> PTBBuilder<'a> {
             package.type_origin_table,
             package.linkage_table,
         )
-        .map_err(|e| err!(self, "{e}"))?;
+        .map_err(|e| err!(loc, "{e}"))?;
         Ok(package)
     }
 
@@ -540,9 +532,9 @@ impl<'a> PTBBuilder<'a> {
                 }
                 SignatureToken::TypeParameter(idx) => {
                     let Some(tag) = ty_args.get(*idx as usize) else {
-                        error!(sp: loc, self, "Not enough type parameters supplied for Move call",);
+                        error!(loc, "Not enough type parameters supplied for Move call",);
                     };
-                    if !is_pure(tag).map_err(|e| err!(sp: loc, self, "{e}"))? {
+                    if !is_pure(tag).map_err(|e| err!(loc, "{e}"))? {
                         is_object_arg = true;
                         break;
                     }
@@ -597,7 +589,7 @@ impl<'a> PTBBuilder<'a> {
                             .map(|(x, _)| x.as_str()),
                     ))
                 };
-                let e = err!(sp: *mloc, self, "{e}");
+                let e = err!(*mloc, "{e}");
                 if let Some(help_message) = help_message {
                     e.with_help(help_message)
                 } else {
@@ -612,8 +604,8 @@ impl<'a> PTBBuilder<'a> {
                     == function_name.as_ident_str()
             })
             .ok_or_else(|| {
-                let e = err!(sp: *floc,
-                    self,
+                let e = err!(
+                    *floc,
                     "Could not resolve function '{}' in module '{}'",
                     function_name,
                     module_name
@@ -641,8 +633,8 @@ impl<'a> PTBBuilder<'a> {
             } else {
                 args[0].span.union_with(args[1..].iter().map(|x| x.span))
             };
-            error!(sp: loc,
-                self,
+            error!(
+                loc,
                 "Expected {} arguments, but got {}",
                 parameters.len(),
                 args.len()
@@ -657,6 +649,46 @@ impl<'a> PTBBuilder<'a> {
             call_args.push(call_arg);
         }
         Ok(call_args)
+    }
+
+    fn resolve_variable_access(
+        &self,
+        head: &Spanned<String>,
+        fields: Vec<Spanned<String>>,
+    ) -> Spanned<ResolvedAccess> {
+        if fields.len() == 1 {
+            // Get the span and value of the field zero'th field. Safe since we just checked the
+            // length above. Since the length is 1, we know that the field is non-empty.
+            let sp!(field_loc, field) = &fields[0];
+            if let Ok(n) = field.parse::<u16>() {
+                return span(*field_loc, ResolvedAccess::ResultAccess(n));
+            }
+        }
+        let tl_loc = head.span.union_with(fields.iter().map(|x| x.span));
+        span(
+            tl_loc,
+            ResolvedAccess::DottedString(format!(
+                "{}.{}",
+                head.value,
+                fields
+                    .into_iter()
+                    .map(|f| f.value)
+                    .collect::<Vec<_>>()
+                    .join(".")
+            )),
+        )
+    }
+
+    fn did_you_mean_identifier(&self, ident: &str) -> Option<String> {
+        let did_you_means = find_did_you_means(
+            ident,
+            self.resolved_arguments
+                .keys()
+                .chain(self.arguments_to_resolve.keys())
+                .chain(self.addresses.keys())
+                .map(|x| x.as_str()),
+        );
+        display_did_you_mean(did_you_means)
     }
 
     /// Resolve an argument based on the argument value, and the `resolver` that is passed in.
@@ -710,8 +742,7 @@ impl<'a> PTBBuilder<'a> {
                 ctx.pure(
                     self,
                     arg_loc,
-                    x.into_move_value_opt()
-                        .map_err(|e| err!(sp: arg_loc, self, "{e}"))?,
+                    x.into_move_value_opt().map_err(|e| err!(arg_loc, "{e}"))?,
                 )
                 .await
             }
@@ -719,8 +750,7 @@ impl<'a> PTBBuilder<'a> {
                 ctx.pure(
                     self,
                     arg_loc,
-                    x.into_move_value_opt()
-                        .map_err(|e| err!(sp: arg_loc, self, "{e}"))?,
+                    x.into_move_value_opt().map_err(|e| err!(arg_loc, "{e}"))?,
                 )
                 .await
             }
@@ -728,39 +758,67 @@ impl<'a> PTBBuilder<'a> {
                 let object_id = ObjectID::from_address(addr.into_inner());
                 ctx.resolve_object_id(self, arg_loc, object_id).await
             }
-            PTBArg::VariableAccess(sp!(_, head), fields) => {
-                if fields.len() != 1 {
-                    error!(sp: arg_loc,
-                        self,
-                        "Tried to access more deeply than one level into a result {}. Tried to access: {:?} levels deep.", head, fields.len(),
-                    );
-                }
-                match self.resolved_arguments.get(&head) {
-                    Some(Tx::Argument::Result(u)) => {
-                        Ok(Tx::Argument::NestedResult(*u, fields[0].value))
+            PTBArg::VariableAccess(head, fields) => {
+                match self.resolve_variable_access(&head, fields) {
+                    sp!(l, ResolvedAccess::DottedString(string)) => {
+                        self.resolve(span(l, PTBArg::Identifier(string)), ctx).await
                     }
-                    Some(
-                        x @ (Tx::Argument::NestedResult(..)
-                        | Tx::Argument::Input(..)
-                        | Tx::Argument::GasCoin),
-                    ) => {
-                        error!(sp: arg_loc,
-                            self,
-                            "Tried to access a nested result, input, or gascoin {}: {}", head, x,
-                        );
-                    }
-                    None => {
-                        error!(sp: arg_loc, self, "Tried to access an unresolved identifier: {}", head);
-                    }
+                    sp!(_, ResolvedAccess::ResultAccess(access)) => match self
+                        .resolved_arguments
+                        .get(&head.value)
+                    {
+                        Some(Tx::Argument::Result(u)) => Ok(Tx::Argument::NestedResult(*u, access)),
+                        Some(
+                            x @ (Tx::Argument::NestedResult(..)
+                            | Tx::Argument::Input(..)
+                            | Tx::Argument::GasCoin),
+                        ) => {
+                            error!(
+                                arg_loc,
+                                "Tried to access a nested result, input, or gascoin {}: {}",
+                                head.value,
+                                x,
+                            );
+                        }
+                        None => match self
+                            .resolve(
+                                span(
+                                    arg_loc,
+                                    PTBArg::Identifier(format!("{}.{}", head.value, access)),
+                                ),
+                                ctx,
+                            )
+                            .await
+                        {
+                            Ok(x) => Ok(x),
+                            Err(_) => match self.did_you_mean_identifier(&head.value) {
+                                Some(similars) => {
+                                    error!(
+                                        arg_loc => help: { "{}", similars },
+                                        "Tried to access an unresolved identifier: {}", head.value
+                                    );
+                                }
+                                None => {
+                                    error!(
+                                        arg_loc,
+                                        "Tried to access an unresolved identifier: {}", head.value
+                                    );
+                                }
+                            },
+                        },
+                    },
                 }
             }
-            PTBArg::Identifier(i) => {
-                error!(sp: arg_loc, self, "Unresolved identifier: {}", i);
-            }
+            PTBArg::Identifier(i) => match self.did_you_mean_identifier(&i) {
+                Some(similars) => {
+                    error!(arg_loc => help: { "{}", similars }, "Unresolved identifier: '{}'", i)
+                }
+                None => error!(arg_loc, "Unresolved identifier: '{}'", i),
+            },
             PTBArg::Array(arr) => {
                 let combined = arg_loc.union_with(arr.iter().map(|x| x.span));
-                error!(sp: combined,
-                    self,
+                error!(
+                    combined,
                     "Tried to resolve an array to a value. \
                        This is invalid and means that you nested an array inside \
                        a pure PTB value (or inside another array)"
@@ -768,23 +826,19 @@ impl<'a> PTBBuilder<'a> {
             }
             PTBArg::ModuleAccess { .. } => {
                 error!(
-                    sp: arg_loc,
-                    help: {
+                    arg_loc => help: {
                         "This is invalid and most likely means that you nested a function call inside \
                         a value (e.g., inside an array, vector, or option)."
                     },
-                    self,
                     "Tried to resolve a module access to a value.",
                 );
             }
             PTBArg::TyArgs(..) => {
                 error!(
-                    sp: arg_loc,
-                    help: {
+                    arg_loc => help: {
                         "This is invalid and most likely means that you have \
                         your arguments to the command in an incorrect order."
                     },
-                    self,
                     "Tried to resolve a type arguments to a value."
                 );
             }
@@ -800,29 +854,24 @@ impl<'a> PTBBuilder<'a> {
                 SuiObjectDataOptions::new().with_type().with_owner(),
             )
             .await
-            .map_err(|e| err!(sp: obj_loc, self, "{e}"))?
+            .map_err(|e| err!(obj_loc, "{e}"))?
             .into_object()
-            .map_err(|e| err!(sp: obj_loc, self, "{e}"))?;
+            .map_err(|e| err!(obj_loc, "{e}"))?;
         Ok(res)
     }
 
     /// Add a single PTB command to the PTB that we are building up.
     /// Errors are added to the `errors` field of the PTBBuilder.
     pub async fn handle_command(&mut self, command: ParsedPTBCommand) {
-        let command_tok = command.name.clone();
         if let Err(e) = self.handle_command_(command).await {
             self.errors.push(e);
-        }
-        // We don't count these synthesized commands towards the command index.
-        if !matches!(command_tok, CommandToken::FileStart | CommandToken::FileEnd) {
-            self.context.increment_file_command_index();
         }
     }
 
     /// Add a single PTB command to the PTB that we are building up. This is the workhorse of it
     /// all.
     async fn handle_command_(&mut self, mut command: ParsedPTBCommand) -> PTBResult<()> {
-        let tok = &command.name;
+        let sp!(cmd_span, tok) = &command.name;
         match tok {
             CommandToken::TransferObjects => {
                 assert!(command.args.len() == 2);
@@ -830,7 +879,7 @@ impl<'a> PTBBuilder<'a> {
                     _,
                     PTBArg::Array(obj_args) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(sp: loc, self, "expected array of objects");
+                        error!(loc, "expected array of objects");
                     }
                 );
                 let to_address = command.args.pop().unwrap();
@@ -850,18 +899,16 @@ impl<'a> PTBBuilder<'a> {
                     ident_loc,
                     PTBArg::Identifier(i) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(sp: loc, self, "expected identifier",);
+                        error!(loc, "expected identifier",);
                     }
                 );
                 let Some(prev_ptb_arg) = self.last_command.take() else {
                     error!(
-                        sp: ident_loc,
-                        help: {
+                        ident_loc => help: {
                            "This is most likely because the previous command did not \
                            produce a result. E.g., '{ASSIGN}' or '{GAS_BUDGET}' commands do not produce results."
 
                         },
-                        self,
                         "Cannot assign a value to this variable."
                     );
                 };
@@ -874,38 +921,40 @@ impl<'a> PTBBuilder<'a> {
                     ident_loc,
                     PTBArg::Identifier(i) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(sp: loc, self, "expected identifier");
+                        error!(loc, "expected identifier");
                     }
                 );
                 self.declare_identifier(i.clone(), ident_loc);
                 self.declare_possible_address_binding(i.clone(), &arg_w_loc);
                 self.arguments_to_resolve.insert(i, arg_w_loc);
             }
-            CommandToken::Assign => error!(self, "expected 1 or 2 arguments for assignment",),
+            CommandToken::Assign => {
+                error!(*cmd_span, "expected 1 or 2 arguments for assignment",)
+            }
             CommandToken::MakeMoveVec => {
                 bind!(
                     _,
                     PTBArg::Array(args) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(sp: loc, self, "expected array of argument",);
+                        error!(loc, "expected array of argument",);
                     }
                 );
                 bind!(
                     ty_locs,
                     PTBArg::TyArgs(ty_args) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(sp: loc, self, "expected type argument",);
+                        error!(loc, "expected type argument",);
                     }
                 );
                 if ty_args.len() != 1 {
-                    error!(sp: ty_locs, self, "expected 1 type argumen",);
+                    error!(ty_locs, "expected 1 type argumen",);
                 }
                 let ty_arg = ty_args[0]
                     .clone()
                     .into_type_tag(&resolve_address)
-                    .map_err(|e| err!(self, "{e}"))?;
+                    .map_err(|e| err!(ty_locs, "{e}"))?;
                 let mut vec_args: Vec<Tx::Argument> = vec![];
-                if is_pure(&ty_arg).map_err(|e| err!(self, "{e}"))? {
+                if is_pure(&ty_arg).map_err(|e| err!(ty_locs, "{e}"))? {
                     for arg in args.into_iter() {
                         let arg = self.resolve(arg, ToPure).await?;
                         vec_args.push(arg);
@@ -923,14 +972,14 @@ impl<'a> PTBBuilder<'a> {
             }
             CommandToken::SplitCoins => {
                 if command.args.len() != 2 {
-                    error!(self, "expected 2 argument",);
+                    error!(*cmd_span, "expected 2 argument",);
                 }
 
                 bind!(
                     _,
                     PTBArg::Array(amounts) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(sp: loc, self, "expected array of amount",);
+                        error!(loc, "expected array of amount",);
                     }
                 );
 
@@ -949,14 +998,14 @@ impl<'a> PTBBuilder<'a> {
             }
             CommandToken::MergeCoins => {
                 if command.args.len() != 2 {
-                    error!(self, "expected 2 argument",);
+                    error!(*cmd_span, "expected 2 argument",);
                 }
 
                 bind!(
                     _,
                     PTBArg::Array(coins) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(sp: loc, self, "expected array of coin",);
+                        error!(loc, "expected array of coin",);
                     }
                 );
 
@@ -978,58 +1027,54 @@ impl<'a> PTBBuilder<'a> {
                     ident_loc,
                     PTBArg::Identifier(i) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(sp: loc, self, "expected identifier",);
+                        error!(loc, "expected identifier",);
                     }
                 );
                 let picker = match i.to_string().as_str() {
                     "max" => GasPicker::Max,
                     "min" => GasPicker::Min,
                     "sum" => GasPicker::Sum,
-                    x => error!(sp: ident_loc, self, "invalid gas picker: {}", x,),
+                    x => error!(ident_loc, "invalid gas picker: {}", x,),
                 };
-                let context = self.context.current_file_scope().clone();
-                self.gas_budget.set_gas_picker(picker, context, ident_loc);
+                self.gas_budget.set_gas_picker(picker, ident_loc);
             }
             CommandToken::GasBudget => {
                 bind!(
                     budget_loc,
                     PTBArg::U64(budget) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(sp: loc, self, "expected gas budget");
+                        error!(loc, "expected gas budget");
                     }
                 );
-                let context = self.context.current_file_scope().clone();
-                self.gas_budget.add_gas_budget(budget, context, budget_loc);
+                self.gas_budget.add_gas_budget(budget, budget_loc);
             }
             CommandToken::File => {
-                error!(self, "File commands should be removed at this point");
+                error!(*cmd_span, "File commands should be removed at this point");
             }
             CommandToken::FileStart => {
                 assert!(command.args.len() == 1);
                 bind!(
                     _fname_loc,
-                    PTBArg::String(file_name) = command.args.pop().unwrap(),
+                    PTBArg::String(_) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(sp: loc, self, "expected file name");
+                        error!(loc, "expected file name");
                     }
                 );
-                self.context.push_file_scope(file_name);
             }
             CommandToken::FileEnd => {
                 assert!(command.args.len() == 1);
                 bind!(
                     _fname_loc,
-                    PTBArg::String(file_name) = command.args.pop().unwrap(),
+                    PTBArg::String(_) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(sp: loc, self, "expected file name");
+                        error!(loc, "expected file name");
                     }
                 );
-                self.context.pop_file_scope(&file_name)?;
             }
             CommandToken::MoveCall => {
                 if command.args.is_empty() {
                     error!(
-                        self,
+                        *cmd_span,
                         "must provide function to call for {MOVE_CALL} command",
                     );
                 }
@@ -1043,7 +1088,7 @@ impl<'a> PTBBuilder<'a> {
                         function_name,
                     } = command.args.remove(0),
                     |loc| {
-                        error!(sp: loc, self, "expected module access");
+                        error!(loc, "expected module access");
                     }
                 );
 
@@ -1052,14 +1097,13 @@ impl<'a> PTBBuilder<'a> {
                         for t in targs.into_iter() {
                             ty_args.push(
                                 t.into_type_tag(&resolve_address)
-                                    .map_err(|e| err!(self, "{e}"))?,
+                                    .map_err(|e| err!(arg_loc, "{e}"))?,
                             )
                         }
                     } else {
                         args.push(span(arg_loc, arg));
                     }
                 }
-                // TODO(tzakian): Handle addresses in scope here.
                 let resolved_address = address.value.clone().into_account_address(&|s| {
                     self.addresses.get(s).cloned().or_else(|| resolve_address(s))
                 }).map_err(|e| {
@@ -1069,7 +1113,7 @@ impl<'a> PTBBuilder<'a> {
                     } else {
                         None
                     };
-                    let e = err!(sp: address.span, self, "{e}");
+                    let e = err!(address.span, "{e}");
 
                     if let Some(help_message) = help_message {
                         e.with_help(help_message)
@@ -1101,8 +1145,10 @@ impl<'a> PTBBuilder<'a> {
             }
             CommandToken::Publish => {
                 if command.args.len() != 1 {
+                    let span =
+                        Span::union_spans(command.args.iter().map(|x| x.span)).unwrap_or(*cmd_span);
                     error!(
-                        self,
+                        span,
                         "expected 1 argument for publish but got {}",
                         command.args.len()
                     );
@@ -1111,7 +1157,7 @@ impl<'a> PTBBuilder<'a> {
                     pkg_loc,
                     PTBArg::String(package_path) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(sp: loc, self, "expected filepath argument for publish",);
+                        error!(loc, "expected filepath argument for publish",);
                     }
                 );
                 let package_path = std::path::PathBuf::from(package_path);
@@ -1123,7 +1169,7 @@ impl<'a> PTBBuilder<'a> {
                     false, /* skip_dependency_verification */
                 )
                 .await
-                .map_err(|e| err!(sp: pkg_loc, self, "{e}"))?;
+                .map_err(|e| err!(pkg_loc, "{e}"))?;
 
                 let res = self.ptb.publish_upgradeable(
                     compiled_modules,
@@ -1134,8 +1180,10 @@ impl<'a> PTBBuilder<'a> {
             // Update this command to not do as many things. It should result in a single command.
             CommandToken::Upgrade => {
                 if command.args.len() != 2 {
+                    let span =
+                        Span::union_spans(command.args.iter().map(|x| x.span)).unwrap_or(*cmd_span);
                     error!(
-                        self,
+                        span,
                         "expected 2 arguments for upgrade but got {}",
                         command.args.len()
                     );
@@ -1145,19 +1193,17 @@ impl<'a> PTBBuilder<'a> {
                     arg = self
                         .arguments_to_resolve
                         .get(&id)
-                        .ok_or_else(
-                            || err!(sp: loc, self, "Unable to find object ID argument for upgrade",),
-                        )?
+                        .ok_or_else(|| err!(loc, "Unable to find object ID argument for upgrade",))?
                         .clone();
                 }
                 bind!(cap_loc, PTBArg::Address(upgrade_cap_id) = arg, |loc| {
-                    error!(sp: loc, self, "expected upgrade cap object ID for upgrade",);
+                    error!(loc, "expected upgrade cap object ID for upgrade",);
                 });
                 bind!(
                     path_loc,
                     PTBArg::String(package_path) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(sp: loc, self, "expected filepath argument for publish",);
+                        error!(loc, "expected filepath argument for publish",);
                     }
                 );
                 let package_path = std::path::PathBuf::from(package_path);
@@ -1181,16 +1227,16 @@ impl<'a> PTBBuilder<'a> {
                         false, /* skip_dependency_verification */
                     )
                     .await
-                    .map_err(|e| err!(sp: path_loc, self, "{e}"))?;
+                    .map_err(|e| err!(path_loc, "{e}"))?;
 
                 let upgrade_arg = self
                     .ptb
                     .pure(upgrade_policy)
-                    .map_err(|e| err!(self, "{e}"))?;
+                    .map_err(|e| err!(*cmd_span, "{e}"))?;
                 let digest_arg = self
                     .ptb
                     .pure(package_digest)
-                    .map_err(|e| err!(self, "{e}"))?;
+                    .map_err(|e| err!(*cmd_span, "{e}"))?;
                 let upgrade_ticket =
                     self.ptb
                         .command(Tx::Command::MoveCall(Box::new(Tx::ProgrammableMoveCall {
@@ -1219,16 +1265,20 @@ impl<'a> PTBBuilder<'a> {
             }
             CommandToken::WarnShadows => {
                 if command.args.len() == 1 {
-                    self.warn_on_shadowing = true;
+                    self.warn_on_shadowing = command.args[0].value == PTBArg::Bool(true);
                 } else {
-                    error!(self, "expected no arguments for warn shadows");
+                    let span =
+                        Span::union_spans(command.args.iter().map(|x| x.span)).unwrap_or(*cmd_span);
+                    error!(span, "expected no arguments for warn shadows");
                 }
             }
             CommandToken::Preview => {
                 if command.args.len() == 1 {
-                    self.preview_set = true;
+                    self.preview_set = command.args[0].value == PTBArg::Bool(true);
                 } else {
-                    error!(self, "expected no arguments for preview");
+                    let span =
+                        Span::union_spans(command.args.iter().map(|x| x.span)).unwrap_or(*cmd_span);
+                    error!(span, "expected no arguments for preview");
                 }
             }
         }

@@ -25,7 +25,7 @@ pub enum Argument {
     U256(move_core_types::u256::U256),
     Gas,
     Identifier(String),
-    VariableAccess(Spanned<String>, Vec<Spanned<u16>>),
+    VariableAccess(Spanned<String>, Vec<Spanned<String>>),
     Address(NumericalAddress),
     String(String),
     Vector(Vec<Spanned<Argument>>),
