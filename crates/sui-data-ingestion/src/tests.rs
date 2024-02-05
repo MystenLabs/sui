@@ -4,14 +4,20 @@
 use crate::progress_store::ExecutorProgress;
 use crate::reader::ENV_VAR_LOCAL_READ_TIMEOUT_MS;
 use crate::workers::Worker;
-use crate::{DataIngestionMetrics, FileProgressStore, IndexerExecutor, WorkerPool};
+use crate::{
+    ArchivalConfig, ArchivalWorker, DataIngestionMetrics, FileProgressStore, IndexerExecutor,
+    WorkerPool,
+};
 use anyhow::Result;
 use async_trait::async_trait;
+use object_store::parse_url_opts;
 use prometheus::Registry;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
+use sui_archival::verify_archive_with_checksums2;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_types::crypto::KeypairTraits;
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -23,6 +29,7 @@ use sui_types::messages_checkpoint::{
 use sui_types::utils::make_committee_key;
 use tempfile::NamedTempFile;
 use tokio::sync::oneshot;
+use url::Url;
 
 async fn add_worker_pool<W: Worker + 'static>(
     indexer: &mut IndexerExecutor<FileProgressStore>,
@@ -101,6 +108,41 @@ async fn basic_flow() {
     let result = run(bundle.executor, Some(path), Some(Duration::from_secs(1))).await;
     assert!(result.is_ok());
     assert_eq!(result.unwrap().get("test"), Some(&20));
+}
+
+#[tokio::test]
+async fn archival_flow() {
+    let mut bundle = create_executor_bundle();
+    let remote_url = "https://s3.us-east-1.amazonaws.com/tmpingestion".to_string();
+    let remote_store_options = vec![
+        ("aws_access_key_id".to_string(), "fake".to_string()),
+        ("aws_secret_access_key".to_string(), "fake".to_string()),
+    ];
+    let config = ArchivalConfig {
+        remote_url: remote_url.clone(),
+        remote_store_options: remote_store_options.clone(),
+        commit_file_size: 1,
+        commit_duration_seconds: 3,
+    };
+    let path = temp_dir();
+    let worker = ArchivalWorker::new(config).await.unwrap();
+    add_worker_pool(&mut bundle.executor, worker, 1)
+        .await
+        .unwrap();
+    for checkpoint_number in 0..20 {
+        let bytes = mock_checkpoint_data_bytes(checkpoint_number);
+        std::fs::write(path.join(format!("{}.chk", checkpoint_number)), bytes).unwrap();
+    }
+    let result = run(bundle.executor, Some(path), Some(Duration::from_secs(10))).await;
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().get("test"), Some(&20));
+
+    let remote_store = parse_url_opts(&Url::parse(&remote_url).unwrap(), remote_store_options)
+        .unwrap()
+        .0;
+    verify_archive_with_checksums2("tmpingestion".to_string(), Arc::new(remote_store))
+        .await
+        .unwrap();
 }
 
 fn temp_dir() -> std::path::PathBuf {

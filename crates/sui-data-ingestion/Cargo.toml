@@ -38,3 +38,4 @@ workspace-hack.workspace = true
 rand.workspace = true
 tempfile.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
+sui-config.workspace = true

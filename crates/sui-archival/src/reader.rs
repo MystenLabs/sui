@@ -167,6 +167,22 @@ impl ArchiveReader {
         })
     }
 
+    pub fn new2(bucket: String, remote_object_store: Arc<dyn ObjectStoreGetExt>, metrics: &Arc<ArchiveReaderMetrics>) -> Self {
+        let (sender, recv) = oneshot::channel();
+        let manifest = Arc::new(Mutex::new(Manifest::new(0, 0)));
+        // Start a background tokio task to keep local manifest in sync with remote
+        Self::spawn_manifest_sync_task(remote_object_store.clone(), manifest.clone(), recv);
+        ArchiveReader {
+            bucket,
+            manifest,
+            sender: Arc::new(sender),
+            remote_object_store,
+            use_for_pruning_watermark: false,
+            concurrency: 1,
+            archive_reader_metrics: metrics.clone(),
+        }
+    }
+
     /// This function verifies that the files in archive cover the entire range of checkpoints from
     /// sequence number 0 until the latest available checkpoint with no missing checkpoint
     pub async fn verify_manifest(

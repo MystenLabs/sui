@@ -44,6 +44,17 @@ impl ObjectStoreGetExt for Arc<DynObjectStore> {
 }
 
 #[async_trait]
+impl ObjectStoreGetExt for Box<DynObjectStore> {
+    async fn get_bytes(&self, src: &Path) -> Result<Bytes> {
+        self.get(src)
+            .await?
+            .bytes()
+            .await
+            .map_err(|e| anyhow!("Failed to get file: {} with error: {}", src, e.to_string()))
+    }
+}
+
+#[async_trait]
 pub trait ObjectStoreListExt: Send + Sync + 'static {
     /// List the objects at the given path in object store
     async fn list_objects(

@@ -403,6 +403,30 @@ pub async fn verify_archive_with_checksums(
     );
 
     let file_metadata = archive_reader.verify_manifest(manifest).await?;
+
+    // Account for both summary and content files
+    let num_files = file_metadata.len() * 2;
+    archive_reader
+        .verify_file_consistency(file_metadata)
+        .await?;
+    info!("All {} files are valid", num_files);
+    Ok(())
+}
+
+pub async fn verify_archive_with_checksums2(
+    bucket: String,
+    remote_object_store: Arc<dyn ObjectStoreGetExt>,
+) -> Result<()> {
+    let metrics = ArchiveReaderMetrics::new(&Registry::default());
+    let archive_reader = ArchiveReader::new2(bucket, remote_object_store, &metrics);
+    archive_reader.sync_manifest_once().await?;
+    let manifest = archive_reader.get_manifest().await?;
+    info!(
+        "Next checkpoint in archive store: {}",
+        manifest.next_checkpoint_seq_num()
+    );
+
+    let file_metadata = archive_reader.verify_manifest(manifest).await?;
     // Account for both summary and content files
     let num_files = file_metadata.len() * 2;
     archive_reader
