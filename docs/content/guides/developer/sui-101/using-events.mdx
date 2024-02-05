@@ -129,7 +129,8 @@ This example leverages the Sui TypeScript SDK to subscribe to events the package
 
 To create the event subscription, you can use a basic Node.js app. You need the Sui TypeScript SDK, so install the module using `npm install @mysten/sui.js` at the root of your project. In your TypeScript code, Use queryEvents within the executeMoveCall function below to query the events information for a Transaction.Below is an example of how to obtain the events information for the current transaction when calling a contract.
 
-example：https://suiexplorer.com/txblock/2hg7QQvNh7DnmmMaanAZ7hRYCAUimPJTN3bJRnpo29ej?network=testnet
+Example transaction：https://suiexplorer.com/txblock/2hg7QQvNh7DnmmMaanAZ7hRYCAUimPJTN3bJRnpo29ej?network=testnet
+
 ```json
 {
   "id": {
@@ -145,9 +146,8 @@ example：https://suiexplorer.com/txblock/2hg7QQvNh7DnmmMaanAZ7hRYCAUimPJTN3bJRn
   },
   "bcs": "3ZrJhsA3GhA8gKr",
   "timestampMs": "1707120095029"
-
 ```
-
+Example code：
 
 ```ts
 import {
