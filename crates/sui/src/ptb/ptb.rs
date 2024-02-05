@@ -226,19 +226,15 @@ impl PTB {
         if filename.len() != 1 {
             return Err(anyhow!("The --file options should only pass one filename"));
         }
-        let filename = filename.get(0).unwrap();
+        let filename = filename
+            .first()
+            .ok_or_else(|| anyhow!("Empty input file list."))?;
         let file_path = std::path::Path::new(&cwd).join(filename);
         let file_path = std::fs::canonicalize(file_path)
             .map_err(|_| anyhow!("Cannot find the absolute path of this file {}", filename))?;
         if !file_path.exists() {
             return Err(anyhow!("{filename} does not exist"));
         }
-
-        let parent = if let Some(p) = file_path.parent() {
-            p.to_path_buf()
-        } else {
-            std::env::current_dir().map_err(|_| anyhow!("Cannot get current working directory."))?
-        };
 
         let file_content = std::fs::read_to_string(file_path.clone())?.replace("\\", "");
         let ignore_comments = file_content
@@ -251,19 +247,25 @@ impl PTB {
             ));
         }
 
-        let mut files_to_resolve = vec![];
+        let parent_folder = if let Some(p) = file_path.parent() {
+            p.to_path_buf()
+        } else {
+            std::env::current_dir().map_err(|_| anyhow!("Cannot get current working directory."))?
+        };
 
-        for f in ignore_comments
+        let mut files_to_resolve = vec![];
+        for file in ignore_comments
             .iter()
             .flat_map(|x| x.split("--"))
             .filter(|x| x.starts_with("file"))
             .map(|x| x.to_string().replace("file", "").replace(" ", ""))
         {
             let mut p = PathBuf::new();
-            p.push(parent.clone());
-            p.push(f.clone());
-            let file = std::fs::canonicalize(p)
-                .map_err(|_| anyhow!("{} includes file {} which does not exist.", filename, f))?;
+            p.push(parent_folder.clone());
+            p.push(file.clone());
+            let file = std::fs::canonicalize(p).map_err(|_| {
+                anyhow!("{} includes file {} which does not exist.", filename, file)
+            })?;
             files_to_resolve.push(file);
         }
 
@@ -273,21 +275,7 @@ impl PTB {
             included_files.insert(file_path, files_to_resolve);
         }
 
-        let edges = included_files.iter().flat_map(|(k, vs)| {
-            let vs = vs.iter().map(|v| v.to_str().unwrap());
-            std::iter::repeat(k.to_str().unwrap()).zip(vs)
-        });
-
-        // find if there is a circular file inclusion
-        // we use toposort as it will return which file includes a file that was already included
-        let graph: DiGraphMap<_, ()> = edges.collect();
-        let sort = petgraph::algo::toposort(&graph, None);
-        sort.map_err(|x| {
-            anyhow!(
-                "Cannot have circular file inclusions. It appears that the issue is in the {:?} file",
-                x.node_id()
-            )
-        })?;
+        check_for_cyclic_file_inclusions(&included_files)?;
 
         let lines = ignore_comments
             .iter()
@@ -296,15 +284,8 @@ impl PTB {
 
         // in a file the first arg will not be the binary's name, so exclude it
         let input = PTB::command().no_binary_name(true);
-        // .arg(Arg::new("--gas-budget").required(false));
-        // TODO do not require --gas-budget to exist in files???
-        // the issue is that we could pass a --gas-budget from the CLI and then a --file
-        // and in the file there is no --gas-budget. For now, --gas-budget is always required
-        // so we might want to figure out the best way to handle this case
         let args = input.get_matches_from(lines);
-        let mut cwd = current_file.clone();
-        cwd.pop();
-        let ptb_commands = self.from_matches(cwd, &args, included_files)?;
+        let ptb_commands = self.from_matches(parent_folder, &args, included_files)?;
         let len_cmds = ptb_commands.len();
 
         // add a pseudo command to tag where does the file include start and end
@@ -553,5 +534,27 @@ where
             },
         );
     }
+    Ok(())
+}
+
+/// Check for circular file inclusion.
+/// It uses toposort algorithm and returns an error on finding a cycle,
+/// describing which file includes a file that was already included.
+fn check_for_cyclic_file_inclusions(
+    included_files: &BTreeMap<PathBuf, Vec<PathBuf>>,
+) -> Result<(), anyhow::Error> {
+    let edges = included_files.iter().flat_map(|(k, vs)| {
+        let vs = vs.iter().map(|v| v.to_str().unwrap());
+        std::iter::repeat(k.to_str().unwrap()).zip(vs)
+    });
+
+    let graph: DiGraphMap<_, ()> = edges.collect();
+    let sort = petgraph::algo::toposort(&graph, None);
+    sort.map_err(|node| {
+        anyhow!(
+            "Cannot have circular file inclusions. It appears that the issue is in the {:?} file",
+            node.node_id()
+        )
+    })?;
     Ok(())
 }
