@@ -129,25 +129,6 @@ This example leverages the Sui TypeScript SDK to subscribe to events the package
 
 To create the event subscription, you can use a basic Node.js app. You need the Sui TypeScript SDK, so install the module using `npm install @mysten/sui.js` at the root of your project. In your TypeScript code, Use queryEvents within the executeMoveCall function below to query the events information for a Transaction.Below is an example of how to obtain the events information for the current transaction when calling a contract.
 
-Example transaction：https://suiexplorer.com/txblock/2hg7QQvNh7DnmmMaanAZ7hRYCAUimPJTN3bJRnpo29ej?network=testnet
-
-```json
-{
-  "id": {
-    "txDigest": "2hg7QQvNh7DnmmMaanAZ7hRYCAUimPJTN3bJRnpo29ej",
-    "eventSeq": "0"
-  },
-  "packageId": "0x4047ca9d7990e25abe3dea249e54eb5ed079212dd976f1ccc30700a96d01608f",
-  "transactionModule": "sicbogame",
-  "sender": "0x3c54103db151f05f698705b76427cc03f80f1b3a092353bc84c2fd88a6b56c85",
-  "type": "0x4047ca9d7990e25abe3dea249e54eb5ed079212dd976f1ccc30700a96d01608f::sicbogame::Result",
-  "parsedJson": {
-    "msg": "You Win :)"
-  },
-  "bcs": "3ZrJhsA3GhA8gKr",
-  "timestampMs": "1707120095029"
-```
-
 Example code：
 
 ```ts
@@ -231,6 +212,25 @@ export function Creategame({
 ```
 
 ### Response
+
+Example transaction：https://suiexplorer.com/txblock/2hg7QQvNh7DnmmMaanAZ7hRYCAUimPJTN3bJRnpo29ej?network=testnet
+
+```json
+{
+  "id": {
+    "txDigest": "2hg7QQvNh7DnmmMaanAZ7hRYCAUimPJTN3bJRnpo29ej",
+    "eventSeq": "0"
+  },
+  "packageId": "0x4047ca9d7990e25abe3dea249e54eb5ed079212dd976f1ccc30700a96d01608f",
+  "transactionModule": "sicbogame",
+  "sender": "0x3c54103db151f05f698705b76427cc03f80f1b3a092353bc84c2fd88a6b56c85",
+  "type": "0x4047ca9d7990e25abe3dea249e54eb5ed079212dd976f1ccc30700a96d01608f::sicbogame::Result",
+  "parsedJson": {
+    "msg": "You Win :)"
+  },
+  "bcs": "3ZrJhsA3GhA8gKr",
+  "timestampMs": "1707120095029"
+```
 
 I can get the value of parsedJson in the example below, and its final value is {"msg":"You Win :)"}.
 
