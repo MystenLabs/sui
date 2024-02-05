@@ -1,0 +1,132 @@
+bug[ICE12003]: INTERNAL COMPILER ERROR
+  ┌─ tests/move_2024/matching/option_enum_match.move:8:15
+  │
+8 │     fun t0(): u64 {
+  │               ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
+
+  │
+  = The Move compiler has encountered an internal compiler error.
+     Please report this this issue to the Mysten Labs Move language team,
+     including this error and any relevant code, to the Mysten Labs issue tracker
+     at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/option_enum_match.move:15:31
+   │
+15 │     fun t1(opt: Option<Option<u64>>): u64 {
+   │                               ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/option_enum_match.move:18:26
+   │
+18 │             Option::Some(Option::None) => 1,
+   │                          ^^^^^^^^^^^^ ICE base type constraint failed: &(0x42::m::Option<(u64: copy+drop+store)>: )
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/option_enum_match.move:25:13
+   │
+25 │             Option::Some(Option::Some(x)) => x,
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ICE base type constraint failed: &(0x42::m::Option<(u64: copy+drop+store)>: )
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/option_enum_match.move:25:26
+   │
+25 │             Option::Some(Option::Some(x)) => x,
+   │                          ^^^^^^^^^^^^^^^ ICE base type constraint failed: &(u64: copy+drop+store)
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/option_enum_match.move:26:13
+   │
+26 │             Option::Some(Option::None) => default,
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^ ICE base type constraint failed: &(0x42::m::Option<(u64: copy+drop+store)>: )
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/option_enum_match.move:33:13
+   │
+33 │             Option::Some(Option::Some(x)) => x,
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ICE base type constraint failed: &mut (0x42::m::Option<(u64: copy+drop+store)>: )
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/option_enum_match.move:33:26
+   │
+33 │             Option::Some(Option::Some(x)) => x,
+   │                          ^^^^^^^^^^^^^^^ ICE base type constraint failed: &(u64: copy+drop+store)
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/option_enum_match.move:33:26
+   │
+33 │             Option::Some(Option::Some(x)) => x,
+   │                          ^^^^^^^^^^^^^^^ ICE base type constraint failed: &mut (u64: copy+drop+store)
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/option_enum_match.move:34:13
+   │
+34 │             Option::Some(Option::None) => default,
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^ ICE base type constraint failed: &(0x42::m::Option<(u64: copy+drop+store)>: )
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/option_enum_match.move:34:13
+   │
+34 │             Option::Some(Option::None) => default,
+   │             ^^^^^^^^^^^^^^^^^^^^^^^^^^ ICE base type constraint failed: &mut (0x42::m::Option<(u64: copy+drop+store)>: )
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+

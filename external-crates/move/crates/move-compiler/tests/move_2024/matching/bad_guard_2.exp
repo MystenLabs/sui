@@ -1,0 +1,12 @@
+bug[ICE12003]: INTERNAL COMPILER ERROR
+   ┌─ tests/move_2024/matching/bad_guard_2.move:17:13
+   │
+17 │             Option::Some(_) => 2,
+   │             ^^^^^^^^^^^^^^^ ICE base type constraint failed: &(u64: copy+drop+store)
+
+   │
+   = The Move compiler has encountered an internal compiler error.
+      Please report this this issue to the Mysten Labs Move language team,
+      including this error and any relevant code, to the Mysten Labs issue tracker
+      at : https://github.com/MystenLabs/sui/issues
+
