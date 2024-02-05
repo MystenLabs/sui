@@ -9,7 +9,7 @@ use std::{
 use move_core_types::language_storage::StructTag;
 use sui_json_rpc::name_service::{Domain, NameRecord, SubDomainRegistration};
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     dynamic_field::Field,
     full_checkpoint_content::CheckpointData,
     object::Object,
@@ -29,6 +29,7 @@ pub struct NameRecordChange {
     field: Field<Domain, NameRecord>,
     /// the DF's ID.
     field_id: ObjectID,
+    sequence_number: SequenceNumber,
 }
 pub struct SuinsIndexer {
     registry_table_id: SuiAddress,
@@ -83,8 +84,8 @@ impl SuinsIndexer {
     pub fn parse_name_record_changes(
         &self,
         objects: &[&Object],
-    ) -> (Vec<NameRecordChange>, HashMap<String, String>) {
-        let mut name_records: Vec<NameRecordChange> = vec![];
+    ) -> (HashMap<ObjectID, NameRecordChange>, HashMap<String, String>) {
+        let mut name_records: HashMap<ObjectID, NameRecordChange> = HashMap::new();
         let mut subdomain_wrappers: HashMap<String, String> = HashMap::new();
 
         for &object in objects {
@@ -94,9 +95,18 @@ impl SuinsIndexer {
                     .to_rust()
                     .unwrap_or_else(|| panic!("Failed to parse name record for {:?}", object));
 
-                name_records.push(NameRecordChange {
+                let id: ObjectID = object.id();
+
+                // If we already have a newer version of the same name record, skip insertion.
+                // That prevents us from falling into PG's bulk insertions double conflicts.
+                if name_records.get(&id).is_some_and(|x| x.sequence_number > object.version()) {
+                    continue;
+                }
+
+                name_records.insert(id, NameRecordChange {
                     field: name_record,
                     field_id: object.id(),
+                    sequence_number: object.version()
                 });
             }
             // Parse subdomain wrappers and save them in our hashmap.
@@ -186,13 +196,13 @@ pub fn format_update_subdomain_wrapper_query() -> String {
 /// Prepares a vector of `VerifiedDomain`s to be inserted into the DB, taking in account
 /// the list of subdomain wrappers created as well as the checkpoint's sequence number.
 pub fn prepare_db_updates(
-    name_record_changes: &[NameRecordChange],
+    name_record_changes: &HashMap<ObjectID, NameRecordChange>,
     subdomain_wrappers: &HashMap<String, String>,
     checkpoint_seq_num: u64,
 ) -> Vec<VerifiedDomain> {
     let mut updates: Vec<VerifiedDomain> = vec![];
 
-    for name_record_change in name_record_changes {
+    for name_record_change in name_record_changes.values() {
         let name_record = &name_record_change.field;
 
         let parent = name_record.name.parent().to_string();
