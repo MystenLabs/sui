@@ -110,8 +110,7 @@ module bridge::bridge {
             committee: committee::create(ctx),
             treasury: treasury::create(ctx),
             bridge_records: linked_table::new(ctx),
-            // TODO: set transfer limit
-            limiter: limiter::new(vec_map::empty()),
+            limiter: limiter::new(),
             frozen: false,
         };
         let bridge = Bridge {
