@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useSuiClientContext } from '@mysten/dapp-kit';
 import { DryRunTransactionBlockResponse, GasCostSummary } from '@mysten/sui.js/src/client';
 import { ReactNode } from 'react';
 
@@ -23,7 +24,9 @@ const calculateGas = (gas: GasCostSummary, gasPrice: string): string => {
 };
 
 export function Overview({ output }: { output: DryRunTransactionBlockResponse }) {
+	const { network } = useSuiClientContext();
 	const metadata: Record<string, ReactNode> = {
+		network,
 		status:
 			output.effects.status?.status === 'success'
 				? '✅ Transaction dry run executed succesfully!'

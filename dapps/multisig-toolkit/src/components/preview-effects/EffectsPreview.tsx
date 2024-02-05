@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { DryRunTransactionBlockResponse, SuiClient } from '@mysten/sui.js/src/client';
+import { DryRunTransactionBlockResponse } from '@mysten/sui.js/src/client';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useState } from 'react';
 
@@ -12,14 +12,7 @@ import { ObjectChanges } from './partials/ObjectChanges';
 import { Overview } from './partials/Overview';
 import { Transactions } from './partials/Transactions';
 
-// SPDX-License-Identifier: Apache-2.0
-export function EffectsPreview({
-	output,
-	client,
-}: {
-	output: DryRunTransactionBlockResponse;
-	client: SuiClient | undefined;
-}) {
+export function EffectsPreview({ output }: { output: DryRunTransactionBlockResponse }) {
 	const [tab, setTab] = useState('balance-changes');
 
 	const { objectChanges, balanceChanges } = output;

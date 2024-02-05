@@ -43,6 +43,7 @@ export default function OfflineSigner() {
 		if (!currentAccount?.chains[0]) return;
 
 		selectNetwork(currentAccount?.chains[0]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentAccount]);
 
 	// runs a dry-run for the transaction based on the connected wallet.
@@ -111,7 +112,7 @@ export default function OfflineSigner() {
 						</div>
 						{dryRunData && (
 							<>
-								<EffectsPreview client={client} output={dryRunData} />
+								<EffectsPreview output={dryRunData} />
 							</>
 						)}
 					</div>
