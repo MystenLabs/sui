@@ -13,7 +13,7 @@ const config = {
 	},
 	docsRepositoryBase: 'https://github.com/MystenLabs/sui/tree/main/sdk/docs',
 	footer: {
-		text: 'Copyright © 2023, Mysten Labs, Inc.',
+		text: `Copyright © ${new Date().getFullYear()}, Mysten Labs, Inc.`,
 	},
 	head: (
 		<>
