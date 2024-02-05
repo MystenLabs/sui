@@ -228,6 +228,8 @@ impl PTB {
         }
         let filename = filename.get(0).unwrap();
         let file_path = std::path::Path::new(&cwd).join(filename);
+        let file_path = std::fs::canonicalize(file_path)
+            .map_err(|_| anyhow!("Cannot find the absolute path of this file {}", filename))?;
         if !file_path.exists() {
             return Err(anyhow!("{filename} does not exist"));
         }
@@ -254,8 +256,13 @@ impl PTB {
             .flat_map(|x| x.split("--"))
             .filter(|x| x.starts_with("file"))
             .map(|x| x.to_string().replace("file", "").replace(" ", ""))
-            .map(|x| [Path::new(&parent), Path::new(&x)].iter().collect())
-            .collect::<Vec<_>>();
+            .map(|x| {
+                let mut p = PathBuf::new();
+                p.push(parent.clone());
+                p.push(x);
+                std::fs::canonicalize(p)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         if let Some(files) = included_files.get_mut(&current_file) {
             files.extend(files_to_resolve);
