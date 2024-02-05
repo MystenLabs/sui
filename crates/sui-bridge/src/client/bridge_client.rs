@@ -73,6 +73,12 @@ impl BridgeClient {
                     .join(",");
                 format!("sign/update_committee_blocklist/{chain_id}/{nonce}/{type_}/{keys}")
             }
+            BridgeAction::EmergencyAction(a) => {
+                let chain_id = (a.chain_id as u8).to_string();
+                let nonce = a.nonce.to_string();
+                let type_ = (a.action_type as u8).to_string();
+                format!("sign/emergency_button/{chain_id}/{nonce}/{type_}")
+            }
         }
     }
 
@@ -396,6 +402,16 @@ mod tests {
         assert_eq!(
             BridgeClient::bridge_action_to_path(&action),
             "sign/update_committee_blocklist/11/1/0/027f1178ff417fc9f5b8290bd8876f0a157a505a6c52db100a8492203ddd1d4279,02321ede33d2c2d7a8a152f275a1484edef2098f034121a602cb7d767d38680aa4",
+        );
+
+        let action = BridgeAction::EmergencyAction(crate::types::EmergencyAction {
+            chain_id: BridgeChainId::SuiLocalTest,
+            nonce: 5,
+            action_type: crate::types::EmergencyActionType::Pause,
+        });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/emergency_button/3/5/0",
         );
     }
 }
