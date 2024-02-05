@@ -11561,6 +11561,7 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-package",
+ "move-symbol-pool",
  "move-vm-profiler",
  "num-bigint 0.4.4",
  "petgraph 0.5.1",
