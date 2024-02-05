@@ -36,6 +36,11 @@ export function Event({ event }: { event: SuiEvent }) {
 
 	return (
 		<PreviewCard.Root>
+			<PreviewCard.Header>
+				<p>
+					Event Type: <strong>{event.type}</strong>
+				</p>
+			</PreviewCard.Header>
 			<PreviewCard.Body>
 				{Object.entries(fields).map(([key, value]) => (
 					<div key={key} className="flex items-center gap-3 mb-3 ">
@@ -44,11 +49,6 @@ export function Event({ event }: { event: SuiEvent }) {
 					</div>
 				))}
 			</PreviewCard.Body>
-			<PreviewCard.Footer>
-				<p>
-					Event Type: <strong>{event.type}</strong>
-				</p>
-			</PreviewCard.Footer>
 		</PreviewCard.Root>
 	);
 }
