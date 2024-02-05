@@ -29,8 +29,10 @@ module bridge::message {
 
     const CURRENT_MESSAGE_VERSION: u8 = 1;
     const COMPRESSED_ECDSA_PUB_KEY_LENGTH: u64 = 33;
+    const ECDSA_ADDRESS_LENGTH: u64 = 20;
 
     const ETrailingBytes: u64 = 0;
+    const EInvalidAddressLength: u64 = 1;
 
     struct BridgeMessage has copy, drop, store {
         message_type: u8,
@@ -226,16 +228,25 @@ module bridge::message {
     /// [nonce:u64]
     /// [chain_id: u8]
     /// [blocklist_type: u8]
-    /// [validator_pub_keys: byte[][]]
+    /// [validator_length: u8]
+    /// [validator_ecdsa_addresses: byte[][]]
     public fun create_block_list_message(
         source_chain: u8,
         seq_num: u64,
         // 0: block, 1: unblock
         blocklist_type: u8,
-        validator_pub_key: vector<u8>,
+        validator_ecdsa_addresses: vector<vector<u8>>,
     ): BridgeMessage {
-        let payload = vector[blocklist_type];
-        vector::append(&mut payload, validator_pub_key);
+        let address_length = (vector::length(&validator_ecdsa_addresses) as u8);
+        let payload = vector[blocklist_type, address_length];
+
+        while (address_length > 0) {
+            let address = vector::pop_back(&mut validator_ecdsa_addresses);
+            assert!(vector::length(&address) == ECDSA_ADDRESS_LENGTH, EInvalidAddressLength);
+            vector::append(&mut payload, address);
+            address_length = address_length - 1;
+        };
+
         BridgeMessage {
             message_type: message_types::committee_blocklist(),
             message_version: CURRENT_MESSAGE_VERSION,
@@ -465,19 +476,20 @@ module bridge::message {
 
     #[test]
     fun test_blocklist_message_serialization() {
-        let validator_pub_key = hex::decode(b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964");
+        let validator_pub_key1 = hex::decode(b"b14d3c4f5fbfbcfb98af2d330000d49c95b93aa7");
+        let validator_pub_key2 = hex::decode(b"f7e93cc543d97af6632c9b8864417379dba4bf15");
 
         let blocklist_message = create_block_list_message(
             chain_ids::sui_testnet(), // source chain
             10, // seq_num
             0,
-            validator_pub_key
+            vector[validator_pub_key1, validator_pub_key2]
         );
         // Test message serialization
         let message = serialize_message(blocklist_message);
 
         let expected_msg = hex::decode(
-            b"0101000000000000000a0100029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964",
+            b"0101000000000000000a010002f7e93cc543d97af6632c9b8864417379dba4bf15b14d3c4f5fbfbcfb98af2d330000d49c95b93aa7",
         );
         assert!(message == expected_msg, 0);
         assert!(blocklist_message == deserialize_message(message), 0);
