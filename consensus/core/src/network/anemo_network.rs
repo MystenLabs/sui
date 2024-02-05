@@ -301,4 +301,120 @@ impl<S: NetworkService> NetworkManager<AnemoClient, S> for AnemoManager {
     }
 }
 
-// TODO: unit test
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+    use bytes::Bytes;
+    use consensus_config::{Authority, AuthorityIndex, Committee, NetworkKeyPair, ProtocolKeyPair};
+    use fastcrypto::traits::KeyPair;
+    use parking_lot::Mutex;
+    use rand::{rngs::StdRng, SeedableRng};
+
+    use crate::{
+        block::BlockRef,
+        context::Context,
+        error::ConsensusResult,
+        network::{
+            anemo_network::{AnemoClient, AnemoManager},
+            NetworkClient, NetworkManager, NetworkService,
+        },
+    };
+
+    struct TestService {
+        handle_send_block: Vec<(AuthorityIndex, Bytes)>,
+        handle_fetch_blocks: Vec<(AuthorityIndex, Vec<BlockRef>)>,
+    }
+
+    impl TestService {
+        pub(crate) fn new() -> Self {
+            Self {
+                handle_send_block: Vec::new(),
+                handle_fetch_blocks: Vec::new(),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl NetworkService for Mutex<TestService> {
+        async fn handle_send_block(
+            &self,
+            peer: AuthorityIndex,
+            block: Bytes,
+        ) -> ConsensusResult<()> {
+            self.lock().handle_send_block.push((peer, block));
+            Ok(())
+        }
+
+        async fn handle_fetch_blocks(
+            &self,
+            peer: AuthorityIndex,
+            block_refs: Vec<BlockRef>,
+        ) -> ConsensusResult<Vec<Bytes>> {
+            self.lock().handle_fetch_blocks.push((peer, block_refs));
+            Ok(vec![])
+        }
+    }
+
+    #[tokio::test]
+    async fn test_basics() {
+        let authorities_stake = vec![100, 100, 100, 100];
+        let mut authorities = vec![];
+        let mut key_pairs = vec![];
+        let mut rng = StdRng::from_seed([0; 32]);
+        for (i, stake) in authorities_stake.into_iter().enumerate() {
+            let network_keypair = NetworkKeyPair::generate(&mut rng);
+            let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
+            authorities.push(Authority {
+                stake,
+                address: format!("/ip4/127.0.0.1/udp/{}", 9090 + i).parse().unwrap(),
+                hostname: format!("test_host {i}").to_string(),
+                network_key: network_keypair.public().clone(),
+                protocol_key: protocol_keypair.public().clone(),
+            });
+            key_pairs.push((network_keypair, protocol_keypair));
+        }
+        let committee = Committee::new(0, authorities);
+        let (context, keys) = Context::new_for_test(4);
+
+        let context_0 = Arc::new(
+            context
+                .clone()
+                .with_committee(committee.clone())
+                .with_authority_index(committee.to_authority_index(0).unwrap()),
+        );
+        let manager_0 = AnemoManager::new(context_0.clone());
+        let client_0 =
+            <AnemoManager as NetworkManager<AnemoClient, Mutex<TestService>>>::client(&manager_0);
+        let service_0 = Arc::new(Mutex::new(TestService::new()));
+        manager_0.install_service(keys[0].0.copy(), service_0.clone());
+
+        let context_1 = Arc::new(
+            context
+                .clone()
+                .with_committee(committee.clone())
+                .with_authority_index(committee.to_authority_index(1).unwrap()),
+        );
+        let manager_1 = AnemoManager::new(context_1.clone());
+        let client_1 =
+            <AnemoManager as NetworkManager<AnemoClient, Mutex<TestService>>>::client(&manager_1);
+        let service_1 = Arc::new(Mutex::new(TestService::new()));
+        manager_0.install_service(keys[1].0.copy(), service_1.clone());
+
+        client_0
+            .send_block(
+                committee.to_authority_index(1).unwrap(),
+                &Bytes::from_static(b"msg 0"),
+            )
+            .await
+            .unwrap();
+        client_1
+            .send_block(
+                committee.to_authority_index(0).unwrap(),
+                &Bytes::from_static(b"msg 1"),
+            )
+            .await
+            .unwrap();
+    }
+}

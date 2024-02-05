@@ -4,12 +4,12 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::block_manager::BlockManager;
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use prometheus::Registry;
 use sui_protocol_config::ProtocolConfig;
 use tracing::info;
 
+use crate::block_manager::BlockManager;
 use crate::block_verifier::BlockVerifier;
 use crate::context::Context;
 use crate::core::{Core, CoreSignals};
@@ -103,10 +103,10 @@ mod tests {
     use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
     use fastcrypto::traits::ToFromBytes;
     use prometheus::Registry;
+    use sui_protocol_config::ProtocolConfig;
 
     use crate::authority_node::AuthorityNode;
     use crate::block_verifier::TestBlockVerifier;
-    use crate::context::Context;
 
     #[tokio::test]
     async fn start_and_stop() {
@@ -123,7 +123,7 @@ mod tests {
             own_index,
             committee,
             parameters,
-            Context::default_protocol_config_for_testing(),
+            ProtocolConfig::get_for_max_version_UNSAFE(),
             block_signer,
             signer,
             block_verifier,

@@ -23,7 +23,7 @@ pub type Stake = u64;
 
 /// Committee is the set of authorities that participate in the consensus protocol for this epoch.
 /// Its configuration is stored and computed on chain.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Committee {
     /// The epoch number of this committee
     epoch: Epoch,
@@ -64,7 +64,7 @@ impl Committee {
     ) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
         let mut authorities = vec![];
         let mut key_pairs = vec![];
-        let mut rng = StdRng::from_seed([9; 32]);
+        let mut rng = StdRng::from_seed([0; 32]);
         for (i, stake) in authorities_stake.into_iter().enumerate() {
             let network_keypair = NetworkKeyPair::generate(&mut rng);
             let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
@@ -146,7 +146,7 @@ impl Committee {
 ///
 /// NOTE: this is intentionally un-cloneable, to encourage only copying relevant fields.
 /// AuthorityIndex should be used to reference an authority instead.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Authority {
     /// Voting power of the authority in the committee.
     pub stake: Stake,
