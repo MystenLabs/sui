@@ -251,18 +251,21 @@ impl PTB {
             ));
         }
 
-        let files_to_resolve = ignore_comments
+        let mut files_to_resolve = vec![];
+
+        for f in ignore_comments
             .iter()
             .flat_map(|x| x.split("--"))
             .filter(|x| x.starts_with("file"))
             .map(|x| x.to_string().replace("file", "").replace(" ", ""))
-            .map(|x| {
-                let mut p = PathBuf::new();
-                p.push(parent.clone());
-                p.push(x);
-                std::fs::canonicalize(p)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        {
+            let mut p = PathBuf::new();
+            p.push(parent.clone());
+            p.push(f.clone());
+            let file = std::fs::canonicalize(p)
+                .map_err(|_| anyhow!("{} includes file {} which does not exist.", filename, f))?;
+            files_to_resolve.push(file);
+        }
 
         if let Some(files) = included_files.get_mut(&current_file) {
             files.extend(files_to_resolve);
