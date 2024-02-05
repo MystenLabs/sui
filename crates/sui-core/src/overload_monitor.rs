@@ -8,7 +8,7 @@ use std::sync::Weak;
 use std::time::Duration;
 use sui_config::node::OverloadThresholdConfig;
 use tokio::time::sleep;
-use tracing::info;
+use tracing::{debug, info};
 
 #[derive(Default)]
 pub struct AuthorityOverloadInfo {
@@ -73,6 +73,11 @@ fn check_authority_overload(
     let txn_ready_rate = authority.metrics.txn_ready_rate_tracker.lock().rate();
     let execution_rate = authority.metrics.execution_rate_tracker.lock().rate();
 
+    debug!(
+        "Check authority overload signal, queueing latency {:?}, ready rate {:?}, execution rate {:?}.",
+        queueing_latency, txn_ready_rate, execution_rate
+    );
+
     let (is_overload, load_shedding_percentage) =
         check_overload_signals(config, queueing_latency, txn_ready_rate, execution_rate);
     if is_overload {
@@ -126,11 +131,17 @@ fn check_overload_signals(
     let overload_status;
     let load_shedding_percentage;
     if queueing_latency > config.execution_queue_latency_hard_limit {
-        overload_status = true;
-        load_shedding_percentage = max(
-            calculate_load_shedding_percentage(txn_ready_rate, execution_rate),
-            config.min_load_shedding_percentage_above_hard_limit,
-        );
+        let calculated_load_shedding_percentage =
+            calculate_load_shedding_percentage(txn_ready_rate, execution_rate);
+        load_shedding_percentage = if calculated_load_shedding_percentage > 0 {
+            max(
+                calculated_load_shedding_percentage,
+                config.min_load_shedding_percentage_above_hard_limit,
+            )
+        } else {
+            0
+        };
+        overload_status = load_shedding_percentage > 0;
     } else if queueing_latency > config.execution_queue_latency_soft_limit {
         load_shedding_percentage =
             calculate_load_shedding_percentage(txn_ready_rate, execution_rate);
@@ -149,6 +160,13 @@ fn check_overload_signals(
 
 #[cfg(test)]
 mod tests {
+    use tokio::sync::mpsc::unbounded_channel;
+    use tokio::sync::mpsc::UnboundedReceiver;
+    use tokio::sync::mpsc::UnboundedSender;
+    use tokio::sync::oneshot;
+    use tokio::task::JoinHandle;
+    use tokio::time::{pause, resume, Instant};
+
     use super::*;
 
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
@@ -248,10 +266,17 @@ mod tests {
         );
 
         // When execution queueing latency hits hard limit and calculated shedding percentage
-        // is higher than
+        // is higher than min_load_shedding_percentage_above_hard_limit.
         assert_eq!(
             check_overload_signals(&config, Duration::from_secs(11), 240.0, 100.0),
             (true, 73)
+        );
+
+        // When execution queueing latency hits hard limit, but transaction ready rate
+        // is already lower than execution rate, don't start overload protection.
+        assert_eq!(
+            check_overload_signals(&config, Duration::from_secs(11), 20.0, 100.0),
+            (false, 0)
         );
 
         // Maximum transactions shed is cap by `max_load_shedding_percentage` config.
@@ -288,5 +313,82 @@ mod tests {
         let authority = Arc::downgrade(&state);
         drop(state);
         assert!(!check_authority_overload(&authority, &config));
+    }
+
+    fn start_load_generator(
+        tx: UnboundedSender<Instant>,
+        authority: Arc<AuthorityState>,
+    ) -> JoinHandle<()> {
+        let event_rate = 10;
+        tokio::spawn(async move {
+            loop {
+                if tx.send(Instant::now()).is_err() {
+                    return;
+                }
+                authority.metrics.txn_ready_rate_tracker.lock().record();
+                sleep(Duration::from_secs_f64(1.0 / event_rate as f64)).await;
+            }
+        })
+    }
+
+    fn start_executor(
+        mut rx: UnboundedReceiver<Instant>,
+        mut stop_rx: oneshot::Receiver<()>,
+        authority: Arc<AuthorityState>,
+    ) -> JoinHandle<()> {
+        let execution_rate = 1000;
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    Some(start_time) = rx.recv() => {
+                        authority.metrics.execution_rate_tracker.lock().record();
+                        authority.metrics.execution_queueing_latency.report(start_time.elapsed());
+                        sleep(Duration::from_secs_f64(1.0 / execution_rate as f64)).await;
+                    }
+                    _ = &mut stop_rx => {
+                        // Stop signal received
+                        println!("Task stopping");
+                        return;
+                    }
+                }
+            }
+        })
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    pub async fn test_workload_single_spike() {
+        let state = TestAuthorityBuilder::new().build().await;
+
+        let (tx, rx) = unbounded_channel();
+
+        let load_generator = start_load_generator(tx.clone(), state.clone());
+
+        let (stop_tx, stop_rx) = oneshot::channel();
+        let executor = start_executor(rx, stop_rx, state.clone());
+
+        sleep(Duration::from_secs(10)).await;
+        pause();
+        for _ in 0..20000 {
+            tx.send(Instant::now()).unwrap();
+        }
+        resume();
+        for _ in 0..40 {
+            // assert!(!state.overload_info.is_overload.load(Ordering::Relaxed));
+            info!(
+                "If overload {:?}, shedding percentage {:?}, queue {:?} ready {:?} exec {:?}",
+                state.overload_info.is_overload.load(Ordering::Relaxed),
+                state
+                    .overload_info
+                    .load_shedding_percentage
+                    .load(Ordering::Relaxed),
+                state.metrics.execution_queueing_latency.latency(),
+                state.metrics.txn_ready_rate_tracker.lock().rate(),
+                state.metrics.execution_rate_tracker.lock().rate(),
+            );
+            sleep(Duration::from_secs(1)).await;
+        }
+
+        stop_tx.send(()).unwrap();
+        let _ = tokio::join!(load_generator, executor);
     }
 }
