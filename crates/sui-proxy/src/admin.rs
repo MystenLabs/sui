@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::config::{PeerValidationConfig, RemoteWriteConfig};
+use crate::config::{DynamicPeerValidationConfig, RemoteWriteConfig, StaticPeerValidationConfig};
 use crate::handlers::publish_metrics;
 use crate::histogram_relay::HistogramRelay;
 use crate::middleware::{
@@ -8,6 +8,7 @@ use crate::middleware::{
 };
 use crate::peers::SuiNodeProvider;
 use crate::var;
+use anyhow::Error;
 use anyhow::Result;
 use axum::{extract::DefaultBodyLimit, middleware, routing::post, Extension, Router};
 use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PublicKey};
@@ -17,7 +18,10 @@ use std::io::BufReader;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_tls::{rustls::ServerConfig, AllowAll, CertVerifier, SelfSignedCertificate, TlsAcceptor};
+use sui_tls::{
+    public_key_from_certificate, rustls::ServerConfig, AllowAll, CertVerifier,
+    SelfSignedCertificate, TlsAcceptor,
+};
 use tokio::signal;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -102,7 +106,6 @@ pub fn app(
         )))
         .route_layer(middleware::from_fn(expect_mysten_proxy_header))
         .route_layer(middleware::from_fn(expect_content_length));
-
     if let Some(allower) = allower {
         router = router
             .route_layer(middleware::from_fn(expect_valid_public_key))
@@ -161,9 +164,30 @@ pub fn generate_self_cert(hostname: String) -> CertKeyPair {
     )
 }
 
+/// Load all pub keys from a given directory
+fn load_all_certs(path: &str) -> Result<Vec<Ed25519PublicKey>, Error> {
+    let mut pub_keys = vec![];
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        // Get the path of the current entry
+        let file_path = entry.path();
+        // Check if it's a regular file
+        if file_path.is_file() {
+            // Process the file
+            pub_keys.extend(
+                load_certs(file_path.as_path().to_str().unwrap())
+                    .iter()
+                    .map(|v| public_key_from_certificate(v).unwrap()),
+            );
+        }
+    }
+    Ok(pub_keys)
+}
+
 /// Load a certificate for use by the listening service
 fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
-    let certfile = fs::File::open(filename).expect("cannot open certificate file");
+    let certfile =
+        fs::File::open(filename).expect(&format!("cannot open certificate file: {}", filename));
     let mut reader = BufReader::new(certfile);
     rustls_pemfile::certs(&mut reader)
         .unwrap()
@@ -173,7 +197,8 @@ fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
 }
 
 fn load_private_key(filename: &str) -> rustls::PrivateKey {
-    let keyfile = fs::File::open(filename).expect("cannot open private key file");
+    let keyfile =
+        fs::File::open(filename).expect(&format!("cannot open private key file {}", filename));
     let mut reader = BufReader::new(keyfile);
 
     loop {
@@ -207,16 +232,26 @@ pub fn create_server_cert_default_allow(
 /// Verify clients against sui blockchain, clients that are not found in sui_getValidators
 /// will be rejected
 pub fn create_server_cert_enforce_peer(
-    peer_config: PeerValidationConfig,
+    dynamic_peers: DynamicPeerValidationConfig,
+    static_peers: Option<StaticPeerValidationConfig>,
 ) -> Result<(ServerConfig, Option<SuiNodeProvider>), sui_tls::rustls::Error> {
     let (Some(certificate_path), Some(private_key_path)) =
-        (peer_config.certificate_file, peer_config.private_key)
+        (dynamic_peers.certificate_file, dynamic_peers.private_key)
     else {
         return Err(sui_tls::rustls::Error::General(
             "missing certs to initialize server".into(),
         ));
     };
-    let allower = SuiNodeProvider::new(peer_config.url, peer_config.interval);
+    let static_peers = static_peers.unwrap_or_else(|| StaticPeerValidationConfig {
+        pub_key_path: "pub_keys/".into(),
+    });
+    let static_keys = load_all_certs(&static_peers.pub_key_path).map_err(|e| {
+        sui_tls::rustls::Error::General(format!(
+            "load_all_certs for pub keys failed for path; {}; {}",
+            static_peers.pub_key_path, e
+        ))
+    })?;
+    let allower = SuiNodeProvider::new(dynamic_peers.url, dynamic_peers.interval, static_keys);
     allower.poll_peer_list();
     let c = CertVerifier::new(allower.clone()).rustls_server_config(
         load_certs(&certificate_path),

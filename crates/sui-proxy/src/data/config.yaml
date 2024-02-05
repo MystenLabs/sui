@@ -1,11 +1,11 @@
 network: joenet
 inventory-hostname: joenet-local
-listen-address: 192.168.0.2:8080
+listen-address: 127.0.0.1:8080
 remote-write:
   url: http://unittest.abcd.io/api/v1/push
   username: foo
   password: fooman
-json-rpc:
+dynamic-peers:
   url: http://127.0.0.1:9000
   interval: 30
   certificate-file: /opt/joeman/fullchain.pem

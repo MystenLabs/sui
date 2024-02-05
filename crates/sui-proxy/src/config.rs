@@ -15,7 +15,8 @@ pub struct ProxyConfig {
     pub inventory_hostname: String,
     pub listen_address: SocketAddr,
     pub remote_write: RemoteWriteConfig,
-    pub json_rpc: PeerValidationConfig,
+    pub dynamic_peers: DynamicPeerValidationConfig,
+    pub static_peers: Option<StaticPeerValidationConfig>,
     pub metrics_address: String,
     pub histogram_address: String,
 }
@@ -38,10 +39,13 @@ pub struct RemoteWriteConfig {
     pub pool_max_idle_per_host: usize,
 }
 
+/// DynamicPeerValidationConfig controls what sui-node binaries that are functioning as a validator that we'll speak with.
+/// Peer in this case is peers within the consensus committee, for each epoch.  This membership is determined dynamically
+/// for each epoch via json-rpc calls to a full node.
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct PeerValidationConfig {
+pub struct DynamicPeerValidationConfig {
     /// url is the json-rpc url we use to obtain valid peers on the blockchain
     pub url: String,
     #[serde_as(as = "DurationSeconds<u64>")]
@@ -57,6 +61,17 @@ pub struct PeerValidationConfig {
     /// private key for tls
     /// please use an absolute path
     pub private_key: Option<String>,
+}
+
+/// StaticPeerValidationConfig, unlike the DynamicPeerValidationConfig, is not determined dynamically from rpc
+/// calls.  It instead searches a local directory for pub keys that we will add to an allow list.
+#[serde_as]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct StaticPeerValidationConfig {
+    /// ssfns should have known pub keys.  This directory will be searched for .pub keys
+    /// and without a match, we will not communicate with any callers
+    pub pub_key_path: String,
 }
 
 /// the default idle worker per host (reqwest to remote write url call)

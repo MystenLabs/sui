@@ -67,8 +67,28 @@ impl Allower for SuiNodeProvider {
 }
 
 impl SuiNodeProvider {
-    pub fn new(rpc_url: String, rpc_poll_interval: Duration) -> Self {
-        let nodes = Arc::new(RwLock::new(HashMap::new()));
+    pub fn new(
+        rpc_url: String,
+        rpc_poll_interval: Duration,
+        static_keys: Vec<Ed25519PublicKey>,
+    ) -> Self {
+        // build our hashmap with the static pub keys. we only do this one time at binary startup.
+        let nodes: HashMap<Ed25519PublicKey, SuiPeer> = static_keys
+            .into_iter()
+            .map(|v| {
+                (
+                    v.clone(),
+                    SuiPeer {
+                        name: v.to_string(),
+                        // no easy way to add these, so add a non-routable to clue in
+                        // something weird is here
+                        p2p_address: "169.254.0.0".parse().unwrap(),
+                        public_key: v,
+                    },
+                )
+            })
+            .collect();
+        let nodes = Arc::new(RwLock::new(nodes));
         Self {
             nodes,
             rpc_url,
