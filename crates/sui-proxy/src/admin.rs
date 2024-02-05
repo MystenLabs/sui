@@ -186,8 +186,8 @@ fn load_all_certs(path: &str) -> Result<Vec<Ed25519PublicKey>, Error> {
 
 /// Load a certificate for use by the listening service
 fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
-    let certfile =
-        fs::File::open(filename).expect(&format!("cannot open certificate file: {}", filename));
+    let certfile = fs::File::open(filename)
+        .unwrap_or_else(|e| panic!("cannot open certificate file: {}; {}", filename, e));
     let mut reader = BufReader::new(certfile);
     rustls_pemfile::certs(&mut reader)
         .unwrap()
@@ -197,8 +197,8 @@ fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
 }
 
 fn load_private_key(filename: &str) -> rustls::PrivateKey {
-    let keyfile =
-        fs::File::open(filename).expect(&format!("cannot open private key file {}", filename));
+    let keyfile = fs::File::open(filename)
+        .unwrap_or_else(|e| panic!("cannot open private key file {}; {}", filename, e));
     let mut reader = BufReader::new(keyfile);
 
     loop {
