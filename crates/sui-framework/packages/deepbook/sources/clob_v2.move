@@ -1297,11 +1297,6 @@ module deepbook::clob_v2 {
         )
     }
 
-    /// Place a limit order to the order book.
-    /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
-    /// When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.
-    /// When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
-    /// So please check that boolean value first before using the order id.
     fun place_limit_order_int<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         client_order_id: u64,
