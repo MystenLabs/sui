@@ -99,15 +99,21 @@ impl SuinsIndexer {
 
                 // If we already have a newer version of the same name record, skip insertion.
                 // That prevents us from falling into PG's bulk insertions double conflicts.
-                if name_records.get(&id).is_some_and(|x| x.sequence_number > object.version()) {
+                if name_records
+                    .get(&id)
+                    .is_some_and(|x| x.sequence_number > object.version())
+                {
                     continue;
                 }
 
-                name_records.insert(id, NameRecordChange {
-                    field: name_record,
-                    field_id: object.id(),
-                    sequence_number: object.version()
-                });
+                name_records.insert(
+                    id,
+                    NameRecordChange {
+                        field: name_record,
+                        field_id: object.id(),
+                        sequence_number: object.version(),
+                    },
+                );
             }
             // Parse subdomain wrappers and save them in our hashmap.
             // Later, we'll save the id of the wrapper in the name record.
