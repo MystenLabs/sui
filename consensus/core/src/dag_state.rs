@@ -11,6 +11,7 @@ use std::{
 
 use consensus_config::AuthorityIndex;
 
+use crate::error::ConsensusResult;
 use crate::{
     block::{BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
     commit::{Commit, CommitIndex},
@@ -106,7 +107,6 @@ impl DagState {
     }
 
     /// Accepts a blocks into DagState and keeps it in memory.
-    #[cfg(test)]
     pub(crate) fn accept_blocks(&mut self, blocks: Vec<VerifiedBlock>) {
         for block in blocks {
             self.accept_block(block);
@@ -212,6 +212,48 @@ impl DagState {
                     .clone()
             })
             .collect()
+    }
+
+    pub(crate) fn contains_block_in_cache_or_store(
+        &self,
+        block_ref: &BlockRef,
+    ) -> ConsensusResult<bool> {
+        let blocks = self.contains_blocks_in_cache_or_store(vec![*block_ref])?;
+        Ok(blocks.first().cloned().expect("Result should be present"))
+    }
+
+    /// Checks whether the required blocks are in cache, if exist, or otherwise will check in store. The method is not caching
+    /// back the results, so its expensive if keep asking for cache missing blocks.
+    pub(crate) fn contains_blocks_in_cache_or_store(
+        &self,
+        block_refs: Vec<BlockRef>,
+    ) -> ConsensusResult<Vec<bool>> {
+        let mut blocks = Vec::with_capacity(block_refs.len());
+        let mut missing = Vec::new();
+        for (index, block_ref) in block_refs.into_iter().enumerate() {
+            if self.recent_blocks.contains_key(&block_ref) {
+                blocks.push(true);
+            } else {
+                blocks.push(false);
+                missing.push((index, block_ref));
+            }
+        }
+
+        let missing_refs = missing
+            .iter()
+            .map(|(_, block_ref)| *block_ref)
+            .collect::<Vec<_>>();
+        for (i, result) in self
+            .store
+            .contains_blocks(&missing_refs)?
+            .into_iter()
+            .enumerate()
+        {
+            let index = missing[i].0;
+            blocks[index] = result;
+        }
+
+        Ok(blocks)
     }
 
     pub(crate) fn highest_accepted_round(&self) -> Round {

@@ -169,18 +169,21 @@ mod test {
     use crate::block_manager::BlockManager;
     use crate::context::Context;
     use crate::core::CoreSignals;
+    use crate::dag_state::DagState;
     use crate::storage::mem_store::MemStore;
     use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
+    use parking_lot::RwLock;
 
     #[tokio::test]
     async fn test_core_thread() {
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
-        let block_manager = BlockManager::new();
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let block_manager = BlockManager::new(context.clone(), dag_state);
         let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
         let transactions_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
-        let store = Arc::new(MemStore::new());
 
         let core = Core::new(
             context.clone(),
