@@ -39,6 +39,7 @@ impl QueuesManager {
     pub async fn run(&mut self) {
         loop {
             tokio::select! {
+                biased;
                 //TODO can we make sure we only process new_tx if done_tx is empty?
                 Some(done_tx) = self.done.recv() => {
                     self.clean_up(&done_tx).await;
