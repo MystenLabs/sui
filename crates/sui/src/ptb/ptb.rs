@@ -5,6 +5,7 @@ use crate::ptb::ptb_parser::build_ptb::PTBBuilder;
 use crate::ptb::ptb_parser::errors::render_errors;
 use crate::ptb::ptb_parser::parser::PTBParser;
 use anyhow::anyhow;
+use anyhow::Error;
 use clap::parser::ValuesRef;
 use clap::ArgMatches;
 use clap::CommandFactory;
@@ -121,7 +122,7 @@ impl PTB {
         cwd: PathBuf,
         matches: &ArgMatches,
         included_files: &mut BTreeMap<PathBuf, Vec<PathBuf>>,
-    ) -> Result<BTreeMap<usize, PTBCommand>, anyhow::Error> {
+    ) -> Result<BTreeMap<usize, PTBCommand>, Error> {
         let mut order = BTreeMap::<usize, PTBCommand>::new();
         for arg_name in matches.ids() {
             if matches.try_get_many::<clap::Id>(arg_name.as_str()).is_ok() {
@@ -150,7 +151,7 @@ impl PTB {
         cwd: PathBuf,
         ptb: BTreeMap<usize, PTBCommand>,
         included_files: &mut BTreeMap<PathBuf, Vec<PathBuf>>,
-    ) -> Result<BTreeMap<usize, PTBCommand>, anyhow::Error> {
+    ) -> Result<BTreeMap<usize, PTBCommand>, Error> {
         // the ptb input is a list of commands  and values, where the key is the index
         // of that value / command as it appearead in the args list on the CLI.
         // A command can have multiple values, and these values will appear sequential
@@ -222,7 +223,7 @@ impl PTB {
         current_file: PathBuf,
         start_index: usize,
         output: &mut BTreeMap<usize, PTBCommand>,
-    ) -> Result<usize, anyhow::Error> {
+    ) -> Result<usize, Error> {
         if filename.len() != 1 {
             return Err(anyhow!("The --file options should only pass one filename"));
         }
@@ -230,6 +231,8 @@ impl PTB {
             .first()
             .ok_or_else(|| anyhow!("Empty input file list."))?;
         let file_path = std::path::Path::new(&cwd).join(filename);
+        // TODO we might want to figure out how to handle missing symlinks, as canonicalize will
+        // error on a missing file. Prb we need to use path_abs.
         let file_path = std::fs::canonicalize(file_path)
             .map_err(|_| anyhow!("Cannot find the absolute path of this file {}", filename))?;
         if !file_path.exists() {
@@ -314,7 +317,7 @@ impl PTB {
     }
 
     /// Parses and executes the PTB with the sender as the current active address
-    pub async fn execute(self, matches: ArgMatches) -> Result<(), anyhow::Error> {
+    pub async fn execute(self, matches: ArgMatches) -> Result<(), Error> {
         let ptb_args_matches = matches
             .subcommand_matches("client")
             .ok_or_else(|| anyhow!("Expected the client command but got a different command"))?
@@ -513,7 +516,7 @@ fn insert_value<T>(
     arg_name: &clap::Id,
     matches: &ArgMatches,
     order: &mut BTreeMap<usize, PTBCommand>,
-) -> Result<(), anyhow::Error>
+) -> Result<(), Error>
 where
     T: Clone + Display + Send + Sync + 'static,
 {
@@ -542,7 +545,7 @@ where
 /// describing which file includes a file that was already included.
 fn check_for_cyclic_file_inclusions(
     included_files: &BTreeMap<PathBuf, Vec<PathBuf>>,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), Error> {
     let edges = included_files.iter().flat_map(|(k, vs)| {
         let vs = vs.iter().map(|v| v.to_str().unwrap());
         std::iter::repeat(k.to_str().unwrap()).zip(vs)
@@ -552,7 +555,7 @@ fn check_for_cyclic_file_inclusions(
     let sort = petgraph::algo::toposort(&graph, None);
     sort.map_err(|node| {
         anyhow!(
-            "Cannot have circular file inclusions. It appears that the issue is in the {:?} file",
+            "Cannot have circular file inclusions. It appears that the issue is in the {} file",
             node.node_id()
         )
     })?;
