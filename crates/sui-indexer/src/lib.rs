@@ -217,9 +217,9 @@ impl Indexer {
                 Some(last_seq_from_db as u64)
             };
 
-            let (checkpoint_handler, object_handler) = new_handlers(store, metrics, config);
+            let (checkpoint_handler, object_handler) = new_handlers(store, metrics.clone(), config);
 
-            IndexerBuilder::new()
+            IndexerBuilder::new(metrics)
                 .last_downloaded_checkpoint(last_downloaded_checkpoint)
                 .rest_url(&config.rpc_client_url)
                 .handler(checkpoint_handler)
