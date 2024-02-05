@@ -224,6 +224,8 @@ codes!(
         UnboundMacro: { msg: "unbound macro", severity: BlockingError },
         PositionalCallMismatch: { msg: "positional call mismatch", severity: NonblockingError },
         InvalidLabel: { msg: "invalid use of label", severity: BlockingError },
+        InvalidPattern: { msg: "invalud pattern", severity: BlockingError },
+        UnboundVariant: { msg: "unbound variant", severity: BlockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [
@@ -262,6 +264,7 @@ codes!(
         InvalidCopyOp: { msg: "invalid 'copy' usage", severity: NonblockingError },
         InvalidMoveOp: { msg: "invalid 'move' usage", severity: NonblockingError },
         ImplicitConstantCopy: { msg: "implicit copy of a constant", severity: Warning },
+        IncompletePattern: { msg: "non-exhaustive pattern", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
@@ -328,6 +331,10 @@ codes!(
             msg: "feature is not supported in specified edition",
             severity: BlockingError,
         },
+        FeatureInDevelopment: {
+            msg: "feature is under active development",
+            severity: BlockingError,
+        }
     ],
     Migration: [
         NeedsPublic: { msg: "move 2024 migration: public struct", severity: BlockingError },

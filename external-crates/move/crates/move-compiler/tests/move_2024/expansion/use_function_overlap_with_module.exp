@@ -6,9 +6,9 @@ error[E02001]: duplicate declaration, item, or annotation
   │                  │           
   │                  Alias previously defined here
 
-error[E03006]: unexpected name in this position
+error[E03003]: unbound module member
    ┌─ tests/move_2024/expansion/use_function_overlap_with_module.move:10:9
    │
 10 │         X::u()
-   │         ^ Expected a module or address in this position, not a module member
+   │         ^^^^ Invalid module access. Unbound struct 'u' in module '0x2::X'
 

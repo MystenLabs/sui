@@ -1,0 +1,10 @@
+error[E04006]: invalid subtype
+   ┌─ tests/move_2024/matching/bad_guard_4.move:16:21
+   │
+16 │             x if ({*x = Option::Some(1); false}) => 1,
+   │             -       ^
+   │             │       │
+   │             │       Invalid mutation. Expected a mutable reference
+   │             │       Expected: '&mut _'
+   │             Given: '&0x42::m::Option<{integer}>'
+

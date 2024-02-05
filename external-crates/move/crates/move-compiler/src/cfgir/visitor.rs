@@ -253,6 +253,7 @@ pub trait SimpleAbsInt: Sized {
                 self.exp(context, state, el);
             }
             C::JumpIf { cond: e, .. }
+            | C::VariantSwitch { subject: e, .. }
             | C::IgnoreAndPop { exp: e, .. }
             | C::Return { exp: e, .. }
             | C::Abort(e) => {
@@ -308,6 +309,12 @@ pub trait SimpleAbsInt: Sized {
                 locals.insert(*v, LocalState::Available(*loc, value));
             }
             L::Unpack(_, _, fields) => {
+                for (_, l) in fields {
+                    let v = <Self::State as SimpleDomain>::Value::default();
+                    self.lvalue(context, state, l, v)
+                }
+            }
+            L::UnpackVariant(_, _, _, _, _, fields) => {
                 for (_, l) in fields {
                     let v = <Self::State as SimpleDomain>::Value::default();
                     self.lvalue(context, state, l, v)
@@ -409,6 +416,12 @@ pub trait SimpleAbsInt: Sized {
                 default_values(1)
             }
             E::Pack(_, _, fields) => {
+                for (_, _, e) in fields {
+                    self.exp(context, state, e);
+                }
+                default_values(1)
+            }
+            E::PackVariant(_, _, _, fields) => {
                 for (_, _, e) in fields {
                     self.exp(context, state, e);
                 }

@@ -165,6 +165,21 @@ pub trait TypingVisitorContext {
                 self.visit_exp(e2);
                 self.visit_exp(e3);
             }
+            E::Match(esubject, arms) => {
+                self.visit_exp(esubject);
+                for sp!(_, arm) in arms.value.iter_mut() {
+                    if let Some(guard) = arm.guard.as_mut() {
+                        self.visit_exp(guard)
+                    }
+                    self.visit_exp(&mut arm.rhs);
+                }
+            }
+            E::VariantMatch(esubject, _, arms) => {
+                self.visit_exp(esubject);
+                for (_, earm) in arms.iter_mut() {
+                    self.visit_exp(earm);
+                }
+            }
             E::While(e1, _, e2) => {
                 self.visit_exp(e1);
                 self.visit_exp(e2);
@@ -187,6 +202,9 @@ pub trait TypingVisitorContext {
                 self.visit_exp(e2);
             }
             E::Pack(_, _, _, fields) => fields
+                .iter_mut()
+                .for_each(|(_, _, (_, (_, e)))| self.visit_exp(e)),
+            E::PackVariant(_, _, _, _, fields) => fields
                 .iter_mut()
                 .for_each(|(_, _, (_, (_, e)))| self.visit_exp(e)),
             E::ExpList(list) => {

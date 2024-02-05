@@ -505,12 +505,18 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
     use Bytecode::*;
 
     vec![
-        (MoveToDeprecated(StructDefinitionIndex::new(0)), GasCost::new(0, 0)),
+        (
+            MoveToDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
         (
             MoveToGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(0, 0),
         ),
-        (MoveFromDeprecated(StructDefinitionIndex::new(0)), GasCost::new(0, 0)),
+        (
+            MoveFromDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
         (
             MoveFromGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(0, 0),
@@ -572,7 +578,10 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
         (LdTrue, GasCost::new(0, 0)),
         (Mod, GasCost::new(0, 0)),
         (BrFalse(0), GasCost::new(0, 0)),
-        (ExistsDeprecated(StructDefinitionIndex::new(0)), GasCost::new(0, 0)),
+        (
+            ExistsDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
         (
             ExistsGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(0, 0),
@@ -644,7 +653,10 @@ pub fn unit_cost_schedule() -> CostTable {
 pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
     use Bytecode::*;
     vec![
-        (MoveToDeprecated(StructDefinitionIndex::new(0)), GasCost::new(13, 1)),
+        (
+            MoveToDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(13, 1),
+        ),
         (
             MoveToGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(27, 1),
@@ -714,7 +726,10 @@ pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
         (LdTrue, GasCost::new(1, 1)),
         (Mod, GasCost::new(1, 1)),
         (BrFalse(0), GasCost::new(1, 1)),
-        (ExistsDeprecated(StructDefinitionIndex::new(0)), GasCost::new(41, 1)),
+        (
+            ExistsDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(41, 1),
+        ),
         (
             ExistsGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(34, 1),

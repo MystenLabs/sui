@@ -241,6 +241,9 @@ fn module(context: &mut Context, mident: ModuleIdent, mdef: &T::ModuleDefinition
     mdef.structs
         .iter()
         .for_each(|(_, _, sdef)| struct_def(context, sdef));
+    mdef.enums
+        .iter()
+        .for_each(|(_, _, edef)| enum_def(context, edef));
     mdef.functions
         .iter()
         .for_each(|(_, _, fdef)| function(context, fdef));
@@ -263,12 +266,20 @@ fn function_signature(context: &mut Context, sig: &N::FunctionSignature) {
 }
 
 //**************************************************************************************************
-// Struct
+// Data Types
 //**************************************************************************************************
 
 fn struct_def(context: &mut Context, sdef: &N::StructDefinition) {
     if let N::StructFields::Defined(fields) = &sdef.fields {
         fields.iter().for_each(|(_, _, (_, bt))| type_(context, bt));
+    }
+}
+
+fn enum_def(context: &mut Context, edef: &N::EnumDefinition) {
+    for (_, _, variant) in &edef.variants {
+        if let N::VariantFields::Defined(fields) = &variant.fields {
+            fields.iter().for_each(|(_, _, (_, bt))| type_(context, bt));
+        }
     }
 }
 
@@ -344,6 +355,9 @@ fn lvalue(context: &mut Context, sp!(loc, lv_): &T::LValue) {
                 lvalue(context, field)
             }
         }
+        L::BorrowUnpackVariant(..) | L::UnpackVariant(..) => {
+            panic!("ICE shouldn't occur before match expansions")
+        }
     }
 }
 
@@ -373,6 +387,17 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e2);
             exp(context, e3);
         }
+        E::Match(esubject, arms) => {
+            exp(context, esubject);
+            for sp!(_, arm) in &arms.value {
+                pat(context, &arm.pattern);
+                if let Some(guard) = arm.guard.as_ref() {
+                    exp(context, guard)
+                }
+                exp(context, &arm.rhs);
+            }
+        }
+        E::VariantMatch(..) => panic!("ICE shouldn't find variant match before HLIR lowerng"),
         E::While(e1, _, e2) => {
             exp(context, e1);
             exp(context, e2);
@@ -407,6 +432,13 @@ fn exp(context: &mut Context, e: &T::Exp) {
                 exp(context, e)
             }
         }
+        E::PackVariant(m, _, _, tys, fields) => {
+            context.add_usage(*m, e.exp.loc);
+            types(context, tys);
+            for (_, _, (_, (_, e))) in fields {
+                exp(context, e)
+            }
+        }
         E::ExpList(list) => {
             for l in list {
                 match l {
@@ -434,5 +466,24 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Continue(_)
         | E::BorrowLocal(..)
         | E::UnresolvedError => (),
+    }
+}
+
+fn pat(context: &mut Context, p: &T::MatchPattern) {
+    use T::UnannotatedPat_ as P;
+    match &p.pat.value {
+        P::Constructor(m, _, _, tys, fields) | P::BorrowConstructor(m, _, _, tys, fields) => {
+            context.add_usage(*m, p.pat.loc);
+            types(context, tys);
+            for (_, _, (_, (_, p))) in fields {
+                pat(context, p)
+            }
+        }
+        P::At(_, inner) => pat(context, inner),
+        P::Or(lhs, rhs) => {
+            pat(context, lhs);
+            pat(context, rhs);
+        }
+        P::Wildcard | P::ErrorPat | P::Binder(_) | P::Literal(_) => (),
     }
 }

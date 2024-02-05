@@ -2,17 +2,17 @@ error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/standalone_module_ident.move:8:17
   │
 8 │         let x = X; x;
-  │                 ^ Unexpected module identifier. A module identifier is not a valid expression
+  │                 ^ Unexpected module. A module identifier is not a valid expression
 
 error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/standalone_module_ident.move:9:17
   │
 9 │         let x = 0x2::X; x;
-  │                 ^^^^^^ Unexpected module identifier. A module identifier is not a valid expression
+  │                 ^^^^^^ Unexpected module. A module identifier is not a valid expression
 
 error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/naming/standalone_module_ident.move:10:17
    │
 10 │         let y = 0x2::Y; y;
-   │                 ^^^^^^ Unexpected module identifier. A module identifier is not a valid expression
+   │                 ^^^^^^ Unexpected module. A module identifier is not a valid expression
 
