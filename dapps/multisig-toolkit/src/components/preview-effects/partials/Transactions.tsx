@@ -91,8 +91,9 @@ const FOOTERS: Record<string, string> = {
 	TransferObjects: 'TransferObjects (transfers the list of objects to the specified address)',
 	SplitCoins: 'SplitCoins (splits the coin into multiple coins)',
 	MergeCoins: 'MergeCoins (merges the coins into a single coin)',
-	Publish: 'Publishes a new package',
-	Upgrade: 'Upgrades a package',
+	Publish: 'Publish (publishes a new package)',
+	Upgrade: 'Upgrade (upgrades a package)',
+	MakeMoveVec: 'MakeMoveVec (creates a vector of Move objects)',
 };
 
 function Transaction({
@@ -179,6 +180,16 @@ function Transaction({
 
 					{('Publish' in transaction || 'Upgrade' in transaction) && (
 						<>{JSON.stringify(transaction)}</>
+					)}
+
+					{'MakeMoveVec' in transaction && (
+						<>
+							{/* TODO: Create a sample tx with MakeMoveVec to render this better. */}
+							<div>
+								<label>Objects: </label>
+								{JSON.stringify(transaction.MakeMoveVec)}
+							</div>
+						</>
 					)}
 				</>
 			</PreviewCard.Body>
