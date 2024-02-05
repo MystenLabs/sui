@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, panic, sync::Arc, thread::sleep, time::Duration};
 
-use anemo::Response;
+use anemo::{types::PeerInfo, PeerId, Response};
 use anemo_tower::auth::{AllowedPeers, RequireAuthorizationLayer};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
@@ -64,7 +64,7 @@ impl AnemoClient {
         };
 
         let authority = self.context.committee.authority(peer);
-        let peer_id = anemo::PeerId(authority.network_key.0.into());
+        let peer_id = PeerId(authority.network_key.0.into());
         if let Some(peer) = network.peer(peer_id) {
             return Ok(ConsensusRpcClient::new(peer));
         };
@@ -145,7 +145,7 @@ impl NetworkClient for AnemoClient {
 #[allow(unused)]
 struct AnemoServiceProxy<S: NetworkService> {
     context: Arc<Context>,
-    peer_map: BTreeMap<anemo::PeerId, AuthorityIndex>,
+    peer_map: BTreeMap<PeerId, AuthorityIndex>,
     service: Arc<S>,
 }
 
@@ -155,7 +155,7 @@ impl<S: NetworkService> AnemoServiceProxy<S> {
             .committee
             .authorities()
             .map(|(index, authority)| {
-                let peer_id = anemo::PeerId(authority.network_key.0.into());
+                let peer_id = PeerId(authority.network_key.0.into());
                 (peer_id, index)
             })
             .collect();
@@ -263,7 +263,7 @@ impl<S: NetworkService> NetworkManager<AnemoClient, S> for AnemoManager {
             .context
             .committee
             .authorities()
-            .map(|(_i, authority)| anemo::PeerId(authority.network_key.0.to_bytes()));
+            .map(|(_i, authority)| PeerId(authority.network_key.0.to_bytes()));
         // TODO: add layers for metrics and additional filters.
         let routes = anemo::Router::new()
             .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
@@ -335,6 +335,17 @@ impl<S: NetworkService> NetworkManager<AnemoClient, S> for AnemoManager {
                 }
             }
         };
+
+        for (_i, authority) in self.context.committee.authorities() {
+            let peer_id = PeerId(authority.network_key.0.to_bytes());
+            let address = authority.address.to_anemo_address().unwrap();
+            let peer_info = PeerInfo {
+                peer_id,
+                affinity: anemo::types::PeerAffinity::High,
+                address: vec![address.clone()],
+            };
+            network.known_peers().insert(peer_info);
+        }
 
         self.client.set_network(network);
     }
@@ -421,6 +432,7 @@ mod test {
         let service_1 = Arc::new(Mutex::new(TestService::new()));
         manager_1.install_service(keys[1].0.copy(), service_1.clone());
 
+        // Test that servers can receive client RPCs.
         client_0
             .send_block(
                 context.committee.to_authority_index(1).unwrap(),
@@ -435,5 +447,40 @@ mod test {
             )
             .await
             .unwrap();
+        assert_eq!(service_0.lock().handle_send_block.len(), 1);
+        assert_eq!(service_0.lock().handle_send_block[0].0.value(), 1);
+        assert_eq!(service_1.lock().handle_send_block.len(), 1);
+        assert_eq!(service_1.lock().handle_send_block[0].0.value(), 0);
+
+        // `Committee` is generated with the same random seed in Context::new_for_test(),
+        // so the first 4 authorities are the same.
+        let (context_4, keys_4) = Context::new_for_test(5);
+        let context_4 = Arc::new(
+            context_4
+                .clone()
+                .with_authority_index(context_4.committee.to_authority_index(4).unwrap()),
+        );
+        let manager_4 = AnemoManager::new(context_4.clone());
+        let client_4 =
+            <AnemoManager as NetworkManager<AnemoClient, Mutex<TestService>>>::client(&manager_4);
+        let service_4 = Arc::new(Mutex::new(TestService::new()));
+        manager_4.install_service(keys_4[4].0.copy(), service_4.clone());
+
+        // client_4 should not be able to reach service_0 or service_1, because of the
+        // AllowedPeers filter.
+        assert!(client_4
+            .send_block(
+                context.committee.to_authority_index(0).unwrap(),
+                &Bytes::from_static(b"msg 2"),
+            )
+            .await
+            .is_err());
+        assert!(client_4
+            .send_block(
+                context.committee.to_authority_index(1).unwrap(),
+                &Bytes::from_static(b"msg 3"),
+            )
+            .await
+            .is_err());
     }
 }
