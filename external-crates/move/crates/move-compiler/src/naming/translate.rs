@@ -7,7 +7,7 @@ use crate::{
     diagnostics::codes::*,
     editions::FeatureGate,
     expansion::{
-        ast::{self as E, AbilitySet, ModuleIdent, Visibility},
+        ast::{self as E, AbilitySet, Ellipsis, ModuleIdent, Visibility},
         translate::is_valid_struct_constant_or_schema_name as is_constant_name,
     },
     naming::{
@@ -106,7 +106,7 @@ struct StructType {
     original_mident: ModuleIdent,
     decl_loc: Loc,
     arity: usize,
-    is_positional: bool,
+    field_info: FieldInfo,
 }
 
 #[derive(Debug, Clone)]
@@ -121,8 +121,32 @@ struct EnumType {
 struct VariantConstructor {
     original_variant_name: Name,
     decl_loc: Loc,
-    is_positional: bool,
-    is_empty: bool,
+    field_info: FieldInfo,
+}
+
+#[derive(Debug, Clone)]
+enum FieldInfo {
+    Positional(usize),
+    Named(BTreeSet<Field>),
+    Empty,
+}
+
+impl FieldInfo {
+    pub fn is_empty(&self) -> bool {
+        matches!(self, FieldInfo::Empty)
+    }
+
+    pub fn is_positional(&self) -> bool {
+        matches!(self, FieldInfo::Positional(_))
+    }
+
+    pub fn field_count(&self) -> usize {
+        match self {
+            FieldInfo::Positional(n) => *n,
+            FieldInfo::Named(fields) => fields.len(),
+            FieldInfo::Empty => 0,
+        }
+    }
 }
 
 enum ResolvedFunction {
@@ -191,13 +215,20 @@ impl<'env> Context<'env> {
                         .map(|(s, sdef)| {
                             let arity = sdef.type_parameters.len();
                             let sname = s.value();
-                            let is_positional =
-                                matches!(sdef.fields, E::StructFields::Positional(_));
+                            let field_info = match &sdef.fields {
+                                E::StructFields::Positional(fields) => {
+                                    FieldInfo::Positional(fields.len())
+                                }
+                                E::StructFields::Named(f) => {
+                                    FieldInfo::Named(f.key_cloned_iter().map(|(k, _)| k).collect())
+                                }
+                                E::StructFields::Native(_) => FieldInfo::Empty,
+                            };
                             let st = StructType {
                                 original_mident: mident,
                                 decl_loc: s.loc(),
                                 arity,
-                                is_positional,
+                                field_info,
                             };
                             let type_info = ModuleType::Struct(Box::new(st));
                             (sname, type_info)
@@ -209,16 +240,22 @@ impl<'env> Context<'env> {
                         .map(|(e, edef)| {
                             let arity = edef.type_parameters.len();
                             let ename = e.value();
-                            let variants =
-                                edef.variants.clone().map(|name, v| VariantConstructor {
+                            let variants = edef.variants.clone().map(|name, v| {
+                                let field_info = match &v.fields {
+                                    E::VariantFields::Named(fields) => FieldInfo::Named(
+                                        fields.key_cloned_iter().map(|(k, _)| k).collect(),
+                                    ),
+                                    E::VariantFields::Positional(tys) => {
+                                        FieldInfo::Positional(tys.len())
+                                    }
+                                    E::VariantFields::Empty => FieldInfo::Empty,
+                                };
+                                VariantConstructor {
                                     original_variant_name: name.0,
                                     decl_loc: v.loc,
-                                    is_positional: matches!(
-                                        v.fields,
-                                        E::VariantFields::Positional(_)
-                                    ),
-                                    is_empty: matches!(v.fields, E::VariantFields::Empty),
-                                });
+                                    field_info,
+                                }
+                            });
                             let et = EnumType {
                                 original_mident: mident,
                                 arity,
@@ -433,7 +470,7 @@ impl<'env> Context<'env> {
         verb: &str,
         ma: E::ModuleAccess,
         etys_opt: Option<Vec<E::Type>>,
-    ) -> Option<(ModuleIdent, DatatypeName, Option<Vec<N::Type>>, bool)> {
+    ) -> Option<(ModuleIdent, DatatypeName, Option<Vec<N::Type>>, FieldInfo)> {
         match self.resolve_type(ma) {
             ResolvedType::Unbound => {
                 assert!(self.env.has_errors());
@@ -474,7 +511,7 @@ impl<'env> Context<'env> {
                             let name_f = || format!("{}::{}", &m, &n);
                             check_type_argument_arity(self, loc, name_f, tys, struct_type.arity)
                         });
-                        Some((m, DatatypeName(n), tys_opt, struct_type.is_positional))
+                        Some((m, DatatypeName(n), tys_opt, struct_type.field_info))
                     }
                     ModuleType::Enum(..) => {
                         self.env.add_diag(diag!(
@@ -631,8 +668,7 @@ impl<'env> Context<'env> {
         VariantName,
         Option<Vec<N::Type>>,
         Loc,
-        /* is_positional */ bool,
-        /* is_empty */ bool,
+        FieldInfo,
     )> {
         match &ma {
             sp!(_, E::ModuleAccess_::Variant(sp!(_, _), variant_name)) => {
@@ -646,8 +682,7 @@ impl<'env> Context<'env> {
                             VariantName(vdef.original_variant_name),
                             ty_opts,
                             vdef.decl_loc,
-                            vdef.is_positional,
-                            vdef.is_empty,
+                            vdef.field_info.clone(),
                         ))
                     } else {
                         let primary_msg = format!(
@@ -1706,8 +1741,8 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                     assert!(context.env.has_errors());
                     NE::UnresolvedError
                 }
-                Some((m, en, vn, tys_opt, dloc, is_positional, is_empty)) => {
-                    if !is_empty {
+                Some((m, en, vn, tys_opt, dloc, field_info)) => {
+                    if !field_info.is_empty() {
                         let msg =
                             "Invalid variant instantiation. Non-empty variant instantiations \
                                    require arguments";
@@ -1717,7 +1752,7 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                             (eloc, msg),
                             (dloc, defn_msg)
                         );
-                        if is_positional {
+                        if field_info.is_positional() {
                             diag.add_note("Pass arguments to positional variants using '()'");
                         } else {
                             diag.add_note("Pass arguments to named variant fields using '{ .. }'");
@@ -1878,8 +1913,8 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                     assert!(context.env.has_errors());
                     NE::UnresolvedError
                 }
-                Some((m, en, vn, tys_opt, dloc, is_positional, is_empty)) => {
-                    if is_empty {
+                Some((m, en, vn, tys_opt, dloc, field_info)) => {
+                    if field_info.is_empty() {
                         let msg = "Invalid variant instantiation. Empty variant instantiations \
                                    do not use field syntax";
                         let defn_msg = "Variant is defined here.";
@@ -1890,7 +1925,7 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                         );
                         diag.add_note("Remove '{}' after the variant name");
                         context.env.add_diag(diag);
-                    } else if is_positional {
+                    } else if field_info.is_positional() {
                         let msg = "Invalid variant instantiation. Positional variant fields \
                                    require positional instantiations.";
                         let defn_msg = "Variant is defined here.";
@@ -1913,8 +1948,8 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                     assert!(context.env.has_errors());
                     NE::UnresolvedError
                 }
-                Some((m, sn, tys_opt, is_positional)) => {
-                    if is_positional {
+                Some((m, sn, tys_opt, field_info)) => {
+                    if field_info.is_positional() {
                         let msg = "Invalid struct instantiation. Positional struct declarations \
                              require positional instantiations.";
                         context
@@ -1969,8 +2004,8 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                     assert!(context.env.has_errors());
                     NE::UnresolvedError
                 }
-                Some((m, sn, tys_opt, is_positional)) => {
-                    if !is_positional {
+                Some((m, sn, tys_opt, field_info)) => {
+                    if !field_info.is_positional() {
                         let msg = "Invalid struct instantiation. Named struct declarations \
                                    require named instantiations.";
                         context
@@ -2002,8 +2037,8 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                     assert!(context.env.has_errors());
                     NE::UnresolvedError
                 }
-                Some((m, en, vn, tys_opt, dloc, is_positional, is_empty)) => {
-                    if is_empty {
+                Some((m, en, vn, tys_opt, dloc, field_info)) => {
+                    if field_info.is_empty() {
                         let msg = "Invalid variant instantiation. Empty variant instantiations \
                                    do not use call syntax";
                         let defn_msg = "Variant is defined here.";
@@ -2014,7 +2049,7 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                         );
                         diag.add_note("Remove '()' after the variant name");
                         context.env.add_diag(diag);
-                    } else if !is_positional {
+                    } else if !field_info.is_positional() {
                         let msg = "Invalid variant instantiation. Named variant fields \
                                    require named instantiations.";
                         let defn_msg = "Variant is defined here.";
@@ -2240,22 +2275,71 @@ fn match_arm(context: &mut Context, sp!(aloc, arm): E::MatchArm) -> N::MatchArm 
     sp(aloc, arm)
 }
 
+fn expand_positional_ellipsis<T>(
+    missing: isize,
+    args: Vec<E::Ellipsis<Spanned<T>>>,
+    replacement: impl Fn(Loc) -> Spanned<T>,
+) -> Vec<(Field, (usize, Spanned<T>))> {
+    args.into_iter()
+        .flat_map(|p| match p {
+            E::Ellipsis::Binder(p) => vec![p],
+            E::Ellipsis::Ellipsis(eloc) => {
+                (0..=missing).map(|_| replacement(eloc)).collect::<Vec<_>>()
+            }
+        })
+        .enumerate()
+        .map(|(idx, p)| {
+            let field = Field::add_loc(p.loc, format!("{idx}").into());
+            (field, (idx, p))
+        })
+        .collect()
+}
+
+fn expand_named_ellipsis<T>(
+    field_info: &FieldInfo,
+    head_loc: Loc,
+    eloc: Loc,
+    args: &mut UniqueMap<Field, (usize, Spanned<T>)>,
+    replacement: impl Fn(Loc) -> Spanned<T>,
+) {
+    let mut fields = match field_info {
+        FieldInfo::Empty => BTreeSet::new(),
+        FieldInfo::Named(fields) => fields.clone(),
+        FieldInfo::Positional(num_fields) => (0..*num_fields)
+            .map(|i| Field::add_loc(head_loc, format!("{i}").into()))
+            .collect(),
+    };
+
+    for (k, _) in args.key_cloned_iter() {
+        fields.remove(&k);
+    }
+
+    let start_idx = args.len();
+    for (i, f) in fields.into_iter().enumerate() {
+        args.add(
+            Field(sp(eloc, f.value())),
+            (start_idx + i, replacement(eloc)),
+        )
+        .unwrap();
+    }
+}
+
 fn pat(context: &mut Context, sp!(ploc, pat_): E::MatchPattern) -> N::MatchPattern {
     use E::MatchPattern_ as EP;
     use N::MatchPattern_ as NP;
 
     let pat_: N::MatchPattern_ = match pat_ {
         EP::PositionalConstructor(name, etys_opt, args) => {
-            if let Some((mident, enum_, variant, tys_opt, _, is_positional, is_empty)) =
+            if let Some((mident, enum_, variant, tys_opt, _, field_info)) =
                 context.resolve_variant_name(ploc, "pattern", name, etys_opt)
             {
-                if is_empty {
+                if field_info.is_empty() {
                     let msg = "Invalid variant pattern. Empty variants \
                                are not matched with positional variant syntax";
                     let mut diag = diag!(NameResolution::PositionalCallMismatch, (ploc, msg));
                     diag.add_note("Remove '()' after the variant name");
                     context.env.add_diag(diag);
-                } else if !is_positional {
+                } else if !field_info.is_positional() {
                     let msg = "Invalid variant pattern. Named variant declarations \
                                    require named patterns.";
                     context
@@ -2263,35 +2347,47 @@ fn pat(context: &mut Context, sp!(ploc, pat_): E::MatchPattern) -> N::MatchPatte
                         .add_diag(diag!(NameResolution::PositionalCallMismatch, (ploc, msg)));
                 }
 
-                let args = UniqueMap::maybe_from_iter(args.value.into_iter().enumerate().map(
-                    |(idx, p)| {
-                        let field = Field::add_loc(p.loc, format!("{idx}").into());
-                        (field, (idx, pat(context, p)))
-                    },
-                ))
+                let fields = field_info.field_count();
+
+                // NB: We may have more args than fields! Since we allow `..` to be zero-or-more
+                // wildcards.
+                let missing = (fields as isize) - args.value.len() as isize;
+                let args =
+                    expand_positional_ellipsis(missing, args.value, |eloc| sp(eloc, EP::Wildcard));
+                let result_args = UniqueMap::maybe_from_iter(
+                    args.into_iter()
+                        .map(|(f, (i, p))| (f, (i, pat(context, p)))),
+                )
                 .unwrap();
-                NP::Constructor(mident, enum_, variant, tys_opt, args)
+                NP::Constructor(mident, enum_, variant, tys_opt, result_args)
             } else {
                 assert!(context.env.has_errors());
                 NP::ErrorPat
             }
         }
-        EP::FieldConstructor(name, etys_opt, args) => {
-            if let Some((mident, enum_, variant, tys_opt, _, is_positional, is_empty)) =
+        EP::FieldConstructor(name, etys_opt, mut args, ellipsis) => {
+            if let Some((mident, enum_, variant, tys_opt, _, field_info)) =
                 context.resolve_variant_name(ploc, "pattern", name, etys_opt)
             {
-                if is_empty {
+                if field_info.is_empty() {
                     let msg = "Invalid variant pattern. Empty variants \
                                are not matched with variant field syntax";
                     let mut diag = diag!(NameResolution::PositionalCallMismatch, (ploc, msg));
                     diag.add_note("Remove '{}' after the variant name");
                     context.env.add_diag(diag);
-                } else if is_positional {
+                } else if field_info.is_positional() {
                     let msg = "Invalid variant pattern. Positional variant declarations \
                                    require positional patterns.";
                     context
                         .env
                         .add_diag(diag!(NameResolution::PositionalCallMismatch, (ploc, msg)));
+                }
+
+                // If we have an ellipsis fill in any missing patterns
+                if let Some(ellipsis_loc) = ellipsis {
+                    expand_named_ellipsis(&field_info, ploc, ellipsis_loc, &mut args, |eloc| {
+                        sp(eloc, EP::Wildcard)
+                    });
                 }
 
                 let args = args.map(|_, (idx, p)| (idx, pat(context, p)));
@@ -2302,7 +2398,7 @@ fn pat(context: &mut Context, sp!(ploc, pat_): E::MatchPattern) -> N::MatchPatte
             }
         }
         EP::HeadConstructor(name, etys_opt) => {
-            if let Some((mident, enum_, variant, tys_opt, _, _is_positional, _is_empty)) =
+            if let Some((mident, enum_, variant, tys_opt, _, _field_info)) =
                 context.resolve_variant_name(ploc, "pattern", name, etys_opt)
             {
                 // No need to chck is_empty / is_positional because typing will report the errors.
@@ -2409,9 +2505,9 @@ fn lvalue(
                 C::Bind => "deconstructing binding",
                 C::Assign => "deconstructing assignment",
             };
-            let (m, sn, tys_opt, is_positional) =
+            let (m, sn, tys_opt, field_info) =
                 context.resolve_struct_name(loc, msg, tn, etys_opt)?;
-            if is_positional && !matches!(efields, E::FieldBindings::Positional(_)) {
+            if field_info.is_positional() && !matches!(efields, E::FieldBindings::Positional(_)) {
                 let msg = "Invalid deconstruction. Positional struct field declarations require \
                            positional deconstruction";
                 context
@@ -2419,21 +2515,38 @@ fn lvalue(
                     .add_diag(diag!(NameResolution::PositionalCallMismatch, (loc, msg)));
             }
 
-            if !is_positional && matches!(efields, E::FieldBindings::Positional(_)) {
+            if !field_info.is_positional() && matches!(efields, E::FieldBindings::Positional(_)) {
                 let msg = "Invalid deconstruction. Named struct field declarations require \
                            named deconstruction";
                 context
                     .env
                     .add_diag(diag!(NameResolution::PositionalCallMismatch, (loc, msg)));
             }
+            let make_ignore = |loc| {
+                let var = sp(loc, Symbol::from("_"));
+                let name = E::ModuleAccess::new(loc, E::ModuleAccess_::Name(var));
+                sp(loc, E::LValue_::Var(None, name, None))
+            };
             let efields = match efields {
-                E::FieldBindings::Named(efields) => efields,
+                E::FieldBindings::Named(mut efields, ellipsis) => {
+                    if let Some(ellipsis_loc) = ellipsis {
+                        expand_named_ellipsis(
+                            &field_info,
+                            loc,
+                            ellipsis_loc,
+                            &mut efields,
+                            make_ignore,
+                        );
+                    }
+
+                    efields
+                }
                 E::FieldBindings::Positional(lvals) => {
-                    let lvals = lvals.into_iter().enumerate().map(|(idx, l)| {
-                        let field_name = Field::add_loc(l.loc, format!("{idx}").into());
-                        (field_name, (idx, l))
-                    });
-                    UniqueMap::maybe_from_iter(lvals).unwrap()
+                    let fields = field_info.field_count();
+                    let missing = (fields as isize) - lvals.len() as isize;
+
+                    let expanded_lvals = expand_positional_ellipsis(missing, lvals, make_ignore);
+                    UniqueMap::maybe_from_iter(expanded_lvals.into_iter()).unwrap()
                 }
             };
             let nfields =

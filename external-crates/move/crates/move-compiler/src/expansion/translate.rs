@@ -3194,6 +3194,20 @@ fn exp_dotted(context: &mut Context, sp!(loc, pdotted_): P::Exp) -> Option<E::Ex
 // Match and Patterns
 //**************************************************************************************************
 
+fn check_ellipsis_usage(context: &mut Context, ellipsis_locs: &[Loc]) {
+    if ellipsis_locs.len() > 1 {
+        let mut diag = diag!(
+            NameResolution::InvalidPattern,
+            (ellipsis_locs[0], "Multiple ellipsis patterns"),
+        );
+        for loc in ellipsis_locs.iter().skip(1) {
+            diag.add_secondary_label((*loc, "Ellipsis pattern used again here"));
+        }
+        diag.add_note("An ellipsis pattern can only appear once in a constructor's pattern.");
+        context.env().add_diag(diag);
+    }
+}
+
 fn match_arm(context: &mut Context, sp!(loc, arm_): P::MatchArm) -> E::MatchArm {
     let P::MatchArm_ {
         pattern,
@@ -3266,14 +3280,26 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
             match head_ctor_name {
                 Some(head_ctor_name @ sp!(_, EM::Variant(_, _))) => {
                     let ploc = pats.loc;
-                    let pats = pats
-                        .value
-                        .into_iter()
-                        .map(|pat| match_pattern(context, pat))
-                        .collect();
+                    let mut out_pats = vec![];
+                    let mut ellipsis_locs = vec![];
+                    for pat in pats.value.into_iter() {
+                        match pat {
+                            P::Ellipsis::Binder(p) => {
+                                out_pats.push(E::Ellipsis::Binder(match_pattern(context, p)));
+                            }
+                            P::Ellipsis::Ellipsis(loc) if ellipsis_locs.is_empty() => {
+                                out_pats.push(E::Ellipsis::Ellipsis(loc));
+                                ellipsis_locs.push(loc);
+                            }
+                            P::Ellipsis::Ellipsis(loc) => {
+                                ellipsis_locs.push(loc);
+                            }
+                        }
+                    }
+                    check_ellipsis_usage(context, &ellipsis_locs);
                     sp(
                         loc,
-                        EP::PositionalConstructor(head_ctor_name, tys, sp(ploc, pats)),
+                        EP::PositionalConstructor(head_ctor_name, tys, sp(ploc, out_pats)),
                     )
                 }
                 _ => error_pattern!(),
@@ -3286,13 +3312,26 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
             let tys = optional_types(context, pts_opt);
             match head_ctor_name {
                 Some(head_ctor_name @ sp!(_, EM::Variant(_, _))) => {
-                    let fields = fields
-                        .value
-                        .into_iter()
-                        .map(|(field, pat)| (field, match_pattern(context, pat)))
-                        .collect();
-                    let fields = named_fields(context, loc, "pattern", "sub-pattern", fields);
-                    sp(loc, EP::FieldConstructor(head_ctor_name, tys, fields))
+                    let mut ellipsis_locs = vec![];
+                    let mut stripped_fields = vec![];
+                    for field in fields.value.into_iter() {
+                        match field {
+                            P::Ellipsis::Binder((field, pat)) => {
+                                stripped_fields.push((field, match_pattern(context, pat)));
+                            }
+                            P::Ellipsis::Ellipsis(eloc) => {
+                                ellipsis_locs.push(eloc);
+                            }
+                        }
+                    }
+                    let fields =
+                        named_fields(context, loc, "pattern", "sub-pattern", stripped_fields);
+                    check_ellipsis_usage(context, &ellipsis_locs);
+                    let ellipsis = ellipsis_locs.get(0).copied();
+                    sp(
+                        loc,
+                        EP::FieldConstructor(head_ctor_name, tys, fields, ellipsis),
+                    )
                 }
                 _ => error_pattern!(),
             }
@@ -3427,11 +3466,14 @@ fn pattern_binders(context: &mut Context, pattern: &E::MatchPattern) -> Vec<(Mut
             EP::PositionalConstructor(_, _, sp!(_, patterns)) => {
                 let bindings = patterns
                     .iter()
-                    .map(|pat| check_duplicates(context, pat))
+                    .filter_map(|pat| match pat {
+                        E::Ellipsis::Binder(p) => Some(check_duplicates(context, p)),
+                        E::Ellipsis::Ellipsis(_) => None,
+                    })
                     .collect();
                 report_duplicates_and_combine(context, bindings)
             }
-            EP::FieldConstructor(_, _, fields) => {
+            EP::FieldConstructor(_, _, fields, _) => {
                 let mut bindings = vec![];
                 for (_, _, (_, pat)) in fields {
                     bindings.push(check_duplicates(context, pat));
@@ -3665,20 +3707,35 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
             let tys_opt = optional_types(context, ptys_opt);
             let fields = match pfields {
                 FieldBindings::Named(named_bindings) => {
-                    let vfields: Option<Vec<(Field, E::LValue)>> = named_bindings
-                        .into_iter()
-                        .map(|(f, pb)| Some((f, bind(context, pb)?)))
-                        .collect();
+                    let mut vfields = vec![];
+                    let mut ellipsis_locs = vec![];
+                    for e in named_bindings.into_iter() {
+                        match e {
+                            P::Ellipsis::Binder((f, pb)) => vfields.push((f, bind(context, pb)?)),
+                            P::Ellipsis::Ellipsis(loc) => ellipsis_locs.push(loc),
+                        }
+                    }
+                    check_ellipsis_usage(context, &ellipsis_locs);
                     let fields =
-                        named_fields(context, loc, "deconstruction binding", "binding", vfields?);
-                    E::FieldBindings::Named(fields)
+                        named_fields(context, loc, "deconstruction binding", "binding", vfields);
+                    E::FieldBindings::Named(fields, ellipsis_locs.get(0).copied())
                 }
                 FieldBindings::Positional(positional_bindings) => {
-                    let fields: Option<Vec<E::LValue>> = positional_bindings
-                        .into_iter()
-                        .map(|b| bind(context, b))
-                        .collect();
-                    E::FieldBindings::Positional(fields?)
+                    let mut fields = vec![];
+                    let mut ellipsis_locs = vec![];
+                    for e in positional_bindings.into_iter() {
+                        match e {
+                            P::Ellipsis::Binder(pb) => {
+                                fields.push(E::Ellipsis::Binder(bind(context, pb)?))
+                            }
+                            P::Ellipsis::Ellipsis(loc) => {
+                                ellipsis_locs.push(loc);
+                                fields.push(E::Ellipsis::Ellipsis(loc))
+                            }
+                        }
+                    }
+                    check_ellipsis_usage(context, &ellipsis_locs);
+                    E::FieldBindings::Positional(fields)
                 }
             };
             EL::Unpack(tn, tys_opt, fields)
@@ -3773,7 +3830,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
             let efields = assign_unpack_fields(context, loc, pfields)?;
             Some(sp(
                 loc,
-                EL::Unpack(en, tys_opt, E::FieldBindings::Named(efields)),
+                EL::Unpack(en, tys_opt, E::FieldBindings::Named(efields, None)),
             ))
         }
         PE::Call(pn, false, ptys_opt, sp!(_, exprs)) => {
@@ -3783,7 +3840,10 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
                 .check_feature(FeatureGate::PositionalFields, pkg, loc);
             let en = context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
             let tys_opt = optional_types(context, ptys_opt);
-            let pfields: Option<_> = exprs.into_iter().map(|e| assign(context, e)).collect();
+            let pfields: Option<_> = exprs
+                .into_iter()
+                .map(|e| assign(context, e).map(E::Ellipsis::Binder))
+                .collect();
             Some(sp(
                 loc,
                 EL::Unpack(en, tys_opt, E::FieldBindings::Positional(pfields?)),

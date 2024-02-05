@@ -1581,9 +1581,7 @@ impl AstDebug for MatchPattern_ {
                 });
                 w.write("} ");
             }
-            Binder(name) => {
-                name.ast_debug(w)
-            }
+            Binder(name) => name.ast_debug(w),
             Literal(v) => v.ast_debug(w),
             Wildcard => w.write("_"),
             Or(lhs, rhs) => {
