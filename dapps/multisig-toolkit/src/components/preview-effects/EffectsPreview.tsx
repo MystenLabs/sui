@@ -43,7 +43,7 @@ export function EffectsPreview({ output }: { output: DryRunTransactionBlockRespo
 		},
 		{
 			name: 'json',
-			title: 'Pure JSON',
+			title: 'Raw JSON',
 		},
 	];
 
