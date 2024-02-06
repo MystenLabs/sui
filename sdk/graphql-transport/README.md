@@ -29,7 +29,7 @@ const client = new SuiClient({
 ### Unsupported methods
 
 The following methods are currently unsupported in SuiClientGraphQLTransport, and will either error,
-or fallback to the JSON RPC Api if a `fallbackFullNodeUrl` is provided:
+or fallback to the JSON RPC API if a `fallbackFullNodeUrl` is provided:
 
 - `subscribeTransaction`
 - `subscribeEvents`
