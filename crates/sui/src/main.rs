@@ -57,7 +57,7 @@ async fn main() {
         .is_some_and(|x| x.subcommand_matches("ptb").is_some())
     {
         let ptb = PTB::default();
-        exit_main!(ptb.execute(args.get_matches_mut()).await);
+        exit_main!(ptb.execute(args.get_matches_mut(), None).await);
     } else {
         let args = Args::parse();
         let _guard = match args.command {

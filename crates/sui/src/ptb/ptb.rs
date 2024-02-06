@@ -317,7 +317,11 @@ impl PTB {
     }
 
     /// Parses and executes the PTB with the sender as the current active address
-    pub async fn execute(self, matches: ArgMatches) -> Result<(), Error> {
+    pub async fn execute(
+        self,
+        matches: ArgMatches,
+        context: Option<WalletContext>,
+    ) -> Result<(), Error> {
         let ptb_args_matches = matches
             .subcommand_matches("client")
             .ok_or_else(|| anyhow!("Expected the client command but got a different command"))?
@@ -374,8 +378,15 @@ impl PTB {
         }
 
         // We need to resolve object IDs, so we need a fullnode to access
-        let config_path = sui_config::sui_config_dir()?.join(sui_config::SUI_CLIENT_CONFIG);
-        let context = WalletContext::new(&config_path, None, None).await?;
+        let context = if let Some(context) = context {
+            context
+        } else {
+            let config_path = sui_config::sui_config_dir()?.join(sui_config::SUI_CLIENT_CONFIG);
+            let context = WalletContext::new(&config_path, None, None).await?;
+            context
+        };
+
+        let client = context.get_client().await?;
         let starting_addresses = context
             .config
             .keystore
@@ -383,8 +394,6 @@ impl PTB {
             .into_iter()
             .map(|(sa, alias)| (alias.alias.clone(), AccountAddress::from(*sa)))
             .collect();
-
-        let client = context.get_client().await?;
         let mut builder = PTBBuilder::new(starting_addresses, client.read_api());
 
         for p in parsed.into_iter() {

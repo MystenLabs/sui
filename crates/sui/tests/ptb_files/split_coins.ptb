@@ -1,0 +1,3 @@
+--gas-budget 1000
+--split-coins @0x1 [1,2,3]
+--assign coins
