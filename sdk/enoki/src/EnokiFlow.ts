@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiClient } from '@mysten/sui.js/client';
+import { decodeSuiPrivateKey } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import type { TransactionBlock } from '@mysten/sui.js/transactions';
 import { fromB64, toB64 } from '@mysten/sui.js/utils';
@@ -160,7 +161,7 @@ export class EnokiFlow {
 			expiresAt: estimatedExpiration,
 			maxEpoch,
 			randomness,
-			ephemeralKeyPair: ephemeralKeyPair.export().privateKey,
+			ephemeralKeyPair: toB64(decodeSuiPrivateKey(ephemeralKeyPair.getSecretKey()).secretKey),
 		});
 
 		return oauthUrl;
