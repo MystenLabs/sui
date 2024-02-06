@@ -28,7 +28,6 @@ impl SuspendedBlock {
 /// TODO: As it is possible to have Byzantine validators who produce Blocks without valid causal
 /// history we need to make sure that BlockManager takes care of that and avoid OOM (Out Of Memory)
 /// situations.
-#[allow(dead_code)]
 pub(crate) struct BlockManager {
     /// Keeps all the suspended blocks. A suspended block is a block that is missing part of its causal history and thus
     /// can't be immediately processed. A block will remain in this map until all its causal history has been successfully
@@ -43,7 +42,6 @@ pub(crate) struct BlockManager {
     context: Arc<Context>,
 }
 
-#[allow(dead_code)]
 impl BlockManager {
     pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
         let (_, genesis) = Block::genesis(context.clone());
@@ -219,6 +217,7 @@ impl BlockManager {
         None
     }
 
+    #[allow(dead_code)]
     /// Returns all the blocks that are currently missing and needed in order to accept suspended
     /// blocks.
     pub(crate) fn missing_blocks(&self) -> Vec<BlockRef> {
@@ -230,6 +229,7 @@ impl BlockManager {
             .collect()
     }
 
+    #[allow(dead_code)]
     /// Returns all the suspended blocks whose causal history we miss hence we can't accept them yet.
     pub(crate) fn suspended_blocks(&self) -> Vec<BlockRef> {
         self.suspended_blocks.keys().cloned().collect()
