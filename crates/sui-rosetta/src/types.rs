@@ -557,9 +557,9 @@ pub struct ConstructionPreprocessRequest {
 }
 
 #[derive(Serialize, Deserialize)]
-pub enum PreprocessMetadata {
-    PaySui,
-    Delegation,
+pub struct PreprocessMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -573,6 +573,8 @@ pub struct ConstructionPreprocessResponse {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MetadataOptions {
     pub internal_operation: InternalOperation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget: Option<u64>,
 }
 
 impl IntoResponse for ConstructionPreprocessResponse {

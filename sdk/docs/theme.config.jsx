@@ -11,9 +11,9 @@ const config = {
 	chat: {
 		link: 'https://discord.com/invite/Sui',
 	},
-	docsRepositoryBase: 'https://github.com/MystenLabs/sui/tree/main/sdk/docs/pages',
+	docsRepositoryBase: 'https://github.com/MystenLabs/sui/tree/main/sdk/docs',
 	footer: {
-		text: 'Copyright © 2023, Mysten Labs, Inc.',
+		text: `Copyright © ${new Date().getFullYear()}, Mysten Labs, Inc.`,
 	},
 	head: (
 		<>
