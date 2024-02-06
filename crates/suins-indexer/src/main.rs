@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use diesel::{dsl::sql, Connection, ExpressionMethods, RunQueryDsl};
 use prometheus::Registry;
 use std::path::PathBuf;
-use sui_data_ingestion::{
+use sui_data_ingestion_core::{
     DataIngestionMetrics, FileProgressStore, IndexerExecutor, Worker, WorkerPool,
 };
 use sui_types::full_checkpoint_content::CheckpointData;

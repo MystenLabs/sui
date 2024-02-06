@@ -12107,6 +12107,32 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.8.26",
  "sui-archival",
+ "sui-data-ingestion-core",
+ "sui-storage",
+ "sui-types",
+ "telemetry-subscribers",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-data-ingestion-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "backoff",
+ "futures",
+ "mysten-metrics",
+ "notify",
+ "object_store 0.7.0",
+ "prometheus",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",
@@ -13938,7 +13964,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
- "sui-data-ingestion",
+ "sui-data-ingestion-core",
  "sui-json-rpc",
  "sui-storage",
  "sui-types",

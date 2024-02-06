@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::progress_store::ProgressStore;
 use anyhow::Result;
 use async_trait::async_trait;
 use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_dynamodb::Client;
 use aws_sdk_s3::config::{Credentials, Region};
 use std::str::FromStr;
+use sui_data_ingestion_core::ProgressStore;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 pub struct DynamoDBProgressStore {

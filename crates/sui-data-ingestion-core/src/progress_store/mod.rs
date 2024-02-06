@@ -5,9 +5,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-mod dynamodb;
 mod file;
-pub use dynamodb::DynamoDBProgressStore;
 pub use file::FileProgressStore;
 
 pub type ExecutorProgress = HashMap<String, CheckpointSequenceNumber>;
