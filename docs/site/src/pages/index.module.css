@@ -98,7 +98,6 @@
 }
 
 .cardB {
-  height: 200px;
   background-color: rgba(247, 247, 248, .05);
   padding: 1.7rem;
   font-family: var(--headerFont);
