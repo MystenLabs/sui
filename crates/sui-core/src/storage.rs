@@ -28,7 +28,7 @@ use sui_types::transaction::VerifiedTransaction;
 use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::in_mem_execution_cache::ExecutionCacheRead;
+use crate::execution_cache::ExecutionCacheRead;
 
 #[derive(Clone)]
 pub struct RocksDbStore {

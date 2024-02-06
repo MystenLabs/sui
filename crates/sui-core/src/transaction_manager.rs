@@ -31,7 +31,7 @@ use tracing::{error, info, instrument, trace, warn};
 use crate::authority::AuthorityMetrics;
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    in_mem_execution_cache::ExecutionCacheRead,
+    execution_cache::ExecutionCacheRead,
 };
 use sui_types::transaction::SenderSignedData;
 use tap::TapOptional;
