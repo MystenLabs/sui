@@ -78,8 +78,17 @@ fn check_authority_overload(
         queueing_latency, txn_ready_rate, execution_rate
     );
 
-    let (is_overload, load_shedding_percentage) =
-        check_overload_signals(config, queueing_latency, txn_ready_rate, execution_rate);
+    let (is_overload, load_shedding_percentage) = check_overload_signals(
+        config,
+        authority
+            .overload_info
+            .load_shedding_percentage
+            .load(Ordering::Relaxed),
+        queueing_latency,
+        txn_ready_rate,
+        execution_rate,
+    );
+
     if is_overload {
         authority
             .overload_info
@@ -116,7 +125,7 @@ fn calculate_load_shedding_percentage(txn_ready_rate: f64, execution_rate: f64) 
     }
 
     // In order to maintain execution queue length, we need to drop at least (1 - executionRate / readyRate).
-    // TO reduce the queue length, here we add 10% more transactions to drop.
+    // To reduce the queue length, here we add 10% more transactions to drop.
     (((1.0 - execution_rate * 0.9 / txn_ready_rate) + 0.1).min(1.0) * 100.0).round() as u32
 }
 
@@ -124,16 +133,19 @@ fn calculate_load_shedding_percentage(txn_ready_rate: f64, execution_rate: f64) 
 // the authority server should enter load shedding mode, and how much percentage of transactions to drop.
 fn check_overload_signals(
     config: &OverloadThresholdConfig,
+    current_load_shedding_percentage: u32,
     queueing_latency: Duration,
     txn_ready_rate: f64,
     execution_rate: f64,
 ) -> (bool, u32) {
-    let overload_status;
-    let load_shedding_percentage;
+    let additional_load_shedding_percentage;
     if queueing_latency > config.execution_queue_latency_hard_limit {
         let calculated_load_shedding_percentage =
             calculate_load_shedding_percentage(txn_ready_rate, execution_rate);
-        load_shedding_percentage = if calculated_load_shedding_percentage > 0 {
+
+        additional_load_shedding_percentage = if calculated_load_shedding_percentage > 0
+            || txn_ready_rate >= config.safe_transaction_ready_rate as f64
+        {
             max(
                 calculated_load_shedding_percentage,
                 config.min_load_shedding_percentage_above_hard_limit,
@@ -141,36 +153,50 @@ fn check_overload_signals(
         } else {
             0
         };
-        overload_status = load_shedding_percentage > 0;
     } else if queueing_latency > config.execution_queue_latency_soft_limit {
-        load_shedding_percentage =
+        additional_load_shedding_percentage =
             calculate_load_shedding_percentage(txn_ready_rate, execution_rate);
-        overload_status = load_shedding_percentage > 0;
     } else {
-        overload_status = false;
-        load_shedding_percentage = 0;
+        additional_load_shedding_percentage = 0;
     }
+
+    let load_shedding_percentage = if additional_load_shedding_percentage > 0 {
+        current_load_shedding_percentage
+            + (100 - current_load_shedding_percentage) * additional_load_shedding_percentage / 100
+    } else {
+        if txn_ready_rate > config.safe_transaction_ready_rate as f64
+            && current_load_shedding_percentage > 10
+        {
+            current_load_shedding_percentage - 10
+        } else {
+            0
+        }
+    };
 
     let load_shedding_percentage = min(
         load_shedding_percentage,
         config.max_load_shedding_percentage,
     );
+    let overload_status = load_shedding_percentage > 0;
     (overload_status, load_shedding_percentage)
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use rand::{
+        rngs::{OsRng, StdRng},
+        Rng, SeedableRng,
+    };
+    use std::sync::Arc;
     use tokio::sync::mpsc::unbounded_channel;
     use tokio::sync::mpsc::UnboundedReceiver;
     use tokio::sync::mpsc::UnboundedSender;
     use tokio::sync::oneshot;
     use tokio::task::JoinHandle;
-    use tokio::time::{pause, resume, Instant};
-
-    use super::*;
-
-    use crate::authority::test_authority_builder::TestAuthorityBuilder;
-    use std::sync::Arc;
+    use tokio::time::{interval, pause, resume, Instant, MissedTickBehavior};
 
     #[test]
     pub fn test_authority_overload_info() {
@@ -240,56 +266,77 @@ mod tests {
 
         // When execution queueing latency is within soft limit, don't start overload protection.
         assert_eq!(
-            check_overload_signals(&config, Duration::from_millis(500), 1000.0, 10.0),
+            check_overload_signals(&config, 0, Duration::from_millis(500), 1000.0, 10.0),
             (false, 0)
         );
 
         // When execution queueing latency hits soft limit and execution rate is higher, don't
         // start overload protection.
         assert_eq!(
-            check_overload_signals(&config, Duration::from_secs(2), 100.0, 120.0),
+            check_overload_signals(&config, 0, Duration::from_secs(2), 100.0, 120.0),
             (false, 0)
         );
 
         // When execution queueing latency hits soft limit, but not hard limit, start overload
         // protection.
         assert_eq!(
-            check_overload_signals(&config, Duration::from_secs(2), 100.0, 100.0),
+            check_overload_signals(&config, 0, Duration::from_secs(2), 100.0, 100.0),
             (true, 20)
         );
 
         // When execution queueing latency hits hard limit, start more aggressive overload
         // protection.
         assert_eq!(
-            check_overload_signals(&config, Duration::from_secs(11), 100.0, 100.0),
+            check_overload_signals(&config, 0, Duration::from_secs(11), 100.0, 100.0),
             (true, 50)
         );
 
         // When execution queueing latency hits hard limit and calculated shedding percentage
         // is higher than min_load_shedding_percentage_above_hard_limit.
         assert_eq!(
-            check_overload_signals(&config, Duration::from_secs(11), 240.0, 100.0),
+            check_overload_signals(&config, 0, Duration::from_secs(11), 240.0, 100.0),
             (true, 73)
         );
 
         // When execution queueing latency hits hard limit, but transaction ready rate
-        // is already lower than execution rate, don't start overload protection.
+        // is within safe_transaction_ready_rate, don't start overload protection.
         assert_eq!(
-            check_overload_signals(&config, Duration::from_secs(11), 20.0, 100.0),
+            check_overload_signals(&config, 0, Duration::from_secs(11), 20.0, 100.0),
             (false, 0)
         );
 
         // Maximum transactions shed is cap by `max_load_shedding_percentage` config.
         assert_eq!(
-            check_overload_signals(&config, Duration::from_secs(11), 100.0, 0.0),
+            check_overload_signals(&config, 0, Duration::from_secs(11), 100.0, 0.0),
             (true, 90)
+        );
+
+        assert_eq!(
+            check_overload_signals(&config, 50, Duration::from_secs(2), 100.0, 100.0),
+            (true, 60)
+        );
+
+        assert_eq!(
+            check_overload_signals(&config, 90, Duration::from_secs(2), 200.0, 300.0),
+            (true, 80)
+        );
+
+        assert_eq!(
+            check_overload_signals(&config, 50, Duration::from_secs(11), 100.0, 100.0),
+            (true, 75)
         );
     }
 
     #[tokio::test(flavor = "current_thread")]
     pub async fn test_check_authority_overload() {
-        let state = TestAuthorityBuilder::new().build().await;
-        let config = OverloadThresholdConfig::default();
+        let config = OverloadThresholdConfig {
+            safe_transaction_ready_rate: 0,
+            ..Default::default()
+        };
+        let state = TestAuthorityBuilder::new()
+            .with_overload_threshold_config(config.clone())
+            .build()
+            .await;
 
         // Creates a simple case to see if authority state overload_info can be updated
         // correctly by check_authority_overload.
@@ -316,38 +363,95 @@ mod tests {
     }
 
     fn start_load_generator(
+        steady_rate: f64,
         tx: UnboundedSender<Instant>,
+        mut burst_rx: UnboundedReceiver<u32>,
         authority: Arc<AuthorityState>,
+        enable_load_shedding: bool,
+        total_requests_arc: Arc<AtomicU32>,
+        dropped_requests_arc: Arc<AtomicU32>,
     ) -> JoinHandle<()> {
-        let event_rate = 10;
         tokio::spawn(async move {
+            let mut interval = interval(Duration::from_secs_f64(1.0 / steady_rate));
+            let mut rng = StdRng::from_rng(&mut OsRng).unwrap();
+            let mut total_requests: u32 = 0;
+            let mut total_dropped_requests: u32 = 0;
+
+            // Helper function to check whether we should send a request.
+            let mut do_send =
+                |enable_load_shedding: bool, authority: Arc<AuthorityState>| -> bool {
+                    if enable_load_shedding {
+                        let shedding_percentage = authority
+                            .overload_info
+                            .load_shedding_percentage
+                            .load(Ordering::Relaxed);
+                        if shedding_percentage > 0 && rng.gen_range(0..100) < shedding_percentage {
+                            false
+                        } else {
+                            true
+                        }
+                    } else {
+                        true
+                    }
+                };
+
             loop {
-                if tx.send(Instant::now()).is_err() {
-                    return;
+                tokio::select! {
+                    now = interval.tick() => {
+                        total_requests += 1;
+                        if do_send(enable_load_shedding, authority.clone()) {
+                            if tx.send(now).is_err() {
+                                info!("Load generator stopping. Total requests {:?}, total dropped requests {:?}.", total_requests, total_dropped_requests);
+                                total_requests_arc.store(total_requests, Ordering::SeqCst);
+                                dropped_requests_arc.store(total_dropped_requests, Ordering::SeqCst);
+                                return;
+                            }
+                            authority.metrics.txn_ready_rate_tracker.lock().record();
+                        } else {
+                            total_dropped_requests += 1;
+                        }
+                    }
+                    Some(burst) = burst_rx.recv() => {
+                        let now = Instant::now();
+                        total_requests += burst;
+                        for _ in 0..burst {
+                            if do_send(enable_load_shedding, authority.clone()) {
+                                if tx.send(now).is_err() {
+                                    info!("Load generator stopping. Total requests {:?}, total dropped requests {:?}.", total_requests, total_dropped_requests);
+                                    total_requests_arc.store(total_requests, Ordering::SeqCst);
+                                    dropped_requests_arc.store(total_dropped_requests, Ordering::SeqCst);
+                                    return;
+                                }
+                                authority.metrics.txn_ready_rate_tracker.lock().record();
+                            } else {
+                                total_dropped_requests += 1;
+                            }
+                        }
+                    }
                 }
-                authority.metrics.txn_ready_rate_tracker.lock().record();
-                sleep(Duration::from_secs_f64(1.0 / event_rate as f64)).await;
             }
         })
     }
 
     fn start_executor(
+        execution_rate: f64,
         mut rx: UnboundedReceiver<Instant>,
         mut stop_rx: oneshot::Receiver<()>,
         authority: Arc<AuthorityState>,
     ) -> JoinHandle<()> {
-        let execution_rate = 1000;
         tokio::spawn(async move {
+            let mut interval = interval(Duration::from_secs_f64(1.0 / execution_rate));
+            interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
             loop {
                 tokio::select! {
                     Some(start_time) = rx.recv() => {
                         authority.metrics.execution_rate_tracker.lock().record();
                         authority.metrics.execution_queueing_latency.report(start_time.elapsed());
-                        sleep(Duration::from_secs_f64(1.0 / execution_rate as f64)).await;
+                        interval.tick().await;
                     }
                     _ = &mut stop_rx => {
                         // Stop signal received
-                        println!("Task stopping");
+                        info!("Executor stopping");
                         return;
                     }
                 }
@@ -355,27 +459,10 @@ mod tests {
         })
     }
 
-    #[tokio::test(flavor = "current_thread")]
-    pub async fn test_workload_single_spike() {
-        let state = TestAuthorityBuilder::new().build().await;
-
-        let (tx, rx) = unbounded_channel();
-
-        let load_generator = start_load_generator(tx.clone(), state.clone());
-
-        let (stop_tx, stop_rx) = oneshot::channel();
-        let executor = start_executor(rx, stop_rx, state.clone());
-
-        sleep(Duration::from_secs(10)).await;
-        pause();
-        for _ in 0..20000 {
-            tx.send(Instant::now()).unwrap();
-        }
-        resume();
-        for _ in 0..40 {
-            // assert!(!state.overload_info.is_overload.load(Ordering::Relaxed));
+    async fn sleep_and_print_stats(state: Arc<AuthorityState>, seconds: u32) {
+        for _ in 0..seconds {
             info!(
-                "If overload {:?}, shedding percentage {:?}, queue {:?} ready {:?} exec {:?}",
+                "Overload: {:?}. Shedding percentage: {:?}. Queue: {:?}, Ready rate: {:?}. Exec rate: {:?}.",
                 state.overload_info.is_overload.load(Ordering::Relaxed),
                 state
                     .overload_info
@@ -387,8 +474,124 @@ mod tests {
             );
             sleep(Duration::from_secs(1)).await;
         }
+    }
+
+    async fn run_consistent_workload_test(
+        generator_rate: f64,
+        executor_rate: f64,
+        min_dropping_rate: f64,
+        max_dropping_rate: f64,
+    ) {
+        let state = TestAuthorityBuilder::new().build().await;
+
+        let (tx, rx) = unbounded_channel();
+        let (_burst_tx, burst_rx) = unbounded_channel();
+        let total_requests = Arc::new(AtomicU32::new(0));
+        let dropped_requests = Arc::new(AtomicU32::new(0));
+        let load_generator = start_load_generator(
+            generator_rate,
+            tx.clone(),
+            burst_rx,
+            state.clone(),
+            true,
+            total_requests.clone(),
+            dropped_requests.clone(),
+        );
+
+        let (stop_tx, stop_rx) = oneshot::channel();
+        let executor = start_executor(executor_rate, rx, stop_rx, state.clone());
+
+        sleep_and_print_stats(state.clone(), 50).await;
 
         stop_tx.send(()).unwrap();
         let _ = tokio::join!(load_generator, executor);
+
+        let dropped_ratio = dropped_requests.load(Ordering::SeqCst) as f64
+            / total_requests.load(Ordering::SeqCst) as f64;
+        assert!(min_dropping_rate < dropped_ratio);
+        assert!(dropped_ratio < max_dropping_rate);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    pub async fn test_workload_consistent_slightly_overload() {
+        telemetry_subscribers::init_for_testing();
+        run_consistent_workload_test(1100.0, 1000.0, 0.05, 0.25).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    pub async fn test_workload_consistent_overload() {
+        telemetry_subscribers::init_for_testing();
+        run_consistent_workload_test(3000.0, 1000.0, 0.6, 0.8).await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    pub async fn test_workload_single_spike() {
+        telemetry_subscribers::init_for_testing();
+        let state = TestAuthorityBuilder::new().build().await;
+
+        let (tx, rx) = unbounded_channel();
+        let (burst_tx, burst_rx) = unbounded_channel();
+        let total_requests = Arc::new(AtomicU32::new(0));
+        let dropped_requests = Arc::new(AtomicU32::new(0));
+        let load_generator = start_load_generator(
+            10.0,
+            tx.clone(),
+            burst_rx,
+            state.clone(),
+            true,
+            total_requests.clone(),
+            dropped_requests.clone(),
+        );
+
+        let (stop_tx, stop_rx) = oneshot::channel();
+        let executor = start_executor(1000.0, rx, stop_rx, state.clone());
+
+        sleep_and_print_stats(state.clone(), 10).await;
+        pause();
+        burst_tx.send(8000).unwrap();
+        resume();
+        sleep_and_print_stats(state.clone(), 20).await;
+
+        stop_tx.send(()).unwrap();
+        let _ = tokio::join!(load_generator, executor);
+        assert_eq!(dropped_requests.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    pub async fn test_workload_consistent_short_spike() {
+        telemetry_subscribers::init_for_testing();
+        let state = TestAuthorityBuilder::new().build().await;
+
+        let (tx, rx) = unbounded_channel();
+        let (burst_tx, burst_rx) = unbounded_channel();
+        let total_requests = Arc::new(AtomicU32::new(0));
+        let dropped_requests = Arc::new(AtomicU32::new(0));
+        let load_generator = start_load_generator(
+            10.0,
+            tx.clone(),
+            burst_rx,
+            state.clone(),
+            true,
+            total_requests.clone(),
+            dropped_requests.clone(),
+        );
+
+        let (stop_tx, stop_rx) = oneshot::channel();
+        let executor = start_executor(1000.0, rx, stop_rx, state.clone());
+
+        sleep_and_print_stats(state.clone(), 15).await;
+        for _ in 0..8 {
+            pause();
+            burst_tx.send(10000).unwrap();
+            resume();
+            sleep_and_print_stats(state.clone(), 5).await;
+        }
+
+        stop_tx.send(()).unwrap();
+        let _ = tokio::join!(load_generator, executor);
+        let dropped_ratio = dropped_requests.load(Ordering::SeqCst) as f64
+            / total_requests.load(Ordering::SeqCst) as f64;
+        assert!(0.4 < dropped_ratio);
+        assert!(dropped_ratio < 0.6);
     }
 }
