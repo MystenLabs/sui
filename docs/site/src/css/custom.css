@@ -113,112 +113,112 @@
 /** add custom fonts **/
 @font-face {
   font-family: 'Twkeverett Mono';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/654cbd72f35b1c8988b9d9c8_TWKEverettMono-Thin.ttf') format('truetype');
+  src: url('/fonts/TWKEverettMono-Thin.ttf') format('truetype');
   font-weight: 100;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett Mono';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/654cbdaced2ebffe6cd03ea7_TWKEverettMono-Ultralight.ttf') format('truetype');
+  src: url('/fonts/TWKEverettMono-Ultralight.ttf') format('truetype');
   font-weight: 200;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett Mono';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/654cbdbe1434db307b7ff1ca_TWKEverettMono-Light.ttf') format('truetype');
+  src: url('/fonts/TWKEverettMono-Light.ttf') format('truetype');
   font-weight: 300;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett Mono';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/654cbdde19532b76db4cf806_TWKEverettMono-Regular.ttf') format('truetype');
+  src: url('/fonts/TWKEverettMono-Regular.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett Mono';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/654cbdee9afc7d208ff7020e_TWKEverettMono-Medium.ttf') format('truetype');
+  src: url('/fonts/TWKEverettMono-Medium.ttf') format('truetype');
   font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett Mono';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/654cbe4813ad8e51d813a4f9_TWKEverettMono-Bold.ttf') format('truetype');
+  src: url('/fonts/TWKEverettMono-Bold.ttf') format('truetype');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett Mono';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/654cbe642d34755b01e24617_TWKEverettMono-Extrabold.ttf') format('truetype');
+  src: url('/fonts/TWKEverettMono-Extrabold.ttf') format('truetype');
   font-weight: 800;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett Mono';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/654cbe71c57a65db1ecd4ccb_TWKEverettMono-Black.ttf') format('truetype');
+  src: url('/fonts/TWKEverettMono-Black.ttf') format('truetype');
   font-weight: 900;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/64efaed392814b0afb203071_TWKEverett-Medium.otf') format('opentype');
+  src: url('/fonts/TWKEverett-Medium.otf') format('opentype');
   font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/654cb1e34cb73aa526f8be77_TWKEverett-Black.otf') format('opentype');
+  src: url('/fonts/TWKEverett-Black.otf') format('opentype');
   font-weight: 900;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/654cb26df577c9fbf546bd2b_TWKEverett-Thin.otf') format('opentype');
+  src: url('/fonts/TWKEverett-Thin.otf') format('opentype');
   font-weight: 100;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/654cb278544659a9c87f0e9e_TWKEverett-Ultralight.otf') format('opentype');
+  src: url('/fonts/TWKEverett-Ultralight.otf') format('opentype');
   font-weight: 200;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/654cb283855176003eea3826_TWKEverett-Light.otf') format('opentype');
+  src: url('/fonts/TWKEverett-Light.otf') format('opentype');
   font-weight: 300;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/64efaeb96c828e68baca8732_TWKEverett-Regular.otf') format('opentype');
+  src: url('/fonts/TWKEverett-Regular.otf') format('opentype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/64efaeb9ff2bcc44a15de0a5_TWKEverett-Bold.otf') format('opentype');
+  src: url('/fonts/TWKEverett-Bold.otf') format('opentype');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Twkeverett';
-  src: url('https://assets.website-files.com/6425f546844727ce5fb9e5ab/654cb1fba5e2dcfb68496171_TWKEverett-Extrabold.otf') format('opentype');
+  src: url('/fonts/TWKEverett-Extrabold.otf') format('opentype');
   font-weight: 800;
   font-style: normal;
   font-display: swap;
