@@ -1,0 +1,25 @@
+codecov:
+    require_ci_to_pass: false
+
+comment: false
+
+coverage:
+  precision: 2
+  round: down
+  status:
+    project:
+      sui-indexer:
+        # Project must always have at least 78% coverage (by line)
+        target: 85%
+        # Whole-project test coverage is allowed to drop up to 5%. (For situtations where we delete code with full coverage)
+        threshold: 5%
+        flags:
+          - back-end
+
+    patch: off
+
+flags:
+  sui-indexer:
+    paths:
+      - ccrates/sui-indexer
+    carryforward: true
