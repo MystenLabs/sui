@@ -533,7 +533,7 @@ mod tests {
         let (stop_tx, stop_rx) = oneshot::channel();
         let executor = start_executor(executor_rate, rx, stop_rx, state.clone());
 
-        sleep_and_print_stats(state.clone(), 50).await;
+        sleep_and_print_stats(state.clone(), 300).await;
 
         stop_tx.send(()).unwrap();
         let _ = tokio::join!(load_generator, executor);
@@ -545,8 +545,7 @@ mod tests {
     }
 
     // Tests that when request generation rate is slower than execution rate, no requests should be dropped.
-    #[tokio::test(flavor = "multi_thread")]
-    #[cfg_attr(msim, ignore)]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     pub async fn test_workload_consistent_no_overload() {
         telemetry_subscribers::init_for_testing();
         run_consistent_workload_test(900.0, 1000.0, 0.0, 0.0).await;
@@ -554,8 +553,7 @@ mod tests {
 
     // Tests that when request generation rate is slightly above execution rate, a small portion of
     // requests should be dropped.
-    #[tokio::test(flavor = "multi_thread")]
-    #[cfg_attr(msim, ignore)]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     pub async fn test_workload_consistent_slightly_overload() {
         telemetry_subscribers::init_for_testing();
         // Dropping rate should be around 15%.
@@ -564,8 +562,7 @@ mod tests {
 
     // Tests that when request generation rate is much higher than execution rate, a large portion of
     // requests should be dropped.
-    #[tokio::test(flavor = "multi_thread")]
-    #[cfg_attr(msim, ignore)]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     pub async fn test_workload_consistent_overload() {
         telemetry_subscribers::init_for_testing();
         // Dropping rate should be around 70%.
@@ -573,8 +570,7 @@ mod tests {
     }
 
     // Tests that when there is a very short single spike, no request should be dropped.
-    #[tokio::test(flavor = "current_thread")]
-    #[cfg_attr(msim, ignore)]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     pub async fn test_workload_single_spike() {
         telemetry_subscribers::init_for_testing();
         let state = TestAuthorityBuilder::new().build().await;
@@ -610,8 +606,7 @@ mod tests {
 
     // Tests that when there are regular spikes that keep queueing latency consistently high,
     // overload monitor should kick in and shed load.
-    #[tokio::test(flavor = "current_thread")]
-    #[cfg_attr(msim, ignore)]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     pub async fn test_workload_consistent_short_spike() {
         telemetry_subscribers::init_for_testing();
         let state = TestAuthorityBuilder::new().build().await;
