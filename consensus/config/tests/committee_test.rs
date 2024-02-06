@@ -4,7 +4,7 @@
 use consensus_config::{Authority, Committee, NetworkKeyPair, ProtocolKeyPair, Stake};
 use fastcrypto::traits::KeyPair as _;
 use insta::assert_yaml_snapshot;
-use multiaddr::Multiaddr;
+use mysten_network::Multiaddr;
 use rand::{rngs::StdRng, SeedableRng as _};
 
 // Committee is not sent over network or stored on disk itself, but some of its fields are.

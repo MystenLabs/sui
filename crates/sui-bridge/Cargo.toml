@@ -45,6 +45,7 @@ fastcrypto.workspace = true
 tap.workspace = true
 rand.workspace = true
 workspace-hack.workspace = true
+lru.workspace = true
 shared-crypto.workspace = true
 
 [dev-dependencies]

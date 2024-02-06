@@ -4,12 +4,17 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use sui_types::full_checkpoint_content::CheckpointData;
+mod archival;
 mod blob;
 mod kv_store;
+pub use archival::{ArchivalConfig, ArchivalWorker};
 pub use blob::{BlobTaskConfig, BlobWorker};
 pub use kv_store::{KVStoreTaskConfig, KVStoreWorker};
 
 #[async_trait]
 pub trait Worker: Send + Sync {
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> Result<()>;
+    async fn save_progress(&self) -> bool {
+        true
+    }
 }

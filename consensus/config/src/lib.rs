@@ -4,7 +4,9 @@
 mod committee;
 mod crypto;
 mod parameters;
+mod test_committee;
 
 pub use committee::*;
 pub use crypto::*;
 pub use parameters::*;
+pub use test_committee::*;

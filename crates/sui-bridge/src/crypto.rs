@@ -5,13 +5,18 @@ use crate::{
     error::{BridgeError, BridgeResult},
     types::{BridgeAction, BridgeCommittee, SignedBridgeAction, VerifiedSignedBridgeAction},
 };
+use ethers::core::k256::ecdsa::VerifyingKey;
+use ethers::core::k256::elliptic_curve::sec1::ToEncodedPoint;
+use ethers::types::Address as EthAddress;
+use fastcrypto::hash::HashFunction;
 use fastcrypto::{
     encoding::{Encoding, Hex},
+    error::FastCryptoError,
     secp256k1::{
         recoverable::Secp256k1RecoverableSignature, Secp256k1KeyPair, Secp256k1PublicKey,
         Secp256k1PublicKeyAsBytes,
     },
-    traits::{RecoverableSigner, VerifyRecoverable},
+    traits::{RecoverableSigner, ToFromBytes, VerifyRecoverable},
 };
 use fastcrypto::{hash::Keccak256, traits::KeyPair};
 use serde::{Deserialize, Serialize};
@@ -23,12 +28,38 @@ pub type BridgeAuthorityKeyPair = Secp256k1KeyPair;
 pub type BridgeAuthorityPublicKey = Secp256k1PublicKey;
 pub type BridgeAuthorityRecoverableSignature = Secp256k1RecoverableSignature;
 
-#[derive(Ord, PartialOrd, PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(Ord, PartialOrd, PartialEq, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct BridgeAuthorityPublicKeyBytes(Secp256k1PublicKeyAsBytes);
+
+impl BridgeAuthorityPublicKeyBytes {
+    pub fn to_eth_address(&self) -> EthAddress {
+        // unwrap: the conversion should not fail
+        let pubkey = VerifyingKey::from_sec1_bytes(self.as_bytes()).unwrap();
+        let affine: &ethers::core::k256::AffinePoint = pubkey.as_ref();
+        let encoded = affine.to_encoded_point(false);
+        let pubkey = &encoded.as_bytes()[1..];
+        assert_eq!(pubkey.len(), 64, "raw public key must be 64 bytes");
+        let hash = Keccak256::digest(pubkey).digest;
+        EthAddress::from_slice(&hash[12..])
+    }
+}
 
 impl From<&BridgeAuthorityPublicKey> for BridgeAuthorityPublicKeyBytes {
     fn from(pk: &BridgeAuthorityPublicKey) -> Self {
         Self(Secp256k1PublicKeyAsBytes::from(pk))
+    }
+}
+
+impl ToFromBytes for BridgeAuthorityPublicKeyBytes {
+    /// Parse an object from its byte representation
+    fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
+        let pk = BridgeAuthorityPublicKey::from_bytes(bytes)?;
+        Ok(Self::from(&pk))
+    }
+
+    /// Borrow a byte slice representing the serialized form of this object
+    fn as_bytes(&self) -> &[u8] {
+        self.as_ref()
     }
 }
 
@@ -67,7 +98,7 @@ impl<'a> ConciseableName<'a> for BridgeAuthorityPublicKeyBytes {
 }
 
 // TODO: include epoch ID here to reduce race conditions?
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct BridgeAuthoritySignInfo {
     pub authority_pub_key: BridgeAuthorityPublicKey,
     pub signature: BridgeAuthorityRecoverableSignature,
@@ -328,5 +359,29 @@ mod tests {
             ).unwrap(),
         };
         sig.verify(&action, &committee).unwrap_err();
+    }
+
+    #[test]
+    fn test_bridge_authority_public_key_bytes_to_eth_address() {
+        let pub_key_bytes = BridgeAuthorityPublicKeyBytes::from_bytes(
+            &Hex::decode("02321ede33d2c2d7a8a152f275a1484edef2098f034121a602cb7d767d38680aa4")
+                .unwrap(),
+        )
+        .unwrap();
+        let addr = "0x68b43fd906c0b8f024a18c56e06744f7c6157c65"
+            .parse::<EthAddress>()
+            .unwrap();
+        assert_eq!(pub_key_bytes.to_eth_address(), addr);
+
+        // Example from: https://github.com/gakonst/ethers-rs/blob/master/ethers-core/src/utils/mod.rs#L1235
+        let pub_key_bytes = BridgeAuthorityPublicKeyBytes::from_bytes(
+            &Hex::decode("0376698beebe8ee5c74d8cc50ab84ac301ee8f10af6f28d0ffd6adf4d6d3b9b762")
+                .unwrap(),
+        )
+        .unwrap();
+        let addr = "0Ac1dF02185025F65202660F8167210A80dD5086"
+            .parse::<EthAddress>()
+            .unwrap();
+        assert_eq!(pub_key_bytes.to_eth_address(), addr);
     }
 }
