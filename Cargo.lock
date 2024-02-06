@@ -11547,6 +11547,7 @@ dependencies = [
  "colored",
  "const-str",
  "csv",
+ "datatest-stable",
  "expect-test",
  "fastcrypto",
  "fastcrypto-zkp",

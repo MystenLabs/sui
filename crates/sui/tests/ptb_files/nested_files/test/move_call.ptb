@@ -1,0 +1,2 @@
+--assign a none
+--move-call 0x1::option::is_none <u64> a

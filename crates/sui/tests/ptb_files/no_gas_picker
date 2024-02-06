@@ -1,0 +1,3 @@
+--gas-budget 1000
+--assign X 1000
+--file simple/move_call.ptb
