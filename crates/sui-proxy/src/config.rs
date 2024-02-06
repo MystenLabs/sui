@@ -69,9 +69,22 @@ pub struct DynamicPeerValidationConfig {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct StaticPeerValidationConfig {
-    /// ssfns should have known pub keys.  This directory will be searched for .pub keys
-    /// and without a match, we will not communicate with any callers
-    pub pub_key_path: String,
+    pub pub_keys: Vec<StaticPubKey>,
+}
+
+/// StaticPubKey holds a human friendly name, ip and the key file for the pub key
+/// if you don't have a valid public routable ip, use an ip from 169.254.0.0/16.
+#[serde_as]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct StaticPubKey {
+    /// friendly name we will see in metrics
+    pub name: String,
+    /// friendly ip address we may see in metrics
+    pub p2p_address: String,
+    /// the relative pub_key file to read when combined with the absolute path
+    /// of StaticPeerValidationConfig.pub_key_path
+    pub pub_key: String,
 }
 
 /// the default idle worker per host (reqwest to remote write url call)

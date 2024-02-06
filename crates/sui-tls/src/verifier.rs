@@ -189,7 +189,7 @@ fn pki_error(error: webpki::Error) -> rustls::Error {
     }
 }
 
-pub fn public_key_from_certificate(
+fn public_key_from_certificate(
     certificate: &rustls::Certificate,
 ) -> Result<Ed25519PublicKey, rustls::Error> {
     use x509_parser::{certificate::X509Certificate, prelude::FromDer};

@@ -10,5 +10,10 @@ dynamic-peers:
   interval: 30
   certificate-file: /opt/joeman/fullchain.pem
   private-key: /opt/joeman/privkey.pem
+static-peers:
+  pub-keys:
+    - name: joeman
+      p2p-address: 169.254.0.1
+      pub-key: AE4vET5heE/c1hFlDzZZXbj3npQgMZ9CpbVx3C8rKVry
 metrics-address: localhost:9184
 histogram-address: localhost:9185

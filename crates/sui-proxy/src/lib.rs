@@ -5,6 +5,7 @@ pub mod config;
 pub mod consumer;
 pub mod handlers;
 pub mod histogram_relay;
+mod ip;
 pub mod metrics;
 pub mod middleware;
 pub mod peers;

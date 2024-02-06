@@ -3,32 +3,30 @@
 use crate::config::{DynamicPeerValidationConfig, RemoteWriteConfig, StaticPeerValidationConfig};
 use crate::handlers::publish_metrics;
 use crate::histogram_relay::HistogramRelay;
+use crate::ip::{is_private, to_multiaddr};
 use crate::middleware::{
     expect_content_length, expect_mysten_proxy_header, expect_valid_public_key,
 };
-use crate::peers::SuiNodeProvider;
+use crate::peers::{SuiNodeProvider, SuiPeer};
 use crate::var;
 use anyhow::Error;
 use anyhow::Result;
 use axum::{extract::DefaultBodyLimit, middleware, routing::post, Extension, Router};
 use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PublicKey};
-use fastcrypto::traits::KeyPair;
+use fastcrypto::traits::{KeyPair, ToFromBytes};
 use std::fs;
 use std::io::BufReader;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
-use sui_tls::{
-    public_key_from_certificate, rustls::ServerConfig, AllowAll, CertVerifier,
-    SelfSignedCertificate, TlsAcceptor,
-};
+use sui_tls::{rustls::ServerConfig, AllowAll, CertVerifier, SelfSignedCertificate, TlsAcceptor};
 use tokio::signal;
 use tower::ServiceBuilder;
 use tower_http::{
     trace::{DefaultOnResponse, TraceLayer},
     LatencyUnit,
 };
-use tracing::{info, Level};
+use tracing::{error, info, Level};
 
 /// Configure our graceful shutdown scenarios
 pub async fn shutdown_signal(h: axum_server::Handle) {
@@ -164,26 +162,6 @@ pub fn generate_self_cert(hostname: String) -> CertKeyPair {
     )
 }
 
-/// Load all pub keys from a given directory
-fn load_all_certs(path: &str) -> Result<Vec<Ed25519PublicKey>, Error> {
-    let mut pub_keys = vec![];
-    for entry in fs::read_dir(path)? {
-        let entry = entry?;
-        // Get the path of the current entry
-        let file_path = entry.path();
-        // Check if it's a regular file
-        if file_path.is_file() {
-            // Process the file
-            pub_keys.extend(
-                load_certs(file_path.as_path().to_str().unwrap())
-                    .iter()
-                    .map(|v| public_key_from_certificate(v).unwrap()),
-            );
-        }
-    }
-    Ok(pub_keys)
-}
-
 /// Load a certificate for use by the listening service
 fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
     let certfile = fs::File::open(filename)
@@ -196,6 +174,7 @@ fn load_certs(filename: &str) -> Vec<rustls::Certificate> {
         .collect()
 }
 
+/// Load a private key
 fn load_private_key(filename: &str) -> rustls::PrivateKey {
     let keyfile = fs::File::open(filename)
         .unwrap_or_else(|e| panic!("cannot open private key file {}; {}", filename, e));
@@ -215,6 +194,36 @@ fn load_private_key(filename: &str) -> rustls::PrivateKey {
         "no keys found in {:?} (encrypted keys not supported)",
         filename
     );
+}
+
+/// load the static keys we'll use to allow external non-validator nodes to push metrics
+fn load_static_peers(
+    static_peers: Option<StaticPeerValidationConfig>,
+) -> Result<Vec<SuiPeer>, Error> {
+    let Some(static_peers) = static_peers else {
+        return Ok(vec![]);
+    };
+    let static_keys = static_peers.pub_keys.into_iter().filter_map(|spk|{
+        let p2p_address: IpAddr = spk.p2p_address.parse().unwrap();
+        if is_private(p2p_address) {
+            error!("{} appears to be a private address. We only allow 169.254.0.0/16 addresses to be private; ignoring this entry", p2p_address);
+            dbg!("skipping {}", spk);
+            return None;
+        }
+        Some(spk)
+    }).map(|spk|{
+        let key_pair = hex::decode(spk.pub_key).unwrap();
+        let public_key = Ed25519PublicKey::from_bytes(key_pair.as_ref()).unwrap();
+        let p2p_address: IpAddr = spk.p2p_address.parse().unwrap();
+        let s = SuiPeer{
+            name:spk.name.clone(),
+            p2p_address: to_multiaddr(p2p_address),
+            public_key,
+        };
+        info!("loaded static peer: {} public key: {}", &s.name, &s.public_key);
+        s
+    }).collect();
+    Ok(static_keys)
 }
 
 /// Default allow mode for server, we don't verify clients, everything is accepted
@@ -242,16 +251,10 @@ pub fn create_server_cert_enforce_peer(
             "missing certs to initialize server".into(),
         ));
     };
-    let static_peers = static_peers.unwrap_or_else(|| StaticPeerValidationConfig {
-        pub_key_path: "pub_keys/".into(),
-    });
-    let static_keys = load_all_certs(&static_peers.pub_key_path).map_err(|e| {
-        sui_tls::rustls::Error::General(format!(
-            "load_all_certs for pub keys failed for path; {}; {}",
-            static_peers.pub_key_path, e
-        ))
+    let static_peers = load_static_peers(static_peers).map_err(|e| {
+        sui_tls::rustls::Error::General(format!("unable to load static pub keys: {}", e))
     })?;
-    let allower = SuiNodeProvider::new(dynamic_peers.url, dynamic_peers.interval, static_keys);
+    let allower = SuiNodeProvider::new(dynamic_peers.url, dynamic_peers.interval, static_peers);
     allower.poll_peer_list();
     let c = CertVerifier::new(allower.clone()).rustls_server_config(
         load_certs(&certificate_path),

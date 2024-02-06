@@ -9,9 +9,7 @@ pub const SUI_VALIDATOR_SERVER_NAME: &str = "sui";
 
 pub use acceptor::{TlsAcceptor, TlsConnectionInfo};
 pub use certgen::SelfSignedCertificate;
-pub use verifier::{
-    public_key_from_certificate, AllowAll, Allower, CertVerifier, HashSetAllow, ValidatorAllowlist,
-};
+pub use verifier::{AllowAll, Allower, CertVerifier, HashSetAllow, ValidatorAllowlist};
 
 pub use rustls;
 
