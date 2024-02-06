@@ -2470,7 +2470,7 @@ fn function_(
         let current_package = context.current_package;
         context
             .env()
-            .check_feature(FeatureGate::Macros, current_package, macro_loc);
+            .check_feature(FeatureGate::MacroFuns, current_package, macro_loc);
     }
     let visibility = visibility(pvisibility);
     let signature = function_signature(context, macro_, psignature);

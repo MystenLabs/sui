@@ -5,6 +5,7 @@
 use super::core::{self, Context};
 use crate::{
     diag,
+    editions::FeatureGate,
     expansion::ast::Value_,
     naming::ast::{BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_},
     parser::ast::Ability_,
@@ -99,11 +100,16 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
 }
 
 fn unexpected_lambda_type(context: &mut Context, loc: Loc) {
-    let msg = "Unexpected lambda type. \
-        Lambdas can only be used as parameters for, or direct arguments to, macro functions";
-    context
+    if context
         .env
-        .add_diag(diag!(TypeSafety::UnexpectedFunctionType, (loc, msg)));
+        .check_feature(FeatureGate::MacroFuns, context.current_package, loc)
+    {
+        let msg = "Unexpected lambda type. \
+        Lambdas can only be used as parameters for, or direct arguments to, 'macro' functions";
+        context
+            .env
+            .add_diag(diag!(TypeSafety::UnexpectedFunctionType, (loc, msg)));
+    }
 }
 
 //**************************************************************************************************

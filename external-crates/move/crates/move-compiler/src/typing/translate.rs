@@ -1343,10 +1343,15 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         }
 
         NE::Lambda(_) => {
-            let msg = "Lambdas can only be used directly as arguments to macro functions";
-            context
+            if context
                 .env
-                .add_diag(diag!(TypeSafety::UnexpectedLambda, (eloc, msg)));
+                .check_feature(FeatureGate::MacroFuns, context.current_package, eloc)
+            {
+                let msg = "Lambdas can only be used directly as arguments to 'macro' functions";
+                context
+                    .env
+                    .add_diag(diag!(TypeSafety::UnexpectedLambda, (eloc, msg)))
+            }
             (context.error_type(eloc), TE::UnresolvedError)
         }
 

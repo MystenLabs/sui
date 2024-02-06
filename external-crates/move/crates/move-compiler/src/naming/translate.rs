@@ -1708,7 +1708,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 ResolvedFunction::Module(mf) => {
                     if let Some(mloc) = is_macro {
                         context.env.check_feature(
-                            FeatureGate::Macros,
+                            FeatureGate::MacroFuns,
                             context.current_package,
                             mloc,
                         );
@@ -1745,9 +1745,11 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 let ty_args = tys_opt.map(|tys| types(context, tys));
                 let nes = call_args(context, rhs);
                 if is_macro.is_some() {
-                    context
-                        .env
-                        .check_feature(FeatureGate::Macros, context.current_package, eloc);
+                    context.env.check_feature(
+                        FeatureGate::MacroFuns,
+                        context.current_package,
+                        eloc,
+                    );
                 }
                 NE::MethodCall(d, n, is_macro, ty_args, nes)
             }
