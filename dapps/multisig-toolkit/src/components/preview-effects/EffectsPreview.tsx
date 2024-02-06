@@ -22,16 +22,19 @@ export function EffectsPreview({ output }: { output: DryRunTransactionBlockRespo
 			name: 'balance-changes',
 			title: 'Balance Changes',
 			count: balanceChanges?.length,
+			component: () => <BalanceChanges changes={balanceChanges} />,
 		},
 		{
 			name: 'object-changes',
 			title: 'Object Changes',
 			count: objectChanges?.length,
+			component: () => <ObjectChanges objects={objectChanges} />,
 		},
 		{
 			name: 'events',
 			title: 'Events',
 			count: output.events.length,
+			component: () => <Events events={output.events} />,
 		},
 		{
 			name: 'transactions',
@@ -40,10 +43,12 @@ export function EffectsPreview({ output }: { output: DryRunTransactionBlockRespo
 				output.input.transaction.kind === 'ProgrammableTransaction'
 					? output.input.transaction.transactions.length
 					: 0,
+			component: () => <Transactions inputs={output.input} />,
 		},
 		{
 			name: 'json',
 			title: 'Raw JSON',
+			component: () => <Textarea value={JSON.stringify(output, null, 4)} rows={20} />,
 		},
 	];
 
@@ -65,25 +70,13 @@ export function EffectsPreview({ output }: { output: DryRunTransactionBlockRespo
 					})}
 				</Tabs.List>
 
-				<Tabs.Content className="py-6 " value="balance-changes">
-					<BalanceChanges changes={balanceChanges} />
-				</Tabs.Content>
-
-				<Tabs.Content className="py-6" value="object-changes">
-					<ObjectChanges objects={objectChanges} />
-				</Tabs.Content>
-
-				<Tabs.Content className="py-6" value="events">
-					<Events events={output.events} />
-				</Tabs.Content>
-
-				<Tabs.Content className="py-6" value="transactions">
-					<Transactions inputs={output.input} />
-				</Tabs.Content>
-
-				<Tabs.Content className="py-6" value="json">
-					<Textarea value={JSON.stringify(output, null, 4)} rows={20} />
-				</Tabs.Content>
+				{tabs.map((tab, index) => {
+					return (
+						<Tabs.Content key={index} value={tab.name} className="py-6">
+							{tab.component()}
+						</Tabs.Content>
+					);
+				})}
 			</Tabs.Root>
 		</>
 	);

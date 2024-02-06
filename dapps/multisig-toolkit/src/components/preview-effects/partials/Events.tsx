@@ -7,7 +7,7 @@ import { ReactNode } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 
 import { ObjectLink } from '../ObjectLink';
-import PreviewCard from '../PreviewCard';
+import { PreviewCard } from '../PreviewCard';
 
 export function Events({ events }: { events: SuiEvent[] }) {
 	if (events.length === 0) {

@@ -55,11 +55,9 @@ function Footer({ children, owner }: FooterProps & { owner?: ObjectOwner }) {
 	);
 }
 
-const PreviewCard = {
+export const PreviewCard = {
 	Root,
 	Header,
 	Body,
 	Footer,
 };
-
-export default PreviewCard;

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 export const onChainAmountToFloat = (amount: string, decimals: number) => {
-	if (!decimals) return undefined;
 	const total = parseFloat(amount);
 
 	return total / Math.pow(10, decimals);
