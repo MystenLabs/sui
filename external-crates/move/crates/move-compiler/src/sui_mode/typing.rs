@@ -887,23 +887,6 @@ fn exp(context: &mut Context, e: &T::Exp) {
             if is_transfer_module && PRIVATE_TRANSFER_FUNCTIONS.contains(&name.value()) {
                 check_private_transfer(context, e.exp.loc, mcall)
             }
-            // TODO(tzakian): Temporary
-            if is_transfer_module && &*name.value() == "receiving_object_id" {
-                let diag = diag!(
-                    crate::diagnostics::codes::custom(
-                        SUI_DIAG_PREFIX,
-                        Severity::NonblockingError,
-                        TYPING,
-                        10,
-                        "Non-supported call"
-                    ),
-                    (
-                        e.exp.loc,
-                        "Calling 'receiving_object_id' is not supported at this time"
-                    ),
-                );
-                context.env.add_diag(diag);
-            }
         }
         T::UnannotatedExp_::Pack(m, s, _, _) => {
             if !context.in_test

@@ -1,8 +1,8 @@
 ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/external_dev_dep",
-        root_package: "Root",
-        root_package_orig_name: "Root",
+        root_package_id: "Root",
+        root_package_name: "Root",
         package_graph: {
             "Root": [
                 (
@@ -52,6 +52,7 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/A",
                 ),
+                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
@@ -60,6 +61,7 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/ADep",
                 ),
+                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
@@ -68,6 +70,7 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/B",
                 ),
+                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
@@ -76,6 +79,7 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/BDep",
                 ),
+                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),

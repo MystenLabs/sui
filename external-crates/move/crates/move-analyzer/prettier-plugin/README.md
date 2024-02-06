@@ -44,7 +44,7 @@ Go to the root directory of the Move package whose files you'd like to format (i
 containing the Move.toml manifest file for this package) and run the following command:
 
 ``` bash
-npm install prettier@3.1.1 ~/prettier-plugin-move
+npm install prettier@3.1.1 "$SUI"/external-crates/move/crates/move-analyzer/prettier-plugin
 ```
 
 This will install both the prettier formatter and the plugin in the `./node_modules` directory.

@@ -18,6 +18,7 @@ use std::time::Duration;
 use std::{fs, io};
 use sui_config::{genesis::Genesis, NodeConfig};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
+use sui_core::in_mem_execution_cache::ExecutionCache;
 use sui_network::default_mysten_network_config;
 use sui_protocol_config::Chain;
 use sui_sdk::SuiClientBuilder;
@@ -43,6 +44,7 @@ use prometheus::Registry;
 use sui_archival::reader::{ArchiveReader, ArchiveReaderMetrics};
 use sui_archival::{verify_archive_with_checksums, verify_archive_with_genesis_config};
 use sui_config::node::ArchiveReaderConfig;
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::AuthorityStore;
 use sui_core::checkpoints::CheckpointStore;
@@ -51,7 +53,7 @@ use sui_core::storage::RocksDbStore;
 use sui_snapshot::reader::StateSnapshotReaderV1;
 use sui_snapshot::setup_db_state;
 use sui_storage::object_store::util::{copy_file, exists, get_path};
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreGetExt, ObjectStoreType};
+use sui_storage::object_store::ObjectStoreGetExt;
 use sui_storage::verify_checkpoint_range;
 use sui_types::messages_checkpoint::{CheckpointCommitment, ECMHLiveObjectSetDigest};
 use sui_types::messages_grpc::{
@@ -659,7 +661,12 @@ fn start_summary_sync(
             &Registry::default(),
         )
         .await?;
-        let state_sync_store = RocksDbStore::new(store, committee_store, checkpoint_store.clone());
+        let state_sync_store = RocksDbStore::new(
+            store.clone(),
+            Arc::new(ExecutionCache::new_with_no_metrics(store)),
+            committee_store,
+            checkpoint_store.clone(),
+        );
         // Only insert the genesis checkpoint if the DB is empty and doesn't have it already
         if checkpoint_store
             .get_checkpoint_by_digest(genesis.checkpoint().digest())
@@ -1232,7 +1239,12 @@ pub async fn state_sync_from_archive(
         .get_highest_synced_checkpoint()?
         .map(|c| c.sequence_number)
         .unwrap_or(0);
-    let state_sync_store = RocksDbStore::new(store, committee_store, checkpoint_store.clone());
+    let state_sync_store = RocksDbStore::new(
+        store.clone(),
+        Arc::new(ExecutionCache::new_with_no_metrics(store)),
+        committee_store,
+        checkpoint_store.clone(),
+    );
     let archive_reader_config = ArchiveReaderConfig {
         remote_store_config,
         download_concurrency: NonZeroUsize::new(concurrency).unwrap(),

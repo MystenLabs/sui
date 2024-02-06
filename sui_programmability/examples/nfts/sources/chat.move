@@ -34,7 +34,7 @@ module nfts::chat {
         chat.text
     }
 
-    #[lint_allow(self_transfer)]
+    #[allow(lint(self_transfer))]
     /// Mint (post) a Chat object.
     fun post_internal(
         app_id: address,

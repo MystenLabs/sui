@@ -27,13 +27,14 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::genesis::Genesis;
 use sui_config::node::ArchiveReaderConfig;
+use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::util::{get, put};
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreGetExt, ObjectStorePutExt};
+use sui_storage::object_store::{ObjectStoreGetExt, ObjectStorePutExt};
 use sui_storage::{compute_sha3_checksum, SHA3_BYTES};
 use sui_types::base_types::ExecutionData;
 use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
-use sui_types::storage::{ReadStore, SingleCheckpointSharedInMemoryStore, WriteStore};
+use sui_types::storage::{SingleCheckpointSharedInMemoryStore, WriteStore};
 use tracing::{error, info};
 
 /// Checkpoints and summaries are persisted as blob files. Files are committed to local store
@@ -395,7 +396,6 @@ pub async fn verify_archive_with_local_store<S>(
 ) -> Result<()>
 where
     S: WriteStore + Clone + Send + 'static,
-    <S as ReadStore>::Error: std::error::Error,
 {
     let metrics = ArchiveReaderMetrics::new(&Registry::default());
     let config = ArchiveReaderConfig {

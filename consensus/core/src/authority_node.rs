@@ -5,14 +5,16 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::block_manager::BlockManager;
-use consensus_config::{AuthorityIndex, Committee, Parameters, ProtocolKeyPair};
+use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use prometheus::Registry;
 use sui_protocol_config::ProtocolConfig;
 use tracing::info;
 
 use crate::block_verifier::BlockVerifier;
 use crate::context::Context;
-use crate::core::{Core, CoreOptions, CoreSignals};
+use crate::core::{Core, CoreSignals};
+use crate::core_thread::CoreThreadDispatcher;
+use crate::leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle};
 use crate::metrics::initialise_metrics;
 use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
@@ -20,6 +22,7 @@ pub struct AuthorityNode {
     context: Arc<Context>,
     start_time: Instant,
     transactions_client: Arc<TransactionsClient>,
+    leader_timeout_handle: LeaderTimeoutTaskHandle,
 }
 
 impl AuthorityNode {
@@ -29,8 +32,8 @@ impl AuthorityNode {
         committee: Committee,
         parameters: Parameters,
         protocol_config: ProtocolConfig,
-        // To avoid accidentally leaking the private key, the key pair should only be
-        // stored in the Block signer.
+        // To avoid accidentally leaking the private key, the key pair should only be stored in core
+        block_signer: NetworkKeyPair,
         _signer: ProtocolKeyPair,
         _block_verifier: impl BlockVerifier,
         registry: Registry,
@@ -47,22 +50,28 @@ impl AuthorityNode {
 
         // Create the transactions client and the transactions consumer
         let (client, tx_receiver) = TransactionsClient::new(context.clone());
-        let tx_consumer = TransactionsConsumer::new(tx_receiver);
+        let tx_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
 
         // Construct Core
-        let (core_signals, _signals_receivers) = CoreSignals::new();
+        let (core_signals, signals_receivers) = CoreSignals::new();
         let block_manager = BlockManager::new();
-        let _core = Core::new(
+        let core = Core::new(
             context.clone(),
             tx_consumer,
             block_manager,
             core_signals,
-            CoreOptions::default(),
+            block_signer,
         );
+
+        let (core_dispatcher, core_dispatcher_handle) =
+            CoreThreadDispatcher::start(core, context.clone());
+        let leader_timeout_handle =
+            LeaderTimeoutTask::start(core_dispatcher, signals_receivers, context.clone());
 
         Self {
             context,
             start_time,
+            leader_timeout_handle,
             transactions_client: Arc::new(client),
         }
     }
@@ -73,6 +82,9 @@ impl AuthorityNode {
             "Stopping authority. Total run time: {:?}",
             self.start_time.elapsed()
         );
+
+        self.leader_timeout_handle.stop().await;
+
         self.context
             .metrics
             .node_metrics
@@ -88,13 +100,13 @@ impl AuthorityNode {
 
 #[cfg(test)]
 mod tests {
-    use consensus_config::{Committee, Parameters, ProtocolKeyPair};
+    use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
     use fastcrypto::traits::ToFromBytes;
     use prometheus::Registry;
-    use sui_protocol_config::ProtocolConfig;
 
     use crate::authority_node::AuthorityNode;
     use crate::block_verifier::TestBlockVerifier;
+    use crate::context::Context;
 
     #[tokio::test]
     async fn start_and_stop() {
@@ -104,13 +116,15 @@ mod tests {
         let block_verifier = TestBlockVerifier {};
 
         let (own_index, _) = committee.authorities().last().unwrap();
+        let block_signer = NetworkKeyPair::from_bytes(keypairs[0].0.as_bytes()).unwrap();
         let signer = ProtocolKeyPair::from_bytes(keypairs[0].1.as_bytes()).unwrap();
 
         let authority = AuthorityNode::start(
             own_index,
             committee,
             parameters,
-            ProtocolConfig::get_for_min_version(),
+            Context::default_protocol_config_for_testing(),
+            block_signer,
             signer,
             block_verifier,
             registry,

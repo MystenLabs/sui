@@ -524,15 +524,15 @@ impl FullCheckpointContents {
     pub fn from_checkpoint_contents<S>(
         store: S,
         contents: CheckpointContents,
-    ) -> Result<Option<Self>, <S as ReadStore>::Error>
+    ) -> Result<Option<Self>, crate::storage::error::Error>
     where
         S: ReadStore,
     {
         let mut transactions = Vec::with_capacity(contents.size());
         for tx in contents.iter() {
             if let (Some(t), Some(e)) = (
-                store.get_transaction_block(&tx.transaction)?,
-                store.get_transaction_effects(&tx.effects)?,
+                store.get_transaction(&tx.transaction)?,
+                store.get_transaction_effects(&tx.transaction)?,
             ) {
                 transactions.push(ExecutionData::new(t.into_inner(), e))
             } else {

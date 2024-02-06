@@ -15,6 +15,7 @@ use sui_types::{
     },
 };
 
+use crate::consistency::ConsistentIndexCursor;
 use crate::types::cursor::{JsonCursor, Page};
 use crate::types::sui_address::SuiAddress;
 use crate::{
@@ -26,7 +27,11 @@ use crate::{
 };
 
 #[derive(Clone, PartialEq, Eq)]
-pub(crate) struct EndOfEpochTransaction(pub Vec<NativeEndOfEpochTransactionKind>);
+pub(crate) struct EndOfEpochTransaction {
+    pub native: Vec<NativeEndOfEpochTransactionKind>,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
+}
 
 #[derive(Union, Clone, PartialEq, Eq)]
 pub(crate) enum EndOfEpochTransactionKind {
@@ -38,7 +43,11 @@ pub(crate) enum EndOfEpochTransactionKind {
 }
 
 #[derive(Clone, PartialEq, Eq)]
-pub(crate) struct ChangeEpochTransaction(pub NativeChangeEpochTransaction);
+pub(crate) struct ChangeEpochTransaction {
+    pub native: NativeChangeEpochTransaction,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
+}
 
 /// System transaction for creating the on-chain state used by zkLogin.
 #[derive(SimpleObject, Clone, PartialEq, Eq)]
@@ -49,9 +58,11 @@ pub(crate) struct AuthenticatorStateCreateTransaction {
 }
 
 #[derive(Clone, PartialEq, Eq)]
-pub(crate) struct AuthenticatorStateExpireTransaction(
-    pub NativeAuthenticatorStateExpireTransaction,
-);
+pub(crate) struct AuthenticatorStateExpireTransaction {
+    pub native: NativeAuthenticatorStateExpireTransaction,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
+}
 
 #[derive(SimpleObject, Clone, PartialEq, Eq)]
 pub(crate) struct RandomnessStateCreateTransaction {
@@ -67,8 +78,8 @@ pub(crate) struct CoinDenyListStateCreateTransaction {
     dummy: Option<bool>,
 }
 
-pub(crate) type CTxn = JsonCursor<usize>;
-pub(crate) type CPackage = JsonCursor<usize>;
+pub(crate) type CTxn = JsonCursor<ConsistentIndexCursor>;
+pub(crate) type CPackage = JsonCursor<ConsistentIndexCursor>;
 
 /// System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions
 /// at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other
@@ -87,7 +98,9 @@ impl EndOfEpochTransaction {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) = page.paginate_indices(self.0.len()) else {
+        let Some((prev, next, _, cs)) =
+            page.paginate_consistent_indices(self.native.len(), self.checkpoint_viewed_at)?
+        else {
             return Ok(connection);
         };
 
@@ -95,7 +108,7 @@ impl EndOfEpochTransaction {
         connection.has_next_page = next;
 
         for c in cs {
-            let tx = EndOfEpochTransactionKind::from(self.0[*c].clone());
+            let tx = EndOfEpochTransactionKind::from(self.native[c.ix].clone(), c.c);
             connection.edges.push(Edge::new(c.encode_cursor(), tx));
         }
 
@@ -112,40 +125,44 @@ impl EndOfEpochTransaction {
 impl ChangeEpochTransaction {
     /// The next (to become) epoch.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch))
-            .await
-            .extend()
+        Epoch::query(
+            ctx.data_unchecked(),
+            Some(self.native.epoch),
+            Some(self.checkpoint_viewed_at),
+        )
+        .await
+        .extend()
     }
 
     /// The protocol version in effect in the new epoch.
     async fn protocol_version(&self) -> u64 {
-        self.0.protocol_version.as_u64()
+        self.native.protocol_version.as_u64()
     }
 
     /// The total amount of gas charged for storage during the previous epoch (in MIST).
     async fn storage_charge(&self) -> BigInt {
-        BigInt::from(self.0.storage_charge)
+        BigInt::from(self.native.storage_charge)
     }
 
     /// The total amount of gas charged for computation during the previous epoch (in MIST).
     async fn computation_charge(&self) -> BigInt {
-        BigInt::from(self.0.computation_charge)
+        BigInt::from(self.native.computation_charge)
     }
 
     /// The SUI returned to transaction senders for cleaning up objects (in MIST).
     async fn storage_rebate(&self) -> BigInt {
-        BigInt::from(self.0.storage_rebate)
+        BigInt::from(self.native.storage_rebate)
     }
 
     /// The total gas retained from storage fees, that will not be returned by storage rebates when
     /// the relevant objects are cleaned up (in MIST).
     async fn non_refundable_storage_fee(&self) -> BigInt {
-        BigInt::from(self.0.non_refundable_storage_fee)
+        BigInt::from(self.native.non_refundable_storage_fee)
     }
 
     /// Time at which the next epoch will start.
     async fn start_timestamp(&self) -> Result<DateTime, Error> {
-        DateTime::from_ms(self.0.epoch_start_timestamp_ms as i64)
+        DateTime::from_ms(self.native.epoch_start_timestamp_ms as i64)
     }
 
     /// System packages (specifically framework and move stdlib) that are written before the new
@@ -162,7 +179,11 @@ impl ChangeEpochTransaction {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) = page.paginate_indices(self.0.system_packages.len()) else {
+        let Some((prev, next, _, cs)) = page.paginate_consistent_indices(
+            self.native.system_packages.len(),
+            self.checkpoint_viewed_at,
+        )?
+        else {
             return Ok(connection);
         };
 
@@ -170,7 +191,7 @@ impl ChangeEpochTransaction {
         connection.has_next_page = next;
 
         for c in cs {
-            let (version, modules, deps) = &self.0.system_packages[*c];
+            let (version, modules, deps) = &self.native.system_packages[c.ix];
             let compiled_modules = modules
                 .iter()
                 .map(|bytes| CompiledModule::deserialize_with_defaults(bytes))
@@ -186,8 +207,8 @@ impl ChangeEpochTransaction {
             );
 
             let runtime_id = native.id();
-            let object = Object::from_native(SuiAddress::from(runtime_id), native);
-            let package = MovePackage::try_from(&object)
+            let object = Object::from_native(SuiAddress::from(runtime_id), native, Some(c.c));
+            let package = MovePackage::try_from(&object, self.checkpoint_viewed_at)
                 .map_err(|_| Error::Internal("Failed to create system package".to_string()))
                 .extend()?;
 
@@ -202,29 +223,39 @@ impl ChangeEpochTransaction {
 impl AuthenticatorStateExpireTransaction {
     /// Expire JWKs that have a lower epoch than this.
     async fn min_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.0.min_epoch))
-            .await
-            .extend()
+        Epoch::query(
+            ctx.data_unchecked(),
+            Some(self.native.min_epoch),
+            Some(self.checkpoint_viewed_at),
+        )
+        .await
+        .extend()
     }
 
     /// The initial version that the AuthenticatorStateUpdate was shared at.
     async fn authenticator_obj_initial_shared_version(&self) -> u64 {
-        self.0.authenticator_obj_initial_shared_version.value()
+        self.native.authenticator_obj_initial_shared_version.value()
     }
 }
 
-impl From<NativeEndOfEpochTransactionKind> for EndOfEpochTransactionKind {
-    fn from(kind: NativeEndOfEpochTransactionKind) -> Self {
+impl EndOfEpochTransactionKind {
+    fn from(kind: NativeEndOfEpochTransactionKind, checkpoint_viewed_at: u64) -> Self {
         use EndOfEpochTransactionKind as K;
         use NativeEndOfEpochTransactionKind as N;
 
         match kind {
-            N::ChangeEpoch(ce) => K::ChangeEpoch(ChangeEpochTransaction(ce)),
+            N::ChangeEpoch(ce) => K::ChangeEpoch(ChangeEpochTransaction {
+                native: ce,
+                checkpoint_viewed_at,
+            }),
             N::AuthenticatorStateCreate => {
                 K::AuthenticatorStateCreate(AuthenticatorStateCreateTransaction { dummy: None })
             }
             N::AuthenticatorStateExpire(ase) => {
-                K::AuthenticatorStateExpire(AuthenticatorStateExpireTransaction(ase))
+                K::AuthenticatorStateExpire(AuthenticatorStateExpireTransaction {
+                    native: ase,
+                    checkpoint_viewed_at,
+                })
             }
             N::RandomnessStateCreate => {
                 K::RandomnessStateCreate(RandomnessStateCreateTransaction { dummy: None })

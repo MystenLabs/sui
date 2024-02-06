@@ -7,11 +7,11 @@ pub mod comments;
 pub(crate) mod filter;
 pub mod keywords;
 pub mod lexer;
-pub(crate) mod merge_spec_modules;
 pub(crate) mod syntax;
+pub(crate) mod verification_attribute_filter;
 
 use crate::{
-    diagnostics::{Diagnostics, FilesSourceText},
+    diagnostics::FilesSourceText,
     parser::{self, ast::PackageDefinition, syntax::parse_file_string},
     shared::{CompilationEnv, IndexedPackagePath, NamedAddressMaps},
 };
@@ -71,15 +71,13 @@ pub(crate) fn parse_program(
         named_address_map,
     } in targets
     {
-        let (defs, comments, ds, file_hash) =
-            parse_file(compilation_env, &mut files, path, package)?;
+        let (defs, comments, file_hash) = parse_file(compilation_env, &mut files, path, package)?;
         source_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
             package,
             named_address_map,
             def,
         }));
         source_comments.insert(file_hash, comments);
-        compilation_env.add_diags(ds);
     }
 
     for IndexedPackagePath {
@@ -88,13 +86,12 @@ pub(crate) fn parse_program(
         named_address_map,
     } in deps
     {
-        let (defs, _, ds, _) = parse_file(compilation_env, &mut files, path, package)?;
+        let (defs, _, _) = parse_file(compilation_env, &mut files, path, package)?;
         lib_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
             package,
             named_address_map,
             def,
         }));
-        compilation_env.add_diags(ds);
     }
 
     let pprog = parser::ast::Program {
@@ -153,10 +150,8 @@ fn parse_file(
 ) -> anyhow::Result<(
     Vec<parser::ast::Definition>,
     MatchedFileCommentMap,
-    Diagnostics,
     FileHash,
 )> {
-    let mut diags = Diagnostics::new();
     let mut f = File::open(fname.as_str())
         .map_err(|err| std::io::Error::new(err.kind(), format!("{}: {}", err, fname)))?;
     let mut source_buffer = String::new();
@@ -164,19 +159,19 @@ fn parse_file(
     let file_hash = FileHash::new(&source_buffer);
     let buffer = match verify_string(file_hash, &source_buffer) {
         Err(ds) => {
-            diags.extend(ds);
+            compilation_env.add_diags(ds);
             files.insert(file_hash, (fname, source_buffer));
-            return Ok((vec![], MatchedFileCommentMap::new(), diags, file_hash));
+            return Ok((vec![], MatchedFileCommentMap::new(), file_hash));
         }
         Ok(()) => &source_buffer,
     };
     let (defs, comments) = match parse_file_string(compilation_env, file_hash, buffer, package) {
         Ok(defs_and_comments) => defs_and_comments,
         Err(ds) => {
-            diags.extend(ds);
+            compilation_env.add_diags(ds);
             (vec![], MatchedFileCommentMap::new())
         }
     };
     files.insert(file_hash, (fname, source_buffer));
-    Ok((defs, comments, diags, file_hash))
+    Ok((defs, comments, file_hash))
 }

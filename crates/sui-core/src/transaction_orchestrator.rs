@@ -7,7 +7,7 @@ Transaction Orchestrator is a Node component that utilizes Quorum Driver to
 submit transactions to validators for finality, and proactively executes
 finalized transactions locally, when possible.
 */
-use crate::authority::{AuthorityState, EffectsNotifyRead};
+use crate::authority::AuthorityState;
 use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
@@ -280,13 +280,14 @@ where
         // So we also subscribe to that. If we hear from `effects_await` first, it means
         // the ticket misses the previous notification, and we want to ask quorum driver
         // to form a certificate for us again, to serve this request.
-        let effects_await = self
-            .validator_state
-            .database
-            .notify_read_executed_effects(vec![tx_digest]);
+        let cache_reader = self.validator_state.get_cache_reader().clone();
         let qd = self.clone_quorum_driver();
         Ok(async move {
-            match select(ticket, effects_await.boxed()).await {
+            let digests = [tx_digest];
+            let effects_await = cache_reader.notify_read_executed_effects(&digests);
+            // let-and-return necessary to satisfy borrow checker.
+            #[allow(clippy::let_and_return)]
+            let res = match select(ticket, effects_await.boxed()).await {
                 Either::Left((quorum_driver_response, _)) => Ok(quorum_driver_response),
                 Either::Right((_, unfinished_quorum_driver_task)) => {
                     debug!(
@@ -296,7 +297,8 @@ where
                     qd.submit_transaction_no_ticket(transaction.into()).await?;
                     Ok(unfinished_quorum_driver_task.await)
                 }
-            }
+            };
+            res
         })
     }
 

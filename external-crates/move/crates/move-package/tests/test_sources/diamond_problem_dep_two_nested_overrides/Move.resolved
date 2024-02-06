@@ -1,8 +1,8 @@
 ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/diamond_problem_dep_two_nested_overrides",
-        root_package: "Root",
-        root_package_orig_name: "Root",
+        root_package_id: "Root",
+        root_package_name: "Root",
         package_graph: {
             "Root": [
                 (
@@ -94,30 +94,35 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/A",
                 ),
+                version: None,
                 resolver: None,
             },
             "B": Package {
                 kind: Local(
                     "deps_only/B",
                 ),
+                version: None,
                 resolver: None,
             },
             "C": Package {
                 kind: Local(
                     "deps_only/C",
                 ),
+                version: None,
                 resolver: None,
             },
             "D": Package {
                 kind: Local(
                     "deps_only/D",
                 ),
+                version: None,
                 resolver: None,
             },
             "E": Package {
                 kind: Local(
                     "deps_only/E-v1",
                 ),
+                version: None,
                 resolver: None,
             },
         },

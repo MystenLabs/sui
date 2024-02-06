@@ -32,22 +32,44 @@ pub(crate) enum TransactionBlockKind {
     EndOfEpoch(EndOfEpochTransaction),
 }
 
-impl From<NativeTransactionKind> for TransactionBlockKind {
-    fn from(kind: NativeTransactionKind) -> Self {
+impl TransactionBlockKind {
+    pub(crate) fn from(kind: NativeTransactionKind, checkpoint_viewed_at: u64) -> Self {
         use NativeTransactionKind as K;
         use TransactionBlockKind as T;
 
         match kind {
-            K::ProgrammableTransaction(pt) => T::Programmable(ProgrammableTransactionBlock(pt)),
-            K::ChangeEpoch(ce) => T::ChangeEpoch(ChangeEpochTransaction(ce)),
-            K::Genesis(g) => T::Genesis(GenesisTransaction(g)),
-            K::ConsensusCommitPrologue(ccp) => T::ConsensusCommitPrologue(ccp.into()),
-            K::ConsensusCommitPrologueV2(ccp) => T::ConsensusCommitPrologue(ccp.into()),
+            K::ProgrammableTransaction(pt) => T::Programmable(ProgrammableTransactionBlock {
+                native: pt,
+                checkpoint_viewed_at,
+            }),
+            K::ChangeEpoch(ce) => T::ChangeEpoch(ChangeEpochTransaction {
+                native: ce,
+                checkpoint_viewed_at,
+            }),
+            K::Genesis(g) => T::Genesis(GenesisTransaction {
+                native: g,
+                checkpoint_viewed_at,
+            }),
+            K::ConsensusCommitPrologue(ccp) => T::ConsensusCommitPrologue(
+                ConsensusCommitPrologueTransaction::from_v1(ccp, checkpoint_viewed_at),
+            ),
+            K::ConsensusCommitPrologueV2(ccp) => T::ConsensusCommitPrologue(
+                ConsensusCommitPrologueTransaction::from_v2(ccp, checkpoint_viewed_at),
+            ),
             K::AuthenticatorStateUpdate(asu) => {
-                T::AuthenticatorState(AuthenticatorStateUpdateTransaction(asu))
+                T::AuthenticatorState(AuthenticatorStateUpdateTransaction {
+                    native: asu,
+                    checkpoint_viewed_at,
+                })
             }
-            K::EndOfEpochTransaction(eoe) => T::EndOfEpoch(EndOfEpochTransaction(eoe)),
-            K::RandomnessStateUpdate(rsu) => T::Randomness(RandomnessStateUpdateTransaction(rsu)),
+            K::EndOfEpochTransaction(eoe) => T::EndOfEpoch(EndOfEpochTransaction {
+                native: eoe,
+                checkpoint_viewed_at,
+            }),
+            K::RandomnessStateUpdate(rsu) => T::Randomness(RandomnessStateUpdateTransaction {
+                native: rsu,
+                checkpoint_viewed_at,
+            }),
         }
     }
 }

@@ -20,9 +20,11 @@
           referenceGasPrice
           validatorSet {
             activeValidators {
-              name
-              description
-              exchangeRatesSize
+              nodes {
+                name
+                description
+                exchangeRatesSize
+              }
             }
             totalStake
           }

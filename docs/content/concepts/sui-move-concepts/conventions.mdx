@@ -1,0 +1,494 @@
+---
+title: Conventions
+description: Recommended Move 2024 best practices for the Sui blockchain.
+---
+
+The following recommendations are based on 2024 Move.
+
+## Add section titles
+
+Use titles in code comments to create sections for your Move code files. Structure your titles using `===` on either side of the title.
+
+```move
+module conventions::comments {
+  // === Imports ===
+
+  // === Friends ===
+
+  // === Errors ===
+
+  // === Constants ===
+
+  // === Structs ===
+
+  // === Public-Mutative Functions ===
+
+  // === Public-View Functions ===
+
+  // === Admin Functions ===
+
+  // === Public-Friend Functions ===
+
+  // === Private Functions ===
+
+  // === Test Functions ===
+}
+```
+
+## CRUD functions names
+
+These are the available CRUD functions:
+
+- `add`: Adds a value.
+- `new`: Creates an object.
+- `drop`: Drops a struct.
+- `empty`: Creates a struct.
+- `remove`: Removes a value.
+- `exists_`: Checks if a key exists.
+- `contains`: Checks if a collection contains a value.
+- `destroy_empty`: Destroys an object or data structure that has values with the **drop** ability.
+- `to_object_name`: Transforms an Object X to Object Y.
+- `from_object_name`: Transforms an Object Y to Object X.
+- `property_name`: Returns an immutable reference or a copy.
+- `property_name_mut`: Returns a mutable reference.
+
+## Potato structs
+
+Do not use 'potato' in the name of structs. The lack of abilities define it as a potato pattern.
+
+```move
+module conventions::request {
+  // ✅ Right
+  struct Request {}
+
+  // ❌ Wrong
+  struct RequestPotato {}
+}
+```
+
+## Read functions
+
+Be mindful of the dot syntax when naming functions. Avoid using the object name on function names.
+
+```move
+module conventions::profile {
+
+  struct Profile {
+    age: u64
+  }
+
+  // ✅ Right
+  public fun age(self: &Profile):  u64 {
+    self.age
+  }
+
+  // ❌ Wrong
+  public fun profile_age(self: &Profile): u64 {
+    self.age
+  }
+}
+
+module conventions::defi {
+
+  use conventions::profile::{Self, Profile};
+
+  public fun get_tokens(profile: &Profile) {
+
+   // ✅ Right
+   let name = profile.age();
+
+   // ❌ Wrong
+   let name2 = profile.profile_age();
+  }
+}
+```
+
+## Empty function
+
+Name the functions that create data structures as `empty`.
+
+```move
+module conventions::collection {
+
+  struct Collection has copy, drop, store {
+    bits: vector<u8>
+  }
+
+  public fun empty(): Collection {
+    Collection {
+      bits: vector[]
+    }
+  }
+}
+```
+
+## New function
+
+Name the functions that create objects as `new`.
+
+```move
+module conventions::object {
+
+  use sui::object::{Self, UID};
+  use sui::tx_context::TxContext;
+
+  struct Object has key, store {
+    id: UID
+  }
+
+  public fun new(ctx:&mut TxContext): Object {
+    Object {
+      id: object::new(ctx)
+    }
+  }
+}
+```
+
+## Shared objects
+
+Library modules that share objects should provide two functions: one to create the object and another to share it. It allows the caller to access its UID and run custom functionality before sharing it.
+
+```move
+module conventions::profile {
+
+  use sui::object::{Self, UID};
+  use sui::tx_context::TxContext;
+  use sui::transfer::share_object;
+
+  struct Profile has key {
+    id: UID
+  }
+
+  public fun new(ctx:&mut TxContext): Profile {
+    Profile {
+      id: object::new(ctx)
+    }
+  }
+
+  public fun share(profile: Profile) {
+    share_object(profile);
+  }
+}
+```
+
+## Reference functions
+
+Name the functions that return a reference as `<PROPERTY-NAME>_mut` or `<PROPERTY-NAME>`, replacing with <PROPERTY-NAME\> the actual name of the property.
+
+```move
+module conventions::profile {
+
+  use std::string::String;
+
+  use sui::object::UID;
+
+  struct Profile has key {
+    id: UID,
+    name: String,
+    age: u8
+  }
+
+  // profile.name()
+  public fun name(self: &Profile): &String {
+    &self.name
+  }
+
+  // profile.age_mut()
+  public fun age_mut(self: &mut Profile): &mut u8 {
+    &mut self.age
+  }
+}
+```
+
+## Separation of concerns
+
+Design your modules around one object or data structure. A variant structure should have its own module to avoid complexity and bugs.
+
+```move
+module conventions::wallet {
+
+  use sui::object::UID;
+
+  struct Wallet has key, store {
+    id: UID,
+    amount: u64
+  }
+}
+
+module conventions::claw_back_wallet {
+
+  use sui::object::UID;
+
+  struct Wallet has key {
+    id: UID,
+    amount: u64
+  }
+}
+```
+
+## Errors
+
+Use PascalCase for errors, start with an E and be descriptive.
+
+```move
+module conventions::errors {
+  // ✅ Right
+  const ENameHasMaxLengthOf64Chars: u64 = 0;
+
+  // ❌ Wrong
+  const INVALID_NAME: u64 = 0;
+}
+```
+
+## Struct property comments
+
+Describe the properties of your structs.
+
+```move
+module conventions::profile {
+
+  use std::string::String;
+
+  use sui::object::UID;
+
+  struct Profile has key, store {
+    id: UID,
+    /// The age of the user
+    age: u8,
+    /// The first name of the user
+    name: String
+  }
+}
+```
+
+## Destroy functions
+
+Provide functions to delete objects. Destroy empty objects with the function `destroy_empty`. Use the function `drop` for objects that have types that can be dropped.
+
+```move
+module conventions::wallet {
+
+  use sui::object::{Self, UID};
+  use sui::balance::{Self, Balance};
+  use sui::sui::SUI;
+
+  struct Wallet<Value> has key, store {
+    id: UID,
+    value: Value
+  }
+
+  // Value has drop
+  public fun drop<Value: drop>(self: Wallet<Value>) {
+    let Wallet { id, value: _ } = self;
+    object::delete(id);
+  }
+
+  // Value doesn't have drop
+  // Throws if the `wallet.value` is not empty.
+  public fun destroy_empty(self: Wallet<Balance<SUI>>) {
+    let Wallet { id, value } = self;
+    object::delete(id);
+    balance::destroy_zero(value);
+  }
+}
+```
+
+## Pure functions
+
+Keep your functions pure to maintain composability. Do not use `transfer::transfer` or `transfer::public_transfer` inside core functions.
+
+```move
+module conventions::amm {
+
+  use sui::transfer;
+  use sui::coin::Coin;
+  use sui::object::UID;
+  use sui::tx_context::{Self, TxContext};
+
+  struct Pool has key {
+    id: UID
+  }
+
+  // ✅ Right
+  // Return the excess coins even if they have zero value.
+  public fun add_liquidity<CoinX, CoinY, LpCoin>(pool: &mut Pool, coin_x: Coin<CoinX>, coin_y: Coin<CoinY>): (Coin<LpCoin>, Coin<CoinX>, Coin<CoinY>) {
+    // Implementation omitted.
+    abort(0)
+  }
+
+  // ✅ Right
+  public fun add_liquidity_and_transfer<CoinX, CoinY, LpCoin>(pool: &mut Pool, coin_x: Coin<CoinX>, coin_y: Coin<CoinY>, recipient: address) {
+    let (lp_coin, coin_x, coin_y) = add_liquidity<CoinX, CoinY, LpCoin>(pool, coin_x, coin_y);
+    transfer::public_transfer(lp_coin, recipient);
+    transfer::public_transfer(coin_x, recipient);
+    transfer::public_transfer(coin_y, recipient);
+  }
+
+  // ❌ Wrong
+  public fun impure_add_liquidity<CoinX, CoinY, LpCoin>(pool: &mut Pool, coin_x: Coin<CoinX>, coin_y: Coin<CoinY>, ctx: &mut TxContext): Coin<LpCoin> {
+    let (lp_coin, coin_x, coin_y) = add_liquidity<CoinX, CoinY, LpCoin>(pool, coin_x, coin_y);
+    transfer::public_transfer(coin_x, tx_context::sender(ctx));
+    transfer::public_transfer(coin_y, tx_context::sender(ctx));
+
+    lp_coin
+  }
+}
+```
+
+## Coin argument
+
+Pass the `Coin` object by value with the right amount directly because it's better for transaction readability from the frontend.
+
+```move
+module conventions::amm {
+
+  use sui::coin::Coin;
+  use sui::object::UID;
+
+  struct Pool has key {
+    id: UID
+  }
+
+  // ✅ Right
+  public fun swap<CoinX, CoinY>(coin_in: Coin<CoinX>): Coin<CoinY> {
+    // Implementation omitted.
+    abort(0)
+  }
+
+  // ❌ Wrong
+  public fun exchange<CoinX, CoinY>(coin_in: &mut Coin<CoinX>, value: u64): Coin<CoinY> {
+    // Implementation omitted.
+    abort(0)
+  }
+}
+```
+
+## Access control
+
+To maintain composability, use capabilities instead of addresses for access control.
+
+```move
+module conventions::access_control {
+
+  use sui::sui::SUI;
+  use sui::object::UID;
+  use sui::balance::Balance;
+  use sui::coin::{Self, Coin};
+  use sui::table::{Self, Table};
+  use sui::tx_context::{Self, TxContext};
+
+  struct Account has key, store {
+    id: UID,
+    balance: u64
+  }
+
+  struct State has key {
+    id: UID,
+    accounts: Table<address, u64>,
+    balance: Balance<SUI>
+  }
+
+  // ✅ Right
+  // With this function, another protocol can hold the `Account` on behalf of a user.
+  public fun withdraw(state: &mut State, account: &mut Account, ctx: &mut TxContext): Coin<SUI> {
+    let authorized_balance = account.balance;
+
+    account.balance = 0;
+
+    coin::take(&mut state.balance, authorized_balance, ctx)
+  }
+
+  // ❌ Wrong
+  // This is less composable.
+  public fun wrong_withdraw(state: &mut State, ctx: &mut TxContext): Coin<SUI> {
+    let sender = tx_context::sender(ctx);
+
+    let authorized_balance = table::borrow_mut(&mut state.accounts, sender);
+    let value = *authorized_balance;
+    *authorized_balance = 0;
+    coin::take(&mut state.balance, value, ctx)
+  }
+}
+```
+
+## Data storage in owned vs shared objects
+
+If your dApp data has a one to one relationship, it's best to use owned objects.
+
+```move
+module conventions::vesting_wallet {
+
+  use sui::sui::SUI;
+  use sui::coin::Coin;
+  use sui::object::UID;
+  use sui::table::Table;
+  use sui::balance::Balance;
+  use sui::tx_context::TxContext;
+
+  struct OwnedWallet has key {
+    id: UID,
+    balance: Balance<SUI>
+  }
+
+  struct SharedWallet has key {
+    id: UID,
+    balance: Balance<SUI>,
+    accounts: Table<address, u64>
+  }
+
+  /*
+  * A vesting wallet releases a certain amount of coin over a period of time.
+  * If the entire balance belongs to one user and the wallet has no additional functionalities, it is best to store it in an owned object.
+  */
+  public fun new(deposit: Coin<SUI>, ctx: &mut TxContext): OwnedWallet {
+    // Implementation omitted.
+    abort(0)
+  }
+
+  /*
+  * If you wish to add extra functionality to a vesting wallet, it is best to share the object.
+  * For example, if you wish the issuer of the wallet to be able to cancel the contract in the future.
+  */
+  public fun new_shared(deposit: Coin<SUI>, ctx: &mut TxContext) {
+    // Implementation omitted.
+    // It shares the `SharedWallet`.
+    abort(0)
+  }
+}
+```
+
+## Admin capability
+
+In admin-gated functions, the first parameter should be the capability. It helps the autocomplete with user types.
+
+```move
+module conventions::social_network {
+
+  use std::string::String;
+
+  use sui::object::UID;
+
+  struct Account has key {
+    id: UID,
+    name: String
+  }
+
+  struct Admin has key {
+    id: UID,
+  }
+
+  // ✅ Right
+  // cap.update(&mut account, b"jose");
+  public fun update(_: &Admin, account: &mut Account, new_name: String) {
+    // Implementation omitted.
+    abort(0)
+  }
+
+  // ❌ Wrong
+  // account.update(&cap, b"jose");
+  public fun set(account: &mut Account, _: &Admin, new_name: String) {
+    // Implementation omitted.
+    abort(0)
+  }
+}
+```

@@ -1,15 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64 } from '@mysten/bcs';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { blake2b } from '@noble/hashes/blake2b';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import { HDKey } from '@scure/bip32';
 
-import type { ExportedKeypair } from '../../cryptography/keypair.js';
-import { Keypair } from '../../cryptography/keypair.js';
+import { encodeSuiPrivateKey, Keypair } from '../../cryptography/keypair.js';
 import { isValidBIP32Path, mnemonicToSeed } from '../../cryptography/mnemonics.js';
 import type { PublicKey } from '../../cryptography/publickey.js';
 import type { SignatureScheme } from '../../cryptography/signature-scheme.js';
@@ -109,6 +107,12 @@ export class Secp256k1Keypair extends Keypair {
 	getPublicKey(): PublicKey {
 		return new Secp256k1PublicKey(this.keypair.publicKey);
 	}
+	/**
+	 * The Bech32 secret key string for this Secp256k1 keypair
+	 */
+	getSecretKey(): string {
+		return encodeSuiPrivateKey(this.keypair.secretKey, this.getKeyScheme());
+	}
 
 	async sign(data: Uint8Array) {
 		return this.signData(data);
@@ -147,12 +151,5 @@ export class Secp256k1Keypair extends Keypair {
 			publicKey: key.publicKey,
 			secretKey: key.privateKey,
 		});
-	}
-
-	export(): ExportedKeypair {
-		return {
-			schema: 'Secp256k1',
-			privateKey: toB64(this.keypair.secretKey),
-		};
 	}
 }

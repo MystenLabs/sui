@@ -180,6 +180,11 @@ impl GasProfiler {
 
     #[cfg(feature = "gas-profiler")]
     pub fn to_file(&self) {
+        use std::ffi::{OsStr, OsString};
+        use std::fs::File;
+        use std::io::Write;
+        use std::time::SystemTime;
+
         let Some(config) = &self.config else {
             return;
         };
@@ -189,33 +194,28 @@ impl GasProfiler {
         }
 
         let mut p = config.full_path.clone();
-        let file_prefix = match p.file_stem() {
-            Some(fp) => fp.to_str().unwrap_or("gas_profile"),
-            None => "gas_profile",
-        };
-        let file_extension = match p.extension() {
-            Some(e) => e.to_str().unwrap_or("json"),
-            None => "json",
-        };
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Error getting system time")
-            .as_nanos();
-        let filename = format!(
-            "{}_{}_{}.{}",
-            file_prefix,
-            self.name.clone(),
-            now,
-            file_extension
+        let mut filename = OsString::new();
+        filename.push(p.file_name().unwrap_or_else(|| OsStr::new("gas_profile")));
+        filename.push("_");
+        filename.push(self.name.clone());
+        filename.push("_");
+        filename.push(
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("Error getting system time")
+                .as_nanos()
+                .to_string(),
         );
+        filename.push(".");
+        filename.push(p.extension().unwrap_or_else(|| OsStr::new("json")));
         p.set_file_name(filename);
 
-        let path_str = p.as_os_str().to_string_lossy().to_string();
-        let mut file = std::fs::File::create(p).expect("Unable to create file");
+        let mut file = File::create(&p).expect("Unable to create file");
 
         let json = serde_json::to_string_pretty(&self).expect("Unable to serialize profile");
-        std::io::Write::write_all(&mut file, json.as_bytes()).expect("Unable to write to file");
-        info!("Gas profile written to file: {}", path_str);
+        file.write_all(json.as_bytes())
+            .expect("Unable to write to file");
+        info!("Gas profile written to file: {}", p.display());
     }
 
     #[cfg(feature = "gas-profiler")]
@@ -352,10 +352,9 @@ macro_rules! profile_dump_file {
 #[macro_export]
 macro_rules! gas_profiler_feature_enabled {
     ($($tt:tt)*) => {
-        #[cfg(feature = "gas-profiler")]
-      {
-        $($tt)*
-      }
+        if cfg!(feature = "gas-profiler") {
+            $($tt)*
+        }
     };
 }
 
@@ -369,10 +368,9 @@ macro_rules! gas_profiler_feature_enabled {
 #[macro_export]
 macro_rules! gas_profiler_feature_disabled {
     ($($tt:tt)*) => {
-        #[cfg(not(feature = "gas-profiler"))]
-      {
-        $($tt)*
-      }
+        if !cfg!(feature = "gas-profiler") {
+            $($tt)*
+        }
     };
 }
 

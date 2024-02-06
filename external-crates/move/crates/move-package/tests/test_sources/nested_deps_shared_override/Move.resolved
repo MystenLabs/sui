@@ -1,8 +1,8 @@
 ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/nested_deps_shared_override",
-        root_package: "Root",
-        root_package_orig_name: "Root",
+        root_package_id: "Root",
+        root_package_name: "Root",
         package_graph: {
             "Root": [
                 (
@@ -66,18 +66,21 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/more",
                 ),
+                version: None,
                 resolver: None,
             },
             "Nested": Package {
                 kind: Local(
                     "deps_only/nested",
                 ),
+                version: None,
                 resolver: None,
             },
             "Shared": Package {
                 kind: Local(
                     "deps_only/shared",
                 ),
+                version: None,
                 resolver: None,
             },
         },

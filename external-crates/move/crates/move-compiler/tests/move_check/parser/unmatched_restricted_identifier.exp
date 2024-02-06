@@ -4,3 +4,9 @@ error[E01012]: invalid identifier escape
 4 │     fun foo(`x: u64): u64 { `x }
   │             ^^ Missing closing backtick (`) for restricted identifier escaping
 
+error[E01012]: invalid identifier escape
+  ┌─ tests/move_check/parser/unmatched_restricted_identifier.move:4:29
+  │
+4 │     fun foo(`x: u64): u64 { `x }
+  │                             ^^ Missing closing backtick (`) for restricted identifier escaping
+

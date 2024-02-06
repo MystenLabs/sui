@@ -7,3 +7,11 @@ error[E01002]: unexpected token
   │                   Unexpected 'use'
   │                   Expected an expression term
 
+warning[W09001]: unused alias
+  ┌─ tests/move_check/parser/use_inner_scope_invalid_inner.move:4:28
+  │
+4 │         if (cond) use 0x2::M;
+  │                            ^ Unused 'use' of alias 'M'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

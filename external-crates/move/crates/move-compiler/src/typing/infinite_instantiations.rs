@@ -196,7 +196,7 @@ fn function_body(context: &mut Context, sp!(_, b_): &T::FunctionBody) {
 // Expressions
 //**************************************************************************************************
 
-fn sequence(context: &mut Context, seq: &T::Sequence) {
+fn sequence(context: &mut Context, (_, seq): &T::Sequence) {
     seq.iter().for_each(|item| sequence_item(context, item))
 }
 

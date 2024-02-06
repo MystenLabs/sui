@@ -1,0 +1,10 @@
+
+# TOML FILE
+
+[package]
+name = "A"
+edition = "2024.alpha"
+
+# this is a comment
+[addresses]
+A = "0x1"

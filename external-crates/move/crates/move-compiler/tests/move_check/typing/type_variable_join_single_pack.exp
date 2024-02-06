@@ -7,3 +7,27 @@ error[E01002]: unexpected token
   │                   Unexpected 'copy'
   │                   Expected '{'
 
+error[E03004]: unbound type
+  ┌─ tests/move_check/typing/type_variable_join_single_pack.move:5:17
+  │
+5 │         let b = Box { f1: 0, f2: 1 };
+  │                 ^^^ Unbound type 'Box' in current scope
+
+error[E03004]: unbound type
+  ┌─ tests/move_check/typing/type_variable_join_single_pack.move:6:15
+  │
+6 │         (*&b: Box<u64>);
+  │               ^^^ Unbound type 'Box' in current scope
+
+error[E03004]: unbound type
+  ┌─ tests/move_check/typing/type_variable_join_single_pack.move:7:18
+  │
+7 │         let b2 = Box { f1: *&b, f2: b };
+  │                  ^^^ Unbound type 'Box' in current scope
+
+error[E03004]: unbound type
+  ┌─ tests/move_check/typing/type_variable_join_single_pack.move:8:14
+  │
+8 │         (b2: Box<Box<u64>>);
+  │              ^^^ Unbound type 'Box' in current scope
+

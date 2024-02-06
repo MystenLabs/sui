@@ -829,10 +829,8 @@ fn statement(
 
             let entry_block = VecDeque::from([make_jump(sloc, start_label, false)]);
 
-            let (body_entry_block, body_blocks) = block_(
-                context,
-                with_last(body, make_jump(sloc, end_label, false)),
-            );
+            let (body_entry_block, body_blocks) =
+                block_(context, with_last(body, make_jump(sloc, end_label, false)));
 
             context.exit_named_block(&name);
 

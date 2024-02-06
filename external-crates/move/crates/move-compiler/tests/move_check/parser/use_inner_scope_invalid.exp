@@ -7,3 +7,18 @@ error[E01002]: unexpected token
   │         Unexpected 'use'
   │         Expected an expression term
 
+error[E03002]: unbound module
+  ┌─ tests/move_check/parser/use_inner_scope_invalid.move:6:13
+  │
+6 │         use 0x1::M::foo;
+  │             ^^^^^^ Invalid 'use'. Unbound module: '0x1::M'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/use_inner_scope_invalid.move:7:9
+  │
+7 │         foo(x)
+  │         ^^^
+  │         │
+  │         Unexpected 'foo'
+  │         Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+

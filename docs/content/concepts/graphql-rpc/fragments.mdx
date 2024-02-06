@@ -1,0 +1,52 @@
+---
+title: Fragments
+---
+
+Fragments are reusable units that can be included in queries as needed. To learn more, consult the official GraphQL [documentation](https://graphql.org/learn/queries/#fragments). The following example uses fragments to factor out a reusable snippet representing a Move Value.
+
+```graphql
+query DynamicField {
+  object(
+    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
+  ) {
+    dynamicField(
+      name: {
+        type: "0x2::kiosk::Listing",
+        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1VhfwA",
+      }
+    ) {
+      ...DynamicFieldSelect
+    }
+  }
+}
+
+fragment DynamicFieldSelect on DynamicField {
+  name {
+    ...MoveValueFields
+  }
+  value {
+    ...DynamicFieldValueSelection
+  }
+}
+
+fragment DynamicFieldValueSelection on DynamicFieldValue {
+  __typename
+  ... on MoveValue {
+    ...MoveValueFields
+  }
+  ... on MoveObject {
+    hasPublicTransfer
+    contents {
+      ...MoveValueFields
+    }
+  }
+}
+
+fragment MoveValueFields on MoveValue {
+  type {
+    repr
+  }
+  data
+  bcs
+}
+```

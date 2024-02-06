@@ -5,7 +5,6 @@ module a::test1 {
     use sui::transfer;
     use sui::object::UID;
 
-    #[allow(unused_field)]
     struct Obj has key, store {
         id: UID
     }
@@ -36,20 +35,12 @@ module a::test2 {
         object::delete(id);
     }
 
-    #[lint_allow(share_owned)]
+    #[allow(lint(share_owned))]
     public entry fun unpack_obj_suppressed(w: Wrapper) {
         let Wrapper { id, i: _, o } = w;
         transfer::public_share_object(o);
         object::delete(id);
     }
-
-    // a linter suppression should not work for regular compiler warnings
-    #[linter_allow(code_suppression_should_not_work)]
-    fun private_fun_should_not_be_suppressed() {}
-
-    // a linter suppression should not work for regular compiler warnings
-    #[linter_allow(category_suppression_should_not_work)]
-    fun another_private_fun_should_not_be_suppressed() {}
 }
 
 module sui::object {

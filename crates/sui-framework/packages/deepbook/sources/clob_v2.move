@@ -321,7 +321,7 @@ module deepbook::clob_v2 {
         mint_account_cap(ctx)
     }
 
-    #[lint_allow(self_transfer, share_owned)]
+    #[allow(lint(self_transfer, share_owned))]
     fun create_pool_<BaseAsset, QuoteAsset>(
         taker_fee_rate: u64,
         maker_rebate_rate: u64,
@@ -454,7 +454,7 @@ module deepbook::clob_v2 {
         )
     }
 
-    #[lint_allow(self_transfer)]
+    #[allow(lint(self_transfer))]
     /// Function for creating pool with customized taker fee rate and maker rebate rate.
     /// The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and both should have a scaling of 10^9.
     /// Taker_fee_rate of 0.25% should be 2_500_000 for example

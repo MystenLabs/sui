@@ -24,6 +24,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::SubmitToConsensus;
+use sui_core::epoch::randomness::RandomnessManager;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::digests::ChainIdentifier;
@@ -48,6 +49,7 @@ use sui_archival::reader::ArchiveReaderBalancer;
 use sui_archival::writer::ArchiveWriter;
 use sui_config::node::{ConsensusProtocol, DBCheckpointConfig, RunWithRange};
 use sui_config::node_config_metrics::NodeConfigMetrics;
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -73,6 +75,7 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
+use sui_core::in_mem_execution_cache::ExecutionCache;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
@@ -97,7 +100,6 @@ use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
 use sui_protocol_config::{Chain, ProtocolConfig, SupportedProtocolVersions};
 use sui_snapshot::uploader::StateSnapshotUploader;
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_storage::{
     http_key_value_store::HttpKVStore,
     key_value_store::{FallbackTransactionKVStore, TransactionKeyValueStore},
@@ -440,6 +442,8 @@ impl SuiNode {
             &prometheus_registry,
         )
         .await?;
+        let execution_cache = Arc::new(ExecutionCache::new(store.clone(), &prometheus_registry));
+
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store
             .get_committee(&cur_epoch)?
@@ -458,7 +462,7 @@ impl SuiNode {
             Some(epoch_options.options),
             EpochMetrics::new(&registry_service.default_registry()),
             epoch_start_configuration,
-            store.clone(),
+            execution_cache.clone(),
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
@@ -500,8 +504,10 @@ impl SuiNode {
             genesis.checkpoint_contents().clone(),
             &epoch_store,
         );
+
         let state_sync_store = RocksDbStore::new(
             store.clone(),
+            execution_cache.clone(),
             committee_store.clone(),
             checkpoint_store.clone(),
         );
@@ -547,7 +553,8 @@ impl SuiNode {
 
         // Start archiving local state to remote store
         let state_archive_handle =
-            Self::start_state_archival(&config, &prometheus_registry, state_sync_store).await?;
+            Self::start_state_archival(&config, &prometheus_registry, state_sync_store.clone())
+                .await?;
 
         // Start uploading state snapshot to remote store
         let state_snapshot_handle = Self::start_state_snapshot(&config, &prometheus_registry)?;
@@ -573,6 +580,7 @@ impl SuiNode {
             secret,
             config.supported_protocol_versions.unwrap(),
             store.clone(),
+            execution_cache,
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
@@ -636,6 +644,7 @@ impl SuiNode {
 
         let http_server = build_http_server(
             state.clone(),
+            state_sync_store,
             &transaction_orchestrator.clone(),
             &config,
             &prometheus_registry,
@@ -1169,6 +1178,18 @@ impl SuiNode {
             );
         }
 
+        if epoch_store.randomness_state_enabled() {
+            let randomness_manager = RandomnessManager::try_new(
+                Arc::downgrade(&epoch_store),
+                consensus_adapter.clone(),
+                config.protocol_key_pair(),
+            )
+            .map(Arc::new);
+            if let Some(randomness_manager) = &randomness_manager {
+                epoch_store.set_randomness_manager(randomness_manager.clone())?;
+            }
+        }
+
         Ok(ValidatorComponents {
             validator_server_handle,
             consensus_manager,
@@ -1218,7 +1239,7 @@ impl SuiNode {
             state.clone(),
             checkpoint_store,
             epoch_store,
-            Box::new(state.db()),
+            state.get_effects_notify_read(),
             accumulator,
             checkpoint_output,
             Box::new(certified_checkpoint_output),
@@ -1342,8 +1363,7 @@ impl SuiNode {
         let mut checkpoint_executor = CheckpointExecutor::new(
             self.state_sync.subscribe_to_synced_checkpoints(),
             self.checkpoint_store.clone(),
-            self.state.database.clone(),
-            self.state.transaction_manager().clone(),
+            self.state.clone(),
             self.accumulator.clone(),
             self.config.checkpoint_executor_config.clone(),
             &self.registry_service.default_registry(),
@@ -1713,6 +1733,7 @@ fn build_kv_store(
 
 pub fn build_http_server(
     state: Arc<AuthorityState>,
+    store: RocksDbStore,
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
@@ -1780,7 +1801,7 @@ pub fn build_http_server(
             metrics,
             config.indexer_max_subscriptions,
         ))?;
-        server.register_module(MoveUtils::new(state.clone()))?;
+        server.register_module(MoveUtils::new(state))?;
 
         server.to_router(None)?
     };
@@ -1788,7 +1809,7 @@ pub fn build_http_server(
     router = router.merge(json_rpc_router);
 
     if config.enable_experimental_rest_api {
-        let rest_router = sui_rest_api::rest_router(state);
+        let rest_router = sui_rest_api::rest_router(store);
         router = router.nest("/rest", rest_router);
     }
 

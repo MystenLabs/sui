@@ -257,6 +257,15 @@ async fn reconfig_with_revert_end_to_end_test() {
 // This test just starts up a cluster that reconfigures itself under 0 load.
 #[sim_test]
 async fn test_passive_reconfig() {
+    do_test_passive_reconfig().await;
+}
+
+#[sim_test(check_determinism)]
+async fn test_passive_reconfig_determinism() {
+    do_test_passive_reconfig().await;
+}
+
+async fn do_test_passive_reconfig() {
     telemetry_subscribers::init_for_testing();
     let _commit_root_state_digest = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_commit_root_state_digest_supported(true);
@@ -580,6 +589,15 @@ async fn test_reconfig_with_committee_change_basic() {
 
 #[sim_test]
 async fn test_reconfig_with_committee_change_stress() {
+    do_test_reconfig_with_committee_change_stress().await;
+}
+
+#[sim_test(check_determinism)]
+async fn test_reconfig_with_committee_change_stress_determinism() {
+    do_test_reconfig_with_committee_change_stress().await;
+}
+
+async fn do_test_reconfig_with_committee_change_stress() {
     let mut candidates = (0..6)
         .map(|_| ValidatorGenesisConfigBuilder::new().build(&mut OsRng))
         .collect::<Vec<_>>();

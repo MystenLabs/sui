@@ -3,6 +3,7 @@
 
 use std::fmt::Display;
 
+use consensus_config::AuthorityIndex;
 use serde::{Deserialize, Serialize};
 
 use crate::block::{BlockAPI, BlockRef, Round, Slot, VerifiedBlock};
@@ -39,6 +40,13 @@ pub(crate) struct Commit {
     pub last_committed_rounds: Vec<Round>,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[allow(unused)]
+pub(crate) enum Decision {
+    Direct,
+    Indirect,
+}
+
 /// The status of every leader output by the committers. While the core only cares
 /// about committed leaders, providing a richer status allows for easier debugging,
 /// testing, and composition with advanced commit strategies.
@@ -57,6 +65,22 @@ impl LeaderStatus {
             Self::Commit(block) => block.round(),
             Self::Skip(leader) => leader.round,
             Self::Undecided(leader) => leader.round,
+        }
+    }
+
+    pub fn authority(&self) -> AuthorityIndex {
+        match self {
+            Self::Commit(block) => block.author(),
+            Self::Skip(leader) => leader.authority,
+            Self::Undecided(leader) => leader.authority,
+        }
+    }
+
+    pub fn is_decided(&self) -> bool {
+        match self {
+            Self::Commit(_) => true,
+            Self::Skip(_) => true,
+            Self::Undecided(_) => false,
         }
     }
 }

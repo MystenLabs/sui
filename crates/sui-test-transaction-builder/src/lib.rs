@@ -50,6 +50,7 @@ impl TestTransactionBuilder {
         self.gas_object
     }
 
+    // Use `with_type_args` below to provide type args if any
     pub fn move_call(
         mut self,
         package_id: ObjectID,
@@ -65,6 +66,16 @@ impl TestTransactionBuilder {
             args,
             type_args: vec![],
         });
+        self
+    }
+
+    pub fn with_type_args(mut self, type_args: Vec<TypeTag>) -> Self {
+        if let TestTransactionData::Move(data) = &mut self.test_data {
+            assert!(data.type_args.is_empty());
+            data.type_args = type_args;
+        } else {
+            panic!("Cannot set type args for non-move call");
+        }
         self
     }
 
@@ -207,16 +218,6 @@ impl TestTransactionBuilder {
             "request_remove_validator",
             vec![CallArg::SUI_SYSTEM_MUT],
         )
-    }
-
-    pub fn with_type_args(mut self, type_args: Vec<TypeTag>) -> Self {
-        if let TestTransactionData::Move(data) = &mut self.test_data {
-            assert!(data.type_args.is_empty());
-            data.type_args = type_args;
-        } else {
-            panic!("Cannot set type args for non-move call");
-        }
-        self
     }
 
     pub fn transfer(mut self, object: ObjectRef, recipient: SuiAddress) -> Self {

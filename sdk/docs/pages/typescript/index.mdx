@@ -1,3 +1,5 @@
+import { Callout } from 'nextra/components';
+
 # Sui TypeScript SDK Quick Start
 
 The Sui TypeScript SDK is a modular library of tools for interacting with the Sui blockchain. Use it
@@ -19,6 +21,19 @@ The following table lists the locations for Sui networks.
 | Devnet  | `https://fullnode.devnet.sui.io:443`  | `https://faucet.devnet.sui.io/gas`    |
 | Testnet | `https://fullnode.testnet.sui.io:443` | `https://faucet.testnet.sui.io/gas`   |
 | Mainnet | `https://fullnode.mainnet.sui.io:443` | `null`                                |
+
+<Callout type="warning">
+
+Use dedicated nodes/shared services rather than public endpoints for production apps. The public
+endpoints maintained by Mysten Labs (`fullnode.<NETWORK>.sui.io:443`) are rate-limited, and support
+only 100 requests per 30 seconds or so. Do not use public endpoints in production applications with
+high traffic volume.
+
+You can either run your own Full nodes, or outsource this to a professional infrastructure provider
+(preferred for apps that have high traffic). You can find a list of reliable RPC endpoint providers
+for Sui on the [Sui Dev Portal](https://sui.io/developers#dev-tools) using the **Node Service** tab.
+
+</Callout>
 
 ## Migrate to version 0.38.0
 

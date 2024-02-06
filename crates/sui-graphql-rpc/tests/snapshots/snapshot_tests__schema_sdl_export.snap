@@ -106,6 +106,35 @@ type Address implements IOwner {
 	transactionBlocks(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection!
 }
 
+type AddressConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [AddressEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Address!]!
+}
+
+"""
+An edge in a connection.
+"""
+type AddressEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Address!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 """
 An address-owned object is owned by a specific 32-byte address that is
 either an account address (derived from a particular signature scheme) or
@@ -360,11 +389,6 @@ type Checkpoint {
 	The digest of the checkpoint at the previous sequence number.
 	"""
 	previousCheckpointDigest: String
-	"""
-	A commitment by the committee at the end of epoch on the contents of the live object set at
-	that time. This can be used to verify state snapshots.
-	"""
-	liveObjectSetDigest: String
 	"""
 	The total number of transaction blocks in the network by the end of this checkpoint.
 	"""
@@ -984,6 +1008,10 @@ type Epoch {
 	"""
 	totalCheckpoints: BigInt
 	"""
+	The total number of transaction blocks in this epoch.
+	"""
+	totalTransactions: Int
+	"""
 	The total amount of gas fees (in MIST) that were paid in this epoch.
 	"""
 	totalGasFees: BigInt
@@ -1044,6 +1072,11 @@ type Epoch {
 	Parameters related to the subsidy that supplements staking rewards
 	"""
 	systemStakeSubsidy: StakeSubsidy
+	"""
+	A commitment by the committee at the end of epoch on the contents of the live object set at
+	that time. This can be used to verify state snapshots.
+	"""
+	liveObjectSetDigest: String
 	"""
 	The epoch's corresponding checkpoints.
 	"""
@@ -3294,6 +3327,10 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	"""
 	requestedEpoch: Epoch
 	"""
+	The object id of the validator staking pool this stake belongs to.
+	"""
+	poolId: SuiAddress
+	"""
 	The SUI that was initially staked.
 	"""
 	principal: BigInt
@@ -3982,12 +4019,27 @@ type Validator {
 	"""
 	The addresses of other validators this validator has reported.
 	"""
-	reportRecords: [Address!]
+	reportRecords(first: Int, before: String, last: Int, after: String): AddressConnection!
 	"""
 	The APY of this validator in basis points.
 	To get the APY in percentage, divide by 100.
 	"""
 	apy: Int
+}
+
+type ValidatorConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ValidatorEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Validator!]!
 }
 
 """
@@ -4005,6 +4057,20 @@ type ValidatorCredentials {
 }
 
 """
+An edge in a connection.
+"""
+type ValidatorEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Validator!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
 Representation of `0x3::validator_set::ValidatorSet`.
 """
 type ValidatorSet {
@@ -4013,18 +4079,48 @@ type ValidatorSet {
 	"""
 	totalStake: BigInt
 	"""
-	The current list of active validators.
-	"""
-	activeValidators: [Validator!]
-	"""
 	Validators that are pending removal from the active validator set, expressed as indices in
 	to `activeValidators`.
 	"""
 	pendingRemovals: [Int!]
+	"""
+	Object ID of the wrapped object `TableVec` storing the pending active validators.
+	"""
+	pendingActiveValidatorsId: SuiAddress
+	"""
+	Size of the pending active validators table.
+	"""
 	pendingActiveValidatorsSize: Int
-	stakePoolMappingsSize: Int
+	"""
+	Object ID of the `Table` storing the mapping from staking pool ids to the addresses
+	of the corresponding validators. This is needed because a validator's address
+	can potentially change but the object ID of its pool will not.
+	"""
+	stakingPoolMappingsId: SuiAddress
+	"""
+	Size of the stake pool mappings `Table`.
+	"""
+	stakingPoolMappingsSize: Int
+	"""
+	Object ID of the `Table` storing the inactive staking pools.
+	"""
+	inactivePoolsId: SuiAddress
+	"""
+	Size of the inactive pools `Table`.
+	"""
 	inactivePoolsSize: Int
+	"""
+	Object ID of the `Table` storing the validator candidates.
+	"""
+	validatorCandidatesId: SuiAddress
+	"""
+	Size of the validator candidates `Table`.
+	"""
 	validatorCandidatesSize: Int
+	"""
+	The current set of active validators.
+	"""
+	activeValidators(first: Int, before: String, last: Int, after: String): ValidatorConnection!
 }
 
 schema {

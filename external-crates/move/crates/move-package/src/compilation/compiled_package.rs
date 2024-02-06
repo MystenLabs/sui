@@ -135,6 +135,14 @@ pub struct DependencyInfo<'a> {
     pub module_format: ModuleFormat,
 }
 
+pub(crate) struct BuildResult<T> {
+    root_package_name: Symbol,
+    sources_package_paths: PackagePaths,
+    immediate_dependencies: Vec<Symbol>,
+    deps_package_paths: Vec<(PackagePaths, ModuleFormat)>,
+    result: T,
+}
+
 impl OnDiskCompiledPackage {
     pub fn from_path(p: &Path) -> Result<Self> {
         let (buf, build_path) = if try_exists(p)? && extension_equals(p, "yaml") {
@@ -424,17 +432,13 @@ impl CompiledPackage {
                     == resolved_package.resolved_table
     }
 
-    pub(crate) fn build_all<W: Write>(
+    pub(crate) fn build_for_driver<W: Write, T>(
         w: &mut W,
-        project_root: &Path,
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        mut compiler_driver: impl FnMut(
-            Compiler,
-        )
-            -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
-    ) -> Result<CompiledPackage> {
+        mut compiler_driver: impl FnMut(Compiler) -> Result<T>,
+    ) -> Result<BuildResult<T>> {
         let immediate_dependencies = transitive_dependencies
             .iter()
             .filter(|&dep| dep.is_immediate)
@@ -485,13 +489,61 @@ impl CompiledPackage {
         let mut compiler = Compiler::from_package_paths(paths, bytecode_deps)
             .unwrap()
             .set_flags(flags);
-        if lint && sui_mode {
+        if sui_mode {
             let (filter_attr_name, filters) = known_filters();
-            compiler = compiler
-                .add_visitors(linter_visitors())
-                .add_custom_known_filters(filters, filter_attr_name);
+            compiler = compiler.add_custom_known_filters(filter_attr_name, filters);
+            if lint {
+                compiler = compiler.add_visitors(linter_visitors())
+            }
         }
-        let (file_map, all_compiled_units) = compiler_driver(compiler)?;
+        Ok(BuildResult {
+            root_package_name,
+            sources_package_paths,
+            immediate_dependencies,
+            deps_package_paths,
+            result: compiler_driver(compiler)?,
+        })
+    }
+
+    pub(crate) fn build_for_result<W: Write, T>(
+        w: &mut W,
+        resolved_package: Package,
+        transitive_dependencies: Vec<DependencyInfo>,
+        resolution_graph: &ResolvedGraph,
+        compiler_driver: impl FnMut(Compiler) -> Result<T>,
+    ) -> Result<T> {
+        let build_result = Self::build_for_driver(
+            w,
+            resolved_package,
+            transitive_dependencies,
+            resolution_graph,
+            compiler_driver,
+        )?;
+        Ok(build_result.result)
+    }
+
+    pub(crate) fn build_all<W: Write>(
+        w: &mut W,
+        project_root: &Path,
+        resolved_package: Package,
+        transitive_dependencies: Vec<DependencyInfo>,
+        resolution_graph: &ResolvedGraph,
+        compiler_driver: impl FnMut(Compiler) -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
+    ) -> Result<CompiledPackage> {
+        let BuildResult {
+            root_package_name,
+            sources_package_paths,
+            immediate_dependencies,
+            deps_package_paths,
+            result,
+        } = Self::build_for_driver(
+            w,
+            resolved_package.clone(),
+            transitive_dependencies,
+            resolution_graph,
+            compiler_driver,
+        )?;
+        let (file_map, all_compiled_units) = result;
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
         for annot_unit in all_compiled_units {

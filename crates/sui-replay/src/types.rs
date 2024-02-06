@@ -24,8 +24,8 @@ use tracing::{error, warn};
 use crate::config::ReplayableNetworkConfigSet;
 
 // TODO: make these configurable
-pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
-pub(crate) const RPC_TIMEOUT_ERR_NUM_RETRIES: u32 = 2;
+pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(100_000);
+pub(crate) const RPC_TIMEOUT_ERR_NUM_RETRIES: u32 = 3;
 pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 
 // Struct tag used in system epoch change events

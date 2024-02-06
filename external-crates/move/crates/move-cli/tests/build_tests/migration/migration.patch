@@ -1,0 +1,65 @@
+--- ./sources/mod0.move
++++ ./sources/mod0.move
+@@ -2,1 +2,1 @@
+-    struct S { f: u64 }
++    public struct S { f: u64 }
+@@ -4,1 +4,1 @@
+-    struct LongerName {
++    public struct LongerName {
+@@ -9,1 +9,1 @@
+-    struct Positional(u64, u64, u64)
++    public struct Positional(u64, u64, u64)
+@@ -11,1 +11,1 @@
+-    entry fun t0(x: u64, s: S): u64 {
++    entry fun t0(mut x: u64, s: S): u64 {
+@@ -12,1 +12,1 @@
+-        let S { f: fin } = s;
++        let S { f: mut fin } = s;
+--- ./sources/mod1.move
++++ ./sources/mod1.move
+@@ -3,1 +3,1 @@
+-    public fun t(x: u64, yip: u64, s: S): u64  {
++    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
+@@ -4,1 +4,1 @@
+-        let yes = 0;
++        let mut yes = 0;
+@@ -5,1 +5,1 @@
+-        let S { f: fin } = s;
++        let S { f: mut fin } = s;
+--- ./sources/mod2.move
++++ ./sources/mod2.move
+@@ -3,1 +3,1 @@
+-    public fun t(x: u64, yip: u64, s: S): u64  {
++    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
+@@ -4,1 +4,1 @@
+-        let yes = 0;
++        let mut yes = 0;
+@@ -5,1 +5,1 @@
+-        let S { f: fin } = s;
++        let S { f: mut fin } = s;
+--- ./sources/mod3_4.move
++++ ./sources/mod3_4.move
+@@ -2,1 +2,1 @@
+-    struct S { f: u64 }
++    public struct S { f: u64 }
+@@ -4,1 +4,1 @@
+-    struct LongerName {
++    public struct LongerName {
+@@ -9,1 +9,1 @@
+-    struct Positional(u64, u64, u64)
++    public struct Positional(u64, u64, u64)
+@@ -11,1 +11,1 @@
+-    entry fun t0(x: u64, s: S): u64 {
++    entry fun t0(mut x: u64, s: S): u64 {
+@@ -12,1 +12,1 @@
+-        let S { f: fin } = s;
++        let S { f: mut fin } = s;
+@@ -22,1 +22,1 @@
+-    public fun t(x: u64, yip: u64, s: S): u64  {
++    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
+@@ -23,1 +23,1 @@
+-        let yes = 0;
++        let mut yes = 0;
+@@ -24,1 +24,1 @@
+-        let S { f: fin } = s;
++        let S { f: mut fin } = s;
