@@ -14,6 +14,6 @@ static-peers:
   pub-keys:
     - name: joeman
       p2p-address: 169.254.0.1
-      pub-key: AE4vET5heE/c1hFlDzZZXbj3npQgMZ9CpbVx3C8rKVry
+      peerid: 4e2f113e61784fdcd611650f36595db8f79e9420319f42a5b571dc2f2b295af2
 metrics-address: localhost:9184
 histogram-address: localhost:9185

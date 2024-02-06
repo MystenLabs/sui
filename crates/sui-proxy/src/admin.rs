@@ -212,15 +212,15 @@ fn load_static_peers(
         }
         Some(spk)
     }).map(|spk|{
-        let key_pair = hex::decode(spk.pub_key).unwrap();
-        let public_key = Ed25519PublicKey::from_bytes(key_pair.as_ref()).unwrap();
+        let peerid = hex::decode(spk.peerid).unwrap();
+        let public_key = Ed25519PublicKey::from_bytes(peerid.as_ref()).unwrap();
         let p2p_address: IpAddr = spk.p2p_address.parse().unwrap();
         let s = SuiPeer{
             name:spk.name.clone(),
             p2p_address: to_multiaddr(p2p_address),
             public_key,
         };
-        info!("loaded static peer: {} public key: {}", &s.name, &s.public_key);
+        info!("loaded static peer: {} public key: {} p2p address: {}", &s.name, &s.public_key, &s.p2p_address);
         s
     }).collect();
     Ok(static_keys)
