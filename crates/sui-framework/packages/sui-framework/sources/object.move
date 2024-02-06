@@ -120,7 +120,7 @@ module sui::object {
     }
 
     /// Create the `UID` for the singleton `DenyList` object.
-    /// This should only be called once from `coin`.
+    /// This should only be called once from `deny_list`.
     public(friend) fun sui_deny_list_object_id(): UID {
         UID {
             id: ID { bytes: SUI_DENY_LIST_OBJECT_ID }
