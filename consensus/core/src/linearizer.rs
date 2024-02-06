@@ -129,11 +129,11 @@ impl Linearizer {
     fn collect_sub_dag(
         &mut self,
         leader_block: VerifiedBlock,
-        committed: &mut HashSet<BlockRef>,
         last_commit_index: CommitIndex,
         last_committed_rounds: Vec<Round>,
     ) -> CommittedSubDag {
         let mut to_commit = Vec::new();
+        let mut committed = HashSet::new();
 
         let timestamp_ms = leader_block.timestamp_ms();
         let leader_block_ref = leader_block.reference();
@@ -180,17 +180,17 @@ impl Linearizer {
     // iterate over the sequence of committed leaders and produce a list of sub-dags.
     pub fn handle_commit(&mut self, committed_leaders: Vec<VerifiedBlock>) -> Vec<CommittedSubDag> {
         let mut committed_sub_dags = vec![];
-        let mut committed_blocks = HashSet::new();
-
-        // Grab latest commit state from dag state
-        let mut last_commit_index = self.dag_state.read().last_commit_index();
-        let last_committed_rounds = self.dag_state.read().last_committed_rounds();
 
         for leader_block in committed_leaders {
+            // Grab latest commit state from dag state
+            let dag_state = self.dag_state.read();
+            let mut last_commit_index = dag_state.last_commit_index();
+            let mut last_committed_rounds = dag_state.last_committed_rounds();
+            drop(dag_state);
+
             // Collect the sub-dag generated using each of these leaders.
             let mut sub_dag = self.collect_sub_dag(
                 leader_block,
-                &mut committed_blocks,
                 last_commit_index,
                 last_committed_rounds.clone(),
             );
@@ -198,9 +198,22 @@ impl Linearizer {
             // [Optional] sort the sub-dag using a deterministic algorithm.
             sub_dag.sort();
 
-            // Update running commit state. This will be persisted in dag state
-            // after handle commit is completed.
-            last_commit_index = sub_dag.commit_index;
+            // Update last commit in dag state
+            let last_commit = Commit {
+                index: sub_dag.commit_index,
+                leader: sub_dag.leader,
+                blocks: sub_dag
+                    .blocks
+                    .iter()
+                    .map(|block| {
+                        let block_ref = block.reference();
+                        last_committed_rounds[block_ref.author.value()] = block_ref.round;
+                        block_ref
+                    })
+                    .collect::<Vec<_>>(),
+                last_committed_rounds,
+            };
+            self.dag_state.write().set_last_commit(last_commit);
 
             committed_sub_dags.push(sub_dag);
         }

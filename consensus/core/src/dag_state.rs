@@ -234,8 +234,6 @@ impl DagState {
         }
     }
 
-    // May get used in production, but for now just used in testing.
-    #[cfg(test)]
     pub(crate) fn set_last_commit(&mut self, commit: Commit) {
         self.last_commit = Some(commit);
     }
