@@ -47,7 +47,7 @@ or fallback to the JSON RPC API if a `fallbackFullNodeUrl` is provided:
 Some supported methods in `SuiClientGraphQLTransport` do not support the full set of parameters
 available in the JSON RPC API.
 
-If an unsupported parameter is used, the request will error, or fallback to JSON RPC Api if a
+If an unsupported parameter is used, the request will error, or fallback to JSON RPC API if a
 `fallbackFullNodeUrl` is provided.
 
 - `getOwnedObjects`:
