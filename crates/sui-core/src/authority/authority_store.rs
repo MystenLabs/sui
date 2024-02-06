@@ -782,7 +782,7 @@ impl AuthorityStore {
     pub async fn write_transaction_outputs(
         &self,
         epoch_id: EpochId,
-        tx_outputs: TransactionOutputs,
+        tx_outputs: Arc<TransactionOutputs>,
     ) -> SuiResult {
         let TransactionOutputs {
             transaction,
@@ -795,7 +795,7 @@ impl AuthorityStore {
             locks_to_delete,
             new_locks_to_init,
             ..
-        } = tx_outputs;
+        } = &*tx_outputs;
 
         let _locks = self.acquire_read_locks_for_indirect_objects(&written).await;
 
@@ -874,7 +874,7 @@ impl AuthorityStore {
         let event_digest = events.digest();
         let events = events
             .data
-            .into_iter()
+            .iter()
             .enumerate()
             .map(|(i, e)| ((event_digest, i), e));
 
@@ -1004,6 +1004,39 @@ impl AuthorityStore {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn write_locks(
+        &self,
+        locks_to_write: &[(ObjectRef, Option<LockDetailsWrapper>)],
+    ) -> SuiResult {
+        trace!(?locks_to_write, "Writing locks");
+        let mut batch = self.perpetual_tables.owned_object_transaction_locks.batch();
+        batch.insert_batch(
+            &self.perpetual_tables.owned_object_transaction_locks,
+            locks_to_write
+                .iter()
+                .map(|(obj_ref, lock)| (*obj_ref, lock.clone())),
+        )?;
+        batch.write()?;
+        Ok(())
+    }
+
+    pub(crate) fn get_lock_entry(&self, obj_ref: ObjectRef) -> SuiResult<Option<LockDetails>> {
+        let lock = self
+            .perpetual_tables
+            .owned_object_transaction_locks
+            .get(&obj_ref)?;
+
+        match lock {
+            Some(lock_details) => Ok(lock_details.map(|l| l.migrate().into_inner())),
+            None => Err(SuiError::UserInputError {
+                error: UserInputError::ObjectNotFound {
+                    object_id: obj_ref.0,
+                    version: Some(obj_ref.1),
+                },
+            }),
+        }
     }
 
     /// Gets ObjectLockInfo that represents state of lock on an object.

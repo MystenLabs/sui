@@ -1370,7 +1370,7 @@ impl AuthorityState {
             inner_temporary_store,
         );
         self.execution_cache
-            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs)
+            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs.into())
             .await?;
 
         if certificate.transaction_data().is_end_of_epoch_tx() {
@@ -2704,6 +2704,22 @@ impl AuthorityState {
         self.execution_lock.write().await
     }
 
+    /// Acquire the execution lock while setting transaction locks during signing.
+    pub async fn execution_lock_for_signing(
+        &self,
+        epoch_id: EpochId,
+    ) -> SuiResult<ExecutionLockReadGuard> {
+        let lock = self.execution_lock.read().await;
+        if *lock == epoch_id {
+            Ok(lock)
+        } else {
+            Err(SuiError::WrongEpoch {
+                expected_epoch: *lock,
+                actual_epoch: epoch_id,
+            })
+        }
+    }
+
     #[instrument(level = "error", skip_all)]
     pub async fn reconfigure(
         &self,
@@ -3840,9 +3856,12 @@ impl AuthorityState {
     ) -> SuiResult {
         let tx_digest = *transaction.digest();
 
+        let epoch = epoch_store.epoch();
+        let execution_lock = self.execution_lock_for_signing(epoch).await?;
+
         // Acquire the lock on input objects
         self.execution_cache
-            .acquire_transaction_locks(epoch_store.epoch(), owned_input_objects, tx_digest)
+            .acquire_transaction_locks(&execution_lock, owned_input_objects, tx_digest)
             .await?;
 
         // Write transactions after because if we write before, there is a chance the lock can fail
