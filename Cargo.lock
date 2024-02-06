@@ -16339,6 +16339,7 @@ dependencies = [
  "internment",
  "io-lifetimes",
  "ipnet",
+ "ipnetwork",
  "iri-string",
  "is-terminal",
  "itertools 0.10.5",

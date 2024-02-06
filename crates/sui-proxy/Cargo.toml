@@ -39,7 +39,7 @@ prost.workspace = true
 once_cell.workspace = true
 http-body.workspace = true
 hex.workspace = true
-ipnetwork = "0.20.0"
+ipnetwork.workspace = true
 
 
 telemetry-subscribers.workspace = true
