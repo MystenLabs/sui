@@ -118,6 +118,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::BlockLabels,
     FeatureGate::Move2024Paths,
     FeatureGate::MacroFuns,
+    FeatureGate::Move2024Optimizations,
 ];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
