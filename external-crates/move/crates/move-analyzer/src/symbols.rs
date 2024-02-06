@@ -521,6 +521,13 @@ fn type_to_ide_string(sp!(_, t): &Type) -> String {
                 )
             }
         },
+        Type_::Fun(args, ret) => {
+            format!(
+                "|{}| -> {}",
+                type_list_to_ide_string(args),
+                type_to_ide_string(ret)
+            )
+        }
         Type_::Anything => "_".to_string(),
         Type_::Var(_) => "invalid type (var)".to_string(),
         Type_::UnresolvedError => "unknown type (unresolved)".to_string(),
@@ -1534,7 +1541,7 @@ impl<'a> ParsingSymbolicator<'a> {
                 self.exp_symbols(e2);
             }
             E::Loop(e) => self.exp_symbols(e),
-            E::NamedBlock(_, seq) => self.seq_symbols(seq),
+            E::Labled(_, e) => self.exp_symbols(e),
             E::Block(seq) => self.seq_symbols(seq),
             E::ExpList(l) => l.iter().for_each(|e| self.exp_symbols(e)),
             E::Assign(e1, e2) => {
@@ -1560,7 +1567,7 @@ impl<'a> ParsingSymbolicator<'a> {
             }
             E::Borrow(_, e) => self.exp_symbols(e),
             E::Dot(e, _) => self.exp_symbols(e),
-            E::DotCall(e, _, vo, v) => {
+            E::DotCall(e, _, _, vo, v) => {
                 self.exp_symbols(e);
                 if let Some(v) = vo {
                     v.iter().for_each(|t| self.type_symbols(t));
@@ -1993,7 +2000,7 @@ impl<'a> TypingSymbolicator<'a> {
                     self.seq_item_symbols(&mut scope, seq_item);
                 }
             }
-            FunctionBody_::Native => (),
+            FunctionBody_::Macro | FunctionBody_::Native => (),
         }
 
         // process return types
@@ -2126,7 +2133,7 @@ impl<'a> TypingSymbolicator<'a> {
                 self.exp_symbols(t, scope);
                 self.exp_symbols(f, scope);
             }
-            E::While(cond, _, body) => {
+            E::While(_, cond, body) => {
                 self.exp_symbols(cond, scope);
                 self.exp_symbols(body, scope);
             }
@@ -2219,6 +2226,7 @@ impl<'a> TypingSymbolicator<'a> {
         let UseFuns {
             resolved,
             implicit_candidates,
+            color: _,
         } = use_funs;
 
         // at typing there should be no unresolved candidates (it's also checked in typing

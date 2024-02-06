@@ -4,10 +4,14 @@
 
 use crate::{
     debug_display, diag,
-    diagnostics::{codes::NameResolution, Diagnostic},
+    diagnostics::{
+        codes::{NameResolution, TypeSafety},
+        Diagnostic,
+    },
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
+    ice,
     naming::ast::{
-        self as N, BlockLabel, BuiltinTypeName_, ResolvedUseFuns, StructDefinition,
+        self as N, BlockLabel, BuiltinTypeName_, Color, ResolvedUseFuns, StructDefinition,
         StructTypeParameter, TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind,
         Var,
     },
@@ -19,13 +23,17 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet, HashMap},
+};
 
 //**************************************************************************************************
 // Context
 //**************************************************************************************************
 
-struct UseFunsScope {
+pub struct UseFunsScope {
+    color: Option<Color>,
     count: usize,
     use_funs: ResolvedUseFuns,
 }
@@ -52,14 +60,32 @@ pub struct Local {
     pub used_mut: Option<Loc>,
 }
 
+#[derive(Debug)]
+pub struct MacroCall {
+    pub module: ModuleIdent,
+    pub function: FunctionName,
+    pub invocation: Loc,
+    pub scope_color: Color,
+}
+
+#[derive(Debug)]
+pub enum MacroExpansion {
+    Call(Box<MacroCall>),
+    // An argument to a macro, where the entire expression was substituted in
+    Argument { scope_color: Color },
+}
+
 pub struct Context<'env> {
     pub modules: NamingProgramInfo,
+    macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     pub env: &'env mut CompilationEnv,
 
     use_funs: Vec<UseFunsScope>,
     pub current_package: Option<Symbol>,
     pub current_module: Option<ModuleIdent>,
     pub current_function: Option<FunctionName>,
+    pub in_macro_function: bool,
+    max_variable_color: RefCell<u16>,
     pub return_type: Option<Type>,
     locals: UniqueMap<Var, Local>,
 
@@ -76,6 +102,20 @@ pub struct Context<'env> {
     /// collects all used module members (functions and constants) but it's a superset of these in
     /// that it may contain other identifiers that do not in fact represent a function or a constant
     pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
+    /// Current macros being expanded
+    pub macro_expansion: Vec<MacroExpansion>,
+    /// Stack of items from `macro_expansion` pushed/popped when entering/leaving a lambda expansion
+    /// This is to prevent accidentally thinking we are in a recursive call if a macro is used
+    /// inside a lambda body
+    pub lambda_expansion: Vec<Vec<MacroExpansion>>,
+}
+
+pub struct ResolvedFunctionType {
+    pub declared: Loc,
+    pub macro_: Option<Loc>,
+    pub ty_args: Vec<Type>,
+    pub params: Vec<(Var, Type)>,
+    pub return_: Type,
 }
 
 impl UseFunsScope {
@@ -107,7 +147,11 @@ impl UseFunsScope {
                 use_funs.insert(tn.clone(), public_methods);
             }
         }
-        UseFunsScope { count, use_funs }
+        UseFunsScope {
+            color: None,
+            count,
+            use_funs,
+        }
     }
 }
 
@@ -124,19 +168,33 @@ impl<'env> Context<'env> {
             current_package: None,
             current_module: None,
             current_function: None,
+            in_macro_function: false,
+            max_variable_color: RefCell::new(0),
             return_type: None,
             constraints: vec![],
             locals: UniqueMap::new(),
             modules: info,
+            macros: UniqueMap::new(),
             named_block_map: BTreeMap::new(),
             env,
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
+            macro_expansion: vec![],
+            lambda_expansion: vec![],
         }
+    }
+
+    pub fn set_macros(
+        &mut self,
+        macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
+    ) {
+        debug_assert!(self.macros.is_empty());
+        self.macros = macros;
     }
 
     pub fn add_use_funs_scope(&mut self, new_scope: N::UseFuns) {
         let N::UseFuns {
+            color,
             resolved: new_scope,
             implicit_candidates,
         } = new_scope;
@@ -145,13 +203,14 @@ impl<'env> Context<'env> {
             "ICE use fun candidates should have been resolved"
         );
         let cur = self.use_funs.last_mut().unwrap();
-        if new_scope.is_empty() {
+        if new_scope.is_empty() && cur.color == Some(color) {
             cur.count += 1;
             return;
         }
         self.use_funs.push(UseFunsScope {
             count: 1,
             use_funs: new_scope,
+            color: Some(color),
         })
     }
 
@@ -159,12 +218,11 @@ impl<'env> Context<'env> {
         let cur = self.use_funs.last_mut().unwrap();
         if cur.count > 1 {
             cur.count -= 1;
-            return N::UseFuns {
-                resolved: N::ResolvedUseFuns::new(),
-                implicit_candidates: UniqueMap::new(),
-            };
+            return N::UseFuns::new(cur.color.unwrap_or(0));
         }
-        let UseFunsScope { use_funs, .. } = self.use_funs.pop().unwrap();
+        let UseFunsScope {
+            use_funs, color, ..
+        } = self.use_funs.pop().unwrap();
         for (tn, methods) in use_funs.iter() {
             let unused = methods.iter().filter(|(_, _, uf)| !uf.used);
             for (_, method, use_fun) in unused {
@@ -193,6 +251,7 @@ impl<'env> Context<'env> {
         }
         N::UseFuns {
             resolved: use_funs,
+            color: color.unwrap_or(0),
             implicit_candidates: UniqueMap::new(),
         }
     }
@@ -202,11 +261,121 @@ impl<'env> Context<'env> {
         tn: &TypeName,
         method: Name,
     ) -> Option<(ModuleIdent, FunctionName)> {
+        let cur_color = self.use_funs.last().unwrap().color;
         self.use_funs.iter_mut().rev().find_map(|scope| {
+            // scope color is None for global scope, which is always in consideration
+            // otherwise, the color must match the current color. In practice, we are preventing
+            // macro scopes from interfering with each the scopes in which they are expanded
+            if scope.color.is_some() && scope.color != cur_color {
+                return None;
+            }
             let use_fun = scope.use_funs.get_mut(tn)?.get_mut(&method)?;
             use_fun.used = true;
             Some(use_fun.target_function)
         })
+    }
+
+    /// true iff it is safe to expand,
+    /// false with an error otherwise (e.g. a recursive expansion)
+    pub fn add_macro_expansion(&mut self, m: ModuleIdent, f: FunctionName, loc: Loc) -> bool {
+        let current_call_color = self.current_call_color();
+
+        let mut prev_opt = None;
+        for (idx, mexp) in self.macro_expansion.iter().enumerate().rev() {
+            match mexp {
+                MacroExpansion::Argument { scope_color } => {
+                    // the argument has a smaller (or equal) color, meaning this lambda/arg was
+                    // written in an outer scope
+                    if current_call_color > *scope_color {
+                        break;
+                    }
+                }
+                MacroExpansion::Call(c) => {
+                    let MacroCall {
+                        module,
+                        function,
+                        scope_color,
+                        ..
+                    } = &**c;
+                    // If we find a call (same module/fn) above us at a shallower expansion depth,
+                    // without an interceding macro arg/lambda, we are in a macro calling itself.
+                    // If it was a deeper depth, that's fine -- it must have come from elsewhere.
+                    if current_call_color > *scope_color && module == &m && function == &f {
+                        prev_opt = Some(idx);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if let Some(idx) = prev_opt {
+            let msg = format!(
+                "Recursive macro expansion. '{}::{}' cannot recursively expand itself",
+                m, f
+            );
+            let mut diag = diag!(TypeSafety::CannotExpandMacro, (loc, msg));
+            let cycle = self.macro_expansion[idx..]
+                .iter()
+                .filter_map(|case| match case {
+                    MacroExpansion::Call(c) => Some((&c.module, &c.function, &c.invocation)),
+                    MacroExpansion::Argument { .. } => None,
+                });
+            for (prev_m, prev_f, prev_loc) in cycle {
+                let msg = if prev_m == &m && prev_f == &f {
+                    format!("'{}::{}' previously expanded here", prev_m, prev_f)
+                } else {
+                    "From this macro expansion".to_owned()
+                };
+                diag.add_secondary_label((*prev_loc, msg));
+            }
+            self.env.add_diag(diag);
+            false
+        } else {
+            self.macro_expansion
+                .push(MacroExpansion::Call(Box::new(MacroCall {
+                    module: m,
+                    function: f,
+                    invocation: loc,
+                    scope_color: current_call_color,
+                })));
+            true
+        }
+    }
+
+    pub fn pop_macro_expansion(&mut self, m: &ModuleIdent, f: &FunctionName) {
+        let Some(MacroExpansion::Call(c)) = self.macro_expansion.pop() else {
+            panic!("ICE macro expansion stack should have a call when leaving a macro expansion")
+        };
+        let MacroCall {
+            module, function, ..
+        } = *c;
+        assert!(
+            m == &module && f == &function,
+            "ICE macro expansion stack should be popped in reverse order"
+        );
+    }
+
+    pub fn maybe_enter_macro_argument(
+        &mut self,
+        from_macro_argument: Option<N::MacroArgument>,
+        color: Color,
+    ) {
+        if from_macro_argument.is_some() {
+            self.macro_expansion
+                .push(MacroExpansion::Argument { scope_color: color })
+        }
+    }
+
+    pub fn maybe_exit_macro_argument(&mut self, from_macro_argument: Option<N::MacroArgument>) {
+        if from_macro_argument.is_some() {
+            let Some(MacroExpansion::Argument { .. }) = self.macro_expansion.pop() else {
+                panic!("ICE macro expansion stack should have a lambda when leaving a lambda")
+            };
+        }
+    }
+
+    pub fn current_call_color(&self) -> Color {
+        self.use_funs.last().unwrap().color.unwrap()
     }
 
     pub fn reset_for_module_item(&mut self) {
@@ -216,6 +385,10 @@ impl<'env> Context<'env> {
         self.subst = Subst::empty();
         self.constraints = Constraints::new();
         self.current_function = None;
+        self.in_macro_function = false;
+        self.max_variable_color = RefCell::new(0);
+        self.macro_expansion = vec![];
+        self.lambda_expansion = vec![];
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {
@@ -283,15 +456,30 @@ impl<'env> Context<'env> {
             ty,
             used_mut: None,
         };
-        self.locals.add(var, local).unwrap()
+        if let Err((_, prev_loc)) = self.locals.add(var, local) {
+            let msg = format!("ICE duplicate {var:?}. Should have been made unique in naming");
+            self.env
+                .add_diag(ice!((var.loc, msg), (prev_loc, "Previously declared here")));
+        }
     }
 
     pub fn get_local_type(&mut self, var: &Var) -> Type {
-        // should not fail, already checked in naming
+        if !self.locals.contains_key(var) {
+            let msg = format!("ICE unbound {var:?}. Should have failed in naming");
+            self.env.add_diag(ice!((var.loc, msg)));
+            return self.error_type(var.loc);
+        }
+
         self.locals.get(var).unwrap().ty.clone()
     }
 
     pub fn mark_mutable_usage(&mut self, loc: Loc, var: &Var) -> (Loc, Mutability) {
+        if !self.locals.contains_key(var) {
+            let msg = format!("ICE unbound {var:?}. Should have failed in naming");
+            self.env.add_diag(ice!((loc, msg)));
+            return (loc, Mutability::None);
+        }
+
         // should not fail, already checked in naming
         let decl_loc = *self.locals.get_loc(var).unwrap();
         let local = self.locals.get_mut(var).unwrap();
@@ -377,8 +565,12 @@ impl<'env> Context<'env> {
         self.modules.struct_type_parameters(m, n)
     }
 
-    fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
+    pub fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
         self.modules.function_info(m, n)
+    }
+
+    pub fn macro_body(&self, m: &ModuleIdent, n: &FunctionName) -> Option<&N::Sequence> {
+        self.macros.get(m)?.get(n)
     }
 
     fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
@@ -399,6 +591,24 @@ impl<'env> Context<'env> {
 
     pub fn named_block_type_opt(&self, name: BlockLabel) -> Option<Type> {
         self.named_block_map.get(&name).cloned()
+    }
+
+    pub fn next_variable_color(&mut self) -> Color {
+        let max_variable_color: &mut u16 = &mut self.max_variable_color.borrow_mut();
+        *max_variable_color += 1;
+        *max_variable_color
+    }
+
+    pub fn set_max_variable_color(&self, color: Color) {
+        let max_variable_color: &mut u16 = &mut self.max_variable_color.borrow_mut();
+        assert!(
+            *max_variable_color <= color,
+            "ICE a new, lower color means reusing variables \
+            {} <= {}",
+            *max_variable_color,
+            color,
+        );
+        *max_variable_color = color;
     }
 }
 
@@ -522,6 +732,13 @@ fn error_format_impl_(b_: &Type_, subst: &Subst, nested: bool) -> String {
             };
             format!("{}{}", n, tys_str)
         }
+        Fun(args, result) => {
+            format!(
+                "|{}| -> {}",
+                format_comma(args.iter().map(|t| error_format_nested(t, subst))),
+                error_format_nested(result, subst)
+            )
+        }
         Param(tp) => tp.user_specified_name.value.to_string(),
         Ref(mut_, ty) => format!(
             "&{}{}",
@@ -580,6 +797,7 @@ pub fn infer_abilities<const INFO_PASS: bool>(
             }))
             .unwrap()
         }
+        T::Fun(_, _) => AbilitySet::functions(loc),
     }
 }
 
@@ -610,6 +828,7 @@ fn debug_abilities_info(context: &Context, ty: &Type) -> (Option<Loc>, AbilitySe
             context.struct_declared_abilities(m, n).clone(),
             ty_args.clone(),
         ),
+        T::Fun(_, _) => (None, AbilitySet::functions(loc), vec![]),
     }
 }
 
@@ -791,18 +1010,11 @@ pub fn make_method_call_type(
     tn: &TypeName,
     method: Name,
     ty_args_opt: Option<Vec<Type>>,
-) -> Option<(
-    Loc,
-    ModuleIdent,
-    FunctionName,
-    Vec<Type>,
-    Vec<(Var, Type)>,
-    Type,
-)> {
+) -> Option<(ModuleIdent, FunctionName, ResolvedFunctionType)> {
     let target_function_opt = context.find_method_and_mark_used(tn, method);
     // try to find a function in the defining module for errors
     let Some((target_m, target_f)) = target_function_opt else {
-        let lhs_ty_str = error_format_nested(lhs_ty, &Subst::empty());
+        let lhs_ty_str = error_format_nested(lhs_ty, &context.subst);
         let defining_module = match &tn.value {
             TypeName_::Multiple(_) => panic!("ICE method on tuple"),
             TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
@@ -829,7 +1041,7 @@ pub fn make_method_call_type(
             };
             let arg_msg = match first_ty {
                 Some(ty) => {
-                    let tys_str = error_format(&ty, &Subst::empty());
+                    let tys_str = error_format(&ty, &context.subst);
                     format!("but it has a different type for its first argument, {tys_str}")
                 }
                 None => "but it takes no arguments".to_owned(),
@@ -866,10 +1078,9 @@ pub fn make_method_call_type(
         return None;
     };
 
-    let (defined_loc, ty_args, params, return_ty) =
-        make_function_type(context, loc, &target_m, &target_f, ty_args_opt);
+    let function_ty = make_function_type(context, loc, &target_m, &target_f, ty_args_opt);
 
-    Some((defined_loc, target_m, target_f, ty_args, params, return_ty))
+    Some((target_m, target_f, function_ty))
 }
 
 pub fn make_function_type(
@@ -878,13 +1089,14 @@ pub fn make_function_type(
     m: &ModuleIdent,
     f: &FunctionName,
     ty_args_opt: Option<Vec<Type>>,
-) -> (Loc, Vec<Type>, Vec<(Var, Type)>, Type) {
+) -> ResolvedFunctionType {
     let in_current_module = match &context.current_module {
         Some(current) => m == current,
         None => false,
     };
-    let constraints: Vec<_> = context
-        .function_info(m, f)
+    let finfo = context.function_info(m, f);
+    let macro_ = finfo.macro_;
+    let constraints: Vec<_> = finfo
         .signature
         .type_parameters
         .iter()
@@ -893,10 +1105,20 @@ pub fn make_function_type(
 
     let ty_args = match ty_args_opt {
         None => {
+            let case = if macro_.is_some() {
+                TVarCase::Macro
+            } else {
+                TVarCase::Base
+            };
             let locs_constraints = constraints.into_iter().map(|k| (loc, k)).collect();
-            make_tparams(context, loc, TVarCase::Base, locs_constraints)
+            make_tparams(context, loc, case, locs_constraints)
         }
         Some(ty_args) => {
+            let case = if macro_.is_some() {
+                TArgCase::Macro
+            } else {
+                TArgCase::Fun
+            };
             let ty_args = check_type_argument_arity(
                 context,
                 loc,
@@ -904,7 +1126,7 @@ pub fn make_function_type(
                 ty_args,
                 &constraints,
             );
-            instantiate_type_args(context, loc, None, ty_args, constraints)
+            instantiate_type_args(context, loc, case, ty_args, constraints)
         }
     };
 
@@ -936,7 +1158,7 @@ pub fn make_function_type(
             visibility_error(
                 context,
                 public_for_testing,
-                (loc, format!("Invalid call to '{}::{}'", m, f)),
+                (loc, format!("Invalid call to internal function '{m}::{f}'")),
                 (defined_loc, internal_msg),
             );
         }
@@ -946,6 +1168,12 @@ pub fn make_function_type(
             context.record_current_module_as_friend(m, loc);
         }
         Visibility::Package(vis_loc) => {
+            let msg = format!(
+                "Invalid call to '{}' visible function '{}::{}'",
+                Visibility::PACKAGE,
+                m,
+                f
+            );
             let internal_msg = format!(
                 "A '{}' function can only be called from the same address and package as \
                 module '{}' in package '{}'. This call is from address '{}' in package '{}'",
@@ -969,28 +1197,37 @@ pub fn make_function_type(
             visibility_error(
                 context,
                 public_for_testing,
-                (loc, format!("Invalid call to '{}::{}'", m, f)),
+                (loc, msg),
                 (vis_loc, internal_msg),
             );
         }
         Visibility::Friend(_) if in_current_module || context.current_module_is_a_friend_of(m) => {}
         Visibility::Friend(vis_loc) => {
-            let internal_msg = format!(
-                "This function can only be called from a 'friend' of module '{}'",
-                m
+            let msg = format!(
+                "Invalid call to '{}' visible function '{m}::{f}'",
+                Visibility::FRIEND,
             );
+            let internal_msg =
+                format!("This function can only be called from a 'friend' of module '{m}'",);
             visibility_error(
                 context,
                 public_for_testing,
-                (loc, format!("Invalid call to '{}::{}'", m, f)),
+                (loc, msg),
                 (vis_loc, internal_msg),
             );
         }
         Visibility::Public(_) => (),
     };
-    (defined_loc, ty_args, params, return_ty)
+    ResolvedFunctionType {
+        declared: defined_loc,
+        macro_,
+        ty_args,
+        params,
+        return_: return_ty,
+    }
 }
 
+#[derive(Clone, Copy)]
 pub enum PublicForTesting {
     /// The function is entry, so it can be called in unit tests
     Entry(Loc),
@@ -1045,6 +1282,35 @@ fn visibility_error(
         }
     }
     context.env.add_diag(diag)
+}
+
+pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
+    context: &mut Context,
+    loc: Loc,
+    msg: F,
+    arity: usize,
+    argloc: Loc,
+    given_len: usize,
+) {
+    if given_len == arity {
+        return;
+    }
+    let code = if given_len < arity {
+        TypeSafety::TooFewArguments
+    } else {
+        TypeSafety::TooManyArguments
+    };
+    let cmsg = format!(
+        "{}. The call expected {} argument(s) but got {}",
+        msg(),
+        arity,
+        given_len
+    );
+    context.env.add_diag(diag!(
+        code,
+        (loc, cmsg),
+        (argloc, format!("Found {} argument(s) here", given_len)),
+    ));
 }
 
 //**************************************************************************************************
@@ -1260,7 +1526,7 @@ fn solve_base_type_constraint(context: &mut Context, loc: Loc, msg: String, ty: 
                 (tyloc, tmsg)
             ))
         }
-        UnresolvedError | Anything | Param(_) | Apply(_, _, _) => (),
+        UnresolvedError | Anything | Param(_) | Apply(_, _, _) | Fun(_, _) => (),
     }
 }
 
@@ -1281,7 +1547,7 @@ fn solve_single_type_constraint(context: &mut Context, loc: Loc, msg: String, ty
                 (tyloc, tmsg)
             ))
         }
-        UnresolvedError | Anything | Ref(_, _) | Param(_) | Apply(_, _, _) => (),
+        UnresolvedError | Anything | Ref(_, _) | Param(_) | Apply(_, _, _) | Fun(_, _) => (),
     }
 }
 
@@ -1355,6 +1621,11 @@ pub fn subst_tparams(subst: &TParamSubst, sp!(loc, t_): Type) -> Type {
                 .collect();
             sp(loc, Apply(k, n, ftys))
         }
+        Fun(args, result) => {
+            let ftys = args.into_iter().map(|t| subst_tparams(subst, t)).collect();
+            let fres = Box::new(subst_tparams(subst, *result));
+            sp(loc, Fun(ftys, fres))
+        }
     }
 }
 
@@ -1374,6 +1645,11 @@ pub fn ready_tvars(subst: &Subst, sp!(loc, t_): Type) -> Type {
                 None => sp(loc, Var(last_var)),
                 Some(t) => ready_tvars(subst, t.clone()),
             }
+        }
+        Fun(args, result) => {
+            let args = args.into_iter().map(|t| ready_tvars(subst, t)).collect();
+            let result = Box::new(ready_tvars(subst, *result));
+            sp(loc, Fun(args, result))
         }
     }
 }
@@ -1396,8 +1672,17 @@ pub fn instantiate(context: &mut Context, sp!(loc, t_): Type) -> Type {
         Apply(abilities_opt, n, ty_args) => {
             instantiate_apply(context, loc, abilities_opt, n, ty_args)
         }
+        Fun(args, result) => Fun(
+            args.into_iter().map(|t| instantiate(context, t)).collect(),
+            Box::new(instantiate(context, *result)),
+        ),
         x @ Param(_) => x,
-        Var(_) => panic!("ICE instantiate type variable"),
+        // instantiating a var really shouldn't happen... but it does because of macro expansion
+        // We expand macros before type checking, but after the arguments to the macro are type
+        // checked (otherwise we couldn't properly do method syntax macros). As a result, we are
+        // substituting type variables into the macro body, and might hit one while expanding a
+        // type in the macro where a type parameter's argument had a type variable.
+        x @ Var(_) => x,
     };
     sp(loc, it_)
 }
@@ -1423,7 +1708,13 @@ fn instantiate_apply(
         }
     };
 
-    let tys = instantiate_type_args(context, loc, Some(&n.value), ty_args, tparam_constraints);
+    let tys = instantiate_type_args(
+        context,
+        loc,
+        TArgCase::Apply(&n.value),
+        ty_args,
+        tparam_constraints,
+    );
     Type_::Apply(abilities_opt, n, tys)
 }
 
@@ -1435,7 +1726,7 @@ fn instantiate_apply(
 fn instantiate_type_args(
     context: &mut Context,
     loc: Loc,
-    n: Option<&TypeName_>,
+    case: TArgCase,
     mut ty_args: Vec<Type>,
     constraints: Vec<AbilitySet>,
 ) -> Vec<Type> {
@@ -1445,11 +1736,14 @@ fn instantiate_type_args(
         .zip(&ty_args)
         .map(|(abilities, t)| (t.loc, abilities))
         .collect();
-    let tvar_case = match n {
-        Some(TypeName_::Multiple(_)) => {
+    let tvar_case = match case {
+        TArgCase::Apply(TypeName_::Multiple(_)) => {
             TVarCase::Single("Invalid expression list type argument".to_owned())
         }
-        None | Some(TypeName_::Builtin(_)) | Some(TypeName_::ModuleType(_, _)) => TVarCase::Base,
+        TArgCase::Fun
+        | TArgCase::Apply(TypeName_::Builtin(_))
+        | TArgCase::Apply(TypeName_::ModuleType(_, _)) => TVarCase::Base,
+        TArgCase::Macro => TVarCase::Macro,
     };
     let tvars = make_tparams(context, loc, tvar_case, locs_constraints);
     ty_args = ty_args
@@ -1510,6 +1804,13 @@ fn check_type_argument_arity<F: FnOnce() -> String>(
 enum TVarCase {
     Single(String),
     Base,
+    Macro,
+}
+
+enum TArgCase<'a> {
+    Apply(&'a TypeName_),
+    Fun,
+    Macro,
 }
 
 fn make_tparams(
@@ -1528,10 +1829,32 @@ fn make_tparams(
                 TVarCase::Base => {
                     context.add_base_type_constraint(loc, "Invalid type argument", tvar.clone())
                 }
+                TVarCase::Macro => (),
             };
             tvar
         })
         .collect()
+}
+
+// used in macros to make the signatures consistent with the bodies, in that we don't check
+// constraints until application
+pub fn give_tparams_all_abilities(sp!(_, ty_): &mut Type) {
+    match ty_ {
+        Type_::Unit | Type_::Var(_) | Type_::UnresolvedError | Type_::Anything => (),
+        Type_::Ref(_, inner) => give_tparams_all_abilities(inner),
+        Type_::Apply(_, _, ty_args) => {
+            for ty_arg in ty_args {
+                give_tparams_all_abilities(ty_arg)
+            }
+        }
+        Type_::Fun(args, ret) => {
+            for arg in args {
+                give_tparams_all_abilities(arg)
+            }
+            give_tparams_all_abilities(ret)
+        }
+        Type_::Param(_) => *ty_ = Type_::Anything,
+    }
 }
 
 //**************************************************************************************************
@@ -1543,6 +1866,7 @@ pub enum TypingError {
     SubtypeError(Box<Type>, Box<Type>),
     Incompatible(Box<Type>, Box<Type>),
     ArityMismatch(usize, Box<Type>, usize, Box<Type>),
+    FunArityMismatch(usize, Box<Type>, usize, Box<Type>),
     RecursiveType(Loc),
 }
 
@@ -1623,6 +1947,24 @@ fn join_impl(
             );
             let (subst, tys) = join_impl_types(subst, case, tys1, tys2)?;
             Ok((subst, sp(*loc, Apply(k2.clone(), n2.clone(), tys))))
+        }
+        (sp!(_, Fun(a1, _)), sp!(_, Fun(a2, _))) if a1.len() != a2.len() => {
+            Err(TypingError::FunArityMismatch(
+                a1.len(),
+                Box::new(lhs.clone()),
+                a2.len(),
+                Box::new(rhs.clone()),
+            ))
+        }
+        (sp!(_, Fun(a1, r1)), sp!(loc, Fun(a2, r2))) => {
+            // TODO this is going to likely lead to some strange error locations/messages
+            // since the RHS in subtyping is currently assumed to be an annotation
+            let (subst, args) = match case {
+                Join => join_impl_types(subst, case, a1, a2)?,
+                Subtype => join_impl_types(subst, case, a2, a1)?,
+            };
+            let (subst, result) = join_impl(subst, case, r1, r2)?;
+            Ok((subst, sp(*loc, Fun(args, Box::new(result)))))
         }
         (sp!(loc1, Var(id1)), sp!(loc2, Var(id2))) => {
             if *id1 == *id2 {
@@ -1770,6 +2112,13 @@ fn join_bind_tvar(subst: &mut Subst, loc: Loc, tvar: TVar, ty: Type) -> Result<b
                 .iter()
                 .rev()
                 .for_each(|inner| used_tvars(used, inner)),
+            T::Fun(inner_args, inner_ret) => {
+                inner_args
+                    .iter()
+                    .rev()
+                    .for_each(|inner| used_tvars(used, inner));
+                used_tvars(used, inner_ret)
+            }
             T::Unit | T::Param(_) | T::Anything | T::UnresolvedError => (),
         }
     }

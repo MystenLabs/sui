@@ -48,7 +48,11 @@ fn translate_var(sp!(loc, v_): N::Var) -> H::Var {
     H::Var(sp(loc, s))
 }
 
-fn translate_block_label(N::BlockLabel(sp!(loc, v_)): N::BlockLabel) -> H::BlockLabel {
+fn translate_block_label(lbl: N::BlockLabel) -> H::BlockLabel {
+    let N::BlockLabel {
+        label: sp!(loc, v_),
+        ..
+    } = lbl;
     let N::Var_ {
         name,
         id: depth,
@@ -290,7 +294,13 @@ fn module(
     let structs = tstructs.map(|name, s| struct_def(context, name, s));
 
     let constants = tconstants.map(|name, c| constant(context, name, c));
-    let functions = tfunctions.map(|name, f| function(context, name, f));
+    let functions = tfunctions.filter_map(|name, f| {
+        if f.macro_.is_none() {
+            Some(function(context, name, f))
+        } else {
+            None
+        }
+    });
 
     gen_unused_warnings(context, is_source_module, &structs);
 
@@ -325,9 +335,11 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         attributes,
         visibility: evisibility,
         entry,
+        macro_,
         signature,
         body,
     } = f;
+    assert!(macro_.is_none(), "ICE macros filtered above");
     context.env.add_warning_filter_scope(warning_filter.clone());
     let signature = function_signature(context, signature);
     let body = function_body(context, &signature, body);
@@ -378,6 +390,7 @@ fn function_body(
             let (locals, body) = function_body_defined(context, sig, loc, seq);
             HB::Defined { locals, body }
         }
+        TB::Macro => unreachable!("ICE macros filtered above"),
     };
     sp(loc, b_)
 }
@@ -540,7 +553,7 @@ fn base_type(context: &Context, sp!(loc, nb_): N::Type) -> H::BaseType {
         NT::Param(tp) => HB::Param(tp),
         NT::UnresolvedError => HB::UnresolvedError,
         NT::Anything => HB::Unreachable,
-        NT::Ref(_, _) | NT::Unit => {
+        NT::Ref(_, _) | NT::Unit | NT::Fun(_, _) => {
             panic!(
                 "ICE type constraints failed {}:{}-{}",
                 loc.file_hash(),
@@ -848,7 +861,7 @@ fn value(
         // Expansion-y things
         // These could likely be discharged during expansion instead.
         //
-        E::Builtin(bt, arguments) if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(false))) => {
+        E::Builtin(bt, arguments) if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(None))) => {
             use T::ExpListItem as TI;
             let [cond_item, code_item]: [TI; 2] = match arguments.exp.value {
                 E::ExpList(arg_list) => arg_list.try_into().unwrap(),
@@ -874,7 +887,9 @@ fn value(
             ));
             unit_exp(eloc)
         }
-        E::Builtin(bt, arguments) if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(true))) => {
+        E::Builtin(bt, arguments)
+            if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(Some(_)))) =>
+        {
             use T::ExpListItem as TI;
             let [cond_item, code_item]: [TI; 2] = match arguments.exp.value {
                 E::ExpList(arg_list) => arg_list.try_into().unwrap(),
@@ -1401,7 +1416,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
                 },
             ));
         }
-        E::While(test, name, body) => {
+        E::While(name, test, body) => {
             let mut cond_block = make_block!();
             let cond_exp = value(context, &mut cond_block, Some(&tbool(eloc)), *test);
             let cond = (cond_block, Box::new(cond_exp));

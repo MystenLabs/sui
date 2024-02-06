@@ -242,6 +242,7 @@ new_name!(FunctionName);
 
 pub const NATIVE_MODIFIER: &str = "native";
 pub const ENTRY_MODIFIER: &str = "entry";
+pub const MACRO_MODIFIER: &str = "macro";
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct FunctionSignature {
@@ -275,6 +276,7 @@ pub struct Function {
     pub loc: Loc,
     pub visibility: Visibility,
     pub entry: Option<Loc>,
+    pub macro_: Option<Loc>,
     pub signature: FunctionSignature,
     pub name: FunctionName,
     pub body: FunctionBody,
@@ -495,6 +497,9 @@ pub type BindList = Spanned<Vec<Bind>>;
 pub type BindWithRange = Spanned<(Bind, Exp)>;
 pub type BindWithRangeList = Spanned<Vec<BindWithRange>>;
 
+pub type LambdaBindings_ = Vec<(BindList, Option<Type>)>;
+pub type LambdaBindings = Spanned<LambdaBindings_>;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value_ {
     // @<num>
@@ -593,7 +598,12 @@ pub enum Exp_ {
 
     // f(earg,*)
     // f!(earg,*)
-    Call(NameAccessChain, bool, Option<Vec<Type>>, Spanned<Vec<Exp>>),
+    Call(
+        NameAccessChain,
+        Option<Loc>,
+        Option<Vec<Type>>,
+        Spanned<Vec<Exp>>,
+    ),
 
     // tn {f1: e1, ... , f_n: e_n }
     Pack(NameAccessChain, Option<Vec<Type>>, Vec<(Field, Exp)>),
@@ -613,12 +623,13 @@ pub enum Exp_ {
     // loop eloop
     Loop(Box<Exp>),
 
-    // 'label: { seq }
-    NamedBlock(BlockLabel, Sequence),
+    // 'label: e
+    Labled(BlockLabel, Box<Exp>),
     // { seq }
     Block(Sequence),
-    // fun (x1, ..., xn) e
-    Lambda(BindList, Box<Exp>), // spec only
+    // |lv1, ..., lvn| e
+    // |lv1, ..., lvn| -> { e }
+    Lambda(LambdaBindings, Option<Type>, Box<Exp>),
     // forall/exists x1 : e1, ..., xn [{ t1, .., tk } *] [where cond]: en.
     Quant(
         QuantKind,
@@ -658,7 +669,13 @@ pub enum Exp_ {
     // e.f
     Dot(Box<Exp>, Name),
     // e.f(earg,*)
-    DotCall(Box<Exp>, Name, Option<Vec<Type>>, Spanned<Vec<Exp>>),
+    DotCall(
+        Box<Exp>,
+        Name,
+        /* is_macro */ Option<Loc>,
+        Option<Vec<Type>>,
+        Spanned<Vec<Exp>>,
+    ),
     // e[e']
     Index(Box<Exp>, Box<Exp>), // spec only
 
@@ -768,12 +785,36 @@ impl ModuleName {
 }
 
 impl Var {
+    pub const SYNTAX_IDENT_START: char = '$';
+
     pub fn is_underscore(&self) -> bool {
         self.0.value == symbol!("_")
     }
 
     pub fn starts_with_underscore(&self) -> bool {
-        self.0.value.starts_with('_')
+        Self::starts_with_underscore_name(self.0.value)
+    }
+
+    pub fn starts_with_underscore_name(n: Symbol) -> bool {
+        n.starts_with('_') || n.starts_with("$_")
+    }
+
+    pub fn is_syntax_identifier(&self) -> bool {
+        Self::is_syntax_identifier_name(self.0.value)
+    }
+
+    pub fn is_syntax_identifier_name(n: Symbol) -> bool {
+        n.starts_with(Self::SYNTAX_IDENT_START)
+    }
+
+    pub fn is_valid(&self) -> bool {
+        Self::is_valid_name(self.0.value)
+    }
+
+    pub fn is_valid_name(s: Symbol) -> bool {
+        s.starts_with('_')
+            || s.starts_with(|c: char| c.is_ascii_lowercase())
+            || Self::is_syntax_identifier_name(s)
     }
 }
 
@@ -1498,6 +1539,7 @@ impl AstDebug for Function {
             loc: _loc,
             visibility,
             entry,
+            macro_,
             signature,
             name,
             body,
@@ -1507,8 +1549,11 @@ impl AstDebug for Function {
         if entry.is_some() {
             w.write(&format!("{} ", ENTRY_MODIFIER));
         }
+        if macro_.is_some() {
+            w.write(&format!("{} ", MACRO_MODIFIER));
+        }
         if let FunctionBody_::Native = &body.value {
-            w.write("native ");
+            w.write(&format!("{} ", NATIVE_MODIFIER));
         }
         w.write(&format!("fun {}", name));
         signature.ast_debug(w);
@@ -1743,7 +1788,7 @@ impl AstDebug for Exp_ {
             }
             E::Call(ma, is_macro, tys_opt, sp!(_, rhs)) => {
                 ma.ast_debug(w);
-                if *is_macro {
+                if is_macro.is_some() {
                     w.write("!");
                 }
                 if let Some(ss) = tys_opt {
@@ -1800,15 +1845,17 @@ impl AstDebug for Exp_ {
                 w.write("loop ");
                 e.ast_debug(w);
             }
-            E::NamedBlock(name, seq) => {
-                w.write(format!("'{}: ", name));
-                w.block(|w| seq.ast_debug(w))
+            E::Labled(name, e) => {
+                w.write(format!("'{name}: "));
+                e.ast_debug(w)
             }
             E::Block(seq) => w.block(|w| seq.ast_debug(w)),
-            E::Lambda(sp!(_, bs), e) => {
-                w.write("fun ");
+            E::Lambda(sp!(_, bs), ty_opt, e) => {
                 bs.ast_debug(w);
-                w.write(" ");
+                if let Some(ty) = ty_opt {
+                    w.write(" -> ");
+                    ty.ast_debug(w);
+                }
                 e.ast_debug(w);
             }
             E::Quant(kind, sp!(_, rs), trs, c_opt, e) => {
@@ -1884,9 +1931,12 @@ impl AstDebug for Exp_ {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n));
             }
-            E::DotCall(e, n, tys_opt, sp!(_, rhs)) => {
+            E::DotCall(e, n, is_macro, tys_opt, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n));
+                if is_macro.is_some() {
+                    w.write("!");
+                }
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);
@@ -2026,6 +2076,20 @@ impl AstDebug for Bind_ {
                 fields.ast_debug(w);
             }
         }
+    }
+}
+
+impl AstDebug for LambdaBindings_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("|");
+        w.comma(self, |w, (b, ty_opt)| {
+            b.ast_debug(w);
+            if let Some(ty) = ty_opt {
+                w.write(": ");
+                ty.ast_debug(w);
+            }
+        });
+        w.write("| ");
     }
 }
 

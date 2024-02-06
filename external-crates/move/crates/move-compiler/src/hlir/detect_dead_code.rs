@@ -536,7 +536,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             }
         }
 
-        E::While(test, _, body) => {
+        E::While(_, test, body) => {
             if let Some(test_control_flow) = value(context, test) {
                 context.report_value_error(test_control_flow);
                 already_reported(*eloc)

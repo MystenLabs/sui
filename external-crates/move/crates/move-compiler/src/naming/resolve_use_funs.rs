@@ -48,6 +48,7 @@ pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &m
             let N::UseFuns {
                 resolved,
                 implicit_candidates,
+                color: _,
             } = &mdef.use_funs;
             assert!(implicit_candidates.is_empty());
             (mident, resolved.clone())
@@ -102,6 +103,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
     let N::UseFuns {
         resolved,
         implicit_candidates,
+        color: _,
     } = uf;
     // remove any incorrect resolved functions
     for (tn, methods) in &mut *resolved {
@@ -310,24 +312,34 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Return(e)
         | N::Exp_::Abort(e)
-        | N::Exp_::Give(_, e)
+        | N::Exp_::Give(_, _, e)
         | N::Exp_::Dereference(e)
         | N::Exp_::UnaryExp(_, e)
         | N::Exp_::Cast(e, _)
         | N::Exp_::Assign(_, e)
         | N::Exp_::Loop(_, e)
-        | N::Exp_::Annotate(e, _) => exp(context, e),
+        | N::Exp_::Annotate(e, _)
+        | N::Exp_::Lambda(N::Lambda {
+            parameters: _,
+            return_type: _,
+            return_label: _,
+            use_fun_color: _,
+            body: e,
+        }) => exp(context, e),
         N::Exp_::IfElse(econd, et, ef) => {
             exp(context, econd);
             exp(context, et);
             exp(context, ef);
         }
-        N::Exp_::While(econd, _, ebody) => {
+        N::Exp_::While(_, econd, ebody) => {
             exp(context, econd);
             exp(context, ebody)
         }
-        N::Exp_::NamedBlock(_, s) => sequence(context, s),
-        N::Exp_::Block(s) => sequence(context, s),
+        N::Exp_::Block(N::Block {
+            name: _,
+            from_macro_argument: _,
+            seq,
+        }) => sequence(context, seq),
         N::Exp_::FieldMutate(ed, e) => {
             exp_dotted(context, ed);
             exp(context, e)
@@ -343,13 +355,14 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         }
         N::Exp_::Builtin(_, sp!(_, es))
         | N::Exp_::Vector(_, _, sp!(_, es))
-        | N::Exp_::ModuleCall(_, _, _, sp!(_, es))
+        | N::Exp_::ModuleCall(_, _, _, _, sp!(_, es))
+        | N::Exp_::VarCall(_, sp!(_, es))
         | N::Exp_::ExpList(es) => {
             for e in es {
                 exp(context, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, sp!(_, es)) => {
+        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es)) => {
             exp_dotted(context, ed);
             for e in es {
                 exp(context, e)

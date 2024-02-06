@@ -7,6 +7,7 @@ use crate::{
     parser::ast::{
         self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, Field, FunctionName,
         ModuleName, Mutability, QuantKind, StructName, UnaryOp, Var, ENTRY_MODIFIER,
+        MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{
         ast_debug::*, known_attributes::KnownAttribute, unique_map::UniqueMap,
@@ -209,6 +210,7 @@ pub struct Function {
     pub loc: Loc,
     pub visibility: Visibility,
     pub entry: Option<Loc>,
+    pub macro_: Option<Loc>,
     pub signature: FunctionSignature,
     pub body: FunctionBody,
 }
@@ -279,6 +281,9 @@ pub type LValueWithRange = Spanned<LValueWithRange_>;
 pub type LValueWithRangeList_ = Vec<LValueWithRange>;
 pub type LValueWithRangeList = Spanned<LValueWithRangeList_>;
 
+pub type LambdaLValues_ = Vec<(LValueList, Option<Type>)>;
+pub type LambdaLValues = Spanned<LambdaLValues_>;
+
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum ExpDotted_ {
@@ -329,20 +334,25 @@ pub enum Exp_ {
     Name(ModuleAccess, Option<Vec<Type>>),
     Call(
         ModuleAccess,
-        /* is_macro */ bool,
+        /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
     ),
-    MethodCall(Box<ExpDotted>, Name, Option<Vec<Type>>, Spanned<Vec<Exp>>),
+    MethodCall(
+        Box<ExpDotted>,
+        Name,
+        /* is_macro */ Option<Loc>,
+        Option<Vec<Type>>,
+        Spanned<Vec<Exp>>,
+    ),
     Pack(ModuleAccess, Option<Vec<Type>>, Fields<Exp>),
     Vector(Loc, Option<Vec<Type>>, Spanned<Vec<Exp>>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
-    While(Box<Exp>, Option<BlockLabel>, Box<Exp>),
+    While(Option<BlockLabel>, Box<Exp>, Box<Exp>),
     Loop(Option<BlockLabel>, Box<Exp>),
-    NamedBlock(BlockLabel, Sequence),
-    Block(Sequence),
-    Lambda(LValueList, Box<Exp>), // spec only
+    Block(Option<BlockLabel>, Sequence),
+    Lambda(LambdaLValues, Option<Type>, Box<Exp>),
     Quant(
         QuantKind,
         LValueWithRangeList,
@@ -381,9 +391,9 @@ pub type Exp = Spanned<Exp_>;
 pub type Sequence = (UseFuns, VecDeque<SequenceItem>);
 #[derive(Debug, Clone, PartialEq)]
 pub enum SequenceItem_ {
-    Seq(Exp),
+    Seq(Box<Exp>),
     Declare(LValueList, Option<Type>),
-    Bind(LValueList, Exp),
+    Bind(LValueList, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
 
@@ -590,6 +600,8 @@ impl AbilitySet {
     pub const SIGNER: [Ability_; 1] = [Ability_::Drop];
     /// Abilities for vector<_>, note they are predicated on the type argument
     pub const COLLECTION: [Ability_; 3] = [Ability_::Copy, Ability_::Drop, Ability_::Store];
+    /// Abilities for functions
+    pub const FUNCTIONS: [Ability_; 0] = [];
 
     pub fn empty() -> Self {
         AbilitySet(UniqueSet::new())
@@ -655,23 +667,27 @@ impl AbilitySet {
     }
 
     pub fn all(loc: Loc) -> Self {
-        Self::from_abilities_(loc, Self::ALL.to_vec()).unwrap()
+        Self::from_abilities_(loc, Self::ALL).unwrap()
     }
 
     pub fn primitives(loc: Loc) -> Self {
-        Self::from_abilities_(loc, Self::PRIMITIVES.to_vec()).unwrap()
+        Self::from_abilities_(loc, Self::PRIMITIVES).unwrap()
     }
 
     pub fn references(loc: Loc) -> Self {
-        Self::from_abilities_(loc, Self::REFERENCES.to_vec()).unwrap()
+        Self::from_abilities_(loc, Self::REFERENCES).unwrap()
     }
 
     pub fn signer(loc: Loc) -> Self {
-        Self::from_abilities_(loc, Self::SIGNER.to_vec()).unwrap()
+        Self::from_abilities_(loc, Self::SIGNER).unwrap()
     }
 
     pub fn collection(loc: Loc) -> Self {
-        Self::from_abilities_(loc, Self::COLLECTION.to_vec()).unwrap()
+        Self::from_abilities_(loc, Self::COLLECTION).unwrap()
+    }
+
+    pub fn functions(loc: Loc) -> Self {
+        Self::from_abilities_(loc, Self::COLLECTION).unwrap()
     }
 }
 
@@ -1074,6 +1090,7 @@ impl AstDebug for (FunctionName, &Function) {
                 loc: _loc,
                 visibility,
                 entry,
+                macro_,
                 signature,
                 body,
                 warning_filter,
@@ -1085,8 +1102,11 @@ impl AstDebug for (FunctionName, &Function) {
         if entry.is_some() {
             w.write(&format!("{} ", ENTRY_MODIFIER));
         }
+        if macro_.is_some() {
+            w.write(&format!("{} ", MACRO_MODIFIER));
+        }
         if let FunctionBody_::Native = &body.value {
-            w.write("native ");
+            w.write(&format!("{} ", NATIVE_MODIFIER));
         }
         w.write(&format!("fun#{index} {name}"));
         signature.ast_debug(w);
@@ -1319,7 +1339,7 @@ impl AstDebug for Exp_ {
             }
             E::Call(ma, is_macro, tys_opt, sp!(_, rhs)) => {
                 ma.ast_debug(w);
-                if *is_macro {
+                if is_macro.is_some() {
                     w.write("!");
                 }
                 if let Some(ss) = tys_opt {
@@ -1331,9 +1351,12 @@ impl AstDebug for Exp_ {
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
             }
-            E::MethodCall(e, f, tys_opt, sp!(_, rhs)) => {
+            E::MethodCall(e, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", f));
+                if is_macro.is_some() {
+                    w.write("!");
+                }
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);
@@ -1377,27 +1400,28 @@ impl AstDebug for Exp_ {
                 w.write(" else ");
                 f.ast_debug(w);
             }
-            E::While(b, name, e) => {
+            E::While(name, b, e) => {
+                name.map(|name| w.write(format!("'{}: ", name)));
                 w.write("while (");
                 b.ast_debug(w);
                 w.write(")");
-                name.map(|name| w.write(format!(" '{}: ", name)));
                 e.ast_debug(w);
             }
             E::Loop(name, e) => {
+                name.map(|name| w.write(format!("'{}: ", name)));
                 w.write("loop ");
-                name.map(|name| w.write(format!(" '{}: ", name)));
                 e.ast_debug(w);
             }
-            E::NamedBlock(name, seq) => {
-                w.write(format!("'{}: ", name));
+            E::Block(name, seq) => {
+                name.map(|name| w.write(format!("'{}: ", name)));
                 seq.ast_debug(w);
             }
-            E::Block(seq) => seq.ast_debug(w),
-            E::Lambda(sp!(_, bs), e) => {
-                w.write("fun ");
+            E::Lambda(sp!(_, bs), ty_opt, e) => {
                 bs.ast_debug(w);
-                w.write(" ");
+                if let Some(ty) = ty_opt {
+                    w.write(" -> ");
+                    ty.ast_debug(w);
+                }
                 e.ast_debug(w);
             }
             E::Quant(kind, sp!(_, rs), trs, c_opt, e) => {
@@ -1578,6 +1602,20 @@ impl AstDebug for (LValue, Exp) {
         self.0.ast_debug(w);
         w.write(" in ");
         self.1.ast_debug(w);
+    }
+}
+
+impl AstDebug for LambdaLValues_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("|");
+        w.comma(self, |w, (lv, ty_opt)| {
+            lv.ast_debug(w);
+            if let Some(ty) = ty_opt {
+                w.write(": ");
+                ty.ast_debug(w);
+            }
+        });
+        w.write("| ");
     }
 }
 

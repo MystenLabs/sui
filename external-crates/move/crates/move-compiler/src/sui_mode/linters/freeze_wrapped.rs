@@ -188,7 +188,8 @@ impl<'a> Context<'a> {
             | T::Ref(_, _)
             | T::Var(_)
             | T::Anything
-            | T::UnresolvedError => None,
+            | T::UnresolvedError
+            | T::Fun(_, _) => None,
         }
     }
 

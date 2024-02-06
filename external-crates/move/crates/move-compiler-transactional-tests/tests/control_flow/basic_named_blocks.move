@@ -5,7 +5,7 @@ module 0x42::m {
 
     #[allow(dead_code)]
     public fun t00(): u64 {
-        'name:  {
+        'name: {
             return 'name 10;
             20
         }
@@ -13,7 +13,7 @@ module 0x42::m {
 
     #[allow(dead_code)]
     public fun t01(): u64 {
-        'name:  {
+        'name: {
             'name2: {
                 return 'name 10;
                 20
@@ -23,8 +23,8 @@ module 0x42::m {
 
     #[allow(dead_code)]
     public fun t02(): u64 {
-        loop 'outer: {
-            let _x = loop 'inner: {
+        'outer: loop {
+            let _x = 'inner: loop {
                 break 'outer 10;
                 break 'inner 20
             };
@@ -33,8 +33,8 @@ module 0x42::m {
 
     #[allow(dead_code)]
     public fun t03(): u64 {
-        loop 'outer: {
-            let x = loop 'inner: {
+        'outer: loop {
+            let x = 'inner: loop {
                 break 'inner 10
             };
             break 'outer x
@@ -42,15 +42,15 @@ module 0x42::m {
     }
 
     public fun t04(cond: bool): u64 {
-        while (cond) 'name: {
+        'name: while (cond) {
             break 'name
         };
         10
     }
 
     public fun t05(cond: bool): u64 {
-        loop 'outer: {
-            while (cond) 'body: {
+        'outer: loop {
+            'body: while (cond) {
                 if (cond) { break 'outer 10 };
                 continue 'body
             }
@@ -58,7 +58,7 @@ module 0x42::m {
     }
 
     public fun t06(cond: bool): u64 {
-        while (cond) 'name: {
+        'name: while (cond) {
             return 10
         };
         20

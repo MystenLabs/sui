@@ -294,7 +294,7 @@ impl<'a> Compiler<'a> {
         }
 
         let (source_text, pprog, comments) =
-            parse_program(&mut compilation_env, maps, targets, deps)?;
+            with_large_stack!(parse_program(&mut compilation_env, maps, targets, deps))?;
 
         let res: Result<_, Diagnostics> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
@@ -850,91 +850,108 @@ fn run(
     pre_compiled_lib: Option<&FullyCompiledProgram>,
     cur: PassResult,
     until: Pass,
-    mut result_check: impl FnMut(&PassResult, &CompilationEnv),
+    result_check: impl FnMut(&PassResult, &CompilationEnv),
 ) -> Result<PassResult, Diagnostics> {
-    compilation_env.check_diags_at_or_above_severity(Severity::Bug)?;
-    assert!(
-        until <= PASS_COMPILATION,
-        "Invalid pass for run_to. Target is greater than maximum pass"
-    );
-    result_check(&cur, compilation_env);
-    if cur.equivalent_pass() >= until {
-        return Ok(cur);
-    }
+    fn rec(
+        compilation_env: &mut CompilationEnv,
+        pre_compiled_lib: Option<&FullyCompiledProgram>,
+        cur: PassResult,
+        until: Pass,
+        mut result_check: impl FnMut(&PassResult, &CompilationEnv),
+    ) -> Result<PassResult, Diagnostics> {
+        compilation_env.check_diags_at_or_above_severity(Severity::Bug)?;
+        assert!(
+            until <= PASS_COMPILATION,
+            "Invalid pass for run_to. Target is greater than maximum pass"
+        );
+        result_check(&cur, compilation_env);
+        if cur.equivalent_pass() >= until {
+            return Ok(cur);
+        }
 
-    match cur {
-        PassResult::Parser(prog) => {
-            let prog = unit_test::filter_test_members::program(compilation_env, prog);
-            let prog = verification_attribute_filter::program(compilation_env, prog);
-            let eprog = expansion::translate::program(compilation_env, pre_compiled_lib, prog);
-            run(
-                compilation_env,
-                pre_compiled_lib,
-                PassResult::Expansion(eprog),
-                until,
-                result_check,
-            )
+        match cur {
+            PassResult::Parser(prog) => {
+                let eprog = {
+                    let prog = unit_test::filter_test_members::program(compilation_env, prog);
+                    let prog = verification_attribute_filter::program(compilation_env, prog);
+                    expansion::translate::program(compilation_env, pre_compiled_lib, prog)
+                };
+                rec(
+                    compilation_env,
+                    pre_compiled_lib,
+                    PassResult::Expansion(eprog),
+                    until,
+                    result_check,
+                )
+            }
+            PassResult::Expansion(eprog) => {
+                let nprog = naming::translate::program(compilation_env, pre_compiled_lib, eprog);
+                rec(
+                    compilation_env,
+                    pre_compiled_lib,
+                    PassResult::Naming(nprog),
+                    until,
+                    result_check,
+                )
+            }
+            PassResult::Naming(nprog) => {
+                let tprog = typing::translate::program(compilation_env, pre_compiled_lib, nprog);
+                rec(
+                    compilation_env,
+                    pre_compiled_lib,
+                    PassResult::Typing(tprog),
+                    until,
+                    result_check,
+                )
+            }
+            PassResult::Typing(tprog) => {
+                compilation_env.check_diags_at_or_above_severity(Severity::BlockingError)?;
+                let hprog = hlir::translate::program(compilation_env, pre_compiled_lib, tprog);
+                rec(
+                    compilation_env,
+                    pre_compiled_lib,
+                    PassResult::HLIR(hprog),
+                    until,
+                    result_check,
+                )
+            }
+            PassResult::HLIR(hprog) => {
+                let cprog = cfgir::translate::program(compilation_env, pre_compiled_lib, hprog);
+                rec(
+                    compilation_env,
+                    pre_compiled_lib,
+                    PassResult::CFGIR(cprog),
+                    until,
+                    result_check,
+                )
+            }
+            PassResult::CFGIR(cprog) => {
+                // Don't generate bytecode if there are any errors
+                compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
+                let compiled_units =
+                    to_bytecode::translate::program(compilation_env, pre_compiled_lib, cprog);
+                // Report any errors from bytecode generation
+                compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
+                let warnings = compilation_env.take_final_warning_diags();
+                assert!(until == PASS_COMPILATION);
+                rec(
+                    compilation_env,
+                    pre_compiled_lib,
+                    PassResult::Compilation(compiled_units, warnings),
+                    PASS_COMPILATION,
+                    result_check,
+                )
+            }
+            PassResult::Compilation(_, _) => unreachable!("ICE Pass::Compilation is >= all passes"),
         }
-        PassResult::Expansion(eprog) => {
-            let nprog = naming::translate::program(compilation_env, pre_compiled_lib, eprog);
-            run(
-                compilation_env,
-                pre_compiled_lib,
-                PassResult::Naming(nprog),
-                until,
-                result_check,
-            )
-        }
-        PassResult::Naming(nprog) => {
-            let tprog = typing::translate::program(compilation_env, pre_compiled_lib, nprog);
-            run(
-                compilation_env,
-                pre_compiled_lib,
-                PassResult::Typing(tprog),
-                until,
-                result_check,
-            )
-        }
-        PassResult::Typing(tprog) => {
-            compilation_env.check_diags_at_or_above_severity(Severity::BlockingError)?;
-            let hprog = hlir::translate::program(compilation_env, pre_compiled_lib, tprog);
-            run(
-                compilation_env,
-                pre_compiled_lib,
-                PassResult::HLIR(hprog),
-                until,
-                result_check,
-            )
-        }
-        PassResult::HLIR(hprog) => {
-            let cprog = cfgir::translate::program(compilation_env, pre_compiled_lib, hprog);
-            run(
-                compilation_env,
-                pre_compiled_lib,
-                PassResult::CFGIR(cprog),
-                until,
-                result_check,
-            )
-        }
-        PassResult::CFGIR(cprog) => {
-            // Don't generate bytecode if there are any errors
-            compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
-            let compiled_units =
-                to_bytecode::translate::program(compilation_env, pre_compiled_lib, cprog);
-            // Report any errors from bytecode generation
-            compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
-            let warnings = compilation_env.take_final_warning_diags();
-            assert!(until == PASS_COMPILATION);
-            run(
-                compilation_env,
-                pre_compiled_lib,
-                PassResult::Compilation(compiled_units, warnings),
-                PASS_COMPILATION,
-                result_check,
-            )
-        }
-        PassResult::Compilation(_, _) => unreachable!("ICE Pass::Compilation is >= all passes"),
     }
+    with_large_stack!(rec(
+        compilation_env,
+        pre_compiled_lib,
+        cur,
+        until,
+        result_check
+    ))
 }
 
 //**************************************************************************************************

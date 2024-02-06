@@ -143,7 +143,7 @@ pub fn base_type(t: &N::Type) -> Option<&N::Type> {
     match &t.value {
         T::Ref(_, inner_t) => base_type(inner_t),
         T::Apply(_, _, _) | T::Param(_) => Some(t),
-        T::Unit | T::Var(_) | T::Anything | T::UnresolvedError => None,
+        T::Unit | T::Var(_) | T::Anything | T::UnresolvedError | T::Fun(_, _) => None,
     }
 }
 

@@ -9,7 +9,10 @@ use crate::{
         BlockLabel, FunctionSignature, Neighbor, StructDefinition, Type, TypeName_, Type_, UseFuns,
         Var,
     },
-    parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
+    parser::ast::{
+        BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
+        MACRO_MODIFIER, NATIVE_MODIFIER,
+    },
     shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name},
 };
 use move_ir_types::location::*;
@@ -66,6 +69,7 @@ pub struct ModuleDefinition {
 pub enum FunctionBody_ {
     Defined(Sequence),
     Native,
+    Macro,
 }
 pub type FunctionBody = Spanned<FunctionBody_>;
 
@@ -77,6 +81,7 @@ pub struct Function {
     pub attributes: Attributes,
     pub visibility: Visibility,
     pub entry: Option<Loc>,
+    pub macro_: Option<Loc>,
     pub signature: FunctionSignature,
     pub body: FunctionBody,
 }
@@ -136,7 +141,7 @@ pub struct ModuleCall {
 #[allow(clippy::large_enum_variant)]
 pub enum BuiltinFunction_ {
     Freeze(Type),
-    Assert(/* is_macro */ bool),
+    Assert(/* is_macro */ Option<Loc>),
 }
 pub type BuiltinFunction = Spanned<BuiltinFunction_>;
 
@@ -162,7 +167,7 @@ pub enum UnannotatedExp_ {
     Vector(Loc, usize, Box<Type>, Box<Exp>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
-    While(Box<Exp>, BlockLabel, Box<Exp>),
+    While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop {
         name: BlockLabel,
         has_break: bool,
@@ -199,9 +204,6 @@ pub struct Exp {
     pub ty: Type,
     pub exp: UnannotatedExp,
 }
-pub fn exp(ty: Type, exp: UnannotatedExp) -> Exp {
-    Exp { ty, exp }
-}
 
 pub type Sequence = (UseFuns, VecDeque<SequenceItem>);
 #[derive(Debug, PartialEq, Clone)]
@@ -218,20 +220,6 @@ pub enum ExpListItem {
     Splat(Loc, Exp, Vec<Type>),
 }
 
-pub fn single_item(e: Exp) -> ExpListItem {
-    let ty = Box::new(e.ty.clone());
-    ExpListItem::Single(e, ty)
-}
-
-pub fn splat_item(splat_loc: Loc, e: Exp) -> ExpListItem {
-    let ss = match &e.ty {
-        sp!(_, Type_::Unit) => vec![],
-        sp!(_, Type_::Apply(_, sp!(_, TypeName_::Multiple(_)), ss)) => ss.clone(),
-        _ => panic!("ICE splat of non list type"),
-    };
-    ExpListItem::Splat(splat_loc, e, ss)
-}
-
 //**************************************************************************************************
 // impls
 //**************************************************************************************************
@@ -245,6 +233,41 @@ impl BuiltinFunction_ {
             B::Assert(_) => NB::ASSERT_MACRO,
         }
     }
+}
+
+pub fn explist(loc: Loc, mut es: Vec<Exp>) -> Exp {
+    match es.len() {
+        0 => {
+            let e__ = UnannotatedExp_::Unit { trailing: false };
+            let ty = sp(loc, Type_::Unit);
+            exp(ty, sp(loc, e__))
+        }
+        1 => es.pop().unwrap(),
+        _ => {
+            let tys = es.iter().map(|e| e.ty.clone()).collect();
+            let items = es.into_iter().map(single_item).collect();
+            let ty = Type_::multiple(loc, tys);
+            exp(ty, sp(loc, UnannotatedExp_::ExpList(items)))
+        }
+    }
+}
+
+pub fn exp(ty: Type, exp: UnannotatedExp) -> Exp {
+    Exp { ty, exp }
+}
+
+pub fn single_item(e: Exp) -> ExpListItem {
+    let ty = Box::new(e.ty.clone());
+    ExpListItem::Single(e, ty)
+}
+
+pub fn splat_item(splat_loc: Loc, e: Exp) -> ExpListItem {
+    let ss = match &e.ty {
+        sp!(_, Type_::Unit) => vec![],
+        sp!(_, Type_::Apply(_, sp!(_, TypeName_::Multiple(_)), ss)) => ss.clone(),
+        _ => panic!("ICE splat of non list type"),
+    };
+    ExpListItem::Splat(splat_loc, e, ss)
 }
 
 //**************************************************************************************************
@@ -346,6 +369,7 @@ impl AstDebug for (FunctionName, &Function) {
                 attributes,
                 visibility,
                 entry,
+                macro_,
                 signature,
                 body,
             },
@@ -356,14 +380,24 @@ impl AstDebug for (FunctionName, &Function) {
         if entry.is_some() {
             w.write(&format!("{} ", ENTRY_MODIFIER));
         }
+        if macro_.is_some() {
+            w.write(&format!("{} ", MACRO_MODIFIER));
+        }
         if let FunctionBody_::Native = &body.value {
-            w.write("native ");
+            w.write(&format!("{} ", NATIVE_MODIFIER));
         }
         w.write(&format!("fun#{index} {name}"));
         signature.ast_debug(w);
-        match &body.value {
-            FunctionBody_::Defined(body) => body.ast_debug(w),
-            FunctionBody_::Native => w.writeln(";"),
+        body.ast_debug(w);
+    }
+}
+
+impl AstDebug for FunctionBody_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        use FunctionBody_ as F;
+        match self {
+            F::Defined(seq) => seq.ast_debug(w),
+            F::Native | F::Macro => w.writeln(";"),
         }
     }
 }
@@ -507,9 +541,8 @@ impl AstDebug for UnannotatedExp_ {
                 f.ast_debug(w);
             }
             E::While(name, b, e) => {
-                w.write("while@");
                 name.ast_debug(w);
-                w.write(" (");
+                w.write(": while (");
                 b.ast_debug(w);
                 w.write(")");
                 e.ast_debug(w);
@@ -519,13 +552,12 @@ impl AstDebug for UnannotatedExp_ {
                 has_break,
                 body,
             } => {
-                w.write("loop");
+                name.ast_debug(w);
+                w.write(": loop");
                 if *has_break {
                     w.write("#with_break");
                 }
                 w.write(" ");
-                name.ast_debug(w);
-                w.write(": ");
                 body.ast_debug(w);
             }
             E::NamedBlock(name, seq) => {

@@ -16,7 +16,7 @@ use crate::{
     },
     parser::ast::{
         self as P, Ability, BlockLabel, ConstantName, Field, FieldBindings, FunctionName,
-        ModuleName, Mutability, StructName, Var,
+        ModuleName, Mutability, StructName, Var, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{known_attributes::AttributePosition, unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -652,7 +652,7 @@ fn module_(
             P::ModuleMember::Use(_) => unreachable!(),
             P::ModuleMember::Friend(f) => friend(context, &mut friends, f),
             P::ModuleMember::Function(mut f) => {
-                if !context.is_source_definition {
+                if !context.is_source_definition && f.macro_.is_none() {
                     f.body.value = P::FunctionBody_::Native
                 }
                 function(
@@ -2391,7 +2391,7 @@ fn constant_(
         .env()
         .add_warning_filter_scope(warning_filter.clone());
     let signature = type_(context, psignature);
-    let value = exp_(context, pvalue);
+    let value = *exp(context, Box::new(pvalue));
     let constant = E::Constant {
         warning_filter,
         index,
@@ -2432,6 +2432,7 @@ fn function_(
         name,
         visibility: pvisibility,
         entry,
+        macro_,
         signature: psignature,
         body: pbody,
     } = pfunction;
@@ -2440,8 +2441,39 @@ fn function_(
     context
         .env()
         .add_warning_filter_scope(warning_filter.clone());
+    if let (Some(entry_loc), Some(macro_loc)) = (entry, macro_) {
+        let e_msg = format!(
+            "Invalid function declaration. \
+            It is meaningless for '{MACRO_MODIFIER}' functions to be '{ENTRY_MODIFIER}' since they \
+            are fully-expanded inline during compilation"
+        );
+        let m_msg = format!("Function declared as '{MACRO_MODIFIER}' here");
+        context.env().add_diag(diag!(
+            Declarations::InvalidFunction,
+            (entry_loc, e_msg),
+            (macro_loc, m_msg),
+        ));
+    }
+    if let (Some(macro_loc), sp!(native_loc, P::FunctionBody_::Native)) = (macro_, &pbody) {
+        let n_msg = format!(
+            "Invalid function declaration. \
+            '{NATIVE_MODIFIER}' functions cannot be '{MACRO_MODIFIER}'",
+        );
+        let m_msg = format!("Function declared as '{MACRO_MODIFIER}' here");
+        context.env().add_diag(diag!(
+            Declarations::InvalidFunction,
+            (*native_loc, n_msg),
+            (macro_loc, m_msg),
+        ));
+    }
+    if let Some(macro_loc) = macro_ {
+        let current_package = context.current_package;
+        context
+            .env()
+            .check_feature(FeatureGate::MacroFuns, current_package, macro_loc);
+    }
     let visibility = visibility(pvisibility);
-    let signature = function_signature(context, psignature);
+    let signature = function_signature(context, macro_, psignature);
     let body = function_body(context, pbody);
     if let Some((m, use_funs_builder)) = module_and_use_funs {
         let implicit = E::ImplicitUseFunCandidate {
@@ -2462,6 +2494,7 @@ fn function_(
         loc,
         visibility,
         entry,
+        macro_,
         signature,
         body,
     };
@@ -2481,6 +2514,7 @@ fn visibility(pvisibility: P::Visibility) -> E::Visibility {
 
 fn function_signature(
     context: &mut Context,
+    is_macro: Option<Loc>,
     psignature: P::FunctionSignature,
 ) -> E::FunctionSignature {
     let P::FunctionSignature {
@@ -2488,14 +2522,14 @@ fn function_signature(
         parameters: pparams,
         return_type: pret_ty,
     } = psignature;
-    let type_parameters = type_parameters(context, pty_params);
+    let type_parameters = function_type_parameters(context, is_macro, pty_params);
     context.push_type_parameters(type_parameters.iter().map(|(name, _)| name));
     let parameters = pparams
         .into_iter()
         .map(|(pmut, v, t)| (mutability(context, v.loc(), pmut), v, type_(context, t)))
         .collect::<Vec<_>>();
     for (_, v, _) in &parameters {
-        check_valid_local_name(context, v)
+        check_valid_function_parameter_name(context, is_macro, v)
     }
     let return_type = type_(context, pret_ty);
     E::FunctionSignature {
@@ -2534,14 +2568,16 @@ fn ability_set(context: &mut Context, case: &str, abilities_vec: Vec<Ability>) -
     set
 }
 
-fn type_parameters(
+fn function_type_parameters(
     context: &mut Context,
+    is_macro: Option<Loc>,
     pty_params: Vec<(Name, Vec<Ability>)>,
 ) -> Vec<(Name, E::AbilitySet)> {
     pty_params
         .into_iter()
         .map(|(name, constraints_vec)| {
             let constraints = ability_set(context, "constraint", constraints_vec);
+            let _ = check_valid_type_parameter_name(context, is_macro, &name);
             (name, constraints)
         })
         .collect()
@@ -2553,10 +2589,13 @@ fn struct_type_parameters(
 ) -> Vec<E::StructTypeParameter> {
     pty_params
         .into_iter()
-        .map(|param| E::StructTypeParameter {
-            is_phantom: param.is_phantom,
-            name: param.name,
-            constraints: ability_set(context, "constraint", param.constraints),
+        .map(|param| {
+            let _ = check_valid_type_parameter_name(context, None, &param.name);
+            E::StructTypeParameter {
+                is_phantom: param.is_phantom,
+                name: param.name,
+                constraints: ability_set(context, "constraint", param.constraints),
+            }
         })
         .collect()
 }
@@ -2578,10 +2617,10 @@ fn type_(context: &mut Context, sp!(loc, pt_): P::Type) -> E::Type {
             }
         }
         PT::Ref(mut_, inner) => ET::Ref(mut_, Box::new(type_(context, *inner))),
-        PT::Fun(_, _) => {
-            // TODO these will be used later by macros
-            context.spec_deprecated(loc, /* is_error */ true);
-            ET::UnresolvedError
+        PT::Fun(args, result) => {
+            let args = types(context, args);
+            let result = type_(context, *result);
+            ET::Fun(args, Box::new(result))
         }
     };
     sp(loc, t_)
@@ -2609,14 +2648,14 @@ fn sequence(context: &mut Context, loc: Loc, seq: P::Sequence) -> E::Sequence {
         .into_iter()
         .map(|item| sequence_item(context, item))
         .collect();
-    let final_e_opt = pfinal_item.map(|item| exp_(context, item));
+    let final_e_opt = pfinal_item.map(|item| exp(context, Box::new(item)));
     let final_e = match final_e_opt {
         None => {
             let last_semicolon_loc = match maybe_last_semicolon_loc {
                 Some(l) => l,
                 None => loc,
             };
-            sp(last_semicolon_loc, E::Exp_::Unit { trailing: true })
+            Box::new(sp(last_semicolon_loc, E::Exp_::Unit { trailing: true }))
         }
         Some(e) => e,
     };
@@ -2630,14 +2669,14 @@ fn sequence_item(context: &mut Context, sp!(loc, pitem_): P::SequenceItem) -> E:
     use E::SequenceItem_ as ES;
     use P::SequenceItem_ as PS;
     let item_ = match pitem_ {
-        PS::Seq(e) => ES::Seq(exp_(context, *e)),
+        PS::Seq(e) => ES::Seq(exp(context, e)),
         PS::Declare(pb, pty_opt) => {
             let b_opt = bind_list(context, pb);
             let ty_opt = pty_opt.map(|t| type_(context, t));
             match b_opt {
                 None => {
                     assert!(context.env().has_errors());
-                    ES::Seq(sp(loc, E::Exp_::UnresolvedError))
+                    ES::Seq(Box::new(sp(loc, E::Exp_::UnresolvedError)))
                 }
                 Some(b) => ES::Declare(b, ty_opt),
             }
@@ -2645,15 +2684,15 @@ fn sequence_item(context: &mut Context, sp!(loc, pitem_): P::SequenceItem) -> E:
         PS::Bind(pb, pty_opt, pe) => {
             let b_opt = bind_list(context, pb);
             let ty_opt = pty_opt.map(|t| type_(context, t));
-            let e_ = exp_(context, *pe);
+            let e_ = exp(context, pe);
             let e = match ty_opt {
                 None => e_,
-                Some(ty) => sp(e_.loc, E::Exp_::Annotate(Box::new(e_), ty)),
+                Some(ty) => Box::new(sp(e_.loc, E::Exp_::Annotate(e_, ty))),
             };
             match b_opt {
                 None => {
                     assert!(context.env().has_errors());
-                    ES::Seq(sp(loc, E::Exp_::UnresolvedError))
+                    ES::Seq(Box::new(sp(loc, E::Exp_::UnresolvedError)))
                 }
                 Some(b) => ES::Bind(b, e),
             }
@@ -2663,16 +2702,15 @@ fn sequence_item(context: &mut Context, sp!(loc, pitem_): P::SequenceItem) -> E:
 }
 
 fn exps(context: &mut Context, pes: Vec<P::Exp>) -> Vec<E::Exp> {
-    pes.into_iter().map(|pe| exp_(context, pe)).collect()
+    pes.into_iter()
+        .map(|pe| *exp(context, Box::new(pe)))
+        .collect()
 }
 
-fn exp(context: &mut Context, pe: P::Exp) -> Box<E::Exp> {
-    Box::new(exp_(context, pe))
-}
-
-fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
+fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
     use E::Exp_ as EE;
     use P::Exp_ as PE;
+    let sp!(loc, pe_) = *pe;
     let e_ = match pe_ {
         PE::Unit => EE::Unit { trailing: false },
         PE::Value(pv) => match value(&mut context.defn_context, pv) {
@@ -2718,7 +2756,7 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
             let tys_opt = optional_types(context, ptys_opt);
             let efields_vec = pfields
                 .into_iter()
-                .map(|(f, pe)| (f, exp_(context, pe)))
+                .map(|(f, pe)| (f, *exp(context, Box::new(pe))))
                 .collect();
             let efields = named_fields(context, loc, "construction", "argument", efields_vec);
             match en_opt {
@@ -2735,26 +2773,33 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
             EE::Vector(vec_loc, tys_opt, args)
         }
         PE::IfElse(pb, pt, pf_opt) => {
-            let eb = exp(context, *pb);
-            let et = exp(context, *pt);
+            let eb = exp(context, pb);
+            let et = exp(context, pt);
             let ef = match pf_opt {
                 None => Box::new(sp(loc, EE::Unit { trailing: false })),
-                Some(pf) => exp(context, *pf),
+                Some(pf) => exp(context, pf),
             };
             EE::IfElse(eb, et, ef)
         }
-        PE::While(pb, ploop) => {
-            let (name, body) = maybe_named_loop(context, loc, *ploop);
-            EE::While(exp(context, *pb), name, body)
+        PE::Labled(name, pe) => {
+            let e = exp(context, pe);
+            return maybe_labeled_exp(context, loc, name, e);
         }
-        PE::Loop(ploop) => {
-            let (name, body) = maybe_named_loop(context, loc, *ploop);
-            EE::Loop(name, body)
+        PE::While(pb, ploop) => EE::While(None, exp(context, pb), exp(context, ploop)),
+        PE::Loop(ploop) => EE::Loop(None, exp(context, ploop)),
+        PE::Block(seq) => EE::Block(None, sequence(context, loc, seq)),
+        PE::Lambda(plambda, pty_opt, pe) => {
+            let elambda_opt = lambda_bind_list(context, plambda);
+            let ty_opt = pty_opt.map(|t| type_(context, t));
+            match elambda_opt {
+                Some(elambda) => EE::Lambda(elambda, ty_opt, exp(context, pe)),
+                None => {
+                    assert!(context.env().has_errors());
+                    EE::UnresolvedError
+                }
+            }
         }
-        PE::NamedBlock(name, seq) => EE::NamedBlock(name, sequence(context, loc, seq)),
-        PE::Block(seq) => EE::Block(sequence(context, loc, seq)),
-        PE::Lambda(..) | PE::Quant(..) => {
-            // TODO lambdas will be used later by macros
+        PE::Quant(..) => {
             context.spec_deprecated(loc, /* is_error */ true);
             EE::UnresolvedError
         }
@@ -2764,8 +2809,8 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
         }
 
         PE::Assign(lvalue, rhs) => {
-            let l_opt = lvalues(context, *lvalue);
-            let er = exp(context, *rhs);
+            let l_opt = lvalues(context, lvalue);
+            let er = exp(context, rhs);
             match l_opt {
                 None => {
                     assert!(context.env().has_errors());
@@ -2776,24 +2821,24 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
                 Some(LValue::FieldMutate(edotted)) => EE::FieldMutate(edotted, er),
             }
         }
-        PE::Abort(pe) => EE::Abort(exp(context, *pe)),
+        PE::Abort(pe) => EE::Abort(exp(context, pe)),
         PE::Return(name_opt, pe_opt) => {
             let ev = match pe_opt {
                 None => Box::new(sp(loc, EE::Unit { trailing: false })),
-                Some(pe) => exp(context, *pe),
+                Some(pe) => exp(context, pe),
             };
             EE::Return(name_opt, ev)
         }
         PE::Break(name_opt, pe_opt) => {
             let ev = match pe_opt {
                 None => Box::new(sp(loc, EE::Unit { trailing: false })),
-                Some(pe) => exp(context, *pe),
+                Some(pe) => exp(context, pe),
             };
             EE::Break(name_opt, ev)
         }
         PE::Continue(name) => EE::Continue(name),
-        PE::Dereference(pe) => EE::Dereference(exp(context, *pe)),
-        PE::UnaryExp(op, pe) => EE::UnaryExp(op, exp(context, *pe)),
+        PE::Dereference(pe) => EE::Dereference(exp(context, pe)),
+        PE::UnaryExp(op, pe) => EE::UnaryExp(op, exp(context, pe)),
         PE::BinopExp(_pl, op, _pr) if op.value.is_spec_only() => {
             context.spec_deprecated(loc, /* is_error */ true);
             EE::UnresolvedError
@@ -2806,7 +2851,7 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
                 e,
                 *e,
                 sp!(loc, PE::BinopExp(lhs, op, rhs)) => { (lhs, (op, loc), rhs) },
-                { exp(context, *e) },
+                { exp(context, e) },
                 value_stack,
                 (bop, loc) => {
                     let el = value_stack.pop().expect("ICE binop expansion issue");
@@ -2816,65 +2861,98 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
             )
             .value
         }
-        PE::Move(loc, pdotted) => move_or_copy_path(context, PathCase::Move(loc), *pdotted),
-        PE::Copy(loc, pdotted) => move_or_copy_path(context, PathCase::Copy(loc), *pdotted),
-        PE::Borrow(mut_, pdotted) => match exp_dotted(context, *pdotted) {
-            Some(edotted) => EE::ExpDotted(E::DottedUsage::Borrow(mut_), Box::new(edotted)),
+        PE::Move(loc, pdotted) => move_or_copy_path(context, PathCase::Move(loc), pdotted),
+        PE::Copy(loc, pdotted) => move_or_copy_path(context, PathCase::Copy(loc), pdotted),
+        PE::Borrow(mut_, pdotted) => match exp_dotted(context, pdotted) {
+            Some(edotted) => EE::ExpDotted(E::DottedUsage::Borrow(mut_), edotted),
             None => {
                 assert!(context.env().has_errors());
                 EE::UnresolvedError
             }
         },
-        pdotted_ @ PE::Dot(_, _) => match exp_dotted(context, sp(loc, pdotted_)) {
-            Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, Box::new(edotted)),
+        pdotted_ @ PE::Dot(_, _) => match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
+            Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, edotted),
             None => {
                 assert!(context.env().has_errors());
                 EE::UnresolvedError
             }
         },
-        PE::DotCall(pdotted, n, ptys_opt, sp!(rloc, prs)) => match exp_dotted(context, *pdotted) {
-            Some(edotted) => {
-                let pkg = context.current_package;
-                context.env().check_feature(FeatureGate::DotCall, pkg, loc);
-                let tys_opt = optional_types(context, ptys_opt);
-                let ers = sp(rloc, exps(context, prs));
-                EE::MethodCall(Box::new(edotted), n, tys_opt, ers)
+        PE::DotCall(pdotted, n, is_macro, ptys_opt, sp!(rloc, prs)) => {
+            match exp_dotted(context, pdotted) {
+                Some(edotted) => {
+                    let pkg = context.current_package;
+                    context.env().check_feature(FeatureGate::DotCall, pkg, loc);
+                    let tys_opt = optional_types(context, ptys_opt);
+                    let ers = sp(rloc, exps(context, prs));
+                    EE::MethodCall(edotted, n, is_macro, tys_opt, ers)
+                }
+                None => {
+                    assert!(context.env().has_errors());
+                    EE::UnresolvedError
+                }
             }
-            None => {
-                assert!(context.env().has_errors());
-                EE::UnresolvedError
-            }
-        },
-        PE::Cast(e, ty) => EE::Cast(exp(context, *e), type_(context, ty)),
+        }
+        PE::Cast(e, ty) => EE::Cast(exp(context, e), type_(context, ty)),
         PE::Index(..) => {
             // TODO index syntax will be added
             context.spec_deprecated(loc, /* is_error */ true);
             EE::UnresolvedError
         }
-        PE::Annotate(e, ty) => EE::Annotate(exp(context, *e), type_(context, ty)),
+        PE::Annotate(e, ty) => EE::Annotate(exp(context, e), type_(context, ty)),
         PE::Spec(_) => {
             context.spec_deprecated(loc, /* is_error */ false);
             EE::Unit { trailing: false }
         }
         PE::UnresolvedError => EE::UnresolvedError,
     };
-    sp(loc, e_)
+    Box::new(sp(loc, e_))
 }
 
-// If the expression is a named block, hand back the name and a normal block. Otherwise, just
-// process the expression. This is used to lift names for loop and while to the appropriate form.
-fn maybe_named_loop(
+// If the expression can take a label, attach the label. Otherwise error
+fn maybe_labeled_exp(
     context: &mut Context,
     loc: Loc,
-    body: P::Exp,
-) -> (Option<BlockLabel>, Box<E::Exp>) {
-    if let P::Exp_::NamedBlock(name, seq) = body.value {
-        (
-            Some(name),
-            Box::new(sp(loc, E::Exp_::Block(sequence(context, loc, seq)))),
-        )
-    } else {
-        (None, exp(context, body))
+    label: BlockLabel,
+    e: Box<E::Exp>,
+) -> Box<E::Exp> {
+    let sp!(_eloc, e_) = *e;
+    let e_ = match e_ {
+        E::Exp_::While(label_opt, cond, body) => {
+            ensure_unique_label(context, loc, &label, label_opt);
+            E::Exp_::While(Some(label), cond, body)
+        }
+        E::Exp_::Loop(label_opt, body) => {
+            ensure_unique_label(context, loc, &label, label_opt);
+            E::Exp_::Loop(Some(label), body)
+        }
+        E::Exp_::Block(label_opt, seq) => {
+            ensure_unique_label(context, loc, &label, label_opt);
+            E::Exp_::Block(Some(label), seq)
+        }
+        _ => {
+            let msg = "Invalid label. Labels can only be used on 'while', 'loop', or block '{{}}' \
+                 expressions";
+            context
+                .env()
+                .add_diag(diag!(Syntax::InvalidLabel, (loc, msg)));
+            E::Exp_::UnresolvedError
+        }
+    };
+    Box::new(sp(loc, e_))
+}
+
+fn ensure_unique_label(
+    context: &mut Context,
+    loc: Loc,
+    _label: &BlockLabel,
+    label_opt: Option<BlockLabel>,
+) {
+    if let Some(old_label) = label_opt {
+        context.env().add_diag(diag!(
+            Syntax::InvalidLabel,
+            (loc, "Multiple labels for a single expression"),
+            (old_label.0.loc, "Label previously given here"),
+        ));
     }
 }
 
@@ -2898,7 +2976,7 @@ impl PathCase {
     }
 }
 
-fn move_or_copy_path(context: &mut Context, case: PathCase, pe: P::Exp) -> E::Exp_ {
+fn move_or_copy_path(context: &mut Context, case: PathCase, pe: Box<P::Exp>) -> E::Exp_ {
     match move_or_copy_path_(context, case, pe) {
         Some(e) => e,
         None => {
@@ -2908,7 +2986,7 @@ fn move_or_copy_path(context: &mut Context, case: PathCase, pe: P::Exp) -> E::Ex
     }
 }
 
-fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: P::Exp) -> Option<E::Exp_> {
+fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: Box<P::Exp>) -> Option<E::Exp_> {
     let e = exp_dotted(context, pe)?;
     let cloc = case.loc();
     match &e.value {
@@ -2932,22 +3010,23 @@ fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: P::Exp) -> Opti
         }
     }
     Some(match case {
-        PathCase::Move(loc) => E::Exp_::ExpDotted(E::DottedUsage::Move(loc), Box::new(e)),
-        PathCase::Copy(loc) => E::Exp_::ExpDotted(E::DottedUsage::Copy(loc), Box::new(e)),
+        PathCase::Move(loc) => E::Exp_::ExpDotted(E::DottedUsage::Move(loc), e),
+        PathCase::Copy(loc) => E::Exp_::ExpDotted(E::DottedUsage::Copy(loc), e),
     })
 }
 
-fn exp_dotted(context: &mut Context, sp!(loc, pdotted_): P::Exp) -> Option<E::ExpDotted> {
+fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpDotted>> {
     use E::ExpDotted_ as EE;
     use P::Exp_ as PE;
+    let sp!(loc, pdotted_) = *pdotted;
     let edotted_ = match pdotted_ {
         PE::Dot(plhs, field) => {
-            let lhs = exp_dotted(context, *plhs)?;
-            EE::Dot(Box::new(lhs), field)
+            let lhs = exp_dotted(context, plhs)?;
+            EE::Dot(lhs, field)
         }
-        pe_ => EE::Exp(Box::new(exp_(context, sp(loc, pe_)))),
+        pe_ => EE::Exp(exp(context, Box::new(sp(loc, pe_)))),
     };
-    Some(sp(loc, edotted_))
+    Some(Box::new(sp(loc, edotted_)))
 }
 
 fn value(context: &mut DefnContext, sp!(loc, pvalue_): P::Value) -> Option<E::Value> {
@@ -3118,15 +3197,31 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
     Some(sp(loc, b_))
 }
 
+fn lambda_bind_list(
+    context: &mut Context,
+    sp!(loc, plambda): P::LambdaBindings,
+) -> Option<E::LambdaLValues> {
+    let elambda = plambda
+        .into_iter()
+        .map(|(pbs, ty_opt)| {
+            let bs = bind_list(context, pbs)?;
+            let ety = ty_opt.map(|t| type_(context, t));
+            Some((bs, ety))
+        })
+        .collect::<Option<_>>()?;
+    Some(sp(loc, elambda))
+}
+
 enum LValue {
     Assigns(E::LValueList),
     FieldMutate(Box<E::ExpDotted>),
     Mutate(Box<E::Exp>),
 }
 
-fn lvalues(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<LValue> {
+fn lvalues(context: &mut Context, e: Box<P::Exp>) -> Option<LValue> {
     use LValue as L;
     use P::Exp_ as PE;
+    let sp!(loc, e_) = *e;
     let al: LValue = match e_ {
         PE::Unit => L::Assigns(sp(loc, vec![])),
         PE::ExpList(pes) => {
@@ -3135,12 +3230,12 @@ fn lvalues(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<LValue> {
             L::Assigns(sp(loc, al_opt?))
         }
         PE::Dereference(pr) => {
-            let er = exp(context, *pr);
+            let er = exp(context, pr);
             L::Mutate(er)
         }
         pdotted_ @ PE::Dot(_, _) => {
-            let dotted = exp_dotted(context, sp(loc, pdotted_))?;
-            L::FieldMutate(Box::new(dotted))
+            let dotted = exp_dotted(context, Box::new(sp(loc, pdotted_)))?;
+            L::FieldMutate(dotted)
         }
         _ => L::Assigns(sp(loc, vec![assign(context, sp(loc, e_))?])),
     };
@@ -3191,7 +3286,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
                 EL::Unpack(en, tys_opt, E::FieldBindings::Named(efields)),
             ))
         }
-        PE::Call(pn, false, ptys_opt, sp!(_, exprs)) => {
+        PE::Call(pn, None, ptys_opt, sp!(_, exprs)) => {
             let pkg = context.current_package;
             context
                 .env()
@@ -3263,19 +3358,46 @@ fn check_valid_address_name(
     use P::LeadingNameAccess_ as LN;
     match ln_ {
         LN::AnonymousAddress(_) => Ok(()),
-        LN::GlobalAddress(n) => check_restricted_name_all_cases(context, NameCase::Address, n),
-        LN::Name(n) => check_restricted_name_all_cases(context, NameCase::Address, n),
+        LN::GlobalAddress(n) | LN::Name(n) => {
+            check_restricted_name_all_cases(context, NameCase::Address, n)
+        }
     }
 }
 
-fn check_valid_local_name(context: &mut Context, v: &Var) {
-    fn is_valid(s: Symbol) -> bool {
-        s.starts_with('_') || s.starts_with(|c: char| c.is_ascii_lowercase())
-    }
-    if !is_valid(v.value()) {
+fn check_valid_function_parameter_name(context: &mut Context, is_macro: Option<Loc>, v: &Var) {
+    const SYNTAX_IDENTIFIER_NOTE: &str =
+        "'macro' parameters start with '$' to indicate that their arguments are not evaluated \
+        before the macro is expanded, meaning the entire expression is substituted. \
+        This is different from regular function parameters that are evaluated before the \
+        function is called.";
+    let is_syntax_identifier = v.is_syntax_identifier();
+    if let Some(macro_loc) = is_macro {
+        if !is_syntax_identifier && !v.is_underscore() {
+            let msg = format!(
+                "Invalid parameter name '{}'. '{}' parameter names must start with '$' (or must be '_')",
+                v, MACRO_MODIFIER,
+            );
+            let macro_msg = format!("Declared '{}' here", MACRO_MODIFIER);
+            let mut diag = diag!(
+                Declarations::InvalidName,
+                (v.loc(), msg),
+                (macro_loc, macro_msg),
+            );
+            diag.add_note(SYNTAX_IDENTIFIER_NOTE);
+            context.env().add_diag(diag);
+        }
+    } else if is_syntax_identifier {
         let msg = format!(
-            "Invalid local variable name '{}'. Local variable names must start with 'a'..'z' (or \
-             '_')",
+            "Invalid parameter name '{}'. Non-'{}' parameter names cannot start with '$'",
+            v, MACRO_MODIFIER,
+        );
+        let mut diag = diag!(Declarations::InvalidName, (v.loc(), msg));
+        diag.add_note(SYNTAX_IDENTIFIER_NOTE);
+        context.env().add_diag(diag);
+    } else if !is_valid_local_variable_name(v.value()) {
+        let msg = format!(
+            "Invalid parameter name '{}'. Local variable names must start with 'a'..'z' or \
+                 '_'",
             v,
         );
         context
@@ -3283,6 +3405,24 @@ fn check_valid_local_name(context: &mut Context, v: &Var) {
             .add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
     }
     let _ = check_restricted_name_all_cases(&mut context.defn_context, NameCase::Variable, &v.0);
+}
+
+fn check_valid_local_name(context: &mut Context, v: &Var) {
+    if !is_valid_local_variable_name(v.value()) {
+        let msg = format!(
+            "Invalid local variable name '{}'. Local variable names must start with 'a'..'z' or \
+             '_'",
+            v,
+        );
+        context
+            .env()
+            .add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
+    }
+    let _ = check_restricted_name_all_cases(&mut context.defn_context, NameCase::Variable, &v.0);
+}
+
+fn is_valid_local_variable_name(s: Symbol) -> bool {
+    Var::is_valid_name(s) && !Var::is_syntax_identifier_name(s)
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -3315,6 +3455,7 @@ pub enum NameCase {
     ModuleAlias,
     Variable,
     Address,
+    TypeParameter,
 }
 
 impl NameCase {
@@ -3332,6 +3473,7 @@ impl NameCase {
             NameCase::ModuleAlias => "module alias",
             NameCase::Variable => "variable",
             NameCase::Address => "address",
+            NameCase::TypeParameter => "type parameter",
         }
     }
 }
@@ -3429,6 +3571,65 @@ fn check_valid_module_member_name_impl(
     Ok(())
 }
 
+fn check_valid_type_parameter_name(
+    context: &mut Context,
+    is_macro: Option<Loc>,
+    n: &Name,
+) -> Result<(), ()> {
+    const SYNTAX_IDENTIFIER_NOTE: &str = "Type parameter names starting with '$' indicate that \
+        their arguments do not have to satisfy certain constraints before the macro is expanded, \
+        meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.";
+
+    let is_syntax_ident = Var::is_syntax_identifier_name(n.value);
+    if let Some(macro_loc) = is_macro {
+        if !is_syntax_ident {
+            let msg = format!(
+                "Invalid type parameter name. \
+                '{} fun' type parameter names must start with '$'",
+                MACRO_MODIFIER
+            );
+            let macro_msg = format!("Declared '{}' here", MACRO_MODIFIER);
+            let mut diag = diag!(
+                Declarations::InvalidName,
+                (n.loc, msg),
+                (macro_loc, macro_msg),
+            );
+            diag.add_note(SYNTAX_IDENTIFIER_NOTE);
+            context.env().add_diag(diag);
+        }
+    } else if is_syntax_ident {
+        let msg = format!(
+            "Invalid type parameter name. \
+                Only '{} fun' type parameter names cat start with '$'",
+            MACRO_MODIFIER
+        );
+        let mut diag = diag!(Declarations::InvalidName, (n.loc, msg));
+        diag.add_note(SYNTAX_IDENTIFIER_NOTE);
+        context.env().add_diag(diag);
+    }
+
+    // TODO move these names to a more central place?
+    if n.value == symbol!("_") {
+        let diag = restricted_name_error(NameCase::TypeParameter, n.loc, "_");
+        context.env().add_diag(diag);
+        return Err(());
+    }
+    check_restricted_names(
+        context,
+        NameCase::TypeParameter,
+        n,
+        crate::naming::ast::BuiltinFunction_::all_names(),
+    )?;
+    check_restricted_names(
+        context,
+        NameCase::TypeParameter,
+        n,
+        crate::naming::ast::BuiltinTypeName_::all_names(),
+    )?;
+
+    check_restricted_name_all_cases(&mut context.defn_context, NameCase::TypeParameter, n)
+}
+
 pub fn is_valid_struct_constant_or_schema_name(s: &str) -> bool {
     s.starts_with(|c: char| c.is_ascii_uppercase())
 }
@@ -3440,6 +3641,31 @@ fn check_restricted_name_all_cases(
     case: NameCase,
     n: &Name,
 ) -> Result<(), ()> {
+    match case {
+        NameCase::Constant
+        | NameCase::Function
+        | NameCase::Struct
+        | NameCase::Schema
+        | NameCase::Module
+        | NameCase::ModuleMemberAlias(_)
+        | NameCase::ModuleAlias
+        | NameCase::Address => {
+            if Var::is_syntax_identifier_name(n.value) {
+                let msg = format!(
+                    "Invalid {} name '{}'. Identifiers starting with '$' can be used only for \
+                    parameters and type paramters",
+                    case.name(),
+                    n,
+                );
+                context
+                    .env
+                    .add_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
+                return Err(());
+            }
+        }
+        NameCase::Variable | NameCase::TypeParameter => (),
+    }
+
     let n_str = n.value.as_str();
     let can_be_vector = matches!(case, NameCase::Module | NameCase::ModuleAlias);
     if n_str == ModuleName::SELF_NAME

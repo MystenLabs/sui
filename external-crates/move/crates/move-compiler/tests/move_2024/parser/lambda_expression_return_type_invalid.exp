@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/lambda_expression_return_type_invalid.move:7:25
+  │
+7 │         call!(|| -> u64 0);
+  │                         ^
+  │                         │
+  │                         Unexpected '0'
+  │                         Expected '{'
+

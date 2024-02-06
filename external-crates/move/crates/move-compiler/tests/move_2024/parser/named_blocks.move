@@ -8,14 +8,17 @@ module 0x42::m {
     }
 
     fun t1(cond: bool): u64 {
-        loop 'name: {
+        'name: loop {
             if (cond) { break 'name 10 };
         }
     }
+    fun t1_inline(cond: bool): u64 {
+        'name: loop if (cond) { break 'name 10 }
+    }
 
     fun t2(cond: bool): u64 {
-        loop 'outer: {
-            loop 'inner: {
+        'outer: loop {
+            'inner: loop {
                 if (cond) { break 'outer 10 };
                 if (cond) { break 'inner 20 };
             };
@@ -23,16 +26,23 @@ module 0x42::m {
     }
 
     fun t3(cond: bool) {
-        while (cond) 'outer: {
-            while (cond) 'inner: {
+        'outer: while (cond) {
+            'inner: while (cond) {
                 if (cond) { break 'outer };
                 if (cond) { break 'inner };
             }
         }
     }
+    fun t3_inline(cond: bool) {
+        'outer: while (cond)
+            'inner: while (cond) {
+                if (cond) { break 'outer };
+                if (cond) { break 'inner };
+            }
+    }
 
     fun t4(cond: bool) {
-        while (cond) 'outer: {
+        'outer: while (cond) {
             let _x = 'inner: {
                 if (cond) { break 'outer };
                 if (cond) { return 'inner 10 };
@@ -42,8 +52,8 @@ module 0x42::m {
     }
 
     fun t5() {
-        loop 'l: {
-            loop 'l: {
+        'l: loop {
+            'l: loop {
                 break 'l
             }
         }

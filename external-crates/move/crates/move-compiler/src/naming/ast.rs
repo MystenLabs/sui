@@ -10,8 +10,8 @@ use crate::{
         Visibility,
     },
     parser::ast::{
-        Ability_, BinOp, ConstantName, Field, FunctionName, Mutability, StructName, UnaryOp,
-        ENTRY_MODIFIER,
+        self as P, Ability_, BinOp, ConstantName, Field, FunctionName, Mutability, StructName,
+        UnaryOp, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{ast_debug::*, program_info::NamingProgramInfo, unique_map::UniqueMap, *},
 };
@@ -73,8 +73,12 @@ pub struct UseFun {
 // Mapping from type to their possible "methods"
 pub type ResolvedUseFuns = BTreeMap<TypeName, UniqueMap<Name, UseFun>>;
 
+// Color for scopes of use funs and variables
+pub type Color = u16;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct UseFuns {
+    pub color: Color,
     pub resolved: ResolvedUseFuns,
     pub implicit_candidates: UniqueMap<Name, ImplicitUseFunCandidate>,
 }
@@ -151,6 +155,7 @@ pub struct Function {
     pub attributes: Attributes,
     pub visibility: Visibility,
     pub entry: Option<Loc>,
+    pub macro_: Option<Loc>,
     pub signature: FunctionSignature,
     pub body: FunctionBody,
 }
@@ -229,6 +234,7 @@ pub enum Type_ {
     Ref(bool, Box<Type>),
     Param(TParam),
     Apply(Option<AbilitySet>, TypeName, Vec<Type>),
+    Fun(Vec<Type>, Box<Type>),
     Var(TVar),
     Anything,
     UnresolvedError,
@@ -243,12 +249,15 @@ pub type Type = Spanned<Type_>;
 pub struct Var_ {
     pub name: Symbol,
     pub id: u16,
-    pub color: u16,
+    pub color: Color,
 }
 pub type Var = Spanned<Var_>;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, PartialOrd, Ord)]
-pub struct BlockLabel(pub Var);
+pub struct BlockLabel {
+    pub label: Var,
+    pub is_implicit: bool,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
@@ -265,6 +274,9 @@ pub type LValue = Spanned<LValue_>;
 pub type LValueList_ = Vec<LValue>;
 pub type LValueList = Spanned<LValueList_>;
 
+pub type LambdaLValues_ = Vec<(LValueList, Option<Type>)>;
+pub type LambdaLValues = Spanned<LambdaLValues_>;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum ExpDotted_ {
     Exp(Box<Exp>),
@@ -276,9 +288,38 @@ pub type ExpDotted = Spanned<ExpDotted_>;
 #[allow(clippy::large_enum_variant)]
 pub enum BuiltinFunction_ {
     Freeze(Option<Type>),
-    Assert(/* is_macro */ bool),
+    Assert(/* is_macro */ Option<Loc>),
 }
 pub type BuiltinFunction = Spanned<BuiltinFunction_>;
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+pub enum NominalBlockUsage {
+    Return,
+    Break,
+    Continue,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Lambda {
+    pub parameters: LambdaLValues,
+    pub return_type: Option<Type>,
+    pub return_label: BlockLabel,
+    pub use_fun_color: Color,
+    pub body: Box<Exp>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Block {
+    pub name: Option<BlockLabel>,
+    pub from_macro_argument: Option<MacroArgument>,
+    pub seq: Sequence,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum MacroArgument {
+    Lambda(Loc),
+    Substituted(Loc),
+}
 
 #[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
@@ -290,18 +331,26 @@ pub enum Exp_ {
     ModuleCall(
         ModuleIdent,
         FunctionName,
+        /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
     ),
-    MethodCall(ExpDotted, Name, Option<Vec<Type>>, Spanned<Vec<Exp>>),
+    MethodCall(
+        ExpDotted,
+        Name,
+        /* is_macro */ Option<Loc>,
+        Option<Vec<Type>>,
+        Spanned<Vec<Exp>>,
+    ),
+    VarCall(Var, Spanned<Vec<Exp>>),
     Builtin(BuiltinFunction, Spanned<Vec<Exp>>),
     Vector(Loc, Option<Type>, Spanned<Vec<Exp>>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
-    While(Box<Exp>, BlockLabel, Box<Exp>),
+    While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop(BlockLabel, Box<Exp>),
-    NamedBlock(BlockLabel, Sequence),
-    Block(Sequence),
+    Block(Block),
+    Lambda(Lambda),
 
     Assign(LValueList, Box<Exp>),
     FieldMutate(ExpDotted, Box<Exp>),
@@ -309,7 +358,7 @@ pub enum Exp_ {
 
     Return(Box<Exp>),
     Abort(Box<Exp>),
-    Give(BlockLabel, Box<Exp>),
+    Give(NominalBlockUsage, BlockLabel, Box<Exp>),
     Continue(BlockLabel),
 
     Dereference(Box<Exp>),
@@ -334,9 +383,9 @@ pub type Exp = Spanned<Exp_>;
 pub type Sequence = (UseFuns, VecDeque<SequenceItem>);
 #[derive(Debug, PartialEq, Clone)]
 pub enum SequenceItem_ {
-    Seq(Exp),
+    Seq(Box<Exp>),
     Declare(LValueList, Option<Type>),
-    Bind(LValueList, Exp),
+    Bind(LValueList, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
 
@@ -367,6 +416,16 @@ impl TName for Var {
 //**************************************************************************************************
 // impls
 //**************************************************************************************************
+
+impl UseFuns {
+    pub fn new(color: Color) -> Self {
+        Self {
+            color,
+            resolved: BTreeMap::new(),
+            implicit_candidates: UniqueMap::new(),
+        }
+    }
+}
 
 static BUILTIN_TYPE_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
     [
@@ -653,6 +712,7 @@ impl Type_ {
             Type_::Unit => Some(AbilitySet::collection(loc)),
             Type_::Ref(_, _) => Some(AbilitySet::references(loc)),
             Type_::Anything | Type_::UnresolvedError => Some(AbilitySet::all(loc)),
+            Type_::Fun(_, _) => Some(AbilitySet::functions(loc)),
             Type_::Var(_) => None,
         }
     }
@@ -664,14 +724,26 @@ impl Type_ {
             Type_::Unit => Some(AbilitySet::COLLECTION.contains(&ability)),
             Type_::Ref(_, _) => Some(AbilitySet::REFERENCES.contains(&ability)),
             Type_::Anything | Type_::UnresolvedError => Some(true),
+            Type_::Fun(_, _) => Some(AbilitySet::FUNCTIONS.contains(&ability)),
             Type_::Var(_) => None,
         }
     }
 }
 
-impl Exp_ {
-    // base symbol to used when making names forunnamed loops
-    pub const LOOP_NAME_SYMBOL: Symbol = symbol!("loop");
+impl Var_ {
+    pub fn starts_with_underscore(&self) -> bool {
+        P::Var::starts_with_underscore_name(self.name)
+    }
+
+    pub fn is_valid(&self) -> bool {
+        P::Var::is_valid_name(self.name)
+    }
+}
+
+impl BlockLabel {
+    // base symbol to used when making names for unnamed loops or lambdas
+    pub const IMPLICIT_LABEL_SYMBOL: Symbol = symbol!("%implicit");
+    pub const MACRO_RETURN_NAME_SYMBOL: Symbol = symbol!("%macro");
 }
 
 impl Value_ {
@@ -726,6 +798,20 @@ impl fmt::Display for TypeName_ {
             Builtin(b) => write!(f, "{}", b),
             ModuleType(m, n) => write!(f, "{}::{}", m, n),
         }
+    }
+}
+
+impl std::fmt::Display for NominalBlockUsage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                NominalBlockUsage::Return => "return",
+                NominalBlockUsage::Break => "break",
+                NominalBlockUsage::Continue => "continue",
+            }
+        )
     }
 }
 
@@ -808,16 +894,21 @@ impl AstDebug for ResolvedUseFuns {
 impl AstDebug for UseFuns {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Self {
+            color,
             resolved,
             implicit_candidates,
         } = self;
+        w.write(&format!("use_funs#{} ", color));
         resolved.ast_debug(w);
-        w.write("unresolved ");
-        w.block(|w| {
-            for (_, _, implicit) in implicit_candidates {
-                implicit.ast_debug(w)
-            }
-        })
+        if !implicit_candidates.is_empty() {
+            w.write("unresolved ");
+            w.block(|w| {
+                for (_, _, implicit) in implicit_candidates {
+                    implicit.ast_debug(w)
+                }
+            });
+        }
+        w.new_line();
     }
 }
 
@@ -908,6 +999,7 @@ impl AstDebug for (FunctionName, &Function) {
                 index,
                 attributes,
                 visibility,
+                macro_,
                 entry,
                 signature,
                 body,
@@ -919,8 +1011,11 @@ impl AstDebug for (FunctionName, &Function) {
         if entry.is_some() {
             w.write(&format!("{} ", ENTRY_MODIFIER));
         }
+        if macro_.is_some() {
+            w.write(&format!("{} ", MACRO_MODIFIER));
+        }
         if let FunctionBody_::Native = &body.value {
-            w.write("native ");
+            w.write(&format!("{} ", NATIVE_MODIFIER));
         }
         w.write(&format!("fun#{index} {name}"));
         signature.ast_debug(w);
@@ -970,12 +1065,15 @@ impl AstDebug for Var_ {
 
 impl AstDebug for BlockLabel {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Var_ { name, id, color } = self.0.value;
+        let BlockLabel {
+            is_implicit: _,
+            label: sp!(_, Var_ { name, id, color }),
+        } = self;
         w.write(&format!("'{name}"));
-        if id != 0 {
+        if *id != 0 {
             w.write(&format!("#{id}"));
         }
-        if color != 0 {
+        if *color != 0 {
             w.write(&format!("#{color}"));
         }
     }
@@ -1109,6 +1207,12 @@ impl AstDebug for Type_ {
                     }),
                 }
             }
+            Type_::Fun(args, result) => {
+                w.write("|");
+                w.comma(args, |w, ty| ty.ast_debug(w));
+                w.write("|");
+                result.ast_debug(w);
+            }
             Type_::Var(tv) => w.write(&format!("#{}", tv.0)),
             Type_::Anything => w.write("_"),
             Type_::UnresolvedError => w.write("_|_"),
@@ -1165,8 +1269,11 @@ impl AstDebug for Exp_ {
             E::Value(v) => v.ast_debug(w),
             E::Var(v) => v.ast_debug(w),
             E::Constant(m, c) => w.write(&format!("{}::{}", m, c)),
-            E::ModuleCall(m, f, tys_opt, sp!(_, rhs)) => {
+            E::ModuleCall(m, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 w.write(&format!("{}::{}", m, f));
+                if is_macro.is_some() {
+                    w.write("!");
+                }
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);
@@ -1176,14 +1283,23 @@ impl AstDebug for Exp_ {
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
             }
-            E::MethodCall(e, f, tys_opt, sp!(_, rhs)) => {
+            E::MethodCall(e, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", f));
+                if is_macro.is_some() {
+                    w.write("!");
+                }
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);
                     w.write(">");
                 }
+                w.write("(");
+                w.comma(rhs, |w, e| e.ast_debug(w));
+                w.write(")");
+            }
+            E::VarCall(var, sp!(_, rhs)) => {
+                var.ast_debug(w);
                 w.write("(");
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
@@ -1228,27 +1344,23 @@ impl AstDebug for Exp_ {
                 w.write(" else ");
                 f.ast_debug(w);
             }
-            E::While(b, name, e) => {
+            E::While(name, b, e) => {
+                name.ast_debug(w);
+                w.write(": ");
                 w.write("while ");
                 w.write(" (");
                 b.ast_debug(w);
                 w.write(") ");
-                name.ast_debug(w);
-                w.write(": ");
                 e.ast_debug(w);
             }
             E::Loop(name, e) => {
-                w.write("loop ");
                 name.ast_debug(w);
                 w.write(": ");
+                w.write("loop ");
                 e.ast_debug(w);
             }
-            E::NamedBlock(name, seq) => {
-                name.ast_debug(w);
-                w.write(": ");
-                seq.ast_debug(w);
-            }
             E::Block(seq) => seq.ast_debug(w),
+            E::Lambda(l) => l.ast_debug(w),
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));
@@ -1280,8 +1392,8 @@ impl AstDebug for Exp_ {
                 w.write("abort ");
                 e.ast_debug(w);
             }
-            E::Give(name, e) => {
-                w.write("give @");
+            E::Give(usage, name, e) => {
+                w.write(&format!("give#{usage} '"));
                 name.ast_debug(w);
                 w.write(" ");
                 e.ast_debug(w);
@@ -1333,6 +1445,45 @@ impl AstDebug for Exp_ {
             }
             E::UnresolvedError => w.write("_|_"),
         }
+    }
+}
+
+impl AstDebug for Lambda {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let Lambda {
+            parameters: sp!(_, bs),
+            return_type,
+            return_label,
+            use_fun_color,
+            body: e,
+        } = self;
+        return_label.ast_debug(w);
+        w.write(": ");
+        bs.ast_debug(w);
+        if let Some(ty) = return_type {
+            w.write(" -> ");
+            ty.ast_debug(w);
+        }
+        w.write(&format!("use_funs#{}", use_fun_color));
+        e.ast_debug(w);
+    }
+}
+
+impl AstDebug for Block {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let Block {
+            name,
+            from_macro_argument,
+            seq,
+        } = self;
+        if let Some(name) = name {
+            name.ast_debug(w);
+            w.write(": ");
+        }
+        if from_macro_argument.is_some() {
+            w.write("substituted_macro_arg#");
+        }
+        seq.ast_debug(w);
     }
 }
 
@@ -1412,5 +1563,19 @@ impl AstDebug for LValue_ {
                 w.write("}");
             }
         }
+    }
+}
+
+impl AstDebug for LambdaLValues_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("|");
+        w.comma(self, |w, (lv, ty_opt)| {
+            lv.ast_debug(w);
+            if let Some(ty) = ty_opt {
+                w.write(": ");
+                ty.ast_debug(w);
+            }
+        });
+        w.write("| ");
     }
 }

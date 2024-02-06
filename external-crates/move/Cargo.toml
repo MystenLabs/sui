@@ -87,6 +87,7 @@ sha3 = "0.9.1"
 shell-words = "1.0.0"
 simplelog = "0.9.0"
 smallvec = "1.6.1"
+stacker = "0.1.15"
 static_assertions = "1.1.0"
 syn = { version = "1.0.64", features = ["derive"] }
 tempfile = "3.2.0"

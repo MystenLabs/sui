@@ -6742,6 +6742,7 @@ dependencies = [
  "petgraph 0.5.1",
  "regex",
  "serde",
+ "stacker",
  "tempfile",
 ]
 
@@ -9556,6 +9557,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "psm"
+version = "0.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5787f7cda34e3033a72192c018bc5883100330f362ef279a8cbccfce8bb4e874"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "quanta"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11413,6 +11423,19 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
+name = "stacker"
+version = "0.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c886bd4480155fd3ef527d45e9ac8dd7118a898a46530b7b94c3e21866259fce"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "psm",
+ "winapi",
+]
 
 [[package]]
 name = "static_assertions"
@@ -16654,6 +16677,7 @@ dependencies = [
  "prost-types",
  "protobuf",
  "protobuf-src",
+ "psm",
  "quanta",
  "quick-error 1.2.3",
  "quick-error 2.0.1",
@@ -16803,6 +16827,7 @@ dependencies = [
  "spki 0.6.0",
  "spki 0.7.1",
  "stable_deref_trait",
+ "stacker",
  "static_assertions",
  "str-buf",
  "strip-ansi-escapes",

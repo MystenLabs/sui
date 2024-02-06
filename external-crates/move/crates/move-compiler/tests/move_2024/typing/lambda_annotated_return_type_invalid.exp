@@ -1,0 +1,18 @@
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_annotated_return_type_invalid.move:13:21
+   │
+13 │         call!(|| -> X { 0 }).foo();
+   │                     ^   - Given: integer
+   │                     │    
+   │                     Invalid type annotation
+   │                     Expected: 'a::m::X'
+
+error[E04006]: invalid subtype
+   ┌─ tests/move_2024/typing/lambda_annotated_return_type_invalid.move:14:21
+   │
+14 │         call!(|| -> &mut u64 { &0 });
+   │                     ^^^^^^^^   -- Given: '&{integer}'
+   │                     │           
+   │                     Invalid type annotation
+   │                     Expected: '&mut u64'
+

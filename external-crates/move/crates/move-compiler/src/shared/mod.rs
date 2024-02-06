@@ -35,6 +35,8 @@ pub mod remembering_unique_map;
 pub mod unique_map;
 pub mod unique_set;
 
+pub use ast_debug::AstDebug;
+
 //**************************************************************************************************
 // Numbers
 //**************************************************************************************************
@@ -387,6 +389,10 @@ impl CompilationEnv {
 
     pub fn count_diags(&self) -> usize {
         self.diags.len()
+    }
+
+    pub fn count_diags_at_or_above_severity(&self, threshold: Severity) -> usize {
+        self.diags.count_diags_at_or_above_severity(threshold)
     }
 
     pub fn has_diags_at_or_above_severity(&self, threshold: Severity) -> bool {

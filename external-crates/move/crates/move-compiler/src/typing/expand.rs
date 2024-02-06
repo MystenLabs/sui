@@ -5,6 +5,7 @@
 use super::core::{self, Context};
 use crate::{
     diag,
+    editions::FeatureGate,
     expansion::ast::Value_,
     naming::ast::{BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_},
     parser::ast::Ability_,
@@ -19,7 +20,7 @@ use move_ir_types::location::*;
 
 pub fn function_body_(context: &mut Context, b_: &mut T::FunctionBody_) {
     match b_ {
-        T::FunctionBody_::Native => (),
+        T::FunctionBody_::Native | T::FunctionBody_::Macro => (),
         T::FunctionBody_::Defined(es) => sequence(context, es),
     }
 }
@@ -64,6 +65,11 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                         .add_diag(diag!(TypeSafety::UninferredType, (ty.loc, msg)));
                     sp(loc, UnresolvedError)
                 }
+                sp!(loc, Fun(_, _)) if !context.in_macro_function => {
+                    // catch this here for better location infomration (the tvar instead of the fun)
+                    unexpected_lambda_type(context, ty.loc);
+                    sp(loc, UnresolvedError)
+                }
                 t => t,
             };
             *ty = replacement;
@@ -81,6 +87,28 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                 _ => panic!("ICE impossible. tapply switched to nontapply"),
             }
         }
+        Fun(args, result) => {
+            if context.in_macro_function {
+                types(context, args);
+                type_(context, result);
+            } else {
+                unexpected_lambda_type(context, ty.loc);
+                *ty = sp(ty.loc, UnresolvedError)
+            }
+        }
+    }
+}
+
+fn unexpected_lambda_type(context: &mut Context, loc: Loc) {
+    if context
+        .env
+        .check_feature(FeatureGate::MacroFuns, context.current_package, loc)
+    {
+        let msg = "Unexpected lambda type. \
+            Lambdas can only be used with 'macro' functions, as parameters or direct arguments";
+        context
+            .env
+            .add_diag(diag!(TypeSafety::UnexpectedFunctionType, (loc, msg)));
     }
 }
 
@@ -240,7 +268,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             exp(context, et);
             exp(context, ef);
         }
-        E::While(eb, _, eloop) => {
+        E::While(_, eb, eloop) => {
             exp(context, eb);
             exp(context, eloop);
         }

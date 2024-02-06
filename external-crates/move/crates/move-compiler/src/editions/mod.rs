@@ -38,6 +38,7 @@ pub enum FeatureGate {
     Move2024Keywords,
     BlockLabels,
     Move2024Paths,
+    MacroFuns,
     Move2024Migration,
 }
 
@@ -116,6 +117,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::Move2024Keywords,
     FeatureGate::BlockLabels,
     FeatureGate::Move2024Paths,
+    FeatureGate::MacroFuns,
 ];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
@@ -208,6 +210,7 @@ impl FeatureGate {
             FeatureGate::Move2024Keywords => "Move 2024 keywords are",
             FeatureGate::BlockLabels => "Block labels are",
             FeatureGate::Move2024Paths => "Move 2024 paths are",
+            FeatureGate::MacroFuns => "'macro' functions are",
             FeatureGate::Move2024Migration => "Move 2024 migration is",
         }
     }
