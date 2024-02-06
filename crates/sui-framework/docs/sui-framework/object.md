@@ -390,7 +390,7 @@ This should only be called once from <code><a href="random.md#0x2_random">random
 ## Function `sui_deny_list_object_id`
 
 Create the <code><a href="object.md#0x2_object_UID">UID</a></code> for the singleton <code>DenyList</code> object.
-This should only be called once from <code><a href="coin.md#0x2_coin">coin</a></code>.
+This should only be called once from <code><a href="deny_list.md#0x2_deny_list">deny_list</a></code>.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="object.md#0x2_object_sui_deny_list_object_id">sui_deny_list_object_id</a>(): <a href="object.md#0x2_object_UID">object::UID</a>
