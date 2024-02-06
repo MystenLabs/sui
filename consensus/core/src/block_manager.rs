@@ -70,7 +70,7 @@ impl BlockManager {
         for block in blocks {
             if let Some(block) = self.try_accept_block(block)? {
                 // Try to unsuspend and accept any children blocks
-                let mut children_blocks = self.try_accept_children_blocks(&block);
+                let mut children_blocks = self.try_unsuspend_children_blocks(&block);
                 children_blocks.push(block);
 
                 // Accept the state in DAG here so the next block to be processed can find any DAG/store any accepted blocks.
@@ -149,11 +149,14 @@ impl BlockManager {
         Ok(Some(block))
     }
 
-    /// Given an unsuspended `block` it attempts to accept all the children blocks. All the unsuspended/accepted blocks are
-    /// returned as a vector.
-    fn try_accept_children_blocks(&mut self, block: &VerifiedBlock) -> Vec<VerifiedBlock> {
+    /// Given an accepted block `block` it attempts to accept all the suspended children blocks assuming such exist.
+    /// All the unsuspended/accepted blocks are returned as a vector.
+    fn try_unsuspend_children_blocks(
+        &mut self,
+        accepted_block: &VerifiedBlock,
+    ) -> Vec<VerifiedBlock> {
         let mut unsuspended_blocks = vec![];
-        let mut to_process_blocks = vec![block.clone()];
+        let mut to_process_blocks = vec![accepted_block.clone()];
 
         while let Some(block) = to_process_blocks.pop() {
             // And try to check if its direct children can be unsuspended
@@ -190,12 +193,12 @@ impl BlockManager {
         unsuspended_blocks
     }
 
-    /// Attempts to unsuspend a block by checking its ancestors and removing the `missing_dependency` by its local set.
+    /// Attempts to unsuspend a block by checking its ancestors and removing the `accepted_dependency` by its local set.
     /// If there is no missing dependency then this block can be unsuspended immediately and is removed from the `suspended_blocks` map.
     fn try_unsuspend_block(
         &mut self,
         block_ref: &BlockRef,
-        missing_dependency: &BlockRef,
+        accepted_dependency: &BlockRef,
     ) -> Option<SuspendedBlock> {
         let block = self
             .suspended_blocks
@@ -203,7 +206,7 @@ impl BlockManager {
             .expect("Block should be in suspended map");
 
         assert!(
-            block.missing_ancestors.remove(missing_dependency),
+            block.missing_ancestors.remove(accepted_dependency),
             "Block reference {} should be present in missing dependencies of {:?}",
             block_ref,
             block.block
