@@ -53,7 +53,7 @@ If an unsupported parameter is used, the request will error, or fallback to JSON
 - `getOwnedObjects`:
   - missing the `MatchAll`, `MatchAny`, `MatchNone`, and `Version` filters
 - `queryEvents`:
-  - missing the `MoveEventField`, `Module`, `TimeRange`, `All`, `Any`, `And`, amd `Or` filters
+  - missing the `MoveEventField`, `Module`, `TimeRange`, `All`, `Any`, `And`, and `Or` filters
 
 ### Unsupported fields
 
