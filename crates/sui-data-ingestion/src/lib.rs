@@ -14,4 +14,7 @@ pub use executor::IndexerExecutor;
 pub use metrics::DataIngestionMetrics;
 pub use progress_store::{DynamoDBProgressStore, FileProgressStore};
 pub use worker_pool::WorkerPool;
-pub use workers::{BlobTaskConfig, BlobWorker, KVStoreTaskConfig, KVStoreWorker, Worker};
+pub use workers::{
+    ArchivalConfig, ArchivalWorker, BlobTaskConfig, BlobWorker, KVStoreTaskConfig, KVStoreWorker,
+    Worker,
+};
