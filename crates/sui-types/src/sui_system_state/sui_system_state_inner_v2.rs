@@ -140,14 +140,14 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV2 {
         }
     }
 
-    fn get_pending_active_validators<S: ObjectStore>(
+    fn get_pending_active_validators<S: ObjectStore + ?Sized>(
         &self,
         object_store: &S,
     ) -> Result<Vec<SuiValidatorSummary>, SuiError> {
         let table_id = self.validators.pending_active_validators.contents.id;
         let table_size = self.validators.pending_active_validators.contents.size;
         let validators: Vec<ValidatorV1> =
-            get_validators_from_table_vec(object_store, table_id, table_size)?;
+            get_validators_from_table_vec(&object_store, table_id, table_size)?;
         Ok(validators
             .into_iter()
             .map(|v| v.into_sui_validator_summary())

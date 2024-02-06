@@ -6,6 +6,7 @@ mod sim_only_tests {
     use std::path::PathBuf;
     use std::time::Duration;
     use sui_core::authority::authority_store_tables::LiveObject;
+    use sui_core::state_accumulator::AccumulatorStore;
     use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
     use sui_macros::sim_test;
     use sui_node::SuiNode;
@@ -53,7 +54,7 @@ mod sim_only_tests {
         // Remove the wrapped tombstone on some nodes but not all.
         for (idx, validator) in test_cluster.swarm.validator_nodes().enumerate() {
             validator.get_node_handle().unwrap().with(|node| {
-                let db = node.state().db();
+                let db = node.state().database_for_testing().clone();
                 assert_eq!(count_wrapped_tombstone(&node), 1);
                 if idx % 2 == 0 {
                     db.remove_all_versions_of_object(child_id);
@@ -108,8 +109,18 @@ mod sim_only_tests {
                 node.state().prune_objects_and_compact_for_testing().await;
 
                 // Check that no object with `child_id` exists in object store.
-                assert_eq!(node.state().db().count_object_versions(child_id), 0);
-                assert!(node.state().db().count_object_versions(object_id) > 0);
+                assert_eq!(
+                    node.state()
+                        .database_for_testing()
+                        .count_object_versions(child_id),
+                    0
+                );
+                assert!(
+                    node.state()
+                        .database_for_testing()
+                        .count_object_versions(object_id)
+                        > 0
+                );
             })
             .await;
 
@@ -151,8 +162,18 @@ mod sim_only_tests {
                 node.state().prune_objects_and_compact_for_testing().await;
 
                 // Check that both root and child objects are gone from object store.
-                assert_eq!(node.state().db().count_object_versions(child_id), 0);
-                assert_eq!(node.state().db().count_object_versions(object_id), 0);
+                assert_eq!(
+                    node.state()
+                        .database_for_testing()
+                        .count_object_versions(child_id),
+                    0
+                );
+                assert_eq!(
+                    node.state()
+                        .database_for_testing()
+                        .count_object_versions(object_id),
+                    0
+                );
             })
             .await;
     }
@@ -292,8 +313,9 @@ mod sim_only_tests {
     }
 
     fn count_wrapped_tombstone(node: &SuiNode) -> usize {
-        let db = node.state().db();
-        db.iter_live_object_set(true)
+        let store = node.state().get_execution_cache();
+        store
+            .iter_live_object_set(true)
             .filter(|o| matches!(o, LiveObject::Wrapped(_)))
             .count()
     }
@@ -317,7 +339,12 @@ mod sim_only_tests {
 
     async fn wait_until_checkpoint_pruned(node: &SuiNode, checkpoint: CheckpointSequenceNumber) {
         loop {
-            if node.state().get_highest_pruned_checkpoint().unwrap() >= checkpoint {
+            if node
+                .state()
+                .get_highest_pruned_checkpoint_for_testing()
+                .unwrap()
+                >= checkpoint
+            {
                 return;
             }
             tokio::time::sleep(Duration::from_secs(1)).await;

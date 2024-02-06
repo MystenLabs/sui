@@ -88,7 +88,7 @@ pub async fn execute_certificate_with_execution_error(
     // for testing and regression detection.
     // We must do this before sending to consensus, otherwise consensus may already
     // lead to transaction execution and state change.
-    let state_acc = StateAccumulator::new(authority.database.clone());
+    let state_acc = StateAccumulator::new(authority.execution_cache.clone());
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()

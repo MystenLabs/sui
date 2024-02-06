@@ -82,13 +82,15 @@ pub trait ReadStore: ObjectStore {
     // Transaction Getters
     //
 
-    fn get_transaction(&self, tx_digest: &TransactionDigest)
-        -> Result<Option<VerifiedTransaction>>;
+    fn get_transaction(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<Arc<VerifiedTransaction>>>;
 
     fn multi_get_transactions(
         &self,
         tx_digests: &[TransactionDigest],
-    ) -> Result<Vec<Option<VerifiedTransaction>>> {
+    ) -> Result<Vec<Option<Arc<VerifiedTransaction>>>> {
         tx_digests
             .iter()
             .map(|digest| self.get_transaction(digest))
@@ -258,7 +260,7 @@ pub trait ReadStore: ObjectStore {
                 .collect::<anyhow::Result<Vec<_>>>()?;
 
             let full_transaction = CheckpointTransaction {
-                transaction: tx.into(),
+                transaction: (*tx).clone().into(),
                 effects: fx,
                 events,
                 input_objects,
@@ -338,14 +340,14 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
     fn get_transaction(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedTransaction>> {
+    ) -> Result<Option<Arc<VerifiedTransaction>>> {
         (*self).get_transaction(tx_digest)
     }
 
     fn multi_get_transactions(
         &self,
         tx_digests: &[TransactionDigest],
-    ) -> Result<Vec<Option<VerifiedTransaction>>> {
+    ) -> Result<Vec<Option<Arc<VerifiedTransaction>>>> {
         (*self).multi_get_transactions(tx_digests)
     }
 
@@ -460,14 +462,14 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
     fn get_transaction(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedTransaction>> {
+    ) -> Result<Option<Arc<VerifiedTransaction>>> {
         (**self).get_transaction(tx_digest)
     }
 
     fn multi_get_transactions(
         &self,
         tx_digests: &[TransactionDigest],
-    ) -> Result<Vec<Option<VerifiedTransaction>>> {
+    ) -> Result<Vec<Option<Arc<VerifiedTransaction>>>> {
         (**self).multi_get_transactions(tx_digests)
     }
 
@@ -582,14 +584,14 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
     fn get_transaction(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedTransaction>> {
+    ) -> Result<Option<Arc<VerifiedTransaction>>> {
         (**self).get_transaction(tx_digest)
     }
 
     fn multi_get_transactions(
         &self,
         tx_digests: &[TransactionDigest],
-    ) -> Result<Vec<Option<VerifiedTransaction>>> {
+    ) -> Result<Vec<Option<Arc<VerifiedTransaction>>>> {
         (**self).multi_get_transactions(tx_digests)
     }
 

@@ -59,7 +59,7 @@ impl RocksDbStore {
     }
 
     pub fn get_objects(&self, object_keys: &[ObjectKey]) -> Result<Vec<Option<Object>>, SuiError> {
-        self.execution_cache.multi_get_object_by_key(object_keys)
+        self.execution_cache.multi_get_objects_by_key(object_keys)
     }
 
     pub fn get_last_executed_checkpoint(&self) -> Result<Option<VerifiedCheckpoint>, SuiError> {
@@ -160,8 +160,10 @@ impl ReadStore for RocksDbStore {
                             .get(&tx.effects)
                             .map_err(sui_types::storage::error::Error::custom)?,
                     ) {
-                        transactions
-                            .push(sui_types::base_types::ExecutionData::new(t.into_inner(), e))
+                        transactions.push(sui_types::base_types::ExecutionData::new(
+                            (*t).clone().into_inner(),
+                            e,
+                        ))
                     } else {
                         return Result::<
                             Option<FullCheckpointContents>,
@@ -191,10 +193,9 @@ impl ReadStore for RocksDbStore {
     fn get_transaction(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedTransaction>, StorageError> {
+    ) -> Result<Option<Arc<VerifiedTransaction>>, StorageError> {
         self.execution_cache
             .get_transaction_block(digest)
-            .map(|tx| tx.map(|tx| (*tx).clone()))
             .map_err(StorageError::custom)
     }
 

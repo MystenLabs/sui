@@ -1,9 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_notify_read::EffectsNotifyRead;
-use crate::authority::authority_store::SuiLockResult;
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
+use crate::authority::authority_store_pruner::{
+    AuthorityStorePruner, AuthorityStorePruningMetrics,
+};
+use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::AuthorityStore;
+use crate::authority::{
+    authority_notify_read::EffectsNotifyRead, epoch_start_configuration::EpochStartConfiguration,
+};
+use crate::checkpoints::CheckpointStore;
+use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
 use async_trait::async_trait;
 
@@ -15,12 +24,18 @@ use futures::{
 use mysten_common::sync::notify_read::NotifyRead;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::collections::HashSet;
+use std::path::Path;
 use std::sync::Arc;
+use sui_config::node::AuthorityStorePruningConfig;
+use sui_protocol_config::ProtocolVersion;
 use sui_storage::package_object_cache::PackageObjectCache;
+use sui_types::accumulator::Accumulator;
+use sui_types::base_types::VerifiedExecutionData;
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::message_envelope::Message;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{
     error::{Error as StorageError, Result as StorageResult},
@@ -34,7 +49,8 @@ use sui_types::{
     object::Owner,
     storage::InputKey,
 };
-use tracing::instrument;
+use tap::TapFallible;
+use tracing::{error, instrument};
 use typed_store::Map;
 
 struct ExecutionCacheMetrics {
@@ -86,7 +102,8 @@ pub trait ExecutionCacheRead: Send + Sync {
         version: SequenceNumber,
     ) -> SuiResult<Option<Object>>;
 
-    fn multi_get_object_by_key(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<Option<Object>>>;
+    fn multi_get_objects_by_key(&self, object_keys: &[ObjectKey])
+        -> SuiResult<Vec<Option<Object>>>;
 
     fn object_exists_by_key(
         &self,
@@ -103,11 +120,11 @@ pub trait ExecutionCacheRead: Send + Sync {
     /// transaction is out-of-date and we return a ObjectVersionUnavailableForConsumption,
     /// which indicates this is not retriable.
     /// Otherwise, we return a ObjectNotFound error, which indicates this is retriable.
-    fn multi_get_object_with_more_accurate_error_return(
+    fn multi_get_objects_with_more_accurate_error_return(
         &self,
         object_refs: &[ObjectRef],
     ) -> Result<Vec<Object>, SuiError> {
-        let objects = self.multi_get_object_by_key(
+        let objects = self.multi_get_objects_by_key(
             &object_refs.iter().map(ObjectKey::from).collect::<Vec<_>>(),
         )?;
         let mut result = Vec::new();
@@ -231,6 +248,8 @@ pub trait ExecutionCacheRead: Send + Sync {
     fn get_lock(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult;
 
     fn get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef>;
+
+    fn check_owned_object_locks_exist(&self, owned_object_refs: &[ObjectRef]) -> SuiResult;
 
     fn multi_get_transaction_blocks(
         &self,
@@ -480,6 +499,67 @@ pub trait ExecutionCacheWrite: Send + Sync {
     ) -> BoxFuture<'a, SuiResult>;
 }
 
+pub trait CheckpointCache: Send + Sync {
+    // TODO: In addition to the deprecated methods below, this will eventually include access
+    // to the CheckpointStore
+
+    // DEPRECATED METHODS
+    fn deprecated_get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>>;
+
+    fn deprecated_multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>>;
+
+    fn deprecated_insert_finalized_transactions(
+        &self,
+        digests: &[TransactionDigest],
+        epoch: EpochId,
+        sequence: CheckpointSequenceNumber,
+    ) -> SuiResult;
+}
+
+pub trait ExecutionCacheReconfigAPI: Send + Sync {
+    fn insert_genesis_object(&self, object: Object) -> SuiResult;
+    fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult;
+
+    fn revert_state_update(&self, digest: &TransactionDigest) -> SuiResult;
+    fn set_epoch_start_configuration(
+        &self,
+        epoch_start_config: &EpochStartConfiguration,
+    ) -> SuiResult;
+
+    fn update_epoch_flags_metrics(&self, old: &[EpochFlag], new: &[EpochFlag]);
+
+    fn clear_object_per_epoch_marker_table(&self, execution_guard: &ExecutionLockWriteGuard<'_>);
+
+    fn expensive_check_sui_conservation(
+        &self,
+        old_epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult;
+
+    fn checkpoint_db(&self, path: &Path) -> SuiResult;
+}
+
+// StateSyncAPI is for writing any data that was not the result of transaction execution,
+// but that arrived via state sync. The fact that it came via state sync implies that it
+// is certified output, and can be immediately persisted to the store.
+pub trait StateSyncAPI: Send + Sync {
+    fn insert_transaction_and_effects(
+        &self,
+        transaction: &VerifiedTransaction,
+        transaction_effects: &TransactionEffects,
+    ) -> SuiResult;
+
+    fn multi_insert_transaction_and_effects(
+        &self,
+        transactions_and_effects: &[VerifiedExecutionData],
+    ) -> SuiResult;
+}
+
 pub struct PassthroughCache {
     store: Arc<AuthorityStore>,
     metrics: Option<ExecutionCacheMetrics>,
@@ -509,6 +589,42 @@ impl PassthroughCache {
     pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper<Self> {
         NotifyReadWrapper(self)
     }
+
+    pub fn store_for_testing(&self) -> &Arc<AuthorityStore> {
+        &self.store
+    }
+
+    pub async fn prune_objects_and_compact_for_testing(
+        &self,
+        checkpoint_store: &Arc<CheckpointStore>,
+    ) {
+        let pruning_config = AuthorityStorePruningConfig {
+            num_epochs_to_retain: 0,
+            ..Default::default()
+        };
+        let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
+            &self.store.perpetual_tables,
+            checkpoint_store,
+            &self.store.objects_lock_table,
+            pruning_config,
+            AuthorityStorePruningMetrics::new_for_test(),
+            usize::MAX,
+        )
+        .await;
+        let _ = AuthorityStorePruner::compact(&self.store.perpetual_tables);
+    }
+
+    /// This is a temporary method to be used when we enable simplified_unwrap_then_delete.
+    /// It re-accumulates state hash for the new epoch if simplified_unwrap_then_delete is enabled.
+    #[instrument(level = "error", skip_all)]
+    pub fn maybe_reaccumulate_state_hash(
+        &self,
+        cur_epoch_store: &AuthorityPerEpochStore,
+        new_protocol_version: ProtocolVersion,
+    ) {
+        self.store
+            .maybe_reaccumulate_state_hash(cur_epoch_store, new_protocol_version);
+    }
 }
 
 impl ExecutionCacheRead for PassthroughCache {
@@ -534,11 +650,11 @@ impl ExecutionCacheRead for PassthroughCache {
         Ok(self.store.get_object_by_key(object_id, version)?)
     }
 
-    fn multi_get_object_by_key(
+    fn multi_get_objects_by_key(
         &self,
         object_keys: &[ObjectKey],
     ) -> Result<Vec<Option<Object>>, SuiError> {
-        self.store.multi_get_object_by_key(object_keys)
+        Ok(self.store.multi_get_objects_by_key(object_keys)?)
     }
 
     fn object_exists_by_key(
@@ -581,6 +697,10 @@ impl ExecutionCacheRead for PassthroughCache {
 
     fn get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
         self.store.get_latest_lock_for_object_id(object_id)
+    }
+
+    fn check_owned_object_locks_exist(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
+        self.store.check_owned_object_locks_exist(owned_object_refs)
     }
 
     fn multi_get_transaction_blocks(
@@ -663,6 +783,33 @@ impl ExecutionCacheRead for PassthroughCache {
     }
 }
 
+impl CheckpointCache for PassthroughCache {
+    fn deprecated_get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>> {
+        self.store.deprecated_get_transaction_checkpoint(digest)
+    }
+
+    fn deprecated_multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>> {
+        self.store
+            .deprecated_multi_get_transaction_checkpoint(digests)
+    }
+
+    fn deprecated_insert_finalized_transactions(
+        &self,
+        digests: &[TransactionDigest],
+        epoch: EpochId,
+        sequence: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        self.store
+            .deprecated_insert_finalized_transactions(digests, epoch, sequence)
+    }
+}
+
 impl ExecutionCacheWrite for PassthroughCache {
     #[instrument(level = "debug", skip_all)]
     fn write_transaction_outputs<'a>(
@@ -703,9 +850,123 @@ impl ExecutionCacheWrite for PassthroughCache {
     }
 }
 
+impl ExecutionCacheReconfigAPI for PassthroughCache {
+    fn insert_genesis_object(&self, object: Object) -> SuiResult {
+        self.store.insert_genesis_object(object)
+    }
+
+    fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult {
+        self.store.bulk_insert_genesis_objects(objects)
+    }
+
+    fn revert_state_update(&self, digest: &TransactionDigest) -> SuiResult {
+        self.store.revert_state_update(digest)
+    }
+
+    fn set_epoch_start_configuration(
+        &self,
+        epoch_start_config: &EpochStartConfiguration,
+    ) -> SuiResult {
+        self.store.set_epoch_start_configuration(epoch_start_config)
+    }
+
+    fn update_epoch_flags_metrics(&self, old: &[EpochFlag], new: &[EpochFlag]) {
+        self.store.update_epoch_flags_metrics(old, new)
+    }
+
+    fn clear_object_per_epoch_marker_table(&self, execution_guard: &ExecutionLockWriteGuard<'_>) {
+        self.store
+            .clear_object_per_epoch_marker_table(execution_guard)
+            .tap_err(|e| {
+                error!(?e, "Failed to clear object per-epoch marker table");
+            })
+            .ok();
+    }
+
+    fn expensive_check_sui_conservation(
+        &self,
+        old_epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult {
+        self.store
+            .expensive_check_sui_conservation(self, old_epoch_store)
+    }
+
+    fn checkpoint_db(&self, path: &Path) -> SuiResult {
+        self.store.perpetual_tables.checkpoint_db(path)
+    }
+}
+
+impl StateSyncAPI for PassthroughCache {
+    fn insert_transaction_and_effects(
+        &self,
+        transaction: &VerifiedTransaction,
+        transaction_effects: &TransactionEffects,
+    ) -> SuiResult {
+        Ok(self
+            .store
+            .insert_transaction_and_effects(transaction, transaction_effects)?)
+    }
+
+    fn multi_insert_transaction_and_effects(
+        &self,
+        transactions_and_effects: &[VerifiedExecutionData],
+    ) -> SuiResult {
+        Ok(self
+            .store
+            .multi_insert_transaction_and_effects(transactions_and_effects.iter())?)
+    }
+}
+
+impl AccumulatorStore for PassthroughCache {
+    fn get_object_ref_prior_to_key_deprecated(
+        &self,
+        object_id: &ObjectID,
+        version: sui_types::base_types::VersionNumber,
+    ) -> SuiResult<Option<ObjectRef>> {
+        self.store
+            .get_object_ref_prior_to_key_deprecated(object_id, version)
+    }
+
+    fn get_root_state_accumulator_for_epoch(
+        &self,
+        epoch: EpochId,
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, Accumulator)>> {
+        self.store.get_root_state_accumulator_for_epoch(epoch)
+    }
+
+    fn get_root_state_accumulator_for_highest_epoch(
+        &self,
+    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, Accumulator))>> {
+        self.store.get_root_state_accumulator_for_highest_epoch()
+    }
+
+    fn insert_state_accumulator_for_epoch(
+        &self,
+        epoch: EpochId,
+        checkpoint_seq_num: &CheckpointSequenceNumber,
+        acc: &Accumulator,
+    ) -> SuiResult {
+        self.store
+            .insert_state_accumulator_for_epoch(epoch, checkpoint_seq_num, acc)
+    }
+
+    fn iter_live_object_set(
+        &self,
+        include_wrapped_tombstone: bool,
+    ) -> Box<dyn Iterator<Item = crate::authority::authority_store_tables::LiveObject> + '_> {
+        self.store.iter_live_object_set(include_wrapped_tombstone)
+    }
+}
+
 // TODO: Remove EffectsNotifyRead trait and just use ExecutionCacheRead directly everywhere.
 /// This wrapper is used so that we don't have to disambiguate traits at every callsite.
 pub struct NotifyReadWrapper<T>(Arc<T>);
+
+impl<T> Clone for NotifyReadWrapper<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 #[async_trait]
 impl<T: ExecutionCacheRead + 'static> EffectsNotifyRead for NotifyReadWrapper<T> {

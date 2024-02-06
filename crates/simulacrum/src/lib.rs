@@ -11,6 +11,7 @@
 //! [`Simulacrum`]: crate::Simulacrum
 
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use fastcrypto::traits::Signer;
@@ -472,8 +473,8 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
     fn get_transaction(
         &self,
         tx_digest: &sui_types::digests::TransactionDigest,
-    ) -> sui_types::storage::error::Result<Option<VerifiedTransaction>> {
-        Ok(self.store().get_transaction(tx_digest))
+    ) -> sui_types::storage::error::Result<Option<Arc<VerifiedTransaction>>> {
+        Ok(self.store().get_transaction(tx_digest).map(Arc::new))
     }
 
     fn get_transaction_effects(

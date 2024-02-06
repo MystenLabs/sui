@@ -563,7 +563,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
         }
     }
 
-    fn get_pending_active_validators<S: ObjectStore>(
+    fn get_pending_active_validators<S: ObjectStore + ?Sized>(
         &self,
         object_store: &S,
     ) -> Result<Vec<SuiValidatorSummary>, SuiError> {
