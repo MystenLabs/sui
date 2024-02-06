@@ -32,6 +32,10 @@ impl AuthorityOverloadInfo {
     }
 }
 
+const STEADY_OVERLOAD_REDUCTION_PERCENTAGE: u32 = 10;
+const EXECUTION_RATE_RATIO_FOR_COMPARISON: f64 = 0.9;
+const ADDITIONAL_LOAD_SHEDDING: f64 = 0.1;
+
 // Monitors the overload signals in `authority_state` periodically, and updates its `overload_info`
 // when the signals indicates overload.
 pub async fn overload_monitor(
@@ -120,13 +124,17 @@ fn calculate_load_shedding_percentage(txn_ready_rate: f64, execution_rate: f64) 
 
     // Deflate the execution rate to account for the case that execution_rate is close to
     // txn_ready_rate.
-    if execution_rate * 0.9 > txn_ready_rate {
+    if execution_rate * EXECUTION_RATE_RATIO_FOR_COMPARISON > txn_ready_rate {
         return 0;
     }
 
     // In order to maintain execution queue length, we need to drop at least (1 - executionRate / readyRate).
     // To reduce the queue length, here we add 10% more transactions to drop.
-    (((1.0 - execution_rate * 0.9 / txn_ready_rate) + 0.1).min(1.0) * 100.0).round() as u32
+    (((1.0 - execution_rate * EXECUTION_RATE_RATIO_FOR_COMPARISON / txn_ready_rate)
+        + ADDITIONAL_LOAD_SHEDDING)
+        .min(1.0)
+        * 100.0)
+        .round() as u32
 }
 
 // Given overload signals (`queueing_latency`, `txn_ready_rate`, `execution_rate`), return whether
@@ -182,7 +190,7 @@ fn check_overload_signals(
         // We don't need to shed more load. However, the enqueue rate is still not minimal.
         // We gradually reduce load shedding percentage (10% at a time) to gracefully accept
         // more load.
-        current_load_shedding_percentage - 10
+        current_load_shedding_percentage - STEADY_OVERLOAD_REDUCTION_PERCENTAGE
     } else {
         // The current transaction ready rate is considered very low. Turn off load shedding mode.
         0
