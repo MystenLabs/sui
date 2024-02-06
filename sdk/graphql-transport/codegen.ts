@@ -15,8 +15,7 @@ const config: CodegenConfig = {
 	documents: ['src/queries/*.graphql'],
 	ignoreNoDocuments: true,
 	generates: {
-		'src/generated/queries.ts': {
-			// hooks: { afterOneFileWrite: ['prettier --write'] },
+		'src/generated/queries.ts': {			
 			plugins: [
 				{
 					add: {
