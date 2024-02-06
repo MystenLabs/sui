@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use ipnetwork::IpNetwork;
 use multiaddr::Multiaddr;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
