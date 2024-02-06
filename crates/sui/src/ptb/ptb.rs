@@ -570,3 +570,34 @@ fn check_for_cyclic_file_inclusions(
     })?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        collections::BTreeMap,
+        path::{Path, PathBuf},
+    };
+
+    use crate::ptb::ptb::check_for_cyclic_file_inclusions;
+
+    #[test]
+    fn test_cyclic_inclusion() {
+        let mut included_files: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
+
+        let p1 = Path::new("a");
+        let p2 = Path::new("b");
+        let p3 = Path::new("c");
+
+        included_files.insert(p1.to_path_buf(), vec![p2.to_path_buf()]);
+        included_files.insert(p2.to_path_buf(), vec![p3.to_path_buf()]);
+
+        assert!(check_for_cyclic_file_inclusions(&included_files).is_ok());
+
+        included_files.insert(p3.to_path_buf(), vec![p1.to_path_buf()]);
+        assert!(check_for_cyclic_file_inclusions(&included_files).is_err());
+
+        included_files.clear();
+        included_files.insert(p1.to_path_buf(), vec![p1.to_path_buf()]);
+        assert!(check_for_cyclic_file_inclusions(&included_files).is_err());
+    }
+}
