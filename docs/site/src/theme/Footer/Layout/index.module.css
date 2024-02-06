@@ -31,6 +31,7 @@
   letter-spacing: -0.02em;
   text-align: left;
   color: var(--sui-gray);
+  text-transform: uppercase;
 }
 .footerCopy a {
   color: var(--sui-blue-primary);
