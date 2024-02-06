@@ -96,4 +96,4 @@ Some may require multiple requests to properly resolve:
 ### Pagination
 
 Page sizes and limits for paginated methods are based on the defaults and limits of the GraphQL API,
-so page sizes and limits may be different than those returned by the JSON Rpc API
+so page sizes and limits may be different than those returned by the JSON RPC API
