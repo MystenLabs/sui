@@ -661,6 +661,10 @@ impl AuthorityMetrics {
 ///
 pub type StableSyncAuthoritySigner = Pin<Arc<dyn Signer<AuthoritySignature> + Send + Sync>>;
 
+// If you have Arc<ExecutionCache>, you cannot return a reference to it as
+// an &Arc<dyn ExecutionCacheRead> (for example), because the trait object is a fat pointer.
+// So, in order to be able to return &Arc<dyn T>, we create all the converted trait objects
+// (aka fat pointers) up front and return references to them.
 struct ExecutionCacheTraitPointers {
     cache_reader: Arc<dyn ExecutionCacheRead>,
     backing_store: Arc<dyn BackingStore + Send + Sync>,
@@ -3679,7 +3683,6 @@ impl AuthorityState {
     }
 
     pub async fn insert_genesis_object(&self, object: Object) {
-        // TODO(cache)
         self.execution_cache
             .insert_genesis_object(object)
             .expect("Cannot insert genesis object")
@@ -4471,7 +4474,6 @@ impl AuthorityState {
         // We must write tx and effects to the state sync tables so that state sync is able to
         // deliver to the transaction to CheckpointExecutor after it is included in a certified
         // checkpoint.
-        // TODO(cache) - state sync trait pls
         self.execution_cache
             .insert_transaction_and_effects(&tx, &effects)
             .map_err(|err| {

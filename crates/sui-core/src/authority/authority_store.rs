@@ -24,7 +24,6 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::UserInputError;
 use sui_types::execution::TypeLayoutStore;
 use sui_types::message_envelope::Message;
-use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::storage::{
     get_module, BackingPackageStore, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore,
 };
@@ -274,15 +273,6 @@ impl AuthorityStore {
         }
 
         Ok(store)
-    }
-
-    pub fn _get_root_state_hash(&self, epoch: EpochId) -> SuiResult<ECMHLiveObjectSetDigest> {
-        let acc = self
-            .perpetual_tables
-            .root_state_hash_by_epoch
-            .get(&epoch)?
-            .expect("Root state hash for this epoch does not exist");
-        Ok(acc.1.digest().into())
     }
 
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
@@ -1589,49 +1579,6 @@ impl AuthorityStore {
         }
 
         Ok(())
-    }
-
-    pub fn expensive_check_is_consistent_state(
-        &self,
-        checkpoint_executor: &CheckpointExecutor,
-        accumulator: Arc<StateAccumulator>,
-        cur_epoch_store: &AuthorityPerEpochStore,
-        panic: bool,
-    ) {
-        let live_object_set_hash = accumulator.digest_live_object_set(
-            !cur_epoch_store
-                .protocol_config()
-                .simplified_unwrap_then_delete(),
-        );
-
-        let root_state_hash: ECMHLiveObjectSetDigest = self
-            .get_root_state_accumulator_for_epoch(cur_epoch_store.epoch())
-            .expect("Retrieving root state hash cannot fail")
-            .expect("Root state hash not found")
-            .1
-            .digest()
-            .into();
-
-        let is_inconsistent = root_state_hash != live_object_set_hash;
-        if is_inconsistent {
-            if panic {
-                panic!(
-                    "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
-                    root_state_hash, live_object_set_hash
-                );
-            } else {
-                error!(
-                    "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
-                    root_state_hash, live_object_set_hash
-                );
-            }
-        } else {
-            info!("State consistency check passed");
-        }
-
-        if !panic {
-            checkpoint_executor.set_inconsistent_state(is_inconsistent);
-        }
     }
 
     /// This is a temporary method to be used when we enable simplified_unwrap_then_delete.

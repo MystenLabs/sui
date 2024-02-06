@@ -3431,7 +3431,6 @@ async fn test_store_revert_transfer_sui() {
         .await
         .unwrap();
 
-    // TODO:
     let db = &authority_state.database_for_testing();
     db.revert_state_update(&tx_digest).unwrap();
 
