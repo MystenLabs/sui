@@ -1,7 +1,7 @@
 # `@mysten/graphql-transport`
 
 This package provides a `SuiTransport` that enables `SuiClient` to make requests using the RPC 2.0
-(GraphQL) API instead of the JSON RPC APi.
+(GraphQL) API instead of the JSON RPC API.
 
 ## Install
 
