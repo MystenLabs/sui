@@ -15,7 +15,7 @@ const config: CodegenConfig = {
 	documents: ['src/queries/*.graphql'],
 	ignoreNoDocuments: true,
 	generates: {
-		'src/generated/queries.ts': {			
+		'src/generated/queries.ts': {
 			plugins: [
 				{
 					add: {
