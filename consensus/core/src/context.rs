@@ -16,6 +16,7 @@ use consensus_config::{NetworkKeyPair, ProtocolKeyPair};
 /// Context contains per-epoch configuration and metrics shared by all components
 /// of this authority.
 #[allow(dead_code)]
+#[derive(Clone)]
 pub(crate) struct Context {
     /// Index of this authority in the committee.
     pub own_index: AuthorityIndex,
@@ -52,33 +53,29 @@ impl Context {
     pub(crate) fn new_for_test(
         committee_size: usize,
     ) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
-        let (committee, keypairs) = Committee::new_for_test(0, vec![1; committee_size]);
+        let (committee, keypairs) =
+            consensus_config::local_committee_and_keys(0, vec![1; committee_size]);
         let metrics = test_metrics();
 
         let context = Context::new(
             AuthorityIndex::new_for_test(0),
             committee,
             Parameters::default(),
-            Self::default_protocol_config_for_testing(),
+            ProtocolConfig::get_for_max_version_UNSAFE(),
             metrics,
         );
         (context, keypairs)
     }
 
     #[cfg(test)]
-    pub(crate) fn default_protocol_config_for_testing() -> ProtocolConfig {
-        ProtocolConfig::get_for_max_version_UNSAFE()
+    pub(crate) fn with_authority_index(mut self, authority: AuthorityIndex) -> Self {
+        self.own_index = authority;
+        self
     }
 
     #[cfg(test)]
     pub(crate) fn with_committee(mut self, committee: Committee) -> Self {
         self.committee = committee;
-        self
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_authority_index(mut self, authority: AuthorityIndex) -> Self {
-        self.own_index = authority;
         self
     }
 

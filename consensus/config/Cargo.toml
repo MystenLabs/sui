@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 fastcrypto.workspace = true
-multiaddr.workspace = true
+mysten-network.workspace = true
 rand.workspace = true
 serde.workspace = true
 shared-crypto.workspace = true

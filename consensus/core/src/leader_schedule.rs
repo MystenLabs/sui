@@ -68,15 +68,15 @@ impl LeaderSchedule {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    use crate::metrics::test_metrics;
-    use consensus_config::{Committee, Parameters};
+    use consensus_config::{local_committee_and_keys, Parameters};
     use sui_protocol_config::ProtocolConfig;
+
+    use super::*;
+    use crate::metrics::test_metrics;
 
     #[test]
     fn test_elect_leader() {
-        let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
+        let committee = local_committee_and_keys(0, vec![1, 1, 1, 1]).0;
         let metrics = test_metrics();
         let context = Arc::new(Context::new(
             AuthorityIndex::new_for_test(0),
@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn test_elect_leader_stake_based() {
-        let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
+        let committee = local_committee_and_keys(0, vec![1, 1, 1, 1]).0;
         let metrics = test_metrics();
         let context = Arc::new(Context::new(
             AuthorityIndex::new_for_test(0),
