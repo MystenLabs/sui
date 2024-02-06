@@ -45,7 +45,7 @@ or fallback to the JSON RPC API if a `fallbackFullNodeUrl` is provided:
 ### Unsupported parameters
 
 Some supported methods in `SuiClientGraphQLTransport` do not support the full set of parameters
-available in the JSON Rpc API.
+available in the JSON RPC API.
 
 If an unsupported parameter is used, the request will error, or fallback to JSON RPC Api if a
 `fallbackFullNodeUrl` is provided.
