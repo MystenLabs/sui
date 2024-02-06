@@ -19,6 +19,8 @@
   --ifm-code-font-size: 95%;
   --ifm-background-color-dark: #030F1C;
   --ifm-navbar-background-color: #030F1C;
+  --ifm-navbar-sidebar-link-color: #F7F7F8;
+  --ifm-navbar-sidebar-background-color: #030F1C;
   --ifm-navbar-link-color: #F7F7F8;
   --ifm-navbar-height: 4.5rem;
   --ifm-spacing-horizontal: 1.875rem;
@@ -99,6 +101,8 @@
   --ifm-background-color: #030F1C;
   --ifm-menu-color: var(--sui-white);
   --ifm-menu-color-background-active: rgba(247, 247, 248, .05);
+  --ifm-navbar-sidebar-link-color: #F7F7F8;
+  --ifm-navbar-sidebar-background-color: #030F1C;
 }
 
 .active-scroll-spy {
@@ -109,7 +113,20 @@
 [data-theme='dark'] img.balance-coin-token {
   filter: invert(1);
 }
+ 
+/** navbar overrides */
+.navbar-sidebar .menu__link {
+  color: var(--ifm-navbar-sidebar-link-color);
+}
 
+.navbar-sidebar .menu__link--active {
+  background-color: var(--sui-blue-primary);
+  color: var(--sui-gray-100);
+}
+[data-theme='dark'] .navbar-sidebar .menu__link--active {
+  background-color: var(--sui-blue-primary);
+  color: var(--sui-gray-100);
+}
 /** add custom fonts **/
 @font-face {
   font-family: 'Twkeverett Mono';
@@ -315,9 +332,6 @@ h4 {
   }
 }
 @media screen and (max-width: 599px) {
-  h1 , .h1{
-    font-size: 2.5rem;
-  }
   h2, .h2 {
     font-size: 1.7rem;
   }

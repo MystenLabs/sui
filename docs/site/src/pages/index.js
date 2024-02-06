@@ -2,73 +2,34 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from "react";
-import { useHistory } from "@docusaurus/router";
 
 import Layout from "@theme/Layout";
 import Link from "@docusaurus/Link";
 import styles from "./index.module.css";
 
 export default function Home() {
-  const history = useHistory();
-  const SingleLink = (props) => {
-    const { to } = props;
-
+  const HomeCard = (props) => {
+    const { title, children } = props;
     return (
-      <div
-        onClick={() => history.push(to)}
-        className="bg-sui-card-dark rounded-sui w-[350px] h-[350px] p-8 bg-[url(../static/img/index/card-bg.svg)] justify-center flex justify-center items-center"
-      >
-        <div className="p-4 rounded-full border border-solid border-sui-white/30 w-[249px] h-[51px] text-sui-white bg-sui-card-dark bg-[url(../static/img/index/circle-arrow.svg)] bg-no-repeat bg-[center_right_2px] flex items-center cursor-pointer hover:shadow-sui hover:shadow-sui-blue hover:bg-opacity-50 hover:bg-[url(../static/img/index/circle-arrow-blue.svg)]">
-          Build your first dApp
+      <div className={`p-px col-span-3 w-[350px]`}>
+        <div className={styles.card}>
+          {title && <h4 className="h4 text-white">{title}</h4>}
+          <div className={styles.cardLinksContainer}>{children}</div>
         </div>
       </div>
     );
   };
-  // const ContentItem = (props) => {
-  //   const [vis, setVis] = useState(false);
-  //   const { children, title } = props;
-  //   const handleClick = () => {
-  //     setVis(!vis);
-  //   };
-
-  //   return (
-  //     <div className="grid grid-cols-3 border-solid border-0 border-t border-sui-white/50 mb-8 lg:mx-0 mx-4">
-  //       <p
-  //         className={`lg:text-4xl text-2xl pb-2 mt-8 pr-12 cursor-pointer bg-no-repeat bg-right-top flex-none ${
-  //           vis
-  //             ? "bg-[url(../static/img/index/circle-arrow-up.svg)]"
-  //             : "bg-[url(../static/img/index/circle-arrow-down.svg)]"
-  //         }`}
-  //         onClick={handleClick}
-  //       >
-  //         {title}
-  //       </p>
-  //       <p
-  //         className={`${
-  //           vis ? "opacity-100" : "opacity-0"
-  //         } transition-opacity ease-in-out duration-300 col-span-2 mt-10 text-lg text-sui-blue-lighter mx-8`}
-  //       >
-  //         {vis && children}
-  //       </p>
-  //     </div>
-  //   );
-  // };
-  const HomeCard = (props) => {
-    const { title, children } = props;
+  const HomeCardCTA = (props) => {
+    const { children } = props;
     return (
-      <div
-        className={`p-px col-span-3 bg-gradient-to-b from-sui-white/40 from-20% hover:from-30% via-sui-white/0 to-sui-white/10 to-80% rounded-sui w-[350px] h-[350px]`}
-      >
-        <div className={styles.card}>
-          <h4 className="h4 text-white">{title}</h4>
+      <div className={`p-px col-span-3 w-[350px]`}>
+        <div className={styles.cardCTA}>
           <div className={styles.cardLinksContainer}>{children}</div>
         </div>
       </div>
     );
   };
 
-  const darkcardclass =
-    "p-px col-span-4 bg-gradient-to-b from-sui-white/40 from-20% hover:from-30% via-sui-white/0 to-sui-white/10 to-80% rounded-sui";
   return (
     <Layout>
       <div className="bg-sui-black overflow-hidden">
@@ -161,14 +122,31 @@ export default function Home() {
               Sui dev cheat sheet
             </Link>
           </HomeCard>
-          <div className={`${darkcardclass} w-[350px] h-[350px]`}>
-            <SingleLink to="/guides/developer/first-app"></SingleLink>
-          </div>
+          <HomeCardCTA>
+            <Link
+              className={styles.cardCTALink}
+              to="/guides/developer/first-app"
+            >
+              <span>Build your first dApp</span>
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 11 11"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M6.01312 0.5L5.05102 1.45391L8.39164 4.80332L0 4.80332L0 6.19668L8.39164 6.19668L5.05102 9.54073L6.01312 10.5L11 5.5L6.01312 0.5Z"
+                  fill="#4DA2FF"
+                />
+              </svg>
+            </Link>
+          </HomeCardCTA>
         </div>
 
         <div className={styles.sectionHeader}>
           <h2 className="h1 text-white">Why Sui?</h2>
-          <h3 className="h3 text-gray">
+          <h3 className="h3 text-gray text-center">
             Sui is the first internet-scale programmable blockchain platform
           </h3>
         </div>
