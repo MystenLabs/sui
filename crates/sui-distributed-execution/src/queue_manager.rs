@@ -13,17 +13,17 @@ pub struct QueuesManager {
     writing_tx: HashMap<ObjectID, TransactionDigest>,
     wait_table: HashMap<TransactionDigest, HashSet<TransactionDigest>>,
     reverse_wait_table: HashMap<TransactionDigest, HashSet<TransactionDigest>>,
-    new: mpsc::Receiver<TransactionWithEffects>,
-    ready: mpsc::Sender<TransactionWithEffects>,
-    done: mpsc::Receiver<TransactionDigest>,
+    new: mpsc::UnboundedReceiver<TransactionWithEffects>,
+    ready: mpsc::UnboundedSender<TransactionWithEffects>,
+    done: mpsc::UnboundedReceiver<TransactionDigest>,
 }
 
 // The methods of the QueuesManager are called from a single thread, so no need for locks
 impl QueuesManager {
     pub fn new(
-        new_tx_receiver: mpsc::Receiver<TransactionWithEffects>,
-        ready_tx_sender: mpsc::Sender<TransactionWithEffects>,
-        done_tx_receiver: mpsc::Receiver<TransactionDigest>,
+        new_tx_receiver: mpsc::UnboundedReceiver<TransactionWithEffects>,
+        ready_tx_sender: mpsc::UnboundedSender<TransactionWithEffects>,
+        done_tx_receiver: mpsc::UnboundedReceiver<TransactionDigest>,
     ) -> QueuesManager {
         QueuesManager {
             tx_store: HashMap::new(),
@@ -88,7 +88,7 @@ impl QueuesManager {
 
         // Set the wait table and check if tx is ready
         if wait_ctr == 0 {
-            self.ready.send(full_tx).await.expect("send failed");
+            self.ready.send(full_tx).expect("send failed");
         }
     }
 
@@ -115,7 +115,7 @@ impl QueuesManager {
                     if waiting_tx_set.is_empty() {
                         self.wait_table.remove(&other_txid);
                         let ready_tx = self.get_tx(&other_txid).clone();
-                        self.ready.send(ready_tx).await.expect("send failed");
+                        self.ready.send(ready_tx).expect("send failed");
                     }
                 }
             }

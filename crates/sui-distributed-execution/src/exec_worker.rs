@@ -380,9 +380,9 @@ impl<
         worker_metrics: Arc<Metrics>,
     ) {
         // Initialize channels
-        let (ready_tx_sender, mut ready_tx_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
-        let (new_tx_sender, new_tx_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
-        let (done_tx_sender, done_tx_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
+        let (ready_tx_sender, mut ready_tx_receiver) = mpsc::unbounded_channel();
+        let (new_tx_sender, new_tx_receiver) = mpsc::unbounded_channel();
+        let (done_tx_sender, done_tx_receiver) = mpsc::unbounded_channel();
 
         let mut manager = QueuesManager::new(new_tx_receiver, ready_tx_sender, done_tx_receiver);
 
@@ -424,39 +424,6 @@ impl<
         loop {
             tokio::select! {
                 biased;
-
-                // Received a tx from the queue mananger -> the tx is ready to be executed
-                // Must poll from manager_receiver before sw_receiver, to avoid deadlock
-                Some(full_tx) = ready_tx_receiver.recv() => {
-                    // UNCOMMENT THIS PART FOR REAL EXECUTION
-                    let txid = full_tx.tx.digest();
-                    self.ready_txs.insert(*txid, ());
-
-                    let mut locked_objs = Vec::new();
-                    for obj_id in full_tx.get_read_set() {
-                        // println!("EW {} checking if obj {} is locked", my_id, obj_id);
-                        if my_id != get_ew_owner_for_object(obj_id, &ew_ids) {
-                            continue;
-                        }
-                        let obj_ref_opt = self.memory_store.get_latest_parent_entry_ref(obj_id).unwrap();
-                        let obj_opt = self.memory_store.get_object(&obj_id).unwrap();
-                        if let (Some(obj_ref), Some(obj)) = (obj_ref_opt, obj_opt) {
-                            locked_objs.push(Some((obj_ref, obj)));
-                        } else {
-                            locked_objs.push(None);
-                        }
-                    }
-                    // println!("Sending LockedExec for tx {}, locked_objs: {:?}", txid, locked_objs);
-
-                    let msg = NetworkMessage{
-                        src:0,
-                        dst:vec![get_designated_executor_for_tx(*txid, &full_tx,&ew_ids)],
-                        payload: SailfishMessage::LockedExec { full_tx: full_tx.clone(), objects: locked_objs.clone(), child_objects: Vec::new() }};
-                    // println!("EW {} Sending LockedExec for tx {} to EW {}", my_id, txid, execute_on_ew);
-                    if out_channel.send(msg).await.is_err() {
-                        eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, get_designated_executor_for_tx(*txid, &full_tx,&ew_ids));
-                    }
-                },
                 Some(tx_with_results) = tasks_queue.join_next() => {
                     let tx_with_results = tx_with_results.expect("tx task failed");
                     let txid = tx_with_results.full_tx.tx.digest();
@@ -500,7 +467,7 @@ impl<
                     }
 
                     // 2. Update object queues
-                    done_tx_sender.send(*txid).await.expect("send failed");
+                    done_tx_sender.send(*txid).expect("send failed");
 
 
                     // println!("Sending TxResults message for tx {}", txid);
@@ -527,6 +494,38 @@ impl<
                     self.update_metrics(&tx_with_results.full_tx, &worker_metrics);
                 },
 
+                // Received a tx from the queue mananger -> the tx is ready to be executed
+                // Must poll from manager_receiver before sw_receiver, to avoid deadlock
+                Some(full_tx) = ready_tx_receiver.recv() => {
+                    // UNCOMMENT THIS PART FOR REAL EXECUTION
+                    let txid = full_tx.tx.digest();
+                    self.ready_txs.insert(*txid, ());
+
+                    let mut locked_objs = Vec::new();
+                    for obj_id in full_tx.get_read_set() {
+                        // println!("EW {} checking if obj {} is locked", my_id, obj_id);
+                        if my_id != get_ew_owner_for_object(obj_id, &ew_ids) {
+                            continue;
+                        }
+                        let obj_ref_opt = self.memory_store.get_latest_parent_entry_ref(obj_id).unwrap();
+                        let obj_opt = self.memory_store.get_object(&obj_id).unwrap();
+                        if let (Some(obj_ref), Some(obj)) = (obj_ref_opt, obj_opt) {
+                            locked_objs.push(Some((obj_ref, obj)));
+                        } else {
+                            locked_objs.push(None);
+                        }
+                    }
+                    // println!("Sending LockedExec for tx {}, locked_objs: {:?}", txid, locked_objs);
+
+                    let msg = NetworkMessage{
+                        src:0,
+                        dst:vec![get_designated_executor_for_tx(*txid, &full_tx,&ew_ids)],
+                        payload: SailfishMessage::LockedExec { full_tx: full_tx.clone(), objects: locked_objs.clone(), child_objects: Vec::new() }};
+                    // println!("EW {} Sending LockedExec for tx {} to EW {}", my_id, txid, execute_on_ew);
+                    if out_channel.send(msg).await.is_err() {
+                        eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, get_designated_executor_for_tx(*txid, &full_tx,&ew_ids));
+                    }
+                },
 
                 Some(msg) = in_channel.recv() => {
                     let msg = msg.payload;
@@ -621,7 +620,7 @@ impl<
                         }
                     } else if let SailfishMessage::TxResults { txid, deleted, written } = msg {
                         if let Some(_) = self.ready_txs.remove(&txid) {
-                            done_tx_sender.send(txid).await.expect("send failed");
+                            done_tx_sender.send(txid).expect("send failed");
                         }
                         // else {
                         //     unreachable!("tx already executed though we did not send LockedExec");
@@ -650,7 +649,7 @@ impl<
                             // don't queue to manager, but store to epoch_change_tx
                             epoch_change_tx = Some(full_tx);
                         } else {
-                            new_tx_sender.send(full_tx).await.expect("send failed");
+                            new_tx_sender.send(full_tx).expect("send failed");
                             // epoch_txs_semaphore += 1;
                         }
                     } else {
