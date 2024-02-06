@@ -47,40 +47,36 @@ module games::slot_machine_tests {
         test_scenario::next_tx(scenario, user2);
         mint(user2, 100, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-        slot_machine::play(&mut game, &random_state, coin, test_scenario::ctx(scenario));
+        slot_machine::play(&mut game, &random_state, &mut coin, test_scenario::ctx(scenario));
         assert!(slot_machine::get_balance(&game) == 1100, 1); // lost 100
+        assert!(coin::value(&coin) == 0, 1);
+        test_scenario::return_to_sender(scenario, coin);
 
         test_scenario::next_tx(scenario, user2);
         mint(user2, 200, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-        slot_machine::play(&mut game, &random_state, coin, test_scenario::ctx(scenario));
+        slot_machine::play(&mut game, &random_state, &mut coin, test_scenario::ctx(scenario));
         assert!(slot_machine::get_balance(&game) == 900, 1); // won 200
         // check that received the right amount
-        test_scenario::next_tx(scenario, user2);
-        let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
         assert!(coin::value(&coin) == 400, 1);
         test_scenario::return_to_sender(scenario, coin);
 
         test_scenario::next_tx(scenario, user2);
-        mint(user2, 2000, scenario);
+        mint(user2, 300, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-        slot_machine::play(&mut game, &random_state, coin, test_scenario::ctx(scenario));
-        assert!(slot_machine::get_balance(&game) == 1800, 1); // lost 900
+        slot_machine::play(&mut game, &random_state, &mut coin, test_scenario::ctx(scenario));
+        assert!(slot_machine::get_balance(&game) == 600, 1); // won 300
         // check that received the remaining amount
-        test_scenario::next_tx(scenario, user2);
-        let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-        assert!(coin::value(&coin) == 1100, 1);
+        assert!(coin::value(&coin) == 600, 1);
         test_scenario::return_to_sender(scenario, coin);
 
         test_scenario::next_tx(scenario, user2);
         mint(user2, 200, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-        slot_machine::play(&mut game, &random_state, coin, test_scenario::ctx(scenario));
-        assert!(slot_machine::get_balance(&game) == 1600, 1); // won 200
+        slot_machine::play(&mut game, &random_state, &mut coin, test_scenario::ctx(scenario));
+        assert!(slot_machine::get_balance(&game) == 800, 1); // lost 200
         // check that received the right amount
-        test_scenario::next_tx(scenario, user2);
-        let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-        assert!(coin::value(&coin) == 400, 1);
+        assert!(coin::value(&coin) == 0, 1);
         test_scenario::return_to_sender(scenario, coin);
 
         // TODO: test also that the last coin is taken
@@ -88,7 +84,7 @@ module games::slot_machine_tests {
         // Take remaining balance
         test_scenario::next_epoch(scenario, user1);
         let coin = slot_machine::close(&mut game, test_scenario::ctx(scenario));
-        assert!(coin::value(&coin) == 1600, 1);
+        assert!(coin::value(&coin) == 800, 1);
         coin::burn_for_testing(coin);
 
         test_scenario::return_shared(game);

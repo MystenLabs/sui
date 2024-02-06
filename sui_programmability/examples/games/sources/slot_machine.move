@@ -56,24 +56,26 @@ module games::slot_machine {
 
     /// Play one turn of the game.
     ///
-    /// The function consumes more gas in the "winning" case than the "losing" case, thus gas consumption attacks are
-    /// not possible.
-    entry fun play(game: &mut Game, r: &Random, coin: Coin<SUI>, ctx: &mut TxContext) {
+    /// The function consumes the same amount of gas independently of the random outcome.
+    entry fun play(game: &mut Game, r: &Random, coin: &mut Coin<SUI>, ctx: &mut TxContext) {
         assert!(tx_context::epoch(ctx) == game.epoch, EInvalidEpoch);
-        assert!(coin::value(&coin) > 0, EInvalidAmount);
+        assert!(coin::value(coin) > 0, EInvalidAmount);
 
-        let coin_value = coin::value(&coin);
-        let bet_amount = math::min(coin_value, balance::value(&game.balance));
-        coin::put(&mut game.balance, coin);
-
+        // play the game
         let generator = new_generator(r, ctx);
         let bet = random::generate_u8_in_range(&mut generator, 1, 100);
-        let won = bet <= 49;
+        let won = 1 - bet / 50; // equals 1 with probability 49% and 0 otherwise
 
-        let amount = coin_value - bet_amount;
-        if (won) { amount = amount + 2 * bet_amount; };
-        let to_user_coin = coin::take(&mut game.balance, amount, ctx);
-        transfer::public_transfer(to_user_coin, tx_context::sender(ctx));
+        // move the bet amount from the user's coin to the game's balance
+        let coin_value = coin::value(coin);
+        let bet_amount = math::min(coin_value, balance::value(&game.balance));
+        coin::put(&mut game.balance, coin::split(coin, bet_amount, ctx));
+
+        // move the reward to the user's coin
+        let reward = 2 * (won as u64) * bet_amount;
+        // the assumption here is that the next line does not consumes more gas when called with zero reward than with
+        // non-zero reward
+        coin::join(coin, coin::take(&mut game.balance, reward, ctx));
     }
 
     #[test_only]
