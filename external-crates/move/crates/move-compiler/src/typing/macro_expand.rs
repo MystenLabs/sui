@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 type LambdaMap = BTreeMap<Var_, (N::Lambda, Vec<Type>, Type)>;
 type ArgMap = BTreeMap<Var_, (N::Exp, Type)>;
 struct ParamInfo {
-    argument: Option<EitherArg<Loc, Loc>>,
+    argument: Option<EvalStrategy<Loc, Loc>>,
     used: bool,
 }
 
@@ -40,12 +40,12 @@ pub struct ExpandedMacro {
     pub body: Box<N::Exp>,
 }
 
-pub enum EitherArg<ByValue, ByName> {
+pub enum EvalStrategy<ByValue, ByName> {
     ByValue(ByValue),
     ByName(ByName),
 }
 
-pub type Arg = EitherArg<T::Exp, (N::Exp, Type)>;
+pub type Arg = EvalStrategy<T::Exp, (N::Exp, Type)>;
 
 pub(crate) fn call(
     context: &mut core::Context,
@@ -107,8 +107,8 @@ pub(crate) fn call(
             Some(param.value)
         };
         let (arg_loc, arg_ty) = match &arg {
-            Arg::ByValue(e) => (EitherArg::ByValue(e.exp.loc), e.ty.clone()),
-            Arg::ByName((e, ty)) => (EitherArg::ByName(e.loc), ty.clone()),
+            Arg::ByValue(e) => (EvalStrategy::ByValue(e.exp.loc), e.ty.clone()),
+            Arg::ByName((e, ty)) => (EvalStrategy::ByName(e.loc), ty.clone()),
         };
         let unfolded = core::unfold_type(&context.subst, arg_ty);
         if let sp!(_, Type_::Fun(param_tys, result_ty)) = unfolded {
@@ -601,10 +601,10 @@ impl Context<'_, '_> {
     }
 }
 
-fn report_unused_argument(context: &mut core::Context, loc: EitherArg<Loc, Loc>) {
+fn report_unused_argument(context: &mut core::Context, loc: EvalStrategy<Loc, Loc>) {
     let loc = match loc {
-        EitherArg::ByValue(_) => return, // will be evaluated
-        EitherArg::ByName(loc) => loc,
+        EvalStrategy::ByValue(_) => return, // will be evaluated
+        EvalStrategy::ByName(loc) => loc,
     };
     let msg = "Unused macro argument. \
     Its expression will not be type checked and it will not evaluated";
@@ -937,7 +937,7 @@ fn builtin_function(context: &mut Context, sp!(_, bf_): &mut N::BuiltinFunction)
                 type_(context, ty)
             }
         }
-        N::BuiltinFunction_::Assert(_) => todo!(),
+        N::BuiltinFunction_::Assert(_) => (),
     }
 }
 

@@ -1601,13 +1601,11 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         NE::Annotate(nl, ty_annot) => {
             let el = exp(context, nl);
             let annot_loc = ty_annot.loc;
-            annotate_(
-                context,
-                || "Invalid type annotation",
-                annot_loc,
-                el,
-                ty_annot,
-            )
+            let msg = || "Invalid type annotation";
+            let rhs = core::instantiate(context, ty_annot);
+            subtype(context, annot_loc, msg, el.ty.clone(), rhs.clone());
+            let e_ = TE::Annotate(el, Box::new(rhs.clone()));
+            (rhs, e_)
         }
         NE::UnresolvedError => {
             assert!(context.env.has_errors());
@@ -2310,22 +2308,6 @@ impl crate::shared::ast_debug::AstDebug for ExpDotted_ {
     }
 }
 
-fn annotate_<S: ToString, F: FnOnce() -> S>(
-    context: &mut Context,
-    msg: F,
-    annot_loc: Loc,
-    e: Box<T::Exp>,
-    ty_annot: Type,
-) -> (Type, T::UnannotatedExp_) {
-    let rhs = core::instantiate(context, ty_annot);
-    subtype(context, annot_loc, msg, e.ty.clone(), rhs.clone());
-    let e_ = match core::unfold_type(&context.subst, rhs.clone()).value {
-        Type_::Fun(_, _) => e.exp.value,
-        _ => T::UnannotatedExp_::Annotate(e, Box::new(rhs.clone())),
-    };
-    (rhs, e_)
-}
-
 //**************************************************************************************************
 // Calls
 //**************************************************************************************************
@@ -2677,9 +2659,9 @@ fn check_call_target(
         )
     };
     let decl_msg = if decl_is_macro {
-        "Declared a macro function here"
+        "'macro' function is declared here"
     } else {
-        "Declared a normal (non-macro) function here"
+        "Normal (non-'macro') function is declared here"
     };
     context.env.add_diag(diag!(
         TypeSafety::InvalidCallTarget,
@@ -2705,11 +2687,11 @@ fn macro_method_call(
 ) -> Option<(Type, T::UnannotatedExp_)> {
     let (m, f, fty, first_arg) =
         method_call_resolve(context, loc, edotted, edotted_ty, method, ty_args_opt)?;
-    let mut args = vec![macro_expand::EitherArg::ByValue(first_arg)];
+    let mut args = vec![macro_expand::EvalStrategy::ByValue(first_arg)];
     args.extend(
         nargs
             .into_iter()
-            .map(|e| macro_expand::EitherArg::ByName(block_macro_arg(context, e))),
+            .map(|e| macro_expand::EvalStrategy::ByName(convert_macro_arg_to_block(context, e))),
     );
     let (type_arguments, args, return_ty) =
         macro_call_impl(context, loc, m, f, macro_call_loc, fty, argloc, args);
@@ -2737,7 +2719,7 @@ fn macro_module_call(
     let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt);
     let args = nargs
         .into_iter()
-        .map(|e| macro_expand::EitherArg::ByName(block_macro_arg(context, e)))
+        .map(|e| macro_expand::EvalStrategy::ByName(convert_macro_arg_to_block(context, e)))
         .collect();
     let (type_arguments, args, return_ty) =
         macro_call_impl(context, loc, m, f, macro_call_loc, fty, argloc, args);
@@ -2752,9 +2734,9 @@ fn macro_call_impl(
     macro_call_loc: Loc,
     fty: ResolvedFunctionType,
     argloc: Loc,
-    mut args: Vec<macro_expand::EitherArg<T::Exp, N::Exp>>,
+    mut args: Vec<macro_expand::EvalStrategy<T::Exp, N::Exp>>,
 ) -> (Vec<Type>, Vec<macro_expand::Arg>, Type) {
-    use macro_expand::EitherArg;
+    use macro_expand::EvalStrategy;
     let ResolvedFunctionType {
         declared,
         macro_,
@@ -2783,7 +2765,7 @@ fn macro_call_impl(
         core::instantiate(context, param_ty.clone());
     }
     while args.len() < parameters.len() {
-        args.push(EitherArg::ByName(sp(loc, N::Exp_::UnresolvedError)));
+        args.push(EvalStrategy::ByName(sp(loc, N::Exp_::UnresolvedError)));
     }
     while args.len() > parameters.len() {
         args.pop();
@@ -2793,7 +2775,7 @@ fn macro_call_impl(
         .into_iter()
         .zip(parameters)
         .map(|(arg, (param, param_ty))| match arg {
-            EitherArg::ByValue(e) => {
+            EvalStrategy::ByValue(e) => {
                 let msg = || {
                     format!(
                         "Invalid call of '{}::{}'. Invalid argument for parameter '{}'",
@@ -2801,12 +2783,12 @@ fn macro_call_impl(
                     )
                 };
                 subtype(context, loc, msg, e.ty.clone(), param_ty.clone());
-                EitherArg::ByValue(e)
+                EvalStrategy::ByValue(e)
             }
-            EitherArg::ByName(ne) => {
+            EvalStrategy::ByName(ne) => {
                 let expected_ty =
                     expected_by_name_arg_type(context, loc, &m, &f, &param, &ne, param_ty.clone());
-                EitherArg::ByName((ne, expected_ty))
+                EvalStrategy::ByName((ne, expected_ty))
             }
         })
         .collect();
@@ -2928,7 +2910,7 @@ fn expand_macro(
 /// 1) We can track the use_fun_scope, which is used for resolving method calls correctly
 /// 2) After substitution, we can mark the Block as coming from a macro expansion which is used
 ///    for tracking recursive macro calls
-fn block_macro_arg(context: &Context, sp!(loc, ne_): N::Exp) -> N::Exp {
+fn convert_macro_arg_to_block(context: &Context, sp!(loc, ne_): N::Exp) -> N::Exp {
     let ne_ = match ne_ {
         N::Exp_::Block(_) | N::Exp_::Lambda(_) | N::Exp_::UnresolvedError => ne_,
         ne_ => {

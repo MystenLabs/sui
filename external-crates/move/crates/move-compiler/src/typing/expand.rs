@@ -105,7 +105,7 @@ fn unexpected_lambda_type(context: &mut Context, loc: Loc) {
         .check_feature(FeatureGate::MacroFuns, context.current_package, loc)
     {
         let msg = "Unexpected lambda type. \
-        Lambdas can only be used as parameters for, or direct arguments to, 'macro' functions";
+            Lambdas can only be used with 'macro' functions, as parameters or direct arguments";
         context
             .env
             .add_diag(diag!(TypeSafety::UnexpectedFunctionType, (loc, msg)));

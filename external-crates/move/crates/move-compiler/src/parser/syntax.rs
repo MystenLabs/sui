@@ -1578,7 +1578,7 @@ fn at_start_of_exp(context: &mut Context) -> bool {
 // Parse an expression:
 //      Exp =
 //            <LambdaBindList> <Exp>
-//          | <LambdaBindList> "->" "{" <Sequence>
+//          | <LambdaBindList> "->" <Type> "{" <Sequence>
 //          | <Quantifier>                  spec only
 //          | <BinOpExp>
 //          | <UnaryExp> "=" <Exp>

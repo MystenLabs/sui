@@ -22,7 +22,7 @@ error[E04029]: invalid function call
   ┌─ tests/move_check/feature_gate/macro_call.move:4:12
   │
 2 │     public fun foo(_: u64) {}
-  │                --- Declared a normal (non-macro) function here
+  │                --- Normal (non-macro) function is declared here
 3 │     fun bar() {
 4 │         foo!(|| ())
   │            ^ 'foo' is not a macro function and cannot be called with a `!`. Try replacing with 'foo'

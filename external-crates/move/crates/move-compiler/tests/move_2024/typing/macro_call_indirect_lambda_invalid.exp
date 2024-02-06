@@ -20,7 +20,7 @@ error[E04030]: invalid usage of lambda type
    ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:12:13
    │
 12 │         let f: |u64| -> u64;
-   │             ^ Unexpected lambda type. Lambdas can only be used as parameters for, or direct arguments to, 'macro' functions
+   │             ^ Unexpected lambda type. Lambdas can only be used with 'macro' functions, as parameters or direct arguments
 
 error[E04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:13:24

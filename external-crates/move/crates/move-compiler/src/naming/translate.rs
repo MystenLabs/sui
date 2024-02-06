@@ -1722,8 +1722,9 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 }
                 ResolvedFunction::Var(v) => {
                     if let Some(mloc) = is_macro {
-                        let msg = "Unexpected macro invocation. Variables cannot be invoked as a \
-                            macro";
+                        let msg =
+                            "Unexpected macro invocation. Bound lambdas cannot be invoked as \
+                            a macro";
                         context
                             .env
                             .add_diag(diag!(TypeSafety::InvalidCallTarget, (mloc, msg)));
@@ -1852,7 +1853,11 @@ fn lvalue(
                         .env
                         .add_diag(diag!(Declarations::DuplicateItem, primary, secondary));
                 }
-                if matches!(case, C::Assign) && v.is_syntax_identifier() {
+                if v.is_syntax_identifier() {
+                    debug_assert!(
+                        matches!(case, C::Assign),
+                        "ICE this should fail during parsing"
+                    );
                     let msg = format!(
                         "Cannot assign to argument for parameter '{}'. \
                         Arguments must be used in value positions",
