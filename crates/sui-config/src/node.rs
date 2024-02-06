@@ -711,6 +711,8 @@ pub struct OverloadThresholdConfig {
     #[serde(default = "default_min_load_shedding_percentage_above_hard_limit")]
     pub min_load_shedding_percentage_above_hard_limit: u32,
 
+    // If transaction ready rate is below this rate, we consider the validator
+    // is well under used, and will not enter load shedding mode.
     #[serde(default = "default_safe_transaction_ready_rate")]
     pub safe_transaction_ready_rate: u32,
     // TODO: Move other thresholds here as well, including `MAX_TM_QUEUE_LENGTH`
