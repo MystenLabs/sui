@@ -49,6 +49,7 @@ use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
+use tower_http::cors::CorsLayer;
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -179,7 +180,9 @@ impl ServerBuilder {
     pub fn build(self) -> Result<Server, Error> {
         let (address, schema, router) = self.build_components();
 
-        let app = router.layer(axum::extract::Extension(schema));
+        let app = router
+            .layer(axum::extract::Extension(schema))
+            .layer(CorsLayer::permissive());
 
         Ok(Server {
             server: axum::Server::bind(
