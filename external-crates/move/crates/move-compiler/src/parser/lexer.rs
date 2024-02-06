@@ -228,6 +228,10 @@ impl<'input> Lexer<'input> {
         make_loc(self.file_hash(), self.cur_start, self.cur_end)
     }
 
+    pub fn edition(&self) -> Edition {
+        self.edition
+    }
+
     /// Strips line and block comments from input source, and collects documentation comments,
     /// putting them into a map indexed by the span of the comment region. Comments in the original
     /// source will be replaced by spaces, such that positions of source items stay unchanged.

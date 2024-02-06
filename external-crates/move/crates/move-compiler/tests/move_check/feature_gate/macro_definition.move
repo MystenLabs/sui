@@ -1,3 +1,3 @@
 module a::m {
-    public macro fun do($f: ||) { $f() }
+    public macro fun do($f: || ()) { $f() }
 }

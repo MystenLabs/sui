@@ -2123,16 +2123,26 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
             } else {
                 parse_comma_list(context, Tok::Pipe, Tok::Pipe, parse_type, "a type")?
             };
-            let result = if context.tokens.peek() == Tok::MinusGreater {
-                context.tokens.advance()?;
-                parse_type(context)?
+            let result = if context
+                .tokens
+                .edition()
+                .supports(FeatureGate::Move2024Keywords)
+            {
+                // 2024 syntax
+                if context.tokens.peek() == Tok::MinusGreater {
+                    context.tokens.advance()?;
+                    parse_type(context)?
+                } else {
+                    spanned(
+                        context.tokens.file_hash(),
+                        start_loc,
+                        context.tokens.start_loc(),
+                        Type_::Unit,
+                    )
+                }
             } else {
-                spanned(
-                    context.tokens.file_hash(),
-                    start_loc,
-                    context.tokens.start_loc(),
-                    Type_::Unit,
-                )
+                // legacy spec syntax
+                parse_type(context)?
             };
             return Ok(spanned(
                 context.tokens.file_hash(),
