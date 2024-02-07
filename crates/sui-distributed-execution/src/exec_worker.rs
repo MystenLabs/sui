@@ -41,98 +41,10 @@ use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
 
 use super::types::*;
-// use crate::queue_manager::{QueuesManager, MANAGER_CHANNEL_SIZE};
+use crate::queue_manager::{QueuesManager, MANAGER_CHANNEL_SIZE};
 use crate::setup::generate_benchmark_ctx_workload;
 use crate::setup::generate_benchmark_txs;
 use crate::{metrics::Metrics, types::WritableObjectStore};
-
-pub const MANAGER_CHANNEL_SIZE: usize = 1_000;
-pub struct QueuesManager {
-    tx_store: HashMap<TransactionDigest, TransactionWithEffects>,
-    writing_tx: HashMap<ObjectID, TransactionDigest>,
-    wait_table: HashMap<TransactionDigest, HashSet<TransactionDigest>>,
-    reverse_wait_table: HashMap<TransactionDigest, HashSet<TransactionDigest>>,
-    ready: mpsc::Sender<TransactionDigest>,
-}
-
-// The methods of the QueuesManager are called from a single thread, so no need for locks
-impl QueuesManager {
-    fn new(manager_sender: mpsc::Sender<TransactionDigest>) -> QueuesManager {
-        QueuesManager {
-            tx_store: HashMap::new(),
-            writing_tx: HashMap::new(),
-            wait_table: HashMap::new(),
-            reverse_wait_table: HashMap::new(),
-            ready: manager_sender,
-        }
-    }
-
-    /// Enqueues a transaction on the manager
-    async fn queue_tx(&mut self, full_tx: TransactionWithEffects) {
-        let txid = full_tx.tx.digest();
-
-        // Get RW set
-        let r_set = full_tx.get_read_set();
-        let w_set = full_tx.get_write_set();
-        let mut wait_ctr = 0;
-
-        // Add tx to wait lists
-        for obj in r_set.union(&w_set) {
-            let prev_write = self.writing_tx.insert(*obj, *txid);
-            if let Some(other_txid) = prev_write {
-                self.wait_table.entry(*txid).or_default().insert(other_txid);
-                self.reverse_wait_table
-                    .entry(other_txid)
-                    .or_default()
-                    .insert(*txid);
-                wait_ctr += 1;
-            }
-        }
-
-        // Set this transaction as the current writer
-        for obj in &w_set {
-            self.writing_tx.insert(*obj, *txid);
-        }
-
-        // Store tx
-        self.tx_store.insert(*txid, full_tx.clone());
-
-        // Set the wait table and check if tx is ready
-        if wait_ctr == 0 {
-            self.ready.send(*txid).await.expect("send failed");
-        }
-    }
-
-    /// Cleans up after a completed transaction
-    async fn clean_up(&mut self, txid: &TransactionDigest) {
-        if let Some(completed_tx) = self.tx_store.remove(txid) {
-            assert!(self.wait_table.get(txid).is_none());
-
-            // Remove tx itself from objects where it is still marked as their current writer
-            for obj in completed_tx.get_read_write_set().iter() {
-                if let Some(t) = self.writing_tx.get(obj) {
-                    if t == txid {
-                        self.writing_tx.remove(obj);
-                    }
-                }
-            }
-        }
-
-        if let Some(waiting_txs) = self.reverse_wait_table.remove(txid) {
-            for other_txid in waiting_txs {
-                self.wait_table.get_mut(&other_txid).unwrap().remove(txid);
-                if self.wait_table.get(&other_txid).unwrap().is_empty() {
-                    self.wait_table.remove(&other_txid);
-                    self.ready.send(other_txid).await.expect("send failed");
-                }
-            }
-        }
-    }
-
-    fn get_tx(&self, txid: &TransactionDigest) -> &TransactionWithEffects {
-        self.tx_store.get(txid).unwrap()
-    }
-}
 
 /*****************************************************************************************
  *                                    Execution Worker                                   *
