@@ -761,12 +761,12 @@ impl LocalExec {
             executor.execute_transaction_to_effects(
                 &self,
                 protocol_config,
-                metrics,
+                metrics.clone(),
                 expensive_checks,
                 &certificate_deny_set,
                 &tx_info.executed_epoch,
                 epoch_start_timestamp,
-                CheckedInputObjects::new_for_replay(input_objects),
+                CheckedInputObjects::new_for_replay(input_objects.clone()),
                 tx_info.gas.clone(),
                 gas_status,
                 transaction_kind.clone(),
@@ -779,8 +779,21 @@ impl LocalExec {
 
         trace!(target: "replay_gas_info", "{}", Pretty(&gas_status));
 
-        if let ProgrammableTransaction(pt) = transaction_kind {
-            trace!(target: "replay_ptb_info", "{}", Pretty(&pt));
+        if let ProgrammableTransaction(ref pt) = transaction_kind {
+            trace!(target: "replay_ptb_info", "{}", Pretty(&(pt.clone(), executor.dev_inspect_transaction(&self, protocol_config,
+                metrics,
+                expensive_checks,
+                &certificate_deny_set,
+                &tx_info.executed_epoch,
+                epoch_start_timestamp,
+                CheckedInputObjects::new_for_replay(input_objects),
+                tx_info.gas.clone(),
+                SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)?,
+                transaction_kind.clone(),
+                tx_info.sender,
+                *tx_digest,
+                true
+            ).3)));
         };
 
         let all_required_objects = self.storage.all_objects();
