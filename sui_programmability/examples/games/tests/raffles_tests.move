@@ -102,7 +102,7 @@ module games::raffles_tests {
     }
 
     #[test]
-    fun test_simple_game() {
+    fun test_small_raffle() {
         let user1 = @0x0;
         let user2 = @0x1;
         let user3 = @0x2;
