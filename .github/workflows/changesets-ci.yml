@@ -32,7 +32,7 @@ jobs:
         run: |
           echo "true" > missing-changeset.txt
       - name: Upload missing changeset artifact
-        uses: actions/upload-artifact@83fd05a356d7e2593de66fc9913b3002723633cb # pin@v3
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # pin@v3
         if: steps.has-changesets.outputs.any_changed != 'true' && steps.diff.outputs.hasChanges == 'true'
         with:
           name: missing-changeset
