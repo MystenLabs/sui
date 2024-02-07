@@ -9,10 +9,13 @@ mod write_store;
 
 use crate::base_types::{TransactionDigest, VersionNumber};
 use crate::committee::EpochId;
+use crate::crypto::RandomnessRound;
 use crate::error::SuiError;
+use crate::executable_transaction::{CertificateProof, VerifiedExecutableTransaction};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
+use crate::message_envelope::VerifiedEnvelope;
 use crate::move_package::MovePackage;
-use crate::transaction::{SenderSignedData, TransactionDataAPI};
+use crate::transaction::{SenderSignedData, TransactionDataAPI, TransactionKey};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
@@ -524,6 +527,6 @@ where
 pub trait GetSharedLocks: Send + Sync {
     fn get_shared_locks(
         &self,
-        transaction_digest: &TransactionDigest,
+        key: &TransactionKey,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError>;
 }

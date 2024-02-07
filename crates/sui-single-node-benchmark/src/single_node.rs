@@ -172,7 +172,6 @@ impl SingleValidator {
         store: InMemoryObjectStore,
         transaction: Transaction,
     ) -> TransactionEffects {
-        let tx_digest = transaction.digest();
         let input_objects = transaction.transaction_data().input_objects().unwrap();
         let objects = if transaction
             .data()
@@ -185,7 +184,7 @@ impl SingleValidator {
                 .unwrap()
         } else {
             store
-                .read_objects_for_execution(&*self.epoch_store, tx_digest, &input_objects)
+                .read_objects_for_execution(&*self.epoch_store, &transaction.key(), &input_objects)
                 .unwrap()
         };
 

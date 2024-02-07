@@ -12009,6 +12009,7 @@ dependencies = [
 name = "sui-core"
 version = "0.1.0"
 dependencies = [
+ "anemo",
  "anyhow",
  "arc-swap",
  "async-trait",
@@ -12937,9 +12938,11 @@ dependencies = [
  "anemo-build",
  "anemo-tower",
  "anyhow",
+ "bcs",
  "dashmap",
  "ed25519-consensus",
  "fastcrypto",
+ "fastcrypto-tbls",
  "futures",
  "governor",
  "mysten-metrics",

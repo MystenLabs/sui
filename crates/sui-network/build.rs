@@ -166,7 +166,21 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .build();
 
+    let randomness = anemo_build::manual::Service::builder()
+        .name("Randomness")
+        .package("sui")
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("send_partial_signatures")
+                .route_name("SendPartialSignatures")
+                .request_type("crate::randomness::SendPartialSignaturesRequest")
+                .response_type("()")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .build();
+
     anemo_build::manual::Builder::new()
         .out_dir(out_dir)
-        .compile(&[discovery, state_sync]);
+        .compile(&[discovery, state_sync, randomness]);
 }

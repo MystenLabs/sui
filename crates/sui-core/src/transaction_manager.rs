@@ -12,14 +12,14 @@ use indexmap::IndexMap;
 use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use sui_types::{base_types::TransactionDigest, error::SuiResult, fp_ensure};
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
+    base_types::{ObjectID, SequenceNumber, TransactionDigest},
     committee::EpochId,
     digests::TransactionEffectsDigest,
-    error::SuiError,
+    error::{SuiError, SuiResult},
+    fp_ensure,
     storage::InputKey,
-    transaction::{TransactionDataAPI, VerifiedCertificate},
+    transaction::{TransactionDataAPI, TransactionKey, VerifiedCertificate},
 };
 use sui_types::{executable_transaction::VerifiedExecutableTransaction, fp_bail};
 use tokio::sync::mpsc::UnboundedSender;
@@ -436,7 +436,6 @@ impl TransactionManager {
         let certs: Vec<_> = certs
             .into_iter()
             .map(|(cert, fx_digest)| {
-                let digest = *cert.digest();
                 let input_object_kinds = cert
                     .data()
                     .intent_message()
@@ -444,7 +443,7 @@ impl TransactionManager {
                     .input_objects()
                     .expect("input_objects() cannot fail");
                 let mut input_object_keys =
-                    epoch_store.get_input_object_keys(&digest, &input_object_kinds);
+                    epoch_store.get_input_object_keys(&cert.key(), &input_object_kinds);
 
                 if input_object_kinds.len() != input_object_keys.len() {
                     error!("Duplicated input objects: {:?}", input_object_kinds);

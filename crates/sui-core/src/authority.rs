@@ -41,10 +41,13 @@ use std::{
 };
 use sui_config::node::{OverloadThresholdConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
+use sui_types::crypto::RandomnessRound;
+use sui_types::execution_status::ExecutionStatus;
 use sui_types::type_resolver::LayoutResolver;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::{mpsc, oneshot, RwLock};
+use tokio::task::JoinHandle;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
@@ -1012,7 +1015,7 @@ impl AuthorityState {
                 self.input_loader
                     .read_objects_for_execution(
                         epoch_store.as_ref(),
-                        tx_digest,
+                        &certificate.inner().key(),
                         input_objects,
                         epoch_store.epoch(),
                     )
@@ -4630,6 +4633,90 @@ impl AuthorityState {
         self.execution_cache
             .force_reload_system_packages(&BuiltInFramework::all_package_ids());
         Ok(())
+    }
+}
+
+pub struct RandomnessRoundReceiver {
+    authority_state: Arc<AuthorityState>, // TODO-DNS is this safe or does it need to be `Weak`?
+    randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
+}
+
+impl RandomnessRoundReceiver {
+    pub fn spawn(
+        authority_state: Arc<AuthorityState>,
+        randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
+    ) -> JoinHandle<()> {
+        let rrr = RandomnessRoundReceiver {
+            authority_state,
+            randomness_rx,
+        };
+        spawn_monitored_task!(rrr.run())
+    }
+
+    async fn run(mut self) {
+        loop {
+            info!("RandomnessRoundReceiver event loop started");
+
+            loop {
+                tokio::select! {
+                    maybe_recv = self.randomness_rx.recv() => {
+                        if let Some((epoch, round, bytes)) = maybe_recv {
+                            self.handle_new_randomness(epoch, round, bytes).await;
+                        } else {
+                            break;
+                        }
+                    },
+                }
+            }
+
+            panic!("RandomnessRoundReceiver event loop should never end");
+        }
+    }
+
+    async fn handle_new_randomness(&self, epoch: EpochId, round: RandomnessRound, bytes: Vec<u8>) {
+        let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
+        if epoch_store.epoch() != epoch {
+            error!(
+                "BUG: dropping randomness for epoch {epoch}, round {round}, because we are in epoch {}",
+                epoch_store.epoch()
+            );
+            return;
+        }
+        let transaction = VerifiedTransaction::new_randomness_state_update(
+            epoch,
+            round,
+            bytes,
+            epoch_store
+                .epoch_start_config()
+                .randomness_obj_initial_shared_version()
+                .expect("randomness state obj must exist"),
+        );
+        debug!(
+            "created randomness state update transaction: {:?}",
+            transaction.digest()
+        );
+        let transaction = VerifiedExecutableTransaction::new_system(transaction, epoch);
+        let digest = *transaction.digest();
+        if let Err(e) = self
+            .authority_state
+            .transaction_manager()
+            .enqueue(vec![transaction], &epoch_store)
+        {
+            error!("BUG: failed to enqueue randomness state update transaction: {e:?}",);
+        }
+        let Ok(mut effects) = self
+            .authority_state
+            .execution_cache
+            .notify_read_executed_effects(&[digest])
+            .await
+        else {
+            error!("BUG: failed to get effects for randomness state update transaction at epoch {epoch}, round {round}");
+            return;
+        };
+        let effects = effects.pop().expect("should return effects");
+        if *effects.status() != ExecutionStatus::Success {
+            error!("BUG: failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
+        }
     }
 }
 

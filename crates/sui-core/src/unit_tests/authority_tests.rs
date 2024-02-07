@@ -44,6 +44,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 use sui_types::storage::GetSharedLocks;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
+use sui_types::transaction::TransactionKey;
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
@@ -4729,7 +4730,6 @@ async fn test_shared_object_transaction_shared_locks_not_set() {
 async fn test_shared_object_transaction_ok() {
     let (authority, certificate, shared_object_id) =
         prepare_authority_and_shared_object_cert().await;
-    let transaction_digest = certificate.digest();
 
     // Sequence the certificate to assign a sequence number to the shared object.
     send_consensus(&authority, &certificate).await;
@@ -4737,7 +4737,7 @@ async fn test_shared_object_transaction_ok() {
     // Verify shared locks are now set for the transaction.
     let shared_object_version = authority
         .epoch_store_for_testing()
-        .get_shared_locks(transaction_digest)
+        .get_shared_locks(&certificate.key())
         .expect("Reading shared locks should not fail")
         .into_iter()
         .find_map(|(object_id, version)| {

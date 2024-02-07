@@ -13,7 +13,7 @@ use fastcrypto_tbls::types::{PublicVssKey, ThresholdBls12381MinSig};
 use fastcrypto_tbls::{dkg, nodes};
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
-use network::anemo_ext::NetworkExt;
+use mysten_network::anemo_ext::NetworkExt;
 use std::collections::BTreeMap;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;

@@ -24,7 +24,7 @@ use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
-use sui_types::crypto::SuiSignature;
+use sui_types::crypto::{RandomnessRound, SuiSignature};
 use sui_types::digests::{ConsensusCommitDigest, ObjectDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{ExecutionError, SuiError, SuiResult};
@@ -488,7 +488,7 @@ impl SuiTransactionBlockKind {
             TransactionKind::RandomnessStateUpdate(update) => {
                 Self::RandomnessStateUpdate(SuiRandomnessStateUpdate {
                     epoch: update.epoch,
-                    randomness_round: update.randomness_round,
+                    randomness_round: update.randomness_round.0,
                     random_bytes: update.random_bytes,
                 })
             }

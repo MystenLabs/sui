@@ -7,8 +7,8 @@ use crate::authenticator_state::ActiveJwk;
 use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    DefaultHash, Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner,
-    ToFromBytes,
+    DefaultHash, Ed25519SuiSignature, EmptySignInfo, RandomnessRound, Signature, Signer,
+    SuiSignatureInner, ToFromBytes,
 };
 use crate::digests::ConsensusCommitDigest;
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
@@ -241,7 +241,7 @@ pub struct RandomnessStateUpdate {
     /// Epoch of the randomness state update transaction
     pub epoch: u64,
     /// Randomness round of the update
-    pub randomness_round: u64,
+    pub randomness_round: RandomnessRound,
     /// Updated random bytes
     pub random_bytes: Vec<u8>,
     /// The initial version of the randomness object that it was shared at.
@@ -2358,6 +2358,15 @@ impl<S> Envelope<SenderSignedData, S> {
             .into_iter()
     }
 
+    pub fn key(&self) -> TransactionKey {
+        match &self.data().intent_message().value.kind() {
+            TransactionKind::RandomnessStateUpdate(rsu) => {
+                TransactionKey::RandomnessRound(rsu.randomness_round)
+            }
+            _ => TransactionKey::Digest(*self.digest()),
+        }
+    }
+
     pub fn is_system_tx(&self) -> bool {
         self.data().intent_message().value.is_system_tx()
     }
@@ -2498,7 +2507,7 @@ impl VerifiedTransaction {
 
     pub fn new_randomness_state_update(
         epoch: u64,
-        randomness_round: u64,
+        randomness_round: RandomnessRound,
         random_bytes: Vec<u8>,
         randomness_obj_initial_shared_version: SequenceNumber,
     ) -> Self {
@@ -3046,4 +3055,10 @@ impl Display for CertifiedTransaction {
         write!(writer, "{}", &self.data().intent_message().value.kind())?;
         write!(f, "{}", writer)
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum TransactionKey {
+    Digest(TransactionDigest),
+    RandomnessRound(RandomnessRound),
 }

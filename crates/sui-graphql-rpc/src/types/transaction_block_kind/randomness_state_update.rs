@@ -20,7 +20,7 @@ impl RandomnessStateUpdateTransaction {
 
     /// Randomness round of the update.
     async fn randomness_round(&self) -> u64 {
-        self.0.randomness_round
+        self.0.randomness_round.0
     }
 
     /// Updated random bytes, encoded as Base64.
