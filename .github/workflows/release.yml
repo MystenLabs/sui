@@ -2,7 +2,7 @@ name: Attach Sui binaries to a release
 
 on:
   release:
-    types: [published]
+    types: [ published ]
   workflow_dispatch:
     inputs:
       sui_tag:
@@ -39,7 +39,13 @@ jobs:
     timeout-minutes: 80
     strategy:
       matrix:
-        os: [ windows-ghcloud, ubuntu-ghcloud, macos-latest-xl, macos-arm64-self-hosted ]
+        os:
+          [
+            windows-ghcloud,
+            ubuntu-ghcloud,
+            macos-latest-xl,
+            macos-arm64-self-hosted
+          ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -93,14 +99,14 @@ jobs:
       - name: Setup caching
         if: ${{ env.s3_archive_exist == '' }}
         uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths          
-      
+
       - name: Install nexttest (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@33022ba120c3f523d134bbbee12278fc11a3df1a # pin@nextest
 
       - name: Setup protoc (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@149f6c87b92550901b26acd1632e11c3662e381f # pin@v1
         # this avoids rate-limiting
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -118,9 +124,9 @@ jobs:
 
       - name: Checking out ${{ env.sui_tag }}
         if: ${{ env.s3_archive_exist == '' }}
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
-          ref: ${{ env.sui_tag }}        
+          ref: ${{ env.sui_tag }}
 
       - name: cargo build (release) for ${{ matrix.os }} platform
         if: ${{ env.s3_archive_exist == '' }}
@@ -182,7 +188,7 @@ jobs:
           choco push sui.${{ env.sui_version }}.nupkg --source https://push.chocolatey.org/
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # pin@v3
         with:
           name: sui-binaries-${{ matrix.os }}
           if-no-files-found: error
@@ -190,7 +196,7 @@ jobs:
             ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
       - name: Publish binaries for ${{ env.sui_tag }} release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
         with:
           tag_name: ${{ env.sui_tag }}
           files: |
@@ -207,7 +213,7 @@ jobs:
         shell: bash
         run: |
           echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
-      - uses: mislav/bump-homebrew-formula-action@v3
+      - uses: mislav/bump-homebrew-formula-action@b3327118b2153c82da63fd9cbf58942146ee99f0 # pin@v3
         with:
           formula-name: sui
           create-pullrequest: true
@@ -224,12 +230,12 @@ jobs:
     steps:
       - name: Clean up tag name ${{ env.TAG_NAME }}
         shell: bash
-        run: | 
+        run: |
           echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
 
       # Checkout MystenLabs/homebrew-tap
       - name: Checkout Target Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           repository: MystenLabs/homebrew-tap
           # @john's PAT, needs to be rotated jan 5 2025
@@ -239,7 +245,7 @@ jobs:
 
       # Download all artifacts from the previous job
       - name: Download all artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@cbed621e49e4c01b044d60f6c80ea4ed6328b281 # pin@v2
 
       - name: Fetch Ubuntu x86_64 Binary and Compute SHA256
         shell: bash
@@ -247,7 +253,7 @@ jobs:
           echo "sha256_ubuntu_release=$(sha256sum sui-binaries-ubuntu-ghcloud/sui-${{ env.sui_tag }}-ubuntu-x86_64.tgz | awk '{print $1}')" >> $GITHUB_ENV
           echo "sha256_macos_x86_release=$(sha256sum sui-binaries-macos-latest-xl/sui-${{ env.sui_tag }}-macos-x86_64.tgz  | awk '{print $1}')" >> $GITHUB_ENV
           echo "sha256_macos_arm_release=$(sha256sum sui-binaries-macos-arm64-self-hosted/sui-${{ env.sui_tag }}-macos-arm64.tgz | awk '{print $1}' )" >> $GITHUB_ENV
-          
+
       # Install Jinja2 for templating
       - name: Install Jinja2
         run: pip install jinja2
@@ -280,7 +286,7 @@ jobs:
 
       # Commit and Push to Target Repository
       - name: Commit and Push to Target Repository
-        uses: github-actions-x/commit@v2.9
+        uses: github-actions-x/commit@722d56b8968bf00ced78407bbe2ead81062d8baa # pin@v2.9
         with:
           github-token: ${{ secrets.HOMEBREW_TAP_REPO_READ_WRITE }}
           commit-message: "Update Homebrew formula for release ${{ env.sui_tag }}"
@@ -296,7 +302,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
-        uses: peter-evans/repository-dispatch@26b39ed245ab8f31526069329e112ab2fb224588 # pin@v2
+        uses: peter-evans/repository-dispatch@bf47d102fdb849e755b0b0023ea3e81a44b6f570 # pin@v2
         with:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
