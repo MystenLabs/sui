@@ -14,6 +14,7 @@ use crate::{
         Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend, ModuleAccess_,
         ModuleIdent, ModuleIdent_, Value_, Visibility,
     },
+    ice,
     naming::ast::{self as N, BlockLabel, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_,
@@ -1338,7 +1339,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             } else {
                 (seq_ty, TE::Block(seq))
             };
-            context.maybe_exit_macro_argument(from_macro_argument);
+            context.maybe_exit_macro_argument(eloc, from_macro_argument);
             res
         }
 
@@ -1685,7 +1686,12 @@ fn binop(
             (Type_::bool(loc), Type_::bool(loc))
         }
 
-        Range | Implies | Iff => panic!("specification operator unexpected"),
+        Range | Implies | Iff => {
+            context
+                .env
+                .add_diag(ice!((loc, "ICE unexpect specification operator")));
+            (context.error_type(loc), context.error_type(loc))
+        }
     };
     Box::new(T::exp(
         ty,
@@ -2899,8 +2905,11 @@ fn expand_macro(
             (ty, e_)
         }
     };
-    context.pop_macro_expansion(&m, &f);
-    res
+    if context.pop_macro_expansion(call_loc, &m, &f) {
+        res
+    } else {
+        (context.error_type(call_loc), TE::UnresolvedError)
+    }
 }
 
 /// We need to make sure that arguments to macro calls are either lambdas or a Block

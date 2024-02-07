@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    debug_display, diag,
     diagnostics::WarningFilters,
     expansion::ast::{Address, Attributes, Fields, Friend, ModuleIdent, Value, Visibility},
+    ice,
     naming::ast::{
         BlockLabel, FunctionSignature, Neighbor, StructDefinition, Type, TypeName_, Type_, UseFuns,
         Var,
@@ -13,7 +15,9 @@ use crate::{
         BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
         MACRO_MODIFIER, NATIVE_MODIFIER,
     },
-    shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name},
+    shared::{
+        ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv, Name,
+    },
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -261,11 +265,16 @@ pub fn single_item(e: Exp) -> ExpListItem {
     ExpListItem::Single(e, ty)
 }
 
-pub fn splat_item(splat_loc: Loc, e: Exp) -> ExpListItem {
+pub fn splat_item(env: &mut CompilationEnv, splat_loc: Loc, e: Exp) -> ExpListItem {
     let ss = match &e.ty {
         sp!(_, Type_::Unit) => vec![],
         sp!(_, Type_::Apply(_, sp!(_, TypeName_::Multiple(_)), ss)) => ss.clone(),
-        _ => panic!("ICE splat of non list type"),
+        _ => {
+            let mut diag = ice!((splat_loc, "ICE called `splat_item` on a non-list type"));
+            diag.add_note(format!("Expression: {}", debug_display!(e)));
+            env.add_diag(diag);
+            vec![]
+        }
     };
     ExpListItem::Splat(splat_loc, e, ss)
 }
