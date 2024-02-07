@@ -3,13 +3,18 @@
 
 mod constant_fold;
 mod eliminate_locals;
-// mod forwarding_jumps;
+mod forwarding_jumps;
 mod inline_blocks;
 mod simplify_jumps;
 
+use move_symbol_pool::Symbol;
+
 use crate::{
-    cfgir::cfg::MutForwardCFG, hlir::ast::*, parser::ast::ConstantName,
-    shared::unique_map::UniqueMap,
+    cfgir::cfg::MutForwardCFG,
+    editions::FeatureGate,
+    hlir::ast::*,
+    parser::ast::ConstantName,
+    shared::{unique_map::UniqueMap, CompilationEnv},
 };
 
 pub type Optimization = fn(
@@ -22,23 +27,38 @@ pub type Optimization = fn(
 const OPTIMIZATIONS: &[Optimization] = &[
     eliminate_locals::optimize,
     constant_fold::optimize,
-    // forwarding_jumps::optimize,
+    simplify_jumps::optimize,
+    inline_blocks::optimize,
+];
+
+const MOVE_2024_OPTIMIZATIONS: &[Optimization] = &[
+    eliminate_locals::optimize,
+    constant_fold::optimize,
+    forwarding_jumps::optimize,
     simplify_jumps::optimize,
     inline_blocks::optimize,
 ];
 
 pub fn optimize(
+    env: &mut CompilationEnv,
+    package: Option<Symbol>,
     signature: &FunctionSignature,
     locals: &UniqueMap<Var, SingleType>,
     constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) {
     let mut count = 0;
-    for optimization in OPTIMIZATIONS.iter().cycle() {
+    let optimizations = if env.supports_feature(package, FeatureGate::Move2024Optimizations) {
+        MOVE_2024_OPTIMIZATIONS
+    } else {
+        OPTIMIZATIONS
+    };
+    let opt_count = optimizations.len();
+    for optimization in optimizations.iter().cycle() {
         // if we have fully cycled through the list of optimizations without a change,
         // it is safe to stop
-        if count >= OPTIMIZATIONS.len() {
-            debug_assert_eq!(count, OPTIMIZATIONS.len());
+        if count >= opt_count {
+            debug_assert_eq!(count, opt_count);
             break;
         }
 
