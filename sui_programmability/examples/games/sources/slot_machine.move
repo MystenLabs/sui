@@ -3,10 +3,10 @@
 
 /// A betting game that depends on Sui randomness.
 ///
-/// Anyone can create a new game for the current epoch by depositing SUIs as the initial balance. The creator can
+/// Anyone can create a new game for the current epoch by depositing SUI as the initial balance. The creator can
 /// withdraw the remaining balance after the epoch is over.
 ///
-/// Anyone can play the game by betting on X SUIs. They win X with probability 49% and loss the X SUIs otherwise.
+/// Anyone can play the game by betting on X SUI. They win X with probability 49% and lose the X SUI otherwise.
 ///
 module games::slot_machine {
     use sui::balance::{Self, Balance};
@@ -24,7 +24,7 @@ module games::slot_machine {
     const EInvalidEpoch: u64 = 2;
 
     /// Game for a specific epoch.
-    struct Game has key, store {
+    struct Game has key {
         id: UID,
         creator: address,
         epoch: u64,
@@ -38,7 +38,7 @@ module games::slot_machine {
     ) {
         let amount = coin::value(&reward);
         assert!(amount > 0, EInvalidAmount);
-        transfer::public_share_object(Game {
+        transfer::share_object(Game {
             id: object::new(ctx),
             creator: tx_context::sender(ctx),
             epoch: tx_context::epoch(ctx),
@@ -47,11 +47,12 @@ module games::slot_machine {
     }
 
     /// Creator can withdraw remaining balance if the game is over.
-    public fun close(game: &mut Game, ctx: &mut TxContext): Coin<SUI> {
+    public fun close(game: Game, ctx: &mut TxContext): Coin<SUI> {
         assert!(tx_context::epoch(ctx) > game.epoch, EInvalidEpoch);
         assert!(tx_context::sender(ctx) == game.creator, EInvalidSender);
-        let full_balance = balance::value(&game.balance);
-        coin::take(&mut game.balance, full_balance, ctx)
+        let Game { id, creator: _, epoch: _, balance } = game;
+        object::delete(id);
+        coin::from_balance(balance, ctx)
     }
 
     /// Play one turn of the game.
@@ -64,7 +65,7 @@ module games::slot_machine {
         // play the game
         let generator = new_generator(r, ctx);
         let bet = random::generate_u8_in_range(&mut generator, 1, 100);
-        let won = 1 - bet / 50; // equals 1 with probability 49% and 0 otherwise
+        let won = 1 - (bet / 50); // equals 1 with probability 49% and 0 otherwise
 
         // move the bet amount from the user's coin to the game's balance
         let coin_value = coin::value(coin);

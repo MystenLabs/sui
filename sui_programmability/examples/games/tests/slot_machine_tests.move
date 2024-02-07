@@ -83,11 +83,10 @@ module games::slot_machine_tests {
 
         // Take remaining balance
         test_scenario::next_epoch(scenario, user1);
-        let coin = slot_machine::close(&mut game, test_scenario::ctx(scenario));
+        let coin = slot_machine::close(game, test_scenario::ctx(scenario));
         assert!(coin::value(&coin) == 800, 1);
         coin::burn_for_testing(coin);
 
-        test_scenario::return_shared(game);
         test_scenario::return_shared(random_state);
         test_scenario::end(scenario_val);
     }

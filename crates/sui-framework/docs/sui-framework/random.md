@@ -17,7 +17,7 @@ This module provides functionality for generating secure randomness.
 -  [Function `new_generator`](#0x2_random_new_generator)
 -  [Function `derive_next_block`](#0x2_random_derive_next_block)
 -  [Function `fill_buffer`](#0x2_random_fill_buffer)
--  [Function `bytes`](#0x2_random_bytes)
+-  [Function `generate_bytes`](#0x2_random_generate_bytes)
 -  [Function `u256_from_bytes`](#0x2_random_u256_from_bytes)
 -  [Function `generate_u256`](#0x2_random_generate_u256)
 -  [Function `generate_u128`](#0x2_random_generate_u128)
@@ -25,12 +25,14 @@ This module provides functionality for generating secure randomness.
 -  [Function `generate_u32`](#0x2_random_generate_u32)
 -  [Function `generate_u16`](#0x2_random_generate_u16)
 -  [Function `generate_u8`](#0x2_random_generate_u8)
+-  [Function `generate_bool`](#0x2_random_generate_bool)
 -  [Function `u128_in_range`](#0x2_random_u128_in_range)
 -  [Function `generate_u128_in_range`](#0x2_random_generate_u128_in_range)
 -  [Function `generate_u64_in_range`](#0x2_random_generate_u64_in_range)
 -  [Function `generate_u32_in_range`](#0x2_random_generate_u32_in_range)
 -  [Function `generate_u16_in_range`](#0x2_random_generate_u16_in_range)
 -  [Function `generate_u8_in_range`](#0x2_random_generate_u8_in_range)
+-  [Function `shuffle`](#0x2_random_shuffle)
 
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">0x1::bcs</a>;
@@ -402,7 +404,10 @@ Create a generator. Can be used to derive up to MAX_U16 * 32 random bytes.
 
 <pre><code><b>public</b> <b>fun</b> <a href="random.md#0x2_random_new_generator">new_generator</a>(r: &<a href="random.md#0x2_random_Random">Random</a>, ctx: &<b>mut</b> TxContext): <a href="random.md#0x2_random_RandomGenerator">RandomGenerator</a> {
     <b>let</b> inner = <a href="random.md#0x2_random_load_inner">load_inner</a>(r);
-    <b>let</b> seed = hmac_sha3_256(&inner.random_bytes, &to_bytes(fresh_object_address(ctx)));
+    <b>let</b> seed = hmac_sha3_256(
+        &inner.random_bytes,
+        &to_bytes(fresh_object_address(ctx))
+    );
     <a href="random.md#0x2_random_RandomGenerator">RandomGenerator</a> { seed, counter: 0, buffer: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[] }
 }
 </code></pre>
@@ -461,14 +466,14 @@ Create a generator. Can be used to derive up to MAX_U16 * 32 random bytes.
 
 </details>
 
-<a name="0x2_random_bytes"></a>
+<a name="0x2_random_generate_bytes"></a>
 
-## Function `bytes`
+## Function `generate_bytes`
 
 Generate n random bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="random.md#0x2_random_bytes">bytes</a>(g: &<b>mut</b> <a href="random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>, num_of_bytes: u16): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="random.md#0x2_random_generate_bytes">generate_bytes</a>(g: &<b>mut</b> <a href="random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>, num_of_bytes: u16): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -477,7 +482,7 @@ Generate n random bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="random.md#0x2_random_bytes">bytes</a>(g: &<b>mut</b> <a href="random.md#0x2_random_RandomGenerator">RandomGenerator</a>, num_of_bytes: u16): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="random.md#0x2_random_generate_bytes">generate_bytes</a>(g: &<b>mut</b> <a href="random.md#0x2_random_RandomGenerator">RandomGenerator</a>, num_of_bytes: u16): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
     <b>let</b> result = <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[];
     // Append <a href="random.md#0x2_random_RAND_OUTPUT_LEN">RAND_OUTPUT_LEN</a> size buffers directly without going through the generator's buffer.
     <b>let</b> num_of_blocks = num_of_bytes / <a href="random.md#0x2_random_RAND_OUTPUT_LEN">RAND_OUTPUT_LEN</a>;
@@ -486,10 +491,11 @@ Generate n random bytes.
         num_of_blocks = num_of_blocks - 1;
     };
     // Take remaining bytes from the generator's buffer.
-    <b>if</b> (<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&g.buffer) &lt; ((num_of_bytes <b>as</b> u64) - <a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&result))) {
+    <b>let</b> num_of_bytes = (num_of_bytes <b>as</b> u64);
+    <b>if</b> (<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&g.buffer) &lt; (num_of_bytes - <a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&result))) {
         <a href="random.md#0x2_random_fill_buffer">fill_buffer</a>(g);
     };
-    <b>while</b> (<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&result) &lt; (num_of_bytes <b>as</b> u64)) {
+    <b>while</b> (<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&result) &lt; num_of_bytes) {
         <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> result, <a href="dependencies/move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> g.buffer));
     };
     result
@@ -684,6 +690,31 @@ Generate a u8.
 
 </details>
 
+<a name="0x2_random_generate_bool"></a>
+
+## Function `generate_bool`
+
+Generate a boolean.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="random.md#0x2_random_generate_bool">generate_bool</a>(g: &<b>mut</b> <a href="random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="random.md#0x2_random_generate_bool">generate_bool</a>(g: &<b>mut</b> <a href="random.md#0x2_random_RandomGenerator">RandomGenerator</a>): bool {
+    (<a href="random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 1) & 1) == 1
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_random_u128_in_range"></a>
 
 ## Function `u128_in_range`
@@ -700,7 +731,10 @@ Generate a u8.
 
 
 <pre><code><b>fun</b> <a href="random.md#0x2_random_u128_in_range">u128_in_range</a>(g: &<b>mut</b> <a href="random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: u128, max: u128, num_of_bytes: u8): u128 {
-    <b>assert</b>!(<b>min</b> &lt; max, <a href="random.md#0x2_random_EInvalidRange">EInvalidRange</a>);
+    <b>assert</b>!(<b>min</b> &lt;= max, <a href="random.md#0x2_random_EInvalidRange">EInvalidRange</a>);
+    <b>if</b> (<b>min</b> == max) {
+        <b>return</b> <b>min</b>
+    };
     <b>let</b> diff = ((max - <b>min</b>) <b>as</b> u256) + 1;
     <b>let</b> rand = <a href="random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, num_of_bytes);
     <b>min</b> + ((rand % diff) <b>as</b> u128)
@@ -828,6 +862,40 @@ Generate a random u8 in [min, max] (with a bias of 2^{-64}).
 
 <pre><code><b>public</b> <b>fun</b> <a href="random.md#0x2_random_generate_u8_in_range">generate_u8_in_range</a>(g: &<b>mut</b> <a href="random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: u8, max: u8): u8 {
     (<a href="random.md#0x2_random_u128_in_range">u128_in_range</a>(g, (<b>min</b> <b>as</b> u128), (max <b>as</b> u128), 9) <b>as</b> u8)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_random_shuffle"></a>
+
+## Function `shuffle`
+
+Shuffle a vector using the random generator.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="random.md#0x2_random_shuffle">shuffle</a>&lt;T&gt;(g: &<b>mut</b> <a href="random.md#0x2_random_RandomGenerator">random::RandomGenerator</a>, v: &<b>mut</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="random.md#0x2_random_shuffle">shuffle</a>&lt;T&gt;(g: &<b>mut</b> <a href="random.md#0x2_random_RandomGenerator">RandomGenerator</a>, v: &<b>mut</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;T&gt;) {
+    <b>let</b> n = (<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(v) <b>as</b> u32);
+    <b>if</b> (n == 0) {
+        <b>return</b>
+    };
+    <b>let</b> i: u32 = 0;
+    <b>while</b> (i &lt; (n - 1)) {
+        <b>let</b> j = <a href="random.md#0x2_random_generate_u32_in_range">generate_u32_in_range</a>(g, i, n-1);
+        <a href="dependencies/move-stdlib/vector.md#0x1_vector_swap">vector::swap</a>(v, (i <b>as</b> u64), (j <b>as</b> u64));
+        i = i + 1;
+    };
 }
 </code></pre>
 
