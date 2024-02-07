@@ -204,13 +204,13 @@ where
         self.inner.execute_transaction_block_with_effects(tx).await
     }
 
-    pub async fn get_action_onchain_status_until_success(
+    pub async fn get_token_transfer_action_onchain_status_until_success(
         &self,
         action: &BridgeAction,
     ) -> BridgeActionStatus {
         loop {
             let Ok(status) = retry_with_max_delay!(
-                self.inner.get_action_onchain_status(action),
+                self.inner.get_token_transfer_action_onchain_status(action),
                 Duration::from_secs(600)
             ) else {
                 // TODO: add metrics and fire alert
@@ -257,7 +257,7 @@ pub trait SuiClientInner: Send + Sync {
         tx: Transaction,
     ) -> Result<SuiTransactionBlockResponse, BridgeError>;
 
-    async fn get_action_onchain_status(
+    async fn get_token_transfer_action_onchain_status(
         &self,
         action: &BridgeAction,
     ) -> Result<BridgeActionStatus, BridgeError>;
@@ -307,17 +307,21 @@ impl SuiClientInner for SuiSdkClient {
         Ok(bridge_dynamic_field.value.committee)
     }
 
-    async fn get_action_onchain_status(
+    async fn get_token_transfer_action_onchain_status(
         &self,
         action: &BridgeAction,
     ) -> Result<BridgeActionStatus, BridgeError> {
+        match &action {
+            BridgeAction::SuiToEthBridgeAction(_) | BridgeAction::EthToSuiBridgeAction(_) => (),
+            _ => return Err(BridgeError::NotTokenTransferAction),
+        };
         let package_id = *get_bridge_package_id();
         let key = serde_json::json!(
             {
                 // u64 is represented as string
                 "bridge_seq_num": action.seq_number().to_string(),
                 "message_type": action.action_type() as u8,
-                "source_chain": action.source_chain_id() as u8,
+                "source_chain": action.chain_id() as u8,
             }
         );
         let status_object_id = match self
@@ -568,7 +572,7 @@ mod tests {
 
         let status = sui_client
             .inner
-            .get_action_onchain_status(&action)
+            .get_token_transfer_action_onchain_status(&action)
             .await
             .unwrap();
         assert_eq!(status, BridgeActionStatus::RecordNotFound);
@@ -598,7 +602,7 @@ mod tests {
 
         let status = sui_client
             .inner
-            .get_action_onchain_status(&action)
+            .get_token_transfer_action_onchain_status(&action)
             .await
             .unwrap();
         assert_eq!(status, BridgeActionStatus::Pending);
