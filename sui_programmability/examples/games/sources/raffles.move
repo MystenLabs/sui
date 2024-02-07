@@ -135,7 +135,6 @@ module games::raffle_with_tickets {
 }
 
 
-
 module games::small_raffle {
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
@@ -192,7 +191,14 @@ module games::small_raffle {
         } else {
             balance::destroy_zero(balance);
         };
-        table::drop(participants_table); // TODO: will this work with 10K objects?
+
+        // TODO: will this work with 10K objects?
+        let i = 0;
+        while (i < participants) {
+            table::remove(&mut participants_table, i);
+            i = i + 1;
+        };
+        table::destroy_empty(participants_table);
         object::delete(id);
     }
 
