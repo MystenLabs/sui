@@ -705,6 +705,7 @@ mod tests {
 
     // Tests that rejected transaction will have a chance to be accepted in the future.
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn test_txn_rejection_over_time() {
         let start_time = Instant::now();
         let mut digest = TransactionDigest::random();
