@@ -1296,7 +1296,7 @@ impl AuthorityStore {
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
-    ) -> Option<Object> {
+    ) -> SuiResult<Option<Object>> {
         self.perpetual_tables
             .find_object_lt_or_eq_version(object_id, version)
     }

@@ -173,7 +173,7 @@ impl ExecutionCacheRead for PassthroughCache {
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
-    ) -> Option<Object> {
+    ) -> SuiResult<Option<Object>> {
         self.store.find_object_lt_or_eq_version(object_id, version)
     }
 
