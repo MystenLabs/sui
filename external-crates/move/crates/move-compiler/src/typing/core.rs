@@ -235,18 +235,24 @@ impl<'env> Context<'env> {
                     target_function: _,
                     used: _,
                 } = use_fun;
-                let msg = match kind {
+                match kind {
                     UseFunKind::Explicit => {
-                        format!("Unused 'use fun' of '{tn}.{method}'. Consider removing it")
+                        let msg =
+                            format!("Unused 'use fun' of '{tn}.{method}'. Consider removing it");
+                        self.env.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
                     }
                     UseFunKind::UseAlias => {
-                        format!("Unused 'use' of alias '{method}'. Consider removing it")
+                        let msg = format!("Unused 'use' of alias '{method}'. Consider removing it");
+                        self.env.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
                     }
                     UseFunKind::FunctionDeclaration => {
-                        panic!("ICE function declaration use funs should never be added to use fun")
+                        let diag = ice!((
+                            *loc,
+                            "ICE fun declaration 'use' funs should never be added to 'use' funs"
+                        ));
+                        self.env.add_diag(diag);
                     }
-                };
-                self.env.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
+                }
             }
         }
         N::UseFuns {
@@ -342,9 +348,17 @@ impl<'env> Context<'env> {
         }
     }
 
-    pub fn pop_macro_expansion(&mut self, m: &ModuleIdent, f: &FunctionName) {
-        let Some(MacroExpansion::Call(c)) = self.macro_expansion.pop() else {
-            panic!("ICE macro expansion stack should have a call when leaving a macro expansion")
+    pub fn pop_macro_expansion(&mut self, loc: Loc, m: &ModuleIdent, f: &FunctionName) -> bool {
+        let c = match self.macro_expansion.pop() {
+            Some(MacroExpansion::Call(c)) => c,
+            _ => {
+                let diag = ice!((
+                    loc,
+                    "ICE macro expansion stack should have a call when leaving a macro expansion"
+                ));
+                self.env.add_diag(diag);
+                return false;
+            }
         };
         let MacroCall {
             module, function, ..
@@ -353,6 +367,7 @@ impl<'env> Context<'env> {
             m == &module && f == &function,
             "ICE macro expansion stack should be popped in reverse order"
         );
+        true
     }
 
     pub fn maybe_enter_macro_argument(
@@ -366,11 +381,22 @@ impl<'env> Context<'env> {
         }
     }
 
-    pub fn maybe_exit_macro_argument(&mut self, from_macro_argument: Option<N::MacroArgument>) {
+    pub fn maybe_exit_macro_argument(
+        &mut self,
+        loc: Loc,
+        from_macro_argument: Option<N::MacroArgument>,
+    ) {
         if from_macro_argument.is_some() {
-            let Some(MacroExpansion::Argument { .. }) = self.macro_expansion.pop() else {
-                panic!("ICE macro expansion stack should have a lambda when leaving a lambda")
-            };
+            match self.macro_expansion.pop() {
+                Some(MacroExpansion::Argument { .. }) => (),
+                _ => {
+                    let diag = ice!((
+                        loc,
+                        "ICE macro expansion stack should have a lambda when leaving a lambda",
+                    ));
+                    self.env.add_diag(diag);
+                }
+            }
         }
     }
 
@@ -805,12 +831,19 @@ pub fn infer_abilities<const INFO_PASS: bool>(
 // - the declared location where abilities are added (if applicable)
 // - the set of declared abilities
 // - its type arguments
-fn debug_abilities_info(context: &Context, ty: &Type) -> (Option<Loc>, AbilitySet, Vec<Type>) {
+fn debug_abilities_info(context: &mut Context, ty: &Type) -> (Option<Loc>, AbilitySet, Vec<Type>) {
     use Type_ as T;
     let loc = ty.loc;
     match &ty.value {
         T::Unit | T::Ref(_, _) => (None, AbilitySet::references(loc), vec![]),
-        T::Var(_) => panic!("ICE call unfold_type before debug_abilities_info"),
+        T::Var(_) => {
+            let diag = ice!((
+                loc,
+                "ICE did not call unfold_type before debug_abiliites_info"
+            ));
+            context.env.add_diag(diag);
+            (None, AbilitySet::all(loc), vec![])
+        }
         T::UnresolvedError | T::Anything => (None, AbilitySet::all(loc), vec![]),
         T::Param(TParam {
             abilities,
@@ -868,7 +901,7 @@ pub fn make_struct_type(
             let tapply_ = instantiate_apply(context, loc, None, tn, ty_args);
             let targs = match &tapply_ {
                 Type_::Apply(_, _, targs) => targs.clone(),
-                _ => panic!("ICE instantiate_apply returned non Apply"),
+                _ => unreachable!(),
             };
             (sp(loc, tapply_), targs)
         }
@@ -1016,7 +1049,14 @@ pub fn make_method_call_type(
     let Some((target_m, target_f)) = target_function_opt else {
         let lhs_ty_str = error_format_nested(lhs_ty, &context.subst);
         let defining_module = match &tn.value {
-            TypeName_::Multiple(_) => panic!("ICE method on tuple"),
+            TypeName_::Multiple(_) => {
+                let diag = ice!((
+                    loc,
+                    format!("ICE method on tuple type {}", debug_display!(tn))
+                ));
+                context.env.add_diag(diag);
+                return None;
+            }
             TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
             TypeName_::ModuleType(m, _) => Some(m),
         };

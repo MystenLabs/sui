@@ -3,13 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diag,
+    debug_display, diag,
     diagnostics::{self, codes::*},
     editions::FeatureGate,
     expansion::{
         ast::{self as E, AbilitySet, ModuleIdent, Visibility},
         translate::is_valid_struct_constant_or_schema_name as is_constant_name,
     },
+    ice,
     naming::ast::{self as N, BlockLabel, NominalBlockUsage},
     parser::ast::{self as P, ConstantName, Field, FunctionName, StructName, MACRO_MODIFIER},
     shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
@@ -916,7 +917,15 @@ fn use_fun_module_defines(
                 Err(Some(*decl_loc))
             }
         }
-        N::TypeName_::Multiple(_) => panic!("ICE tuple should not be reachable from use fun"),
+        ty @ N::TypeName_::Multiple(_) => {
+            let msg = format!(
+                "ICE tuple type {} should not be reachable from use fun",
+                debug_display!(ty)
+            );
+            context.env.add_diag(ice!((tn.loc, msg)));
+            // This is already reporting a bug, so let's continue for lack of something better to do.
+            Ok(())
+        }
     }
 }
 
@@ -1778,8 +1787,14 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             NE::UnresolvedError
         }
         // `Name` matches name variants only allowed in specs (we handle the allowed ones above)
-        EE::Index(..) | EE::Quant(..) | EE::Name(_, Some(_)) => {
-            panic!("ICE unexpected specification construct")
+        e @ (EE::Index(..) | EE::Quant(..) | EE::Name(_, Some(_))) => {
+            let mut diag = ice!((
+                eloc,
+                "ICE compiler should not have parsed this form as a specification"
+            ));
+            diag.add_note(format!("Compiler parsed: {}", debug_display!(e)));
+            context.env.add_diag(diag);
+            NE::UnresolvedError
         }
     };
     Box::new(sp(eloc, ne_))
@@ -1931,7 +1946,15 @@ fn lvalue(
                 nfields.expect("ICE fields were already unique"),
             )
         }
-        EL::Var(_, _, _) => panic!("unexpected specification construct"),
+        e @ EL::Var(_, _, _) => {
+            let mut diag = ice!((
+                loc,
+                "ICE compiler should not have parsed this form as a specification"
+            ));
+            diag.add_note(format!("Compiler parsed: {}", debug_display!(e)));
+            context.env.add_diag(diag);
+            NL::Ignore
+        }
     };
     Some(sp(loc, nl_))
 }

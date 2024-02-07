@@ -1,12 +1,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::diag;
 use crate::expansion::ast::{self as E, ModuleIdent};
 use crate::naming::ast as N;
 use crate::parser::ast::{FunctionName, Visibility};
 use crate::shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *};
 use crate::typing::core;
+use crate::{diag, ice};
 use move_ir_types::location::*;
 
 //**************************************************************************************************
@@ -126,7 +126,13 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             if is_valid {
                 if let Some(public_loc) = nuf.is_public {
                     let defining_module = match &tn.value {
-                        N::TypeName_::Multiple(_) => panic!("ICE unexpected tuple type"),
+                        N::TypeName_::Multiple(_) => {
+                            context.env.add_diag(ice!((
+                                tn.loc,
+                                "ICE tuple type should not be reachable from use fun"
+                            )));
+                            return None;
+                        }
                         N::TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
                         N::TypeName_::ModuleType(m, _) => Some(m),
                     };
