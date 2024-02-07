@@ -3,7 +3,7 @@
 
 use anyhow::bail;
 use async_trait::async_trait;
-use futures::Stream;
+use futures::{future, Stream};
 use jsonrpsee::{
     core::{error::SubscriptionClosed, RpcResult},
     types::SubscriptionResult,
@@ -13,7 +13,6 @@ use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_core_types::language_storage::TypeTag;
 use mysten_metrics::spawn_monitored_task;
 use serde::Serialize;
-use std::str::FromStr;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
@@ -39,9 +38,9 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, instrument, warn};
 
 use crate::{
-    authority_state::StateRead,
+    authority_state::{StateRead, StateReadResult},
     error::{Error, SuiRpcInputError},
-    name_service::{Domain, NameRecord, NameServiceConfig},
+    name_service::{Domain, NameRecord, NameServiceConfig, NameServiceError},
     with_tracing, SuiRpcModule,
 };
 
@@ -122,6 +121,16 @@ impl<R: ReadApiServer> IndexerApi<R> {
             Ok(p) => Ok(p),
             Err(_) => bail!("Resources exhausted"),
         }
+    }
+
+    fn get_latest_checkpoint_timestamp_ms(&self) -> StateReadResult<u64> {
+        let latest_checkpoint = self.state.get_latest_checkpoint_sequence_number()?;
+
+        let checkpoint = self
+            .state
+            .get_verified_checkpoint_by_sequence_number(latest_checkpoint)?;
+
+        Ok(checkpoint.timestamp_ms)
     }
 }
 
@@ -371,26 +380,67 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
     #[instrument(skip(self))]
     async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
         with_tracing!(async move {
-            let domain = Domain::from_str(&name).map_err(|e| {
-                Error::UnexpectedError(format!(
-                    "Failed to parse NameService Domain with error: {:?}",
-                    e
-                ))
-            })?;
-
+            // prepare the requested domain's field id.
+            let domain = name.parse::<Domain>().map_err(Error::from)?;
             let record_id = self.name_service_config.record_field_id(&domain);
 
-            let field_record_object = match self.state.get_object(&record_id).await? {
-                Some(o) => o,
-                None => return Ok(None),
+            // prepare the parent's field id.
+            let parent_domain = domain.parent();
+            let parent_record_id = self.name_service_config.record_field_id(&parent_domain);
+
+            let current_timestamp_ms = self.get_latest_checkpoint_timestamp_ms()?;
+
+            // Do these two reads in parallel.
+            let mut requests = vec![self.state.get_object(&record_id)];
+
+            // Also add the parent in the DB reads if the requested domain is a subdomain.
+            if domain.is_subdomain() {
+                requests.push(self.state.get_object(&parent_record_id));
+            }
+
+            // Couldn't find a `multi_get_object` for this crate (looks like it uses a k,v db)
+            // Always fetching both parent + child at the same time (even for node subdomains),
+            // to avoid sequential db reads. We do this because we do not know if the requested
+            // domain is a node subdomain or a leaf subdomain, and we can save a trip to the db.
+            let mut results = future::try_join_all(requests).await?;
+
+            // Removing without checking vector len, since it is known (== 1 or 2 depending on whether
+            // it is a subdomain or not).
+            let Some(object) = results.remove(0) else {
+                return Ok(None);
             };
 
-            let record = field_record_object
-                .to_rust::<Field<Domain, NameRecord>>()
-                .ok_or_else(|| Error::UnexpectedError(format!("Malformed Object {record_id}")))?
-                .value;
+            let name_record = NameRecord::try_from(object)?;
 
-            Ok(record.target_address)
+            // Handling SLD names & node subdomains is the same (we handle them as `node` records)
+            // We check their expiration, and and if not expired, return the target address.
+            if !name_record.is_leaf_record() {
+                return if !name_record.is_node_expired(current_timestamp_ms) {
+                    Ok(name_record.target_address)
+                } else {
+                    Err(Error::from(NameServiceError::NameExpired))
+                };
+            }
+
+            // == Handle leaf subdomains case ==
+            // We can remove since we know that if we're here, we have a parent
+            // (which also means we queried it in the future above).
+            let Some(parent_object) = results.remove(0) else {
+                return Err(Error::from(NameServiceError::NameExpired));
+            };
+
+            let parent_name_record = NameRecord::try_from(parent_object)?;
+
+            // For a leaf record, we check that:
+            // 1. The parent is a valid parent for that leaf record
+            // 2. The parent is not expired
+            if parent_name_record.is_valid_leaf_parent(&name_record)
+                && !parent_name_record.is_node_expired(current_timestamp_ms)
+            {
+                Ok(name_record.target_address)
+            } else {
+                Err(Error::from(NameServiceError::NameExpired))
+            }
         })
     }
 
@@ -406,17 +456,17 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .name_service_config
                 .reverse_record_field_id(address.as_ref());
 
-            let field_reverse_record_object =
-                match self.state.get_object(&reverse_record_id).await? {
-                    Some(o) => o,
-                    None => {
-                        return Ok(Page {
-                            data: vec![],
-                            next_cursor: None,
-                            has_next_page: false,
-                        })
-                    }
-                };
+            let mut result = Page {
+                data: vec![],
+                next_cursor: None,
+                has_next_page: false,
+            };
+
+            let Some(field_reverse_record_object) =
+                self.state.get_object(&reverse_record_id).await?
+            else {
+                return Ok(result);
+            };
 
             let domain = field_reverse_record_object
                 .to_rust::<Field<SuiAddress, Domain>>()
@@ -425,11 +475,22 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 })?
                 .value;
 
-            Ok(Page {
-                data: vec![domain.to_string()],
-                next_cursor: None,
-                has_next_page: false,
-            })
+            let domain_name = domain.to_string();
+
+            let resolved_address = self
+                .resolve_name_service_address(domain_name.clone())
+                .await?;
+
+            // If looking up the domain returns an empty result, we return an empty result.
+            if resolved_address.is_none() {
+                return Ok(result);
+            }
+
+            // TODO(manos): Discuss why is this even a paginated response.
+            // This API is always going to return a single domain name.
+            result.data.push(domain_name);
+
+            Ok(result)
         })
     }
 }

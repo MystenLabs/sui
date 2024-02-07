@@ -291,12 +291,10 @@ impl IndexerApiServer for IndexerApiV2 {
     }
 
     async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
-        let domain = name.parse::<Domain>().map_err(|e| {
-            IndexerError::InvalidArgumentError(format!(
-                "Failed to parse NameService Domain with error: {:?}",
-                e
-            ))
-        })?;
+        // TODO(manos): Implement new logic.
+        let domain = name
+            .parse::<Domain>()
+            .map_err(IndexerError::NameServiceError)?;
 
         let record_id = self.name_service_config.record_field_id(&domain);
 
@@ -305,14 +303,8 @@ impl IndexerApiServer for IndexerApiV2 {
             None => return Ok(None),
         };
 
-        let record = field_record_object
-            .to_rust::<Field<Domain, NameRecord>>()
-            .ok_or_else(|| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "Malformed Object {record_id}"
-                ))
-            })?
-            .value;
+        let record = NameRecord::try_from(field_record_object)
+            .map_err(|e| IndexerError::PersistentStorageDataCorruptionError(e.to_string()))?;
 
         Ok(record.target_address)
     }
