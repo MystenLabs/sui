@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{self, Display};
-
 use anyhow::bail;
 use move_command_line_common::parser::Token;
 use move_core_types::identifier;
+use std::fmt::{self, Display};
 
 // number :=
 //     <digit> (<digit>|"_")*       // Allow _ separators in numbers
@@ -14,7 +13,7 @@ use move_core_types::identifier;
 // value :=
 //     "true"
 //     "false"                                        // bool(s)
-//     <number><type_suffix>                          // u8, u16, u32, ...
+//     <number><type_suffix>                          // u8, u16, u32, u64, u128, u256
 //     "@" <number>                                   // address or sui::object::ID
 //     "\"" <text> "\""                               // string
 //     "'" <text> "'"                                 // also string
@@ -25,17 +24,22 @@ use move_core_types::identifier;
 //
 // arg :=
 //     <value>
-//     <ident> // input
-//     <ident> ("." <digit>)?  // result access
-//     "<arg> <arg>*"          // space separated args
-//     "gas"          // gas coin
+//     <var>                         // input
+//     <var> ("." (<digit>|<var>))+  // result access
+//     "<arg> <arg>*"                // space separated args
+//     "gas"                         // gas coin
 //
 // ty :=
-//     <prim_type> // u64, bool, u32, address (etc)
+//     <prim_type> // u64, bool, u32, address, u16 (etc)
 //     <addr>::<ident>::<ident> (<ty_arg>)?
+//     <var>::<ident>::<ident> (<ty_arg>)?
 //
 // ty_arg :=
 //     "<" (<ty>,)+ ">"
+//
+// var := [a-zA-Z_][a-zA-Z0-9_-]* // Valid move identifier + '-'
+//
+// ident := [a-zA-Z_][a-zA-Z0-9_]* // Valid move identifier
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
 pub enum ArgumentToken {
@@ -78,10 +82,6 @@ pub enum ArgumentToken {
     // <...>
     // eats the whole string, including the < and >, to pass to a different parser
     TypeArgString,
-    // input
-    Input,
-    // result
-    Result,
     // gas
     Gas,
     Void,
@@ -110,8 +110,6 @@ impl Display for ArgumentToken {
             ArgumentToken::At => "@",
             ArgumentToken::Dot => ".",
             ArgumentToken::TypeArgString => "<...>",
-            ArgumentToken::Input => "input",
-            ArgumentToken::Result => "result",
             ArgumentToken::Gas => "gas",
         };
         fmt::Display::fmt(s, formatter)
@@ -284,7 +282,7 @@ fn parse_sub_token_string(mut s: &str, start: &str, end: &str) -> anyhow::Result
 mod tests {
     use move_command_line_common::parser::Token;
 
-    use crate::ptb::ptb_parser::argument_token::ArgumentToken;
+    use crate::ptb::ptb_builder::argument_token::ArgumentToken;
 
     #[test]
     fn tokenize_vector() {

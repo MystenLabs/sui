@@ -1,8 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ptb::ptb::PTBCommand, sp};
-
+use crate::{
+    ptb::{
+        ptb::PTBCommand,
+        ptb_builder::{
+            argument::Argument,
+            argument_token::ArgumentToken,
+            command_token::{CommandToken, ALL_PUBLIC_COMMAND_TOKENS},
+            context::{FileScope, PTBContext},
+            errors::{span, PTBError, Span, Spanned},
+        },
+    },
+    sp,
+};
+use anyhow::{anyhow, bail, Context, Result as AResult};
 use move_command_line_common::{
     address::{NumericalAddress, ParsedAddress},
     parser::{parse_u128, parse_u16, parse_u256, parse_u32, parse_u64, parse_u8, Parser, Token},
@@ -10,16 +22,6 @@ use move_command_line_common::{
 };
 use move_core_types::identifier::Identifier;
 use std::{error::Error, fmt::Debug, str::FromStr};
-
-use crate::ptb::ptb_parser::argument_token::ArgumentToken;
-use anyhow::{anyhow, bail, Context, Result as AResult};
-
-use super::{
-    argument::Argument,
-    command_token::{CommandToken, ALL_PUBLIC_COMMAND_TOKENS},
-    context::{FileScope, PTBContext},
-    errors::{span, PTBError, Span, Spanned},
-};
 
 /// A parsed PTB command consisting of the command and the parsed arguments to the command.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -210,7 +212,7 @@ impl PTBParser {
     }
 
     /// Parse a string to a list of values. Values are separated by whitespace.
-    pub fn parse_values(
+    fn parse_values(
         s: &str,
         arg_idx: usize,
         fscope: FileScope,
@@ -238,17 +240,17 @@ impl PTBParser {
 /// location in the input string that is being parsed. This is used to keep track of the location
 /// for generation spans when parsing PTB arguments.
 pub struct Spanner<'a> {
-    pub current_location: usize,
-    pub arg_idx: usize,
-    pub tokens: Vec<(ArgumentToken, &'a str)>,
-    /// Some arguments may permit non-whitespace delimitation (e.g., or move-calls). So after
+    current_location: usize,
+    arg_idx: usize,
+    tokens: Vec<(ArgumentToken, &'a str)>,
+    /// Some arguments may permit non-whitespace delimitation after them (e.g., move-calls). So after
     /// parsng an arguments that permits no whitespace delimitation, we set this flag to true and
     /// the next token is guaranteed to be whitespace (inserted if not present).
-    pub insert_non_whitespace_next_if_none: bool,
+    insert_non_whitespace_next_if_none: bool,
 }
 
 impl<'a> Spanner<'a> {
-    pub fn new(mut tokens: Vec<(ArgumentToken, &'a str)>, arg_idx: usize) -> Self {
+    fn new(mut tokens: Vec<(ArgumentToken, &'a str)>, arg_idx: usize) -> Self {
         tokens.reverse();
         Self {
             current_location: 0,
@@ -258,11 +260,11 @@ impl<'a> Spanner<'a> {
         }
     }
 
-    pub fn insert_whitespace_next_if_none(&mut self) {
+    fn insert_whitespace_next_if_none(&mut self) {
         self.insert_non_whitespace_next_if_none = true;
     }
 
-    pub fn next(&mut self) -> Option<(ArgumentToken, &'a str)> {
+    fn next(&mut self) -> Option<(ArgumentToken, &'a str)> {
         if self.insert_non_whitespace_next_if_none {
             self.insert_non_whitespace_next_if_none = false;
             if self
@@ -282,7 +284,7 @@ impl<'a> Spanner<'a> {
         }
     }
 
-    pub fn peek(&self) -> Option<(ArgumentToken, &'a str)> {
+    fn peek(&self) -> Option<(ArgumentToken, &'a str)> {
         if self.insert_non_whitespace_next_if_none
             && self
                 .tokens
@@ -296,7 +298,7 @@ impl<'a> Spanner<'a> {
         }
     }
 
-    pub fn current_location(&self) -> usize {
+    fn current_location(&self) -> usize {
         self.current_location
     }
 }
@@ -310,21 +312,21 @@ impl<'a> Iterator for Spanner<'a> {
 }
 
 impl<'a> ValueParser<'a> {
-    pub fn new(v: Spanner<'a>, current_scope: FileScope) -> Self {
+    fn new(v: Spanner<'a>, current_scope: FileScope) -> Self {
         Self {
             inner: v,
             current_scope,
         }
     }
 
-    pub fn advance_any(&mut self) -> AResult<(ArgumentToken, &'a str)> {
+    fn advance_any(&mut self) -> AResult<(ArgumentToken, &'a str)> {
         match self.inner.next() {
             Some(tok) => Ok(tok),
             None => bail!("unexpected end of tokens"),
         }
     }
 
-    pub fn advance(&mut self, expected_token: ArgumentToken) -> AResult<&'a str> {
+    fn advance(&mut self, expected_token: ArgumentToken) -> AResult<&'a str> {
         let (t, contents) = self.advance_any()?;
         if t != expected_token {
             bail!("expected token '{}', but got '{}'", expected_token, t)
@@ -332,15 +334,11 @@ impl<'a> ValueParser<'a> {
         Ok(contents)
     }
 
-    pub fn peek(&mut self) -> Option<(ArgumentToken, &'a str)> {
-        self.inner.peek()
-    }
-
-    pub fn peek_tok(&mut self) -> Option<ArgumentToken> {
+    fn peek_tok(&mut self) -> Option<ArgumentToken> {
         self.inner.peek().map(|(tok, _)| tok)
     }
 
-    pub fn parse_list<R>(
+    fn parse_list<R>(
         &mut self,
         parse_list_item: impl Fn(&mut Self) -> ParsingResult<R>,
         delim: ArgumentToken,
@@ -368,7 +366,7 @@ impl<'a> ValueParser<'a> {
     /// tokens that match `skip`.
     /// This is used to parse lists of arguments, e.g. `1, 2, 3` or `1, 2, 3` where the tokenizer
     /// we're using is space-sensitive so we want to `skip` whitespace, and `delim` by ','.
-    pub fn parse_list_skip<R>(
+    fn parse_list_skip<R>(
         &mut self,
         parse_list_item: impl Fn(&mut Self) -> ParsingResult<R>,
         delim: ArgumentToken,
@@ -655,8 +653,8 @@ impl<'a> ValueParser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::ptb::ptb_parser::context::FileScope;
-    use crate::ptb::ptb_parser::parser::PTBParser;
+    use crate::ptb::ptb_builder::context::FileScope;
+    use crate::ptb::ptb_builder::parse_ptb::PTBParser;
 
     fn dummy_file_scope() -> FileScope {
         FileScope {

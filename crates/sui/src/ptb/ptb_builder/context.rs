@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::ptb::ptb_builder::errors::{PTBError, PTBResult, Span};
+use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
 
-use move_symbol_pool::Symbol;
-
-use crate::ptb::ptb_parser::errors::PTBError;
-
-use super::errors::{PTBResult, Span};
-
+/// A `FileScope` represents a command in a given file, along with dismbiguating if there are
+/// multiple occurences of the same file in the PTB.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileScope {
     pub file_command_index: usize,
@@ -18,10 +16,16 @@ pub struct FileScope {
     pub name_index: usize,
 }
 
+/// A `PTBContext` is a context holds the current file scope and a stack of file scopes that we are
+/// under currently. It also holds a map of seen scopes to disambiguate between different usages of
+/// the same PTB file possibly.
 #[derive(Debug, Clone)]
 pub struct PTBContext {
+    /// The current file scope that we are in right now.
     current_file_scope: FileScope,
+    /// The stack of file scopes that we are under currently.
     file_scopes: Vec<FileScope>,
+    /// The map of seen scopes to disambiguate between different usages of the same PTB file possibly.
     seen_scopes: BTreeMap<Symbol, usize>,
 }
 
@@ -38,6 +42,8 @@ impl PTBContext {
         }
     }
 
+    /// Push the current scope onto the stack of scopes, and put us into a new scope `name` at
+    /// command 0.
     pub fn push_file_scope(&mut self, name: String) {
         // Account for the `--file` command itself in the index
         self.increment_file_command_index();
@@ -58,12 +64,15 @@ impl PTBContext {
         self.file_scopes.push(scope);
     }
 
+    /// Pop the current scope off the stack of scopes, and put us into the previous scope. Errors
+    /// if we somehow try to pop off more scopes than we have (which means internal logic is wrong
+    /// somewhere).
     pub fn pop_file_scope(&mut self, name: &str) -> PTBResult<()> {
         let name_symbol = Symbol::from(name);
         if self.current_file_scope.name != name_symbol {
             return Err(PTBError::WithSource {
                 message: format!(
-                    "ICE: Expected file scope '{}' but got '{}'",
+                    "Internal Error: Expected file scope '{}' but got '{}'",
                     name_symbol, self.current_file_scope.name
                 ),
                 span: Span::cmd_span(0, self.current_file_scope()),
@@ -71,7 +80,7 @@ impl PTBContext {
             });
         }
         let scope = self.file_scopes.pop().ok_or_else(|| PTBError::WithSource {
-            message: "ICE: No file scopes to pop".to_owned(),
+            message: "Internal Error: No file scopes to pop".to_owned(),
             span: Span::cmd_span(0, self.current_file_scope()),
             help: None,
         })?;
@@ -83,18 +92,7 @@ impl PTBContext {
         self.current_file_scope
     }
 
-    pub fn current_command_index(&self) -> usize {
-        self.current_file_scope.file_command_index
-    }
-
     pub fn increment_file_command_index(&mut self) {
         self.current_file_scope.file_command_index += 1;
-    }
-
-    pub fn current_location(&self) -> String {
-        format!(
-            "command {} in file {}",
-            self.current_file_scope.file_command_index, self.current_file_scope.name
-        )
     }
 }
