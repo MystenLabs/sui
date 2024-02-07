@@ -550,14 +550,13 @@ where
     let values: ValuesRef<'_, T> = matches
         .get_many(arg_name.as_str())
         .ok_or_else(|| anyhow!("Cannot parse the args for the PTB"))?;
-    let idx = order.len();
     for (value, index) in values.zip(
         matches
             .indices_of(arg_name.as_str())
             .expect("id came from matches"),
     ) {
         order.insert(
-            idx + index,
+            index,
             PTBCommand {
                 name: arg_name.to_string(),
                 values: vec![value.to_string()],

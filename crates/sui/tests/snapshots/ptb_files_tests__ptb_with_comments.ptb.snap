@@ -1,7 +1,8 @@
 ---
 source: crates/sui/tests/ptb_files_tests.rs
-expression: results
+expression: "results.join(\"\\n\")"
 ---
+ === PREVIEW === 
 ╭──────────────────────────────────────────────────────────────────────────╮
 │ PTB Preview                                                              │
 ├──────────────────┬───────────────────────────────────────┬───────────────┤
@@ -13,3 +14,22 @@ expression: results
 │ transfer_objects │ tests/ptb_files/ptb_with_comments.ptb │ @0x006 result │
 │ preview          │ console                               │ true          │
 ╰──────────────────┴───────────────────────────────────────┴───────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/ptb_with_comments.ptb\""]
+cmd: gas_budget, value: ["100000u64"]
+cmd: split_coins, value: ["@0x5", "[1000u64]"]
+cmd: assign, value: ["result"]
+cmd: transfer_objects, value: ["@0x6", "result"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/ptb_with_comments.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILDING PTB ERRORS === 
+  × Error at command 3 in PTB file 'tests/ptb_files/ptb_with_comments.ptb'
+   ╭────
+ 1 │ transfer_objects @0x006 result 
+   ·                         ───┬──
+   ·                            ╰── expected array of objects
+   ╰────
+

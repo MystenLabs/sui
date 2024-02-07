@@ -1,7 +1,8 @@
 ---
 source: crates/sui/tests/ptb_files_tests.rs
-expression: results
+expression: "results.join(\"\\n\")"
 ---
+ === PREVIEW === 
 ╭──────────────────────────────────────────────────────────────╮
 │ PTB Preview                                                  │
 ├─────────────┬─────────────────────────────────┬──────────────┤
@@ -12,3 +13,15 @@ expression: results
 │ assign      │ tests/ptb_files/split_coins.ptb │ coins        │
 │ preview     │ console                         │ true         │
 ╰─────────────┴─────────────────────────────────┴──────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/split_coins.ptb\""]
+cmd: gas_budget, value: ["1000u64"]
+cmd: split_coins, value: ["@0x1", "[1u64, 2u64, 3u64]"]
+cmd: assign, value: ["coins"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/split_coins.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILT PTB === 
+SplitCoins(Input(0)Input(1),Input(2),Input(3))

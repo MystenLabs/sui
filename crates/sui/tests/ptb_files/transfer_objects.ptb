@@ -1,3 +1,3 @@
---gas-budget 1000 --assign A "@0x1" --transfer-objects A "[@0x1,@0x2,@0x3]"
---assign A "@0x1" --assign B @0x2 --assign C @0x3 --transfer-objects A "[A,B,C]" --assign G
---split-coins gas "[1,2,3]" --assign s --transfer-objects @0x1 s
+--gas-budget 1000 --assign A @0x1 --transfer-objects A [@0x1,@0x2,@0x3]
+--assign A @0x1 --assign B @0x2 --assign C @0x3 --transfer-objects A [A,B,C] --assign G
+--split-coins gas [1,2,3] --assign s --transfer-objects @0x1 s
