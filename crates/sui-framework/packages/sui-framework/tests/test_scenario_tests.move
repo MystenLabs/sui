@@ -336,6 +336,26 @@ module sui::test_scenario_tests {
     }
 
     #[test]
+    fun test_delete_shared() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let uid1 = ts::new_object(&mut scenario);
+        {
+            let obj1 = Object { id: uid1, value: 10 };
+            transfer::public_share_object(obj1);
+        };
+        ts::next_tx(&mut scenario, sender);
+        {
+            assert!(ts::has_most_recent_shared<Object>(), 1);
+            let obj1 = ts::take_shared<Object>(&scenario);
+            assert!(obj1.value == 10, EValueMismatch);
+            let Object { id, value: _ } = obj1;
+            object::delete(id);
+        };
+        ts::end(scenario);
+    }
+
+    #[test]
     fun test_take_immutable_by_id() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
