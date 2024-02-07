@@ -471,21 +471,20 @@ impl<
 
 
                     // println!("Sending TxResults message for tx {}", txid);
-                    // TODO send only to owners of objects in deleted & written
-                        let msg = NetworkMessage { src: 0, dst: ew_ids.iter()
-                            .filter(|&&id| id != my_id)
-                            .cloned()
-                            .collect(), payload: SailfishMessage::TxResults {
-                            txid: *txid,
-                            deleted: tx_with_results.deleted.clone(),
-                            written: tx_with_results.written.clone(),
-                        }};
-                        if out_channel.send(msg).await.is_err() {
-                            eprintln!("EW {} could not send LockedExec.", my_id);
-                        }
+                    let msg = NetworkMessage { src: 0, dst: ew_ids.iter()
+                        .filter(|&&id| id != my_id)
+                        .cloned()
+                        .collect(), payload: SailfishMessage::TxResults {
+                        txid: *txid,
+                        deleted: tx_with_results.deleted.clone(),
+                        written: tx_with_results.written.clone(),
+                    }};
+                    if out_channel.send(msg).await.is_err() {
+                        eprintln!("EW {} could not send LockedExec.", my_id);
+                    }
 
                     if num_tx % 10_000 == 0 {
-                        tracing::debug!("[task-queue] EW {my_id} executed {num_tx} txs");
+                        println!("[task-queue] EW {my_id} executed {num_tx} txs");
                     }
                     if num_tx == 1 {
                         // Expose the start time as a metric. Should be done only once.
