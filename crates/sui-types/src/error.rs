@@ -329,9 +329,7 @@ pub enum SuiError {
         threshold: u64,
     },
 
-    #[error(
-        "Validator cannot handle the request at the moment, and requests the client to retry."
-    )]
+    #[error("Validator cannot handle the request at the moment. Please retry later.")]
     ValidatorPushbackAndRetry,
 
     // Signature verification
