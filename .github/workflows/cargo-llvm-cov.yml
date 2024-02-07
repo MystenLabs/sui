@@ -53,28 +53,28 @@ jobs:
       - name: Install Rust
         run: rustup update stable
         
-      - name: Run code coverage for nextest
-        working-directory: ./crates/sui-types
-        run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest
+      # - name: Run code coverage for nextest
+      #   working-directory: ./crates/sui-types
+      #   run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest
 
-      - name: Upload report to Codecov for nextest
-        uses: codecov/codecov-action@v3
-        with:
-          files: lcov.info
-          # fail_ci_if_error: true
-
-      # TODO: Will enable this once we get this work
-      #
-      # - name: Run code coverage for simtest
-      #   run: |
-      #     ./scripts/simtest/install.sh
-      #     CODECOV=1 ./scripts/simtest/cargo-simtest simtest
-
-      # - name: Upload report to Codecov for simtest
+      # - name: Upload report to Codecov for nextest
       #   uses: codecov/codecov-action@v3
       #   with:
       #     files: lcov.info
-      #     fail_ci_if_error: true
+      #     # fail_ci_if_error: true
+
+      # TODO: Will enable this once we get this work
+      #
+      - name: Run code coverage for simtest
+        run: |
+          ./scripts/simtest/install.sh
+          CODECOV=1 ./scripts/simtest/cargo-simtest simtest
+
+      - name: Upload report to Codecov for simtest
+        uses: codecov/codecov-action@v3
+        with:
+          files: lcov.info
+          fail_ci_if_error: true
 
   # notify:
   #   name: Notify
