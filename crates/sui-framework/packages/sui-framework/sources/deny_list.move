@@ -95,7 +95,9 @@ module sui::deny_list {
         assert!(vec_set::contains(denied_addresses, &addr), ENotDenied);
         vec_set::remove(denied_addresses, &addr);
         let denied_count = table::borrow_mut(&mut list.denied_count, addr);
-        *denied_count = *denied_count - 1;
+        if (*denied_count > 0) {
+            *denied_count = *denied_count - 1;
+        };
         if (*denied_count == 0) {
             table::remove(&mut list.denied_count, addr);
         }

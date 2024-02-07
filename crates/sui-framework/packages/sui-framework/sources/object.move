@@ -8,7 +8,6 @@ module sui::object {
     use sui::tx_context::{Self, TxContext};
 
     friend sui::clock;
-    friend sui::coin;
     friend sui::dynamic_field;
     friend sui::dynamic_object_field;
     friend sui::transfer;
