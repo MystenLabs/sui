@@ -2562,8 +2562,10 @@ impl AuthorityState {
             rx_execution_shutdown,
         ));
 
-        let authority_state = Arc::downgrade(&state);
-        spawn_monitored_task!(overload_monitor(authority_state, overload_threshold_config));
+        if overload_threshold_config.max_load_shedding_percentage > 0 {
+            let authority_state = Arc::downgrade(&state);
+            spawn_monitored_task!(overload_monitor(authority_state, overload_threshold_config));
+        }
 
         // TODO: This doesn't belong to the constructor of AuthorityState.
         state

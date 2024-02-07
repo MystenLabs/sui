@@ -263,21 +263,15 @@ impl ValidatorService {
     pub async fn execute_certificate_for_testing(
         &self,
         cert: CertifiedTransaction,
-    ) -> HandleCertificateResponseV2 {
-        self.handle_certificate_v2(tonic::Request::new(cert))
-            .await
-            .unwrap()
-            .into_inner()
+    ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
+        self.handle_certificate_v2(tonic::Request::new(cert)).await
     }
 
     pub async fn handle_transaction_for_testing(
         &self,
         transaction: Transaction,
-    ) -> HandleTransactionResponse {
-        self.transaction(tonic::Request::new(transaction))
-            .await
-            .unwrap()
-            .into_inner()
+    ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
+        self.transaction(tonic::Request::new(transaction)).await
     }
 
     async fn handle_transaction(
