@@ -423,8 +423,11 @@ impl PTB {
 
         // find the gas coins if we have no gas coin given
         let coins = if let Some(gas) = gas_coin {
+            if !gas.starts_with("@0x") {
+                return Err(anyhow!("Gas input error: to distinguish it from a hex value, please use @ in front of addresses or object IDs: @{gas}"));
+            }
             context
-                .get_object_ref(ObjectID::from_hex_literal(gas)?)
+                .get_object_ref(ObjectID::from_hex_literal(&gas[1..])?)
                 .await?
         } else {
             context
