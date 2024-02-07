@@ -5,12 +5,22 @@ use crate::displays::Pretty;
 use std::fmt::{Display, Formatter};
 use sui_types::transaction::CallArg::Pure;
 use sui_types::transaction::{
-    write_sep, Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
+    write_sep, Argument, CallArg, Command, FullPTB, ObjectArg, ProgrammableMoveCall,
+    ProgrammableTransaction,
 };
 use tabled::{
     builder::Builder as TableBuilder,
     settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
 };
+
+impl<'a> Display for Pretty<'a, FullPTB> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let Pretty(full_ptb) = self;
+        let (ptb, _results) = full_ptb;
+        // todo: format results and write
+        write!(f, "{}", Pretty(ptb))
+    }
+}
 
 /// These Display implementations provide alternate displays that are used to format info contained
 /// in these Structs when calling the CLI replay command with an additional provided flag.
