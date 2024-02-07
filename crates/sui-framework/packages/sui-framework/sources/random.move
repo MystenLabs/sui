@@ -145,7 +145,10 @@ module sui::random {
     /// Create a generator. Can be used to derive up to MAX_U16 * 32 random bytes.
     public fun new_generator(r: &Random, ctx: &mut TxContext): RandomGenerator {
         let inner = load_inner(r);
-        let seed = hmac_sha3_256(&inner.random_bytes, &to_bytes(fresh_object_address(ctx)));
+        let seed = hmac_sha3_256(
+            &inner.random_bytes,
+            &to_bytes(fresh_object_address(ctx))
+        );
         RandomGenerator { seed, counter: 0, buffer: vector[] }
     }
 
@@ -162,7 +165,7 @@ module sui::random {
     }
 
     /// Generate n random bytes.
-    public fun bytes(g: &mut RandomGenerator, num_of_bytes: u16): vector<u8> {
+    public fun generate_bytes(g: &mut RandomGenerator, num_of_bytes: u16): vector<u8> {
         let result = vector[];
         // Append RAND_OUTPUT_LEN size buffers directly without going through the generator's buffer.
         let num_of_blocks = num_of_bytes / RAND_OUTPUT_LEN;
@@ -171,10 +174,11 @@ module sui::random {
             num_of_blocks = num_of_blocks - 1;
         };
         // Take remaining bytes from the generator's buffer.
-        if (vector::length(&g.buffer) < ((num_of_bytes as u64) - vector::length(&result))) {
+        let num_of_bytes = (num_of_bytes as u64);
+        if (vector::length(&g.buffer) < (num_of_bytes - vector::length(&result))) {
             fill_buffer(g);
         };
-        while (vector::length(&result) < (num_of_bytes as u64)) {
+        while (vector::length(&result) < num_of_bytes) {
             vector::push_back(&mut result, vector::pop_back(&mut g.buffer));
         };
         result
@@ -226,10 +230,18 @@ module sui::random {
         (u256_from_bytes(g, 1) as u8)
     }
 
+    /// Generate a boolean.
+    public fun generate_bool(g: &mut RandomGenerator): bool {
+        (u256_from_bytes(g, 1) & 1) == 1
+    }
+
     // Helper function to generate a random u128 in [min, max] using a random number with num_of_bytes bytes.
     // Assumes that the caller verified the inputs, and uses num_of_bytes to control the bias.
     fun u128_in_range(g: &mut RandomGenerator, min: u128, max: u128, num_of_bytes: u8): u128 {
-        assert!(min < max, EInvalidRange);
+        assert!(min <= max, EInvalidRange);
+        if (min == max) {
+            return min
+        };
         let diff = ((max - min) as u256) + 1;
         let rand = u256_from_bytes(g, num_of_bytes);
         min + ((rand % diff) as u128)
@@ -258,6 +270,20 @@ module sui::random {
     /// Generate a random u8 in [min, max] (with a bias of 2^{-64}).
     public fun generate_u8_in_range(g: &mut RandomGenerator, min: u8, max: u8): u8 {
         (u128_in_range(g, (min as u128), (max as u128), 9) as u8)
+    }
+
+    /// Shuffle a vector using the random generator.
+    public fun shuffle<T>(g: &mut RandomGenerator, v: &mut vector<T>) {
+        let n = (vector::length(v) as u32);
+        if (n == 0) {
+            return
+        };
+        let i: u32 = 0;
+        while (i < (n - 1)) {
+            let j = generate_u32_in_range(g, i, n-1);
+            vector::swap(v, (i as u64), (j as u64));
+            i = i + 1;
+        };
     }
 
     #[test_only]

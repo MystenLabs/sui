@@ -25,8 +25,9 @@ module games::raffle {
     const EGameInProgress: u64 = 0;
     const EGameAlreadyCompleted: u64 = 1;
     const EInvalidAmount: u64 = 2;
-    const EGameMistmatch: u64 = 3;
-    const EWrongGameWinner: u64 = 4;
+    const EGameMismatch: u64 = 3;
+    const ENotWinner: u64 = 4;
+    const ENoParticipants: u64 = 4;
 
     /// Game represents a set of parameters of a single game.
     struct Game has key {
@@ -59,17 +60,26 @@ module games::raffle {
     }
 
     /// Anyone can determine a winner.
+    ///
+    /// The function is defined as private entry to prevent calls from other Move functions. (If calls from other
+    /// functions are allowed, the calling function might abort the transaction depending on the winner.)
+    /// Gas based attacks are not possible since the gas cost of this function is independent of the winner.
     entry fun determine_winner(game: &mut Game, r: &Random, clock: &Clock, ctx: &mut TxContext) {
         assert!(game.end_time <= clock::timestamp_ms(clock), EGameInProgress);
         assert!(option::is_none(&game.winner), EGameAlreadyCompleted);
+        assert!(game.participants > 0, ENoParticipants);
 
-        let generator = new_generator(r, ctx);
-        let winner = random::generate_u32_in_range(&mut generator, 1, game.participants);
-        game.winner = option::some(winner);
+        if (game.participants == 1) {
+            game.winner = option::some(1);
+        } else {
+            let generator = new_generator(r, ctx);
+            let winner = random::generate_u32_in_range(&mut generator, 1, game.participants);
+            game.winner = option::some(winner);
+        }
     }
 
     /// Anyone can play and receive a ticket.
-    public fun play(game: &mut Game, coin: Coin<SUI>, clock: &Clock, ctx: &mut TxContext): Ticket {
+    public fun buy_ticket(game: &mut Game, coin: Coin<SUI>, clock: &Clock, ctx: &mut TxContext): Ticket {
         assert!(game.end_time > clock::timestamp_ms(clock), EGameAlreadyCompleted);
         assert!(coin::value(&coin) == game.cost_in_sui, EInvalidAmount);
 
@@ -84,12 +94,15 @@ module games::raffle {
     }
 
     /// The winner can take the prize.
-    public fun redeem(ticket: Ticket, game: &mut Game, ctx: &mut TxContext): Coin<SUI> {
-        assert!(object::id(game) == ticket.game_id, EGameMistmatch);
-        assert!(option::contains(&game.winner, &ticket.participant_index), EWrongGameWinner);
+    public fun redeem(ticket: Ticket, game: Game, ctx: &mut TxContext): Coin<SUI> {
+        assert!(object::id(&game) == ticket.game_id, EGameMismatch);
+        assert!(option::contains(&game.winner, &ticket.participant_index), ENotWinner);
         destroy_ticket(ticket);
-        let full_balance = balance::value(&game.balance);
-        coin::take(&mut game.balance, full_balance, ctx)
+
+        let Game { id, cost_in_sui: _, participants: _, end_time: _, winner: _, balance } = game;
+        object::delete(id);
+        let reward = coin::from_balance(balance, ctx);
+        reward
     }
 
     public fun destroy_ticket(ticket: Ticket) {
