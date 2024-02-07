@@ -47,7 +47,7 @@ The [regulated-coin-sample repository](https://github.com/MystenLabs/regulated-c
 
 The list of addresses that aren't able to use a particular regulated coin is held within a system-created `DenyList` shared object. If you own the `DenyCap` you can use the `coin::deny_list_add` and `coin::deny_list_remove` functions to add and remove addresses. You can also use the `coin::deny_list_contains` function to check if an address is already on the list.
 
-The object address is located in the `object` module.
+The object address is located in the [`object` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui-framework/object.md) of the Sui framework.
 
 ```move
 /// The hardcoded ID for the singleton DenyList.
