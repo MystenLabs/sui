@@ -1,32 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::block::Transaction;
-use crate::context::Context;
+
+use std::sync::Arc;
+
 use mysten_metrics::metered_channel;
 use mysten_metrics::metered_channel::channel_with_total;
-use std::sync::Arc;
+use sui_protocol_config::ProtocolConfig;
 use tap::tap::TapFallible;
 use thiserror::Error;
 use tracing::error;
+
+use crate::block::Transaction;
+use crate::context::Context;
 
 /// The maximum number of transactions pending to the queue to be pulled for block proposal
 const MAX_PENDING_TRANSACTIONS: usize = 2_000;
 
 const MAX_CONSUMED_TRANSACTIONS_PER_REQUEST: u64 = 5_000;
 
-/// The TransactionsConsumer is responsible for fetching the next transactions to be included for the block proposals.
-/// The transactions are submitted to a channel which is shared between the TransactionsConsumer and the TransactionsClient
+/// The TransactionConsumer is responsible for fetching the next transactions to be included for the block proposals.
+/// The transactions are submitted to a channel which is shared between the TransactionConsumer and the TransactionClient
 /// and are pulled every time the `next` method is called.
-#[allow(dead_code)]
-pub(crate) struct TransactionsConsumer {
+pub(crate) struct TransactionConsumer {
     tx_receiver: metered_channel::Receiver<Transaction>,
     max_consumed_bytes_per_request: u64,
     max_consumed_transactions_per_request: u64,
     pending_transaction: Option<Transaction>,
 }
 
-#[allow(dead_code)]
-impl TransactionsConsumer {
+impl TransactionConsumer {
     pub(crate) fn new(
         tx_receiver: metered_channel::Receiver<Transaction>,
         context: Arc<Context>,
@@ -76,12 +78,12 @@ impl TransactionsConsumer {
 
 #[derive(Clone)]
 #[allow(dead_code)]
-pub struct TransactionsClient {
+pub struct TransactionClient {
     sender: metered_channel::Sender<Transaction>,
     max_transaction_size: u64,
 }
 
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum ClientError {
     #[error("Failed to submit transaction to consensus: {0}")]
     SubmitError(String),
@@ -91,7 +93,7 @@ pub enum ClientError {
 }
 
 #[allow(dead_code)]
-impl TransactionsClient {
+impl TransactionClient {
     pub(crate) fn new(context: Arc<Context>) -> (Self, metered_channel::Receiver<Transaction>) {
         let (sender, receiver) = channel_with_total(
             MAX_PENDING_TRANSACTIONS,
@@ -127,10 +129,41 @@ impl TransactionsClient {
     }
 }
 
+/// `TransactionVerifier` implementation is supplied by Sui to validate transactions in a block,
+/// before acceptance of the block.
+pub trait TransactionVerifier: Send + Sync + 'static {
+    /// Determines if this batch can be voted on
+    fn verify_batch(
+        &self,
+        protocol_config: &ProtocolConfig,
+        batch: &[&[u8]],
+    ) -> Result<(), ValidationError>;
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Error)]
+pub enum ValidationError {
+    #[error("Invalid transaction: {0}")]
+    InvalidTransaction(String),
+}
+
+/// `NoopTransactionVerifier` accepts all transactions.
+pub(crate) struct NoopTransactionVerifier;
+
+impl TransactionVerifier for NoopTransactionVerifier {
+    fn verify_batch(
+        &self,
+        _protocol_config: &ProtocolConfig,
+        _batch: &[&[u8]],
+    ) -> Result<(), ValidationError> {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::context::Context;
-    use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
+    use crate::transaction::{TransactionClient, TransactionConsumer};
     use std::sync::Arc;
     use sui_protocol_config::ProtocolConfig;
 
@@ -143,8 +176,8 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionsClient::new(context.clone());
-        let mut consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
+        let (client, tx_receiver) = TransactionClient::new(context.clone());
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
         // submit some transactions
         for i in 0..3 {
@@ -178,8 +211,8 @@ mod tests {
         });
 
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionsClient::new(context.clone());
-        let mut consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
+        let (client, tx_receiver) = TransactionClient::new(context.clone());
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
         // submit some transactions
         for i in 0..10 {

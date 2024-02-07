@@ -8,13 +8,14 @@ use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use serde::{Deserialize, Serialize};
 
-use crate::{block::BlockRef, error::ConsensusResult};
+use crate::{block::BlockRef, context::Context, error::ConsensusResult};
 
 // Anemo generated stubs for RPCs.
 mod anemo_gen {
     include!(concat!(env!("OUT_DIR"), "/consensus.ConsensusRpc.rs"));
 }
-mod anemo_network;
+
+pub(crate) mod anemo_network;
 
 /// Network client for communicating with peers.
 pub(crate) trait NetworkClient: Send + Sync {
@@ -44,16 +45,23 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.
 /// Dropping `NetworkManager` will shutdown the network service.
-pub(crate) trait NetworkManager<C, S>
+pub(crate) trait NetworkManager<S>
 where
-    C: NetworkClient,
     S: NetworkService,
 {
+    type Client: NetworkClient;
+
+    /// Creates a new network manager.
+    fn new(context: Arc<Context>) -> Self;
+
     /// Returns the network client.
-    fn client(&self) -> Arc<C>;
+    fn client(&self) -> Arc<Self::Client>;
 
     /// Installs network service.
-    fn install_service(&self, network_signer: NetworkKeyPair, service: Arc<S>);
+    fn install_service(&self, network_keypair: NetworkKeyPair, service: Arc<S>);
+
+    /// Stops the network service.
+    async fn stop(&self);
 }
 
 /// Network message types.
