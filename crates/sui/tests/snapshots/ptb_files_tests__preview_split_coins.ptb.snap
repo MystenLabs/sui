@@ -1,0 +1,14 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: results
+---
+╭──────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                  │
+├─────────────┬─────────────────────────────────┬──────────────┤
+│ command     │ from                            │ value(s)     │
+├─────────────┼─────────────────────────────────┼──────────────┤
+│ gas_budget  │ tests/ptb_files/split_coins.ptb │ 1000         │
+│ split_coins │ tests/ptb_files/split_coins.ptb │ @0x1 [1,2,3] │
+│ assign      │ tests/ptb_files/split_coins.ptb │ coins        │
+│ preview     │ console                         │ true         │
+╰─────────────┴─────────────────────────────────┴──────────────╯

@@ -1,0 +1,18 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: results
+---
+╭─────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                             │
+├───────────────┬───────────────────────────────┬─────────────────────────────────────────┤
+│ command       │ from                          │ value(s)                                │
+├───────────────┼───────────────────────────────┼─────────────────────────────────────────┤
+│ gas_budget    │ tests/ptb_files/move_call.ptb │ 1000                                    │
+│ assign        │ tests/ptb_files/move_call.ptb │ "a" none                                │
+│ make_move_vec │ tests/ptb_files/move_call.ptb │ "<0x1::option::Option<u64>>" "[a]" none │
+│ move_call     │ tests/ptb_files/move_call.ptb │ "0x1::option::is_none" "<u64>" a        │
+│ assign        │ tests/ptb_files/move_call.ptb │ "a" none                                │
+│ move_call     │ tests/ptb_files/move_call.ptb │ "0x1::option::is_none" "<u64>" none     │
+│ move_call     │ tests/ptb_files/move_call.ptb │ "0x1::option::is_none" "<u64>" a        │
+│ preview       │ console                       │ true                                    │
+╰───────────────┴───────────────────────────────┴─────────────────────────────────────────╯

@@ -1,5 +1,0 @@
---gas-budget 1000
---split-coins @0x1 [1,2,3]
---assign coins
---file test/move_call.ptb
---file ../simple/move_call.ptb

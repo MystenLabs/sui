@@ -1,0 +1,15 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: results
+---
+╭──────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                              │
+├──────────────────┬───────────────────────────────────────┬───────────────┤
+│ command          │ from                                  │ value(s)      │
+├──────────────────┼───────────────────────────────────────┼───────────────┤
+│ gas_budget       │ tests/ptb_files/ptb_with_comments.ptb │ 100000        │
+│ split_coins      │ tests/ptb_files/ptb_with_comments.ptb │ @0x005 [1000] │
+│ assign           │ tests/ptb_files/ptb_with_comments.ptb │ result        │
+│ transfer_objects │ tests/ptb_files/ptb_with_comments.ptb │ @0x006 result │
+│ preview          │ console                               │ true          │
+╰──────────────────┴───────────────────────────────────────┴───────────────╯

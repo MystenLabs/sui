@@ -1,0 +1,20 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: results
+---
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                           │
+├───────────────┬───────────────────────────────────┬───────────────────────────────────────────────────┤
+│ command       │ from                              │ value(s)                                          │
+├───────────────┼───────────────────────────────────┼───────────────────────────────────────────────────┤
+│ gas_budget    │ tests/ptb_files/make_move_vec.ptb │ 1000                                              │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ "<u64>" [1,2,3,4]                                 │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ "<0x1::a::b>" [@0x1,@0x2]                         │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ "<address>" [@0x1,@0x2]                           │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ "<vector<address>>" [vector[@0x1],vector[@0x2]]   │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ "<std::option::Option<u64>>" [none,none]          │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ "<std::option::Option<u64>>" [none,none]          │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ "<std::option::Option<u64>>" [none,some(1)]       │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ "<std::option::Option<u64>>" [none,some(some(1))] │
+│ preview       │ console                           │ true                                              │
+╰───────────────┴───────────────────────────────────┴───────────────────────────────────────────────────╯
