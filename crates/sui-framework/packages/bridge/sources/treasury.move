@@ -81,13 +81,13 @@ module bridge::treasury {
     public fun token_decimals<T>(): u8 {
         let coin_type = type_name::get<T>();
         if (coin_type == type_name::get<BTC>()) {
-            8
+            btc::decimal()
         } else if (coin_type == type_name::get<ETH>()) {
-            8
+            eth::decimal()
         } else if (coin_type == type_name::get<USDC>()) {
-            6
+            usdc::decimal()
         } else if (coin_type == type_name::get<USDT>()) {
-            6
+            usdt::decimal()
         } else {
             abort EUnsupportedTokenType
         }

@@ -147,7 +147,6 @@ module bridge::bridge {
 
     // Create bridge request to send token to other chain, the request will be in pending state until approved
     public fun send_token<T>(
-        clock: &Clock,
         self: &mut Bridge,
         target_chain: u8,
         target_address: vector<u8>,
@@ -155,11 +154,9 @@ module bridge::bridge {
         ctx: &mut TxContext
     ) {
         let inner = load_inner_mut(self);
-        let route = chain_ids::get_route(inner.chain_id, target_chain);
         assert!(!inner.frozen, EBridgeUnavailable);
         let amount = balance::value(coin::balance(&token));
-        // Make sure transfer is within limit.
-        limiter::check_and_record_transfer<T>(clock, &mut inner.limiter, route, amount);
+
         let bridge_seq_num = next_seq_num(inner, message_types::token());
         let token_id = treasury::token_id<T>();
         let token_amount = balance::value(coin::balance(&token));
@@ -283,6 +280,7 @@ module bridge::bridge {
         // TODO: why do we check validity of the route here? what if inconsistency?
         // Ensure route is valid
         // TODO: add unit tests
+        // `get_route` abort if route is invalid
         let route = chain_ids::get_route(source_chain, target_chain);
         // get owner address
         let owner = address::from_bytes(message::token_target_address(&token_payload));
@@ -290,7 +288,9 @@ module bridge::bridge {
         assert!(treasury::token_id<T>() == message::token_type(&token_payload), EUnexpectedTokenType);
         let amount = message::token_amount(&token_payload);
         // Make sure transfer is within limit.
-        limiter::check_and_record_transfer<T>(clock, &mut inner.limiter, route, amount);
+        if (!limiter::check_and_record_transfer<T>(clock, &mut inner.limiter, route, amount)){
+            return (option::none(), owner)
+        };
         // claim from treasury
         let token = treasury::mint<T>(&mut inner.treasury, amount, ctx);
         // Record changes

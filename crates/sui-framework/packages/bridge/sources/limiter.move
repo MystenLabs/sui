@@ -15,6 +15,8 @@ module bridge::limiter {
     use bridge::treasury;
     use bridge::chain_ids::BridgeRoute;
     #[test_only]
+    use std::debug::print;
+    #[test_only]
     use sui::test_scenario;
     #[test_only]
     use sui::test_utils::destroy;
@@ -28,9 +30,11 @@ module bridge::limiter {
     // TODO: Make this configurable?
     const DEFAULT_TRANSFER_LIMIT: u64 = 0;
 
+    const TRANSFER_AMOUNT_DP: u8 = 4;
+
     struct TransferLimiter has store {
         transfer_limits: VecMap<BridgeRoute, u64>,
-        // USD notional value, 0 DP accuracy
+        // USD notional value, 4 DP accuracy
         notional_values: VecMap<TypeName, u64>,
         // Per hour transfer amount for each bridge route
         transfer_records: VecMap<BridgeRoute, TransferRecord>,
@@ -40,7 +44,7 @@ module bridge::limiter {
         hour_head: u64,
         hour_tail: u64,
         per_hour_amounts: vector<u64>,
-        // total amount in USD, 0 DP accuracy
+        // total amount in USD, 4 DP accuracy
         total_amount: u64
     }
 
@@ -62,7 +66,7 @@ module bridge::limiter {
         self: &mut TransferLimiter,
         route: BridgeRoute,
         amount: u64
-    ) {
+    ): bool {
         // Create record for route if not exists
         if (!vec_map::contains(&self.transfer_records, &route)) {
             vec_map::insert(&mut self.transfer_records, route, TransferRecord {
@@ -88,16 +92,22 @@ module bridge::limiter {
 
         // Compute notional amount
         let coin_type = type_name::get<T>();
-        let notional_amount = *vec_map::get(&self.notional_values, &coin_type) * amount;
-        let notional_amount = notional_amount / pow(10, treasury::token_decimals<T>());
+        // Upcast to u128 to prevent overflow
+        let notional_amount = (*vec_map::get(&self.notional_values, &coin_type) as u128) * (amount as u128);
+        let notional_amount = notional_amount / (pow(10, treasury::token_decimals<T>()) as u128);
+        // Should be safe to downcast to u64 after dividing by the decimals
+        let notional_amount = (notional_amount as u64);
 
         // Check if transfer amount exceed limit
-        assert!(record.total_amount + notional_amount <= route_limit, ETransferAmountExceedLimit);
+        if (record.total_amount + notional_amount > route_limit) {
+            return false
+        };
 
         // Record transfer value
         let new_amount = vector::pop_back(&mut record.per_hour_amounts) + notional_amount;
         vector::push_back(&mut record.per_hour_amounts, new_amount);
         record.total_amount = record.total_amount + notional_amount;
+        return true
     }
 
     fun append_new_empty_hours(self: &mut TransferRecord, current_hour_since_epoch: u64) {
@@ -155,6 +165,7 @@ module bridge::limiter {
         check_and_record_transfer<ETH>(&clock, &mut limiter, route, 1_000_000_000_000);
 
         let record = vec_map::get(&limiter.transfer_records, &route);
+        print(&record.total_amount);
         assert!(record.total_amount == 10000 * 5, 0);
 
         // transfer 1000 ETH every hour, the 24 hours totol should be 24000 * 10
@@ -215,7 +226,6 @@ module bridge::limiter {
     }
 
     #[test]
-    #[expected_failure(abort_code = ETransferAmountExceedLimit)]
     fun test_exceed_limit() {
         let limiter = TransferLimiter {
             transfer_limits: vec_map::empty(),
@@ -242,11 +252,16 @@ module bridge::limiter {
 
         // tx should fail after 10 iteration when total amount exceed 1000000 * 10^8
         let i = 0;
-        while (i < 11) {
+        while (i < 10) {
             clock::increment_for_testing(&mut clock, 60 * 60 * 1000);
-            check_and_record_transfer<ETH>(&clock, &mut limiter, route, 100_000_000_000);
+            assert!(check_and_record_transfer<ETH>(&clock, &mut limiter, route, 100_000_000_000), 0);
             i = i + 1;
         };
+
+        // should fail on the 11th iteration
+        clock::increment_for_testing(&mut clock, 60 * 60 * 1000);
+        assert!(!check_and_record_transfer<ETH>(&clock, &mut limiter, route, 100_000_000_000), 0);
+
         destroy(limiter);
 
         clock::destroy_for_testing(clock);
