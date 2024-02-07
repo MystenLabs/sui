@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ptb::ptb_parser::build_ptb::PTBBuilder;
-use crate::ptb::ptb_parser::errors::render_errors;
-use crate::ptb::ptb_parser::parser::PTBParser;
+use crate::ptb::ptb_builder::build_ptb::PTBBuilder;
+use crate::ptb::ptb_builder::errors::render_errors;
+use crate::ptb::ptb_builder::parse_ptb::PTBParser;
 use anyhow::anyhow;
 use anyhow::Error;
 use clap::parser::ValuesRef;
