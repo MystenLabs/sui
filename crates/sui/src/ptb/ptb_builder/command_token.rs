@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::bail;
 use std::{
     fmt::{self, Display},
     str::FromStr,
 };
-
-use anyhow::bail;
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
 pub enum CommandToken {
@@ -109,7 +108,7 @@ pub const ALL_PUBLIC_COMMAND_TOKENS: &[&'static str] = &[
 
 #[cfg(test)]
 mod tests {
-    use crate::ptb::ptb_parser::command_token::*;
+    use crate::ptb::ptb_builder::command_token::*;
 
     #[test]
     fn round_trip() {

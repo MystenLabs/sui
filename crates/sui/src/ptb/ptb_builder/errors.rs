@@ -1,19 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::fmt::Debug;
-
+use crate::ptb::{
+    ptb::PTBCommand,
+    ptb_builder::{
+        command_token::{FILE_END, FILE_START},
+        context::FileScope,
+        utils::to_ordinal_contraction,
+    },
+};
 use miette::{miette, LabeledSpan};
 use move_symbol_pool::Symbol;
+use std::{collections::BTreeMap, fmt::Debug};
 use thiserror::Error;
-
-use crate::ptb::{ptb::PTBCommand, ptb_parser::utils::to_ordinal_contraction};
-
-use super::{
-    command_token::{FILE_END, FILE_START},
-    context::FileScope,
-};
 
 #[macro_export]
 macro_rules! error {
@@ -28,14 +27,14 @@ macro_rules! error {
 #[macro_export]
 macro_rules! err {
     ($l:expr, $($arg:tt)*) => {
-        $crate::ptb::ptb_parser::errors::PTBError::WithSource {
+        $crate::ptb::ptb_builder::errors::PTBError::WithSource {
             message: format!($($arg)*),
             span: $l,
             help: None,
         }
     };
     ($l:expr => help: { $($h:expr),* }, $($arg:tt)*) => {
-        $crate::ptb::ptb_parser::errors::PTBError::WithSource {
+        $crate::ptb::ptb_builder::errors::PTBError::WithSource {
             message: format!($($arg)*),
             span: $l,
             help: Some(format!($($h),*)),
@@ -46,13 +45,13 @@ macro_rules! err {
 #[macro_export]
 macro_rules! sp {
     (_, $value:pat) => {
-        $crate::ptb::ptb_parser::errors::Spanned { value: $value, .. }
+        $crate::ptb::ptb_builder::errors::Spanned { value: $value, .. }
     };
     ($loc:pat, _) => {
-        $crate::ptb::ptb_parser::errors::Spanned { span: $loc, .. }
+        $crate::ptb::ptb_builder::errors::Spanned { span: $loc, .. }
     };
     ($loc:pat, $value:pat) => {
-        $crate::ptb::ptb_parser::errors::Spanned {
+        $crate::ptb::ptb_builder::errors::Spanned {
             span: $loc,
             value: $value,
         }
@@ -118,7 +117,7 @@ impl PTBError {
 /// the original commands from the PTB file and not the commands that were parsed -- we will use
 /// the string representation of the original commands to render errors.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FileIndexedErrors(pub BTreeMap<(String, usize), Vec<PTBCommand>>);
+struct FileIndexedErrors(pub BTreeMap<(String, usize), Vec<PTBCommand>>);
 
 impl FileIndexedErrors {
     /// Take a set of commands and index them by file scope.
@@ -159,7 +158,7 @@ impl FileIndexedErrors {
         Self(file_indexed_commands)
     }
 
-    pub fn get(&self, file_scope: &FileScope) -> Option<&PTBCommand> {
+    fn get(&self, file_scope: &FileScope) -> Option<&PTBCommand> {
         self.0
             .get(&(file_scope.name.to_string(), file_scope.name_index))
             .and_then(|commands| commands.get(file_scope.file_command_index))
@@ -246,18 +245,18 @@ pub fn span<T: Debug + Clone + PartialEq + Eq>(loc: Span, value: T) -> Spanned<T
     Spanned { span: loc, value }
 }
 
-pub struct DisplayableError {
-    pub command_string: String,
-    pub label: LabeledSpan,
-    pub error_string: String,
-    pub help: Option<String>,
+struct DisplayableError {
+    command_string: String,
+    label: LabeledSpan,
+    error_string: String,
+    help: Option<String>,
 }
 
 impl DisplayableError {
     // If no span we point to the command name
     // If there is a span, we convert the span range to the appropriate offset in the whole string for
     // the command
-    pub fn new(original_command: PTBCommand, error: PTBError) -> Self {
+    fn new(original_command: PTBCommand, error: PTBError) -> Self {
         let PTBError::WithSource {
             span,
             message,
@@ -322,7 +321,7 @@ impl DisplayableError {
         }
     }
 
-    pub fn create_report(self) -> miette::Report {
+    fn create_report(self) -> miette::Report {
         match self.help {
             Some(help_msg) => miette!(
                 labels = vec![self.label],
