@@ -1084,7 +1084,7 @@ pub fn get_symbols(
         let cloned_defs = defs.clone();
         let path = file_name_mapping.get(&cloned_defs.fhash.clone()).unwrap();
         file_mods
-            .entry(dunce::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path.to_path_buf())))
+            .entry(dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()))
             .or_insert_with(BTreeSet::new)
             .insert(cloned_defs);
 
@@ -1849,7 +1849,7 @@ impl<'a> TypingSymbolicator<'a> {
                     start: name_start,
                 })
                 .unwrap();
-            let fun_type_def = def_info_to_type_def_loc(self.mod_outer_defs, &fun_info);
+            let fun_type_def = def_info_to_type_def_loc(self.mod_outer_defs, fun_info);
             let use_def = UseDef::new(
                 self.references,
                 self.alias_lengths,
@@ -1882,7 +1882,7 @@ impl<'a> TypingSymbolicator<'a> {
                     start: name_start,
                 })
                 .unwrap();
-            let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, &const_info);
+            let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, const_info);
             self.use_defs.insert(
                 name_start.line,
                 UseDef::new(
@@ -1918,7 +1918,7 @@ impl<'a> TypingSymbolicator<'a> {
                     start: name_start,
                 })
                 .unwrap();
-            let struct_type_def = def_info_to_type_def_loc(self.mod_outer_defs, &struct_info);
+            let struct_type_def = def_info_to_type_def_loc(self.mod_outer_defs, struct_info);
             self.use_defs.insert(
                 name_start.line,
                 UseDef::new(
@@ -2407,7 +2407,7 @@ impl<'a> TypingSymbolicator<'a> {
                     start: const_def.name_start,
                 })
                 .unwrap();
-            let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, &const_info);
+            let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, const_info);
             self.use_defs.insert(
                 name_start.line,
                 UseDef::new(
@@ -2556,7 +2556,7 @@ impl<'a> TypingSymbolicator<'a> {
                         })
                         .unwrap();
                     let ident_type_def_loc =
-                        def_info_to_type_def_loc(self.mod_outer_defs, &struct_info);
+                        def_info_to_type_def_loc(self.mod_outer_defs, struct_info);
                     let doc_string = extract_doc_string(
                         self.file_id_mapping,
                         self.file_id_to_lines,
@@ -2592,7 +2592,7 @@ impl<'a> TypingSymbolicator<'a> {
                 match get_start_loc(pos, self.files, self.file_id_mapping) {
                     Some(name_start) => match self.type_params.get(&use_name) {
                         Some(def_loc) => {
-                            let ident_type_def_loc = type_def_loc(self.mod_outer_defs, &id_type);
+                            let ident_type_def_loc = type_def_loc(self.mod_outer_defs, id_type);
                             let doc_string = extract_doc_string(
                                 self.file_id_mapping,
                                 self.file_id_to_lines,
@@ -2766,7 +2766,7 @@ fn add_fun_use_def(
             &func_def.start,
             &def_fhash,
         );
-        let ident_type_def_loc = def_info_to_type_def_loc(mod_outer_defs, &fun_info);
+        let ident_type_def_loc = def_info_to_type_def_loc(mod_outer_defs, fun_info);
         let ud = UseDef::new(
             references,
             alias_lengths,
@@ -2811,7 +2811,7 @@ fn add_struct_use_def(
                 start: def.name_start,
             })
             .unwrap();
-        let ident_type_def_loc = def_info_to_type_def_loc(mod_outer_defs, &struct_info);
+        let ident_type_def_loc = def_info_to_type_def_loc(mod_outer_defs, struct_info);
         let doc_string = extract_doc_string(
             file_id_mapping,
             file_id_to_lines,
