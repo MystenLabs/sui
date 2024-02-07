@@ -45,7 +45,7 @@ use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsA
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::storage::{get_module, PackageObject};
-use sui_types::transaction::TransactionKind::ProgrammableTransaction;
+use sui_types::transaction::ProgrammableTransaction;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
@@ -67,6 +67,7 @@ use sui_types::{
     DEEPBOOK_PACKAGE_ID,
 };
 use tracing::{error, info, trace, warn};
+use sui_types::transaction::TransactionKind::ProgrammableTransaction as ProgrammableTransactionKind;
 
 // TODO: add persistent cache. But perf is good enough already.
 
@@ -315,6 +316,20 @@ impl LocalExec {
         .await
     }
 
+    pub async fn execute_foked(
+        rpc_url: String,
+        transaction: TransactionData,
+        expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+        executor_version: Option<i64>,
+        protocol_version: Option<i64>,
+        enable_profiler: Option<PathBuf>,
+    ) -> Result<ExecutionSandboxState, ReplayEngineError> {
+        let local = LocalExec::new_from_fn_url(&rpc_url)
+            .await?
+            .init_for_execution()
+            .await?;
+        todo!();
+    }
     pub async fn replay_with_network_config(
         rpc_url: Option<String>,
         path: Option<String>,
@@ -492,7 +507,7 @@ impl LocalExec {
         })
     }
 
-    pub async fn multi_download_and_store(
+    pub async fn input_objectsmulti_download_and_store(
         &mut self,
         objs: &[(ObjectID, SequenceNumber)],
     ) -> Result<Vec<Object>, ReplayEngineError> {
@@ -691,6 +706,25 @@ impl LocalExec {
         Ok((succeeded, num as u64))
     }
 
+    pub async fn execute_forked_transaction(
+        &mut self,
+        transaction: ProgrammableTransaction,
+        forked_epoch: u64,
+        expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+        executor_version: Option<i64>,
+        protocol_version: Option<i64>,
+        enable_profiler: Option<PathBuf>,
+    ) -> Result<ExecutionSandboxState, ReplayEngineError> {
+        self.executor_version = executor_version;
+        self.protocol_version = protocol_version;
+        self.enable_profiler = enable_profiler;
+
+        let input_objects = self
+            .initialize_execution_env_forked_state(transaction, forked_epoch)
+            .await?;
+        todo!();
+    }
+
     pub async fn execution_engine_execute_with_tx_info_impl(
         &mut self,
         tx_info: &OnChainTransactionInfo,
@@ -779,7 +813,7 @@ impl LocalExec {
 
         trace!(target: "replay_gas_info", "{}", Pretty(&gas_status));
 
-        if let ProgrammableTransaction(pt) = transaction_kind {
+        if let ProgrammableTransactionKind(pt) = transaction_kind {
             trace!(target: "replay_ptb_info", "{}", Pretty(&pt));
         };
 
@@ -1698,6 +1732,65 @@ impl LocalExec {
             .collect();
 
         Ok(InputObjects::new(resolved_input_objs))
+    }
+
+    /// Given the OnChainTransactionInfo, download and store the input objects, and other info necessary
+    /// for execution
+    async fn initialize_execution_env_forked_state(
+        &mut self,
+        tx: ProgrammableTransaction,
+        forked_epoch: u64,
+    ) -> Result<InputObjects, ReplayEngineError> {
+        // We need this for other activities in this session
+        self.current_protocol_version = self
+            .protocol_version_epoch_table
+            .get(&forked_epoch)?
+            .protocol_version;
+
+        // Download the objects at the version right before the execution of this TX
+        // todo @Laura: how to get the version right before the execution of this TX
+        let inputs = tx.input_objects()?;
+        let objs = Vec::new();
+        for input in inputs {
+            match input {
+                InputObjectKind::ImmOrOwnedMoveObject((id, seq, _)) => {
+                    objs.push((id, seq));
+                }
+                InputObjectKind::SharedMoveObject {}
+            }
+        }
+
+        // turn inputs into a list of ObjectId, SequenceNumber
+
+        self.multi_download_and_store(&tx_info.modified_at_versions)
+            .await?;
+
+        let (shared_refs, deleted_shared_refs): (Vec<ObjectRef>, Vec<ObjectRef>) = tx_info
+            .shared_object_refs
+            .iter()
+            .partition(|r| r.2 != ObjectDigest::OBJECT_DIGEST_DELETED);
+
+        // Download shared objects at the version right before the execution of this TX
+        let shared_refs: Vec<_> = shared_refs.iter().map(|r| (r.0, r.1)).collect();
+        self.multi_download_and_store(&shared_refs).await?;
+
+        // Download gas (although this should already be in cache from modified at versions?)
+        let gas_refs: Vec<_> = tx_info.gas.iter().map(|w| (w.0, w.1)).collect();
+        self.multi_download_and_store(&gas_refs).await?;
+
+        // Fetch the input objects we know from the raw transaction
+        let input_objs = self
+            .resolve_download_input_objects(tx_info, deleted_shared_refs)
+            .await?;
+
+        // Prep the object runtime for dynamic fields
+        // Download the child objects accessed at the version right before the execution of this TX
+        let loaded_child_refs = self.fetch_loaded_child_refs(&tx_info.tx_digest).await?;
+        self.diag.loaded_child_objects = loaded_child_refs.clone();
+        self.multi_download_and_store(&loaded_child_refs).await?;
+        tokio::task::yield_now().await;
+
+        Ok(input_objs)
     }
 
     /// Given the OnChainTransactionInfo, download and store the input objects, and other info necessary
