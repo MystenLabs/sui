@@ -427,7 +427,7 @@ impl<
                 Some(tx_with_results) = tasks_queue.join_next() => {
                     let tx_with_results = tx_with_results.expect("tx task failed");
                     let txid = tx_with_results.full_tx.tx.digest();
-                    println!("EW {} executed tx {}", my_id, txid);
+                    // println!("EW {} executed tx {}", my_id, txid);
                     // TODO uncomment this when we have to send MissingObjects
                     // if !tx_with_results.missing_objs.is_empty() {
                     //     self.waiting_child_objs.entry(txid).or_default().extend(tx_with_results.missing_objs.iter());
@@ -498,7 +498,7 @@ impl<
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
                 Some(full_tx) = ready_tx_receiver.recv() => {
                     let txid = full_tx.tx.digest();
-                    println!("EW {} received ready tx {} from QM", my_id, txid);
+                    // println!("EW {} received ready tx {} from QM", my_id, txid);
                     self.ready_txs.insert(*txid, ());
 
                     let mut locked_objs = Vec::new();
@@ -558,7 +558,7 @@ impl<
                         // TODO: deal with possible duplicate LockedExec messages
                         let tx = full_tx.clone();
                         let txid = tx.tx.digest().clone();
-                        println!("EW {} received LockedExec for tx {}", my_id, txid);
+                        // println!("EW {} received LockedExec for tx {}", my_id, txid);
                         let mut list = self.received_objs.entry(txid).or_default();
                         list.append(&mut objects);
 
@@ -619,7 +619,7 @@ impl<
                             });
                         }
                     } else if let SailfishMessage::TxResults { txid, deleted, written } = msg {
-                        println!("EW {} received TxResults for tx {}", my_id, txid);
+                        // println!("EW {} received TxResults for tx {}", my_id, txid);
                         if let Some(_) = self.ready_txs.remove(&txid) {
                             done_tx_sender.send(txid).expect("send failed");
                         }
@@ -646,7 +646,7 @@ impl<
                         // epoch_txs_semaphore -= 1;
                         // assert!(epoch_txs_semaphore >= 0);
                     } else if let SailfishMessage::ProposeExec(full_tx) = msg {
-                        println!("EW {} received propose exec for tx {}", my_id, full_tx.tx.digest());
+                        // println!("EW {} received propose exec for tx {}", my_id, full_tx.tx.digest());
                         if full_tx.is_epoch_change() {
                             // don't queue to manager, but store to epoch_change_tx
                             epoch_change_tx = Some(full_tx);

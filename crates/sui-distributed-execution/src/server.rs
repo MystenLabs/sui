@@ -186,9 +186,11 @@ impl NetworkManager {
                         message.src = self.my_id; // set source to self
                         for dst in message.dst.iter() {
                             let address = self.addr_table.get(&dst).unwrap();
+                            println!("[{}] Sending message to {:?}", self.my_id, address);
                             let cancel_handler = sender
                                 .send(*address, serialized_message.clone())
                                 .await;
+                            println!("[{}] Sent message to {:?}", self.my_id, address);
                             waiting.push(cancel_handler);
                         }
                     },
