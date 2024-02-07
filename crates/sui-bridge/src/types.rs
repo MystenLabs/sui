@@ -492,7 +492,7 @@ impl BridgeAction {
         BridgeActionDigest::new(hasher.finalize().into())
     }
 
-    pub fn source_chain_id(&self) -> BridgeChainId {
+    pub fn chain_id(&self) -> BridgeChainId {
         match self {
             BridgeAction::SuiToEthBridgeAction(a) => a.sui_bridge_event.sui_chain_id,
             BridgeAction::EthToSuiBridgeAction(a) => a.eth_bridge_event.eth_chain_id,
