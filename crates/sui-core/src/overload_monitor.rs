@@ -211,6 +211,7 @@ fn check_overload_signals(
     (overload_status, load_shedding_percentage)
 }
 
+// Return true if we should reject the txn with `tx_digest`.
 fn should_reject_tx(
     load_shedding_percentage: u32,
     tx_digest: TransactionDigest,
@@ -222,15 +223,19 @@ fn should_reject_tx(
     value % 100 < load_shedding_percentage as u64
 }
 
+// Checks if we can accept the transaction with `tx_digest`.
 pub fn overload_monitor_accept_tx(
     load_shedding_percentage: u32,
     tx_digest: TransactionDigest,
 ) -> SuiResult {
+    // Using the minutes_since_epoch as the hash seed to allow rejected transaction's
+    // retry to have a chance to go through in the future.
     let minutes_since_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Sui did not exist prior to 1970")
         .as_secs()
         / 60;
+
     if should_reject_tx(load_shedding_percentage, tx_digest, minutes_since_epoch) {
         fp_bail!(SuiError::ValidatorPushbackAndRetry);
     }
@@ -679,6 +684,8 @@ mod tests {
         assert!(dropped_ratio < 0.6);
     }
 
+    // Tests that the ratio of rejected transactions created randomly matches load shedding percentage in
+    // the overload monitor.
     #[test]
     fn test_txn_rejection_rate() {
         for rejection_percentage in 0..=100 {
@@ -689,33 +696,46 @@ mod tests {
                     reject_count += 1;
                 }
             }
+
+            // Give it a 2% fluctuation.
             assert!(rejection_percentage as f32 / 100.0 - 0.02 < reject_count as f32 / 10000.0);
             assert!(reject_count as f32 / 10000.0 < rejection_percentage as f32 / 100.0 + 0.02);
         }
     }
 
+    // Tests that rejected transaction will have a chance to be accepted in the future.
     #[test]
     fn test_txn_rejection_over_time() {
         let start_time = Instant::now();
         let mut digest = TransactionDigest::random();
         let mut minutes_since_epoch = 28455473;
-        while !should_reject_tx(50, digest, minutes_since_epoch)
+        let load_shedding_percentage = 50;
+
+        // Find a rejected transaction with 50% rejection rate.
+        while !should_reject_tx(load_shedding_percentage, digest, minutes_since_epoch)
             && start_time.elapsed() < Duration::from_secs(30)
         {
             digest = TransactionDigest::random();
         }
 
+        // It should always be rejected in the current minute.
         for _ in 0..100 {
-            assert!(should_reject_tx(50, digest, minutes_since_epoch));
+            assert!(should_reject_tx(
+                load_shedding_percentage,
+                digest,
+                minutes_since_epoch
+            ));
         }
 
+        // It will be accepted in the future.
         minutes_since_epoch += 1;
-        while should_reject_tx(50, digest, minutes_since_epoch)
+        while should_reject_tx(load_shedding_percentage, digest, minutes_since_epoch)
             && start_time.elapsed() < Duration::from_secs(30)
         {
             minutes_since_epoch += 1;
         }
 
+        // Make sure that the tests can finish within 30 seconds.
         assert!(start_time.elapsed() < Duration::from_secs(30));
     }
 }

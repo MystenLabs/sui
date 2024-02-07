@@ -960,8 +960,7 @@ impl AuthorityState {
     }
 
     fn check_authority_overload(&self, tx_data: &SenderSignedData) -> SuiResult {
-        let is_overload = self.overload_info.is_overload.load(Ordering::Relaxed);
-        if !is_overload {
+        if !self.overload_info.is_overload.load(Ordering::Relaxed) {
             return Ok(());
         }
 
@@ -969,9 +968,7 @@ impl AuthorityState {
             .overload_info
             .load_shedding_percentage
             .load(Ordering::Relaxed);
-
-        let tx_digest = tx_data.digest();
-        overload_monitor_accept_tx(load_shedding_percentage, tx_digest)
+        overload_monitor_accept_tx(load_shedding_percentage, tx_data.digest())
     }
 
     /// Executes a transaction that's known to have correct effects.
@@ -2562,6 +2559,7 @@ impl AuthorityState {
             rx_execution_shutdown,
         ));
 
+        // Don't start the overload monitor when max_load_shedding_percentage is 0.
         if overload_threshold_config.max_load_shedding_percentage > 0 {
             let authority_state = Arc::downgrade(&state);
             spawn_monitored_task!(overload_monitor(authority_state, overload_threshold_config));

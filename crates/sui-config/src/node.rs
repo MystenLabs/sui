@@ -716,9 +716,13 @@ pub struct OverloadThresholdConfig {
     #[serde(default = "default_safe_transaction_ready_rate")]
     pub safe_transaction_ready_rate: u32,
 
+    // When set to true, transaction signing may be rejected when the validator
+    // is overloaded.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub check_system_overload_at_signing: bool,
 
+    // When set to true, transaction execution may be rejected when the validator
+    // is overloaded.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub check_system_overload_at_execution: bool,
     // TODO: Move other thresholds here as well, including `MAX_TM_QUEUE_LENGTH`

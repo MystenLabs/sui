@@ -306,18 +306,25 @@ impl ValidatorService {
             .into());
         }
 
+        // When authority is overloaded and decide to reject this tx, we still lock the object
+        // and ask the client to retry in the future. This is because without locking, the
+        // input objects can be locked by a different tx in the future, however, the input objects
+        // may already be locked by this tx in other validators. This can cause non of the txes
+        // to have enough quorum to form a certificate, causing the objects to be locked for
+        // the entire epoch. By doing locking but pushback, retrying transaction will have
+        // higher chance to succeed.
+        let mut lock_objects_but_push_back = false;
         let overload_check_res = state.check_system_overload(
             &consensus_adapter,
             transaction.data(),
             state.check_system_overload_at_signing(),
         );
-
-        let mut lock_objects_but_push_back = false;
         if let Err(error) = overload_check_res {
             metrics
                 .num_rejected_tx_during_overload
                 .with_label_values(&[error.as_ref()])
                 .inc();
+            // TODO: consider change the behavior for other types of overload errors.
             match error {
                 SuiError::ValidatorPushbackAndRetry => lock_objects_but_push_back = true,
                 _ => return Err(error.into()),
