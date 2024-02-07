@@ -13,7 +13,7 @@ use lsp_types::{
 };
 use std::{
     collections::BTreeMap,
-    path::Path,
+    path::PathBuf,
     sync::{Arc, Mutex},
     thread,
 };
@@ -24,7 +24,6 @@ use move_analyzer::{
     symbols,
     vfs::{on_text_document_sync_notification, VirtualFileSystem},
 };
-use move_symbol_pool::Symbol;
 use url::Url;
 
 #[derive(Parser)]
@@ -111,7 +110,7 @@ fn main() {
     })
     .expect("could not serialize server capabilities");
 
-    let (diag_sender, diag_receiver) = bounded::<Result<BTreeMap<Symbol, Vec<Diagnostic>>>>(0);
+    let (diag_sender, diag_receiver) = bounded::<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>(0);
     let mut symbolicator_runner = symbols::SymbolicatorRunner::idle();
     if symbols::DEFS_AND_REFS_SUPPORT {
         let initialize_params: lsp_types::InitializeParams =
@@ -173,7 +172,7 @@ fn main() {
                         match result {
                             Ok(diags) => {
                                 for (k, v) in diags {
-                                    let url = Url::from_file_path(Path::new(&k.to_string())).unwrap();
+                                    let url = Url::from_file_path(k).unwrap();
                                     let params = lsp_types::PublishDiagnosticsParams::new(url, v, None);
                                     let notification = Notification::new(lsp_types::notification::PublishDiagnostics::METHOD.to_string(), params);
                                     if let Err(err) = context
