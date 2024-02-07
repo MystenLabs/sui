@@ -48,58 +48,51 @@ impl Core {
         context: Arc<Context>,
         transactions_consumer: TransactionsConsumer,
         block_manager: BlockManager,
-        mut signals: CoreSignals,
+        signals: CoreSignals,
         block_signer: NetworkKeyPair,
         store: Arc<dyn Store>,
     ) -> Self {
-        // Recover the pending ancestors to ensure that we'll have a quorum of blocks to make progress.
-        let (mut last_proposed_block, mut all_pending_ancestors) = Block::genesis(context.clone());
-
-        // Now fetch the proposed blocks per authority for their last two rounds.
-        for (index, _authority) in context.committee.authorities() {
-            let blocks = store
-                .scan_last_blocks_by_author(index, 2)
-                .expect("Storage error while recovering Core");
-
-            if index == context.own_index && !blocks.is_empty() {
-                last_proposed_block = blocks.last().cloned().unwrap();
-            }
-            all_pending_ancestors.extend(blocks);
-        }
-
-        // populate the threshold clock to properly advance the round & also populate the pending ancestors
-        let mut threshold_clock = ThresholdClock::new(0, context.clone());
-        let mut pending_ancestors = all_pending_ancestors.into_iter().fold(
-            BTreeMap::<Round, Vec<VerifiedBlock>>::new(),
-            |mut map, ancestor| {
-                threshold_clock.add_block(ancestor.reference());
-                map.entry(ancestor.round()).or_default().push(ancestor);
-                map
-            },
-        );
-
-        // We want as minimum to keep all the ancestors after or equal the last proposed block round. If though the threshold clock round is higher, then
-        // we can keep truncating up to the threshold_clock.round - 1 , so we can successfully make a proposal for the threshold_clock.round.
-        pending_ancestors.retain(|round, _| {
-            *round >= last_proposed_block.round()
-                && *round >= threshold_clock.get_round().saturating_sub(1)
-        });
-
-        // emit a signal for the last threshold clock round, even if that's unnecessary it will ensure that the timeout
-        // logic will trigger to attempt a block creation.
-        signals.new_round(threshold_clock.get_round());
+        let (my_genesis_block, all_genesis_blocks) = Block::genesis(context.clone());
 
         Self {
-            context,
-            threshold_clock,
-            last_proposed_block,
+            context: context.clone(),
+            threshold_clock: ThresholdClock::new(0, context),
+            last_proposed_block: my_genesis_block,
             transactions_consumer,
-            pending_ancestors,
+            pending_ancestors: BTreeMap::new(),
             block_manager,
             signals,
             block_signer,
             store,
         }
+        .recover(all_genesis_blocks)
+    }
+
+    fn recover(mut self, genesis_blocks: Vec<VerifiedBlock>) -> Self {
+        // We always need the genesis blocks as a starter point since we might not have advanced yet at all.
+        let mut all_blocks = genesis_blocks;
+
+        // Now fetch the proposed blocks per authority for their last two rounds.
+        let context = self.context.clone();
+        for (index, _authority) in context.committee.authorities() {
+            let blocks = self
+                .store
+                .scan_last_blocks_by_author(index, 2)
+                .expect("Storage error while recovering Core");
+            all_blocks.extend(blocks);
+        }
+
+        // Recover the last proposed block
+        self.last_proposed_block = all_blocks
+            .iter()
+            .filter(|block| block.author() == context.own_index)
+            .max_by_key(|block| block.round())
+            .cloned()
+            .expect("At least one block - even genesis - should be present");
+
+        // Accept all blocks but make sure that only the last quorum round blocks and onwards are kept.
+        self.add_accepted_blocks(all_blocks, Some(0));
+        self
     }
 
     /// Processes the provided blocks and accepts them if possible when their causal history exists.
@@ -110,6 +103,26 @@ impl Core {
         // Try to accept them via the block manager
         let accepted_blocks = self.block_manager.add_blocks(blocks);
 
+        // Now process them, basically move the threshold clock and add them to pending list
+        self.add_accepted_blocks(accepted_blocks, None);
+
+        // Attempt to create a new block
+        let _ = self.try_new_block(false);
+
+        // TODO: we don't deal for now with missed references, will address later.
+        vec![]
+    }
+
+    /// Adds/processed all the newly `accepted_blocks`. We basically try to move the threshold clock and add them to the
+    /// pending ancestors list. The `pending_ancestors_retain_rounds` if defined then the method will retain on the pending ancestors
+    /// only the `pending_ancestors_retain_rounds` from the last formed quorum round. For example if set to zero (0), then
+    /// we'll strictly keep in the pending ancestors list the blocks of round >= last_quorum_round. If not defined, so None
+    /// is provided, then all the pending ancestors will be kep until the next block proposal.
+    fn add_accepted_blocks(
+        &mut self,
+        accepted_blocks: Vec<VerifiedBlock>,
+        pending_ancestors_retain_rounds: Option<u32>,
+    ) {
         // Advance the threshold clock. If advanced to a new round then send a signal that a new quorum has been received.
         if let Some(new_round) = self
             .threshold_clock
@@ -126,11 +139,6 @@ impl Core {
             .threshold_clock_round
             .set(self.threshold_clock.get_round() as i64);
 
-        // TODO: we might need to consider the following:
-        // 1. Add some sort of protection from bulk catch ups - or intentional validator attack - that is flooding us with
-        // many blocks, so we don't spam the pending_ancestors list and OOM
-        // 2. Probably it doesn't make much sense to keep blocks around from too many rounds ago to reference as the data
-        // might not be relevant any more.
         for accepted_block in accepted_blocks {
             self.pending_ancestors
                 .entry(accepted_block.round())
@@ -138,11 +146,17 @@ impl Core {
                 .push(accepted_block);
         }
 
-        // Attempt to create a new block
-        let _ = self.try_new_block(false);
-
-        // TODO: we don't deal for now with missed references, will address later.
-        vec![]
+        // TODO: we might need to consider the following:
+        // 1. Add some sort of protection from bulk catch ups - or intentional validator attack - that is flooding us with
+        // many blocks, so we don't spam the pending_ancestors list and OOM
+        // 2. Probably it doesn't make much sense to keep blocks around from too many rounds ago to reference as the data
+        // might not be relevant any more.
+        if let Some(retain_ancestor_rounds_from_quorum) = pending_ancestors_retain_rounds {
+            let last_quorum = self.threshold_clock.get_round().saturating_sub(1);
+            self.pending_ancestors.retain(|round, _| {
+                *round >= last_quorum.saturating_sub(retain_ancestor_rounds_from_quorum)
+            });
+        }
     }
 
     /// Force creating a new block for the dictated round. This is used when a leader timeout occurs.
