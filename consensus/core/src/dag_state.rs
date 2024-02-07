@@ -13,7 +13,7 @@ use consensus_config::AuthorityIndex;
 
 use crate::{
     block::{BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
-    commit::Commit,
+    commit::{Commit, CommitIndex},
     context::Context,
     storage::Store,
 };
@@ -67,8 +67,8 @@ impl DagState {
             recent_blocks: BTreeMap::new(),
             cached_refs: vec![BTreeSet::new(); num_authorities],
             last_commit,
-            store,
             highest_accepted_round: 0,
+            store,
         };
 
         for (i, round) in last_committed_rounds.into_iter().enumerate() {
@@ -117,6 +117,18 @@ impl DagState {
     /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
     pub(crate) fn get_uncommitted_block(&self, reference: &BlockRef) -> Option<VerifiedBlock> {
         self.recent_blocks.get(reference).cloned()
+    }
+
+    /// Gets a copy of the uncommitted blocks. Returns None for each block not found.
+    /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
+    pub(crate) fn get_uncommitted_blocks(
+        &self,
+        references: Vec<BlockRef>,
+    ) -> Vec<Option<VerifiedBlock>> {
+        references
+            .into_iter()
+            .map(|reference| self.recent_blocks.get(&reference).cloned())
+            .collect()
     }
 
     /// Gets all uncommitted blocks in a slot.
@@ -204,6 +216,26 @@ impl DagState {
 
     pub(crate) fn highest_accepted_round(&self) -> Round {
         self.highest_accepted_round
+    }
+
+    /// Index of the last commit.
+    pub(crate) fn last_commit_index(&self) -> CommitIndex {
+        match &self.last_commit {
+            Some(commit) => commit.index,
+            None => 0,
+        }
+    }
+
+    /// Last committed round per authority.
+    pub(crate) fn last_committed_rounds(&self) -> Vec<Round> {
+        match &self.last_commit {
+            Some(commit) => commit.last_committed_rounds.clone(),
+            None => vec![0; self.context.committee.size()],
+        }
+    }
+
+    pub(crate) fn set_last_commit(&mut self, commit: Commit) {
+        self.last_commit = Some(commit);
     }
 
     /// Highest round where a block is committed, which is last commit's leader round.
