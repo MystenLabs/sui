@@ -591,7 +591,7 @@ impl<S: ?Sized + StateRead> ObjectProvider for Arc<S> {
     ) -> Result<Option<Object>, Self::Error> {
         Ok(self
             .get_cache_reader()
-            .find_object_lt_or_eq_version(*id, *version))
+            .find_object_lt_or_eq_version(*id, *version)?)
     }
 }
 
@@ -624,7 +624,7 @@ impl<S: ?Sized + StateRead> ObjectProvider for (Arc<S>, Arc<TransactionKeyValueS
         Ok(self
             .0
             .get_cache_reader()
-            .find_object_lt_or_eq_version(*id, *version))
+            .find_object_lt_or_eq_version(*id, *version)?)
     }
 }
 
