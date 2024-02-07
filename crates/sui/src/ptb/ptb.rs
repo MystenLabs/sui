@@ -240,7 +240,15 @@ impl PTB {
             return Err(anyhow!("{filename} does not exist"));
         }
 
-        let file_content = std::fs::read_to_string(file_path.clone())?.replace("\\", "");
+        // NB: The following replacements are necessary. In order to handle quoted values in PTB
+        // files (i.e., to support command-line syntax in PTB files), we need to handle escaped
+        // quotes replacing them with the alternate syntax for inner strings ('), we then remove
+        // any remaining quotes.
+        let file_content = std::fs::read_to_string(file_path.clone())?
+            .replace("\\\"", "'") // Handle escaped quotes \" and replace with '
+            .replace("\"", "") // Remove quotes
+            .replace("\\", ""); // Remove newlines
+
         let ignore_comments = file_content
             .lines()
             .filter(|x| !x.starts_with("#"))
