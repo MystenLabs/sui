@@ -79,6 +79,20 @@ impl BridgeClient {
                 let type_ = (a.action_type as u8).to_string();
                 format!("sign/emergency_button/{chain_id}/{nonce}/{type_}")
             }
+            BridgeAction::LimitUpdateAction(a) => {
+                let chain_id = (a.chain_id as u8).to_string();
+                let nonce = a.nonce.to_string();
+                let sending_chain_id = (a.sending_chain_id as u8).to_string();
+                let new_usd_limit = a.new_usd_limit.to_string();
+                format!("sign/update_limit/{chain_id}/{nonce}/{sending_chain_id}/{new_usd_limit}")
+            }
+            BridgeAction::AssetPriceUpdateAction(a) => {
+                let chain_id = (a.chain_id as u8).to_string();
+                let nonce = a.nonce.to_string();
+                let token_id = (a.token_id as u8).to_string();
+                let new_usd_price = a.new_usd_price.to_string();
+                format!("sign/update_asset_price/{chain_id}/{nonce}/{token_id}/{new_usd_price}")
+            }
         }
     }
 
