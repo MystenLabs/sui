@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// A basic raffle game that depends on Sui randomness.
+/// Basic raffles games that depends on Sui randomness.
 ///
-/// Anyone can create a new lottery game with an end time and a cost per ticket. After the end time, anyone can trigger
-/// a function to determine the winner, and the owner of the winning ticket can redeem the entire balance of the game.
+/// Anyone can create a new lottery game with an end time and a price. After the end time, anyone can trigger
+/// a function to determine the winner, and the winner gets the entire balance of the game.
 ///
-module games::raffle {
+/// - raffle_with_tickets uses tickets which could be transferred to other accounts, used as NFTs, etc.
+/// - small_raffle uses a simpler approach with no tickets.
+
+module games::raffle_with_tickets {
     use std::option::{Self, Option};
     use sui::balance;
     use sui::balance::Balance;
@@ -68,14 +71,9 @@ module games::raffle {
         assert!(game.end_time <= clock::timestamp_ms(clock), EGameInProgress);
         assert!(option::is_none(&game.winner), EGameAlreadyCompleted);
         assert!(game.participants > 0, ENoParticipants);
-
-        if (game.participants == 1) {
-            game.winner = option::some(1);
-        } else {
-            let generator = new_generator(r, ctx);
-            let winner = random::generate_u32_in_range(&mut generator, 1, game.participants);
-            game.winner = option::some(winner);
-        }
+        let generator = new_generator(r, ctx);
+        let winner = random::generate_u32_in_range(&mut generator, 1, game.participants);
+        game.winner = option::some(winner);
     }
 
     /// Anyone can play and receive a ticket.
@@ -128,6 +126,99 @@ module games::raffle {
     #[test_only]
     public fun get_winner(game: &Game): Option<u32> {
         game.winner
+    }
+
+    #[test_only]
+    public fun get_balance(game: &Game): u64 {
+        balance::value(&game.balance)
+    }
+}
+
+
+
+module games::small_raffle {
+    use sui::balance::{Self, Balance};
+    use sui::clock::{Self, Clock};
+    use sui::coin::{Self, Coin};
+    use sui::object::{Self, UID};
+    use sui::random::{Self, Random, new_generator};
+    use sui::sui::SUI;
+    use sui::table::{Self, Table};
+    use sui::transfer;
+    use sui::tx_context::{TxContext, sender};
+
+    /// Error codes
+    const EGameInProgress: u64 = 0;
+    const EGameAlreadyCompleted: u64 = 1;
+    const EInvalidAmount: u64 = 2;
+
+    /// Game represents a set of parameters of a single game.
+    struct Game has key {
+        id: UID,
+        cost_in_sui: u64,
+        participants: u32,
+        end_time: u64,
+        balance: Balance<SUI>,
+        participants_table: Table<u32, address>,
+    }
+
+    /// Create a shared-object Game.
+    public fun create(end_time: u64, cost_in_sui: u64, ctx: &mut TxContext) {
+        let game = Game {
+            id: object::new(ctx),
+            cost_in_sui,
+            participants: 0,
+            end_time,
+            balance: balance::zero(),
+            participants_table: table::new(ctx),
+        };
+        transfer::share_object(game);
+    }
+
+    /// Anyone can close the game and send the balance to the winner.
+    ///
+    /// The function is defined as private entry to prevent calls from other Move functions. (If calls from other
+    /// functions are allowed, the calling function might abort the transaction depending on the winner.)
+    /// Gas based attacks are not possible since the gas cost of this function is independent of the winner.
+    entry fun close(game: Game, r: &Random, clock: &Clock, ctx: &mut TxContext) {
+        assert!(game.end_time <= clock::timestamp_ms(clock), EGameInProgress);
+        let Game { id, cost_in_sui: _, participants, end_time: _, balance , participants_table } = game;
+        if (participants > 0) {
+            let generator = new_generator(r, ctx);
+            let winner = random::generate_u32_in_range(&mut generator, 1, participants);
+            let winner_address = *table::borrow(&participants_table, winner);
+            let reward = coin::from_balance(balance, ctx);
+            transfer::public_transfer(reward, winner_address);
+        } else {
+            balance::destroy_zero(balance);
+        };
+        table::drop(participants_table); // TODO: will this work with 10K objects?
+        object::delete(id);
+    }
+
+    /// Anyone can play.
+    public fun play(game: &mut Game, coin: Coin<SUI>, clock: &Clock, ctx: &mut TxContext) {
+        assert!(game.end_time > clock::timestamp_ms(clock), EGameAlreadyCompleted);
+        assert!(coin::value(&coin) == game.cost_in_sui, EInvalidAmount);
+
+        game.participants = game.participants + 1;
+        coin::put(&mut game.balance, coin);
+        table::add(&mut game.participants_table, game.participants, sender(ctx));
+    }
+
+    #[test_only]
+    public fun get_cost_in_sui(game: &Game): u64 {
+        game.cost_in_sui
+    }
+
+    #[test_only]
+    public fun get_end_time(game: &Game): u64 {
+        game.end_time
+    }
+
+    #[test_only]
+    public fun get_participants(game: &Game): u32 {
+        game.participants
     }
 
     #[test_only]
