@@ -20,6 +20,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::path::Path;
 use std::path::PathBuf;
+use sui_sdk::SuiClient;
+use sui_types::transaction::ProgrammableTransaction;
 
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::AccountKeystore;
@@ -33,6 +35,9 @@ use tabled::{
     builder::Builder as TableBuilder,
     settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
 };
+
+use super::ptb_parser::errors::PTBError;
+use super::ptb_parser::parser::ParsedPTBCommand;
 
 /// The ProgrammableTransactionBlock structure used in the CLI ptb command
 #[derive(Parser, Debug, Default)]
@@ -329,6 +334,28 @@ impl PTB {
         Ok(start_index + len_cmds + 1)
     }
 
+    pub async fn parse_and_build_ptb(
+        &self,
+        parsed: Vec<ParsedPTBCommand>,
+        context: &WalletContext,
+        client: SuiClient,
+    ) -> Result<(ProgrammableTransaction, u64, bool), Vec<PTBError>> {
+        let starting_addresses = context
+            .config
+            .keystore
+            .addresses_with_alias()
+            .into_iter()
+            .map(|(sa, alias)| (alias.alias.clone(), AccountAddress::from(*sa)))
+            .collect();
+        let mut builder = PTBBuilder::new(starting_addresses, client.read_api());
+
+        for p in parsed.into_iter() {
+            builder.handle_command(p).await;
+        }
+
+        builder.finish()
+    }
+
     /// Parses and executes the PTB with the sender as the current active address
     pub async fn execute(
         self,
@@ -390,20 +417,8 @@ impl PTB {
         };
 
         let client = context.get_client().await?;
-        let starting_addresses = context
-            .config
-            .keystore
-            .addresses_with_alias()
-            .into_iter()
-            .map(|(sa, alias)| (alias.alias.clone(), AccountAddress::from(*sa)))
-            .collect();
-        let mut builder = PTBBuilder::new(starting_addresses, client.read_api());
-
-        for p in parsed.into_iter() {
-            builder.handle_command(p).await;
-        }
-
-        let (ptb, budget, _preview) = match builder.finish() {
+        let (ptb, budget, _preview) = match self.parse_and_build_ptb(parsed, &context, client).await
+        {
             Err(errors) => {
                 let suffix = if errors.len() > 1 { "s" } else { "" };
                 eprintln!("Encountered error{suffix} when building PTB:");
