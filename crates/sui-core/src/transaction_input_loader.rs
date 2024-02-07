@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::in_mem_execution_cache::ExecutionCacheRead;
+use crate::execution_cache::ExecutionCacheRead;
 use itertools::izip;
 use once_cell::unsync::OnceCell;
 use std::collections::HashMap;

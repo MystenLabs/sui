@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::in_mem_execution_cache::NotifyReadWrapper;
+use crate::execution_cache::NotifyReadWrapper;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::verify_indexes;
 use anyhow::anyhow;
@@ -136,11 +136,11 @@ use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::execution_driver::execution_process;
-use crate::in_mem_execution_cache::{
+use crate::execution_cache::{
     CheckpointCache, ExecutionCache, ExecutionCacheRead, ExecutionCacheReconfigAPI,
     ExecutionCacheWrite, StateSyncAPI,
 };
+use crate::execution_driver::execution_process;
 use crate::metrics::LatencyObserver;
 use crate::metrics::RateTracker;
 use crate::module_cache_metrics::ResolverMetrics;

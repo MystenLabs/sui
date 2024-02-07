@@ -54,7 +54,7 @@ use crate::authority::AuthorityState;
 use crate::checkpoints::checkpoint_executor::data_ingestion_handler::store_checkpoint_locally;
 use crate::state_accumulator::StateAccumulator;
 use crate::transaction_manager::TransactionManager;
-use crate::{checkpoints::CheckpointStore, in_mem_execution_cache::ExecutionCacheRead};
+use crate::{checkpoints::CheckpointStore, execution_cache::ExecutionCacheRead};
 
 use self::metrics::CheckpointExecutorMetrics;
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::checkpoints::CheckpointStore;
-use crate::in_mem_execution_cache::ExecutionCacheRead;
+use crate::execution_cache::ExecutionCacheRead;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;

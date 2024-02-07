@@ -11,7 +11,7 @@ use crate::{
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     epoch::committee_store::CommitteeStore,
-    in_mem_execution_cache::ExecutionCacheRead,
+    execution_cache::ExecutionCacheRead,
     safe_client::SafeClientMetricsBase,
 };
 
