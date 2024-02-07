@@ -164,6 +164,7 @@ pub enum BridgeActionType {
     EmergencyButton = 2,
     LimitUpdate = 3,
     AssetPriceUpdate = 4,
+    EvmContractUpgrade = 5,
 }
 
 pub const SUI_TX_DIGEST_LENGTH: usize = 32;
@@ -435,6 +436,37 @@ impl AssetPriceUpdateAction {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EvmContractUpgradeAction {
+    pub nonce: u64,
+    pub chain_id: BridgeChainId,
+    pub proxy_address: EthAddress,
+    pub new_impl_address: EthAddress,
+    pub call_data: Vec<u8>,
+}
+
+impl EvmContractUpgradeAction {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        // Add message type
+        bytes.push(BridgeActionType::EvmContractUpgrade as u8);
+        // Add message version
+        bytes.push(EVM_CONTRACT_UPGRADE_MESSAGE_VERSION);
+        // Add nonce
+        bytes.extend_from_slice(&self.nonce.to_be_bytes());
+        // Add chain id
+        bytes.push(self.chain_id as u8);
+        // Add payload
+        let encoded = ethers::abi::encode(&[
+            ethers::abi::Token::Address(self.proxy_address),
+            ethers::abi::Token::Address(self.new_impl_address),
+            ethers::abi::Token::Bytes(self.call_data.clone()),
+        ]);
+        bytes.extend_from_slice(&encoded);
+        bytes
+    }
+}
+
 /// The type of actions Bridge Committee verify and sign off to execution.
 /// Its relationship with BridgeEvent is similar to the relationship between
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -447,6 +479,7 @@ pub enum BridgeAction {
     EmergencyAction(EmergencyAction),
     LimitUpdateAction(LimitUpdateAction),
     AssetPriceUpdateAction(AssetPriceUpdateAction),
+    EvmContractUpgradeAction(EvmContractUpgradeAction),
     // TODO: add other bridge actions such as blocklist & emergency button
 }
 
@@ -455,6 +488,7 @@ pub const COMMITTEE_BLOCKLIST_MESSAGE_VERSION: u8 = 1;
 pub const EMERGENCY_BUTTON_MESSAGE_VERSION: u8 = 1;
 pub const LIMIT_UPDATE_MESSAGE_VERSION: u8 = 1;
 pub const ASSET_PRICE_UPDATE_MESSAGE_VERSION: u8 = 1;
+pub const EVM_CONTRACT_UPGRADE_MESSAGE_VERSION: u8 = 1;
 
 impl BridgeAction {
     /// Convert to message bytes that are verified in Move and Solidity
@@ -480,6 +514,9 @@ impl BridgeAction {
             }
             BridgeAction::AssetPriceUpdateAction(a) => {
                 bytes.extend_from_slice(&a.to_bytes());
+            }
+            BridgeAction::EvmContractUpgradeAction(a) => {
+                bytes.extend_from_slice(&a.to_bytes());
             } // TODO add formats for other events
         }
         bytes
@@ -500,6 +537,7 @@ impl BridgeAction {
             BridgeAction::EmergencyAction(a) => a.chain_id,
             BridgeAction::LimitUpdateAction(a) => a.chain_id,
             BridgeAction::AssetPriceUpdateAction(a) => a.chain_id,
+            BridgeAction::EvmContractUpgradeAction(a) => a.chain_id,
         }
     }
 
@@ -512,6 +550,7 @@ impl BridgeAction {
             BridgeAction::EmergencyAction(_) => BridgeActionType::EmergencyButton,
             BridgeAction::LimitUpdateAction(_) => BridgeActionType::LimitUpdate,
             BridgeAction::AssetPriceUpdateAction(_) => BridgeActionType::AssetPriceUpdate,
+            BridgeAction::EvmContractUpgradeAction(_) => BridgeActionType::EvmContractUpgrade,
         }
     }
 
@@ -524,6 +563,7 @@ impl BridgeAction {
             BridgeAction::EmergencyAction(a) => a.nonce,
             BridgeAction::LimitUpdateAction(a) => a.nonce,
             BridgeAction::AssetPriceUpdateAction(a) => a.nonce,
+            BridgeAction::EvmContractUpgradeAction(a) => a.nonce,
         }
     }
 }
@@ -654,6 +694,7 @@ pub struct MoveTypeBridgeRecord {
 #[cfg(test)]
 mod tests {
     use crate::{test_utils::get_test_authority_and_key, types::TokenId};
+    use ethers::abi::ParamType;
     use ethers::types::{Address as EthAddress, TxHash};
     use fastcrypto::encoding::Hex;
     use fastcrypto::hash::HashFunction;
@@ -988,6 +1029,131 @@ mod tests {
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    fn test_evm_contract_upgrade_action() {
+        // Calldata with only the function selector and no parameters: `function initializeV2()`
+        let function_signature = "initializeV2()";
+        let selector = &Keccak256::digest(function_signature).digest[0..4];
+        let call_data = selector.to_vec();
+        assert_eq!(Hex::encode(call_data.clone()), "5cd8a76b");
+
+        let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+            nonce: 123,
+            chain_id: BridgeChainId::EthLocalTest,
+            proxy_address: EthAddress::repeat_byte(6),
+            new_impl_address: EthAddress::repeat_byte(9),
+            call_data,
+        });
+        /*
+        5355495f4252494447455f4d455353414745: prefix
+        05: msg type
+        01: msg version
+        000000000000007b: nonce
+        0c: chain id
+        0000000000000000000000000606060606060606060606060606060606060606: proxy address
+        0000000000000000000000000909090909090909090909090909090909090909: new impl address
+
+        0000000000000000000000000000000000000000000000000000000000000060
+        0000000000000000000000000000000000000000000000000000000000000004
+        5cd8a76b00000000000000000000000000000000000000000000000000000000: call data
+        */
+        assert_eq!(Hex::encode(action.to_bytes().clone()), "5355495f4252494447455f4d4553534147450501000000000000007b0c00000000000000000000000006060606060606060606060606060606060606060000000000000000000000000909090909090909090909090909090909090909000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000045cd8a76b00000000000000000000000000000000000000000000000000000000");
+
+        // Calldata with one parameter: `function newMockFunction(bool)`
+        let function_signature = "newMockFunction(bool)";
+        let selector = &Keccak256::digest(function_signature).digest[0..4];
+        let mut call_data = selector.to_vec();
+        call_data.extend(ethers::abi::encode(&[ethers::abi::Token::Bool(true)]));
+        assert_eq!(
+            Hex::encode(call_data.clone()),
+            "417795ef0000000000000000000000000000000000000000000000000000000000000001"
+        );
+        let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+            nonce: 123,
+            chain_id: BridgeChainId::EthLocalTest,
+            proxy_address: EthAddress::repeat_byte(6),
+            new_impl_address: EthAddress::repeat_byte(9),
+            call_data,
+        });
+        /*
+        5355495f4252494447455f4d455353414745: prefix
+        05: msg type
+        01: msg version
+        000000000000007b: nonce
+        0c: chain id
+        0000000000000000000000000606060606060606060606060606060606060606: proxy address
+        0000000000000000000000000909090909090909090909090909090909090909: new impl address
+
+        0000000000000000000000000000000000000000000000000000000000000060
+        0000000000000000000000000000000000000000000000000000000000000024
+        417795ef00000000000000000000000000000000000000000000000000000000
+        0000000100000000000000000000000000000000000000000000000000000000: call data
+        */
+        assert_eq!(Hex::encode(action.to_bytes().clone()), "5355495f4252494447455f4d4553534147450501000000000000007b0c0000000000000000000000000606060606060606060606060606060606060606000000000000000000000000090909090909090909090909090909090909090900000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000024417795ef000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000");
+
+        // Calldata with two parameters: `function newerMockFunction(bool, uint8)`
+        let function_signature = "newMockFunction(bool,uint8)";
+        let selector = &Keccak256::digest(function_signature).digest[0..4];
+        let mut call_data = selector.to_vec();
+        call_data.extend(ethers::abi::encode(&[
+            ethers::abi::Token::Bool(true),
+            ethers::abi::Token::Uint(42u8.into()),
+        ]));
+        assert_eq!(
+            Hex::encode(call_data.clone()),
+            "be8fc25d0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002a"
+        );
+        let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+            nonce: 123,
+            chain_id: BridgeChainId::EthLocalTest,
+            proxy_address: EthAddress::repeat_byte(6),
+            new_impl_address: EthAddress::repeat_byte(9),
+            call_data,
+        });
+        /*
+        5355495f4252494447455f4d455353414745: prefix
+        05: msg type
+        01: msg version
+        000000000000007b: nonce
+        0c: chain id
+        0000000000000000000000000606060606060606060606060606060606060606: proxy address
+        0000000000000000000000000909090909090909090909090909090909090909: new impl address
+
+        0000000000000000000000000000000000000000000000000000000000000060
+        0000000000000000000000000000000000000000000000000000000000000044
+        be8fc25d00000000000000000000000000000000000000000000000000000000
+        0000000100000000000000000000000000000000000000000000000000000000
+        0000002a00000000000000000000000000000000000000000000000000000000: call data
+        */
+        assert_eq!(Hex::encode(action.to_bytes().clone()), "5355495f4252494447455f4d4553534147450501000000000000007b0c0000000000000000000000000606060606060606060606060606060606060606000000000000000000000000090909090909090909090909090909090909090900000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044be8fc25d0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002a00000000000000000000000000000000000000000000000000000000");
+
+        // Empty calldate
+        let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+            nonce: 123,
+            chain_id: BridgeChainId::EthLocalTest,
+            proxy_address: EthAddress::repeat_byte(6),
+            new_impl_address: EthAddress::repeat_byte(9),
+            call_data: vec![],
+        });
+        /*
+        5355495f4252494447455f4d455353414745: prefix
+        05: msg type
+        01: msg version
+        000000000000007b: nonce
+        0c: chain id
+        0000000000000000000000000606060606060606060606060606060606060606: proxy address
+        0000000000000000000000000909090909090909090909090909090909090909: new impl address
+
+        0000000000000000000000000000000000000000000000000000000000000060
+        0000000000000000000000000000000000000000000000000000000000000000: call data
+        */
+        let data = action.to_bytes();
+        assert_eq!(Hex::encode(data.clone()), "5355495f4252494447455f4d4553534147450501000000000000007b0c0000000000000000000000000606060606060606060606060606060606060606000000000000000000000000090909090909090909090909090909090909090900000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000");
+        let types = vec![ParamType::Address, ParamType::Address, ParamType::Bytes];
+        // Ensure that the call data (start from bytes 29) can be decoded
+        ethers::abi::decode(&types, &data[29..]).unwrap();
     }
 
     #[test]

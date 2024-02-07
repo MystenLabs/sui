@@ -107,6 +107,10 @@ pub fn build_transaction(
             // TODO: handle this case
             unimplemented!()
         }
+        BridgeAction::EvmContractUpgradeAction(_) => {
+            // TODO: handle this case
+            unimplemented!()
+        }
     }
 }
 

@@ -93,6 +93,16 @@ impl BridgeClient {
                 let new_usd_price = a.new_usd_price.to_string();
                 format!("sign/update_asset_price/{chain_id}/{nonce}/{token_id}/{new_usd_price}")
             }
+            BridgeAction::EvmContractUpgradeAction(a) => {
+                let chain_id = (a.chain_id as u8).to_string();
+                let nonce = a.nonce.to_string();
+                let proxy_address = Hex::encode(a.proxy_address.as_bytes());
+                let new_impl_address = Hex::encode(a.new_impl_address.as_bytes());
+                let call_data = Hex::encode(a.call_data.clone());
+                format!(
+                    "sign/upgrade_evm_contract/{chain_id}/{nonce}/{proxy_address}/{new_impl_address}/{call_data}"
+                )
+            }
         }
     }
 
@@ -160,6 +170,7 @@ mod tests {
         test_utils::{get_test_authority_and_key, get_test_sui_to_eth_bridge_action},
         types::{BridgeChainId, SignedBridgeAction, TokenId},
     };
+    use fastcrypto::hash::{HashFunction, Keccak256};
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
 
@@ -426,6 +437,71 @@ mod tests {
         assert_eq!(
             BridgeClient::bridge_action_to_path(&action),
             "sign/emergency_button/3/5/0",
+        );
+
+        let action = BridgeAction::LimitUpdateAction(crate::types::LimitUpdateAction {
+            chain_id: BridgeChainId::SuiLocalTest,
+            nonce: 10,
+            sending_chain_id: BridgeChainId::EthLocalTest,
+            new_usd_limit: 100,
+        });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/update_limit/3/10/12/100",
+        );
+
+        let action = BridgeAction::AssetPriceUpdateAction(crate::types::AssetPriceUpdateAction {
+            chain_id: BridgeChainId::SuiDevnet,
+            nonce: 8,
+            token_id: TokenId::BTC,
+            new_usd_price: 100_000_000,
+        });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/update_asset_price/2/8/1/100000000",
+        );
+
+        let action =
+            BridgeAction::EvmContractUpgradeAction(crate::types::EvmContractUpgradeAction {
+                nonce: 123,
+                chain_id: BridgeChainId::EthLocalTest,
+                proxy_address: EthAddress::repeat_byte(6),
+                new_impl_address: EthAddress::repeat_byte(9),
+                call_data: vec![],
+            });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/upgrade_evm_contract/12/123/0606060606060606060606060606060606060606/0909090909090909090909090909090909090909/",
+        );
+
+        let function_signature = "initializeV2()";
+        let selector = &Keccak256::digest(function_signature).digest[0..4];
+        let mut call_data = selector.to_vec();
+        let action =
+            BridgeAction::EvmContractUpgradeAction(crate::types::EvmContractUpgradeAction {
+                nonce: 123,
+                chain_id: BridgeChainId::EthLocalTest,
+                proxy_address: EthAddress::repeat_byte(6),
+                new_impl_address: EthAddress::repeat_byte(9),
+                call_data: call_data.clone(),
+            });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/upgrade_evm_contract/12/123/0606060606060606060606060606060606060606/0909090909090909090909090909090909090909/5cd8a76b",
+        );
+
+        call_data.extend(ethers::abi::encode(&[ethers::abi::Token::Uint(42.into())]));
+        let action =
+            BridgeAction::EvmContractUpgradeAction(crate::types::EvmContractUpgradeAction {
+                nonce: 123,
+                chain_id: BridgeChainId::EthLocalTest,
+                proxy_address: EthAddress::repeat_byte(6),
+                new_impl_address: EthAddress::repeat_byte(9),
+                call_data,
+            });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/upgrade_evm_contract/12/123/0606060606060606060606060606060606060606/0909090909090909090909090909090909090909/5cd8a76b000000000000000000000000000000000000000000000000000000000000002a",
         );
     }
 }
