@@ -1,13 +1,14 @@
 # SuiClientProvider
 
-The SuiClientProvider manages the active `SuiClient` used by hooks and components in the dApp Kit
+The `SuiClientProvider` manages the active `SuiClient` that hooks and components use in the dApp
+Kit.
 
 ## Usage
 
-The `SuiClientProvider` should be placed at the root of your app, and should wrap all components
-that use the dApp Kit hooks.
+Place the `SuiClientProvider` at the root of your app and wrap all components that use the dApp Kit
+hooks.
 
-It accepts a list of network configs, which will be used to create `SuiClient` instances for the
+`SuiClientProvider` accepts a list of network configurations to create `SuiClient` instances for the
 currently active network.
 
 ```tsx
@@ -31,18 +32,20 @@ function App() {
 
 ## Props
 
-- `networks`: A map of networks that can be used. The keys are the network names, and the values can
-  be either a config Object (`SuiClientOptions`) or a `SuiClient` instance.
-- `defaultNetwork`: The name of the network to use by default, when the SuiClientProvider is used as
+- `networks`: A map of networks you can use. The keys are the network names, and the values can be
+  either a configuration object (`SuiClientOptions`) or a `SuiClient` instance.
+- `defaultNetwork`: The name of the network to use by default when using the `SuiClientProvider` as
   an uncontrolled component.
-- `network`: The name of the network to use, when the SuiClientProvider is used as a controlled
+- `network`: The name of the network to use when using the `SuiClientProvider` as a controlled
   component.
-- `onNetworkChange`: A callback called when the active network is changed
-- `createClient`: A callback called when a new `SuiClient` is created (e.g. when the active network
-  changes). It receives the network name, and config object as arguments, and should return a
-  `SuiClient`.
+- `onNetworkChange`: A callback when the active network changes.
+- `createClient`: A callback when a new `SuiClient` is created (for example, when the active network
+  changes). It receives the network name and configuration object as arguments, returning a
+  `SuiClient` instance.
 
-## Using the SuiClientProvider as a controlled component
+## Controlled component
+
+The following example demonstrates a `SuiClientProvider` used as a controlled component.
 
 ```tsx
 import { createNetworkConfig, SuiClientProvider } from '@mysten/dapp-kit';
@@ -72,7 +75,9 @@ function App() {
 }
 ```
 
-## Customizing how the SuiClient is created
+## SuiClient customization
+
+The following example demonstrates how to create a custom `SuiClient`.
 
 ```tsx
 import { SuiClientProvider } from '@mysten/dapp-kit';
@@ -110,6 +115,9 @@ function App() {
 
 ## Using the SuiClient from the provider
 
+To use the `SuiClient` from the provider, import the `useSuiClient` function from the
+`@mysten/dapp-kit` module.
+
 ```tsx
 import { useSuiClient } from '@mysten/dapp-kit';
 
@@ -122,8 +130,8 @@ function MyComponent() {
 
 ## Creating a network selector
 
-dApp doesn't currently provide it's own network switcher, but you can use the `useSuiClientContext`
-hook to get the list of networks, and to set the active network:
+The dApp Kit doesn't provide its own network switcher, but you can use the `useSuiClientContext`
+hook to get the list of networks and set the active one:
 
 ```tsx
 function NetworkSelector() {
@@ -143,16 +151,16 @@ function NetworkSelector() {
 
 ## Using network specific configuration
 
-If your dApp runs on multiple networks, the IDs for packages, and potentially other configuration
-will change depending on which network is being used. You can use `createNetworkConfig` to create
-per-network config which can be accessed from your components.
+If your dApp runs on multiple networks, the IDs for packages and other configurations might change,
+depending on which network you're using. You can use `createNetworkConfig` to create per-network
+configurations that your components can access.
 
-the `createNetworkConfig` function returns the provided config, along a few hooks you can use to get
-access the variables defined in your config.
+The `createNetworkConfig` function returns the provided configuration, along with hooks you can use
+to get the variables defined in your configuration.
 
-- `useNetworkConfig` returns the full network config object
-- `useNetworkVariables` returns the full variables object from the network config
-- `useNetworkVariable` returns a specific variable from the network config
+- `useNetworkConfig` returns the full network configuration object
+- `useNetworkVariables` returns the full variables object from the network configuration
+- `useNetworkVariable` returns a specific variable from the network configuration
 
 ```tsx
 import { createNetworkConfig, SuiClientProvider } from '@mysten/dapp-kit';

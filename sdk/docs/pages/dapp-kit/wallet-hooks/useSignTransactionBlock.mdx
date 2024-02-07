@@ -1,9 +1,9 @@
 import { UseSignTransactionBlockExample } from '../../../examples/wallet-hooks';
 
-# `useSignTransactionBlock`
+# useSignTransactionBlock
 
-The `useSignTransactionBlock` hook can be used to prompt the user to sign a transaction block with
-their wallet
+Use the `useSignTransactionBlock` hook to prompt the user to sign a transaction block with their
+wallet.
 
 ```ts
 import { ConnectButton, useCurrentAccount, useSignTransactionBlock } from '@mysten/dapp-kit';
@@ -53,10 +53,10 @@ function MyComponent() {
 
 ## Arguments
 
-- `transactionBlock`: The transaction block to sign
-- `chain`: (optional) The chain identifier the transaction block should be signed for
+- `transactionBlock`: The transaction block to sign.
+- `chain`: (optional) The chain identifier the transaction block should be signed for.
 
 ## Result
 
-- `signature`: The signature of the message, as a Base64 encoded `string`
-- `transactionBlockBytes`: The serialized transaction bytes, as a a Base64 encoded `string`
+- `signature`: The signature of the message, as a Base64-encoded `string`.
+- `transactionBlockBytes`: The serialized transaction bytes, as a a Base64-encoded `string`.
