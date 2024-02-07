@@ -19,21 +19,11 @@ use crate::{
 /// Commit one leader.
 #[test]
 fn direct_commit() {
-    telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4).0);
-    let dag_state = Arc::new(RwLock::new(DagState::new(
-        context.clone(),
-        Arc::new(MemStore::new()),
-    )));
-
-    // Create committer without pipelining and only 1 leader per round
-    let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
+    let (context, dag_state, committer) = basic_test_setup();
 
     // Build fully connected dag with empty blocks adding up to voting round of
     // wave 2 to the dag so that we have 2 completed waves and one incomplete wave.
-    // note: without pipelining or multi-leader enabled there should only be one committer.
-    assert!(committer.committers.len() == 1);
+    // note: waves & rounds are zero-indexed.
     let leader_round_wave_1 = committer.committers[0].leader_round(1);
     let voting_round_wave_2 = committer.committers[0].leader_round(2) + 1;
     build_dag(context, dag_state, None, voting_round_wave_2);
@@ -41,11 +31,11 @@ fn direct_commit() {
     // Genesis cert will not be included in commit sequence, marking it as last decided
     let last_decided = Slot::new_for_test(0, 0);
 
-    // The universal committer should mark the potential leaders in r6 as undecided
-    // because there is no way to get enough certificates for r6 leaders without
-    // completing wave 2.
+    // The universal committer should mark the potential leaders in leader round 6 as
+    // undecided because there is no way to get enough certificates for leaders of
+    // leader round 6 without completing wave 2.
     let sequence = committer.try_commit(last_decided);
-    tracing::info!("Commit sequence: {sequence:?}");
+    tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 1);
     if let LeaderStatus::Commit(ref block) = sequence[0] {
@@ -61,68 +51,90 @@ fn direct_commit() {
 /// Ensure idempotent replies.
 #[test]
 fn idempotence() {
-    telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4).0);
-    let dag_state = Arc::new(RwLock::new(DagState::new(
-        context.clone(),
-        Arc::new(MemStore::new()),
-    )));
+    let (context, dag_state, committer) = basic_test_setup();
 
-    // Create committer without pipelining and only 1 leader per round
-    let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
-
-    let decision_round_wave_2 = 5;
-    let references_decision_round_wave_2 = build_dag(
+    // note: waves & rounds are zero-indexed.
+    let leader_round_wave_1 = committer.committers[0].leader_round(1);
+    let decision_round_wave_1 = committer.committers[0].decision_round(1);
+    let references_decision_round_wave_1 = build_dag(
         context.clone(),
         dag_state.clone(),
         None,
-        decision_round_wave_2,
+        decision_round_wave_1,
     );
 
-    // Commit one block.
+    // Commit one leader.
     let last_decided = Slot::new_for_test(0, 0);
     let first_sequence = committer.try_commit(last_decided);
     assert_eq!(first_sequence.len(), 1);
 
-    // Ensure we don't commit it again.
-    // Add more rounds so we have something to commit after the last_decided
-    let decision_round_wave_3 = 8;
+    if let LeaderStatus::Commit(ref block) = first_sequence[0] {
+        assert_eq!(first_sequence[0].round(), leader_round_wave_1);
+        assert_eq!(
+            block.author(),
+            committer.get_leaders(leader_round_wave_1)[0]
+        )
+    } else {
+        panic!("Expected a committed leader")
+    };
+
+    // Ensure that if try_commit is called again with the same last decided leader
+    // input the commit decision will be the same.
+    let first_sequence = committer.try_commit(last_decided);
+
+    assert_eq!(first_sequence.len(), 1);
+    if let LeaderStatus::Commit(ref block) = first_sequence[0] {
+        assert_eq!(first_sequence[0].round(), leader_round_wave_1);
+        assert_eq!(
+            block.author(),
+            committer.get_leaders(leader_round_wave_1)[0]
+        )
+    } else {
+        panic!("Expected a committed leader")
+    };
+
+    // Add more rounds so we have something to commit after the leader of wave 1
+    let decision_round_wave_2 = committer.committers[0].decision_round(2);
     build_dag(
         context.clone(),
         dag_state.clone(),
-        Some(references_decision_round_wave_2),
-        decision_round_wave_3,
+        Some(references_decision_round_wave_1),
+        decision_round_wave_2,
     );
 
+    // Ensure we don't commit the leader of wave 1 again if we mark it as the
+    // last decided.
     let leader_status_wave_1 = first_sequence.last().unwrap();
     let last_decided = Slot::new(
         leader_status_wave_1.round(),
         leader_status_wave_1.authority(),
     );
+    let leader_round_wave_2 = committer.committers[0].leader_round(2);
     let second_sequence = committer.try_commit(last_decided);
-    tracing::info!("Commit sequence: {second_sequence:?}");
+    tracing::info!("Commit sequence: {second_sequence:#?}");
+
     assert_eq!(second_sequence.len(), 1);
-    assert_eq!(second_sequence[0].round(), 6);
+    if let LeaderStatus::Commit(ref block) = second_sequence[0] {
+        assert_eq!(second_sequence[0].round(), leader_round_wave_2);
+        assert_eq!(
+            block.author(),
+            committer.get_leaders(leader_round_wave_2)[0]
+        );
+    } else {
+        panic!("Expected a committed leader")
+    };
 }
 
 /// Commit one by one each leader as the dag progresses in ideal conditions.
 #[test]
 fn multiple_direct_commit() {
-    telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4).0);
-    let dag_state = Arc::new(RwLock::new(DagState::new(
-        context.clone(),
-        Arc::new(MemStore::new()),
-    )));
-
-    // Create committer without pipelining and only 1 leader per round
-    let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
+    let (context, dag_state, committer) = basic_test_setup();
 
     let mut ancestors = None;
     let mut last_decided = Slot::new_for_test(0, 0);
     for n in 1..=10 {
+        // Build the dag up to the decision round for each wave starting with wave 1.
+        // note: waves & rounds are zero-indexed.
         let decision_round = committer.committers[0].decision_round(n);
         ancestors = Some(build_dag(
             context.clone(),
@@ -131,17 +143,21 @@ fn multiple_direct_commit() {
             decision_round,
         ));
 
-        let sequence = committer.try_commit(last_decided);
-        tracing::info!("Commit sequence: {sequence:?}");
-        assert_eq!(sequence.len(), 1);
-
+        // After each wave is complete try commit the leader of that wave.
         let leader_round = committer.committers[0].leader_round(n);
+        let sequence = committer.try_commit(last_decided);
+        tracing::info!("Commit sequence: {sequence:#?}");
+
+        assert_eq!(sequence.len(), 1);
         if let LeaderStatus::Commit(ref block) = sequence[0] {
+            assert_eq!(block.round(), leader_round);
             assert_eq!(block.author(), committer.get_leaders(leader_round)[0]);
         } else {
             panic!("Expected a committed leader")
         }
 
+        // Update the last decided leader so only one new leader is committed as
+        // each new wave is completed.
         let leader_status = sequence.last().unwrap();
         last_decided = Slot::new(leader_status.round(), leader_status.authority());
     }
@@ -150,18 +166,10 @@ fn multiple_direct_commit() {
 /// Commit 10 leaders in a row (calling the committer after adding them).
 #[test]
 fn direct_commit_late_call() {
-    telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4).0);
-    let dag_state = Arc::new(RwLock::new(DagState::new(
-        context.clone(),
-        Arc::new(MemStore::new()),
-    )));
+    let (context, dag_state, committer) = basic_test_setup();
 
-    // Create committer without pipelining and only 1 leader per round
-    let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
-
-    let num_waves = 10;
+    // note: waves & rounds are zero-indexed.
+    let num_waves = 11;
     let decision_round_wave_10 = committer.committers[0].decision_round(10);
     build_dag(
         context.clone(),
@@ -172,12 +180,15 @@ fn direct_commit_late_call() {
 
     let last_decided = Slot::new_for_test(0, 0);
     let sequence = committer.try_commit(last_decided);
-    tracing::info!("Commit sequence: {sequence:?}");
+    tracing::info!("Commit sequence: {sequence:#?}");
 
-    assert_eq!(sequence.len(), num_waves as usize);
+    // With 11 waves completed, excluding wave 0 with genesis round as its leader
+    // round, ensure we have 10 leaders committed.
+    assert_eq!(sequence.len(), num_waves - 1_usize);
     for (i, leader_block) in sequence.iter().enumerate() {
         let leader_round = committer.committers[0].leader_round(i as u32 + 1);
         if let LeaderStatus::Commit(ref block) = leader_block {
+            assert_eq!(block.round(), leader_round);
             assert_eq!(block.author(), committer.get_leaders(leader_round)[0]);
         } else {
             panic!("Expected a committed leader")
@@ -188,17 +199,9 @@ fn direct_commit_late_call() {
 /// Do not commit anything if we are still in the first wave.
 #[test]
 fn no_genesis_commit() {
-    telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4).0);
-    let dag_state = Arc::new(RwLock::new(DagState::new(
-        context.clone(),
-        Arc::new(MemStore::new()),
-    )));
+    let (context, dag_state, committer) = basic_test_setup();
 
-    // Create committer without pipelining and only 1 leader per round
-    let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
-
+    // note: waves & rounds are zero-indexed.
     let decision_round_wave_1 = committer.committers[0].decision_round(1);
     let mut ancestors = None;
     for r in 0..decision_round_wave_1 {
@@ -206,7 +209,7 @@ fn no_genesis_commit() {
 
         let last_committed = Slot::new_for_test(0, 0);
         let sequence = committer.try_commit(last_committed);
-        tracing::info!("Commit sequence: {sequence:?}");
+        tracing::info!("Commit sequence: {sequence:#?}");
         assert!(sequence.is_empty());
     }
 }
@@ -214,18 +217,10 @@ fn no_genesis_commit() {
 /// We directly skip the leader if it is missing.
 #[test]
 fn no_leader() {
-    telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4).0);
-    let dag_state = Arc::new(RwLock::new(DagState::new(
-        context.clone(),
-        Arc::new(MemStore::new()),
-    )));
-
-    // Create committer without pipelining and only 1 leader per round
-    let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
+    let (context, dag_state, committer) = basic_test_setup();
 
     // Add enough blocks to finish wave 0.
+    // note: waves & rounds are zero-indexed.
     let decision_round_wave_0 = committer.committers[0].decision_round(0);
     let references_decision_round_wave_0 = build_dag(
         context.clone(),
@@ -235,7 +230,9 @@ fn no_leader() {
     );
 
     // Add enough blocks to reach the decision round of the first leader but without
-    // leader of wave 1
+    // leader of wave 1. This is creating the scenario where there are no votes
+    // in the voting round of wave 1 for the leader of wave 1 because it is missing
+    // from the dag.
     let leader_round_wave_1 = committer.committers[0].leader_round(1);
     let leader_wave_1 = committer.get_leaders(leader_round_wave_1)[0];
 
@@ -255,10 +252,11 @@ fn no_leader() {
         decision_round_wave_1,
     );
 
-    // Ensure no blocks are committed.
+    // Ensure no blocks are committed because there are 2f+1 blame (non-votes) for
+    // the missing leader of wave 1.
     let last_decided = Slot::new_for_test(0, 0);
     let sequence = committer.try_commit(last_decided);
-    tracing::info!("Commit sequence: {sequence:?}");
+    tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 1);
     if let LeaderStatus::Skip(leader) = sequence[0] {
@@ -272,18 +270,10 @@ fn no_leader() {
 /// We directly skip the leader if it has enough blame.
 #[test]
 fn direct_skip() {
-    telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4).0);
-    let dag_state = Arc::new(RwLock::new(DagState::new(
-        context.clone(),
-        Arc::new(MemStore::new()),
-    )));
+    let (context, dag_state, committer) = basic_test_setup();
 
-    // Create committer without pipelining and only 1 leader per round
-    let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
-
-    // Add enough blocks to reach the first leader.
+    // Add enough blocks to reach the leader round of wave 1.
+    // note: waves & rounds are zero-indexed.
     let leader_round_wave_1 = committer.committers[0].leader_round(1);
     let references_leader_round_wave_1 = build_dag(
         context.clone(),
@@ -292,13 +282,15 @@ fn direct_skip() {
         leader_round_wave_1,
     );
 
-    // Filter out that leader.
+    // Filter out the leader of wave 1 so that we can create blocks in voting
+    // round of wave 1 that do not include the leader of wave 1. Note that the
+    // leader does exist in the dag in this scenario.
     let references_without_leader_1: Vec<_> = references_leader_round_wave_1
         .into_iter()
         .filter(|x| x.author != committer.get_leaders(leader_round_wave_1)[0])
         .collect();
 
-    // Add enough blocks to reach the decision round of the first leader.
+    // Add enough blocks to reach the decision round of wave 1.
     let decision_round_wave_1 = committer.committers[0].decision_round(1);
     build_dag(
         context.clone(),
@@ -307,10 +299,11 @@ fn direct_skip() {
         decision_round_wave_1,
     );
 
-    // Ensure the leader is skipped.
+    // Ensure the leader is skipped because there are 2f+1 blame (non-votes) for
+    // the leader of wave 1.
     let last_committed = Slot::new_for_test(0, 0);
     let sequence = committer.try_commit(last_committed);
-    tracing::info!("Commit sequence: {sequence:?}");
+    tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 1);
     if let LeaderStatus::Skip(leader) = sequence[0] {
@@ -327,18 +320,10 @@ fn direct_skip() {
 /// Indirect-commit the first leader.
 #[test]
 fn indirect_commit() {
-    telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4).0);
-    let dag_state = Arc::new(RwLock::new(DagState::new(
-        context.clone(),
-        Arc::new(MemStore::new()),
-    )));
-
-    // Create committer without pipelining and only 1 leader per round
-    let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
+    let (context, dag_state, committer) = basic_test_setup();
 
     // Add enough blocks to reach the leader round of wave 1.
+    // note: waves & rounds are zero-indexed.
     let leader_round_wave_1 = committer.committers[0].leader_round(1);
     let references_leader_wave_1 = build_dag(
         context.clone(),
@@ -347,7 +332,7 @@ fn indirect_commit() {
         leader_round_wave_1,
     );
 
-    // Filter out that leader.
+    // Filter out the leader of wave 1.
     let leader_wave_1 = committer.get_leaders(leader_round_wave_1)[0];
     let references_without_leader_wave_1: Vec<_> = references_leader_wave_1
         .iter()
@@ -410,23 +395,26 @@ fn indirect_commit() {
 
     // Add enough blocks to decide the leader of wave 2 connecting to the references
     // manually constructed of the decision round of wave 1.
-    let leader_round_wave_3 = committer.committers[0].leader_round(3);
+    let decision_round_wave_2 = committer.committers[0].decision_round(2);
     build_dag(
         context.clone(),
         dag_state.clone(),
         Some(references_decision_round_wave_1),
-        leader_round_wave_3,
+        decision_round_wave_2,
     );
 
+    // Ensure we indirectly commit the leader of wave 1 via the directly committed
+    // leader of wave 2.
     let last_decided = Slot::new_for_test(0, 0);
     let sequence = committer.try_commit(last_decided);
-    tracing::info!("Commit sequence: {sequence:?}");
+    tracing::info!("Commit sequence: {sequence:#?}");
     assert_eq!(sequence.len(), 2);
 
     for (idx, decided_leader) in sequence.iter().enumerate() {
         let leader_round = committer.committers[0].leader_round(idx as u32 + 1);
         let expected_leader = committer.get_leaders(leader_round)[0];
         if let LeaderStatus::Commit(ref block) = decided_leader {
+            assert_eq!(block.round(), leader_round);
             assert_eq!(block.author(), expected_leader);
         } else {
             panic!("Expected a committed leader")
@@ -437,18 +425,10 @@ fn indirect_commit() {
 /// Commit the first leader, skip the 2nd, and commit the 3rd leader.
 #[test]
 fn indirect_skip() {
-    telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4).0);
-    let dag_state = Arc::new(RwLock::new(DagState::new(
-        context.clone(),
-        Arc::new(MemStore::new()),
-    )));
-
-    // Create committer without pipelining and only 1 leader per round
-    let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
+    let (context, dag_state, committer) = basic_test_setup();
 
     // Add enough blocks to reach the leader of wave 2
+    // note: waves & rounds are zero-indexed.
     let leader_round_wave_2 = committer.committers[0].leader_round(2);
     let references_leader_round_wave_2 = build_dag(
         context.clone(),
@@ -457,7 +437,7 @@ fn indirect_skip() {
         leader_round_wave_2,
     );
 
-    // Filter out that leader.
+    // Filter out the leader of wave 2.
     let leader_wave_2 = committer.get_leaders(leader_round_wave_2)[0];
     let references_without_leader_wave_2: Vec<_> = references_leader_round_wave_2
         .iter()
@@ -465,7 +445,10 @@ fn indirect_skip() {
         .filter(|x| x.author != leader_wave_2)
         .collect();
 
-    // Only f+1 validators connect to the leader of wave 2.
+    // Only f+1 validators connect to the leader of wave 2. This is setting up the
+    // scenario where we have <2f+1 blame & <2f+1 certificates for the leader of wave 2
+    // which will mean we mark it as Undecided. Note there are not enough votes
+    // to form a certified link to the leader of wave 2 as well.
     let mut references = Vec::new();
 
     let connections_with_leader_wave_2 = context
@@ -501,22 +484,26 @@ fn indirect_skip() {
         decision_round_wave_3,
     );
 
-    // Ensure we commit the leaders of wave 1 and 3
+    // Ensure we make a commit decision for the leaders of wave 1 ~ 3
     let last_committed = Slot::new_for_test(0, 0);
     let sequence = committer.try_commit(last_committed);
-    tracing::info!("Commit sequence: {sequence:?}");
+    tracing::info!("Commit sequence: {sequence:#?}");
     assert_eq!(sequence.len(), 3);
 
     // Ensure we commit the leader of wave 1 directly.
     let leader_round_wave_1 = committer.committers[0].leader_round(1);
     let leader_wave_1 = committer.get_leaders(leader_round_wave_1)[0];
     if let LeaderStatus::Commit(ref block) = sequence[0] {
+        assert_eq!(block.round(), leader_round_wave_1);
         assert_eq!(block.author(), leader_wave_1);
     } else {
         panic!("Expected a committed leader")
     };
 
-    // Ensure we skip the leader of wave 2 after it has been marked undecided directly.
+    // Ensure we skip the leader of wave 2 after it had been marked undecided directly.
+    // This happens because we do not have enough votes in voting round of wave 2
+    // for the certificates of decision round wave 2 to form a certified link to
+    // the leader of wave 2.
     if let LeaderStatus::Skip(leader) = sequence[1] {
         assert_eq!(leader.authority, leader_wave_2);
         assert_eq!(leader.round, leader_round_wave_2);
@@ -528,6 +515,7 @@ fn indirect_skip() {
     let leader_round_wave_3 = committer.committers[0].leader_round(3);
     let leader_wave_3 = committer.get_leaders(leader_round_wave_3)[0];
     if let LeaderStatus::Commit(ref block) = sequence[2] {
+        assert_eq!(block.round(), leader_round_wave_3);
         assert_eq!(block.author(), leader_wave_3);
     } else {
         panic!("Expected a committed leader")
@@ -537,18 +525,10 @@ fn indirect_skip() {
 /// If there is no leader with enough support nor blame, we commit nothing.
 #[test]
 fn undecided() {
-    telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4).0);
-    let dag_state = Arc::new(RwLock::new(DagState::new(
-        context.clone(),
-        Arc::new(MemStore::new()),
-    )));
-
-    // Create committer without pipelining and only 1 leader per round
-    let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
+    let (context, dag_state, committer) = basic_test_setup();
 
     // Add enough blocks to reach the leader of wave 1.
+    // note: waves & rounds are zero-indexed.
     let leader_round_wave_1 = committer.committers[0].leader_round(1);
     let references_leader_round_wave_1 = build_dag(
         context.clone(),
@@ -557,7 +537,7 @@ fn undecided() {
         leader_round_wave_1,
     );
 
-    // Filter out that leader.
+    // Filter out the leader of wave 1.
     let references_without_leader_1: Vec<_> = references_leader_round_wave_1
         .iter()
         .cloned()
@@ -591,10 +571,11 @@ fn undecided() {
         decision_round_wave_1,
     );
 
-    // Ensure outcome of direct & indirect rule is undecided
+    // Ensure outcome of direct & indirect rule is undecided. So not commit decisions
+    // should be returned.
     let last_committed = Slot::new_for_test(0, 0);
     let sequence = committer.try_commit(last_committed);
-    tracing::info!("Commit sequence: {sequence:?}");
+    tracing::info!("Commit sequence: {sequence:#?}");
     assert!(sequence.is_empty());
 }
 
@@ -603,18 +584,10 @@ fn undecided() {
 // The commit rule should handle this and correctly commit the expected blocks.
 #[test]
 fn test_byzantine_direct_commit() {
-    telemetry_subscribers::init_for_testing();
-    // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4).0);
-    let dag_state = Arc::new(RwLock::new(DagState::new(
-        context.clone(),
-        Arc::new(MemStore::new()),
-    )));
-
-    // Create committer without pipelining and only 1 leader per round
-    let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
+    let (context, dag_state, committer) = basic_test_setup();
 
     // Add enough blocks to reach leader round of wave 4
+    // note: waves & rounds are zero-indexed.
     let leader_round_wave_4 = committer.committers[0].leader_round(4);
     let references_leader_round_wave_4 = build_dag(
         context.clone(),
@@ -641,10 +614,10 @@ fn test_byzantine_direct_commit() {
     // Add block layer for wave 4 decision round with no votes for leader A12
     // from a byzantine validator C that sent different blocks to all validators.
 
-    // Filter out leader from wave 4.
+    // Filter out leader from wave 4 { A12 }.
     let leader_wave_4 = committer.get_leaders(leader_round_wave_4)[0];
 
-    // B12 C12 D12
+    // References to blocks from leader round wave 4 { B12 C12 D12 }
     let references_without_leader_round_wave_4: Vec<_> = references_leader_round_wave_4
         .into_iter()
         .filter(|x| x.author != leader_wave_4)
@@ -739,13 +712,13 @@ fn test_byzantine_direct_commit() {
     // - We have A13, B13, D13 & C13 as good votes in the voting round of wave 4
     // - We have 3 byzantine C13 nonvotes that we received as ancestors from decision
     //   round blocks from B, C, & D.
-    // - We have  B14, C14 & D14 that include this byzantine nonvote and A14 from the
-    //   decision round. But all of these blocks also have good votes from A, B, C & D.
+    // - We have B14, C14 & D14 that include this byzantine nonvote from C13 but
+    // all of these blocks also have good votes for leader A12 through A, B, D.
 
     // Expect a successful direct commit of A12 and leaders at rounds 9, 6 & 3.
     let last_decided = Slot::new_for_test(0, 0);
     let sequence = committer.try_commit(last_decided);
-    tracing::info!("Commit sequence: {sequence:?}");
+    tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 4);
     if let LeaderStatus::Commit(ref block) = sequence[3] {
@@ -759,3 +732,25 @@ fn test_byzantine_direct_commit() {
 }
 
 // TODO: Add byzantine variant of tests for indirect/direct commit/skip/undecided decisions
+
+fn basic_test_setup() -> (
+    Arc<Context>,
+    Arc<RwLock<DagState>>,
+    super::UniversalCommitter,
+) {
+    telemetry_subscribers::init_for_testing();
+    // Commitee of 4 with even stake
+    let context = Arc::new(Context::new_for_test(4).0);
+    let dag_state = Arc::new(RwLock::new(DagState::new(
+        context.clone(),
+        Arc::new(MemStore::new()),
+    )));
+
+    // Create committer without pipelining and only 1 leader per leader round
+    let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
+
+    // note: without pipelining or multi-leader enabled there should only be one committer.
+    assert!(committer.committers.len() == 1);
+
+    (context, dag_state, committer)
+}
