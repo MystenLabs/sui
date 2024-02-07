@@ -54,7 +54,7 @@ jobs:
         run: rustup update stable
         
       - name: Run code coverage for nextest
-        working-directory: ./crates/sui-indexer
+        working-directory: ./crates/sui-types
         run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest
 
       - name: Upload report to Codecov for nextest
