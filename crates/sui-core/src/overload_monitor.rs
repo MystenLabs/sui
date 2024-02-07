@@ -3,12 +3,19 @@
 
 use crate::authority::AuthorityState;
 use std::cmp::{max, min};
+use std::hash::Hasher;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Weak;
 use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 use sui_config::node::OverloadThresholdConfig;
+use sui_types::digests::TransactionDigest;
+use sui_types::error::SuiError;
+use sui_types::error::SuiResult;
+use sui_types::fp_bail;
 use tokio::time::sleep;
 use tracing::{debug, info};
+use twox_hash::XxHash64;
 
 #[derive(Default)]
 pub struct AuthorityOverloadInfo {
@@ -202,6 +209,32 @@ fn check_overload_signals(
     );
     let overload_status = load_shedding_percentage > 0;
     (overload_status, load_shedding_percentage)
+}
+
+fn should_reject_tx(
+    load_shedding_percentage: u32,
+    tx_digest: TransactionDigest,
+    minutes_since_epoch: u64,
+) -> bool {
+    let mut hasher = XxHash64::with_seed(minutes_since_epoch);
+    hasher.write(tx_digest.inner());
+    let value = hasher.finish();
+    value % 100 < load_shedding_percentage as u64
+}
+
+pub fn overload_monitor_accept_tx(
+    load_shedding_percentage: u32,
+    tx_digest: TransactionDigest,
+) -> SuiResult {
+    let minutes_since_epoch = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Sui did not exist prior to 1970")
+        .as_secs()
+        / 60;
+    if should_reject_tx(load_shedding_percentage, tx_digest, minutes_since_epoch) {
+        fp_bail!(SuiError::ValidatorPushbackAndRetry);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -644,5 +677,45 @@ mod tests {
         // execution rate.
         assert!(0.4 < dropped_ratio);
         assert!(dropped_ratio < 0.6);
+    }
+
+    #[test]
+    fn test_txn_rejection_rate() {
+        for rejection_percentage in 0..=100 {
+            let mut reject_count = 0;
+            for _ in 0..10000 {
+                let digest = TransactionDigest::random();
+                if should_reject_tx(rejection_percentage, digest, 28455473) {
+                    reject_count += 1;
+                }
+            }
+            assert!(rejection_percentage as f32 / 100.0 - 0.02 < reject_count as f32 / 10000.0);
+            assert!(reject_count as f32 / 10000.0 < rejection_percentage as f32 / 100.0 + 0.02);
+        }
+    }
+
+    #[test]
+    fn test_txn_rejection_over_time() {
+        let start_time = Instant::now();
+        let mut digest = TransactionDigest::random();
+        let mut minutes_since_epoch = 28455473;
+        while !should_reject_tx(50, digest, minutes_since_epoch)
+            && start_time.elapsed() < Duration::from_secs(30)
+        {
+            digest = TransactionDigest::random();
+        }
+
+        for _ in 0..100 {
+            assert!(should_reject_tx(50, digest, minutes_since_epoch));
+        }
+
+        minutes_since_epoch += 1;
+        while should_reject_tx(50, digest, minutes_since_epoch)
+            && start_time.elapsed() < Duration::from_secs(30)
+        {
+            minutes_since_epoch += 1;
+        }
+
+        assert!(start_time.elapsed() < Duration::from_secs(30));
     }
 }

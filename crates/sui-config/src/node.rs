@@ -715,6 +715,12 @@ pub struct OverloadThresholdConfig {
     // is well under used, and will not enter load shedding mode.
     #[serde(default = "default_safe_transaction_ready_rate")]
     pub safe_transaction_ready_rate: u32,
+
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub check_system_overload_at_signing: bool,
+
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub check_system_overload_at_execution: bool,
     // TODO: Move other thresholds here as well, including `MAX_TM_QUEUE_LENGTH`
     // and `MAX_PER_OBJECT_QUEUE_LENGTH`.
 }
@@ -758,6 +764,8 @@ impl Default for OverloadThresholdConfig {
             min_load_shedding_percentage_above_hard_limit:
                 default_min_load_shedding_percentage_above_hard_limit(),
             safe_transaction_ready_rate: default_safe_transaction_ready_rate(),
+            check_system_overload_at_signing: false,
+            check_system_overload_at_execution: false,
         }
     }
 }

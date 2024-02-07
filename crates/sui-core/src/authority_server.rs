@@ -312,14 +312,22 @@ impl ValidatorService {
             .into());
         }
 
-        let overload_check_res =
-            state.check_system_overload(&consensus_adapter, transaction.data());
+        let overload_check_res = state.check_system_overload(
+            &consensus_adapter,
+            transaction.data(),
+            state.check_system_overload_at_signing(),
+        );
+
+        let mut lock_objects_but_push_back = false;
         if let Err(error) = overload_check_res {
             metrics
                 .num_rejected_tx_during_overload
                 .with_label_values(&[error.as_ref()])
                 .inc();
-            return Err(error.into());
+            match error {
+                SuiError::ValidatorPushbackAndRetry => lock_objects_but_push_back = true,
+                _ => return Err(error.into()),
+            }
         }
 
         let _handle_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
@@ -345,6 +353,9 @@ impl ValidatorService {
                 }
             })?;
 
+        if lock_objects_but_push_back {
+            return Err(SuiError::ValidatorPushbackAndRetry.into());
+        }
         Ok(tonic::Response::new(info))
     }
 
@@ -414,8 +425,11 @@ impl ValidatorService {
 
         // 2) Verify the cert.
         // Check system overload
-        let overload_check_res =
-            state.check_system_overload(&consensus_adapter, certificate.data());
+        let overload_check_res = state.check_system_overload(
+            &consensus_adapter,
+            certificate.data(),
+            state.check_system_overload_at_execution(),
+        );
         if let Err(error) = overload_check_res {
             metrics
                 .num_rejected_cert_during_overload
