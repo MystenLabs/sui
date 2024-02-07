@@ -1,6 +1,6 @@
 import { UseCurrentWalletExample } from '../../../examples/wallet-hooks';
 
-# `useCurrentWallet`
+# useCurrentWallet
 
 The `useCurrentWallet` hook retrieves the wallet that is currently connected to the dApp, if one
 exists.
@@ -41,22 +41,22 @@ function MyComponent() {
 
 ## Wallet properties
 
-- `name` - The name of the wallet
-- `version` - The version of the wallet as a string
-- `icon` - A data URL of the wallet icon as an SVG
-- `accounts` - An array of accounts that are available in the wallet
+- `name` - The name of the wallet.
+- `version` - The version of the wallet as a string.
+- `icon` - A data URL of the wallet icon as an SVG.
+- `accounts` - An array of accounts that are available in the wallet.
 - `features` - An object with all the
   [wallet-standard](https://github.com/wallet-standard/wallet-standard) features implemented by the
-  wallet
-- `chains` - An array of chain identifiers that the wallet supports
+  wallet.
+- `chains` - An array of chain identifiers that the wallet supports.
 
 ## Connection status properties
 
 - `connectionStatus`
 
-  - `disconnected` - When no wallet connected to the dApp
-  - `connecting` - When a wallet connection attempt is in progress
-  - `connecting` - When a wallet is connected to the dApp
+  - `disconnected` - When no wallet is connected to the dApp.
+  - `connecting` - When a wallet connection attempt is in progress.
+  - `connecting` - When a wallet is connected to the dApp.
 
 - `isDisconnected` - A derived boolean from the status variable above, provided for convenience.
 - `isConnecting` - A derived boolean from the status variable above, provided for convenience.
