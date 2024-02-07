@@ -211,6 +211,19 @@ impl PTB {
         Ok(output)
     }
 
+    pub fn preview(&self, commands: &BTreeMap<usize, PTBCommand>) -> Option<PTBPreview> {
+        // Preview the PTB instead of executing if preview flag is set
+        let preview = commands
+            .values()
+            .find(|x| {
+                x.name == "preview" && x.values.iter().find(|x| x.as_str() == "true").is_some()
+            })
+            .is_some();
+        preview.then_some(PTBPreview {
+            cmds: commands.clone().into_values().collect::<Vec<_>>(),
+        })
+    }
+
     /// Resolve the passed file into the existing array of PTB commands (output)
     /// It will flatly include the list of PTBCommands from the given file
     /// into the existing data holding the PTBs, and return the new index for the
@@ -344,17 +357,7 @@ impl PTB {
             };
         }
 
-        // Preview the PTB instead of executing if preview flag is set
-        let preview = commands
-            .values()
-            .find(|x| {
-                x.name == "preview" && x.values.iter().find(|x| x.as_str() == "true").is_some()
-            })
-            .is_some();
-        if preview {
-            let ptb_preview = PTBPreview {
-                cmds: commands.into_values().collect::<Vec<_>>(),
-            };
+        if let Some(ptb_preview) = &self.preview(&commands) {
             println!("{}", ptb_preview);
             return Ok(());
         }
