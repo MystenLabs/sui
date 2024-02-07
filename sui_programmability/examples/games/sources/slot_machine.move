@@ -65,7 +65,8 @@ module games::slot_machine {
         // play the game
         let generator = new_generator(r, ctx);
         let bet = random::generate_u8_in_range(&mut generator, 1, 100);
-        let won = 1 - (bet / 50); // equals 1 with probability 49% and 0 otherwise
+        let lost = bet / 50; // 0 with probability 49%, and 1 or 2 with probability 51%
+        let won = (2 - lost) / 2; // 1 with probability 49%, and 0 with probability 51%
 
         // move the bet amount from the user's coin to the game's balance
         let coin_value = coin::value(coin);
