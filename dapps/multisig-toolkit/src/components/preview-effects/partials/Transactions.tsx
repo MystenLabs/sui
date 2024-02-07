@@ -10,7 +10,7 @@ import {
 import { ReactNode } from 'react';
 
 import { ObjectLink } from '../ObjectLink';
-import PreviewCard from '../PreviewCard';
+import { PreviewCard } from '../PreviewCard';
 
 export function Transactions({ inputs }: { inputs: TransactionBlockData }) {
 	if (inputs.transaction.kind !== 'ProgrammableTransaction') return null;
