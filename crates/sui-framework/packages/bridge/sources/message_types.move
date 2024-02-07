@@ -8,8 +8,6 @@ module bridge::message_types {
     const EMERGENCY_OP: u8 = 2;
     const UPDATE_BRIDGE_LIMIT: u8 = 3;
     const UPDATE_ASSET_PRICE: u8 = 4;
-    //const COMMITTEE_CHANGE: u8 = 2;
-    //const NFT: u8 = 4;
 
     public fun token():u8{
         TOKEN

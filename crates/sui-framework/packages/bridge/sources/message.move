@@ -26,9 +26,10 @@ module bridge::message {
     use sui::test_scenario;
     #[test_only]
     use bridge::eth::ETH;
+    #[test_only]
+    use bridge::treasury::token_id;
 
     const CURRENT_MESSAGE_VERSION: u8 = 1;
-    const COMPRESSED_ECDSA_PUB_KEY_LENGTH: u64 = 33;
     const ECDSA_ADDRESS_LENGTH: u64 = 20;
 
     const ETrailingBytes: u64 = 0;
@@ -62,7 +63,7 @@ module bridge::message {
 
     struct Blocklist has drop {
         blocklist_type: u8,
-        validator_pub_key: vector<u8>
+        validator_addresses: vector<vector<u8>>
     }
 
     struct UpdateBridgeLimit has drop {
@@ -107,14 +108,23 @@ module bridge::message {
 
     public fun extract_blocklist_payload(message: &BridgeMessage): Blocklist {
         // blocklist payload should consist of one byte blocklist type, and list of 33 bytes ecdsa pub keys
-        let payload_length = vector::length(&message.payload);
-        assert!(payload_length == COMPRESSED_ECDSA_PUB_KEY_LENGTH + 1, ETrailingBytes);
         let bcs = bcs::new(message.payload);
         let blocklist_type = bcs::peel_u8(&mut bcs);
-        let validator_pub_key = bcs::into_remainder_bytes(bcs);
+        let address_count = bcs::peel_u8(&mut bcs);
+        let validator_addresses = vector[];
+        while (address_count > 0) {
+            let (address, i) = (vector[], 0);
+            while (i < ECDSA_ADDRESS_LENGTH) {
+                vector::push_back(&mut address, bcs::peel_u8(&mut bcs));
+                i = i + 1;
+            };
+            vector::push_back(&mut validator_addresses, address);
+            address_count = address_count - 1;
+        };
+        assert!(vector::is_empty(&bcs::into_remainder_bytes(bcs)), ETrailingBytes);
         Blocklist {
             blocklist_type,
-            validator_pub_key
+            validator_addresses
         }
     }
 
@@ -239,12 +249,13 @@ module bridge::message {
     ): BridgeMessage {
         let address_length = (vector::length(&validator_ecdsa_addresses) as u8);
         let payload = vector[blocklist_type, address_length];
+        let i = 0;
 
-        while (address_length > 0) {
-            let address = vector::pop_back(&mut validator_ecdsa_addresses);
-            assert!(vector::length(&address) == ECDSA_ADDRESS_LENGTH, EInvalidAddressLength);
-            vector::append(&mut payload, address);
-            address_length = address_length - 1;
+        while (i < address_length) {
+            let address = vector::borrow(&validator_ecdsa_addresses, (i as u64));
+            assert!(vector::length(address) == ECDSA_ADDRESS_LENGTH, EInvalidAddressLength);
+            vector::append(&mut payload, *address);
+            i = i + 1;
         };
 
         BridgeMessage {
@@ -279,7 +290,7 @@ module bridge::message {
         }
     }
 
-    ///Update asset price message
+    /// Update asset price message
     /// [message_type: u8]
     /// [version:u8]
     /// [nonce:u64]
@@ -479,20 +490,25 @@ module bridge::message {
         let validator_pub_key1 = hex::decode(b"b14d3c4f5fbfbcfb98af2d330000d49c95b93aa7");
         let validator_pub_key2 = hex::decode(b"f7e93cc543d97af6632c9b8864417379dba4bf15");
 
+        let validator_addresses = vector[validator_pub_key1, validator_pub_key2];
         let blocklist_message = create_block_list_message(
             chain_ids::sui_testnet(), // source chain
             10, // seq_num
             0,
-            vector[validator_pub_key1, validator_pub_key2]
+            validator_addresses
         );
         // Test message serialization
         let message = serialize_message(blocklist_message);
 
         let expected_msg = hex::decode(
-            b"0101000000000000000a010002f7e93cc543d97af6632c9b8864417379dba4bf15b14d3c4f5fbfbcfb98af2d330000d49c95b93aa7",
+            b"0101000000000000000a010002b14d3c4f5fbfbcfb98af2d330000d49c95b93aa7f7e93cc543d97af6632c9b8864417379dba4bf15",
         );
+
         assert!(message == expected_msg, 0);
         assert!(blocklist_message == deserialize_message(message), 0);
+
+        let blocklist = extract_blocklist_payload(&blocklist_message);
+        assert!(blocklist.validator_addresses == validator_addresses, 0)
     }
 
     #[test]
@@ -509,8 +525,14 @@ module bridge::message {
         let expected_msg = hex::decode(
             b"0301000000000000000a010b000000003b9aca00",
         );
+
         assert!(message == expected_msg, 0);
         assert!(update_bridge_limit == deserialize_message(message), 0);
+
+        let bridge_limit = extract_update_bridge_limit(&update_bridge_limit);
+        assert!(bridge_limit.source_chain == chain_ids::sui_testnet(), 0);
+        assert!(bridge_limit.target_chain == chain_ids::eth_sepolia(), 0);
+        assert!(bridge_limit.limit == 1000000000, 0);
     }
 
     #[test]
@@ -528,6 +550,10 @@ module bridge::message {
         );
         assert!(message == expected_msg, 0);
         assert!(asset_price_message == deserialize_message(message), 0);
+
+        let asset_price = extract_update_asset_price(&asset_price_message);
+        assert!(asset_price.token_id == token_id<ETH>(), 0);
+        assert!(asset_price.new_price == 12345, 0);
     }
 
     #[test]
