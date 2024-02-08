@@ -1136,10 +1136,16 @@ importers:
       '@prisma/client':
         specifier: ^5.8.1
         version: 5.8.1(prisma@5.8.1)
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
       express:
         specifier: ^4.18.2
         version: 4.18.2
     devDependencies:
+      '@types/cors':
+        specifier: ^2.8.17
+        version: 2.8.17
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.21
@@ -1167,10 +1173,16 @@ importers:
       '@prisma/client':
         specifier: ^5.8.1
         version: 5.8.1(prisma@5.8.1)
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
       express:
         specifier: ^4.18.2
         version: 4.18.2
     devDependencies:
+      '@types/cors':
+        specifier: ^2.8.17
+        version: 2.8.17
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.21
@@ -1189,6 +1201,82 @@ importers:
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
+
+  examples/trading/frontend:
+    dependencies:
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../../../sdk/dapp-kit
+      '@mysten/sui.js':
+        specifier: workspace:*
+        version: link:../../../sdk/typescript
+      '@radix-ui/colors':
+        specifier: ^3.0.0
+        version: 3.0.0
+      '@radix-ui/react-icons':
+        specifier: ^1.3.0
+        version: 1.3.0(react@18.2.0)
+      '@radix-ui/themes':
+        specifier: ^2.0.0
+        version: 2.0.0(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0)(react@18.2.0)
+      '@tanstack/react-query':
+        specifier: ^5.0.0
+        version: 5.0.0(react-dom@18.2.0)(react@18.2.0)
+      react:
+        specifier: ^18.2.0
+        version: 18.2.0
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.2.0(react@18.2.0)
+      react-hot-toast:
+        specifier: ^2.4.1
+        version: 2.4.1(react-dom@18.2.0)(react@18.2.0)
+      react-router-dom:
+        specifier: ^6.14.2
+        version: 6.14.2(react-dom@18.2.0)(react@18.2.0)
+    devDependencies:
+      '@types/react':
+        specifier: ^18.2.15
+        version: 18.2.15
+      '@types/react-dom':
+        specifier: ^18.2.7
+        version: 18.2.7
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^6.1.0
+        version: 6.1.0(@typescript-eslint/parser@6.1.0)(eslint@8.45.0)(typescript@5.1.6)
+      '@typescript-eslint/parser':
+        specifier: ^6.1.0
+        version: 6.1.0(eslint@8.45.0)(typescript@5.1.6)
+      '@vitejs/plugin-react-swc':
+        specifier: ^3.3.2
+        version: 3.4.0(vite@4.4.4)
+      autoprefixer:
+        specifier: ^10.4.14
+        version: 10.4.14(postcss@8.4.31)
+      eslint:
+        specifier: ^8.45.0
+        version: 8.45.0
+      eslint-plugin-react-hooks:
+        specifier: ^4.6.0
+        version: 4.6.0(eslint@8.45.0)
+      eslint-plugin-react-refresh:
+        specifier: ^0.4.3
+        version: 0.4.3(eslint@8.45.0)
+      postcss:
+        specifier: ^8.4.31
+        version: 8.4.31
+      prettier:
+        specifier: ^3.0.0
+        version: 3.0.0
+      tailwindcss:
+        specifier: ^3.3.3
+        version: 3.3.3(ts-node@10.9.1)
+      typescript:
+        specifier: ^5.1.6
+        version: 5.1.6
+      vite:
+        specifier: ^4.4.4
+        version: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
 
   sdk/bcs:
     dependencies:
@@ -11264,6 +11352,12 @@ packages:
     resolution: {integrity: sha512-XW/Aa8APYr6jSVVA1y/DEIZX0/GMKLEVekNG727R8cs56ahETkRAy/3DR7+fJyh7oUgGwNQaRfXCun0+KbWY7Q==}
     dev: true
 
+  /@types/cors@2.8.17:
+    resolution: {integrity: sha512-8CGDvrBj1zgo2qE+oS3pOCyYNqCPryMWY2bGfwA0dcfopWGgxs+78df0Rs3rc9THP4JkOhLsAa+15VdpAqkcUA==}
+    dependencies:
+      '@types/node': 20.4.2
+    dev: true
+
   /@types/cross-spawn@6.0.2:
     resolution: {integrity: sha512-KuwNhp3eza+Rhu8IFI5HUXRP0LIhqH5cAjubUvGXXthh4YYBuP2ntwEX+Cz8GJoZUHlKo247wPWOfA9LYEq4cw==}
     dependencies:
@@ -12446,6 +12540,17 @@ packages:
     dependencies:
       '@swc/core': 1.3.92
       vite: 4.4.11(@types/node@20.4.2)(sass@1.63.6)
+    transitivePeerDependencies:
+      - '@swc/helpers'
+    dev: true
+
+  /@vitejs/plugin-react-swc@3.4.0(vite@4.4.4):
+    resolution: {integrity: sha512-m7UaA4Uvz82N/0EOVpZL4XsFIakRqrFKeSNxa1FBLSXGvWrWRBwmZb4qxk+ZIVAZcW3c3dn5YosomDgx62XWcQ==}
+    peerDependencies:
+      vite: ^4
+    dependencies:
+      '@swc/core': 1.3.92
+      vite: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
     transitivePeerDependencies:
       - '@swc/helpers'
     dev: true
@@ -14733,6 +14838,14 @@ packages:
     resolution: {integrity: sha512-ZQBvi1DcpJ4GDqanjucZ2Hj3wEO5pZDS89BWbkcrvdxksJorwUDDZamX9ldFkp9aw2lmBDLgkObEA4DWNJ9FYQ==}
     dev: true
 
+  /cors@2.8.5:
+    resolution: {integrity: sha512-KIHbLJqu73RGr/hnbrO9uBeixNGuvSQjul/jdFvS/KFSIH1hWVd1ng7zOHx+YrEfInLG7q4n6GHQ9cDtxv/P6g==}
+    engines: {node: '>= 0.10'}
+    dependencies:
+      object-assign: 4.1.1
+      vary: 1.1.2
+    dev: false
+
   /cose-base@1.0.3:
     resolution: {integrity: sha512-s9whTXInMSgAp/NVXVNuVxVKzGH2qck3aQlVHxDCdAEPgtMKwc4Wq6/QKhgdEdgbLSi9rBTAcPoRa6JpiG4ksg==}
     dependencies:
@@ -16667,14 +16780,6 @@ packages:
       estraverse: 4.3.0
     dev: true
 
-  /eslint-scope@7.2.1:
-    resolution: {integrity: sha512-CvefSOsDdaYYvxChovdrPo/ZGt8d5lrJWleAc1diXRKhHGiTYEI26cvo8Kle/wGnsizoCJjK73FMg1/IkIwiNA==}
-    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
-    dependencies:
-      esrecurse: 4.3.0
-      estraverse: 5.3.0
-    dev: true
-
   /eslint-scope@7.2.2:
     resolution: {integrity: sha512-dOt21O7lTMhDM+X9mB4GX+DZrZtCUJPL/wlcTqxyrx5IvO0IYtILdtrQGQp+8n5S0gwSVmOf9NQrjMOgfQZlIg==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
@@ -16700,11 +16805,6 @@ packages:
 
   /eslint-visitor-keys@3.3.0:
     resolution: {integrity: sha512-mQ+suqKJVyeuwGYHAdjMFqjCyfl8+Ldnxuyp3ldiMBFKkvytrXUZWaiPCEav8qDHKty44bD+qV1IP4T+w+xXRA==}
-    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
-    dev: true
-
-  /eslint-visitor-keys@3.4.1:
-    resolution: {integrity: sha512-pZnmmLwYzf+kWaM/Qgrvpen51upAktaaiI01nsJD/Yr3lMOdNtq0cxkrrg16w64VtisN6okbs7Q8AfGqj4c9fA==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
     dev: true
 
@@ -16748,7 +16848,7 @@ packages:
       doctrine: 3.0.0
       escape-string-regexp: 4.0.0
       eslint-scope: 7.2.2
-      eslint-visitor-keys: 3.3.0
+      eslint-visitor-keys: 3.4.3
       espree: 9.6.1
       esquery: 1.5.0
       esutils: 2.0.3
@@ -16796,8 +16896,8 @@ packages:
       debug: 4.3.4(supports-color@8.1.1)
       doctrine: 3.0.0
       escape-string-regexp: 4.0.0
-      eslint-scope: 7.2.1
-      eslint-visitor-keys: 3.4.1
+      eslint-scope: 7.2.2
+      eslint-visitor-keys: 3.4.3
       espree: 9.6.1
       esquery: 1.5.0
       esutils: 2.0.3
@@ -16830,7 +16930,7 @@ packages:
     dependencies:
       acorn: 8.10.0
       acorn-jsx: 5.3.2(acorn@8.10.0)
-      eslint-visitor-keys: 3.3.0
+      eslint-visitor-keys: 3.4.3
     dev: true
 
   /espree@9.6.1:
@@ -16839,7 +16939,7 @@ packages:
     dependencies:
       acorn: 8.10.0
       acorn-jsx: 5.3.2(acorn@8.10.0)
-      eslint-visitor-keys: 3.4.1
+      eslint-visitor-keys: 3.4.3
     dev: true
 
   /esprima@4.0.1:
@@ -24227,14 +24327,6 @@ packages:
     resolution: {integrity: sha512-IXgzBWvWQwE6PrDI05OvmXUIruQTcoMDzRsOd5CDvHCVLcLHMTSYvOK5Cm46kWqlV3yAbuSpBZdJ5oP5OUoStg==}
     dev: false
 
-  /rollup@3.26.3:
-    resolution: {integrity: sha512-7Tin0C8l86TkpcMtXvQu6saWH93nhG3dGQ1/+l5V2TDMceTxO7kDiK6GzbfLWNNxqJXm591PcEZUozZm51ogwQ==}
-    engines: {node: '>=14.18.0', npm: '>=8.0.0'}
-    hasBin: true
-    optionalDependencies:
-      fsevents: 2.3.3
-    dev: true
-
   /rollup@3.29.4:
     resolution: {integrity: sha512-oWzmBZwvYrU0iJHtDmhsm662rC15FRXmcjCk1xD771dFDx5jJ02ufAQQTn0etB2emNk4J9EZg/yWKpsn9BWGRw==}
     engines: {node: '>=14.18.0', npm: '>=8.0.0'}
@@ -25700,7 +25792,7 @@ packages:
     engines: {node: '>=0.8'}
     dependencies:
       psl: 1.9.0
-      punycode: 2.3.0
+      punycode: 2.3.1
     dev: true
 
   /tough-cookie@3.0.1:
@@ -25709,7 +25801,7 @@ packages:
     dependencies:
       ip-regex: 2.1.0
       psl: 1.9.0
-      punycode: 2.3.0
+      punycode: 2.3.1
     dev: true
 
   /tough-cookie@4.1.3:
@@ -26404,7 +26496,7 @@ packages:
   /uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
     dependencies:
-      punycode: 2.3.0
+      punycode: 2.3.1
     dev: true
 
   /url-parse-lax@3.0.0:
@@ -26805,7 +26897,7 @@ packages:
       '@types/node': 20.4.2
       esbuild: 0.18.14
       postcss: 8.4.31
-      rollup: 3.26.3
+      rollup: 3.29.4
       sass: 1.63.6
     optionalDependencies:
       fsevents: 2.3.3

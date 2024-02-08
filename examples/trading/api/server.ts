@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cors from 'cors';
 import express from 'express';
 
 import { prisma } from './db';
@@ -13,6 +14,7 @@ import {
 } from './utils/api-queries';
 
 const app = express();
+app.use(cors());
 
 app.use(express.json());
 
