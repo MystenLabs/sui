@@ -85,6 +85,45 @@ enum LockEntry {
     Deleted,
 }
 
+type LockMap = DashMap<ObjectID, (ObjectRef, LockEntry)>;
+type LockMapEntry<'a> = DashMapEntry<'a, ObjectID, (ObjectRef, LockEntry)>;
+type LockMapOccupiedEntry<'a> = DashMapOccupiedEntry<'a, ObjectID, (ObjectRef, LockEntry)>;
+
+trait LocksByObjectRef {
+    fn entry_by_objref(&self, obj_ref: &ObjectRef) -> LockMapEntry<'_>;
+    fn get_by_objref(&self, obj_ref: &ObjectRef) -> Option<&LockEntry>;
+    fn insert_by_objref(&self, obj_ref: ObjectRef, lock: LockEntry);
+}
+
+impl LocksByObjectRef for LockMap {
+    fn entry_by_objref(&self, obj_ref: &ObjectRef) -> LockMapEntry<'_> {
+        let entry = self.entry(obj_ref.0);
+        if let DashMapEntry::Occupied(e) = entry {
+            assert_eq!(e.get().0, *obj_ref);
+        }
+        entry
+    }
+
+    fn get_by_objref(&self, obj_ref: &ObjectRef) -> Option<&LockEntry> {
+        if let Some((cur_objref, lock)) = self.get(&obj_ref.0).as_ref().map(|r| &**r) {
+            assert_eq!(*cur_objref, *obj_ref);
+            Some(lock)
+        } else {
+            None
+        }
+    }
+
+    fn insert_by_objref(&self, obj_ref: ObjectRef, lock: LockEntry) {
+        if let Some(old_value) = self.insert(obj_ref.0, (obj_ref, lock)) {
+            assert_eq!(
+                old_value.0, obj_ref,
+                "lock already existed for {:?}",
+                old_value
+            );
+        }
+    }
+}
+
 /// UncommitedData stores execution outputs that are not yet written to the db. Entries in this
 /// struct can only be purged after they are committed.
 struct UncommittedData {
@@ -103,8 +142,10 @@ struct UncommittedData {
     /// bound for a child read in objects, it is the correct object to return.
     objects: DashMap<ObjectID, CachedVersionMap<ObjectEntry>>,
 
-    // Mirrors the owned_object_transaction_locks table in the db.
-    owned_object_transaction_locks: DashMap<ObjectRef, LockEntry>,
+    // Mirrors the owned_object_transaction_locks table in the db, but with the following
+    // difference: Since only one version of an object can ever be locked at a time, this
+    // map is keyed by ObjectID. We store the full ObjectRef in the value.
+    owned_object_transaction_locks: LockMap,
 
     // Markers for received objects and deleted shared objects. This contains all of the dirty
     // marker state, which is committed to the db at the same time as other transaction data.
@@ -303,12 +344,15 @@ impl MemoryCache {
     fn get_owned_object_lock_entry(
         &self,
         obj_ref: &ObjectRef,
-    ) -> SuiResult<DashMapOccupiedEntry<'_, ObjectRef, LockEntry>> {
-        let entry = self.dirty.owned_object_transaction_locks.entry(*obj_ref);
+    ) -> SuiResult<LockMapOccupiedEntry<'_>> {
+        let entry = self
+            .dirty
+            .owned_object_transaction_locks
+            .entry_by_objref(obj_ref);
         let occupied = match entry {
             DashMapEntry::Occupied(occupied) => {
                 if cfg!(debug_assertions) {
-                    if let (Ok(db_lock), LockEntry::Lock(cached_lock)) =
+                    if let (Ok(db_lock), (_, LockEntry::Lock(cached_lock))) =
                         (self.store.get_lock_entry(*obj_ref), occupied.get())
                     {
                         assert_eq!(
@@ -324,7 +368,7 @@ impl MemoryCache {
             DashMapEntry::Vacant(entry) => {
                 let lock = self.store.get_lock_entry(*obj_ref)?;
 
-                entry.insert_entry(LockEntry::Lock(lock))
+                entry.insert_entry((*obj_ref, LockEntry::Lock(lock)))
             }
         };
 
@@ -562,7 +606,7 @@ impl MemoryCache {
             // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its
             //    fine
             assert!(
-                matches!(entry.get(), LockEntry::Lock(_)),
+                matches!(entry.get().1, LockEntry::Lock(_)),
                 "lock must exist for {:?}",
                 obj_ref
             );
@@ -583,7 +627,7 @@ impl MemoryCache {
                 assert!(
                     self.dirty
                         .owned_object_transaction_locks
-                        .get(obj_ref)
+                        .get_by_objref(obj_ref)
                         .is_none(),
                     "lock must not exist in cache {:?}",
                     obj_ref
@@ -592,7 +636,7 @@ impl MemoryCache {
 
             self.dirty
                 .owned_object_transaction_locks
-                .insert(*obj_ref, LockEntry::Lock(None));
+                .insert_by_objref(*obj_ref, LockEntry::Lock(None));
         }
 
         let tx_digest = *transaction.digest();
