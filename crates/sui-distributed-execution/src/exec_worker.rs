@@ -424,7 +424,7 @@ impl<
         // Main loop
         loop {
             tokio::select! {
-                biased;
+                // biased;
                 Some(tx_with_results) = tasks_queue.join_next() => {
                     let tx_with_results = tx_with_results.expect("tx task failed");
                     let txid = tx_with_results.full_tx.tx.digest();
