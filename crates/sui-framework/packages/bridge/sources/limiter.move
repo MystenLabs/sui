@@ -6,31 +6,28 @@ module bridge::limiter {
     use std::option;
     use std::type_name;
     use std::type_name::TypeName;
-    use std::vector;
     use sui::clock;
     use sui::clock::Clock;
     use sui::math::pow;
     use sui::vec_map;
-    use sui::vec_map::VecMap;
+    use sui::vec_map::{VecMap};
+    use bridge::chain_ids;
+    use bridge::sized_vector;
+    use bridge::sized_vector::SizedVector;
     use bridge::treasury;
     use bridge::chain_ids::BridgeRoute;
-    #[test_only]
-    use std::debug::print;
+
     #[test_only]
     use sui::test_scenario;
     #[test_only]
-    use sui::test_utils::destroy;
-    #[test_only]
-    use bridge::chain_ids;
+    use sui::test_utils::{destroy, assert_eq};
     #[test_only]
     use bridge::eth::ETH;
 
-    const ETransferAmountExceedLimit: u64 = 0;
-
     // TODO: Make this configurable?
     const DEFAULT_TRANSFER_LIMIT: u64 = 0;
-
-    const TRANSFER_AMOUNT_DP: u8 = 4;
+    const MAX_TRANSFER_LIMIT: u64 = 18_446_744_073_709_551_615;
+    const WINDOW_SIZE: u64 = 24;
 
     struct TransferLimiter has store {
         transfer_limits: VecMap<BridgeRoute, u64>,
@@ -41,16 +38,34 @@ module bridge::limiter {
     }
 
     struct TransferRecord has store {
-        hour_head: u64,
-        hour_tail: u64,
-        per_hour_amounts: vector<u64>,
+        last_recorded_hour: u64,
+        per_hour_amounts: SizedVector<u64>,
         // total amount in USD, 4 DP accuracy
         total_amount: u64
     }
 
     public fun new(): TransferLimiter {
+        // hardcoded limit for bridge genesis
+        let transfer_limits = vec_map::empty();
+        // 5M limit on SUI to ETH mainnet with 4DP accuracy
+        vec_map::insert(
+            &mut transfer_limits,
+            chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet()),
+            5_000_000 * 10_000
+        );
+        // MAX limit for testnet and devnet
+        vec_map::insert(
+            &mut transfer_limits,
+            chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_devnet()),
+            MAX_TRANSFER_LIMIT
+        );
+        vec_map::insert(
+            &mut transfer_limits,
+            chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_devnet()),
+            MAX_TRANSFER_LIMIT
+        );
         TransferLimiter {
-            transfer_limits: vec_map::empty(),
+            transfer_limits,
             notional_values: vec_map::empty(),
             transfer_records: vec_map::empty()
         }
@@ -70,19 +85,16 @@ module bridge::limiter {
         // Create record for route if not exists
         if (!vec_map::contains(&self.transfer_records, &route)) {
             vec_map::insert(&mut self.transfer_records, route, TransferRecord {
-                hour_head: 0,
-                hour_tail: 0,
-                per_hour_amounts: vector[],
+                last_recorded_hour: 0,
+                per_hour_amounts: sized_vector::new(WINDOW_SIZE),
                 total_amount: 0
             })
         };
         let record = vec_map::get_mut(&mut self.transfer_records, &route);
         let current_hour_since_epoch = current_hour_since_epoch(clock);
 
-        // First clean up old transfer histories
-        remove_stale_hour_maybe(record, current_hour_since_epoch);
-        // Backfill missing hours
-        append_new_empty_hours(record, current_hour_since_epoch);
+        // First clean up old transfer records
+        cleanup_records(record, current_hour_since_epoch);
 
         // Get limit for the route
         let route_limit = option::destroy_with_default(
@@ -104,41 +116,30 @@ module bridge::limiter {
         };
 
         // Record transfer value
-        let new_amount = vector::pop_back(&mut record.per_hour_amounts) + notional_amount;
-        vector::push_back(&mut record.per_hour_amounts, new_amount);
+        let new_amount = sized_vector::pop_back(&mut record.per_hour_amounts) + notional_amount;
+        let poped = sized_vector::push_back(&mut record.per_hour_amounts, new_amount);
+        option::destroy_none(poped);
         record.total_amount = record.total_amount + notional_amount;
         return true
     }
 
-    fun append_new_empty_hours(self: &mut TransferRecord, current_hour_since_epoch: u64) {
-        if (self.hour_head == current_hour_since_epoch) {
-            return; // nothing to backfill
+    fun cleanup_records(self: &mut TransferRecord, current_hour_since_epoch: u64) {
+        if (self.last_recorded_hour == current_hour_since_epoch) {
+            return // nothing to cleanup
         };
 
-        // If tail is even older than 24 hours ago, advance it to that.
-        let target_tail = current_hour_since_epoch - 24;
-        if (self.hour_tail < target_tail) {
-            self.hour_tail = target_tail;
+        // clean up stale records
+        // calculate number of hours to pop, max 24 hours.
+        let i = current_hour_since_epoch - self.last_recorded_hour;
+        if (i > WINDOW_SIZE) {
+            i = WINDOW_SIZE
         };
-
-        // If old head is even older than target tail, advance it to that.
-        if (self.hour_head < target_tail) {
-            self.hour_head = target_tail;
+        while (i > 0) {
+            let poped = sized_vector::push_back(&mut self.per_hour_amounts, 0);
+            self.total_amount = self.total_amount - option::destroy_with_default(poped, 0);
+            i = i - 1;
         };
-
-        // Backfill from head to current hour
-        while (self.hour_head < current_hour_since_epoch) {
-            self.hour_head = self.hour_head + 1;
-            vector::push_back(&mut self.per_hour_amounts, 0);
-        }
-    }
-
-    fun remove_stale_hour_maybe(self: &mut TransferRecord, current_hour_since_epoch: u64) {
-        // remove tails until it's within 24 hours range
-        while (self.hour_tail + 24 < current_hour_since_epoch && self.hour_tail < self.hour_head) {
-            self.total_amount = self.total_amount - vector::remove(&mut self.per_hour_amounts, 0);
-            self.hour_tail = self.hour_tail + 1;
-        }
+        self.last_recorded_hour = current_hour_since_epoch
     }
 
     #[test]
@@ -152,8 +153,8 @@ module bridge::limiter {
 
         let route = chain_ids::get_route(chain_ids::sui_devnet(), chain_ids::eth_sepolia());
 
-        // Global transfer limit is 1M USD
-        vec_map::insert(&mut limiter.transfer_limits, route, 1_000_000);
+        // Global transfer limit is 1000M USD
+        vec_map::insert(&mut limiter.transfer_limits, route, 1_000_000_000);
         // Notional price for ETH is 5 USD
         vec_map::insert(&mut limiter.notional_values, type_name::get<ETH>(), 5);
 
@@ -162,22 +163,22 @@ module bridge::limiter {
         let clock = clock::create_for_testing(ctx);
         clock::set_for_testing(&mut clock, 1706288001377);
 
+        // transfer 10000 ETH every hour, the totol should be 10000 * 5
         check_and_record_transfer<ETH>(&clock, &mut limiter, route, 1_000_000_000_000);
 
         let record = vec_map::get(&limiter.transfer_records, &route);
-        print(&record.total_amount);
         assert!(record.total_amount == 10000 * 5, 0);
 
-        // transfer 1000 ETH every hour, the 24 hours totol should be 24000 * 10
+        // transfer 1000 * i ETH every hour for 24 hours, the 24 hours totol should be 300 * 1000 * 5
         let i = 0;
-        while (i < 50) {
+        while (i < 24) {
             clock::increment_for_testing(&mut clock, 60 * 60 * 1000);
-            check_and_record_transfer<ETH>(&clock, &mut limiter, route, 100_000_000_000);
+            check_and_record_transfer<ETH>(&clock, &mut limiter, route, 100_000_000_000 * (i + 1));
             i = i + 1;
         };
 
         let record = vec_map::get(&limiter.transfer_records, &route);
-        assert!(record.total_amount == 24000 * 5, 0);
+        assert_eq(record.total_amount, 300 * 1000 * 5);
 
         destroy(limiter);
 
