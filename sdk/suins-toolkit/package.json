@@ -2,7 +2,7 @@
 	"name": "@mysten/suins-toolkit",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "SuiNS TypeScript SDK",
-	"version": "0.4.1",
+	"version": "0.4.2",
 	"license": "Apache-2.0",
 	"type": "commonjs",
 	"main": "./dist/cjs/index.js",
