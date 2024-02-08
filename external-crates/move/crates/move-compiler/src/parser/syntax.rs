@@ -1332,6 +1332,16 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
                 );
                 Ok((exp, true))
             }
+            Tok::BlockLabel => {
+                let start_loc = context.tokens.start_loc();
+                let label = parse_block_label(context)?;
+                consume_token(context.tokens, Tok::Colon)?;
+                let (e, ends_in_block) = parse_exp_or_sequence(context)?;
+                let end_loc = context.tokens.previous_end_loc();
+                let labeled_ = Exp_::Labeled(label, Box::new(e));
+                let labeled = spanned(context.tokens.file_hash(), start_loc, end_loc, labeled_);
+                Ok((labeled, ends_in_block))
+            }
             _ => Ok((parse_exp(context)?, false)),
         }
     }
@@ -1438,8 +1448,12 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
         Tok::BlockLabel => {
             let name = parse_block_label(context)?;
             consume_token(context.tokens, Tok::Colon)?;
-            let (e, ends_in_block) = parse_exp_or_sequence(context)?;
-            (Exp_::Labled(name, Box::new(e)), ends_in_block)
+            let (e, ends_in_block) = if is_control_exp(context.tokens.peek()) {
+                parse_control_exp(context)?
+            } else {
+                parse_exp_or_sequence(context)?
+            };
+            (Exp_::Labeled(name, Box::new(e)), ends_in_block)
         }
         _ => unreachable!(),
     };
@@ -1596,12 +1610,26 @@ fn parse_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             let (ret_ty_opt, body) = if context.tokens.peek() == Tok::MinusGreater {
                 context.tokens.advance()?;
                 let ret_ty = parse_type(context)?;
+                let label_opt = if matches!(context.tokens.peek(), Tok::BlockLabel) {
+                    let start_loc = context.tokens.start_loc();
+                    let label = parse_block_label(context)?;
+                    consume_token(context.tokens, Tok::Colon)?;
+                    Some((start_loc, label))
+                } else {
+                    None
+                };
                 let start_loc = context.tokens.start_loc();
                 consume_token(context.tokens, Tok::LBrace)?;
                 let block_ = Exp_::Block(parse_sequence(context)?);
                 let end_loc = context.tokens.previous_end_loc();
                 let block = spanned(context.tokens.file_hash(), start_loc, end_loc, block_);
-                (Some(ret_ty), block)
+                let body = if let Some((lbl_start_loc, label)) = label_opt {
+                    let labeled_ = Exp_::Labeled(label, Box::new(block));
+                    spanned(context.tokens.file_hash(), lbl_start_loc, end_loc, labeled_)
+                } else {
+                    block
+                };
+                (Some(ret_ty), body)
             } else {
                 (None, parse_exp(context)?)
             };
