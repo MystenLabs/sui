@@ -13,48 +13,51 @@ pub struct QueuesManager {
     writing_tx: HashMap<ObjectID, TransactionDigest>,
     wait_table: HashMap<TransactionDigest, HashSet<TransactionDigest>>,
     reverse_wait_table: HashMap<TransactionDigest, HashSet<TransactionDigest>>,
-    // new: mpsc::UnboundedReceiver<TransactionWithEffects>,
-    // ready: mpsc::UnboundedSender<TransactionWithEffects>,
-    // done: mpsc::UnboundedReceiver<TransactionDigest>,
-    ready: mpsc::Sender<TransactionDigest>,
+    new: mpsc::UnboundedReceiver<TransactionWithEffects>,
+    ready: mpsc::UnboundedSender<TransactionWithEffects>,
+    done: mpsc::UnboundedReceiver<TransactionDigest>,
 }
 
 // The methods of the QueuesManager are called from a single thread, so no need for locks
 impl QueuesManager {
-    pub fn new(ready_tx_sender: mpsc::Sender<TransactionDigest>) -> QueuesManager {
+    pub fn new(
+        new_tx_receiver: mpsc::UnboundedReceiver<TransactionWithEffects>,
+        ready_tx_sender: mpsc::UnboundedSender<TransactionWithEffects>,
+        done_tx_receiver: mpsc::UnboundedReceiver<TransactionDigest>,
+    ) -> QueuesManager {
         QueuesManager {
             tx_store: HashMap::new(),
             writing_tx: HashMap::new(),
             wait_table: HashMap::new(),
             reverse_wait_table: HashMap::new(),
-            // new: new_tx_receiver,
+            new: new_tx_receiver,
             ready: ready_tx_sender,
-            // done: done_tx_receiver,
+            done: done_tx_receiver,
         }
     }
 
-    // pub async fn run(&mut self) {
-    //     loop {
-    //         tokio::select! {
-    //             biased;
-    //             //TODO can we make sure we only process new_tx if done_tx is empty?
-    //             Some(done_tx) = self.done.recv() => {
-    //                 self.clean_up(&done_tx).await;
-    //             }
-    //             Some(new_tx) = self.new.recv() => {
-    //                 self.queue_tx(new_tx).await;
-    //             }
-    //             else => {
-    //                 eprintln!("QD error, abort");
-    //                 break
-    //             }
+    pub async fn run(&mut self) {
+        loop {
+            tokio::select! {
+                biased;
+                //TODO can we make sure we only process new_tx if done_tx is empty?
+                Some(done_tx) = self.done.recv() => {
+                    self.clean_up(&done_tx).await;
+                }
+                Some(new_tx) = self.new.recv() => {
+                    self.queue_tx(new_tx).await;
+                }
+                else => {
+                    eprintln!("QD error, abort");
+                    break
+                }
 
-    //         }
-    //     }
-    // }
+            }
+        }
+    }
 
     /// Enqueues a transaction on the manager
-    pub async fn queue_tx(&mut self, full_tx: TransactionWithEffects) {
+    async fn queue_tx(&mut self, full_tx: TransactionWithEffects) {
         let txid = full_tx.tx.digest();
 
         // Get RW set
@@ -85,12 +88,12 @@ impl QueuesManager {
 
         // Set the wait table and check if tx is ready
         if wait_ctr == 0 {
-            self.ready.send(*txid).await.expect("send failed");
+            self.ready.send(full_tx).expect("send failed");
         }
     }
 
     /// Cleans up after a completed transaction
-    pub async fn clean_up(&mut self, txid: &TransactionDigest) {
+    async fn clean_up(&mut self, txid: &TransactionDigest) {
         if let Some(completed_tx) = self.tx_store.remove(txid) {
             assert!(self.wait_table.get(txid).is_none());
 
@@ -104,14 +107,19 @@ impl QueuesManager {
             }
         }
 
-        if let Some(waiting_txs) = self.reverse_wait_table.remove(txid) {
-            for other_txid in waiting_txs {
-                self.wait_table.get_mut(&other_txid).unwrap().remove(txid);
-                if self.wait_table.get(&other_txid).unwrap().is_empty() {
-                    self.wait_table.remove(&other_txid);
-                    self.ready.send(other_txid).await.expect("send failed");
-                }
-            }
+        if let Some(_waiting_txs) = self.reverse_wait_table.remove(txid) {
+            unreachable!("We should not have any txs waiting on a completed tx");
+            // for other_txid in waiting_txs {
+            //     if let Some(waiting_tx_set) = self.wait_table.get_mut(&other_txid) {
+            //         waiting_tx_set.remove(txid);
+
+            //         if waiting_tx_set.is_empty() {
+            //             self.wait_table.remove(&other_txid);
+            //             let ready_tx = self.get_tx(&other_txid).clone();
+            //             self.ready.send(ready_tx).await.expect("send failed");
+            //         }
+            //     }
+            // }
         }
     }
 

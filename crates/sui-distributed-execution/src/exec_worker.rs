@@ -41,7 +41,7 @@ use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
 
 use super::types::*;
-use crate::queue_manager::{QueuesManager, MANAGER_CHANNEL_SIZE};
+use crate::queue_manager::QueuesManager;
 use crate::setup::generate_benchmark_ctx_workload;
 use crate::setup::generate_benchmark_txs;
 use crate::{metrics::Metrics, types::WritableObjectStore};
@@ -380,15 +380,12 @@ impl<
         worker_metrics: Arc<Metrics>,
     ) {
         // Initialize channels
-        // let (ready_tx_sender, mut ready_tx_receiver) = mpsc::unbounded_channel();
-        // let (new_tx_sender, new_tx_receiver) = mpsc::unbounded_channel();
-        // let (done_tx_sender, done_tx_receiver) = mpsc::unbounded_channel();
+        let (ready_tx_sender, mut ready_tx_receiver) = mpsc::unbounded_channel();
+        let (new_tx_sender, new_tx_receiver) = mpsc::unbounded_channel();
+        let (done_tx_sender, done_tx_receiver) = mpsc::unbounded_channel();
 
-        // let mut manager = QueuesManager::new(new_tx_receiver, ready_tx_sender, done_tx_receiver);
-        // tokio::spawn(async move { manager.run().await });
-
-        let (manager_sender, mut manager_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
-        let mut manager = QueuesManager::new(manager_sender);
+        let mut manager = QueuesManager::new(new_tx_receiver, ready_tx_sender, done_tx_receiver);
+        tokio::spawn(async move { manager.run().await });
 
         let mut tasks_queue: JoinSet<TransactionWithResults> = JoinSet::new();
 
@@ -469,8 +466,8 @@ impl<
                     }
 
                     // 2. Update object queues
-                    // done_tx_sender.send(*txid).expect("send failed");
-                    manager.clean_up(&txid).await;
+                    done_tx_sender.send(*txid).expect("send failed");
+                    // manager.clean_up(&txid).await;
 
                     // println!("Sending TxResults message for tx {}", txid);
                     let msg = NetworkMessage { src: 0, dst: ew_ids.iter()
@@ -497,12 +494,12 @@ impl<
 
                 // Received a tx from the queue mananger -> the tx is ready to be executed
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
-                Some(txid) = manager_receiver.recv() => {
-                    let full_tx = manager.get_tx(&txid);
-                // Some(full_tx) = ready_tx_receiver.recv() => {
-                    // let txid = full_tx.tx.digest();
+                // Some(txid) = manager_receiver.recv() => {
+                //     let full_tx = manager.get_tx(&txid);
+                Some(full_tx) = ready_tx_receiver.recv() => {
+                    let txid = full_tx.tx.digest();
                     // println!("EW {} received ready tx {} from QM", my_id, txid);
-                    self.ready_txs.insert(txid, ());
+                    self.ready_txs.insert(*txid, ());
 
                     let mut locked_objs = Vec::new();
                     for obj_id in full_tx.get_read_set() {
@@ -522,11 +519,11 @@ impl<
 
                     let msg = NetworkMessage{
                         src:0,
-                        dst:vec![get_designated_executor_for_tx(txid, &full_tx,&ew_ids)],
+                        dst:vec![get_designated_executor_for_tx(*txid, &full_tx,&ew_ids)],
                         payload: SailfishMessage::LockedExec { full_tx: full_tx.clone(), objects: locked_objs.clone(), child_objects: Vec::new() }};
                     // println!("EW {} Sending LockedExec for tx {} to EW {}", my_id, txid, execute_on_ew);
                     if out_channel.send(msg).await.is_err() {
-                        eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, get_designated_executor_for_tx(txid, &full_tx,&ew_ids));
+                        eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, get_designated_executor_for_tx(*txid, &full_tx,&ew_ids));
                     }
                 },
 
@@ -624,8 +621,8 @@ impl<
                     } else if let SailfishMessage::TxResults { txid, deleted, written } = msg {
                         // println!("EW {} received TxResults for tx {}", my_id, txid);
                         if let Some(_) = self.ready_txs.remove(&txid) {
-                            manager.clean_up(&txid).await;
-                            // done_tx_sender.send(txid).expect("send failed");
+                            // manager.clean_up(&txid).await;
+                            done_tx_sender.send(txid).expect("send failed");
                         }
                         // else {
                         //     unreachable!("tx already executed though we did not send LockedExec");
@@ -655,8 +652,8 @@ impl<
                             // don't queue to manager, but store to epoch_change_tx
                             epoch_change_tx = Some(full_tx);
                         } else {
-                            manager.queue_tx(full_tx).await;
-                            // new_tx_sender.send(full_tx).expect("send failed");
+                            // manager.queue_tx(full_tx).await;
+                            new_tx_sender.send(full_tx).expect("send failed");
                             // epoch_txs_semaphore += 1;
                         }
                     } else {
