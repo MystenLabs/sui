@@ -471,6 +471,12 @@ impl<
                     done_tx_sender.send(*txid).expect("send failed");
                     // manager.clean_up(&txid).await;
 
+                    let mut channel_full = false;
+                    if out_channel.capacity() == 0 {
+                        println!("Out channel is full @ {num_tx}");
+                        channel_full = true;
+                    }
+
                     // println!("Sending TxResults message for tx {}", txid);
                     let msg = NetworkMessage { src: 0, dst: ew_ids.iter()
                         .filter(|&&id| id != my_id)
@@ -482,6 +488,10 @@ impl<
                     }};
                     if out_channel.send(msg).await.is_err() {
                         eprintln!("EW {} could not send LockedExec.", my_id);
+                    }
+
+                    if channel_full {
+                        println!("Got past full channel");
                     }
 
                     if num_tx % 10_000 == 0 {
