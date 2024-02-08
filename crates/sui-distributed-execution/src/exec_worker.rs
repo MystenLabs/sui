@@ -404,7 +404,7 @@ impl<
         // Start timer for TPS computation
         let mut num_tx: u64 = 0;
         let mut before_count: u64 = 0;
-        let mut after_count: u64 = 0;
+        let mut _after_count: u64 = 0;
         // let now = Instant::now();
 
         // if we execute in channel mode, there is no need to wait for epoch start
@@ -520,8 +520,12 @@ impl<
                     // println!("Sending LockedExec for tx {}, locked_objs: {:?}", txid, locked_objs);
 
                     before_count += 1;
-                    if before_count % 1_000 == 0 {
+                    if before_count % 10_000 == 0 {
                         println!("[before_count] {before_count}");
+                    }
+
+                    if out_channel.capacity() == 0 {
+                        println!("Out channel is full @ {before_count}");
                     }
 
                     let msg = NetworkMessage{
@@ -531,11 +535,6 @@ impl<
                     // println!("EW {} Sending LockedExec for tx {} to EW {}", my_id, txid, execute_on_ew);
                     if out_channel.send(msg).await.is_err() {
                         eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, get_designated_executor_for_tx(*txid, &full_tx,&ew_ids));
-                    }
-
-                    after_count += 1;
-                    if after_count % 1_000 == 0 {
-                        println!("[after_count] {after_count}");
                     }
                 },
 
