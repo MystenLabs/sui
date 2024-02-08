@@ -2,31 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::displays::Pretty;
+use move_core_types::language_storage::TypeTag;
+use serde_json::Value;
 use std::fmt::{Display, Formatter};
+use sui_sdk::json::SuiJsonValue;
+use sui_types::execution_mode::ExecutionResult;
 use sui_types::transaction::CallArg::Pure;
 use sui_types::transaction::{
-    write_sep, Argument, CallArg, Command, FullPTB, ObjectArg, ProgrammableMoveCall,
-    ProgrammableTransaction,
+    write_sep, Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
 };
 use tabled::{
     builder::Builder as TableBuilder,
     settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
 };
 
-impl<'a> Display for Pretty<'a, FullPTB> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let Pretty(full_ptb) = self;
-        let (ptb, _results) = full_ptb;
-        // todo: format results and write
-        write!(f, "{}", Pretty(ptb))
-    }
-}
+pub type FullPTB = (ProgrammableTransaction, Vec<ExecutionResult>);
 
 /// These Display implementations provide alternate displays that are used to format info contained
 /// in these Structs when calling the CLI replay command with an additional provided flag.
-impl<'a> Display for Pretty<'a, ProgrammableTransaction> {
+impl<'a> Display for Pretty<'a, FullPTB> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let Pretty(ptb) = self;
+        let Pretty(full_ptb) = self;
+        let (ptb, results) = full_ptb;
+
+        let mut builder = TableBuilder::default();
+
         let ProgrammableTransaction { inputs, commands } = ptb;
         if !inputs.is_empty() {
             let mut builder = TableBuilder::default();
@@ -56,6 +56,7 @@ impl<'a> Display for Pretty<'a, ProgrammableTransaction> {
                         )]);
                         }
                     }
+
                     CallArg::Object(ObjectArg::ImmOrOwnedObject(o)) => {
                         builder.push_record(vec![format!("{i:<3} Imm/Owned Object  ID: {}", o.0)]);
                     }
@@ -79,13 +80,21 @@ impl<'a> Display for Pretty<'a, ProgrammableTransaction> {
             write!(f, "\n  No input objects for this transaction")?;
         }
 
+        let mut table = builder.build();
+        table.with(TablePanel::header("Input Objects"));
+        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+            1,
+            TableStyle::modern().get_horizontal(),
+        )]));
+        write!(f, "\n{}\n", table)?;
+
         if !commands.is_empty() {
             let mut builder = TableBuilder::default();
             for (i, c) in commands.iter().enumerate() {
                 if i == commands.len() - 1 {
-                    builder.push_record(vec![format!("{i:<2} {}", Pretty(c))]);
+                    builder.push_record(vec![format!("{i:<2} {} {}", Pretty(c), Pretty(result))]);
                 } else {
-                    builder.push_record(vec![format!("{i:<2} {}\n", Pretty(c))]);
+                    builder.push_record(vec![format!("{i:<2} {} {}\n", Pretty(c), Pretty(result))]);
                 }
             }
             let mut table = builder.build();
@@ -194,8 +203,84 @@ impl<'a> Display for Pretty<'a, Argument> {
             Argument::GasCoin => "GasCoin".to_string(),
             Argument::Input(i) => format!("Input  {}", i),
             Argument::Result(i) => format!("Result {}", i),
-            Argument::NestedResult(j, k) => format!("Nested Result {}: {}", j, k),
+            Argument::NestedResult(j, k) => format!("Result {}: {}", j, k),
         };
         write!(f, "{}", output)
+    }
+}
+
+impl<'a> Display for Pretty<'a, ExecutionResult> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let Pretty((mutable_ref_outputs, return_values)) = self;
+        let len_m_ref = mutable_ref_outputs.len();
+        let len_ret_vals = return_values.len();
+        if len_ret_vals > 0 || len_m_ref > 0 {
+            write!(f, "\n ┌ ")?;
+        }
+        if len_m_ref > 0 {
+            write!(f, "\n │ Mutable Reference Outputs:")?;
+        }
+        for (arg, bytes, type_tag) in mutable_ref_outputs {
+            write!(f, "\n │   {} ", arg)?;
+            resolve_value(f, bytes, type_tag)?;
+        }
+        if len_ret_vals > 0 {
+            write!(f, "\n │ Return Values:")?;
+        }
+
+        for (i, (bytes, type_tag)) in return_values.iter().enumerate() {
+            write!(f, "\n │   {i:<2} ")?;
+            resolve_value(f, bytes, type_tag)?;
+        }
+        if len_ret_vals > 0 || len_m_ref > 0 {
+            write!(f, "\n └")?;
+        }
+        Ok(())
+    }
+}
+
+impl<'a> Display for Pretty<'a, TypeTag> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let Pretty(type_tag) = self;
+        match type_tag {
+            TypeTag::Vector(v) => {
+                write!(f, "Vector of {}", Pretty(&**v))
+            }
+            TypeTag::Struct(s) => {
+                write!(f, "{}::{}", s.module, s.name)
+            }
+            _ => {
+                write!(f, "{}", type_tag)
+            }
+        }
+    }
+}
+
+fn resolve_value(f: &mut Formatter<'_>, bytes: &[u8], type_tag: &TypeTag) -> std::fmt::Result {
+    let value = SuiJsonValue::from_bcs_bytes(None, bytes)
+        .unwrap_or_else(|e| panic!("Could not resolve value from bcs bytes: {e}"))
+        .to_json_value();
+    write!(f, "{}", Pretty(type_tag))?;
+    match value {
+        Value::Null => {
+            write!(f, "   Null")
+        }
+        Value::Bool(b) => {
+            write!(f, "   {b}")
+        }
+        Value::Number(n) => {
+            write!(f, "   {n}")
+        }
+        Value::String(s) => {
+            write!(f, "   {s}")
+        }
+        Value::Array(_a) => {
+            Ok(()) // We haven't printed this value by default for readability
+                   // but if you need it, add `write!(f, "{:?}", _a)`
+        }
+        Value::Object(_o) => {
+            Ok(()) // We haven't printed this value by default for readability
+                   // but if you need it, add `write!(f, "{:?}", _o)`
+        }
     }
 }

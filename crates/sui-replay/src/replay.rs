@@ -793,7 +793,7 @@ impl LocalExec {
                 tx_info.sender,
                 *tx_digest,
                 true
-            ).3)));
+            ).3.unwrap_or_else(|e| panic!("Error executing this transaction in dev-inspect mode, {e}")))));
         };
 
         let all_required_objects = self.storage.all_objects();
