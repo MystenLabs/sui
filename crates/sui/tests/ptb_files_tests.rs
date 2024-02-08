@@ -5,88 +5,104 @@ use clap::CommandFactory;
 use std::{collections::BTreeMap, path::Path};
 use sui::ptb::{
     ptb::PTB,
-    ptb_parser::{errors::render_errors, parser::PTBParser},
+    ptb_builder::{errors::render_errors, parse_ptb::PTBParser},
 };
 use test_cluster::TestClusterBuilder;
 
-// check if all good ptb files can be parsed OK
-fn test_parse_all_ptb_files(path: &Path) -> datatest_stable::Result<()> {
+const TEST_DIR: &str = "tests";
+
+#[cfg_attr(not(msim), tokio::main)]
+async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    std::env::set_var("NO_COLOR", "true"); // we need this for the miette errors
     let ptb = PTB::default();
     let cmd = PTB::command();
     let file = path.to_str().unwrap();
-    let args = cmd.get_matches_from(vec!["ptb", "--file", file]);
+    let args = cmd.get_matches_from(vec!["ptb", "--file", file, "--preview"]);
     let cwd = std::env::current_dir().unwrap();
     let commands = ptb.from_matches(cwd, &args, &mut BTreeMap::new()).unwrap();
 
+    // === PREVIEW ===
+    let ptb_preview = ptb.preview(&commands);
+    let mut results = vec![];
+    let preview_string = if let Some(ptb_preview) = ptb_preview {
+        ptb_preview.to_string()
+    } else {
+        "".to_string()
+    };
+    results.push(" === PREVIEW === ".to_string());
+    results.push(preview_string);
+
+    // === PARSE COMMANDS ===
     let mut parser = PTBParser::new();
-    for (_, cmd) in commands {
+    for (_, cmd) in &commands {
         parser.parse(cmd.clone());
     }
-    let (_parsed_commands, errors) = parser.finish();
-    assert!(errors.is_empty());
+    let (parsed, errors) = parser.finish();
 
-    Ok(())
-}
-
-// check if the bad ptb files return errors when parsed
-fn test_parse_bad_ptb_files(path: &Path) -> datatest_stable::Result<()> {
-    let ptb = PTB::default();
-    let cmd = PTB::command();
-    let file = path.to_str().unwrap();
-    let args = cmd.get_matches_from(vec!["ptb", "--file", file]);
-    let cwd = std::env::current_dir().unwrap();
-    let commands = ptb.from_matches(cwd, &args, &mut BTreeMap::new()).unwrap();
-    let mut parser = PTBParser::new();
-    for (_, cmd) in commands.clone() {
-        parser.parse(cmd.clone());
+    results.push(" === PARSED INPUT COMMANDS === ".to_string());
+    for c in &parsed {
+        let values = c
+            .args
+            .iter()
+            .map(|x| x.value.to_string())
+            .collect::<Vec<_>>();
+        results.push(format!(
+            "cmd: {}, value: {:?}",
+            c.name.value.to_string(),
+            values
+        ));
     }
-    let (_parsed_commands, errors) = parser.finish();
-    let rendered = render_errors(commands, errors.clone());
-    for e in rendered.iter() {
-        println!("{:?}", e);
-    }
-    println!("{:?}", errors.len());
-    assert!(!errors.is_empty());
-    Ok(())
-}
 
-// parse, build PTB, and run it locally in a network
-async fn test_build_and_run_ptb_from_files(path: &Path) -> datatest_stable::Result<()> {
-    let ptb = PTB::default();
-    let cmd = PTB::command();
-    let file = path.to_str().unwrap();
-    let args = cmd.get_matches_from(vec!["ptb", "--file", file]);
+    if !errors.is_empty() {
+        let rendered = render_errors(commands.clone(), errors);
+        results.push(" === ERRORS AFTER PARSING INPUT COMMANDS === ".to_string());
+        for e in rendered.iter() {
+            results.push(format!("{:?}", e));
+        }
+        insta::assert_display_snapshot!(
+            format!(
+                "{}",
+                path.file_name().unwrap().to_string_lossy().to_string()
+            ),
+            results.join("\n")
+        );
+        return Ok(());
+    }
+
+    // === BUILD PTB ===
     let test_cluster = TestClusterBuilder::new().build().await;
     let context = test_cluster.wallet;
+    let client = context.get_client().await?;
 
-    ptb.execute(args, Some(context)).await.unwrap();
+    let built_ptb = ptb.parse_and_build_ptb(parsed, &context, client).await;
+
+    if let Ok(ref ptb) = built_ptb {
+        results.push(" === BUILT PTB === ".to_string());
+        for c in &ptb.0.commands {
+            results.push(c.to_string());
+        }
+    }
+
+    // === BUILDING PTB ERRORS ===
+    if let Err(e) = built_ptb {
+        let rendered = render_errors(commands, e);
+
+        results.push(" === BUILDING PTB ERRORS === ".to_string());
+        for e in rendered.iter() {
+            results.push(format!("{:?}", e));
+        }
+    }
+
+    // === FINALLY DO THE ASSERTION ===
+    insta::assert_display_snapshot!(
+        format!(
+            "{}",
+            path.file_name().unwrap().to_string_lossy().to_string()
+        ),
+        results.join("\n")
+    );
+
     Ok(())
 }
 
-async fn test_no_gas_picker_from_files(path: &Path) -> datatest_stable::Result<()> {
-    let ptb = PTB::default();
-    let cmd = PTB::command();
-    let file = path.to_str().unwrap();
-    let args = cmd.get_matches_from(vec!["ptb", "--file", file]);
-    let test_cluster = TestClusterBuilder::new().build().await;
-    let context = test_cluster.wallet;
-
-    let execute = ptb.execute(args, Some(context)).await;
-    assert!(execute.is_err());
-    Ok(())
-}
-
-datatest_stable::harness!(
-    test_parse_all_ptb_files,
-    "tests/ptb_files",
-    r"^*.ptb$",
-    test_parse_bad_ptb_files,
-    "tests/ptb_files",
-    r"^*.bad",
-    // test_build_and_run_ptb_from_files,
-    // "tests/ptb_files",
-    // r"^run_*.sh",
-    // test_no_gas_picker_from_files
-    // "tests/ptb_files",
-    // "no_gas_picker",
-);
+datatest_stable::harness!(test_ptb_files, TEST_DIR, r".*\.ptb$",);

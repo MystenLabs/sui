@@ -38,6 +38,7 @@ async-recursion.workspace = true
 thiserror.workspace = true
 miette.workspace = true
 datatest-stable.workspace = true
+insta.workspace = true
 
 sui-config.workspace = true
 sui-execution = { path = "../../sui-execution" }

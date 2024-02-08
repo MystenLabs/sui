@@ -1,0 +1,56 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                        │
+├──────────────────┬─────────────────────────────┬───────────────────────────────────┤
+│ command          │ from                        │ value(s)                          │
+├──────────────────┼─────────────────────────────┼───────────────────────────────────┤
+│ gas_budget       │ tests/ptb_files/bad_ptb.ptb │ @aa                               │
+│ split_coins      │ tests/ptb_files/bad_ptb.ptb │ @0x1 [0xfffffffffu8]              │
+│ split_coins      │ tests/ptb_files/bad_ptb.ptb │ 2x2 [1000]                        │
+│ assign           │ tests/ptb_files/bad_ptb.ptb │ X                                 │
+│ assign           │ tests/ptb_files/bad_ptb.ptb │ Y                                 │
+│ make_move_vec    │ tests/ptb_files/bad_ptb.ptb │ <vector<address>> [[@0x1],[@0x2]] │
+│ transfer_objects │ tests/ptb_files/bad_ptb.ptb │ @0x1 s                            │
+│ assign           │ tests/ptb_files/bad_ptb.ptb │ Z none                            │
+│ move_call        │ tests/ptb_files/bad_ptb.ptb │ 0x1::option::is_no <u64> Z        │
+│ preview          │ console                     │ true                              │
+╰──────────────────┴─────────────────────────────┴───────────────────────────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/bad_ptb.ptb\""]
+cmd: assign, value: ["X"]
+cmd: assign, value: ["Y"]
+cmd: make_move_vec, value: ["<vector<address>>", "[[@0x1], [@0x2]]"]
+cmd: transfer_objects, value: ["@0x1", "s"]
+cmd: assign, value: ["Z", "none"]
+cmd: move_call, value: ["0x1::option::is_no", "<u64>", "Z"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/bad_ptb.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error at command 0 in PTB file 'tests/ptb_files/bad_ptb.ptb'
+   ╭────
+ 1 │ gas_budget @aa 
+   ·            ─┬─
+   ·             ╰── Failed to parse arguments for 'gas_budget' command. Expected a numerical address at this position but got a named address aa
+   ╰────
+
+  × Error at command 1 in PTB file 'tests/ptb_files/bad_ptb.ptb'
+   ╭────
+ 1 │ split_coins @0x1 [0xfffffffffu8] 
+   ·                   ──────┬──────
+   ·                         ╰── Failed to parse arguments for 'split_coins' command. number too large to fit in target type
+   ╰────
+
+  × Error at command 2 in PTB file 'tests/ptb_files/bad_ptb.ptb'
+   ╭────
+ 1 │ split_coins 2x2 [1000] 
+   ·              ─┬
+   ·               ╰── Failed to parse arguments for 'split_coins' command. expected token '[whitespace]', but got '[ident]'
+   ╰────
+
