@@ -1,0 +1,11 @@
+{
+	"extends": "../tsconfig.esm.json",
+	"include": ["./**/*", "../src", "../../typescript"],
+	"compilerOptions": {
+		"rootDir": "../..",
+		"noEmit": true,
+		"moduleResolution": "Node",
+		"emitDeclarationOnly": false,
+		"resolveJsonModule": true
+	}
+}

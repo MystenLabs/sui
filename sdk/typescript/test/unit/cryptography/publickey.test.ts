@@ -78,6 +78,7 @@ describe('Publickey', () => {
 		expect(await pk2.verifyWithIntent(data, sig2.signature, IntentScope.TransactionData)).toEqual(
 			true,
 		);
+
 		expect(
 			await pk1.verifyWithIntent(
 				bcs.ser(['vector', 'u8'], data).toBytes(),

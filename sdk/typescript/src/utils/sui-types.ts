@@ -67,7 +67,7 @@ export function normalizeStructTag(type: string | StructTag): string {
 		typeof type === 'string' ? parseStructTag(type) : type;
 
 	const formattedTypeParams =
-		typeParams.length > 0
+		typeParams?.length > 0
 			? `<${typeParams
 					.map((typeParam) =>
 						typeof typeParam === 'string' ? typeParam : normalizeStructTag(typeParam),

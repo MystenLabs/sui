@@ -1,0 +1,22 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query getCommitteeInfo($epochId: Int, $after: String) {
+	epoch(id: $epochId) {
+		epochId
+		validatorSet {
+			activeValidators(after: $after) {
+				pageInfo {
+					hasNextPage
+					endCursor
+				}
+				nodes {
+					credentials {
+						protocolPubKey
+					}
+					votingPower
+				}
+			}
+		}
+	}
+}

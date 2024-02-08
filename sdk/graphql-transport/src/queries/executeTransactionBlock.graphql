@@ -1,0 +1,22 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+mutation executeTransactionBlock(
+	$txBytes: String!
+	$signatures: [String!]!
+	$showBalanceChanges: Boolean = false
+	$showEffects: Boolean = false
+	$showEvents: Boolean = false
+	$showInput: Boolean = false
+	$showObjectChanges: Boolean = false
+	$showRawInput: Boolean = false
+) {
+	executeTransactionBlock(txBytes: $txBytes, signatures: $signatures) {
+		errors
+		effects {
+			transactionBlock {
+				...RPC_TRANSACTION_FIELDS
+			}
+		}
+	}
+}

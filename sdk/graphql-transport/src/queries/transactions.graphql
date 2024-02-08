@@ -1,0 +1,306 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query queryTransactionBlocks(
+	$first: Int
+	$last: Int
+	$before: String
+	$after: String
+	$showBalanceChanges: Boolean = false
+	$showEffects: Boolean = false
+	$showEvents: Boolean = false
+	$showInput: Boolean = false
+	$showObjectChanges: Boolean = false
+	$showRawInput: Boolean = false
+	$filter: TransactionBlockFilter
+) {
+	transactionBlocks(first: $first, after: $after, last: $last, before: $before, filter: $filter) {
+		pageInfo {
+			hasNextPage
+			hasPreviousPage
+			startCursor
+			endCursor
+		}
+		nodes {
+			...RPC_TRANSACTION_FIELDS
+		}
+	}
+}
+
+query getTransactionBlock(
+	$digest: String!
+	$showBalanceChanges: Boolean = false
+	$showEffects: Boolean = false
+	$showEvents: Boolean = false
+	$showInput: Boolean = false
+	$showObjectChanges: Boolean = false
+	$showRawInput: Boolean = false
+) {
+	transactionBlock(digest: $digest) {
+		...RPC_TRANSACTION_FIELDS
+	}
+}
+
+query multiGetTransactionBlocks(
+	$digests: [String!]!
+	$limit: Int
+	$cursor: String
+	$showBalanceChanges: Boolean = false
+	$showEffects: Boolean = false
+	$showEvents: Boolean = false
+	$showInput: Boolean = false
+	$showObjectChanges: Boolean = false
+	$showRawInput: Boolean = false
+) {
+	transactionBlocks(first: $limit, after: $cursor, filter: { transactionIds: $digests }) {
+		pageInfo {
+			hasNextPage
+			hasPreviousPage
+			startCursor
+			endCursor
+		}
+		nodes {
+			...RPC_TRANSACTION_FIELDS
+		}
+	}
+}
+
+query paginateTransactionBlockLists(
+	$digest: String!
+	$hasMoreEvents: Boolean!
+	$hasMoreBalanceChanges: Boolean!
+	$hasMoreObjectChanges: Boolean!
+	$hasMoreDependencies: Boolean!
+	$afterEvents: String
+	$afterBalanceChanges: String
+	$afterObjectChanges: String
+	$afterDependencies: String
+) {
+	transactionBlock(digest: $digest) {
+		...PAGINATE_TRANSACTION_LISTS
+	}
+}
+
+fragment PAGINATE_TRANSACTION_LISTS on TransactionBlock {
+	effects {
+		events(after: $afterEvents) @include(if: $hasMoreEvents) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				...RPC_EVENTS_FIELDS
+			}
+		}
+		balanceChanges(after: $afterBalanceChanges) @include(if: $hasMoreBalanceChanges) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				coinType {
+					repr
+				}
+				owner {
+					asObject {
+						address
+					}
+					asAddress {
+						address
+					}
+				}
+				amount
+			}
+		}
+		dependencies(after: $afterDependencies) @include(if: $hasMoreDependencies) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				digest
+			}
+		}
+		objectChanges(after: $afterObjectChanges) @include(if: $hasMoreObjectChanges) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				idCreated
+				idDeleted
+				inputState {
+					version
+					digest
+					address
+					asMoveObject {
+						contents {
+							type {
+								repr
+							}
+						}
+					}
+					owner {
+						...RPC_OBJECT_OWNER_FIELDS
+					}
+				}
+				outputState {
+					version
+					digest
+					address
+					asMoveObject {
+						contents {
+							type {
+								repr
+							}
+						}
+					}
+					owner {
+						...RPC_OBJECT_OWNER_FIELDS
+					}
+				}
+			}
+		}
+	}
+}
+
+fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
+	digest
+	rawTransaction: bcs @include(if: $showInput)
+	rawTransaction: bcs @include(if: $showRawInput)
+	sender {
+		address
+	}
+
+	signatures
+
+	effects {
+		events @include(if: $showEvents) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				...RPC_EVENTS_FIELDS
+			}
+		}
+		checkpoint {
+			sequenceNumber
+		}
+		timestamp
+		balanceChanges @include(if: $showBalanceChanges) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				coinType {
+					repr
+				}
+				owner {
+					asObject {
+						address
+					}
+					asAddress {
+						address
+					}
+				}
+				amount
+			}
+		}
+		dependencies @include(if: $showEffects) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				digest
+			}
+		}
+		status @include(if: $showEffects)
+		gasEffects @include(if: $showEffects) {
+			gasObject {
+				owner {
+					...RPC_OBJECT_OWNER_FIELDS
+				}
+				digest
+				version
+				address
+			}
+			gasSummary {
+				storageCost
+				storageRebate
+				nonRefundableStorageFee
+				computationCost
+			}
+		}
+		executedEpoch: epoch @include(if: $showEffects) {
+			epochId
+		}
+
+		objectChanges @include(if: $showEffects) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				idCreated
+				idDeleted
+				inputState {
+					version
+					digest
+					address
+				}
+				outputState {
+					version
+					digest
+					address
+					owner {
+						...RPC_OBJECT_OWNER_FIELDS
+					}
+				}
+			}
+		}
+
+		objectChanges @include(if: $showObjectChanges) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				idCreated
+				idDeleted
+				inputState {
+					version
+					digest
+					address
+					asMoveObject {
+						contents {
+							type {
+								repr
+							}
+						}
+					}
+					owner {
+						...RPC_OBJECT_OWNER_FIELDS
+					}
+				}
+				outputState {
+					version
+					digest
+					address
+					asMoveObject {
+						contents {
+							type {
+								repr
+							}
+						}
+					}
+					owner {
+						...RPC_OBJECT_OWNER_FIELDS
+					}
+				}
+			}
+		}
+	}
+}
