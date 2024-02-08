@@ -5,7 +5,7 @@ use clap::CommandFactory;
 use std::{collections::BTreeMap, path::Path};
 use sui::ptb::{
     ptb::PTB,
-    ptb_parser::{errors::render_errors, parser::PTBParser},
+    ptb_builder::{errors::render_errors, parse_ptb::PTBParser},
 };
 use test_cluster::TestClusterBuilder;
 

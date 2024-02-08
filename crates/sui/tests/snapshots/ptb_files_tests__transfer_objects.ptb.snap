@@ -44,6 +44,6 @@ cmd: warn_shadows, value: ["false"]
    ╭────
  1 │ transfer_objects @0x1 s 
    ·                       ┬
-   ·                       ╰── expected array of objects
+   ·                       ╰── Expected array of objects
    ╰────
 
