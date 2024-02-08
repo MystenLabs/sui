@@ -22,7 +22,6 @@ use futures::{
 };
 use mysten_common::sync::notify_read::NotifyRead;
 use prometheus::Registry;
-use std::path::Path;
 use std::sync::Arc;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_protocol_config::ProtocolVersion;
@@ -39,8 +38,7 @@ use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::VerifiedTransaction;
-use tap::TapFallible;
-use tracing::{error, instrument};
+use tracing::instrument;
 use typed_store::Map;
 
 use super::{

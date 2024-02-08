@@ -5051,7 +5051,7 @@ dependencies = [
  "no-std-compat",
  "nonzero_ext",
  "parking_lot 0.12.1",
- "quanta 0.11.1",
+ "quanta",
  "rand 0.8.5",
  "smallvec",
 ]
@@ -6586,7 +6586,6 @@ dependencies = [
  "crossbeam-utils",
  "once_cell",
  "parking_lot 0.12.1",
- "quanta 0.12.2",
  "rustc_version",
  "skeptic",
  "smallvec",
@@ -9578,22 +9577,7 @@ dependencies = [
  "libc",
  "mach2",
  "once_cell",
- "raw-cpuid 10.6.0",
- "wasi 0.11.0+wasi-snapshot-preview1",
- "web-sys",
- "winapi",
-]
-
-[[package]]
-name = "quanta"
-version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ca0b7bac0b97248c40bb77288fc52029cf1459c0461ea1b05ee32ccf011de2c"
-dependencies = [
- "crossbeam-utils",
- "libc",
- "once_cell",
- "raw-cpuid 11.0.1",
+ "raw-cpuid",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "web-sys",
  "winapi",
@@ -9826,15 +9810,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6823ea29436221176fe662da99998ad3b4db2c7f31e7b6f5fe43adccd6320bb"
 dependencies = [
  "bitflags 1.3.2",
-]
-
-[[package]]
-name = "raw-cpuid"
-version = "11.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d86a7c4638d42c44551f4791a20e687dbb4c3de1f33c43dd71e355cd429def1"
-dependencies = [
- "bitflags 2.4.1",
 ]
 
 [[package]]
@@ -16701,7 +16676,7 @@ dependencies = [
  "protobuf",
  "protobuf-src",
  "psm",
- "quanta 0.11.1",
+ "quanta",
  "quick-error 1.2.3",
  "quick-error 2.0.1",
  "quinn",
@@ -16721,7 +16696,7 @@ dependencies = [
  "rand_core 0.6.4",
  "rand_xorshift",
  "rand_xoshiro",
- "raw-cpuid 10.6.0",
+ "raw-cpuid",
  "rayon",
  "rayon-core",
  "rcgen",

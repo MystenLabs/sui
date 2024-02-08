@@ -360,7 +360,7 @@ markdown-gen = "1.2.1"
 match_opt = "0.1.2"
 mime = "0.3"
 mockall = "0.11.4"
-moka = { version = "0.12", features = ["sync"] }
+moka = { version = "0.12", default-features = false, features = ["sync", "atomic64"] }
 more-asserts = "0.3.1"
 msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "1a52783d6600ecc22e15253a982f77881bd47c77", package = "msim" }
 msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "1a52783d6600ecc22e15253a982f77881bd47c77", package = "msim-macros" }

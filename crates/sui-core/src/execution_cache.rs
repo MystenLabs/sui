@@ -38,8 +38,8 @@ use sui_types::{
 };
 use tracing::instrument;
 
-mod memory_cache;
-mod passthrough_cache;
+pub mod memory_cache;
+pub mod passthrough_cache;
 
 use memory_cache::MemoryCache;
 use passthrough_cache::PassthroughCache;

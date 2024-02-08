@@ -797,7 +797,7 @@ impl AuthorityStore {
             ..
         } = &*tx_outputs;
 
-        let _locks = self.acquire_read_locks_for_indirect_objects(&written).await;
+        let _locks = self.acquire_read_locks_for_indirect_objects(written).await;
 
         // Extract the new state from the execution
         let mut write_batch = self.perpetual_tables.transactions.batch();
@@ -822,9 +822,9 @@ impl AuthorityStore {
         write_batch.insert_batch(
             &self.perpetual_tables.objects,
             deleted
-                .into_iter()
+                .iter()
                 .map(|key| (key, StoreObject::Deleted))
-                .chain(wrapped.into_iter().map(|key| (key, StoreObject::Wrapped)))
+                .chain(wrapped.iter().map(|key| (key, StoreObject::Wrapped)))
                 .map(|(key, store_object)| (key, StoreObjectWrapper::from(store_object))),
         )?;
 
@@ -889,13 +889,13 @@ impl AuthorityStore {
         // 4. Locks may have existed when we started processing this tx, but could have since
         //    been deleted by a concurrent tx that finished first. In that case, check if the
         //    tx effects exist.
-        self.check_owned_object_locks_exist(&locks_to_delete)?;
+        self.check_owned_object_locks_exist(locks_to_delete)?;
 
-        self.initialize_locks_impl(&mut write_batch, &new_locks_to_init, false)?;
+        self.initialize_locks_impl(&mut write_batch, new_locks_to_init, false)?;
 
         // Note: deletes locks for received objects as well (but not for objects that were in
         // `Receiving` arguments which were not received)
-        self.delete_locks(&mut write_batch, &locks_to_delete)?;
+        self.delete_locks(&mut write_batch, locks_to_delete)?;
 
         write_batch
             .insert_batch(
