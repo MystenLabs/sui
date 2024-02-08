@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCurrentAccount, useSuiClientInfiniteQuery } from "@mysten/dapp-kit";
-import { SuiObjectDisplay } from "../SuiObjectDisplay";
+import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
 import { Button } from "@radix-ui/themes";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
 import { CONSTANTS } from "@/constants";
 import { SuiObjectData } from "@mysten/sui.js/client";
 import { LockClosedIcon } from "@radix-ui/react-icons";
-import { InfiniteScrollArea } from "../InfiniteScrollArea";
+import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 
 export function LockItems() {
   const account = useCurrentAccount();

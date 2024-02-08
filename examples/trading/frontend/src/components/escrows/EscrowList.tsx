@@ -5,7 +5,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { CONSTANTS, QueryKey } from "@/constants";
 import { Loading } from "@/components/Loading";
 import { Escrow } from "./Escrow";
-import { InfiniteScrollArea } from "../InfiniteScrollArea";
+import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { getNextPageParam } from "@/utils/helpers";
 

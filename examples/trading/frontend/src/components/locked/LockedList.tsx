@@ -4,7 +4,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { CONSTANTS, QueryKey } from "@/constants";
 import { Loading } from "@/components/Loading";
-import { InfiniteScrollArea } from "../InfiniteScrollArea";
+import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { LockedObject } from "@/types/types";
 import { Locked } from "./Locked";
 import { constructUrlSearchParams, getNextPageParam } from "@/utils/helpers";

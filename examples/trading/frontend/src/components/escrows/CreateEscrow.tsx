@@ -4,7 +4,7 @@ import { LockedObject } from "@/types/types";
 import { useCurrentAccount, useSuiClientInfiniteQuery } from "@mysten/dapp-kit";
 import { formatAddress } from "@mysten/sui.js/utils";
 import { Avatar, Button, Select } from "@radix-ui/themes";
-import { InfiniteScrollArea } from "../InfiniteScrollArea";
+import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { useState } from "react";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { CONSTANTS } from "@/constants";
