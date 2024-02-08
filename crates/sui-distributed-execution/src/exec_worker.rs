@@ -524,8 +524,10 @@ impl<
                         println!("[before_count] {before_count}");
                     }
 
+                    let mut channel_full = false;
                     if out_channel.capacity() == 0 {
                         println!("Out channel is full @ {before_count}");
+                        channel_full = true;
                     }
 
                     let msg = NetworkMessage{
@@ -535,6 +537,10 @@ impl<
                     // println!("EW {} Sending LockedExec for tx {} to EW {}", my_id, txid, execute_on_ew);
                     if out_channel.send(msg).await.is_err() {
                         eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, get_designated_executor_for_tx(*txid, &full_tx,&ew_ids));
+                    }
+
+                    if channel_full {
+                        println!("Got past full channel");
                     }
                 },
 
