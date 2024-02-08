@@ -18,6 +18,7 @@ use crate::transaction_outputs::TransactionOutputs;
 
 use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::mapref::entry::OccupiedEntry as DashMapOccupiedEntry;
+use dashmap::mapref::one::Ref as DashMapRef;
 use dashmap::DashMap;
 use either::Either;
 use futures::{
@@ -28,8 +29,6 @@ use moka::sync::Cache as MokaCache;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use prometheus::Registry;
-use std::cmp::Ordering;
-use std::collections::VecDeque;
 use std::sync::Arc;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_protocol_config::ProtocolVersion;
@@ -50,9 +49,9 @@ use tracing::{info, instrument};
 use typed_store::Map;
 
 use super::{
-    implement_passthrough_traits, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics,
-    ExecutionCacheRead, ExecutionCacheReconfigAPI, ExecutionCacheWrite, NotifyReadWrapper,
-    StateSyncAPI,
+    implement_passthrough_traits, utils::CachedVersionMap, CheckpointCache, ExecutionCacheCommit,
+    ExecutionCacheMetrics, ExecutionCacheRead, ExecutionCacheReconfigAPI, ExecutionCacheWrite,
+    NotifyReadWrapper, StateSyncAPI,
 };
 
 #[derive(Clone)]
@@ -80,47 +79,48 @@ enum CacheResult<T> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum LockEntry {
+enum Lock {
     Lock(Option<LockDetails>),
     Deleted,
 }
 
-type LockMap = DashMap<ObjectID, (ObjectRef, LockEntry)>;
-type LockMapEntry<'a> = DashMapEntry<'a, ObjectID, (ObjectRef, LockEntry)>;
-type LockMapOccupiedEntry<'a> = DashMapOccupiedEntry<'a, ObjectID, (ObjectRef, LockEntry)>;
+impl Lock {
+    fn is_deleted(&self) -> bool {
+        matches!(self, Lock::Deleted)
+    }
+}
+
+type LockMap = DashMap<ObjectID, (ObjectRef, Lock)>;
+type LockMapRef<'a> = DashMapRef<'a, ObjectID, (ObjectRef, Lock)>;
+type LockMapEntry<'a> = DashMapEntry<'a, ObjectID, (ObjectRef, Lock)>;
+type LockMapOccupiedEntry<'a> = DashMapOccupiedEntry<'a, ObjectID, (ObjectRef, Lock)>;
 
 trait LocksByObjectRef {
     fn entry_by_objref(&self, obj_ref: &ObjectRef) -> LockMapEntry<'_>;
-    fn get_by_objref(&self, obj_ref: &ObjectRef) -> Option<&LockEntry>;
-    fn insert_by_objref(&self, obj_ref: ObjectRef, lock: LockEntry);
+    fn get_by_objref(&self, obj_ref: &ObjectRef) -> Option<LockMapRef<'_>>;
+    fn insert_by_objref(&self, obj_ref: ObjectRef, lock: Lock);
 }
 
 impl LocksByObjectRef for LockMap {
     fn entry_by_objref(&self, obj_ref: &ObjectRef) -> LockMapEntry<'_> {
-        let entry = self.entry(obj_ref.0);
-        if let DashMapEntry::Occupied(e) = entry {
-            assert_eq!(e.get().0, *obj_ref);
-        }
-        entry
+        self.entry(obj_ref.0)
     }
 
-    fn get_by_objref(&self, obj_ref: &ObjectRef) -> Option<&LockEntry> {
-        if let Some((cur_objref, lock)) = self.get(&obj_ref.0).as_ref().map(|r| &**r) {
-            assert_eq!(*cur_objref, *obj_ref);
-            Some(lock)
+    fn get_by_objref(&self, obj_ref: &ObjectRef) -> Option<LockMapRef<'_>> {
+        if let Some(r) = self.get(&obj_ref.0) {
+            assert_eq!(r.value().0, *obj_ref);
+            Some(r)
         } else {
             None
         }
     }
 
-    fn insert_by_objref(&self, obj_ref: ObjectRef, lock: LockEntry) {
-        if let Some(old_value) = self.insert(obj_ref.0, (obj_ref, lock)) {
-            assert_eq!(
-                old_value.0, obj_ref,
-                "lock already existed for {:?}",
-                old_value
-            );
-        }
+    fn insert_by_objref(&self, obj_ref: ObjectRef, lock: Lock) {
+        assert!(
+            self.insert(obj_ref.0, (obj_ref, lock)).is_none(),
+            "lock already existed for {:?}",
+            obj_ref
+        );
     }
 }
 
@@ -265,7 +265,8 @@ impl MemoryCache {
         }
     }
 
-    fn insert_object(&self, object_id: &ObjectID, object: &Object) {
+    // Insert a new object in the dirty state. The object will not be persisted to disk.
+    fn write_object(&self, object_id: &ObjectID, object: &Object) {
         let version = object.version();
         tracing::debug!("inserting object {:?}: {:?}", object_id, version);
         self.dirty
@@ -275,7 +276,8 @@ impl MemoryCache {
             .insert(object.version(), object.clone().into());
     }
 
-    fn insert_deleted_tombstone(&self, object_id: &ObjectID, version: SequenceNumber) {
+    // Insert a deleted tombstone in the dirty state. The tombstone will not be persisted to disk.
+    fn write_deleted_tombstone(&self, object_id: &ObjectID, version: SequenceNumber) {
         tracing::debug!("inserting deleted tombstone {:?}: {:?}", object_id, version);
         self.dirty
             .objects
@@ -284,7 +286,8 @@ impl MemoryCache {
             .insert(version, ObjectEntry::Deleted);
     }
 
-    fn insert_wrapped_tombstone(&self, object_id: &ObjectID, version: SequenceNumber) {
+    // Insert a wrapped tombstone in the dirty state. The tombstone will not be persisted to disk.
+    fn write_wrapped_tombstone(&self, object_id: &ObjectID, version: SequenceNumber) {
         tracing::debug!("inserting wrapped tombstone {:?}: {:?}", object_id, version);
         self.dirty
             .objects
@@ -293,6 +296,8 @@ impl MemoryCache {
             .insert(version, ObjectEntry::Wrapped);
     }
 
+    // Attempt to get an object from the cache. The DB is not consulted.
+    // Can return Hit, Miss, or NegativeHit (if the object is known to not exist).
     fn get_object_by_key_cache_only(
         &self,
         object_id: &ObjectID,
@@ -329,19 +334,15 @@ impl MemoryCache {
         CacheResult::Miss
     }
 
-    pub fn store_for_testing(&self) -> &Arc<AuthorityStore> {
-        &self.store
-    }
-
-    pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper<Self> {
-        NotifyReadWrapper(self)
-    }
-
     // Load a lock entry from the cache, populating it from the db if the cache
     // does not have the entry. The cache may be missing entries, but it can
     // never be incoherent (hold an entry that doesn't exist in the db, or that
     // differs from the db) because all db writes for locks go through the cache.
-    fn get_owned_object_lock_entry(
+    //
+    // Furthermore, if the cache holds a lock, it must be the most recent lock
+    // (because all writes go through the cache). Since the cache only holds one
+    // lock, we check that the objref matches. If it does not, we return an error.
+    fn get_owned_object_lock_entry_or_error(
         &self,
         obj_ref: &ObjectRef,
     ) -> SuiResult<LockMapOccupiedEntry<'_>> {
@@ -352,7 +353,7 @@ impl MemoryCache {
         let occupied = match entry {
             DashMapEntry::Occupied(occupied) => {
                 if cfg!(debug_assertions) {
-                    if let (Ok(db_lock), (_, LockEntry::Lock(cached_lock))) =
+                    if let (Ok(db_lock), (_, Lock::Lock(cached_lock))) =
                         (self.store.get_lock_entry(*obj_ref), occupied.get())
                     {
                         assert_eq!(
@@ -363,15 +364,26 @@ impl MemoryCache {
                     }
                 }
 
+                // If the lock is deleted, or is for a different objref, we return an error
+                let value = occupied.get();
+                if value.1.is_deleted() || value.0 != *obj_ref {
+                    return Err(SuiError::UserInputError {
+                        error: UserInputError::ObjectNotFound {
+                            object_id: obj_ref.0,
+                            version: Some(obj_ref.1),
+                        },
+                    });
+                }
+
                 occupied
             }
             DashMapEntry::Vacant(entry) => {
                 let lock = self.store.get_lock_entry(*obj_ref)?;
-
-                entry.insert_entry((*obj_ref, LockEntry::Lock(lock)))
+                entry.insert_entry((*obj_ref, Lock::Lock(lock)))
             }
         };
 
+        assert_eq!(occupied.get().0, *obj_ref);
         Ok(occupied)
     }
 
@@ -394,7 +406,7 @@ impl MemoryCache {
         // the sender has equivocated, and we are under no obligation to help them form a cert.
         for obj_ref in owned_input_objects.iter() {
             // entry holds a lock in the dashmap shard which allows us to safely test and set here.
-            let mut entry = match self.get_owned_object_lock_entry(obj_ref) {
+            let mut entry = match self.get_owned_object_lock_entry_or_error(obj_ref) {
                 Ok(entry) => entry,
                 Err(e) => {
                     ret = Err(e);
@@ -404,44 +416,34 @@ impl MemoryCache {
 
             let previous_value = entry.get().clone();
 
-            match previous_value {
-                LockEntry::Deleted => {
-                    ret = Err(SuiError::UserInputError {
-                        error: UserInputError::ObjectNotFound {
-                            object_id: obj_ref.0,
-                            version: Some(obj_ref.1),
-                        },
-                    });
-                    break;
+            match previous_value.1 {
+                Lock::Deleted => {
+                    unreachable!("get_owned_object_lock_entry_or_error checks for deleted")
                 }
 
                 // Lock exists, but is not set, so we can overwrite it
-                LockEntry::Lock(None) => (),
+                Lock::Lock(None) => (),
 
                 // Lock is set. Check for equivocation and expiry due to the lock
                 // being set in a previous epoch.
-                LockEntry::Lock(Some(LockDetails {
+                Lock::Lock(Some(LockDetails {
                     epoch: previous_epoch,
                     tx_digest: previous_tx_digest,
                 })) => {
                     // this should not be possible because we hold the execution lock
-                    debug_assert!(
+                    assert!(
                         epoch >= previous_epoch,
                         "epoch changed while acquiring locks"
                     );
-                    if epoch < previous_epoch {
-                        ret = Err(SuiError::ObjectLockedAtFutureEpoch {
-                            obj_refs: owned_input_objects.to_vec(),
-                            locked_epoch: previous_epoch,
-                            new_epoch: epoch,
-                            locked_by_tx: previous_tx_digest,
-                        });
-                        break;
-                    }
 
-                    // Lock already set to different transaction from the same epoch.
+                    let same_epoch = epoch == previous_epoch;
+                    let same_tx = tx_digest == previous_tx_digest;
+
                     // If the lock is set in a previous epoch, it's ok to override it.
-                    if previous_epoch == epoch && previous_tx_digest != tx_digest {
+                    if same_epoch && same_tx {
+                        continue;
+                    } else if same_epoch && !same_tx {
+                        // Error: lock already set to different transaction from the same epoch.
                         // TODO: add metrics here
                         info!(prev_tx_digest = ?previous_tx_digest,
                             cur_tx_digest = ?tx_digest,
@@ -451,10 +453,6 @@ impl MemoryCache {
                             pending_transaction: previous_tx_digest,
                         });
                         break;
-                    }
-                    if epoch == previous_epoch {
-                        // Exactly the same epoch and same transaction, nothing to lock here.
-                        continue;
                     } else {
                         info!(prev_epoch =? previous_epoch, cur_epoch =? epoch, "Overriding an old lock from previous epoch");
                         // Fall through and override the old lock.
@@ -464,7 +462,7 @@ impl MemoryCache {
             let lock_details = LockDetails { epoch, tx_digest };
             previous_values.push(previous_value.clone());
             locks_to_write.push((*obj_ref, Some(lock_details.clone().into())));
-            *entry.get_mut() = LockEntry::Lock(Some(lock_details));
+            entry.get_mut().1 = Lock::Lock(Some(lock_details));
         }
 
         if ret.is_ok() {
@@ -481,15 +479,27 @@ impl MemoryCache {
             for ((obj_ref, new_value), previous_value) in
                 locks_to_write.into_iter().zip(previous_values.into_iter())
             {
-                let mut entry = self.get_owned_object_lock_entry(&obj_ref)?;
+                let DashMapEntry::Occupied(mut entry) = self
+                    .dirty
+                    .owned_object_transaction_locks
+                    .entry_by_objref(&obj_ref)
+                else {
+                    panic!("entry was just populated, cannot be vacant");
+                };
+
+                let value = entry.get();
 
                 // it is impossible for any other thread to modify the lock value after we have
                 // written it. This is because the only case in which we overwrite a lock is when
                 // the epoch has changed, but because we are holding ExecutionLockReadGuard, the
                 // epoch cannot change within this function.
                 assert_eq!(
-                    *entry.get(),
-                    LockEntry::Lock(new_value.map(|l| l.clone().migrate().into_inner())),
+                    value.0, obj_ref,
+                    "entry was just populated, cannot be for different obj ref"
+                );
+                assert_eq!(
+                    value.1,
+                    Lock::Lock(new_value.map(|l| l.clone().migrate().into_inner())),
                     "lock for {:?} was modified by another thread (should be impossible)",
                     obj_ref
                 );
@@ -500,6 +510,7 @@ impl MemoryCache {
         ret
     }
 
+    // Commits dirty data for the given TransactionDigest to the db.
     async fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
@@ -516,6 +527,7 @@ impl MemoryCache {
 
         static MAX_VERSIONS: usize = 3;
 
+        // Now, remove each piece of committed data from the dirty state and insert it into the cache.
         let TransactionOutputs {
             transaction,
             effects,
@@ -532,35 +544,45 @@ impl MemoryCache {
         // Move dirty markers to cache
         for (object_key, marker_value) in markers.iter() {
             let key = (epoch, object_key.0);
+            let version = object_key.1;
 
-            // first insert into cache
+            // IMPORTANT: lock both the dirty set entry and the cache entry before modifying either
+            // this ensures that readers cannot see a value temporarily disappear.
             let marker_cache_entry = self.cached.marker_cache.entry(key).or_default();
-            let marker_map = &mut *marker_cache_entry.value().lock();
-            marker_map.insert(object_key.1, *marker_value);
-            marker_map.truncate(MAX_VERSIONS);
+            let mut marker_cache_map = marker_cache_entry.value().lock();
+            let marker_dirty_entry = self.dirty.markers.entry(key);
 
-            // remove from dirty collection
-            let DashMapEntry::Occupied(mut marker_entry) = self.dirty.markers.entry(key) else {
-                panic!("marker map must exist");
+            // insert into cache and drop old versions.
+            marker_cache_map.insert(version, *marker_value);
+            // TODO: make this automatic by giving CachedVersionMap an optional max capacity
+            marker_cache_map.truncate(MAX_VERSIONS);
+
+            let DashMapEntry::Occupied(mut entry) = marker_dirty_entry else {
+                panic!("dirty marker map must exist");
             };
 
-            let removed = marker_entry
-                .get_mut()
-                .remove(&object_key.1)
-                .expect("marker version must exist");
+            let removed = entry.get_mut().remove(&version);
 
-            debug_assert_eq!(removed, *marker_value);
+            assert_eq!(removed, Some(*marker_value), "dirty version must exist");
+
+            // if there are no versions remaining, remove the map entry
+            if entry.get().is_empty() {
+                entry.remove();
+            }
         }
 
-        // Move dirty objects to cache
+        // Move dirty objects to cache. We must be sure not to create a window during which
+        // another thread could observe a parent object without observing its most recent
+        // children. Because cache entries can be evicted at any time, we must remove parent
+        // objects from the dirty set first.
         for (object_id, object) in written.iter() {
             if object.is_child_object() {
-                self.insert_object(object_id, object);
+                self.write_object(object_id, object);
             }
         }
         for (object_id, object) in written.iter() {
             if !object.is_child_object() {
-                self.insert_object(object_id, object);
+                self.write_object(object_id, object);
                 if object.is_package() {
                     self.cached
                         .packages
@@ -570,10 +592,10 @@ impl MemoryCache {
         }
 
         for ObjectKey(id, version) in deleted.iter() {
-            self.insert_deleted_tombstone(id, *version);
+            self.write_deleted_tombstone(id, *version);
         }
         for ObjectKey(id, version) in wrapped.iter() {
-            self.insert_wrapped_tombstone(id, *version);
+            self.write_wrapped_tombstone(id, *version);
         }
 
         // TODO(cache): remove dead objects from cache - this cannot actually be done
@@ -594,51 +616,7 @@ impl MemoryCache {
         }
         */
 
-        // delete old locks
-        for obj_ref in locks_to_delete.iter() {
-            let mut entry = self
-                .get_owned_object_lock_entry(obj_ref)
-                .expect("lock must exist");
-            // NOTE: We just check here that locks exist, not that they are locked to a specific TX. Why?
-            // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
-            // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
-            //    (But the lock should exist which means previous transactions finished)
-            // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its
-            //    fine
-            assert!(
-                matches!(entry.get().1, LockEntry::Lock(_)),
-                "lock must exist for {:?}",
-                obj_ref
-            );
-            *entry.get_mut() = LockEntry::Deleted;
-        }
-
-        // create new locks
-        for obj_ref in new_locks_to_init.iter() {
-            #[cfg(debug_assertions)]
-            {
-                assert!(
-                    // genesis objects are inserted *prior* to executing the genesis transaction
-                    // so we need a loophole for anything that might be a genesis object.
-                    self.store.get_lock_entry(*obj_ref).is_err() || obj_ref.1.value() == 1,
-                    "lock must not exist in store {:?}",
-                    obj_ref
-                );
-                assert!(
-                    self.dirty
-                        .owned_object_transaction_locks
-                        .get_by_objref(obj_ref)
-                        .is_none(),
-                    "lock must not exist in cache {:?}",
-                    obj_ref
-                );
-            }
-
-            self.dirty
-                .owned_object_transaction_locks
-                .insert_by_objref(*obj_ref, LockEntry::Lock(None));
-        }
-
+        // process deleted and new locks
         let tx_digest = *transaction.digest();
         let effects_digest = effects.digest();
 
@@ -678,6 +656,14 @@ impl MemoryCache {
         )
         .await;
         let _ = AuthorityStorePruner::compact(&self.store.perpetual_tables);
+    }
+
+    pub fn store_for_testing(&self) -> &Arc<AuthorityStore> {
+        &self.store
+    }
+
+    pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper<Self> {
+        NotifyReadWrapper(self)
     }
 }
 
@@ -750,7 +736,7 @@ impl ExecutionCacheRead for MemoryCache {
             // If any version of the object is in the cache, it must be the most recent version.
             return match &objects.get_last().1 {
                 ObjectEntry::Object(object) => Ok(Some(object.clone())),
-                _ => Ok(None),
+                _ => Ok(None), // tombstone
             };
         }
 
@@ -759,7 +745,7 @@ impl ExecutionCacheRead for MemoryCache {
             // If any version of the object is in the cache, it must be the most recent version.
             return match &objects.get_last().1 {
                 ObjectEntry::Object(object) => Ok(Some(object.clone())),
-                _ => Ok(None),
+                _ => Ok(None), // tombstone
             };
         }
 
@@ -941,11 +927,11 @@ impl ExecutionCacheRead for MemoryCache {
             match self
                 .dirty
                 .owned_object_transaction_locks
-                .get(obj_ref)
+                .get_by_objref(obj_ref)
                 .as_ref()
-                .map(|e| e.value())
+                .map(|r| &r.value().1)
             {
-                Some(LockEntry::Deleted) => {
+                Some(Lock::Deleted) => {
                     let lock = self.get_latest_lock_for_object_id(obj_ref.0)?;
                     return Err(SuiError::UserInputError {
                         error: UserInputError::ObjectVersionUnavailableForConsumption {
@@ -954,7 +940,7 @@ impl ExecutionCacheRead for MemoryCache {
                         },
                     });
                 }
-                Some(LockEntry::Lock(_)) => (),
+                Some(Lock::Lock(_)) => (),
                 None => fallback_objects.push(*obj_ref),
             }
         }
@@ -1188,12 +1174,12 @@ impl ExecutionCacheWrite for MemoryCache {
         // before its most recent children are visible.
         for (object_id, object) in written.iter() {
             if object.is_child_object() {
-                self.insert_object(object_id, object);
+                self.write_object(object_id, object);
             }
         }
         for (object_id, object) in written.iter() {
             if !object.is_child_object() {
-                self.insert_object(object_id, object);
+                self.write_object(object_id, object);
                 if object.is_package() {
                     self.cached
                         .packages
@@ -1203,10 +1189,10 @@ impl ExecutionCacheWrite for MemoryCache {
         }
 
         for ObjectKey(id, version) in deleted.iter() {
-            self.insert_deleted_tombstone(id, *version);
+            self.write_deleted_tombstone(id, *version);
         }
         for ObjectKey(id, version) in wrapped.iter() {
-            self.insert_wrapped_tombstone(id, *version);
+            self.write_wrapped_tombstone(id, *version);
         }
 
         // TODO(cache): remove dead objects from cache - this cannot actually be done
@@ -1227,49 +1213,54 @@ impl ExecutionCacheWrite for MemoryCache {
         }
         */
 
-        // delete old locks
-        for obj_ref in locks_to_delete.iter() {
-            let mut entry = self
-                .get_owned_object_lock_entry(obj_ref)
-                .expect("lock must exist");
-            // NOTE: We just check here that locks exist, not that they are locked to a specific TX. Why?
-            // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
-            // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
-            //    (But the lock should exist which means previous transactions finished)
-            // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its
-            //    fine
-            assert!(
-                matches!(entry.get(), LockEntry::Lock(_)),
-                "lock must exist for {:?}",
-                obj_ref
-            );
-            *entry.get_mut() = LockEntry::Deleted;
-        }
+        let deleted_locks_iter: AssertOrdered<_> = locks_to_delete.iter().into();
+        let new_locks_iter: AssertOrdered<_> = new_locks_to_init.iter().into();
+        let mut deleted_locks_iter = deleted_locks_iter.peekable();
+        let mut new_locks_iter = new_locks_iter.peekable();
 
-        // create new locks
-        for obj_ref in new_locks_to_init.iter() {
-            #[cfg(debug_assertions)]
-            {
-                assert!(
-                    // genesis objects are inserted *prior* to executing the genesis transaction
-                    // so we need a loophole for anything that might be a genesis object.
-                    self.store.get_lock_entry(*obj_ref).is_err() || obj_ref.1.value() == 1,
-                    "lock must not exist in store {:?}",
-                    obj_ref
-                );
-                assert!(
+        loop {
+            match (deleted_locks_iter.peek(), new_locks_iter.peek()) {
+                (None, None) => break,
+
+                (Some(to_delete), Some(to_create)) => {
+                    if to_delete.0 == to_create.0 {
+                        // object was mutated, update the lock
+                        *self
+                            .get_owned_object_lock_entry_or_error(to_delete)
+                            .expect("lock must exist")
+                            .get_mut() = (**to_create, Lock::Lock(None));
+
+                        deleted_locks_iter.next().unwrap();
+                        new_locks_iter.next().unwrap();
+                    } else if to_delete.0 < to_create.0 {
+                        self.get_owned_object_lock_entry_or_error(to_delete)
+                            .expect("lock must exist")
+                            .get_mut()
+                            .1 = Lock::Deleted;
+                        deleted_locks_iter.next().unwrap();
+                    } else if to_delete.0 > to_create.0 {
+                        self.dirty
+                            .owned_object_transaction_locks
+                            .insert_by_objref(**to_create, Lock::Lock(None));
+                        new_locks_iter.next().unwrap();
+                    }
+                }
+
+                (Some(to_delete), None) => {
+                    self.get_owned_object_lock_entry_or_error(to_delete)
+                        .expect("lock must exist")
+                        .get_mut()
+                        .1 = Lock::Deleted;
+                    deleted_locks_iter.next().unwrap();
+                }
+
+                (None, Some(to_create)) => {
                     self.dirty
                         .owned_object_transaction_locks
-                        .get(obj_ref)
-                        .is_none(),
-                    "lock must not exist in cache {:?}",
-                    obj_ref
-                );
+                        .insert_by_objref(**to_create, Lock::Lock(None));
+                    new_locks_iter.next().unwrap();
+                }
             }
-
-            self.dirty
-                .owned_object_transaction_locks
-                .insert(*obj_ref, LockEntry::Lock(None));
         }
 
         let tx_digest = *transaction.digest();
@@ -1301,149 +1292,6 @@ impl ExecutionCacheWrite for MemoryCache {
         }
 
         std::future::ready(Ok(())).boxed()
-    }
-}
-
-// TODO(cache): this is not safe, because now we are committing persistent state to the db, while the rest
-// of the transaction outputs could simply be lost if the validator restarts. To fix this we must
-// cache locks (which we want to do anyway) but that's a big enough change for it to be worth
-// saving for a separate PR.
-#[instrument(level = "trace", skip_all)]
-fn write_locks(
-    store: &AuthorityStore,
-    locks_to_delete: &[ObjectRef],
-    new_locks_to_init: &[ObjectRef],
-) {
-    store
-        .check_owned_object_locks_exist(locks_to_delete)
-        .expect("locks must exist for certificate to be executed");
-    let lock_table = &store.perpetual_tables.owned_object_transaction_locks;
-    let mut batch = lock_table.batch();
-    AuthorityStore::initialize_locks(lock_table, &mut batch, new_locks_to_init, false)
-        .expect("Failed to initialize locks");
-    store
-        .delete_locks(&mut batch, locks_to_delete)
-        .expect("Failed to delete locks");
-    batch.write().expect("Failed to write locks");
-}
-
-/// CachedVersionMap is a map from version to value, with the additional contraints:
-/// - The key (SequenceNumber) must be monotonically increasing for each insert. If
-///   a key is inserted that is less than the previous key, it results in an assertion
-///   failure.
-/// - Similarly, only the item with the least key can be removed. If an item is removed
-///   from the middle of the map, it is marked for removal by setting its corresponding
-///   `should_remove` flag to true. If the item with the least key is removed, it is removed
-///   immediately, and any consecutive entries that are marked in `should_remove` are also
-///   removed.
-/// - The intent of these constraints is to ensure that there are never gaps in the collection,
-///   so that membership in the map can be tested by comparing to both the highest and lowest
-///   (first and last) entries.
-#[derive(Debug)]
-struct CachedVersionMap<V> {
-    values: VecDeque<(SequenceNumber, V)>,
-    should_remove: VecDeque<bool>,
-}
-
-impl<V> Default for CachedVersionMap<V> {
-    fn default() -> Self {
-        Self {
-            values: VecDeque::new(),
-            should_remove: VecDeque::new(),
-        }
-    }
-}
-
-impl<V> CachedVersionMap<V>
-where
-    V: Clone,
-{
-    fn insert(&mut self, version: SequenceNumber, value: V) {
-        assert!(
-            self.values.is_empty() || self.values.back().unwrap().0 < version,
-            "version must be monotonically increasing"
-        );
-        self.values.push_back((version, value));
-        self.should_remove.push_back(false);
-    }
-
-    // remove the value if it is the first element in values. otherwise mark it
-    // for removal.
-    fn remove(&mut self, version: &SequenceNumber) -> Option<V> {
-        if self.values.is_empty() {
-            return None;
-        }
-
-        if self.values.front().unwrap().0 == *version {
-            self.should_remove.pop_front();
-            let ret = self.values.pop_front().unwrap().1;
-
-            // process any deferred removals
-            while *self.should_remove.front().unwrap_or(&false) {
-                self.should_remove.pop_front();
-                self.values.pop_front();
-            }
-
-            Some(ret)
-        } else {
-            // Removals from the interior are deferred.
-            // Removals will generally be from the front, and the collection will usually
-            // be short, so linear search is preferred.
-            if let Some(index) = self.values.iter().position(|(v, _)| v == version) {
-                self.should_remove[index] = true;
-                Some(self.values[index].1.clone())
-            } else {
-                None
-            }
-        }
-    }
-
-    fn all_lt_or_eq_rev<'a>(
-        &'a self,
-        version: &'a SequenceNumber,
-    ) -> impl Iterator<Item = &'a (SequenceNumber, V)> {
-        self.values
-            .iter()
-            .rev()
-            .take_while(move |(v, _)| v <= version)
-    }
-
-    fn get(&self, version: &SequenceNumber) -> Option<&V> {
-        if self.values.is_empty() {
-            return None;
-        }
-
-        for (v, value) in self.values.iter().rev() {
-            match v.cmp(version) {
-                Ordering::Less => return None,
-                Ordering::Equal => return Some(value),
-                Ordering::Greater => (),
-            }
-        }
-
-        None
-    }
-
-    fn get_prior_to(&self, version: &SequenceNumber) -> Option<(SequenceNumber, &V)> {
-        for (v, value) in self.values.iter().rev() {
-            if v < version {
-                return Some((*v, value));
-            }
-        }
-
-        None
-    }
-
-    fn get_last(&self) -> &(SequenceNumber, V) {
-        self.values.back().expect("CachedVersionMap is empty")
-    }
-
-    // pop items from the front of the map until the first item is >= version
-    fn truncate(&mut self, limit: usize) {
-        while self.values.len() > limit {
-            self.should_remove.pop_front();
-            self.values.pop_front();
-        }
     }
 }
 
@@ -1569,5 +1417,41 @@ impl AccumulatorStore for MemoryCache {
         include_wrapped_tombstone: bool,
     ) -> Box<dyn Iterator<Item = LiveObject> + '_> {
         self.store.iter_live_object_set(include_wrapped_tombstone)
+    }
+}
+
+// an iterator adapter that asserts that the wrapped iterator yields elements in order
+struct AssertOrdered<I: Iterator> {
+    iter: I,
+    last: Option<I::Item>,
+}
+
+impl<I: Iterator> AssertOrdered<I> {
+    fn new(iter: I) -> Self {
+        Self { iter, last: None }
+    }
+}
+
+impl<I: Iterator> From<I> for AssertOrdered<I> {
+    fn from(iter: I) -> Self {
+        Self::new(iter)
+    }
+}
+
+impl<I: Iterator> Iterator for AssertOrdered<I>
+where
+    I::Item: Ord + Copy,
+{
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = self.iter.next();
+        if let Some(next) = next {
+            if let Some(last) = &self.last {
+                assert!(*last < next, "iterator must yield elements in order");
+            }
+            self.last = Some(next);
+        }
+        next
     }
 }

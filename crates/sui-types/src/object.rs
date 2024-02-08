@@ -630,8 +630,18 @@ pub struct ObjectInner {
     pub storage_rebate: u64,
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+#[derive(Eq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct Object(Arc<ObjectInner>);
+
+impl PartialEq for Object {
+    fn eq(&self, other: &Self) -> bool {
+        if Arc::ptr_eq(&self.0, &other.0) {
+            true
+        } else {
+            self.0 == other.0
+        }
+    }
+}
 
 impl From<ObjectInner> for Object {
     fn from(inner: ObjectInner) -> Self {

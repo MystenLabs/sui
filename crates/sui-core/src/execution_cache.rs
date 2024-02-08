@@ -40,6 +40,7 @@ use tracing::instrument;
 
 pub mod memory_cache;
 pub mod passthrough_cache;
+pub(crate) mod utils;
 
 use memory_cache::MemoryCache;
 use passthrough_cache::PassthroughCache;
@@ -246,6 +247,7 @@ pub trait ExecutionCacheRead: Send + Sync {
 
     fn get_lock(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult;
 
+    // This method is considered "private" - only used by multi_get_objects_with_more_accurate_error_return
     fn get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef>;
 
     fn check_owned_object_locks_exist(&self, owned_object_refs: &[ObjectRef]) -> SuiResult;
