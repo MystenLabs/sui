@@ -6,9 +6,10 @@ import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
 import { Button } from "@radix-ui/themes";
 import { Cross1Icon } from "@radix-ui/react-icons";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
-import { CONSTANTS } from "@/constants";
+import { CONSTANTS, QueryKey } from "@/constants";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { ObjectLink } from "../ObjectLink";
+import { useQueryClient } from "@tanstack/react-query";
 
 export type Escrow = {
   id: string;
@@ -20,15 +21,11 @@ export type Escrow = {
   swapped: boolean;
   cancelled: boolean;
 };
-export function Escrow({
-  escrow,
-  refetch,
-}: {
-  escrow: Escrow;
-  refetch?: () => void;
-}) {
+
+export function Escrow({ escrow }: { escrow: Escrow }) {
   const account = useCurrentAccount();
   const executeTransaction = useTransactionExecution();
+  const queryClient = useQueryClient();
 
   const suiObject = useSuiClientQuery("getObject", {
     id: escrow.itemId,
@@ -51,7 +48,11 @@ export function Escrow({
 
     const res = await executeTransaction(txb);
 
-    if (res && refetch) refetch();
+    if (res) {
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: [QueryKey.Escrow] });
+      }, 1_000);
+    }
   };
 
   return (

@@ -3,50 +3,48 @@
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { CONSTANTS, QueryKey } from "@/constants";
-import { Loading } from "@/components/Loading";
 import { Escrow } from "./Escrow";
 import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { getNextPageParam } from "@/utils/helpers";
+import { constructUrlSearchParams, getNextPageParam } from "@/utils/helpers";
 
-export function EscrowList() {
+export function EscrowList({
+  sent,
+  received,
+}: {
+  sent?: boolean;
+  received?: boolean;
+}) {
   const account = useCurrentAccount();
 
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isLoading,
-    isFetchingNextPage,
-    refetch,
-  } = useInfiniteQuery({
-    initialPageParam: null,
-    queryKey: [QueryKey.Escrow, account?.address],
-    queryFn: async ({ pageParam }) => {
-      const urlParams = new URLSearchParams();
-      if (pageParam) urlParams.set("cursor", pageParam);
-      urlParams.set("sender", account?.address!);
-      urlParams.set("cancelled", "false");
-      urlParams.set("swapped", "false");
+  const { data, fetchNextPage, hasNextPage, isLoading, isFetchingNextPage } =
+    useInfiniteQuery({
+      initialPageParam: null,
+      queryKey: [QueryKey.Escrow, account?.address, sent, received],
+      queryFn: async ({ pageParam }) => {
+        const data = await fetch(
+          `${CONSTANTS.apiEndpoint}escrows${constructUrlSearchParams({
+            cancelled: "false",
+            swapped: "false",
+            ...(pageParam ? { cursor: pageParam as string } : {}),
+            ...(sent ? { sender: account?.address } : {}),
+            ...(received ? { recipient: account?.address } : {}),
+          })}`,
+        );
+        return data.json();
+      },
+      select: (data) => data.pages.flatMap((page) => page.data),
+      getNextPageParam,
+    });
 
-      const data = await fetch(
-        `${CONSTANTS.apiEndpoint}escrows?${urlParams.toString()}`,
-      );
-      return data.json();
-    },
-    select: (data) => data.pages.flatMap((page) => page.data),
-    getNextPageParam,
-  });
-
-  if (isLoading) return <Loading />;
   return (
     <InfiniteScrollArea
       loadMore={() => fetchNextPage()}
       hasNextPage={hasNextPage}
-      loading={isFetchingNextPage}
+      loading={isFetchingNextPage || isLoading}
     >
       {data?.map((escrow: Escrow) => (
-        <Escrow key={escrow.itemId} escrow={escrow} refetch={() => refetch()} />
+        <Escrow key={escrow.itemId} escrow={escrow} />
       ))}
     </InfiniteScrollArea>
   );

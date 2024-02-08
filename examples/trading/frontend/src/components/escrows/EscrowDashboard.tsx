@@ -14,7 +14,11 @@ export function EscrowDashboard() {
     },
     {
       name: "Pending Escrows",
-      component: () => <EscrowList />,
+      component: () => <EscrowList sent />,
+    },
+    {
+      name: "Requested Escrows",
+      component: () => <EscrowList received />,
     },
   ];
 
