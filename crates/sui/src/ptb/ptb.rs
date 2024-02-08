@@ -47,7 +47,7 @@ pub struct PTB {
     #[clap(long, num_args(1), required = false)]
     file: Vec<String>,
     /// An input for the PTB, defined as the variable name and value, e.g: --input recipient 0x321
-    #[clap(long, num_args(1..3))]
+    #[clap(long, num_args(0..))]
     assign: Vec<String>,
     /// The object ID of the gas coin
     #[clap(long, required = false)]
@@ -58,7 +58,7 @@ pub struct PTB {
     /// Given n-values of the same type, it constructs a vector.
     /// For non objects or an empty vector, the type tag must be specified.
     /// For example, --make-move-vec "<u64>" "[]"
-    #[clap(long, num_args(2))]
+    #[clap(long, num_args(2..))]
     make_move_vec: Vec<String>,
     /// Merge N coins into the provided coin: --merge-coins into_coin "[coin1,coin2,coin3]"
     #[clap(long, num_args(2))]
@@ -264,7 +264,6 @@ impl PTB {
         // any remaining quotes.
         let file_content = std::fs::read_to_string(file_path.clone())?
             .replace("\\\"", "'") // Handle escaped quotes \" and replace with '
-            .replace("\"", "") // Remove quotes
             .replace("\\", ""); // Remove newlines
 
         let ignore_comments = file_content
@@ -306,15 +305,15 @@ impl PTB {
         }
 
         check_for_cyclic_file_inclusions(&included_files)?;
-
-        let lines = ignore_comments
-            .iter()
-            .flat_map(|x| x.split_whitespace())
+        let splits = Self::split_into_args(ignore_comments.join(" "))
+            .into_iter()
+            .map(|x| x.replace("\"", ""))
+            .filter(|x| !x.is_empty())
             .collect::<Vec<_>>();
 
         // in a file the first arg will not be the binary's name, so exclude it
         let input = PTB::command().no_binary_name(true);
-        let args = input.get_matches_from(lines);
+        let args = input.get_matches_from(splits);
         let ptb_commands = self.from_matches(parent_folder, &args, included_files)?;
         let len_cmds = ptb_commands.len();
 
@@ -363,6 +362,54 @@ impl PTB {
         }
 
         builder.finish()
+    }
+
+    // This function is used to split the input string into arguments. We decide when we have a new
+    // argument based on the different delimiters that we have. If we are inside of a delimiter and
+    // we hit a space, we should keep going until we find the end of the delimiter and a space at
+    // which point that is the end of the argument.
+    fn split_into_args(s: String) -> Vec<String> {
+        let mut res = vec![];
+        let mut temp = String::new();
+
+        // Argument delimiters that cannot span multiple arguments. We know if we are inside of one
+        // of these that we need to keep going to finish the argument.
+        let mut in_quotes = false;
+        let mut in_ticks = false;
+        let mut brackets = 0;
+        let mut parens = 0;
+
+        for c in s.chars() {
+            if c == '"' {
+                in_quotes = !in_quotes;
+            }
+            if c == '\'' {
+                in_ticks = !in_ticks;
+            }
+
+            if c == '[' {
+                brackets += 1;
+            }
+            if c == ']' {
+                brackets -= 1;
+            }
+
+            if c == '(' {
+                parens += 1;
+            }
+            if c == ')' {
+                parens -= 1;
+            }
+
+            if c == ' ' && !in_quotes && !in_ticks && brackets == 0 && parens == 0 {
+                res.push(temp.clone());
+                temp.clear();
+            } else {
+                temp.push(c);
+            }
+        }
+        res.push(temp);
+        res
     }
 
     /// Parses and executes the PTB with the sender as the current active address

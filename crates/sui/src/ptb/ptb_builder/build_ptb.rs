@@ -1069,14 +1069,14 @@ impl<'a> PTBBuilder<'a> {
                     ident_loc,
                     PTBArg::Identifier(i) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(loc, "expected identifier");
+                        error!(loc, "Expected identifier");
                     }
                 );
                 let picker = match i.to_string().as_str() {
                     "max" => GasPicker::Max,
                     "min" => GasPicker::Min,
                     "sum" => GasPicker::Sum,
-                    x => error!(ident_loc, "invalid gas picker: {}", x),
+                    x => error!(ident_loc, "Invalid gas picker: {}", x),
                 };
                 self.gas_budget.set_gas_picker(picker, ident_loc);
             }
@@ -1085,7 +1085,7 @@ impl<'a> PTBBuilder<'a> {
                     budget_loc,
                     PTBArg::U64(budget) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(loc, "expected gas budget");
+                        error!(loc, "Expected an integer as the gas budget");
                     }
                 );
                 self.gas_budget.add_gas_budget(budget, budget_loc);
