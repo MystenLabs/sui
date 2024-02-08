@@ -846,29 +846,32 @@ impl ExecutionCacheRead for MemoryCache {
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
-    ) -> Option<Object> {
+    ) -> SuiResult<Option<Object>> {
         // Both self.dirty.objects and self.cached.object_cache have no gaps,
         // and self.object_cache cannot have a more recent version than self.objects.
         // note that while binary searching would be more efficient for random keys, child
         // reads will be disproportionately more likely o be for a very recent version.
         if let Some(objects) = self.dirty.objects.get(&object_id) {
-            for (_, object) in objects.all_lt_or_eq_rev(&version) {
+            if let Some((_, object)) = objects.all_lt_or_eq_rev(&version).next() {
                 if let ObjectEntry::Object(object) = object {
-                    return Some(object.clone());
+                    return Ok(Some(object.clone()));
                 } else {
                     // if we find a tombstone, the object does not exist
-                    return None;
+                    return Ok(None);
                 }
             }
         }
 
         if let Some(objects) = self.cached.object_cache.get(&object_id) {
             let objects = objects.lock();
-            for (_, object) in objects.all_lt_or_eq_rev(&version) {
+            if let Some((_, object)) = objects.all_lt_or_eq_rev(&version).next() {
                 if let ObjectEntry::Object(object) = object {
-                    return Some(object.clone());
+                    return Ok(Some(object.clone()));
+                } else {
+                    // if we find a tombstone, the object does not exist
+                    return Ok(None);
                 }
-            }
+            };
         }
 
         self.store.find_object_lt_or_eq_version(object_id, version)
@@ -1108,7 +1111,7 @@ impl ExecutionCacheWrite for MemoryCache {
             .boxed()
     }
 
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(level = "debug", skip_all)]
     fn write_transaction_outputs(
         &self,
         epoch_id: EpochId,
@@ -1449,9 +1452,10 @@ impl AccumulatorStore for MemoryCache {
     ) -> SuiResult<Option<ObjectRef>> {
         // There is probably a more efficient way to implement this, but since this is only used by
         // old protocol versions, it is better to do the simple thing that is obviously correct.
+        // In this case we previous version from all sources and choose the highest
         let mut candidates = Vec::new();
 
-        let mut check_versions =
+        let check_versions =
             |versions: &CachedVersionMap<ObjectEntry>| match versions.get_prior_to(&version) {
                 Some((version, object_entry)) => match object_entry {
                     ObjectEntry::Object(object) => {
@@ -1470,7 +1474,7 @@ impl AccumulatorStore for MemoryCache {
 
         // first check dirty data
         if let Some(objects) = self.dirty.objects.get(object_id) {
-            if let Some(prior) = check_versions(&*objects) {
+            if let Some(prior) = check_versions(&objects) {
                 candidates.push(prior);
             }
         }
