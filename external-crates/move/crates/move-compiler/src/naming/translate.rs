@@ -1824,7 +1824,7 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
         E::ExpDotted_::Dot(d, f) => N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), Field(f)),
         E::ExpDotted_::Index(inner, args) => {
             let args = call_args(context, args);
-            let inner = dotted(context, *inner);
+            let inner = Box::new(dotted(context, *inner)?);
             N::ExpDotted_::Index(inner, args)
         },
 
