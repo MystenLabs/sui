@@ -38,11 +38,18 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Tag
-      uses: julbme/gh-action-manage-tag@v1
+    # - name: Tag
+    #   uses: julbme/gh-action-manage-tag@v1
+    #   with:
+    #     name: ${{ env.TAG_NAME }}
+    #     state: present
+    #     from: ${{ env.SUI_COMMIT }}
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Tag commit {{ env.SUI_COMMIT }}
+      uses: pxpm/github-tag-action@1.0.1
       with:
-        name: ${{ env.TAG_NAME }}
-        state: present
-        from: ${{ env.SUI_COMMIT }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        repo-token: "${{ secrets.GITHUB_TOKEN }}"
+        tag: ${{ env.TAG_NAME }}
+        commit-sha: ${{ env.SUI_COMMIT }}
