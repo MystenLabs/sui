@@ -47,9 +47,10 @@ jobs:
     #   env:
     #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Tag commit {{ env.SUI_COMMIT }}
-      uses: pxpm/github-tag-action@1.0.1
+    - name: Tag
+      uses: ydataai/create-tag@v1
       with:
-        repo-token: "${{ secrets.GITHUB_TOKEN }}"
+        github_token: "${{ secrets.GITHUB_TOKEN }}"
         tag: ${{ env.TAG_NAME }}
-        commit-sha: ${{ env.SUI_COMMIT }}
+        sha: ${{ env.SUI_COMMIT }}
+        message: "Test Tag"
