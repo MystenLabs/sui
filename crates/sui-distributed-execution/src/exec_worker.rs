@@ -403,7 +403,8 @@ impl<
 
         // Start timer for TPS computation
         let mut num_tx: u64 = 0;
-        let mut num_new_txs: u64 = 0;
+        let mut before_count: u64 = 0;
+        let mut after_count: u64 = 0;
         // let now = Instant::now();
 
         // if we execute in channel mode, there is no need to wait for epoch start
@@ -518,6 +519,11 @@ impl<
                     }
                     // println!("Sending LockedExec for tx {}, locked_objs: {:?}", txid, locked_objs);
 
+                    before_count += 1;
+                    if before_count % 1_000 == 0 {
+                        println!("[before_count] {before_count}");
+                    }
+
                     let msg = NetworkMessage{
                         src:0,
                         dst:vec![get_designated_executor_for_tx(*txid, &full_tx,&ew_ids)],
@@ -527,9 +533,9 @@ impl<
                         eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, get_designated_executor_for_tx(*txid, &full_tx,&ew_ids));
                     }
 
-                    num_new_txs += 1;
-                    if num_new_txs % 1_000 == 0 {
-                        println!("[locked-exec] EW {my_id} send {num_new_txs} new locked-execs");
+                    after_count += 1;
+                    if after_count % 1_000 == 0 {
+                        println!("[after_count] {after_count}");
                     }
                 },
 
