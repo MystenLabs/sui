@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, Context, Result};
+use crate::{
+    error,
+    ptb::ptb_builder::errors::{PTBResult, Span, Spanned},
+    sp,
+};
 use core::fmt::{self, Debug};
 use move_command_line_common::{
     address::{NumericalAddress, ParsedAddress},
@@ -9,9 +13,6 @@ use move_command_line_common::{
 };
 use move_core_types::annotated_value::MoveValue;
 use sui_types::{resolve_address, Identifier};
-
-use super::errors::Spanned;
-use crate::sp;
 
 /// An enum representing the parsed arguments of a PTB command.
 #[derive(Eq, PartialEq, Debug, Clone)]
@@ -37,6 +38,56 @@ pub enum Argument {
         function_name: Spanned<Identifier>,
     },
     TyArgs(Vec<ParsedType>),
+}
+
+impl Argument {
+    /// Resolve an `Argument` into a `MoveValue` if possible. Errors if the `Argument` is not
+    /// convertible to a `MoveValue`.
+    pub fn into_move_value_opt(&self, loc: Span) -> PTBResult<MoveValue> {
+        Ok(match self {
+            Argument::Bool(b) => MoveValue::Bool(*b),
+            Argument::U8(u) => MoveValue::U8(*u),
+            Argument::U16(u) => MoveValue::U16(*u),
+            Argument::U32(u) => MoveValue::U32(*u),
+            Argument::U64(u) => MoveValue::U64(*u),
+            Argument::U128(u) => MoveValue::U128(*u),
+            Argument::U256(u) => MoveValue::U256(*u),
+            Argument::Address(a) => MoveValue::Address(a.into_inner()),
+            Argument::Vector(vs) => MoveValue::Vector(
+                vs.iter()
+                    .map(|sp!(loc, v)| v.into_move_value_opt(*loc))
+                    .collect::<PTBResult<Vec<_>>>()
+                    .map_err(|e| e.with_help(
+                            format!("Was unable to parse '{self}' as a pure PTB value. This is most likely because \
+                                    the vector contains non-primitive (e.g., object or array) \
+                                    values which aren't permitted inside vectors")
+                            ))?
+            ),
+            Argument::String(s) => {
+                MoveValue::Vector(s.bytes().into_iter().map(MoveValue::U8).collect::<Vec<_>>())
+            }
+            Argument::Option(sp!(loc, o)) => {
+                if let Some(v) = o {
+                    let v = v.as_ref().into_move_value_opt(*loc).map_err(|e| e.with_help(
+                            format!(
+                                "Was unable to parse '{self}' as a pure PTB value. This is most likely because \
+                                the option contains a non-primitive (e.g., object or array) \
+                                value which isn't permitted inside an option"
+                                )
+                            ))?;
+                    MoveValue::Vector(vec![v])
+                } else {
+                    MoveValue::Vector(vec![])
+                }
+            }
+            Argument::Identifier(_)
+            | Argument::Array(_)
+            | Argument::ModuleAccess { .. }
+            | Argument::VariableAccess(_, _)
+            | Argument::Gas
+            | Argument::TyArgs(_) => error!(loc, "Was unable to convert '{self}' to primitive value (i.e., non-object value)"),
+        })
+    }
 }
 
 impl fmt::Display for Argument {
@@ -110,55 +161,5 @@ impl fmt::Display for Argument {
                 write!(f, ">")
             }
         }
-    }
-}
-
-impl Argument {
-    /// Resolve an `Argument` into a `MoveValue` if possible. Errors if the `Argument` is not
-    /// convertible to a `MoveValue`.
-    pub fn into_move_value_opt(&self) -> Result<MoveValue> {
-        Ok(match self {
-            Argument::Bool(b) => MoveValue::Bool(*b),
-            Argument::U8(u) => MoveValue::U8(*u),
-            Argument::U16(u) => MoveValue::U16(*u),
-            Argument::U32(u) => MoveValue::U32(*u),
-            Argument::U64(u) => MoveValue::U64(*u),
-            Argument::U128(u) => MoveValue::U128(*u),
-            Argument::U256(u) => MoveValue::U256(*u),
-            Argument::Address(a) => MoveValue::Address(a.into_inner()),
-            Argument::Vector(vs) => MoveValue::Vector(
-                vs.iter()
-                    .map(|sp!(_, v)| v.into_move_value_opt())
-                    .collect::<Result<Vec<_>>>()
-                    .with_context(|| format!(
-                            "Was unable to parse '{self}' as a pure PTB value. This is most likely because \
-                            the vector contains non-primitive (e.g., object or array) \
-                            values which aren't permitted inside vectors"
-                    ))?,
-            ),
-            Argument::String(s) => {
-                MoveValue::Vector(s.bytes().into_iter().map(MoveValue::U8).collect::<Vec<_>>())
-            }
-            Argument::Option(sp!(_, o)) => {
-                if let Some(v) = o {
-                    let v = v.as_ref().into_move_value_opt().with_context(|| {
-                        format!(
-                            "Was unable to parse '{self}' as a pure PTB value. This is most likely because \
-                            the option contains a non-primitive (e.g., object or array) \
-                            value which isn't permitted inside an option"
-                        )
-                    })?;
-                    MoveValue::Vector(vec![v])
-                } else {
-                    MoveValue::Vector(vec![])
-                }
-            }
-            Argument::Identifier(_)
-            | Argument::Array(_)
-            | Argument::ModuleAccess { .. }
-            | Argument::VariableAccess(_, _)
-            | Argument::Gas
-            | Argument::TyArgs(_) => bail!("Was unable to convert '{self}' to primitive value (i.e., non-object value)"),
-        })
     }
 }

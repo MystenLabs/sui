@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ptb::ptb_parser::build_ptb::PTBBuilder;
-use crate::ptb::ptb_parser::errors::render_errors;
-use crate::ptb::ptb_parser::parser::PTBParser;
+use crate::ptb::ptb_builder::build_ptb::PTBBuilder;
+use crate::ptb::ptb_builder::errors::render_errors;
+use crate::ptb::ptb_builder::parse_ptb::PTBParser;
 use anyhow::anyhow;
 use anyhow::Error;
 use clap::parser::ValuesRef;
@@ -22,6 +22,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use sui_sdk::SuiClient;
 use sui_types::transaction::ProgrammableTransaction;
+use sui_types::base_types::ObjectID;
 
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::AccountKeystore;
@@ -135,7 +136,7 @@ impl PTB {
             }
 
             // we need to skip the json as this is handled in the execute fn
-            if arg_name.as_str() == "json" {
+            if arg_name.as_str() == "json" || arg_name.as_str() == "gas" {
                 continue;
             }
 
@@ -257,7 +258,15 @@ impl PTB {
             return Err(anyhow!("{filename} does not exist"));
         }
 
-        let file_content = std::fs::read_to_string(file_path.clone())?.replace("\\", "");
+        // NB: The following replacements are necessary. In order to handle quoted values in PTB
+        // files (i.e., to support command-line syntax in PTB files), we need to handle escaped
+        // quotes replacing them with the alternate syntax for inner strings ('), we then remove
+        // any remaining quotes.
+        let file_content = std::fs::read_to_string(file_path.clone())?
+            .replace("\\\"", "'") // Handle escaped quotes \" and replace with '
+            .replace("\"", "") // Remove quotes
+            .replace("\\", ""); // Remove newlines
+
         let ignore_comments = file_content
             .lines()
             .filter(|x| !x.starts_with("#"))
@@ -368,6 +377,7 @@ impl PTB {
             .subcommand_matches("ptb")
             .ok_or_else(|| anyhow!("Expected the ptb subcommand but got a different command"))?;
         let json = ptb_args_matches.get_flag("json");
+        let gas_coin = ptb_args_matches.get_one::<String>("gas");
         let cwd =
             std::env::current_dir().map_err(|_| anyhow!("Cannot get the working directory."))?;
         let commands = self.from_matches(cwd, ptb_args_matches, &mut BTreeMap::new())?;
@@ -437,11 +447,21 @@ impl PTB {
             anyhow::bail!("No active address, cannot execute PTB");
         };
 
-        // TODO change this logic to actually use the given gas
         // find the gas coins if we have no gas coin given
-        let coins = context
-            .gas_for_owner_budget(sender, budget, BTreeSet::new())
-            .await?;
+        let coins = if let Some(gas) = gas_coin {
+            if !gas.starts_with("@0x") {
+                return Err(anyhow!("Gas input error: to distinguish it from a hex value, please use @ in front of addresses or object IDs: @{gas}"));
+            }
+            context
+                .get_object_ref(ObjectID::from_hex_literal(&gas[1..])?)
+                .await?
+        } else {
+            context
+                .gas_for_owner_budget(sender, budget, BTreeSet::new())
+                .await?
+                .1
+                .object_ref()
+        };
         // get the gas price
         let gas_price = context
             .get_client()
@@ -450,13 +470,8 @@ impl PTB {
             .get_reference_gas_price()
             .await?;
         // create the transaction data that will be sent to the network
-        let tx_data = TransactionData::new_programmable(
-            sender,
-            vec![coins.1.object_ref()],
-            ptb,
-            budget,
-            gas_price,
-        );
+        let tx_data =
+            TransactionData::new_programmable(sender, vec![coins], ptb, budget, gas_price);
         // sign the tx
         let signature =
             context
