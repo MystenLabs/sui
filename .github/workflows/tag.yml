@@ -34,7 +34,7 @@ permissions: write-all
 jobs:
   tag:
     name: Tag
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-ghcloud
 
     steps:
     - name: Checkout
