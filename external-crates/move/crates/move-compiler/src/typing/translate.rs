@@ -21,7 +21,7 @@ use crate::{
     },
     shared::{
         known_attributes::TestingAttribute, process_binops, program_info::TypingProgramInfo,
-        unique_map::UniqueMap, *,
+        unique_map::UniqueMap, *, ast_debug::AstDebug,
     },
     sui_mode,
     typing::{
@@ -221,6 +221,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         mut signature,
         body: n_body,
     } = f;
+    println!("-- Processing {name} -----------------------------");
     context.env.add_warning_filter_scope(warning_filter.clone());
     assert!(context.constraints.is_empty());
     context.reset_for_module_item();
@@ -287,7 +288,10 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
     let mut b_ = match nb_ {
         N::FunctionBody_::Native => T::FunctionBody_::Native,
         N::FunctionBody_::Defined(es) => {
+            es.print_verbose();
             let seq = sequence(context, es);
+            println!("---------");
+            seq.print();
             let ety = sequence_type(&seq);
             let ret_ty = context.return_type.clone().unwrap();
             let (_, seq_items) = &seq;
@@ -2108,6 +2112,8 @@ enum ExpDotted_ {
     Exp(Box<T::Exp>),
     TmpBorrow(Box<T::Exp>, Box<Type>),
     Dot(Box<ExpDotted>, Field, Box<Type>),
+    Borrow(Box<ExpDotted>, Vec<T::Exp>, Box<Type>),
+    BorrowMut(Box<ExpDotted>, Vec<T::Exp>, Box<Type>),
 }
 type ExpDotted = Spanned<ExpDotted_>;
 
@@ -2374,7 +2380,9 @@ fn method_call_resolve(
                     assert!(context.env.has_errors());
                     return None;
                 }
-                Ty::Ref(_, _) | Ty::Var(_) => panic!("ICE unfolding failed"),
+                rty_ @ (Ty::Ref(_, _) | Ty::Var(_)) => {
+                    format!("Expected a non-reference type, but found {}",  core::error_format_(rty_, &context.subst))
+                }
                 Ty::Apply(_, _, _) => unreachable!(),
             };
             context.env.add_diag(diag!(

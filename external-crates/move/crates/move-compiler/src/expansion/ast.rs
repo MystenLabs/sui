@@ -1539,9 +1539,11 @@ impl AstDebug for ExpDotted_ {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n))
             }
-            D::Inner(e, n) => {
+            D::Index(e, rhs) => {
                 e.ast_debug(w);
-                w.write(&format!(".{}", n))
+                w.write("[");
+                w.comma(&rhs.value, |w, e| e.ast_debug(w));
+                w.write("]");
             }
         }
     }

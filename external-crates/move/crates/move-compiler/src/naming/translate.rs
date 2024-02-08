@@ -1630,7 +1630,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 assert!(context.env.has_errors());
                 NE::UnresolvedError
             }
-            Some(d) => NE::ExpDotted(case, d),
+            Some(ndot) => NE::ExpDotted(case, ndot),
         },
 
         EE::Cast(e, t) => NE::Cast(exp(context, e), type_(context, t)),
@@ -1810,6 +1810,7 @@ fn access_constant(context: &mut Context, ma: E::ModuleAccess) -> N::Exp_ {
     }
 }
 
+
 fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
     let sp!(loc, edot_) = edot;
     let nedot_ = match edot_ {
@@ -1821,6 +1822,12 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
             }
         }
         E::ExpDotted_::Dot(d, f) => N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), Field(f)),
+        E::ExpDotted_::Index(inner, args) => {
+            let args = call_args(context, args);
+            let inner = dotted(context, *inner);
+            N::ExpDotted_::Index(inner, args)
+        },
+
     };
     Some(sp(loc, nedot_))
 }
@@ -2341,6 +2348,12 @@ fn remove_unused_bindings_exp_dotted(
     match ed_ {
         N::ExpDotted_::Exp(e) => remove_unused_bindings_exp(context, used, e),
         N::ExpDotted_::Dot(ed, _) => remove_unused_bindings_exp_dotted(context, used, ed),
+        N::ExpDotted_::Index(ed, sp!(_, es)) => {
+            for e in es {
+                remove_unused_bindings_exp(context, used, e);
+            }
+            remove_unused_bindings_exp_dotted(context, used, ed)
+        }
     }
 }
 

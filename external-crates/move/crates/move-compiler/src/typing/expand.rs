@@ -10,7 +10,7 @@ use crate::{
     ice,
     naming::ast::{BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_},
     parser::ast::Ability_,
-    typing::ast as T,
+    typing::ast as T, shared::ast_debug::AstDebug,
 };
 use move_core_types::u256::U256;
 use move_ir_types::location::*;

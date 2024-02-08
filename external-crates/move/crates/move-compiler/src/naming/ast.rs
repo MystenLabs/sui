@@ -281,6 +281,7 @@ pub type LambdaLValues = Spanned<LambdaLValues_>;
 pub enum ExpDotted_ {
     Exp(Box<Exp>),
     Dot(Box<ExpDotted>, Field),
+    Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
 
@@ -1512,6 +1513,12 @@ impl AstDebug for ExpDotted_ {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n))
             }
+            // D::Index(e, sp!(_, args)) => {
+            //     e.ast_debug(w);
+            //     w.write("(");
+            //     w.comma(args, |w, e| e.ast_debug(w));
+            //     w.write(")");
+            // }
         }
     }
 }

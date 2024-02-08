@@ -2749,15 +2749,19 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
     use E::Exp_ as EE;
     use P::Exp_ as PE;
     let sp!(loc, pe_) = *pe;
-    let e_ = match pe_ {
-        PE::Unit => EE::Unit { trailing: false },
-        PE::Value(pv) => match value(&mut context.defn_context, pv) {
-            Some(v) => EE::Value(v),
-            None => {
+    macro_rules! unwrap_or_error_exp {
+        ($opt_exp:expr) => {
+            if let Some(value) = $opt_exp {
+                value
+            } else {
                 assert!(context.env().has_errors());
                 EE::UnresolvedError
             }
-        },
+        };
+    }
+    let e_ = match pe_ {
+        PE::Unit => EE::Unit { trailing: false },
+        PE::Value(pv) => unwrap_or_error_exp!(value(&mut context.defn_context, pv).map(EE::Value)),
         PE::Name(_, Some(_)) => {
             let msg = "Expected name to be followed by a brace-enclosed list of field expressions \
                 or a parenthesized list of arguments for a function call";
@@ -2769,25 +2773,13 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         PE::Name(pn, ptys_opt) => {
             let en_opt = context.name_access_chain_to_module_access(Access::Term, pn);
             let tys_opt = optional_types(context, ptys_opt);
-            match en_opt {
-                Some(en) => EE::Name(en, tys_opt),
-                None => {
-                    assert!(context.env().has_errors());
-                    EE::UnresolvedError
-                }
-            }
+            unwrap_or_error_exp!(en_opt.map(|en| EE::Name(en, tys_opt)))
         }
         PE::Call(pn, is_macro, ptys_opt, sp!(rloc, prs)) => {
             let tys_opt = optional_types(context, ptys_opt);
             let ers = sp(rloc, exps(context, prs));
             let en_opt = context.name_access_chain_to_module_access(Access::ApplyPositional, pn);
-            match en_opt {
-                Some(en) => EE::Call(en, is_macro, tys_opt, ers),
-                None => {
-                    assert!(context.env().has_errors());
-                    EE::UnresolvedError
-                }
-            }
+            unwrap_or_error_exp!(en_opt.map(|en| EE::Call(en, is_macro, tys_opt, ers)))
         }
         PE::Pack(pn, ptys_opt, pfields) => {
             let en_opt = context.name_access_chain_to_module_access(Access::ApplyNamed, pn);
@@ -2797,13 +2789,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 .map(|(f, pe)| (f, *exp(context, Box::new(pe))))
                 .collect();
             let efields = named_fields(context, loc, "construction", "argument", efields_vec);
-            match en_opt {
-                Some(en) => EE::Pack(en, tys_opt, efields),
-                None => {
-                    assert!(context.env().has_errors());
-                    EE::UnresolvedError
-                }
-            }
+            unwrap_or_error_exp!(en_opt.map(|en| EE::Pack(en, tys_opt, efields)))
         }
         PE::Vector(vec_loc, ptys_opt, sp!(args_loc, pargs_)) => {
             let tys_opt = optional_types(context, ptys_opt);
@@ -2931,11 +2917,6 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
             }
         }
         PE::Cast(e, ty) => EE::Cast(exp(context, e), type_(context, ty)),
-        PE::Index(..) => {
-            // TODO index syntax will be added
-            context.spec_deprecated(loc, /* is_error */ true);
-            EE::UnresolvedError
-        }
         PE::Annotate(e, ty) => EE::Annotate(exp(context, e), type_(context, ty)),
         PE::Spec(_) => {
             context.spec_deprecated(loc, /* is_error */ false);

@@ -1571,7 +1571,6 @@ fn parse_index_args(context: &mut Context) -> Result<Spanned<Vec<Exp>>, Box<Diag
     ))
 }
 
-
 // Return true if the current token is one that might occur after an Exp.
 // This is needed, for example, to check for the optional Exp argument to
 // a return (where "return" is itself an Exp).

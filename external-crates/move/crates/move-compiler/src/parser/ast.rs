@@ -1953,10 +1953,10 @@ impl AstDebug for Exp_ {
                 ty.ast_debug(w);
                 w.write(")");
             }
-            E::Index(e, i) => {
+            E::Index(e, rhs) => {
                 e.ast_debug(w);
                 w.write("[");
-                i.ast_debug(w);
+                w.comma(&rhs.value, |w, e| e.ast_debug(w));
                 w.write("]");
             }
             E::Annotate(e, ty) => {
