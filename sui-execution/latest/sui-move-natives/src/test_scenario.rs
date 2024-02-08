@@ -157,8 +157,11 @@ pub fn end_transaction(
     // deletions already handled above, but we drop the delete kind for the effects
     let mut deleted = vec![];
     for id in deleted_object_ids {
-        incorrect_shared_or_imm_handling =
-            incorrect_shared_or_imm_handling || taken_shared_or_imm.contains_key(&id);
+        // Mark as "incorrect" if a imm object was deleted. Allow shared objects to be deleted though.
+        incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
+            || taken_shared_or_imm
+                .get(&id)
+                .is_some_and(|owner| matches!(owner, Owner::Immutable));
         deleted.push(id);
     }
     // find all wrapped objects
