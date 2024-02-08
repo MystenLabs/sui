@@ -2092,7 +2092,6 @@ fn join_impl(
             subst.insert(new_tvar, other.clone());
             join_tvar(subst, case, other.loc, new_tvar, *loc, *id)
         }
-
         (sp!(_, UnresolvedError), other) | (other, sp!(_, UnresolvedError)) => {
             Ok((subst, other.clone()))
         }
