@@ -81,7 +81,6 @@ Headers: {
     "vary": "origin",
     "vary": "access-control-request-method",
     "vary": "access-control-request-headers",
-    "access-control-expose-headers": "*",
 }
 Service version: 2024.1.0
 Response: {
