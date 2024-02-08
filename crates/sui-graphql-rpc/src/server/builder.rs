@@ -41,6 +41,7 @@ use http::Request;
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
 use hyper::Server as HyperServer;
+use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
 use std::convert::Infallible;
 use std::net::TcpStream;
 use std::{any::Any, net::SocketAddr, time::Instant};
@@ -148,6 +149,9 @@ impl ServerBuilder {
                     self.state.metrics.clone(),
                     check_version_middleware,
                 ))
+                .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
+                    metrics: self.state.metrics.clone(),
+                }))
                 .layer(middleware::from_fn(set_version_middleware));
             self.router = Some(router);
         }
@@ -297,15 +301,11 @@ pub fn export_schema() -> String {
 }
 
 async fn graphql_handler(
-    State(metrics): State<Metrics>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
     headers: HeaderMap,
     req: GraphQLRequest,
-) -> GraphQLResponse {
-    metrics.request_metrics.inflight_requests.inc();
-    metrics.inc_num_queries();
-    let instant = Instant::now();
+) -> (axum::http::Extensions, GraphQLResponse) {
     let mut req = req.into_inner();
     req.data.insert(Uuid::new_v4());
     if headers.contains_key(ShowUsage::name()) {
@@ -315,14 +315,65 @@ async fn graphql_handler(
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
     let result = schema.execute(req).await;
-    let elapsed = instant.elapsed().as_millis() as u64;
-    metrics.query_latency(elapsed);
+
+    // If there are errors, insert them as an extention so that the Metrics callback handler can
+    // pull it out later.
+    let mut extensions = axum::http::Extensions::new();
     if result.is_err() {
-        metrics.inc_errors(result.errors.clone());
-    }
-    metrics.request_metrics.inflight_requests.dec();
-    result.into()
+        extensions.insert(GraphqlErrors(std::sync::Arc::new(result.errors.clone())));
+    };
+    (extensions, result.into())
 }
+
+#[derive(Clone)]
+struct MetricsMakeCallbackHandler {
+    metrics: Metrics,
+}
+
+impl MakeCallbackHandler for MetricsMakeCallbackHandler {
+    type Handler = MetricsCallbackHandler;
+
+    fn make_handler(&self, _request: &http::request::Parts) -> Self::Handler {
+        let start = Instant::now();
+        let metrics = self.metrics.clone();
+
+        metrics.request_metrics.inflight_requests.inc();
+        metrics.inc_num_queries();
+
+        MetricsCallbackHandler { metrics, start }
+    }
+}
+
+struct MetricsCallbackHandler {
+    metrics: Metrics,
+    start: Instant,
+}
+
+impl ResponseHandler for MetricsCallbackHandler {
+    fn on_response(self, response: &http::response::Parts) {
+        if let Some(errors) = response.extensions.get::<GraphqlErrors>() {
+            self.metrics.inc_errors(&errors.0);
+        }
+    }
+
+    fn on_error<E>(self, _error: &E) {
+        // Do nothing if the whole service errored
+        //
+        // in Axum this isn't possible since all services are required to have an error type of
+        // Infallible
+    }
+}
+
+impl Drop for MetricsCallbackHandler {
+    fn drop(&mut self) {
+        let elapsed = self.start.elapsed().as_millis() as u64;
+        self.metrics.query_latency(elapsed);
+        self.metrics.request_metrics.inflight_requests.dec();
+    }
+}
+
+#[derive(Debug, Clone)]
+struct GraphqlErrors(std::sync::Arc<Vec<async_graphql::ServerError>>);
 
 /// Connect via a TCPStream to the DB to check if it is alive
 async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode {
