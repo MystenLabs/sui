@@ -198,32 +198,44 @@ async fn wait_for_graphql_server(client: &SimpleClient) {
     .expect("Timeout waiting for graphql server to start");
 }
 
-impl ExecutorCluster {
-    pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
-        let current_checkpoint = self
-            .indexer_store
+async fn wait_for_indexer_checkpoint_catchup(
+    indexer_store: &PgIndexerStoreV2,
+    checkpoint: u64,
+    base_timeout: Duration,
+) {
+    let current_checkpoint = indexer_store
+        .get_latest_tx_checkpoint_sequence_number()
+        .await
+        .unwrap();
+
+    let diff = checkpoint
+        .saturating_sub(current_checkpoint.unwrap_or(0))
+        .max(1);
+    let timeout = base_timeout.mul_f64(diff as f64);
+
+    tokio::time::timeout(timeout, async {
+        while indexer_store
             .get_latest_tx_checkpoint_sequence_number()
             .await
-            .unwrap();
+            .unwrap()
+            < Some(checkpoint)
+        {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    })
+    .await
+    .expect("Timeout waiting for indexer to catchup to checkpoint");
+}
 
-        let diff = checkpoint
-            .saturating_sub(current_checkpoint.unwrap_or(0))
-            .max(1);
-        let timeout = base_timeout.mul_f64(diff as f64);
+impl Cluster {
+    pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
+        wait_for_indexer_checkpoint_catchup(&self.indexer_store, checkpoint, base_timeout).await
+    }
+}
 
-        tokio::time::timeout(timeout, async {
-            while self
-                .indexer_store
-                .get_latest_tx_checkpoint_sequence_number()
-                .await
-                .unwrap()
-                < Some(checkpoint)
-            {
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        })
-        .await
-        .expect("Timeout waiting for indexer to catchup to checkpoint");
+impl ExecutorCluster {
+    pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
+        wait_for_indexer_checkpoint_catchup(&self.indexer_store, checkpoint, base_timeout).await
     }
 
     /// The ObjectsSnapshotProcessor is a long-running task that periodically takes a snapshot of

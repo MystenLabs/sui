@@ -484,7 +484,7 @@ pub mod tests {
     }
 
     pub async fn test_query_depth_limit_impl() {
-        let (connection_config, _cluster) = prep_cluster().await;
+        let (connection_config, cluster) = prep_cluster().await;
 
         async fn exec_query_depth_limit(
             depth: u32,
@@ -517,6 +517,9 @@ pub mod tests {
         }
 
         // Should complete successfully
+        cluster
+            .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
+            .await;
         let resp = exec_query_depth_limit(1, "{ chainIdentifier }", &connection_config).await;
         assert!(resp.is_ok());
         let resp = exec_query_depth_limit(
