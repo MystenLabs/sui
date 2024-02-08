@@ -16,3 +16,12 @@ error[E01002]: unexpected token
   │                             Unexpected '{'
   │                             Expected '('
 
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/spec_parsing_old_fun_fail.move:8:9
+  │
+5 │     spec fun with_aborts_if {
+  │              -------------- Alias previously defined here
+  ·
+8 │     fun with_aborts_if(x: u64): u64 {
+  │         ^^^^^^^^^^^^^^ Duplicate module member or alias 'with_aborts_if'. Top level names in a namespace must be unique
+

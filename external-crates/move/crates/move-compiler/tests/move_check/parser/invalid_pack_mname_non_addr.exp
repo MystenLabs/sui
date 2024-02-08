@@ -16,6 +16,14 @@ error[E01002]: unexpected token
   │         Unexpected 'fun'
   │         Expected an expression term
 
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/invalid_pack_mname_non_addr.move:8:13
+  │
+7 │     fun bar() {
+  │         --- Alias previously defined here
+8 │         fun bar()::bar()::M::S { }
+  │             ^^^ Duplicate module member or alias 'bar'. Top level names in a namespace must be unique
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/invalid_pack_mname_non_addr.move:8:18
   │

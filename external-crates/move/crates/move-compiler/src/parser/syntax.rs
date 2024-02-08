@@ -2416,7 +2416,7 @@ fn parse_function_decl(
     start_loc: usize,
     modifiers: Modifiers,
     context: &mut Context,
-) -> Result<Function, Box<Diagnostic>> {
+) -> Result<(Function, Option<Box<Diagnostic>>), Box<Diagnostic>> {
     let Modifiers {
         visibility,
         entry,
@@ -2424,83 +2424,85 @@ fn parse_function_decl(
         macro_,
     } = modifiers;
 
-    // "fun" <FunctionDefName>
-    consume_token(context.tokens, Tok::Fun)?;
-    let name = FunctionName(parse_identifier(context)?);
-    let type_parameters = parse_optional_type_parameters(context)?;
-
-    // "(" Comma<Parameter> ")"
-    let parameters = parse_comma_list(
-        context,
-        Tok::LParen,
-        Tok::RParen,
-        parse_parameter,
-        "a function parameter",
-    )?;
-
-    // (":" <Type>)?
-    let return_type = if match_token(context.tokens, Tok::Colon)? {
-        parse_type(context)?
-    } else {
-        sp(name.loc(), Type_::Unit)
-    };
-
-    // ("acquires" (<NameAccessChain> ",")* <NameAccessChain> ","?
-    let mut acquires = vec![];
-    if match_token(context.tokens, Tok::Acquires)? {
-        let follows_acquire = |tok| matches!(tok, Tok::Semicolon | Tok::LBrace);
-        loop {
-            acquires.push(parse_name_access_chain(context, || {
-                "a resource struct name"
-            })?);
-            if follows_acquire(context.tokens.peek()) {
-                break;
-            }
-            consume_token(context.tokens, Tok::Comma)?;
-            if follows_acquire(context.tokens.peek()) {
-                break;
-            }
-        }
+    // certain portions of of the partially constructed function must be updated on return
+    fn update_partial(start_loc: usize, context: &mut Context, mut result: Function) -> Function {
+        result.loc = make_loc(
+            context.tokens.file_hash(),
+            start_loc,
+            context.tokens.previous_end_loc(),
+        );
+        result.body = sp(context.tokens.current_token_loc(), FunctionBody_::Native);
+        result
     }
 
-    let body = match native {
-        Some(loc) => {
-            consume_token(context.tokens, Tok::Semicolon)?;
-            sp(loc, FunctionBody_::Native)
-        }
-        _ => {
-            let start_loc = context.tokens.start_loc();
-            consume_token(context.tokens, Tok::LBrace)?;
-            let seq = parse_sequence(context)?;
-            let end_loc = context.tokens.previous_end_loc();
-            sp(
-                make_loc(context.tokens.file_hash(), start_loc, end_loc),
-                FunctionBody_::Defined(seq),
-            )
-        }
-    };
-
-    let signature = FunctionSignature {
-        type_parameters,
-        parameters,
-        return_type,
-    };
+    // "fun" <FunctionDefName>
+    consume_token(context.tokens, Tok::Fun)?;
+    let nid = parse_identifier(context)?;
+    let name = FunctionName(nid);
 
     let loc = make_loc(
         context.tokens.file_hash(),
         start_loc,
         context.tokens.previous_end_loc(),
     );
-    Ok(Function {
+    // create a largely empty function
+    let mut result = Function {
         attributes,
         loc,
         visibility: visibility.unwrap_or(Visibility::Internal),
         entry,
         macro_,
-        signature,
+        signature: FunctionSignature {
+            type_parameters: vec![],
+            parameters: vec![],
+            return_type: sp(name.loc(), Type_::Unit),
+        },
         name,
-        body,
-    })
+        body: sp(context.tokens.current_token_loc(), FunctionBody_::Native),
+    };
+
+    let type_parameters = match parse_optional_type_parameters(context) {
+        Ok(tparams) => tparams,
+        Err(diag) => return Ok((update_partial(start_loc, context, result), Some(diag))),
+    };
+    result.signature.type_parameters = type_parameters;
+
+    // "(" Comma<Parameter> ")"
+    let parameters = match parse_comma_list(
+        context,
+        Tok::LParen,
+        Tok::RParen,
+        parse_parameter,
+        "a function parameter",
+    ) {
+        Ok(params) => params,
+        Err(diag) => return Ok((update_partial(start_loc, context, result), Some(diag))),
+    };
+    result.signature.parameters = parameters;
+
+    let return_type = match parse_ret_type(context, name) {
+        Ok(t) => t,
+        Err(diag) => return Ok((update_partial(start_loc, context, result), Some(diag))),
+    };
+    result.signature.return_type = return_type;
+
+    match parse_acquires(context) {
+        Ok(a) => a,
+        Err(diag) => return Ok((update_partial(start_loc, context, result), Some(diag))),
+    };
+
+    let body = match parse_body(context, native) {
+        Ok(b) => b,
+        Err(diag) => return Ok((update_partial(start_loc, context, result), Some(diag))),
+    };
+    result.body = body;
+
+    result.loc = make_loc(
+        context.tokens.file_hash(),
+        start_loc,
+        context.tokens.previous_end_loc(),
+    );
+    Ok((result, None))
 }
 
 // Parse a function parameter:
@@ -2517,6 +2519,55 @@ fn parse_parameter(context: &mut Context) -> Result<(Mutability, Var, Type), Box
     consume_token(context.tokens, Tok::Colon)?;
     let t = parse_type(context)?;
     Ok((mut_, v, t))
+}
+
+// (":" <Type>)?
+fn parse_ret_type(context: &mut Context, name: FunctionName) -> Result<Type, Box<Diagnostic>> {
+    if match_token(context.tokens, Tok::Colon)? {
+        parse_type(context)
+    } else {
+        Ok(sp(name.loc(), Type_::Unit))
+    }
+}
+
+// ("acquires" (<NameAccessChain> ",")* <NameAccessChain> ","?
+fn parse_acquires(context: &mut Context) -> Result<Vec<NameAccessChain>, Box<Diagnostic>> {
+    let mut acquires = vec![];
+    if match_token(context.tokens, Tok::Acquires)? {
+        let follows_acquire = |tok| matches!(tok, Tok::Semicolon | Tok::LBrace);
+        loop {
+            acquires.push(parse_name_access_chain(context, || {
+                "a resource struct name"
+            })?);
+            if follows_acquire(context.tokens.peek()) {
+                break;
+            }
+            consume_token(context.tokens, Tok::Comma)?;
+            if follows_acquire(context.tokens.peek()) {
+                break;
+            }
+        }
+    }
+    Ok(acquires)
+}
+
+fn parse_body(context: &mut Context, native: Option<Loc>) -> Result<FunctionBody, Box<Diagnostic>> {
+    match native {
+        Some(loc) => {
+            consume_token(context.tokens, Tok::Semicolon)?;
+            Ok(sp(loc, FunctionBody_::Native))
+        }
+        _ => {
+            let start_loc = context.tokens.start_loc();
+            consume_token(context.tokens, Tok::LBrace)?;
+            let seq = parse_sequence(context)?;
+            let end_loc = context.tokens.previous_end_loc();
+            Ok(sp(
+                make_loc(context.tokens.file_hash(), start_loc, end_loc),
+                FunctionBody_::Defined(seq),
+            ))
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -3126,30 +3177,21 @@ fn parse_module(
     while context.tokens.peek() != Tok::RBrace {
         let curr_token_loc = context.tokens.current_token_loc();
         match parse_module_member(context) {
-            Ok(m) => members.push(m),
-            Err(ErrCase::ContinueToModule(attrs)) => {
-                // while trying to parse module members, we moved past the current module and
-                // encountered a new one - keep parsing it at a higher level, keeping the
-                // already parsed attributes
-                next_mod_attributes = Some(attrs);
-                stop_parsing = true;
-                break;
-            }
-            Err(ErrCase::Unknown(diag)) => {
-                context.env.add_diag(*diag);
-                let next_tok =
-                    skip_to_next_desired_tok_or_eof(context, is_start_of_member_or_module);
-                if next_tok == Tok::EOF || next_tok == Tok::Module {
-                    // either end of file or next module to potentially be parsed
-                    stop_parsing = true;
+            Err(err) => {
+                (stop_parsing, next_mod_attributes) =
+                    handle_parse_member_error(context, err, curr_token_loc);
+                if stop_parsing {
                     break;
                 }
-                if curr_token_loc == context.tokens.current_token_loc() {
-                    // token wasn't advanced by either `parse_module_member` nor by
-                    // `skip_to_next_member_or_module_or_eof` - no further parsing is possible (in
-                    // particular, without this check, compiler tests get stuck)
-                    stop_parsing = true;
-                    break;
+            }
+            Ok((m, err_opt)) => {
+                members.push(m);
+                if let Some(err) = err_opt {
+                    (stop_parsing, next_mod_attributes) =
+                        handle_parse_member_error(context, err, curr_token_loc);
+                    if stop_parsing {
+                        break;
+                    }
                 }
             }
         }
@@ -3172,6 +3214,38 @@ fn parse_module(
     };
 
     Ok((def, next_mod_attributes))
+}
+
+fn handle_parse_member_error(
+    context: &mut Context,
+    err: ErrCase,
+    curr_token_loc: Loc,
+) -> (bool, Option<Vec<Attributes>>) {
+    let mut stop_parsing = false;
+    let mut next_mod_attributes = None;
+    match err {
+        ErrCase::ContinueToModule(attrs) => {
+            // while trying to parse module members, we moved past the current module and
+            // encountered a new one - keep parsing it at a higher level, keeping the
+            // already parsed attributes
+            stop_parsing = true;
+            next_mod_attributes = Some(attrs);
+        }
+        ErrCase::Unknown(diag) => {
+            context.env.add_diag(*diag);
+            let next_tok = skip_to_next_desired_tok_or_eof(context, is_start_of_member_or_module);
+            if next_tok == Tok::EOF || next_tok == Tok::Module {
+                // either end of file or next module to potentially be parsed
+                stop_parsing = true;
+            } else if curr_token_loc == context.tokens.current_token_loc() {
+                // token wasn't advanced by either `parse_module_member` nor by
+                // `skip_to_next_member_or_module_or_eof` - no further parsing is possible (in
+                // particular, without this check, compiler tests get stuck)
+                stop_parsing = true;
+            }
+        }
+    }
+    (stop_parsing, next_mod_attributes)
 }
 
 /// Skips tokens until reaching the desired one or EOF. Returns true if further parsing is
@@ -3221,7 +3295,7 @@ fn is_start_of_module_or_spec(tok: Tok, _: &str) -> bool {
 /// encounter the next module which also should be parsed. While this is a member parsing error,
 /// (optional) attributes for this presumed member (but in fact the next module) had already been
 /// parsed and should be returned as part of the result to allow further parsing of the next module.
-fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
+fn parse_module_member(context: &mut Context) -> Result<(ModuleMember, Option<ErrCase>), ErrCase> {
     let attributes = parse_attributes(context)?;
     match context.tokens.peek() {
         // Top-level specification constructs
@@ -3229,13 +3303,14 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
             context.tokens.match_doc_comments();
             let spec_string = consume_spec_string(context)?;
             consume_token(context.tokens, Tok::Semicolon)?;
-            Ok(ModuleMember::Spec(spec_string))
+            Ok((ModuleMember::Spec(spec_string), None))
         }
         Tok::Spec => {
             match context.tokens.lookahead() {
                 Ok(Tok::Fun) | Ok(Tok::Native) => {
                     context.tokens.match_doc_comments();
                     context.tokens.advance()?;
+
                     // Add an extra check for better error message
                     // if old syntax is used
                     if context.tokens.lookahead2() == Ok((Tok::Identifier, Tok::LBrace)) {
@@ -3245,37 +3320,52 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                         )));
                     }
                     let spec_string = consume_spec_string(context)?;
-                    Ok(ModuleMember::Spec(spec_string))
+                    Ok((ModuleMember::Spec(spec_string), None))
                 }
                 _ => {
                     // Regular spec block
                     let spec_string = consume_spec_string(context)?;
-                    Ok(ModuleMember::Spec(spec_string))
+                    Ok((ModuleMember::Spec(spec_string), None))
                 }
             }
         }
         // Regular move constructs
-        Tok::Friend => Ok(ModuleMember::Friend(parse_friend_decl(
-            attributes, context,
-        )?)),
+        Tok::Friend => Ok((
+            ModuleMember::Friend(parse_friend_decl(attributes, context)?),
+            None,
+        )),
         _ => {
             context.tokens.match_doc_comments();
             let start_loc = context.tokens.start_loc();
             let modifiers = parse_module_member_modifiers(context)?;
             let tok = context.tokens.peek();
             match tok {
-                Tok::Const => Ok(ModuleMember::Constant(parse_constant_decl(
-                    attributes, start_loc, modifiers, context,
-                )?)),
-                Tok::Fun => Ok(ModuleMember::Function(parse_function_decl(
-                    attributes, start_loc, modifiers, context,
-                )?)),
-                Tok::Struct => Ok(ModuleMember::Struct(parse_struct_decl(
-                    attributes, start_loc, modifiers, context,
-                )?)),
-                Tok::Use => Ok(ModuleMember::Use(parse_use_decl(
-                    attributes, start_loc, modifiers, context,
-                )?)),
+                Tok::Const => Ok((
+                    ModuleMember::Constant(parse_constant_decl(
+                        attributes, start_loc, modifiers, context,
+                    )?),
+                    None,
+                )),
+                Tok::Fun => Ok(
+                    parse_function_decl(attributes, start_loc, modifiers, context)
+                        .map(|(fun, diag_opt)| {
+                            (
+                                ModuleMember::Function(fun),
+                                diag_opt.map(|d| ErrCase::Unknown(d)),
+                            )
+                        })
+                        .map_err(|d| ErrCase::Unknown(d))?,
+                ),
+                Tok::Struct => Ok((
+                    ModuleMember::Struct(parse_struct_decl(
+                        attributes, start_loc, modifiers, context,
+                    )?),
+                    None,
+                )),
+                Tok::Use => Ok((
+                    ModuleMember::Use(parse_use_decl(attributes, start_loc, modifiers, context)?),
+                    None,
+                )),
                 _ => {
                     let diag = unexpected_token_error(
                         context.tokens,

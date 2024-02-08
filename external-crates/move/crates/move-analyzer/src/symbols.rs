@@ -115,11 +115,17 @@ pub const DEFS_AND_REFS_SUPPORT: bool = true;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Copy)]
 /// Location of a definition's identifier
-struct DefLoc {
+pub struct DefLoc {
     /// File where the definition of the identifier starts
     fhash: FileHash,
     /// Location where the definition of the identifier starts
     start: Position,
+}
+
+impl DefLoc {
+    pub fn fhash(&self) -> FileHash {
+        self.fhash
+    }
 }
 
 /// Location of a use's identifier
@@ -220,14 +226,14 @@ pub struct UseDef {
 
 /// Definition of a struct field
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct FieldDef {
+pub struct FieldDef {
     name: Symbol,
     start: Position,
 }
 
 /// Definition of a struct
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct StructDef {
+pub struct StructDef {
     name_start: Position,
     field_defs: Vec<FieldDef>,
 }
@@ -362,6 +368,10 @@ pub struct SymbolicatorRunner {
 impl ModuleDefs {
     pub fn functions(&self) -> &BTreeMap<Symbol, FunctionDef> {
         &self.functions
+    }
+
+    pub fn structs(&self) -> &BTreeMap<Symbol, StructDef> {
+        &self.structs
     }
 }
 
@@ -896,6 +906,10 @@ impl UseDef {
     pub fn col_end(&self) -> u32 {
         self.col_end
     }
+
+    pub fn def_loc(&self) -> DefLoc {
+        self.def_loc
+    }
 }
 
 impl Ord for UseDef {
@@ -960,6 +974,20 @@ impl Symbols {
             return BTreeSet::new();
         };
         file_symbols.get(use_line).unwrap_or_else(BTreeSet::new)
+    }
+
+    pub fn def_info(&self, def_loc: &DefLoc) -> Option<&DefInfo> {
+        self.def_info.get(def_loc)
+    }
+
+    pub fn mod_defs(&self, fhash: &FileHash, mod_ident: ModuleIdent_) -> Option<&ModuleDefs> {
+        let Some(fpath) = self.file_name_mapping.get(&fhash) else {
+            return None;
+        };
+        let Some(mod_defs) = self.file_mods.get(fpath) else {
+            return None;
+        };
+        mod_defs.iter().find(|d| d.ident == mod_ident)
     }
 }
 

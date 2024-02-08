@@ -4,3 +4,11 @@ error[E01002]: unexpected token
 2 │     macro fun foo($0: u64) {
   │                   ^ Expected an identifier following '$', e.g. '$x'
 
+error[E02007]: invalid 'fun' declaration
+  ┌─ tests/move_2024/parser/macro_identifier_invalid.move:2:20
+  │
+2 │     macro fun foo($0: u64) {
+  │     -----          ^ Invalid function declaration. 'native' functions cannot be 'macro'
+  │     │               
+  │     Function declared as 'macro' here
+
