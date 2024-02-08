@@ -165,7 +165,9 @@ where
             Err(e) => {
                 match e {
                     // Only cache non-transient errors
-                    BridgeError::BridgeEventInUnrecognizedSuiPackage
+                    BridgeError::GovernanceActionIsNotApproved { .. }
+                    | BridgeError::ActionIsNotGovernanceAction(..)
+                    | BridgeError::BridgeEventInUnrecognizedSuiPackage
                     | BridgeError::BridgeEventInUnrecognizedEthContract
                     | BridgeError::BridgeEventNotActionable
                     | BridgeError::NoBridgeEventsInTxPosition => {
@@ -326,7 +328,10 @@ mod tests {
         test_utils::{
             get_test_log_and_action, get_test_sui_to_eth_bridge_action, mock_last_finalized_block,
         },
-        types::{BridgeActionType, BridgeChainId, TokenId},
+        types::{
+            BridgeActionType, BridgeChainId, EmergencyAction, EmergencyActionType,
+            LimitUpdateAction, TokenId,
+        },
     };
     use ethers::types::{Address as EthAddress, TransactionReceipt};
     use sui_json_rpc_types::SuiEvent;
@@ -529,4 +534,81 @@ mod tests {
             .await;
         entry_.unwrap().lock().await.clone().unwrap().unwrap();
     }
+
+    #[tokio::test]
+    async fn test_signer_with_governace_verifier() {
+        let action_1 = BridgeAction::EmergencyAction(EmergencyAction {
+            chain_id: BridgeChainId::EthLocalTest,
+            nonce: 1,
+            action_type: EmergencyActionType::Pause,
+        });
+        let action_2 = BridgeAction::LimitUpdateAction(LimitUpdateAction {
+            chain_id: BridgeChainId::EthLocalTest,
+            sending_chain_id: BridgeChainId::SuiLocalTest,
+            nonce: 1,
+            new_usd_limit: 10000,
+        });
+
+        let verifier = GovernanceVerifier::new(vec![action_1.clone(), action_2.clone()]).unwrap();
+        assert_eq!(
+            verifier.verify(action_1.clone()).await.unwrap(),
+            action_1.clone()
+        );
+        assert_eq!(
+            verifier.verify(action_2.clone()).await.unwrap(),
+            action_2.clone()
+        );
+
+        let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
+        let signer = Arc::new(kp);
+        let mut signer_with_cache = SignerWithCache::new(signer.clone(), verifier);
+
+        // action_1 is signable
+        signer_with_cache.sign(action_1.clone()).await.unwrap();
+        // signed action is cached
+        let entry_ = signer_with_cache.get_testing_only(action_1.clone()).await;
+        assert_eq!(
+            entry_
+                .unwrap()
+                .lock()
+                .await
+                .clone()
+                .unwrap()
+                .unwrap()
+                .data(),
+            &action_1
+        );
+
+        // alter action_1 to action_3
+        let action_3 = BridgeAction::EmergencyAction(EmergencyAction {
+            chain_id: BridgeChainId::EthLocalTest,
+            nonce: 1,
+            action_type: EmergencyActionType::Unpause,
+        });
+        // action_3 is not signable
+        assert!(matches!(
+            signer_with_cache.sign(action_3.clone()).await.unwrap_err(),
+            BridgeError::GovernanceActionIsNotApproved { .. }
+        ));
+        // error is cached
+        let entry_ = signer_with_cache.get_testing_only(action_3.clone()).await;
+        assert!(matches!(
+            entry_.unwrap().lock().await.clone().unwrap().unwrap_err(),
+            BridgeError::GovernanceActionIsNotApproved { .. }
+        ));
+
+        // Non governace action is not signable
+        let action_4 = get_test_sui_to_eth_bridge_action(None, None, None, None);
+        assert!(matches!(
+            signer_with_cache.sign(action_4.clone()).await.unwrap_err(),
+            BridgeError::ActionIsNotGovernanceAction(..)
+        ));
+        // error is cached
+        let entry_ = signer_with_cache.get_testing_only(action_4.clone()).await;
+        assert!(matches!(
+            entry_.unwrap().lock().await.clone().unwrap().unwrap_err(),
+            BridgeError::ActionIsNotGovernanceAction { .. }
+        ));
+    }
+    // TODO: add tests for BridgeRequestHandler (need to hook up local eth node)
 }
