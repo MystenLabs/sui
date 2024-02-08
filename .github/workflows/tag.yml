@@ -29,12 +29,11 @@ env:
   SUI_COMMIT: "${{ github.event.client_payload.sui_commit || inputs.sui_commit }}"
   TAG_NAME: "${{ github.event.client_payload.tag_name || inputs.tag_name }}"
 
-permissions: write-all
-
 jobs:
   tag:
     name: Tag
-    runs-on: ubuntu-ghcloud
+    runs-on: ubuntu-latest
+    permissions: write-all
 
     steps:
     - name: Checkout
@@ -52,7 +51,7 @@ jobs:
     - name: Tag
       uses: ydataai/create-tag@v1
       with:
-        github_token: "${{ secrets.GITHUB_TOKEN }}"
+        github_token: ${{ secrets.GITHUB_TOKEN }}
         tag: ${{ env.TAG_NAME }}
         sha: ${{ env.SUI_COMMIT }}
         message: "Test Tag"
