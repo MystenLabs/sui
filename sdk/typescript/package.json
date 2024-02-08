@@ -3,7 +3,7 @@
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui TypeScript API(Work in Progress)",
 	"homepage": "https://sdk.mystenlabs.com",
-	"version": "0.49.1",
+	"version": "0.50.0",
 	"license": "Apache-2.0",
 	"sideEffects": false,
 	"files": [
