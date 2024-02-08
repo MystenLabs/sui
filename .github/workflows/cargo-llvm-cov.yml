@@ -62,7 +62,9 @@ jobs:
           files: lcov.info
 
       - name: Run code coverage for simtest
-        run: ./scripts/simtest/codecov.sh
+        run: |
+          git clean -fd
+          ./scripts/simtest/codecov.sh
 
       - name: Upload report to Codecov for simtest
         uses: codecov/codecov-action@v3
