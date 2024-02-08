@@ -12,6 +12,8 @@ module nfts::random_nft_airdrop {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
+    const EInvalidParams: u64 = 0;
+
     const GOLD: u8 = 1;
     const SILVER: u8 = 2;
     const BRONZE: u8 = 3;
@@ -46,6 +48,11 @@ module nfts::random_nft_airdrop {
         result
     }
 
+
+    /// Reveal the metal of the airdrop NFT and convert it to a metal NFT.
+    /// This function uses arithmetic_is_less_than to determine the metal of the NFT in a way that consumes the same
+    /// amount of gas regardless of the value of the random number.
+    /// See alternative_reveal for a different implementation.
     entry fun reveal(nft: AirDropNFT, r: &Random, ctx: &mut TxContext) {
         destroy_airdrop_nft(nft);
 
@@ -63,12 +70,46 @@ module nfts::random_nft_airdrop {
         }, tx_context::sender(ctx));
     }
 
-    // safe "is v < w? where v <= v_max" using integer arithmetic
+    // Implements "is v < w? where v <= v_max" using integer arithmetic. Returns 1 if true, 0 otherwise.
+    // Safe in case w and v_max are independent of the randomenss (e.g., fixed).
+    // Does not check if v <= v_max.
     fun arithmetic_is_less_than(v: u8, w: u8, v_max: u8): u8 {
-        assert!(v_max >= w && w > 0, 0);
+        assert!(v_max >= w && w > 0, EInvalidParams);
         let v_max_over_w = v_max / w;
         let v_over_w = v / w; // 0 if v < w, [1, v_max_over_w] if above
         (v_max_over_w - v_over_w) / v_max_over_w
+    }
+
+    /// An alternative implementation of reveal that uses if-else statements to determine the metal of the NFT.
+    /// Here the "happier flows" consume more gas than the less happy ones.
+    entry fun alternative_reveal(nft: AirDropNFT, r: &Random, ctx: &mut TxContext) {
+        destroy_airdrop_nft(nft);
+
+        let generator = new_generator(r, ctx);
+        let v = random::generate_u8_in_range(&mut generator, 1, 100);
+
+        if (v <= 60) {
+            transfer::public_transfer(MetalNFT {
+                id: object::new(ctx),
+                metal: BRONZE,
+            }, tx_context::sender(ctx));
+            return
+        };
+
+        if (v <= 90) {
+            transfer::public_transfer(MetalNFT {
+                id: object::new(ctx),
+                metal: SILVER,
+            }, tx_context::sender(ctx));
+            return
+        };
+
+        if (v <= 100) {
+            transfer::public_transfer(MetalNFT {
+                id: object::new(ctx),
+                metal: GOLD,
+            }, tx_context::sender(ctx));
+        };
     }
 
     fun destroy_airdrop_nft(nft: AirDropNFT) {
@@ -139,7 +180,11 @@ module nfts::random_nft_airdrop_tests {
         let seen_bronze = false;
         let i = 0;
         while (i < 20) {
-            random_nft_airdrop::reveal(vector::pop_back(&mut nfts), &random_state, ctx(scenario));
+            if (i % 2 == 1) {
+                random_nft_airdrop::reveal(vector::pop_back(&mut nfts), &random_state, ctx(scenario));
+            } else {
+                random_nft_airdrop::alternative_reveal(vector::pop_back(&mut nfts), &random_state, ctx(scenario));
+            };
             next_tx(scenario, user1);
             let nft = take_from_sender<MetalNFT>(scenario);
             let metal = random_nft_airdrop::metal_string(&nft);
