@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod checkpoint_handler;
-pub mod checkpoint_handler_v2;
-pub mod committer;
-pub mod tx_processor;
-
 use std::collections::BTreeMap;
 
 use crate::{
@@ -15,6 +10,10 @@ use crate::{
         IndexedPackage, IndexedTransaction, TxIndex,
     },
 };
+
+pub mod checkpoint_handler_v2;
+pub mod committer;
+pub mod tx_processor;
 
 #[derive(Debug)]
 pub struct CheckpointDataToCommit {

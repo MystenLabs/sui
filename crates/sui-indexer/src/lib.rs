@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #![recursion_limit = "256"]
 
-use std::env;
 use std::net::SocketAddr;
 use std::{collections::HashMap, time::Duration};
 
@@ -15,25 +14,13 @@ use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuild
 use metrics::IndexerMetrics;
 use prometheus::{Registry, TextEncoder};
 use regex::Regex;
-use tokio::runtime::Handle;
 use tracing::{info, warn};
 use url::Url;
 
-use apis::{
-    CoinReadApi, ExtendedApi, GovernanceReadApi, IndexerApi, ReadApi, TransactionBuilderApi,
-    WriteApi,
-};
 use errors::IndexerError;
-use mysten_metrics::{spawn_monitored_task, RegistryService};
-use processors::processor_orchestrator::ProcessorOrchestrator;
-use store::IndexerStore;
-use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, ServerType};
+use mysten_metrics::RegistryService;
 use sui_json_rpc_api::CLIENT_SDK_TYPE_HEADER;
 use sui_sdk::{SuiClient, SuiClientBuilder};
-
-use crate::apis::MoveUtilsApi;
-use crate::framework::IndexerBuilder;
-use crate::handlers::checkpoint_handler::new_handlers;
 
 pub mod apis;
 pub mod errors;
@@ -42,11 +29,8 @@ mod handlers;
 pub mod indexer_reader;
 pub mod indexer_v2;
 pub mod metrics;
-pub mod models;
 pub mod models_v2;
-pub mod processors;
 pub mod processors_v2;
-pub mod schema;
 pub mod schema_v2;
 pub mod store;
 pub mod test_utils;
@@ -179,59 +163,6 @@ impl Default for IndexerConfig {
     }
 }
 
-pub struct Indexer;
-
-impl Indexer {
-    pub async fn start<S: IndexerStore + Sync + Send + Clone + 'static>(
-        config: &IndexerConfig,
-        registry: &Registry,
-        store: S,
-        metrics: IndexerMetrics,
-        custom_runtime: Option<Handle>,
-    ) -> Result<(), IndexerError> {
-        info!(
-            "Sui indexer of version {:?} started...",
-            env!("CARGO_PKG_VERSION")
-        );
-
-        if config.rpc_server_worker {
-            info!("Starting indexer with only RPC server");
-            let handle = build_json_rpc_server(registry, store.clone(), config, custom_runtime)
-                .await
-                .expect("Json rpc server should not run into errors upon start.");
-            handle.stopped().await;
-        } else if config.fullnode_sync_worker {
-            info!("Starting indexer with only fullnode sync");
-            let mut processor_orchestrator =
-                ProcessorOrchestrator::new(store.clone(), metrics.clone());
-            spawn_monitored_task!(processor_orchestrator.run_forever());
-
-            // -1 will be returned when checkpoints table is empty.
-            let last_seq_from_db = store
-                .get_latest_tx_checkpoint_sequence_number()
-                .await
-                .expect("Failed to get latest tx checkpoint sequence number from DB");
-            let last_downloaded_checkpoint = if last_seq_from_db < 0 {
-                None
-            } else {
-                Some(last_seq_from_db as u64)
-            };
-
-            let (checkpoint_handler, object_handler) = new_handlers(store, metrics.clone(), config);
-
-            IndexerBuilder::new(metrics)
-                .last_downloaded_checkpoint(last_downloaded_checkpoint)
-                .rest_url(&config.rpc_client_url)
-                .handler(checkpoint_handler)
-                .handler(object_handler)
-                .run()
-                .await;
-        }
-
-        Ok(())
-    }
-}
-
 // TODO(gegaowp): this is only used in validation now, will remove in a separate PR
 // together with the validation codes.
 pub async fn new_rpc_client(http_url: &str) -> Result<SuiClient, IndexerError> {
@@ -266,11 +197,7 @@ fn get_http_client(rpc_client_url: &str) -> Result<HttpClient, IndexerError> {
         })
 }
 
-pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
-    new_pg_connection_pool_impl(db_url, None)
-}
-
-pub fn new_pg_connection_pool_impl(
+pub fn new_pg_connection_pool(
     db_url: &str,
     pool_size: Option<u32>,
 ) -> Result<PgConnectionPool, IndexerError> {
@@ -380,41 +307,6 @@ pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnectio
             e
         ))
     })
-}
-
-pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clone>(
-    prometheus_registry: &Registry,
-    state: S,
-    config: &IndexerConfig,
-    custom_runtime: Option<Handle>,
-) -> Result<ServerHandle, IndexerError> {
-    let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
-    let http_client = get_http_client(config.rpc_client_url.as_str())?;
-
-    builder.register_module(ReadApi::new(
-        state.clone(),
-        http_client.clone(),
-        config.migrated_methods.clone(),
-    ))?;
-    builder.register_module(CoinReadApi::new(http_client.clone()))?;
-    builder.register_module(TransactionBuilderApi::new(http_client.clone()))?;
-    builder.register_module(GovernanceReadApi::new(http_client.clone()))?;
-    builder.register_module(IndexerApi::new(
-        state.clone(),
-        http_client.clone(),
-        config.migrated_methods.clone(),
-    ))?;
-    builder.register_module(WriteApi::new(http_client.clone()))?;
-    builder.register_module(ExtendedApi::new(state.clone()))?;
-    builder.register_module(MoveUtilsApi::new(http_client))?;
-    let default_socket_addr = SocketAddr::new(
-        // unwrap() here is safe b/c the address is a static config.
-        config.rpc_server_url.as_str().parse().unwrap(),
-        config.rpc_server_port,
-    );
-    Ok(builder
-        .start(default_socket_addr, custom_runtime, Some(ServerType::Http))
-        .await?)
 }
 
 fn convert_url(url_str: &str) -> Option<String> {

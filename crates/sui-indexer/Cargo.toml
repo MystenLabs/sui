@@ -6,7 +6,6 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
-
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
@@ -70,7 +69,3 @@ simulacrum.workspace = true
 [[bin]]
 name = "sui-indexer"
 path = "src/main.rs"
-
-[[bench]]
-name = "indexer_benchmark"
-harness = false
