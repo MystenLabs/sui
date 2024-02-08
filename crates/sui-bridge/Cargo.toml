@@ -57,5 +57,5 @@ test-cluster.workspace = true
 hex-literal = "0.3.4"
 
 [[bin]]
-name = "sui-bridge-validator-cli"
-path = "src/tools/validator_cli.rs"
+name = "sui-bridge-cli"
+path = "src/tools/cli.rs"
