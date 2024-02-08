@@ -21,8 +21,8 @@ use std::fmt::Formatter;
 use std::path::Path;
 use std::path::PathBuf;
 use sui_sdk::SuiClient;
-use sui_types::transaction::ProgrammableTransaction;
 use sui_types::base_types::ObjectID;
+use sui_types::transaction::ProgrammableTransaction;
 
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::AccountKeystore;
@@ -37,8 +37,8 @@ use tabled::{
     settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
 };
 
-use super::ptb_parser::errors::PTBError;
-use super::ptb_parser::parser::ParsedPTBCommand;
+use super::ptb_builder::errors::PTBError;
+use super::ptb_builder::parse_ptb::ParsedPTBCommand;
 
 /// The ProgrammableTransactionBlock structure used in the CLI ptb command
 #[derive(Parser, Debug, Default)]
