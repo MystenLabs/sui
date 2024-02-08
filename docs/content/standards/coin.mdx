@@ -183,8 +183,6 @@ txb.moveCall({
 
 <TabItem label="Rust" value="rust">
 
-</TabItem>
-
 ```rust
 let mut ptb = ProgrammableTransactionBuilder::new();
 
@@ -212,6 +210,8 @@ let builder = ptb.finish();
 - `deny_cap` is the `ObjectRef` (`(ObjectID, SequenceNumber, ObjectDigest)`) of the `DenyCap<REGULATED_COIN>` the publisher has received.
 - `otw_type` is the `TypeTag` created from `<PACKAGE_ID>::regulated_coin::REGULATED_COIN` type.
 - `cmd.address()` returns the address to ban as a `SuiAddress`.
+
+</TabItem>
 
 </Tabs>
 
