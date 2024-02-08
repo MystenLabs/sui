@@ -1604,10 +1604,10 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
 
 fn binop(
     context: &mut Context,
-    el: Box<T::Exp>,
+    mut el: Box<T::Exp>,
     bop: BinOp,
     loc: Loc,
-    er: Box<T::Exp>,
+    mut er: Box<T::Exp>,
 ) -> Box<T::Exp> {
     use BinOp_::*;
     use T::UnannotatedExp_ as TE;
@@ -1643,22 +1643,73 @@ fn binop(
         }
 
         Eq | Neq => {
-            let ability_msg = Some(format!(
-                "'{}' requires the '{}' ability as the value is consumed. Try \
-                         borrowing the values with '&' first.'",
-                &bop,
-                Ability_::Drop,
-            ));
-            context.add_ability_constraint(
-                el.exp.loc,
-                ability_msg.clone(),
-                el.ty.clone(),
-                Ability_::Drop,
-            );
-            context.add_ability_constraint(er.exp.loc, ability_msg, er.ty.clone(), Ability_::Drop);
-            let ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+            let lhs_type = ready_tvars(&context.subst, el.ty.clone());
+            let rhs_type = ready_tvars(&context.subst, er.ty.clone());
+            let (lhs_ref, lhs_inner, rhs_ref, rhs_inner) = match (lhs_type, rhs_type) {
+                (sp!(_, Type_::Ref(lhs_mut, lhs)), sp!(_, Type_::Ref(rhs_mut, rhs))) => {
+                    (Some(lhs_mut), *lhs, Some(rhs_mut), *rhs)
+                }
+                (sp!(_, Type_::Ref(lhs_mut, lhs)), rhs) => (Some(lhs_mut), *lhs, None, rhs),
+                (lhs, sp!(_, Type_::Ref(rhs_mut, rhs))) => (None, lhs, Some(rhs_mut), *rhs),
+                (lhs, rhs) => (None, lhs, None, rhs),
+            };
+            let ty = join(context, bop.loc, msg, lhs_inner.clone(), rhs_inner.clone());
             context.add_single_type_constraint(loc, msg(), ty.clone());
-            (Type_::bool(loc), ty)
+            let eq_ty = match (lhs_ref, rhs_ref) {
+                (None, None) => {
+                    let ability_msg = Some(format!(
+                        "'{}' requires the '{}' ability as the value is consumed. Try \
+                                 borrowing the values with '&' first.'",
+                        &bop,
+                        Ability_::Drop,
+                    ));
+                    context.add_ability_constraint(
+                        el.exp.loc,
+                        ability_msg.clone(),
+                        lhs_inner,
+                        Ability_::Drop,
+                    );
+                    context.add_ability_constraint(
+                        er.exp.loc,
+                        ability_msg,
+                        rhs_inner,
+                        Ability_::Drop,
+                    );
+                    ty
+                }
+                (None, Some(rhs_mut)) => {
+                    // If the RHS is mutable, we reborrow it as immutable so avoid requiring the
+                    // LHS to be mutable.
+                    if rhs_mut {
+                        er = exp_to_ref(context, loc, false, er);
+                    }
+                    el = exp_to_ref(context, loc, false, el);
+                    sp(bop.loc, Type_::Ref(false, Box::new(ty)))
+                }
+                (Some(lhs_mut), None) => {
+                    // If the LHS is mutable, we reborrow it as immutable so avoid requiring the
+                    // RHS to be mutable.
+                    if lhs_mut {
+                        el = exp_to_ref(context, loc, false, el);
+                    }
+                    er = exp_to_ref(context, loc, false, er);
+                    sp(bop.loc, Type_::Ref(false, Box::new(ty)))
+                }
+                (Some(lhs_mut), Some(rhs_mut)) => {
+                    if lhs_mut == rhs_mut {
+                        sp(bop.loc, Type_::Ref(lhs_mut, Box::new(ty)))
+                    } else {
+                        if lhs_mut {
+                            el = exp_to_ref(context, loc, false, el)
+                        };
+                        if rhs_mut {
+                            er = exp_to_ref(context, loc, false, er)
+                        };
+                        sp(bop.loc, Type_::Ref(false, Box::new(ty)))
+                    }
+                }
+            };
+            (Type_::bool(loc), eq_ty)
         }
 
         And | Or => {
@@ -1720,6 +1771,33 @@ fn loop_body(
     } else {
         // if it was a while loop, the `if` case ran, so we can simply make a type var for the loop
         (false, context.named_block_type(name, eloc), eloop)
+    }
+}
+
+fn exp_to_ref(context: &mut Context, loc: Loc, mut_: bool, e: Box<T::Exp>) -> Box<T::Exp> {
+    let ety = &e.ty;
+    let current_ty = core::unfold_type(&context.subst, ety.clone());
+    match current_ty.value {
+        Type_::Ref(false, _t) => {
+            if mut_ {
+                make_error_exp(context, loc)
+            } else {
+                e
+            }
+        }
+        Type_::Ref(true, t) => {
+            if mut_ {
+                e
+            } else {
+                let freeze_type = sp(loc, Type_::Ref(false, Box::new(*t)));
+                let freeze_exp = sp(
+                    loc,
+                    T::UnannotatedExp_::Annotate(e, Box::new(freeze_type.clone())),
+                );
+                Box::new(T::exp(freeze_type, freeze_exp))
+            }
+        }
+        _ => exp_to_borrow(context, loc, mut_, e, current_ty),
     }
 }
 
@@ -2670,7 +2748,7 @@ fn exp_to_borrow(
     loc: Loc,
     mut_: bool,
     eb: Box<T::Exp>,
-    cur_ty: Type,
+    base_type: Type,
 ) -> Box<T::Exp> {
     use Type_::*;
     use T::UnannotatedExp_ as TE;
@@ -2689,7 +2767,7 @@ fn exp_to_borrow(
             TE::TempBorrow(mut_, Box::new(T::exp(eb_ty, sp(ebloc, eb_))))
         }
     };
-    let ty = sp(loc, Ref(mut_, Box::new(cur_ty)));
+    let ty = sp(loc, Ref(mut_, Box::new(base_type)));
     Box::new(T::exp(ty, sp(loc, e_)))
 }
 
