@@ -3,8 +3,10 @@ use dashmap::DashMap;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
+use prometheus::proto;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
+use sui_adapter_latest::programmable_transactions::context;
 use sui_adapter_latest::{adapter, execution_engine};
 use sui_config::genesis::Genesis;
 use sui_core::authority::authority_store_tables::LiveObject;
@@ -424,7 +426,7 @@ impl<
         // Main loop
         loop {
             tokio::select! {
-                // biased;
+                biased;
                 Some(tx_with_results) = tasks_queue.join_next() => {
                     let tx_with_results = tx_with_results.expect("tx task failed");
                     let txid = tx_with_results.full_tx.tx.digest();
@@ -540,13 +542,18 @@ impl<
                         channel_full = true;
                     }
 
-                    let msg = NetworkMessage{
-                        src:0,
-                        dst:vec![get_designated_executor_for_tx(*txid, &full_tx,&ew_ids)],
-                        payload: SailfishMessage::LockedExec { full_tx: full_tx.clone(), objects: locked_objs.clone(), child_objects: Vec::new() }};
-                    // println!("EW {} Sending LockedExec for tx {} to EW {}", my_id, txid, execute_on_ew);
-                    if out_channel.send(msg).await.is_err() {
-                        eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, get_designated_executor_for_tx(*txid, &full_tx,&ew_ids));
+                    let executor = get_designated_executor_for_tx(*txid, &full_tx, &ew_ids);
+                    if executor == my_id {
+                        self.handle_received_locked_exec(full_tx, locked_objs.clone(), Vec::new(), &mut tasks_queue, &protocol_config, reference_gas_price, context.clone(), &ew_ids, my_id);
+                    } else {
+                        let msg = NetworkMessage{
+                            src:0,
+                            dst:vec![executor],
+                            payload: SailfishMessage::LockedExec { full_tx: full_tx.clone(), objects: locked_objs.clone(), child_objects: Vec::new() }};
+                        // println!("EW {} Sending LockedExec for tx {} to EW {}", my_id, txid, execute_on_ew);
+                        if out_channel.send(msg).await.is_err() {
+                            eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, get_designated_executor_for_tx(*txid, &full_tx,&ew_ids));
+                        }
                     }
 
                     if channel_full {
@@ -580,71 +587,10 @@ impl<
                         // if out_channel.send(msg).await.is_err() {
                         //     eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, ew);
                         // }
-                    } else if let SailfishMessage::LockedExec { full_tx , mut objects, mut child_objects } = msg {
+                    } else if let SailfishMessage::LockedExec { full_tx , objects, child_objects } = msg {
 
-                        // TODO: deal with possible duplicate LockedExec messages
-                        let tx = full_tx.clone();
-                        let txid = tx.tx.digest().clone();
-                        // println!("EW {} received LockedExec for tx {}", my_id, txid);
-                        let mut list = self.received_objs.entry(txid).or_default();
-                        list.append(&mut objects);
+                        self.handle_received_locked_exec(full_tx, objects, child_objects, &mut tasks_queue, &protocol_config, reference_gas_price, context.clone(), &ew_ids, my_id);
 
-                        let mut ctr = self.locked_exec_count.entry(txid).or_insert(0);
-                        *ctr += 1;
-
-                        let mut child_list = self.received_child_objs.entry(txid).or_default();
-                        child_list.append(&mut child_objects);
-
-                        // if *ctr == num_ews && self.ready_txs.contains_key(&txid) && (self.waiting_child_objs.get(&txid).is_none() || child_list.len() == self.waiting_child_objs.get(&txid).unwrap().len()) {
-                        if *ctr == get_ews_for_tx(&full_tx, &ew_ids).len() as u8 {
-                            // let tx = manager.get_tx(&txid).clone();
-                            // let tx = &full_tx;
-                            *ctr = 0;
-
-                            let memstore = self.memory_store.clone();
-                            let list = list.clone();
-                            let child_list = child_list.clone();
-                            // let move_vm = move_vm.clone();
-                            // let epoch_data = epoch_data.clone();
-                            let protocol_config = protocol_config.clone();
-                            // let metrics = metrics.clone();
-                            let child_inputs = self.waiting_child_objs.get(&txid)
-                            .map(|r| r.clone())
-                            .unwrap_or_default();
-                            // Push execution task to futures queue
-                            let ew_ids_copy = ew_ids.clone();
-                            let context_copy = context.clone();
-
-                            self.ready_txs.remove(&txid);
-
-                            tasks_queue.spawn(async move {
-                                if child_list.is_empty() {
-                                    for entry_opt in list.into_iter() {
-                                        assert!(entry_opt.is_some(), "tx {} aborted, missing obj", txid);
-                                        let (obj_ref, obj) = entry_opt.unwrap();
-                                        memstore.insert(obj_ref.0, (obj_ref, obj));
-                                    }
-                                } else {
-                                    // Ensure None values from child_inputs are deleted from mem_store!
-                                    let mut children_to_delete = child_inputs.clone();
-                                    for entry_opt in child_list.into_iter() {
-                                        if entry_opt.is_none() {
-                                            continue;
-                                        }
-                                        let (obj_ref, obj) = entry_opt.unwrap();
-                                        children_to_delete.remove(&obj_ref.0);
-                                        memstore.insert(obj_ref.0, (obj_ref, obj));
-                                    }
-                                    for obj_id in children_to_delete {
-                                        if memstore.get_object(&obj_id).unwrap().is_some() {
-                                            memstore.remove(obj_id);
-                                        }
-                                    }
-                                }
-
-                                Self::async_exec2(tx, memstore, &protocol_config, reference_gas_price, &context_copy, my_id, &ew_ids_copy)
-                            });
-                        }
                     } else if let SailfishMessage::TxResults { txid, deleted, written } = msg {
                         // println!("EW {} received TxResults for tx {}", my_id, txid);
                         if let Some(_) = self.ready_txs.remove(&txid) {
@@ -833,6 +779,93 @@ impl<
             deleted: BTreeMap::from_iter(inner_temp_store.deleted),
             written: BTreeMap::from_iter(inner_temp_store.written),
             missing_objs: HashSet::new(),
+        }
+    }
+
+    fn handle_received_locked_exec(
+        &self,
+        full_tx: TransactionWithEffects,
+        mut objects: Vec<Option<(ObjectRef, Object)>>,
+        mut child_objects: Vec<Option<(ObjectRef, Object)>>,
+        tasks_queue: &mut JoinSet<TransactionWithResults>,
+        protocol_config: &ProtocolConfig,
+        reference_gas_price: u64,
+        context: Arc<BenchmarkContext>,
+        ew_ids: &Vec<UniqueId>,
+        my_id: UniqueId,
+    ) {
+        // TODO: deal with possible duplicate LockedExec messages
+        let tx = full_tx.clone();
+        let txid = tx.tx.digest().clone();
+        // println!("EW {} received LockedExec for tx {}", my_id, txid);
+        let mut list = self.received_objs.entry(txid).or_default();
+        list.append(&mut objects);
+
+        let mut ctr = self.locked_exec_count.entry(txid).or_insert(0);
+        *ctr += 1;
+
+        let mut child_list = self.received_child_objs.entry(txid).or_default();
+        child_list.append(&mut child_objects);
+
+        // if *ctr == num_ews && self.ready_txs.contains_key(&txid) && (self.waiting_child_objs.get(&txid).is_none() || child_list.len() == self.waiting_child_objs.get(&txid).unwrap().len()) {
+        if *ctr == get_ews_for_tx(&full_tx, &ew_ids).len() as u8 {
+            // let tx = manager.get_tx(&txid).clone();
+            // let tx = &full_tx;
+            *ctr = 0;
+
+            let memstore = self.memory_store.clone();
+            let list = list.clone();
+            let child_list = child_list.clone();
+            // let move_vm = move_vm.clone();
+            // let epoch_data = epoch_data.clone();
+            let protocol_config = protocol_config.clone();
+            // let metrics = metrics.clone();
+            let child_inputs = self
+                .waiting_child_objs
+                .get(&txid)
+                .map(|r| r.clone())
+                .unwrap_or_default();
+            // Push execution task to futures queue
+            let ew_ids_copy = ew_ids.clone();
+            let context_copy = context.clone();
+
+            self.ready_txs.remove(&txid);
+
+            tasks_queue.spawn(async move {
+                if child_list.is_empty() {
+                    for entry_opt in list.into_iter() {
+                        assert!(entry_opt.is_some(), "tx {} aborted, missing obj", txid);
+                        let (obj_ref, obj) = entry_opt.unwrap();
+                        memstore.insert(obj_ref.0, (obj_ref, obj));
+                    }
+                } else {
+                    // Ensure None values from child_inputs are deleted from mem_store!
+                    let mut children_to_delete = child_inputs.clone();
+                    for entry_opt in child_list.into_iter() {
+                        if entry_opt.is_none() {
+                            continue;
+                        }
+                        let (obj_ref, obj) = entry_opt.unwrap();
+                        children_to_delete.remove(&obj_ref.0);
+                        memstore.insert(obj_ref.0, (obj_ref, obj));
+                    }
+                    for obj_id in children_to_delete {
+                        if memstore.get_object(&obj_id).unwrap().is_some() {
+                            memstore.remove(obj_id);
+                        }
+                    }
+                }
+
+                Self::async_exec2(
+                    tx,
+                    memstore,
+                    &protocol_config,
+                    reference_gas_price,
+                    &context_copy,
+                    my_id,
+                    &ew_ids_copy,
+                )
+            });
         }
     }
 }
