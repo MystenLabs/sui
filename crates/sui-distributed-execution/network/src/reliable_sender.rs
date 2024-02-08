@@ -59,24 +59,15 @@ impl ReliableSender {
     /// Reliably send a message to a specific address.
     pub async fn send(&mut self, address: SocketAddr, data: Bytes) -> CancelHandler {
         let (sender, receiver) = oneshot::channel();
-        let network_sender = self
-            .connections
+        self.connections
             .entry(address)
-            .or_insert_with(|| Self::spawn_connection(address));
-        let channel_full = network_sender.capacity() == 0;
-        if channel_full {
-            println!("[reliable sender] Channel is full");
-        }
-        network_sender
+            .or_insert_with(|| Self::spawn_connection(address))
             .send(InnerMessage {
                 data,
                 cancel_handler: sender,
             })
             .await
             .expect("Failed to send internal message");
-        if channel_full {
-            println!("[reliable sender] got past full channel");
-        }
         receiver
     }
 

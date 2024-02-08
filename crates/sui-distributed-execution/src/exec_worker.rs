@@ -405,8 +405,6 @@ impl<
 
         // Start timer for TPS computation
         let mut num_tx: u64 = 0;
-        let mut before_count: u64 = 0;
-        let mut _after_count: u64 = 0;
         // let now = Instant::now();
 
         // if we execute in channel mode, there is no need to wait for epoch start
@@ -531,15 +529,9 @@ impl<
                     }
                     // println!("Sending LockedExec for tx {}, locked_objs: {:?}", txid, locked_objs);
 
-                    before_count += 1;
-                    if before_count % 10_000 == 0 {
-                        println!("[before_count] {before_count}");
-                    }
-
-                    let mut channel_full = false;
-                    if out_channel.capacity() == 0 {
-                        println!("Out channel is full @ {before_count}");
-                        channel_full = true;
+                    let channel_full = out_channel.capacity() == 0;
+                    if  channel_full {
+                        println!("Out channel is full");
                     }
 
                     let executor = get_designated_executor_for_tx(*txid, &full_tx, &ew_ids);
