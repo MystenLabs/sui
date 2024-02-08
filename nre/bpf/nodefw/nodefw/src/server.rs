@@ -67,7 +67,6 @@ pub fn app(firewall: Arc<RwLock<Firewall>>) -> Router {
             1024 * 1024 * 5,
             usize
         )))
-        // .route_layer(middleware::from_fn(expect_content_length))
         .layer(Extension(firewall))
         .layer(
             ServiceBuilder::new().layer(
@@ -105,8 +104,6 @@ async fn block_addresses(
             "unknown error encountered",
         );
     }
-    // let addrs = fw_guard.list_addresses().unwrap();
-    // dbg!(addrs);
     (StatusCode::CREATED, "created")
 }
 
@@ -126,15 +123,3 @@ async fn list_addresses(
     };
     (StatusCode::OK, Json(BlockAddresses { addresses }))
 }
-
-// middleware
-
-// we expect sui-node to send us an http header content-length encoding.
-// pub async fn expect_content_length<B>(
-//     TypedHeader(content_length): TypedHeader<ContentLength>,
-//     request: Request<B>,
-//     next: middleware::Next<B>,
-// ) -> Result<Response, (StatusCode, &'static str)> {
-//     MIDDLEWARE_HEADERS.with_label_values(&["content-length", &format!("{}", content_length.0)]);
-//     Ok(next.run(request).await)
-// }
