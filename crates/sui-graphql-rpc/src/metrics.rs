@@ -123,9 +123,9 @@ impl Metrics {
 
     /// Use this function to increment the number of errors per path and per error type.
     /// The error type is detected automatically from the passed errors.
-    pub(crate) fn inc_errors(&self, errors: Vec<ServerError>) {
+    pub(crate) fn inc_errors(&self, errors: &[ServerError]) {
         for err in errors {
-            if let Some(ext) = err.extensions {
+            if let Some(ext) = &err.extensions {
                 if let Some(async_graphql_value::ConstValue::String(val)) = ext.get("code") {
                     self.request_metrics
                         .num_errors
