@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::Worker;
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -11,6 +10,7 @@ use object_store::{ClientConfigKey, ClientOptions, ObjectStore, RetryConfig};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::time::Duration;
+use sui_data_ingestion_core::Worker;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_types::full_checkpoint_content::CheckpointData;
 use url::Url;

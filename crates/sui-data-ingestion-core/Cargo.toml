@@ -1,5 +1,5 @@
 [package]
-name = "suins-indexer"
+name = "sui-data-ingestion-core"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -7,24 +7,15 @@ edition = "2021"
 version = "0.1.0"
 
 [dependencies]
-diesel = { version = "2.1.4", features = ["postgres", "r2d2"] }
-sui-data-ingestion-core.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
-aws-config.workspace = true
-aws-sdk-dynamodb.workspace = true
-aws-sdk-s3.workspace = true
 backoff.workspace = true
-base64-url.workspace = true
-bcs.workspace = true
-bytes.workspace = true
 futures.workspace = true
 mysten-metrics.workspace = true
 notify.workspace = true
-object_store.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_yaml.workspace = true
+object_store.workspace = true
 prometheus.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
@@ -33,12 +24,8 @@ sui-storage.workspace = true
 sui-types.workspace = true
 url.workspace = true
 workspace-hack.workspace = true
-sui-json-rpc.workspace = true
-dotenvy = "0.15"
-move-core-types.workspace = true
 
 [dev-dependencies]
 rand.workspace = true
 tempfile.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
-
