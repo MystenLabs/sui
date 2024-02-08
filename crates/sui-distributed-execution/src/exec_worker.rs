@@ -403,6 +403,7 @@ impl<
 
         // Start timer for TPS computation
         let mut num_tx: u64 = 0;
+        let mut num_new_txs: u64 = 0;
         // let now = Instant::now();
 
         // if we execute in channel mode, there is no need to wait for epoch start
@@ -654,6 +655,10 @@ impl<
                         } else {
                             // manager.queue_tx(full_tx).await;
                             new_tx_sender.send(full_tx).expect("send failed");
+                            num_new_txs += 1;
+                            if num_new_txs % 1_000 == 0 {
+                                println!("[propose-exec] EW {my_id} received {num_new_txs} new txs");
+                            }
                             // epoch_txs_semaphore += 1;
                         }
                     } else {
