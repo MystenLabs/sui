@@ -60,20 +60,14 @@ jobs:
         uses: codecov/codecov-action@v3
         with:
           files: lcov.info
-          fail_ci_if_error: true
 
-      # TODO: Will enable this once we get this work
-      #
-      # - name: Run code coverage for simtest
-      #   run: |
-      #     ./scripts/simtest/install.sh
-      #     CODECOV=1 ./scripts/simtest/cargo-simtest simtest
+      - name: Run code coverage for simtest
+        run: ./scripts/simtest/codecov.sh
 
-      # - name: Upload report to Codecov for simtest
-      #   uses: codecov/codecov-action@v3
-      #   with:
-      #     files: lcov.info
-      #     fail_ci_if_error: true
+      - name: Upload report to Codecov for simtest
+        uses: codecov/codecov-action@v3
+        with:
+          files: lcov-simtest.info
 
   notify:
     name: Notify
