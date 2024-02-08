@@ -30,9 +30,9 @@ use shared_crypto::intent::Intent;
 use sui_execution::verifier::VerifierOverrides;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    DynamicFieldPage, SuiData, SuiObjectData, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    get_new_package_obj_from_response, DynamicFieldPage, SuiData, SuiObjectData, SuiObjectResponse,
+    SuiObjectResponseQuery, SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
@@ -929,13 +929,28 @@ impl SuiClientCommands {
                         gas_budget,
                     )
                     .await?;
-                serialize_or_execute!(
+                let result = serialize_or_execute!(
                     data,
                     serialize_unsigned_transaction,
                     serialize_signed_transaction,
                     context,
                     Upgrade
-                )
+                );
+
+                // Persist to lock file.
+                let chain_identifier = context
+                    .get_client()
+                    .await?
+                    .read_api()
+                    .get_chain_identifier()
+                    .await?;
+                let response = result.tx_block_response().unwrap();
+                let (oid, seq_number, _odigest) =
+                    get_new_package_obj_from_response(&response).unwrap();
+                info!("chain: {:#?}", chain_identifier);
+                info!("pkg object: {} {}", seq_number, oid);
+
+                result
             }
             SuiClientCommands::Publish {
                 package_path,
@@ -985,13 +1000,28 @@ impl SuiClientCommands {
                         gas_budget,
                     )
                     .await?;
-                serialize_or_execute!(
+                let result = serialize_or_execute!(
                     data,
                     serialize_unsigned_transaction,
                     serialize_signed_transaction,
                     context,
                     Publish
-                )
+                );
+
+                // Persist to lock file.
+                let chain_identifier = context
+                    .get_client()
+                    .await?
+                    .read_api()
+                    .get_chain_identifier()
+                    .await?;
+                let response = result.tx_block_response().unwrap();
+                let (oid, seq_number, _odigest) =
+                    get_new_package_obj_from_response(&response).unwrap();
+                info!("chain: {:#?}", chain_identifier);
+                info!("pkg object: {} {}", seq_number, oid);
+
+                result
             }
 
             SuiClientCommands::VerifyBytecodeMeter {
