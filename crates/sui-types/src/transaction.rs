@@ -12,9 +12,7 @@ use crate::crypto::{
 };
 use crate::digests::ConsensusCommitDigest;
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
-use crate::error::ExecutionError;
 use crate::execution::SharedInput;
-use crate::execution_mode::ExecutionResult;
 use crate::message_envelope::{
     AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
 };
@@ -642,11 +640,6 @@ fn add_type_tag_packages(packages: &mut BTreeSet<ObjectID>, type_argument: &Type
         }
     }
 }
-
-pub type FullPTB = (
-    ProgrammableTransaction,
-    Result<Vec<ExecutionResult>, ExecutionError>,
-);
 
 /// A series of commands where the results of one command can be used in future
 /// commands
