@@ -1941,6 +1941,9 @@ impl ProtocolConfig {
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val
     }
+    pub fn set_accept_zklogin_in_multisig_for_testing(&mut self, val: bool) {
+        self.feature_flags.accept_zklogin_in_multisig = val
+    }
     #[cfg(msim)]
     pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
         self.feature_flags.simplified_unwrap_then_delete = val;

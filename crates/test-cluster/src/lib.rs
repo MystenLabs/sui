@@ -1058,3 +1058,24 @@ impl Default for TestClusterBuilder {
         Self::new()
     }
 }
+
+pub async fn fund_address_and_return_gas(
+    context: &WalletContext,
+    rgp: u64,
+    funding_address: SuiAddress,
+) -> ObjectRef {
+    // fund the multisig address.
+    let (sender, gas) = context.get_one_gas_object().await.unwrap().unwrap();
+    let tx = context.sign_transaction(
+        &TestTransactionBuilder::new(sender, gas, rgp)
+            .transfer_sui(Some(20000000000), funding_address)
+            .build(),
+    );
+    context.execute_transaction_must_succeed(tx).await;
+
+    context
+        .get_one_gas_object_owned_by_address(funding_address)
+        .await
+        .unwrap()
+        .unwrap()
+}

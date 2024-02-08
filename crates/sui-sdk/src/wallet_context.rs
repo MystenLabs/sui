@@ -277,7 +277,15 @@ impl WalletContext {
         let gas_price = client.governance_api().get_reference_gas_price().await?;
         Ok(gas_price)
     }
-
+    pub async fn get_current_epoch(&self) -> Result<u64, anyhow::Error> {
+        let client = self.get_client().await?;
+        let epoch = client
+            .governance_api()
+            .get_latest_sui_system_state()
+            .await?
+            .epoch;
+        Ok(epoch)
+    }
     /// Sign a transaction with a key currently managed by the WalletContext
     pub fn sign_transaction(&self, data: &TransactionData) -> Transaction {
         let sig = self
