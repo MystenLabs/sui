@@ -1,5 +1,11 @@
 # @mysten/zksend
 
+## 0.2.1
+
+### Patch Changes
+
+- f069e3a13d: fix listing assets for empty links
+
 ## 0.2.0
 
 ### Minor Changes
