@@ -526,6 +526,11 @@ impl<
                     if out_channel.send(msg).await.is_err() {
                         eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, get_designated_executor_for_tx(*txid, &full_tx,&ew_ids));
                     }
+
+                    num_new_txs += 1;
+                    if num_new_txs % 1_000 == 0 {
+                        println!("[locked-exec] EW {my_id} send {num_new_txs} new locked-execs");
+                    }
                 },
 
                 Some(msg) = in_channel.recv() => {
@@ -655,10 +660,6 @@ impl<
                         } else {
                             // manager.queue_tx(full_tx).await;
                             new_tx_sender.send(full_tx).expect("send failed");
-                            num_new_txs += 1;
-                            if num_new_txs % 1_000 == 0 {
-                                println!("[propose-exec] EW {my_id} received {num_new_txs} new txs");
-                            }
                             // epoch_txs_semaphore += 1;
                         }
                     } else {
