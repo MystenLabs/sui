@@ -36,14 +36,14 @@ static BLOCKLIST: HashMap<[u8; 16usize], Rule> =
     HashMap::with_max_entries(MAX_BLOCKLIST_SIZE, 0 | BPF_F_NO_PREALLOC);
 
 /// block_ip inspects our blocklist against the incoming packet and makes a filter determination
-fn block_ip(ctx: &XdpContext, address: [u8; 16usize], dest_port: u16) -> bool {
+fn block_ip(_ctx: &XdpContext, address: [u8; 16usize], dest_port: u16) -> bool {
     unsafe {
         if let Some(rule) = BLOCKLIST.get(&address) {
             if rule.port != dest_port {
                 return false;
             }
             if rule.ttl > 0 {
-                return ttl_active(ctx, rule.ttl);
+                return ttl_active(_ctx, rule.ttl);
             }
         }
         false
@@ -98,6 +98,7 @@ fn get_dest_port(ctx: &XdpContext, af: IpProto, proto: IpProto) -> Result<u16, (
 
 /// get_duration is for debugging only - it fetches a meta data time when our
 /// program started and converts it to seconds from nanosecs
+#[allow(dead_code)]
 fn get_duration() -> u64 {
     let meta: Meta;
     let ktime: u64;
@@ -110,7 +111,7 @@ fn get_duration() -> u64 {
 
 /// ttl_active checks the ktime relative to a precomputed future ktime
 /// in our rule map. we detect expired rules via this mechanism
-fn ttl_active(ctx: &XdpContext, ttl: u64) -> bool {
+fn ttl_active(_ctx: &XdpContext, ttl: u64) -> bool {
     let ktime: u64 = unsafe { bpf_ktime_get_ns() };
     // use i64 to detect negatives, which means we expired a ttl
     let remaining: i64 = ttl as i64 - ktime as i64;
