@@ -11555,6 +11555,7 @@ dependencies = [
  "git-version",
  "im",
  "inquire",
+ "insta",
  "jemalloc-ctl",
  "json_to_table",
  "miette",

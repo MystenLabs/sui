@@ -1,0 +1,46 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭─────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                         │
+├───────────────┬───────────────────────────────────┬─────────────────────────────────────────────────┤
+│ command       │ from                              │ value(s)                                        │
+├───────────────┼───────────────────────────────────┼─────────────────────────────────────────────────┤
+│ gas_budget    │ tests/ptb_files/make_move_vec.ptb │ 1000                                            │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ <u64> [1,2,3,4]                                 │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ <0x1::a::b> [@0x1,@0x2]                         │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ <address> [@0x1,@0x2]                           │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ <vector<address>> [vector[@0x1],vector[@0x2]]   │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ <std::option::Option<u64>> [none,none]          │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ <std::option::Option<u64>> [none,none]          │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ <std::option::Option<u64>> [none,some(1)]       │
+│ make_move_vec │ tests/ptb_files/make_move_vec.ptb │ <std::option::Option<u64>> [none,some(some(1))] │
+│ preview       │ console                           │ true                                            │
+╰───────────────┴───────────────────────────────────┴─────────────────────────────────────────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/make_move_vec.ptb\""]
+cmd: gas_budget, value: ["1000u64"]
+cmd: make_move_vec, value: ["<u64>", "[1u64, 2u64, 3u64, 4u64]"]
+cmd: make_move_vec, value: ["<0x1::a::b>", "[@0x1, @0x2]"]
+cmd: make_move_vec, value: ["<address>", "[@0x1, @0x2]"]
+cmd: make_move_vec, value: ["<vector<address>>", "[vector[@0x1], vector[@0x2]]"]
+cmd: make_move_vec, value: ["<0x1::option::Option<u64>>", "[none, none]"]
+cmd: make_move_vec, value: ["<0x1::option::Option<u64>>", "[none, none]"]
+cmd: make_move_vec, value: ["<0x1::option::Option<u64>>", "[none, some(1u64)]"]
+cmd: make_move_vec, value: ["<0x1::option::Option<u64>>", "[none, some(some(1u64))]"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/make_move_vec.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILT PTB === 
+MakeMoveVec(Someu64,[Input(0),Input(1),Input(2),Input(3)])
+MakeMoveVec(Some0x1::a::b,[Input(4),Input(5)])
+MakeMoveVec(Someaddress,[Input(6),Input(7)])
+MakeMoveVec(Somevector<address>,[Input(8),Input(9)])
+MakeMoveVec(Some0x1::option::Option<u64>,[Input(10),Input(10)])
+MakeMoveVec(Some0x1::option::Option<u64>,[Input(10),Input(10)])
+MakeMoveVec(Some0x1::option::Option<u64>,[Input(10),Input(11)])
+MakeMoveVec(Some0x1::option::Option<u64>,[Input(10),Input(12)])

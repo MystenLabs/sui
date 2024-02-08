@@ -1,0 +1,49 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                  │
+├──────────────────┬──────────────────────────────────────┬────────────────────┤
+│ command          │ from                                 │ value(s)           │
+├──────────────────┼──────────────────────────────────────┼────────────────────┤
+│ gas_budget       │ tests/ptb_files/transfer_objects.ptb │ 1000               │
+│ assign           │ tests/ptb_files/transfer_objects.ptb │ A @0x1             │
+│ transfer_objects │ tests/ptb_files/transfer_objects.ptb │ A [@0x1,@0x2,@0x3] │
+│ assign           │ tests/ptb_files/transfer_objects.ptb │ A @0x1             │
+│ assign           │ tests/ptb_files/transfer_objects.ptb │ B @0x2             │
+│ assign           │ tests/ptb_files/transfer_objects.ptb │ C @0x3             │
+│ transfer_objects │ tests/ptb_files/transfer_objects.ptb │ A [A,B,C]          │
+│ assign           │ tests/ptb_files/transfer_objects.ptb │ G                  │
+│ split_coins      │ tests/ptb_files/transfer_objects.ptb │ gas [1,2,3]        │
+│ assign           │ tests/ptb_files/transfer_objects.ptb │ s                  │
+│ transfer_objects │ tests/ptb_files/transfer_objects.ptb │ @0x1 s             │
+│ preview          │ console                              │ true               │
+╰──────────────────┴──────────────────────────────────────┴────────────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/transfer_objects.ptb\""]
+cmd: gas_budget, value: ["1000u64"]
+cmd: assign, value: ["A", "@0x1"]
+cmd: transfer_objects, value: ["A", "[@0x1, @0x2, @0x3]"]
+cmd: assign, value: ["A", "@0x1"]
+cmd: assign, value: ["B", "@0x2"]
+cmd: assign, value: ["C", "@0x3"]
+cmd: transfer_objects, value: ["A", "[A, B, C]"]
+cmd: assign, value: ["G"]
+cmd: split_coins, value: ["gas", "[1u64, 2u64, 3u64]"]
+cmd: assign, value: ["s"]
+cmd: transfer_objects, value: ["@0x1", "s"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/transfer_objects.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILDING PTB ERRORS === 
+  × Error at command 10 in PTB file 'tests/ptb_files/transfer_objects.ptb'
+   ╭────
+ 1 │ transfer_objects @0x1 s 
+   ·                       ┬
+   ·                       ╰── Expected array of objects
+   ╰────
+
