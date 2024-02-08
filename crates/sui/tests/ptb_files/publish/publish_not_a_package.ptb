@@ -1,0 +1,5 @@
+--gas-budget 1000
+# Point to current dir for package, but it's not a package
+# The output path from this error will be dependent on the machine is run
+# (error provides absolute path) so this is commented out for now.
+# --publish .

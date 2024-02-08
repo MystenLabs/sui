@@ -1,0 +1,44 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                │
+├─────────────┬───────────────────────────────────────────────┬──────────────┤
+│ command     │ from                                          │ value(s)     │
+├─────────────┼───────────────────────────────────────────────┼──────────────┤
+│ assign      │ tests/ptb_files/assign/assign_cross_files.ptb │ x 10         │
+│ assign      │ tests/ptb_files/assign/assign_cross_files.ptb │ y 11         │
+│ split_coins │ for_testing_assigns.ptb.include_only          │ gas [x, y]   │
+│ assign      │ console                                       │ coins        │
+│ assign      │ console                                       │ c0 coins.0   │
+│ assign      │ console                                       │ c1 coins.1   │
+│ merge_coins │ console                                       │ gas [c0, c1] │
+│ gas_budget  │ console                                       │ 10000000     │
+│ preview     │ console                                       │ true         │
+╰─────────────┴───────────────────────────────────────────────┴──────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/assign/assign_cross_files.ptb\""]
+cmd: assign, value: ["x", "10u64"]
+cmd: assign, value: ["y", "11u64"]
+cmd: file-include-start, value: ["\"for_testing_assigns.ptb.include_only\""]
+cmd: split_coins, value: ["gas", "[x, y]"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"for_testing_assigns.ptb.include_only\""]
+cmd: assign, value: ["coins"]
+cmd: assign, value: ["c0", "coins.0"]
+cmd: assign, value: ["c1", "coins.1"]
+cmd: merge_coins, value: ["gas", "[c0, c1]"]
+cmd: gas_budget, value: ["10000000u64"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/assign/assign_cross_files.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILT PTB === 
+Input 0: Pure([10, 0, 0, 0, 0, 0, 0, 0])
+Input 1: Pure([11, 0, 0, 0, 0, 0, 0, 0])
+Command 0: SplitCoins(GasCoinInput(0),Input(1))
+Command 1: MergeCoins(GasCoin,NestedResult(0,0),NestedResult(0,1))

@@ -1,0 +1,32 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                                                                     │
+├────────────┬────────────────────────────────────────────────────┬───────────────────────────────────────────────────────────────────────────────┤
+│ command    │ from                                               │ value(s)                                                                      │
+├────────────┼────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┤
+│ move_call  │ tests/ptb_files/parsing/multiple_function_args.ptb │ std::option::is_none <u64> 'a (this is an unmatched paren in a string' 'b)' c │
+│ gas_budget │ tests/ptb_files/parsing/multiple_function_args.ptb │ 111111                                                                        │
+│ preview    │ console                                            │ true                                                                          │
+╰────────────┴────────────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/parsing/multiple_function_args.ptb\""]
+cmd: move_call, value: ["std::option::is_none", "<u64>", "\"'a (this is an unmatched paren in a string'\"", "\"'b)'\"", "c"]
+cmd: gas_budget, value: ["111111u64"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/parsing/multiple_function_args.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILDING PTB ERRORS === 
+  × Error at command 0 in PTB file 'tests/ptb_files/parsing/
+  │ multiple_function_args.ptb'
+   ╭────
+ 1 │ move_call std::option::is_none <u64> 'a (this is an unmatched paren in a string' 'b)' c 
+   ·                                      ─────────────────────────┬────────────────────────
+   ·                                                               ╰── Expected 1 arguments, but got 3
+   ╰────
+

@@ -44,5 +44,6 @@ cmd: file-include-end, value: ["\"tests/ptb_files/assign/assign_valid.ptb\""]
 cmd: preview, value: ["true"]
 cmd: warn_shadows, value: ["false"]
  === BUILT PTB === 
-MakeMoveVec(Someaddress,[Input(0),Input(0)])
-MakeMoveVec(Someaddress,[Input(0),Input(0)])
+Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+Command 0: MakeMoveVec(Someaddress,[Input(0),Input(0)])
+Command 1: MakeMoveVec(Someaddress,[Input(0),Input(0)])

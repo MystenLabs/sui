@@ -1,0 +1,34 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                                  │
+├───────────────┬───────────────────────────────────────────────────┬──────────────────────────────────────────┤
+│ command       │ from                                              │ value(s)                                 │
+├───────────────┼───────────────────────────────────────────────────┼──────────────────────────────────────────┤
+│ assign        │ tests/ptb_files/resolution/variable_shadowing.ptb │ s @0x1                                   │
+│ move_call     │ tests/ptb_files/resolution/variable_shadowing.ptb │ sui::coin::destroy_zero<sui::sui::SUI> s │
+│ assign        │ tests/ptb_files/resolution/variable_shadowing.ptb │ s @0x2                                   │
+│ make_move_vec │ tests/ptb_files/resolution/variable_shadowing.ptb │ <address> [s]                            │
+│ gas_budget    │ tests/ptb_files/resolution/variable_shadowing.ptb │ 100000                                   │
+│ preview       │ console                                           │ true                                     │
+╰───────────────┴───────────────────────────────────────────────────┴──────────────────────────────────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/resolution/variable_shadowing.ptb\""]
+cmd: assign, value: ["s", "@0x1"]
+cmd: move_call, value: ["sui::coin::destroy_zero", "<0x2::sui::SUI>", "s"]
+cmd: assign, value: ["s", "@0x2"]
+cmd: make_move_vec, value: ["<address>", "[s]"]
+cmd: gas_budget, value: ["100000u64"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/resolution/variable_shadowing.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILT PTB === 
+Input 0: ImmutableOrOwnedObject
+Input 1: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2])
+Command 0: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000002::coin::destroy_zero<0x2::sui::SUI>(Input(0)))
+Command 1: MakeMoveVec(Someaddress,[Input(1)])

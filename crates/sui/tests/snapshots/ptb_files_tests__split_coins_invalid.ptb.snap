@@ -1,0 +1,53 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭───────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                   │
+├─────────────┬─────────────────────────────────────────────────────┬───────────┤
+│ command     │ from                                                │ value(s)  │
+├─────────────┼─────────────────────────────────────────────────────┼───────────┤
+│ split_coins │ tests/ptb_files/split_coins/split_coins_invalid.ptb │ 1         │
+│ split_coins │ tests/ptb_files/split_coins/split_coins_invalid.ptb │ gas [0] 5 │
+│ split_coins │ tests/ptb_files/split_coins/split_coins_invalid.ptb │ [1] gas   │
+│ preview     │ console                                             │ true      │
+╰─────────────┴─────────────────────────────────────────────────────┴───────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/split_coins/split_coins_invalid.ptb\""]
+cmd: split_coins, value: ["1u64"]
+cmd: split_coins, value: ["gas", "[0u64]", "5u64"]
+cmd: split_coins, value: ["[1u64]", "gas"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/split_coins/split_coins_invalid.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILDING PTB ERRORS === 
+  × Error at command 0 in PTB file 'tests/ptb_files/split_coins/
+  │ split_coins_invalid.ptb'
+   ╭────
+ 1 │ split_coins 1 
+   · ─────┬─────
+   ·      ╰── Expected 2 arguments but got 1
+   ╰────
+
+  × Error at command 1 in PTB file 'tests/ptb_files/split_coins/
+  │ split_coins_invalid.ptb'
+   ╭────
+ 1 │ split_coins gas [0] 5 
+   · ─────┬─────
+   ·      ╰── Expected 2 arguments but got 3
+   ╰────
+
+  × Error at command 2 in PTB file 'tests/ptb_files/split_coins/
+  │ split_coins_invalid.ptb'
+   ╭────
+ 1 │ split_coins [1] gas 
+   ·                 ─┬─
+   ·                  ╰── Expected array of amounts
+   ╰────
+
+  × Error at command 0 in PTB file 'console': No gas budget set for
+  │ transaction at command 0 in file 'console'
+

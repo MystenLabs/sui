@@ -58,27 +58,27 @@ pub struct PTB {
     /// Given n-values of the same type, it constructs a vector.
     /// For non objects or an empty vector, the type tag must be specified.
     /// For example, --make-move-vec "<u64>" "[]"
-    #[clap(long, num_args(2..))]
+    #[clap(long, num_args(1..))]
     make_move_vec: Vec<String>,
     /// Merge N coins into the provided coin: --merge-coins into_coin "[coin1,coin2,coin3]"
-    #[clap(long, num_args(2))]
+    #[clap(long, num_args(1..))]
     merge_coins: Vec<String>,
     /// Make a move call to a function
-    #[clap(long, num_args(2..))]
+    #[clap(long, num_args(1..))]
     move_call: Vec<String>,
     /// Split the coin into N coins as per the given amount.
     /// On zsh, the vector needs to be given in quotes: --split-coins coin_to_split "[amount1,amount2]"
-    #[clap(long, num_args(2))]
+    #[clap(long, num_args(1..))]
     split_coins: Vec<String>,
     /// Transfer objects to the address. E.g., --transfer-objects to_address "[obj1, obj2]"
-    #[clap(long, num_args(2))]
+    #[clap(long, num_args(1..))]
     transfer_objects: Vec<String>,
     /// Publish the move package. It takes as input the folder where the package exists.
-    #[clap(long, num_args(1), required = false)]
-    publish: String,
+    #[clap(long, num_args(1..))]
+    publish: Vec<String>,
     /// Upgrade the move package. It takes as input the folder where the package exists.
-    #[clap(long, num_args(2), required = false)]
-    upgrade: String,
+    #[clap(long, num_args(1..))]
+    upgrade: Vec<String>,
     /// Preview the PTB instead of executing it
     #[clap(long)]
     preview: bool,
@@ -285,13 +285,13 @@ impl PTB {
         let mut files_to_resolve = vec![];
         for file in ignore_comments
             .iter()
-            .flat_map(|x| x.split("--"))
-            .filter(|x| x.starts_with("file"))
-            .map(|x| x.to_string().replace("file", "").replace(" ", ""))
+            .filter(|x| x.starts_with("--file"))
+            .flat_map(|x| x.split("--file"))
+            .map(|x| x.trim())
         {
             let mut p = PathBuf::new();
             p.push(parent_folder.clone());
-            p.push(file.clone());
+            p.push(file);
             let file = std::fs::canonicalize(p).map_err(|_| {
                 anyhow!("{} includes file {} which does not exist.", filename, file)
             })?;
@@ -378,6 +378,7 @@ impl PTB {
         let mut in_ticks = false;
         let mut brackets = 0;
         let mut parens = 0;
+        let mut hairpins = 0;
 
         for c in s.chars() {
             if c == '"' {
@@ -387,21 +388,40 @@ impl PTB {
                 in_ticks = !in_ticks;
             }
 
-            if c == '[' {
-                brackets += 1;
-            }
-            if c == ']' {
-                brackets -= 1;
+            // NB: At this point all string escapes have been normalized to single quotes.
+            // When we are in a literal string being passed to the PTB, we do not look or count
+            // delimiters.
+            if !in_ticks {
+                if c == '[' {
+                    brackets += 1;
+                }
+                if c == ']' {
+                    brackets -= 1;
+                }
+
+                if c == '(' {
+                    parens += 1;
+                }
+                if c == ')' {
+                    parens -= 1;
+                }
+
+                if c == '<' {
+                    hairpins += 1;
+                }
+                if c == '>' {
+                    hairpins -= 1;
+                }
             }
 
-            if c == '(' {
-                parens += 1;
-            }
-            if c == ')' {
-                parens -= 1;
-            }
+            let is_delimiter = c == ' ' // Hit a whitspace
+                && !in_quotes  // Not currently inside a quote
+                && !in_ticks   // Not currently inside a string literal
+                && brackets == 0 // Not currently inside a bracket (array/vector)
+                && parens == 0  // Not curently inside parens (some)
+                && hairpins == 0; // Not currently inside hairpins (generics)
 
-            if c == ' ' && !in_quotes && !in_ticks && brackets == 0 && parens == 0 {
+            if is_delimiter {
                 res.push(temp.clone());
                 temp.clear();
             } else {
@@ -452,17 +472,18 @@ impl PTB {
             parser.parse(command.1);
         }
 
-        let (parsed, errors) = parser.finish();
-
-        if !errors.is_empty() {
-            let suffix = if errors.len() > 1 { "s" } else { "" };
-            let rendered = render_errors(commands, errors);
-            eprintln!("Encountered error{suffix} when parsing PTB:");
-            for e in rendered.iter() {
-                eprintln!("{:?}", e);
+        let parsed = match parser.finish() {
+            Err(errors) => {
+                let suffix = if errors.len() > 1 { "s" } else { "" };
+                let rendered = render_errors(commands, errors);
+                eprintln!("Encountered error{suffix} when parsing PTB:");
+                for e in rendered.iter() {
+                    eprintln!("{:?}", e);
+                }
+                anyhow::bail!("Could not build PTB due to previous error{suffix}");
             }
-            anyhow::bail!("Could not build PTB due to previous error{suffix}");
-        }
+            Ok(parsed) => parsed,
+        };
 
         // We need to resolve object IDs, so we need a fullnode to access
         let context = if let Some(context) = context {

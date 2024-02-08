@@ -1,0 +1,165 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                                                                          │
+├───────────────┬───────────────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────────────┤
+│ command       │ from                                      │ value(s)                                                                                 │
+├───────────────┼───────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────┤
+│ assign        │ tests/ptb_files/parsing/invalid_types.ptb │ a 0xfffu8                                                                                │
+│ assign        │ tests/ptb_files/parsing/invalid_types.ptb │ b 0xffffffffu16                                                                          │
+│ assign        │ tests/ptb_files/parsing/invalid_types.ptb │ c 0xfffffffffffffu32                                                                     │
+│ assign        │ tests/ptb_files/parsing/invalid_types.ptb │ d 0xffffffffffffffffffffffffffffffu64                                                    │
+│ assign        │ tests/ptb_files/parsing/invalid_types.ptb │ e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128                       │
+│ assign        │ tests/ptb_files/parsing/invalid_types.ptb │ f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 │
+│ make_move_vec │ tests/ptb_files/parsing/invalid_types.ptb │ <string> ['foo']                                                                         │
+│ make_move_vec │ tests/ptb_files/parsing/invalid_types.ptb │ <String> ['foo']                                                                         │
+│ make_move_vec │ tests/ptb_files/parsing/invalid_types.ptb │ <Bool> [true, false]                                                                     │
+│ make_move_vec │ tests/ptb_files/parsing/invalid_types.ptb │ <i8> [0]                                                                                 │
+│ make_move_vec │ tests/ptb_files/parsing/invalid_types.ptb │ <i16> [0]                                                                                │
+│ make_move_vec │ tests/ptb_files/parsing/invalid_types.ptb │ <i32> [0]                                                                                │
+│ make_move_vec │ tests/ptb_files/parsing/invalid_types.ptb │ <i64> [0]                                                                                │
+│ make_move_vec │ tests/ptb_files/parsing/invalid_types.ptb │ <i128> [0]                                                                               │
+│ make_move_vec │ tests/ptb_files/parsing/invalid_types.ptb │ <i256> [0]                                                                               │
+│ make_move_vec │ tests/ptb_files/parsing/invalid_types.ptb │ <Vector<u8>> [vector[0]]                                                                 │
+│ make_move_vec │ tests/ptb_files/parsing/invalid_types.ptb │ <vector<U256>> [vector[0]]                                                               │
+│ make_move_vec │ tests/ptb_files/parsing/invalid_types.ptb │ <vector<i256>> [vector[0]]                                                               │
+│ preview       │ console                                   │ true                                                                                     │
+╰───────────────┴───────────────────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────────────╯
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error at command 0 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
+   ╭────
+ 1 │ assign a 0xfffu8 
+   ·          ───┬───
+   ·             ╰── Failed to parse arguments for 'assign' command. number too large to fit in target type
+   ╰────
+
+  × Error at command 1 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
+   ╭────
+ 1 │ assign b 0xffffffffu16 
+   ·          ──────┬──────
+   ·                ╰── Failed to parse arguments for 'assign' command. number too large to fit in target type
+   ╰────
+
+  × Error at command 2 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
+   ╭────
+ 1 │ assign c 0xfffffffffffffu32 
+   ·          ─────────┬────────
+   ·                   ╰── Failed to parse arguments for 'assign' command. number too large to fit in target type
+   ╰────
+
+  × Error at command 3 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
+   ╭────
+ 1 │ assign d 0xffffffffffffffffffffffffffffffu64 
+   ·          ─────────────────┬─────────────────
+   ·                           ╰── Failed to parse arguments for 'assign' command. number too large to fit in target type
+   ╰────
+
+  × Error at command 4 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
+   ╭────
+ 1 │ assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 
+   ·          ────────────────────────────────┬───────────────────────────────
+   ·                                          ╰── Failed to parse arguments for 'assign' command. number too large to fit in target type
+   ╰────
+
+  × Error at command 5 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
+   ╭────
+ 1 │ assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 
+   ·          ───────────────────────────────────────────┬──────────────────────────────────────────
+   ·                                                     ╰── Failed to parse arguments for 'assign' command. Invalid string length
+   ╰────
+
+  × Error at command 6 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
+   ╭────
+ 1 │ make_move_vec <string> ['foo'] 
+   ·               ────┬───
+   ·                   ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ╰────
+
+  × Error at command 7 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
+   ╭────
+ 1 │ make_move_vec <String> ['foo'] 
+   ·               ────┬───
+   ·                   ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ╰────
+
+  × Error at command 8 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
+   ╭────
+ 1 │ make_move_vec <Bool> [true, false] 
+   ·               ───┬──
+   ·                  ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ╰────
+
+  × Error at command 9 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
+   ╭────
+ 1 │ make_move_vec <i8> [0] 
+   ·               ──┬─
+   ·                 ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ╰────
+
+  × Error at command 10 in PTB file 'tests/ptb_files/parsing/
+  │ invalid_types.ptb'
+   ╭────
+ 1 │ make_move_vec <i16> [0] 
+   ·               ──┬──
+   ·                 ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ╰────
+
+  × Error at command 11 in PTB file 'tests/ptb_files/parsing/
+  │ invalid_types.ptb'
+   ╭────
+ 1 │ make_move_vec <i32> [0] 
+   ·               ──┬──
+   ·                 ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ╰────
+
+  × Error at command 12 in PTB file 'tests/ptb_files/parsing/
+  │ invalid_types.ptb'
+   ╭────
+ 1 │ make_move_vec <i64> [0] 
+   ·               ──┬──
+   ·                 ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ╰────
+
+  × Error at command 13 in PTB file 'tests/ptb_files/parsing/
+  │ invalid_types.ptb'
+   ╭────
+ 1 │ make_move_vec <i128> [0] 
+   ·               ───┬──
+   ·                  ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ╰────
+
+  × Error at command 14 in PTB file 'tests/ptb_files/parsing/
+  │ invalid_types.ptb'
+   ╭────
+ 1 │ make_move_vec <i256> [0] 
+   ·               ───┬──
+   ·                  ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ╰────
+
+  × Error at command 15 in PTB file 'tests/ptb_files/parsing/
+  │ invalid_types.ptb'
+   ╭────
+ 1 │ make_move_vec <Vector<u8>> [vector[0]] 
+   ·               ──────┬─────
+   ·                     ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got <
+   ╰────
+
+  × Error at command 16 in PTB file 'tests/ptb_files/parsing/
+  │ invalid_types.ptb'
+   ╭────
+ 1 │ make_move_vec <vector<U256>> [vector[0]] 
+   ·               ───────┬──────
+   ·                      ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ╰────
+
+  × Error at command 17 in PTB file 'tests/ptb_files/parsing/
+  │ invalid_types.ptb'
+   ╭────
+ 1 │ make_move_vec <vector<i256>> [vector[0]] 
+   ·               ───────┬──────
+   ·                      ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ╰────
+

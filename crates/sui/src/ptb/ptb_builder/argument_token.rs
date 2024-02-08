@@ -141,7 +141,7 @@ impl Token for ArgumentToken {
 
         // type arguments get delegated to a different parser
         if s.starts_with('<') {
-            let len = parse_sub_token_string(s, "<", ">")?;
+            let len = extract_sub_parser_token_string(s, "<", ">")?;
             return Ok(Some((Self::TypeArgString, len)));
         }
 
@@ -246,7 +246,7 @@ impl Token for ArgumentToken {
     }
 }
 
-fn parse_sub_token_string(mut s: &str, start: &str, end: &str) -> anyhow::Result<usize> {
+fn extract_sub_parser_token_string(mut s: &str, start: &str, end: &str) -> anyhow::Result<usize> {
     // the length of the string until the matching end
     let mut len = 0;
     let start_len = start.len();

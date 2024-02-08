@@ -11,13 +11,6 @@ expression: "results.join(\"\\n\")"
 │ gas_budget │ tests/ptb_files/gas/gas_outside_range.ptb │ 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF │
 │ preview    │ console                                   │ true                                                                       │
 ╰────────────┴───────────────────────────────────────────┴────────────────────────────────────────────────────────────────────────────╯
- === PARSED INPUT COMMANDS === 
-cmd: file-include-start, value: ["\"tests/ptb_files/gas/gas_outside_range.ptb\""]
-cmd: preview, value: ["false"]
-cmd: warn_shadows, value: ["false"]
-cmd: file-include-end, value: ["\"tests/ptb_files/gas/gas_outside_range.ptb\""]
-cmd: preview, value: ["true"]
-cmd: warn_shadows, value: ["false"]
  === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error at command 0 in PTB file 'tests/ptb_files/gas/gas_outside_range.ptb'
    ╭────

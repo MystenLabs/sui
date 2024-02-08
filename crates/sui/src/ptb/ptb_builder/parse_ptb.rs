@@ -59,8 +59,12 @@ impl PTBParser {
 
     /// Return the list of parsed commands along with any errors that were encountered during the
     /// parsing of the PTB command(s).
-    pub fn finish(self) -> (Vec<ParsedPTBCommand>, Vec<PTBError>) {
-        (self.parsed, self.errors)
+    pub fn finish(self) -> Result<Vec<ParsedPTBCommand>, Vec<PTBError>> {
+        if self.errors.is_empty() {
+            Ok(self.parsed)
+        } else {
+            Err(self.errors)
+        }
     }
 
     /// Parse a single PTB command. If an error is encountered, it is added to the list of
@@ -112,7 +116,7 @@ impl PTBParser {
                 if cmd.values.len() != 1 {
                     self.errors.push(PTBError::WithSource {
                         message: format!(
-                            "Invalid command -- expected 1 argument, got {}",
+                            "Invalid command expected 1 argument but got {}",
                             cmd.values.len()
                         ),
                         span: name_span,
@@ -140,7 +144,7 @@ impl PTBParser {
                 if cmd.values.len() != 2 {
                     self.errors.push(PTBError::WithSource {
                         message: format!(
-                            "Invalid command -- expected 2 arguments, got {}",
+                            "Invalid command expected 2 arguments but got {}",
                             cmd.values.len()
                         ),
                         span: name_span,

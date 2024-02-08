@@ -1,0 +1,34 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                                               │
+├───────────────┬──────────────────────────────────────────────────────────────┬────────────────────────────────────────────┤
+│ command       │ from                                                         │ value(s)                                   │
+├───────────────┼──────────────────────────────────────────────────────────────┼────────────────────────────────────────────┤
+│ gas_budget    │ tests/ptb_files/make_move_vec/resolve_array_inside_array.ptb │ 10000                                      │
+│ make_move_vec │ tests/ptb_files/make_move_vec/resolve_array_inside_array.ptb │ <vector<address>> [[@0x1], [@0x2], [@0x3]] │
+│ preview       │ console                                                      │ true                                       │
+╰───────────────┴──────────────────────────────────────────────────────────────┴────────────────────────────────────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/make_move_vec/resolve_array_inside_array.ptb\""]
+cmd: gas_budget, value: ["10000u64"]
+cmd: make_move_vec, value: ["<vector<address>>", "[[@0x1], [@0x2], [@0x3]]"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/make_move_vec/resolve_array_inside_array.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILDING PTB ERRORS === 
+  × Error at command 1 in PTB file 'tests/ptb_files/make_move_vec/
+  │ resolve_array_inside_array.ptb'
+   ╭────
+ 1 │ make_move_vec <vector<address>> [[@0x1], [@0x2], [@0x3]] 
+   ·                                  ───┬──
+   ·                                     ╰── Tried to resolve an array to a value.
+   ╰────
+  help: This is invalid and most likely means that you nested an array
+        inside a value (e.g., inside an array, vector, or option).
+
