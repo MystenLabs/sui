@@ -4,7 +4,9 @@ Thanks for considering making a contribution to the Sui network or its documenta
 
 ## Contribute to Sui
 
-Have an idea for a feature that will improve Sui for everyone? Start with a [Sui Improvement Proposal](https://github.com/sui-foundation/sips/tree/main).
+See [Sui Environment Setup](./docs/content/guides/developer/getting-started/sui-environment.mdx) for approach to submitting code fixes and enhancements.
+
+If you want to contribute code that creates a feature on Sui, start with a [Sui Improvement Proposal](https://github.com/sui-foundation/sips/tree/main) before developing the logic.
 
 Found a bug or security vulnerability? Create a [GitHub issue](https://github.com/MystenLabs/sui/issues/new/choose). 
 
