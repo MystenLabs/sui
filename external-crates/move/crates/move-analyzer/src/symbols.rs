@@ -664,7 +664,6 @@ impl SymbolicatorRunner {
         let runner = SymbolicatorRunner { mtx_cvar };
 
         thread::Builder::new()
-            .stack_size(STACK_SIZE_BYTES)
             .spawn(move || {
                 let (mtx, cvar) = &*thread_mtx_cvar;
                 // Locations opened in the IDE (files or directories) for which manifest file is missing

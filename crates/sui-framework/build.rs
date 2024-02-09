@@ -29,7 +29,6 @@ fn main() {
     let move_stdlib_path = packages_path.join("move-stdlib");
 
     Builder::new()
-        .stack_size(16 * 1024 * 1024) // build_packages require bigger stack size on windows.
         .spawn(move || {
             build_packages(
                 deepbook_path_clone,
