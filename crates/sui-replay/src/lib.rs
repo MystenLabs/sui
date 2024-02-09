@@ -18,7 +18,9 @@ use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
 use move_vm_config::runtime::get_default_output_filepath;
 use std::env;
-use std::io::BufRead;
+use std::ffi::OsString;
+use std::fs::File;
+use std::io::{BufRead, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 use sui_config::node::ExpensiveSafetyCheckConfig;
@@ -95,6 +97,9 @@ pub enum ReplayToolCommand {
         /// Optional protocol version to use, if not specified defaults to the one originally used for the transaction.
         #[arg(long, short, allow_hyphen_values = true)]
         protocol_version: Option<i64>,
+        /// Write a json that contains comprehensive data about this transaction, in a file `replay_output_{tx_digest}.json` to the working directory.
+        #[arg(long)]
+        json: bool,
     },
 
     /// Replay transactions listed in a file
@@ -397,6 +402,7 @@ pub async fn execute_replay_command(
             diag,
             executor_version,
             protocol_version,
+            json,
         } => {
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
@@ -417,6 +423,19 @@ pub async fn execute_replay_command(
             }
             if show_effects {
                 println!("{}", sandbox_state.local_exec_effects);
+            }
+
+            if json {
+                let mut filename = OsString::new();
+                filename.push("replay_output_");
+                filename.push(tx_digest.to_string());
+                filename.push(".json");
+                let mut p = std::path::PathBuf::from(".");
+                p.set_file_name(filename);
+                let mut file = File::create(&p).expect("Unable to create file");
+                file.write_all(sandbox_state.json.as_bytes())
+                    .expect("Unable to write file");
+                info!("Wrote json file to {:?}", p);
             }
 
             sandbox_state.check_effects()?;
