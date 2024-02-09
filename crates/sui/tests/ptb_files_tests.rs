@@ -15,7 +15,7 @@ const TEST_DIR: &str = "tests";
 #[cfg_attr(not(msim), tokio::main)]
 async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("NO_COLOR", "true"); // we need this for the miette errors
-    let fname = path.file_name().unwrap().to_string_lossy().to_string();
+    let fname = || path.file_name().unwrap().to_string_lossy().to_string();
     let ptb = PTB::default();
     let cmd = PTB::command();
     let file = path.to_str().unwrap();
