@@ -655,7 +655,7 @@ mod tests {
         path::{Path, PathBuf},
     };
 
-    use crate::ptb::ptb::check_for_cyclic_file_inclusions;
+    use crate::client_ptb::ptb::check_for_cyclic_file_inclusions;
 
     #[test]
     fn test_cyclic_inclusion() {

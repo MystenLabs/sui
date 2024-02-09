@@ -3,7 +3,7 @@
 
 use clap::CommandFactory;
 use std::{collections::BTreeMap, path::Path};
-use sui::ptb::{
+use sui::client_ptb::{
     ptb::PTB,
     ptb_builder::{errors::render_errors, parse_ptb::PTBParser},
 };
