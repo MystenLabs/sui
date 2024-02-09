@@ -57,7 +57,6 @@ struct GasBudget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum GasPicker {
     Max,
-    Min,
     Sum,
 }
 
@@ -281,7 +280,6 @@ impl GasBudget {
         } else {
             match self.picker.first().map(|x| &x.value) {
                 Some(GasPicker::Max) => self.gas_budgets.iter().map(|x| x.value).max().unwrap(),
-                Some(GasPicker::Min) => self.gas_budgets.iter().map(|x| x.value).min().unwrap(),
                 Some(GasPicker::Sum) => self.gas_budgets.iter().map(|x| x.value).sum(),
                 None => return Err(GasBudgetError::NoGasPicker(self.gas_budgets)),
             }
@@ -1062,7 +1060,6 @@ impl<'a> PTBBuilder<'a> {
                 );
                 let picker = match i.to_string().as_str() {
                     "max" => GasPicker::Max,
-                    "min" => GasPicker::Min,
                     "sum" => GasPicker::Sum,
                     x => error!(ident_loc, "Invalid gas picker: {}", x),
                 };

@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// This lint is is disabled because it's not good and doesn't look at what you're actually
+// iterating over. This seems to be a common problem with this lint.
+// See e.g., https://github.com/rust-lang/rust-clippy/issues/6075
+#[allow(clippy::needless_range_loop)]
 pub fn edit_distance(a: &str, b: &str) -> usize {
     let mut cache = vec![vec![0; b.len() + 1]; a.len() + 1];
 
