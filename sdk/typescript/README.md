@@ -5,7 +5,7 @@ For more complete docs, visit the [Sui TypeScript SDK docs](https://sdk.mystenla
 # Sui TypeScript SDK
 
 This is the Sui TypeScript SDK built on the Sui [JSON RPC
-API](https://github.com/MystenLabs/sui/blob/main/docs/content/references /sui-api.mdx). It provides
+API](https://github.com/MystenLabs/sui/blob/main/docs/content/references/sui-api.mdx). It provides
 utility classes and functions for applications to sign transactions and interact with the Sui
 network.
 
