@@ -1,5 +1,11 @@
 # @mysten/ledgerjs-hw-app-sui
 
+## 0.3.1
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+
 ## 0.3.0
 
 ### Minor Changes
