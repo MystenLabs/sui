@@ -37,8 +37,8 @@ contain the latest changes from `main`.
 npm install @mysten/sui.js@experimental
 ```
 
-Refer to the [JSON RPC](https://github.com/MystenLabs/sui/blob/main/docs/content/references
-/sui-api.mdx) topic for instructions about how to start a local network and local RPC server.
+Refer to the [JSON RPC](https://github.com/MystenLabs/sui/blob/main/docs/content/references/sui-api.mdx)
+topic for instructions about how to start a local network and local RPC server.
 
 ## Building Locally
 
