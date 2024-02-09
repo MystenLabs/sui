@@ -1111,24 +1111,25 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
 
 // Parse an expression term:
 //      Term =
-//          "break" <Exp>?
-//          | "continue"
+//          "break" <BlockLabel>? <Exp>?
+//          | "break" <BlockLabel>? "{" <Exp> "}"
+//          | "continue" <BlockLabel>?
 //          | "vector" ('<' Comma<Type> ">")? "[" Comma<Exp> "]"
 //          | <Value>
 //          | "(" Comma<Exp> ")"
 //          | "(" <Exp> ":" <Type> ")"
 //          | "(" <Exp> "as" <Type> ")"
-//          | <Label> <Exp>
+//          | <BlockLabel> ":" <Exp>
 //          | "{" <Sequence>
-//          | "if" "(" <Exp> ")" <Exp> "else" "{" <Exp> "}"
-//          | "if" "(" <Exp> ")" "{" <Exp> "}"
+//          | "if" "(" <Exp> ")" <Exp> "else" (<BlockLabel> ":")? "{" <Exp> "}"
+//          | "if" "(" <Exp> ")" (<BlockLabel> ":")? "{" <Exp> "}"
 //          | "if" "(" <Exp> ")" <Exp> ("else" <Exp>)?
-//          | "while" "(" <Exp> ")" "{" <Exp> "}"
+//          | "while" "(" <Exp> ")" (<BlockLabel> ":")? "{" <Exp> "}"
 //          | "while" "(" <Exp> ")" <Exp> (SpecBlock)?
 //          | "loop" <Exp>
-//          | "loop" "{" <Exp> "}"
-//          | "return" "{" <Exp> "}"
-//          | "return" <Exp>?
+//          | "loop" (<BlockLabel> ":")? "{" <Exp> "}"
+//          | "return" <BlockLabel>? "{" <Exp> "}"
+//          | "return" <BlockLabel>? <Exp>?
 //          | "abort" "{" <Exp> "}"
 //          | "abort" <Exp>
 fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
@@ -1287,6 +1288,9 @@ fn is_control_exp(tok: Tok) -> bool {
     )
 }
 
+// An identifier with a leading ', used to label blocks and control flow
+//      BlockLabel = <BlockIdentifierValue>
+// roughly "'"<Identifier> but whitespace sensitive
 fn parse_block_label(context: &mut Context) -> Result<BlockLabel, Box<Diagnostic>> {
     let id: Symbol = match context.tokens.peek() {
         Tok::BlockLabel => {
@@ -1316,6 +1320,9 @@ fn parse_block_label(context: &mut Context) -> Result<BlockLabel, Box<Diagnostic
 // AND NOT,       if (cond) e1 else ({ e2 } + 1)
 // But otherwise, if (cond) e1 else e2 + 1
 // should be,     if (cond) e1 else (e2 + 1)
+// This also aplies to any named block
+// e.g.           if (cond) e1 else 'a: { e2 } + 1
+// should be,    (if (cond) e1 else 'a: { e2 }) + 1
 fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnostic>> {
     fn parse_exp_or_sequence(context: &mut Context) -> Result<(Exp, bool), Box<Diagnostic>> {
         match context.tokens.peek() {
