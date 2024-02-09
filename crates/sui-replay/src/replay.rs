@@ -779,6 +779,7 @@ impl LocalExec {
 
         trace!(target: "replay_gas_info", "{}", Pretty(&gas_status));
 
+        let skip_checks = true;
         if let ProgrammableTransaction(ref pt) = transaction_kind {
             trace!(target: "replay_ptb_info", "{}", Pretty(&(pt.clone(), executor.dev_inspect_transaction(&self, protocol_config,
                 metrics,
@@ -792,7 +793,7 @@ impl LocalExec {
                 transaction_kind.clone(),
                 tx_info.sender,
                 *tx_digest,
-                true
+                skip_checks
             ).3.unwrap_or_else(|e| panic!("Error executing this transaction in dev-inspect mode, {e}")))));
         };
 
