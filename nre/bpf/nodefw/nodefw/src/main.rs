@@ -6,7 +6,7 @@ use aya::include_bytes_aligned;
 use aya::programs::{Xdp, XdpFlags};
 use aya::BpfLoader;
 use aya_log::BpfLogger;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use nodefw::fwmap::{ttl_watcher, Firewall};
 use nodefw::server;
 use nodefw::time::get_ktime_get_ns;
@@ -19,6 +19,26 @@ use tracing::{debug, info, warn};
 struct Opt {
     #[clap(short, long, default_value = "lo")]
     iface: String,
+    #[clap(short, long, value_enum, default_value_t=Mode::Default)]
+    mode: Mode,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+enum Mode {
+    Default,
+    Drv,
+    Skb,
+}
+
+// we wrap XdpFlags in our own struct to decouple it from clap's derive requirements.
+impl From<Mode> for XdpFlags {
+    fn from(m: Mode) -> Self {
+        match m {
+            Mode::Default => XdpFlags::default(),
+            Mode::Drv => XdpFlags::DRV_MODE,
+            Mode::Skb => XdpFlags::SKB_MODE,
+        }
+    }
 }
 
 #[tokio::main]
@@ -68,7 +88,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let router = server::app(fw_guard.clone());
     let program: &mut Xdp = bpf.program_mut("nodefw").unwrap().try_into()?;
     program.load()?;
-    program.attach(&opt.iface, XdpFlags::default())
+    program.attach(&opt.iface, XdpFlags::from(opt.mode))
         .context("failed to attach the XDP program with default flags - try changing XdpFlags::default() to XdpFlags::SKB_MODE")?;
 
     let listener = std::net::TcpListener::bind(nodefw::var!(
