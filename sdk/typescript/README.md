@@ -17,7 +17,7 @@ upcoming TestNet launch.
 
 The SDK will be published to [npm registry](https://www.npmjs.com/package/@mysten/sui.js) with the
 same bi-weekly release cycle as the DevNet validators and [RPC
-Server](https://github.com/MystenLabs/sui/blob/main/docs/content/references /sui-api.mdx). To use
+Server](https://github.com/MystenLabs/sui/blob/main/docs/content/references/sui-api.mdx). To use
 the SDK in your project, you can do:
 
 ```bash
