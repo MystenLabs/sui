@@ -450,6 +450,10 @@ struct FeatureFlags {
     // a flag as it will lead to checkpoint forks.
     #[serde(skip_serializing_if = "is_false")]
     mysticeti_use_committed_subdag_digest: bool,
+
+    // Enable VDF
+    #[serde(skip_serializing_if = "is_false")]
+    enable_vdf: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1350,6 +1354,10 @@ impl ProtocolConfig {
     pub fn mysticeti_use_committed_subdag_digest(&self) -> bool {
         self.feature_flags.mysticeti_use_committed_subdag_digest
     }
+
+    pub fn enable_vdf(&self) -> bool {
+        self.feature_flags.enable_vdf
+    }
 }
 
 #[cfg(not(msim))]
@@ -1759,6 +1767,9 @@ impl ProtocolConfig {
             check_zklogin_id_cost_base: None,
             // zklogin::check_zklogin_issuer
             check_zklogin_issuer_cost_base: None,
+
+            vdf_verify_vdf_cost: None,
+            vdf_hash_to_input_cost: None,
 
             max_size_written_objects: None,
             max_size_written_objects_system_tx: None,
@@ -2254,6 +2265,13 @@ impl ProtocolConfig {
 
                     // Enable the committed sub dag digest inclusion on the commit output
                     cfg.feature_flags.mysticeti_use_committed_subdag_digest = true;
+
+                    // enable vdf in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_vdf = true;
+                        cfg.vdf_verify_vdf_cost = Some(2000);
+                        cfg.vdf_hash_to_input_cost = Some(1000);
+                    }
                 }
                 48 => {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
