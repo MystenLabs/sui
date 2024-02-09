@@ -6,23 +6,48 @@ import { Tabs, Tooltip } from "@radix-ui/themes";
 import { LockedList } from "../components/locked/LockedList";
 import { EscrowList } from "../components/escrows/EscrowList";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
+import { useCurrentAccount } from "@mysten/dapp-kit";
 
 export function EscrowDashboard() {
+  const account = useCurrentAccount();
   const tabs = [
     {
       name: "Requested Escrows",
-      component: () => <EscrowList received />,
+      component: () => (
+        <EscrowList
+          params={{
+            recipient: account?.address,
+            swapped: "false",
+            cancelled: "false",
+          }}
+        />
+      ),
       tooltip: "Escrows requested for your locked objects.",
     },
     {
-      name: "My Pending Requests",
-      component: () => <EscrowList sent />,
-      tooltip: "Escrows you have initiated for third party locked objects.",
+      name: "Browse Locked Objects",
+      component: () => (
+        <LockedList
+          params={{
+            deleted: "false",
+          }}
+          enableSearch
+        />
+      ),
+      tooltip: "Browse locked objects you can trade for.",
     },
     {
-      name: "Browse Locked Objects",
-      component: () => <LockedList />,
-      tooltip: "Browse locked objects you can trade for.",
+      name: "My Pending Requests",
+      component: () => (
+        <EscrowList
+          params={{
+            sender: account?.address,
+            swapped: "false",
+            cancelled: "false",
+          }}
+        />
+      ),
+      tooltip: "Escrows you have initiated for third party locked objects.",
     },
   ];
 

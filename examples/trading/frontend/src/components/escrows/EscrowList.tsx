@@ -7,29 +7,31 @@ import { Escrow } from "./Escrow";
 import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { constructUrlSearchParams, getNextPageParam } from "@/utils/helpers";
-import { EscrowObject } from "@/types/types";
+import { EscrowListingQuery, EscrowObject } from "@/types/types";
+import { useState } from "react";
+import { TextField } from "@radix-ui/themes";
 
 export function EscrowList({
-  sent,
-  received,
+  params,
+  enableSearch,
 }: {
-  sent?: boolean;
-  received?: boolean;
+  params: EscrowListingQuery;
+  enableSearch?: boolean;
 }) {
   const account = useCurrentAccount();
+
+  const [escrowId, setEscrowId] = useState("");
 
   const { data, fetchNextPage, hasNextPage, isLoading, isFetchingNextPage } =
     useInfiniteQuery({
       initialPageParam: null,
-      queryKey: [QueryKey.Escrow, account?.address, sent, received],
+      queryKey: [QueryKey.Escrow, params, account?.address, escrowId],
       queryFn: async ({ pageParam }) => {
         const data = await fetch(
           `${CONSTANTS.apiEndpoint}escrows${constructUrlSearchParams({
-            cancelled: "false",
-            swapped: "false",
+            ...params,
             ...(pageParam ? { cursor: pageParam as string } : {}),
-            ...(sent ? { sender: account?.address } : {}),
-            ...(received ? { recipient: account?.address } : {}),
+            ...(escrowId ? { objectId: escrowId } : {}),
           })}`,
         );
         return data.json();
@@ -39,14 +41,25 @@ export function EscrowList({
     });
 
   return (
-    <InfiniteScrollArea
-      loadMore={() => fetchNextPage()}
-      hasNextPage={hasNextPage}
-      loading={isFetchingNextPage || isLoading}
-    >
-      {data?.map((escrow: EscrowObject) => (
-        <Escrow key={escrow.itemId} escrow={escrow} />
-      ))}
-    </InfiniteScrollArea>
+    <div>
+      {enableSearch && (
+        <TextField.Root>
+          <TextField.Input
+            placeholder="Search by escrow id"
+            value={escrowId}
+            onChange={(e) => setEscrowId(e.target.value)}
+          />
+        </TextField.Root>
+      )}
+      <InfiniteScrollArea
+        loadMore={() => fetchNextPage()}
+        hasNextPage={hasNextPage}
+        loading={isFetchingNextPage || isLoading}
+      >
+        {data?.map((escrow: EscrowObject) => (
+          <Escrow key={escrow.itemId} escrow={escrow} />
+        ))}
+      </InfiniteScrollArea>
+    </div>
   );
 }

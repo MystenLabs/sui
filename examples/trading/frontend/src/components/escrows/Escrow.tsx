@@ -130,6 +130,7 @@ export function Escrow({ escrow }: { escrow: EscrowObject }) {
                   </div>
                 )}
               {lockedData.data.deleted &&
+                !escrow.swapped &&
                 escrow.recipient === account?.address && (
                   <div>
                     <p className="text-red-500 text-sm py-2 flex items-center gap-3">

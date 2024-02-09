@@ -36,6 +36,10 @@ app.get('/locked', async (req, res) => {
 			key: 'keyId',
 			type: WhereParamTypes.STRING,
 		},
+		{
+			key: 'objectId',
+			type: WhereParamTypes.STRING,
+		},
 	];
 
 	try {

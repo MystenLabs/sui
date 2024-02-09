@@ -19,3 +19,17 @@ export type EscrowObject = {
   swapped: boolean;
   cancelled: boolean;
 };
+
+export type EscrowListingQuery = {
+  escrowId?: string;
+  sender?: string;
+  recipient?: string;
+  cancelled?: string;
+  swapped?: string;
+};
+
+export type LockedListingQuery = {
+  creator?: string;
+  deleted?: string;
+  keyId?: string;
+};

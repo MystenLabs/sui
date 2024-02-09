@@ -56,7 +56,6 @@ export function Header() {
         </Box>
         <Box>
           <Button
-            color="brown"
             className="cursor-pointer"
             disabled={isPending}
             onClick={() => {

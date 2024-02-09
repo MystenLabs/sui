@@ -110,7 +110,7 @@ export function CreateEscrow({ locked }: { locked: LockedObject }) {
       <div className="text-right">
         <Button
           className="cursor-pointer"
-          disabled={isPending}
+          disabled={isPending || !objectId}
           onClick={() => {
             createEscrowMutation(
               { locked, object: getObject()! },

@@ -9,7 +9,7 @@ export function InfiniteScrollArea({
   loadMore,
   loading = false,
   hasNextPage,
-  gridClasses = "py-12 grid-cols-1 md:grid-cols-2 gap-5",
+  gridClasses = "py-6 grid-cols-1 md:grid-cols-2 gap-5",
 }: {
   children: ReactNode | ReactNode[];
   loadMore: () => void;

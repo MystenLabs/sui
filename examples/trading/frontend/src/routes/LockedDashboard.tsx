@@ -5,13 +5,22 @@ import { useState } from "react";
 import { Tabs } from "@radix-ui/themes";
 import { LockItems } from "../components/locked/LockItems";
 import { LockedList } from "../components/locked/LockedList";
+import { useCurrentAccount } from "@mysten/dapp-kit";
 
 // SPDX-License-Identifier: Apache-2.0
 export function LockedDashboard() {
+  const account = useCurrentAccount();
   const tabs = [
     {
       name: "My Locked Objects",
-      component: () => <LockedList isPersonal />,
+      component: () => (
+        <LockedList
+          params={{
+            deleted: "false",
+            creator: account?.address,
+          }}
+        />
+      ),
     },
     {
       name: "Lock Owned objects",
