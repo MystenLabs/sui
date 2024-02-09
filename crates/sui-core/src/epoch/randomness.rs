@@ -532,7 +532,7 @@ impl Inner {
     pub async fn notify_randomness_in_checkpoint(&self, round: RandomnessRound) -> SuiResult {
         self.tables()?.randomness_rounds_pending.remove(&round)?;
         self.network_handle
-            .cancel_send_partial_signatures(self.epoch_store()?.committee().epoch(), round)
+            .complete_round(self.epoch_store()?.committee().epoch(), round)
             .await;
         Ok(())
     }

@@ -10,7 +10,7 @@ use mysten_metrics::spawn_monitored_task;
 use mysten_network::anemo_ext::NetworkExt;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{btree_map::BTreeMap, HashMap},
+    collections::{btree_map::BTreeMap, BTreeSet, HashMap},
     ops::Bound,
     sync::Arc,
     time::Duration,
@@ -77,7 +77,7 @@ impl Handle {
             .unwrap()
     }
 
-    /// Begins transmitting partial signatures for the given epoch and round until canceled.
+    /// Begins transmitting partial signatures for the given epoch and round until completed.
     pub async fn send_partial_signatures(&self, epoch: EpochId, round: RandomnessRound) {
         self.sender
             .send(RandomnessMessage::SendPartialSignatures(epoch, round))
@@ -85,10 +85,10 @@ impl Handle {
             .unwrap()
     }
 
-    /// Cancels transmitting partial signatures for the given epoch and round.
-    pub async fn cancel_send_partial_signatures(&self, epoch: EpochId, round: RandomnessRound) {
+    /// Records the given round as complete, stopping any partial signature sends.
+    pub async fn complete_round(&self, epoch: EpochId, round: RandomnessRound) {
         self.sender
-            .send(RandomnessMessage::CancelSendPartialSignatures(epoch, round))
+            .send(RandomnessMessage::CompleteRound(epoch, round))
             .await
             .unwrap()
     }
@@ -121,7 +121,7 @@ enum RandomnessMessage {
         u32, // aggregation_threshold
     ),
     SendPartialSignatures(EpochId, RandomnessRound),
-    CancelSendPartialSignatures(EpochId, RandomnessRound),
+    CompleteRound(EpochId, RandomnessRound),
     ReceivePartialSignatures(PeerId, EpochId, RandomnessRound, Vec<Vec<u8>>),
 }
 
@@ -135,11 +135,11 @@ struct RandomnessEventLoop {
     peer_share_counts: Option<HashMap<PeerId, u16>>,
     dkg_output: Option<dkg::Output<bls12381::G2Element, bls12381::G2Element>>,
     aggregation_threshold: u32,
-    pending_tasks: BTreeMap<(EpochId, RandomnessRound), ()>,
+    pending_tasks: BTreeSet<(EpochId, RandomnessRound)>,
     send_tasks: BTreeMap<(EpochId, RandomnessRound), tokio::task::JoinHandle<()>>,
     received_partial_sigs:
         BTreeMap<(EpochId, RandomnessRound, PeerId), Vec<RandomnessPartialSignature>>,
-    completed_sigs: BTreeMap<(EpochId, RandomnessRound), ()>,
+    completed_sigs: BTreeSet<(EpochId, RandomnessRound)>,
 }
 
 impl RandomnessEventLoop {
@@ -181,9 +181,7 @@ impl RandomnessEventLoop {
             RandomnessMessage::SendPartialSignatures(epoch, round) => {
                 self.send_partial_signatures(epoch, round)
             }
-            RandomnessMessage::CancelSendPartialSignatures(epoch, round) => {
-                self.cancel_send_partial_signatures(epoch, round)
-            }
+            RandomnessMessage::CompleteRound(epoch, round) => self.complete_round(epoch, round),
             RandomnessMessage::ReceivePartialSignatures(peer_id, epoch, round, sigs) => {
                 self.receive_partial_signatures(peer_id, epoch, round, sigs)
                     .await
@@ -257,24 +255,26 @@ impl RandomnessEventLoop {
                 );
             return;
         }
-        if self.completed_sigs.contains_key(&(epoch, round)) {
+        if self.completed_sigs.contains(&(epoch, round)) {
             info!(
                 "skipping sending partial sigs for epoch {epoch} round {round}, we already have completed this sig"
             );
             return;
         }
 
-        self.pending_tasks.insert((epoch, round), ());
+        self.pending_tasks.insert((epoch, round));
         self.maybe_start_pending_tasks();
     }
 
-    fn cancel_send_partial_signatures(&mut self, epoch: EpochId, round: RandomnessRound) {
-        debug!("canceling sending partial sigs for epoch {epoch}, round {round}");
+    fn complete_round(&mut self, epoch: EpochId, round: RandomnessRound) {
+        debug!("completing randomness generation for epoch {epoch}, round {round}");
         self.pending_tasks.remove(&(epoch, round));
         if let Some(task) = self.send_tasks.remove(&(epoch, round)) {
             task.abort();
             self.maybe_start_pending_tasks();
         }
+        // Add to completed_sigs in case we are seeing it for the first time from a checkpoint.
+        self.completed_sigs.insert((epoch, round));
     }
 
     async fn receive_partial_signatures(
@@ -304,7 +304,7 @@ impl RandomnessEventLoop {
             );
             return;
         }
-        if self.completed_sigs.contains_key(&(epoch, round)) {
+        if self.completed_sigs.contains(&(epoch, round)) {
             debug!(
                 "skipping received partial sigs for epoch {epoch} round {round}, we already have completed this sig"
             );
@@ -323,9 +323,7 @@ impl RandomnessEventLoop {
             );
             return;
         }
-        if let Some(((last_completed_epoch, last_completed_round), _)) =
-            self.completed_sigs.last_key_value()
-        {
+        if let Some((last_completed_epoch, last_completed_round)) = self.completed_sigs.last() {
             const MAX_PARTIAL_SIGS_ROUNDS_AHEAD: u64 = 5;
             if epoch == *last_completed_epoch
                 && round.0
@@ -448,7 +446,7 @@ impl RandomnessEventLoop {
         }
 
         debug!("generated randomness full signature for epoch {epoch}, round {round}");
-        self.completed_sigs.insert((epoch, round), ());
+        self.completed_sigs.insert((epoch, round));
 
         // TODO-DNS is there a way to do this by range, instead of saving all the keys and
         // individually removing each one? From Googling I found some incomplete feature
@@ -483,7 +481,7 @@ impl RandomnessEventLoop {
         };
 
         let mut last_handled_key = None;
-        for ((epoch, round), _) in &self.pending_tasks {
+        for (epoch, round) in &self.pending_tasks {
             if epoch > &self.epoch {
                 break; // wait for DKG in new epoch
             }
@@ -529,7 +527,7 @@ impl RandomnessEventLoop {
                 .pending_tasks
                 .range((Bound::Excluded(last_handled_key), Bound::Unbounded))
                 .next()
-                .map(|(k, _)| *k);
+                .cloned();
             if let Some(key) = split_point {
                 let mut keep_tasks = self.pending_tasks.split_off(&key);
                 std::mem::swap(&mut self.pending_tasks, &mut keep_tasks);

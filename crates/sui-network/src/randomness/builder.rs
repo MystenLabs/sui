@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
 
@@ -108,10 +108,10 @@ impl UnstartedRandomness {
                 peer_share_counts: None,
                 dkg_output: None,
                 aggregation_threshold: 0,
-                pending_tasks: BTreeMap::new(),
+                pending_tasks: BTreeSet::new(),
                 send_tasks: BTreeMap::new(),
                 received_partial_sigs: BTreeMap::new(),
-                completed_sigs: BTreeMap::new(),
+                completed_sigs: BTreeSet::new(),
             },
             handle,
         )
