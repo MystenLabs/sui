@@ -15,17 +15,14 @@ impl<'a> Display for Pretty<'a, GasCostSummary> {
             storage_rebate,
             non_refundable_storage_fee,
         } = gcs;
-        write!(
-            f,
-            "{}",
-            format!(
-                "Gas Cost Summary:\n   \
+        let output = format!(
+            "Gas Cost Summary:\n   \
                  Storage Cost: {}\n   \
                  Computation Cost: {}\n   \
                  Storage Rebate: {}\n   \
                  Non-refundable Storage Fee: {}",
-                storage_cost, computation_cost, storage_rebate, non_refundable_storage_fee
-            )
-        )
+            storage_cost, computation_cost, storage_rebate, non_refundable_storage_fee
+        );
+        write!(f, "{}", output)
     }
 }

@@ -604,12 +604,10 @@ impl PTB {
                     .map_err(|_| anyhow!("Cannot serialize PTB result to json"))?
             };
             println!("{}", json_string);
+        } else if summary_flag {
+            println!("{}", Pretty(&summary));
         } else {
-            if summary_flag {
-                println!("{}", Pretty(&summary));
-            } else {
-                println!("{}", transaction_response);
-            }
+            println!("{}", transaction_response);
         }
 
         Ok(())

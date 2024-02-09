@@ -23,14 +23,12 @@ impl Display for PTBPreview {
         let mut from = "console";
         for cmd in &self.cmds {
             if cmd.name == "file-include-start" {
-                from = cmd.values.get(0).unwrap();
+                from = cmd.values.first().unwrap();
                 continue;
             } else if cmd.name == "file-include-end" {
                 from = "console";
                 continue;
-            } else if cmd.name == "preview" && cmd.is_preview_false() {
-                continue;
-            } else if cmd.name == "warn_shadows" && cmd.is_warn_shadows_false() {
+            } else if cmd.is_preview_false() || cmd.is_warn_shadows_false() {
                 continue;
             }
             builder.push_record([
@@ -40,7 +38,7 @@ impl Display for PTBPreview {
             ]);
         }
         let mut table = builder.build();
-        table.with(TablePanel::header(format!("PTB Preview")));
+        table.with(TablePanel::header("PTB Preview"));
         table.with(TableStyle::rounded().horizontals([
             HorizontalLine::new(1, TableStyle::modern().get_horizontal()),
             HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
@@ -59,6 +57,6 @@ impl Display for PTBGas {
             PTBGas::MAX => "max",
             PTBGas::SUM => "sum",
         };
-        write!(f, "{}", r.to_string())
+        write!(f, "{}", r)
     }
 }
