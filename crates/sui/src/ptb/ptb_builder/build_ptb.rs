@@ -8,8 +8,7 @@ use crate::{
     ptb::ptb_builder::{
         argument::Argument as PTBArg,
         command_token::{
-            CommandToken, ASSIGN, GAS_BUDGET, MAKE_MOVE_VEC, MOVE_CALL, PICK_GAS_BUDGET, PUBLISH,
-            UPGRADE,
+            CommandToken, ASSIGN, GAS_BUDGET, MOVE_CALL, PICK_GAS_BUDGET, PUBLISH, UPGRADE,
         },
         errors::{span, PTBError, PTBResult, Span, Spanned},
         parse_ptb::ParsedPTBCommand,
@@ -31,7 +30,7 @@ use move_command_line_common::{
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
 use serde::Serialize;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::collections::{BTreeMap, HashSet};
 use sui_json::is_receiving_argument;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
 use sui_protocol_config::ProtocolConfig;
@@ -554,7 +553,7 @@ impl<'a> PTBBuilder<'a> {
                 SignatureToken::Struct(..) | SignatureToken::StructInstantiation(..) => {
                     is_object_arg = true;
                     is_receiving |= is_receiving_argument(view, tok);
-                    break;
+                    // break;
                 }
                 SignatureToken::TypeParameter(idx) => {
                     let Some(tag) = ty_args.get(*idx as usize) else {
@@ -802,37 +801,39 @@ impl<'a> PTBBuilder<'a> {
                                 x,
                             );
                         }
-                        // Unable to resolve, so now see if we can resolve it to a menmonic, i.e.,
+                        // Unable to resolve, so now see if we can resolve it to an alias, i.e.,
                         // handle a alias that looks something like `foo.0`
-                        None => match self
-                            .resolve(
-                                span(
-                                    arg_loc,
-                                    PTBArg::Identifier(format!("{}.{}", head.value, access)),
-                                ),
+                        None => {
+                            let formatted_access = format!("{}.{}", head.value, access);
+                            if !self
+                                .addresses
+                                .keys()
+                                .chain(self.identifiers.keys())
+                                .collect::<HashSet<_>>()
+                                .contains(&formatted_access)
+                            {
+                                match self.did_you_mean_identifier(&head.value) {
+                                    Some(similars) => {
+                                        error!(
+                                            head.span => help: { "{}", similars },
+                                            "Tried to access an unresolved identifier: {}", head.value
+                                        );
+                                    }
+                                    None => {
+                                        error!(
+                                            head.span,
+                                            "Tried to access an unresolved identifier: {}",
+                                            head.value
+                                        );
+                                    }
+                                }
+                            }
+                            self.resolve(
+                                span(arg_loc, PTBArg::Identifier(formatted_access.clone())),
                                 ctx,
                             )
                             .await
-                        {
-                            // If we found a alias that we can resolve, then we return it.
-                            Ok(x) => Ok(x),
-                            // Otherwise error, but error against the head, and don't try to pull
-                            // in aliases for did-you-mean.
-                            Err(_) => match self.did_you_mean_identifier(&head.value) {
-                                Some(similars) => {
-                                    error!(
-                                        arg_loc => help: { "{}", similars },
-                                        "Tried to access an unresolved identifier: {}", head.value
-                                    );
-                                }
-                                None => {
-                                    error!(
-                                        arg_loc,
-                                        "Tried to access an unresolved identifier: {}", head.value
-                                    );
-                                }
-                            },
-                        },
+                        }
                     },
                 }
             }
@@ -912,7 +913,10 @@ impl<'a> PTBBuilder<'a> {
         let sp!(cmd_span, tok) = &command.name;
         match tok {
             CommandToken::TransferObjects => {
-                assert!(command.args.len() == 2);
+                if command.args.len() != 2 {
+                    let sp = cmd_span.union_with(command.args.iter().map(|x| x.span));
+                    error!(sp, "Expected 2 arguments but got {}", command.args.len());
+                }
                 bind!(
                     _,
                     PTBArg::Array(obj_args) = command.args.pop().unwrap(),
@@ -970,11 +974,15 @@ impl<'a> PTBBuilder<'a> {
                 error!(*cmd_span, "Expected 1 or 2 arguments for assignment")
             }
             CommandToken::MakeMoveVec => {
+                if command.args.len() != 2 {
+                    let sp = cmd_span.union_with(command.args.iter().map(|x| x.span));
+                    error!(sp, "Expected 2 arguments but got {}", command.args.len());
+                }
                 bind!(
                     _,
                     PTBArg::Array(args) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(loc, "Expected array of argument");
+                        error!(loc, "Expected an array");
                     }
                 );
                 bind!(
@@ -987,7 +995,7 @@ impl<'a> PTBBuilder<'a> {
                 if ty_args.len() != 1 {
                     error!(
                         ty_locs,
-                        "Expected 1 type argument to '{MAKE_MOVE_VEC}' but got {} type arguments",
+                        "Expected 1 type argument but got {}",
                         ty_args.len()
                     );
                 }
@@ -1014,7 +1022,8 @@ impl<'a> PTBBuilder<'a> {
             }
             CommandToken::SplitCoins => {
                 if command.args.len() != 2 {
-                    error!(*cmd_span, "Expected 2 arguments");
+                    let sp = cmd_span.union_with(command.args.iter().map(|x| x.span));
+                    error!(sp, "Expected 2 arguments but got {}", command.args.len());
                 }
 
                 bind!(
@@ -1040,7 +1049,8 @@ impl<'a> PTBBuilder<'a> {
             }
             CommandToken::MergeCoins => {
                 if command.args.len() != 2 {
-                    error!(*cmd_span, "Expected 2 arguments");
+                    let sp = cmd_span.union_with(command.args.iter().map(|x| x.span));
+                    error!(sp, "Expected 2 arguments but got {}", command.args.len());
                 }
 
                 bind!(
@@ -1069,14 +1079,14 @@ impl<'a> PTBBuilder<'a> {
                     ident_loc,
                     PTBArg::Identifier(i) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(loc, "expected identifier");
+                        error!(loc, "Expected identifier");
                     }
                 );
                 let picker = match i.to_string().as_str() {
                     "max" => GasPicker::Max,
                     "min" => GasPicker::Min,
                     "sum" => GasPicker::Sum,
-                    x => error!(ident_loc, "invalid gas picker: {}", x),
+                    x => error!(ident_loc, "Invalid gas picker: {}", x),
                 };
                 self.gas_budget.set_gas_picker(picker, ident_loc);
             }
@@ -1085,7 +1095,7 @@ impl<'a> PTBBuilder<'a> {
                     budget_loc,
                     PTBArg::U64(budget) = command.args.pop().unwrap(),
                     |loc| {
-                        error!(loc, "expected gas budget");
+                        error!(loc, "Expected an integer as the gas budget");
                     }
                 );
                 self.gas_budget.add_gas_budget(budget, budget_loc);
@@ -1197,11 +1207,11 @@ impl<'a> PTBBuilder<'a> {
                         error!(loc, "Expected filepath argument here");
                     }
                 );
-                let package_path = PathBuf::from(package_path);
+                let qual_package_path = cmd_span.file_scope.qualify_path(&package_path);
                 let (dependencies, compiled_modules, _, _) = compile_package(
                     self.reader,
                     BuildConfig::default(),
-                    package_path,
+                    qual_package_path,
                     false, /* with_unpublished_dependencies */
                     false, /* skip_dependency_verification */
                 )
@@ -1243,7 +1253,7 @@ impl<'a> PTBBuilder<'a> {
                         error!(loc, "Expected filepath argument");
                     }
                 );
-                let package_path = PathBuf::from(package_path);
+                let qual_package_path = cmd_span.file_scope.qualify_path(&package_path);
 
                 let upgrade_cap_arg = self
                     .resolve(
@@ -1256,7 +1266,7 @@ impl<'a> PTBBuilder<'a> {
                     upgrade_package(
                         self.reader,
                         BuildConfig::default(),
-                        package_path,
+                        qual_package_path,
                         ObjectID::from_address(upgrade_cap_id.into_inner()),
                         false, /* with_unpublished_dependencies */
                         false, /* skip_dependency_verification */

@@ -1,0 +1,6 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "format!(\"=== FILE EXPANSION ERROR === \\n {:?}\", e)"
+---
+=== FILE EXPANSION ERROR === 
+ tests/ptb_files/file/self_include_circular.ptb includes file "self_include_circular.ptb" which does not exist.

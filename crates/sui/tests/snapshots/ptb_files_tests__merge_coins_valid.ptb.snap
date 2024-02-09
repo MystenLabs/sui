@@ -1,0 +1,50 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                  │
+├─────────────┬───────────────────────────────────────────────────┬────────────────────────────┤
+│ command     │ from                                              │ value(s)                   │
+├─────────────┼───────────────────────────────────────────────────┼────────────────────────────┤
+│ gas_budget  │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │ 100000000                  │
+│ split_coins │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │ gas [1,2,3]                │
+│ assign      │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │ coins                      │
+│ assign      │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │ c0 coins.0                 │
+│ assign      │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │ c1 coins.1                 │
+│ assign      │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │ c2 coins.2                 │
+│ merge_coins │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │ c0 [c1, c2]                │
+│ merge_coins │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │ gas [c0]                   │
+│ split_coins │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │ gas [1,2,3]                │
+│ assign      │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │ coins                      │
+│ merge_coins │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │ coins.0 [coins.1, coins.2] │
+│ merge_coins │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │ gas [coins.0]              │
+│ preview     │ console                                           │ true                       │
+╰─────────────┴───────────────────────────────────────────────────┴────────────────────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/merge_coins/merge_coins_valid.ptb\""]
+cmd: gas_budget, value: ["100000000u64"]
+cmd: split_coins, value: ["gas", "[1u64, 2u64, 3u64]"]
+cmd: assign, value: ["coins"]
+cmd: assign, value: ["c0", "coins.0"]
+cmd: assign, value: ["c1", "coins.1"]
+cmd: assign, value: ["c2", "coins.2"]
+cmd: merge_coins, value: ["c0", "[c1, c2]"]
+cmd: merge_coins, value: ["gas", "[c0]"]
+cmd: split_coins, value: ["gas", "[1u64, 2u64, 3u64]"]
+cmd: assign, value: ["coins"]
+cmd: merge_coins, value: ["coins.0", "[coins.1, coins.2]"]
+cmd: merge_coins, value: ["gas", "[coins.0]"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/merge_coins/merge_coins_valid.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILT PTB === 
+SplitCoins(GasCoinInput(0),Input(1),Input(2))
+MergeCoins(NestedResult(0,0),NestedResult(0,1),NestedResult(0,2))
+MergeCoins(GasCoin,NestedResult(0,0))
+SplitCoins(GasCoinInput(0),Input(1),Input(2))
+MergeCoins(NestedResult(3,0),NestedResult(3,1),NestedResult(3,2))
+MergeCoins(GasCoin,NestedResult(3,0))

@@ -3,24 +3,24 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭──────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                  │
-├─────────────┬─────────────────────────────────┬──────────────┤
-│ command     │ from                            │ value(s)     │
-├─────────────┼─────────────────────────────────┼──────────────┤
-│ gas_budget  │ tests/ptb_files/split_coins.ptb │ 1000         │
-│ split_coins │ tests/ptb_files/split_coins.ptb │ @0x1 [1,2,3] │
-│ assign      │ tests/ptb_files/split_coins.ptb │ coins        │
-│ preview     │ console                         │ true         │
-╰─────────────┴─────────────────────────────────┴──────────────╯
+╭──────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                              │
+├─────────────┬─────────────────────────────────────────────┬──────────────┤
+│ command     │ from                                        │ value(s)     │
+├─────────────┼─────────────────────────────────────────────┼──────────────┤
+│ gas_budget  │ tests/ptb_files/split_coins/split_coins.ptb │ 1000         │
+│ split_coins │ tests/ptb_files/split_coins/split_coins.ptb │ @0x1 [1,2,3] │
+│ assign      │ tests/ptb_files/split_coins/split_coins.ptb │ coins        │
+│ preview     │ console                                     │ true         │
+╰─────────────┴─────────────────────────────────────────────┴──────────────╯
  === PARSED INPUT COMMANDS === 
-cmd: file-include-start, value: ["\"tests/ptb_files/split_coins.ptb\""]
+cmd: file-include-start, value: ["\"tests/ptb_files/split_coins/split_coins.ptb\""]
 cmd: gas_budget, value: ["1000u64"]
 cmd: split_coins, value: ["@0x1", "[1u64, 2u64, 3u64]"]
 cmd: assign, value: ["coins"]
 cmd: preview, value: ["false"]
 cmd: warn_shadows, value: ["false"]
-cmd: file-include-end, value: ["\"tests/ptb_files/split_coins.ptb\""]
+cmd: file-include-end, value: ["\"tests/ptb_files/split_coins/split_coins.ptb\""]
 cmd: preview, value: ["true"]
 cmd: warn_shadows, value: ["false"]
  === BUILT PTB === 

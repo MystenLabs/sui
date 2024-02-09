@@ -3,7 +3,7 @@
 
 use crate::ptb::ptb_builder::errors::{PTBError, PTBResult, Span};
 use move_symbol_pool::Symbol;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::PathBuf};
 
 /// A `FileScope` represents a command in a given file, along with dismbiguating if there are
 /// multiple occurences of the same file in the PTB.
@@ -94,5 +94,20 @@ impl PTBContext {
 
     pub fn increment_file_command_index(&mut self) {
         self.current_file_scope.file_command_index += 1;
+    }
+}
+
+impl FileScope {
+    /// Qualify a path with the current file scope. This means that relative file paths inside of
+    /// PTBs will be respected and resolved correctly.
+    pub fn qualify_path(&self, path: &str) -> PathBuf {
+        let command_ptb_path = PathBuf::from(self.name.as_str());
+        let mut qual_package_path = match command_ptb_path.parent() {
+            None => PathBuf::new(),
+            Some(x) if x.to_string_lossy().is_empty() => PathBuf::new(),
+            Some(parent) => parent.to_path_buf(),
+        };
+        qual_package_path.push(path);
+        qual_package_path
     }
 }

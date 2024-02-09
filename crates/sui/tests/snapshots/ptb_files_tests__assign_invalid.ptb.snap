@@ -1,0 +1,176 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                        │
+├────────────┬───────────────────────────────────────────┬───────────┤
+│ command    │ from                                      │ value(s)  │
+├────────────┼───────────────────────────────────────────┼───────────┤
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ a         │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ b 3       │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ c         │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ d         │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ a b c     │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ a b c e f │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ gas 1     │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ none 2    │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ a         │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ b 3       │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ c         │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ d         │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ a b c     │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ a b c e f │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ gas 1     │
+│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ none 2    │
+│ gas_budget │ tests/ptb_files/assign/assign_invalid.ptb │ 1         │
+│ preview    │ console                                   │ true      │
+╰────────────┴───────────────────────────────────────────┴───────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/assign/assign_invalid.ptb\""]
+cmd: assign, value: ["a"]
+cmd: assign, value: ["b", "3u64"]
+cmd: assign, value: ["c"]
+cmd: assign, value: ["d"]
+cmd: assign, value: ["a", "b", "c"]
+cmd: assign, value: ["a", "b", "c", "e", "f"]
+cmd: assign, value: ["gas", "1u64"]
+cmd: assign, value: ["none", "2u64"]
+cmd: assign, value: ["a"]
+cmd: assign, value: ["b", "3u64"]
+cmd: assign, value: ["c"]
+cmd: assign, value: ["d"]
+cmd: assign, value: ["a", "b", "c"]
+cmd: assign, value: ["a", "b", "c", "e", "f"]
+cmd: assign, value: ["gas", "1u64"]
+cmd: assign, value: ["none", "2u64"]
+cmd: gas_budget, value: ["1u64"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/assign/assign_invalid.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILDING PTB ERRORS === 
+  × Error at command 0 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
+   ╭────
+ 1 │ assign a 
+   ·        ┬
+   ·        ╰── Cannot assign a value to this variable.
+   ╰────
+  help: This is most likely because the previous command did not produce
+        a result. E.g., 'assign' or 'gas_budget' commands do not produce
+        results.
+
+  × Error at command 2 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
+   ╭────
+ 1 │ assign c 
+   ·        ┬
+   ·        ╰── Cannot assign a value to this variable.
+   ╰────
+  help: This is most likely because the previous command did not produce
+        a result. E.g., 'assign' or 'gas_budget' commands do not produce
+        results.
+
+  × Error at command 3 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
+   ╭────
+ 1 │ assign d 
+   ·        ┬
+   ·        ╰── Cannot assign a value to this variable.
+   ╰────
+  help: This is most likely because the previous command did not produce
+        a result. E.g., 'assign' or 'gas_budget' commands do not produce
+        results.
+
+  × Error at command 4 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
+   ╭────
+ 1 │ assign a b c 
+   · ───┬──
+   ·    ╰── Expected 1 or 2 arguments for assignment
+   ╰────
+
+  × Error at command 5 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
+   ╭────
+ 1 │ assign a b c e f 
+   · ───┬──
+   ·    ╰── Expected 1 or 2 arguments for assignment
+   ╰────
+
+  × Error at command 6 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
+   ╭────
+ 1 │ assign gas 1 
+   ·        ─┬─
+   ·         ╰── Expected identifier
+   ╰────
+
+  × Error at command 7 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
+   ╭────
+ 1 │ assign none 2 
+   ·        ──┬─
+   ·          ╰── Expected identifier
+   ╰────
+
+  × Error at command 8 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
+   ╭────
+ 1 │ assign a 
+   ·        ┬
+   ·        ╰── Cannot assign a value to this variable.
+   ╰────
+  help: This is most likely because the previous command did not produce
+        a result. E.g., 'assign' or 'gas_budget' commands do not produce
+        results.
+
+  × Error at command 10 in PTB file 'tests/ptb_files/assign/
+  │ assign_invalid.ptb'
+   ╭────
+ 1 │ assign c 
+   ·        ┬
+   ·        ╰── Cannot assign a value to this variable.
+   ╰────
+  help: This is most likely because the previous command did not produce
+        a result. E.g., 'assign' or 'gas_budget' commands do not produce
+        results.
+
+  × Error at command 11 in PTB file 'tests/ptb_files/assign/
+  │ assign_invalid.ptb'
+   ╭────
+ 1 │ assign d 
+   ·        ┬
+   ·        ╰── Cannot assign a value to this variable.
+   ╰────
+  help: This is most likely because the previous command did not produce
+        a result. E.g., 'assign' or 'gas_budget' commands do not produce
+        results.
+
+  × Error at command 12 in PTB file 'tests/ptb_files/assign/
+  │ assign_invalid.ptb'
+   ╭────
+ 1 │ assign a b c 
+   · ───┬──
+   ·    ╰── Expected 1 or 2 arguments for assignment
+   ╰────
+
+  × Error at command 13 in PTB file 'tests/ptb_files/assign/
+  │ assign_invalid.ptb'
+   ╭────
+ 1 │ assign a b c e f 
+   · ───┬──
+   ·    ╰── Expected 1 or 2 arguments for assignment
+   ╰────
+
+  × Error at command 14 in PTB file 'tests/ptb_files/assign/
+  │ assign_invalid.ptb'
+   ╭────
+ 1 │ assign gas 1 
+   ·        ─┬─
+   ·         ╰── Expected identifier
+   ╰────
+
+  × Error at command 15 in PTB file 'tests/ptb_files/assign/
+  │ assign_invalid.ptb'
+   ╭────
+ 1 │ assign none 2 
+   ·        ──┬─
+   ·          ╰── Expected identifier
+   ╰────
+

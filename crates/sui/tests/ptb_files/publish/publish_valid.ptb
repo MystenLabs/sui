@@ -1,0 +1,2 @@
+--publish test_pkg
+--gas-budget 1000000

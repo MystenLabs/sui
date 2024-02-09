@@ -3,57 +3,45 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭─────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                         │
-├───────────────┬───────────────────────────────────┬─────────────────────────────────┤
-│ command       │ from                              │ value(s)                        │
-├───────────────┼───────────────────────────────────┼─────────────────────────────────┤
-│ gas_budget    │ tests/ptb_files/no_gas_picker.ptb │ 1000                            │
-│ assign        │ tests/ptb_files/no_gas_picker.ptb │ X 1000                          │
-│ gas_budget    │ move_call.ptb                     │ 1000                            │
-│ assign        │ move_call.ptb                     │ a none                          │
-│ make_move_vec │ move_call.ptb                     │ <0x1::option::Option<u64>> [a]  │
-│ move_call     │ move_call.ptb                     │ 0x1::option::is_none <u64> a    │
-│ assign        │ move_call.ptb                     │ a none                          │
-│ move_call     │ move_call.ptb                     │ 0x1::option::is_none <u64> none │
-│ assign        │ move_call.ptb                     │ a none                          │
-│ move_call     │ move_call.ptb                     │ 0x1::option::is_none <u64> a    │
-│ preview       │ console                           │ true                            │
-╰───────────────┴───────────────────────────────────┴─────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                   │
+├────────────┬───────────────────────────────────────┬──────────┤
+│ command    │ from                                  │ value(s) │
+├────────────┼───────────────────────────────────────┼──────────┤
+│ gas_budget │ tests/ptb_files/gas/no_gas_picker.ptb │ 1000     │
+│ assign     │ tests/ptb_files/gas/no_gas_picker.ptb │ X 1000   │
+│ gas_budget │ valid_gas.ptb                         │ 110000   │
+│ preview    │ console                               │ true     │
+╰────────────┴───────────────────────────────────────┴──────────╯
  === PARSED INPUT COMMANDS === 
-cmd: file-include-start, value: ["\"tests/ptb_files/no_gas_picker.ptb\""]
+cmd: file-include-start, value: ["\"tests/ptb_files/gas/no_gas_picker.ptb\""]
 cmd: gas_budget, value: ["1000u64"]
 cmd: assign, value: ["X", "1000u64"]
-cmd: file-include-start, value: ["\"move_call.ptb\""]
-cmd: gas_budget, value: ["1000u64"]
-cmd: assign, value: ["a", "none"]
-cmd: make_move_vec, value: ["<0x1::option::Option<u64>>", "[a]"]
-cmd: move_call, value: ["0x1::option::is_none", "<u64>", "a"]
-cmd: assign, value: ["a", "none"]
-cmd: move_call, value: ["0x1::option::is_none", "<u64>", "none"]
-cmd: assign, value: ["a", "none"]
-cmd: move_call, value: ["0x1::option::is_none", "<u64>", "a"]
+cmd: file-include-start, value: ["\"valid_gas.ptb\""]
+cmd: gas_budget, value: ["110000u64"]
 cmd: preview, value: ["false"]
 cmd: warn_shadows, value: ["false"]
-cmd: file-include-end, value: ["\"move_call.ptb\""]
+cmd: file-include-end, value: ["\"valid_gas.ptb\""]
 cmd: preview, value: ["false"]
 cmd: warn_shadows, value: ["false"]
-cmd: file-include-end, value: ["\"tests/ptb_files/no_gas_picker.ptb\""]
+cmd: file-include-end, value: ["\"tests/ptb_files/gas/no_gas_picker.ptb\""]
 cmd: preview, value: ["true"]
 cmd: warn_shadows, value: ["false"]
  === BUILDING PTB ERRORS === 
-  × Error at command 0 in PTB file 'tests/ptb_files/no_gas_picker.ptb'
+  × Error at command 0 in PTB file 'tests/ptb_files/gas/no_gas_picker.ptb'
    ╭────
  1 │ gas_budget 1000 
    ·            ──┬─
    ·              ╰── Multiple gas budgets set for transaction with no gas picker. Gas budget is set for the first time here.
    ╰────
-  help: You should either remove all but one usage of setting the gas budget, or use the 'pick_gas_budget' command to handle multiple gas budgets
+  help: You should either remove all but one usage of setting the gas
+        budget, or use the 'pick_gas_budget' command to handle multiple
+        gas budgets
 
-  × Error at command 0 in PTB file 'move_call.ptb'
+  × Error at command 0 in PTB file 'valid_gas.ptb'
    ╭────
- 1 │ gas_budget 1000 
-   ·            ──┬─
-   ·              ╰── Gas budget is set for the 2nd time here.
+ 1 │ gas_budget 110000 
+   ·            ───┬──
+   ·               ╰── Gas budget is set for the 2nd time here.
    ╰────
 

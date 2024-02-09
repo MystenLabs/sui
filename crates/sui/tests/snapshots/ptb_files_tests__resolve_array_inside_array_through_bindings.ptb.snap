@@ -1,0 +1,31 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                                              │
+├───────────────┬───────────────────────────────────────────────────────────────────────────────┬──────────────────────────┤
+│ command       │ from                                                                          │ value(s)                 │
+├───────────────┼───────────────────────────────────────────────────────────────────────────────┼──────────────────────────┤
+│ gas_budget    │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │ 1000000000               │
+│ make_move_vec │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │ <address> [@0x1]         │
+│ assign        │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │ a                        │
+│ make_move_vec │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │ <vector<address>> [a, a] │
+│ preview       │ console                                                                       │ true                     │
+╰───────────────┴───────────────────────────────────────────────────────────────────────────────┴──────────────────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb\""]
+cmd: gas_budget, value: ["1000000000u64"]
+cmd: make_move_vec, value: ["<address>", "[@0x1]"]
+cmd: assign, value: ["a"]
+cmd: make_move_vec, value: ["<vector<address>>", "[a, a]"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILT PTB === 
+Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
+Command 0: MakeMoveVec(Someaddress,[Input(0)])
+Command 1: MakeMoveVec(Somevector<address>,[Result(0),Result(0)])

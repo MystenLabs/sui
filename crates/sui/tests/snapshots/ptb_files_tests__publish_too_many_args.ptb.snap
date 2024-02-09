@@ -1,0 +1,23 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                    │
+├────────────┬───────────────────────────────────────────────────┬───────────────┤
+│ command    │ from                                              │ value(s)      │
+├────────────┼───────────────────────────────────────────────────┼───────────────┤
+│ gas_budget │ tests/ptb_files/publish/publish_too_many_args.ptb │ 1000          │
+│ publish    │ tests/ptb_files/publish/publish_too_many_args.ptb │ too many args │
+│ preview    │ console                                           │ true          │
+╰────────────┴───────────────────────────────────────────────────┴───────────────╯
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error at command 1 in PTB file 'tests/ptb_files/publish/
+  │ publish_too_many_args.ptb'
+   ╭────
+ 1 │ publish too many args 
+   · ───┬───
+   ·    ╰── Invalid command expected 1 argument but got 3
+   ╰────
+
