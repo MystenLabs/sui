@@ -265,9 +265,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "CachedVersionMap is empty")]
-    fn get_last_on_empty_map_panics() {
+    fn get_last_on_empty_map() {
         let map: CachedVersionMap<&str> = CachedVersionMap::default();
-        let _ = map.get_last(); // This should panic
+        assert!(map.get_last().is_none());
     }
 }
