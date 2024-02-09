@@ -507,7 +507,6 @@ impl SuiNode {
         );
 
         let state_sync_store = RocksDbStore::new(
-            store.clone(),
             execution_cache.clone(),
             committee_store.clone(),
             checkpoint_store.clone(),
