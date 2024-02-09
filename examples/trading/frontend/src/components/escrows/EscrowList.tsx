@@ -7,6 +7,7 @@ import { Escrow } from "./Escrow";
 import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { constructUrlSearchParams, getNextPageParam } from "@/utils/helpers";
+import { EscrowObject } from "@/types/types";
 
 export function EscrowList({
   sent,
@@ -43,7 +44,7 @@ export function EscrowList({
       hasNextPage={hasNextPage}
       loading={isFetchingNextPage || isLoading}
     >
-      {data?.map((escrow: Escrow) => (
+      {data?.map((escrow: EscrowObject) => (
         <Escrow key={escrow.itemId} escrow={escrow} />
       ))}
     </InfiniteScrollArea>

@@ -8,3 +8,14 @@ export type LockedObject = {
   itemId: string;
   deleted: boolean;
 };
+
+export type EscrowObject = {
+  id: string;
+  objectId: string;
+  sender: string;
+  recipient: string;
+  keyId: string;
+  itemId: string;
+  swapped: boolean;
+  cancelled: boolean;
+};

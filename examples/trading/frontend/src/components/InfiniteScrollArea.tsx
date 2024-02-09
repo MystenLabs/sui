@@ -17,7 +17,6 @@ export function InfiniteScrollArea({
   hasNextPage: boolean;
   gridClasses?: string;
 }) {
-  console.log(children);
   if (!children || (Array.isArray(children) && children.length === 0))
     return <div className="p-3">No results found.</div>;
   return (

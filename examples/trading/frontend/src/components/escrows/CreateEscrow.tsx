@@ -6,14 +6,15 @@ import { formatAddress } from "@mysten/sui.js/utils";
 import { Avatar, Button, Select } from "@radix-ui/themes";
 import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { useState } from "react";
-import { TransactionBlock } from "@mysten/sui.js/transactions";
-import { CONSTANTS } from "@/constants";
-import { useTransactionExecution } from "@/hooks/useTransactionExecution";
+import { ObjectLink } from "../ObjectLink";
+import { useCreateEscrowMutation } from "@/mutations/escrow";
 
 export function CreateEscrow({ locked }: { locked: LockedObject }) {
   const [objectId, setObjectId] = useState<string | undefined>(undefined);
   const account = useCurrentAccount();
-  const executeTransaction = useTransactionExecution();
+
+  const { mutate: createEscrowMutation, isPending } = useCreateEscrowMutation();
+
   const { data, fetchNextPage, isFetchingNextPage, hasNextPage, refetch } =
     useSuiClientInfiniteQuery(
       "getOwnedObjects",
@@ -35,84 +36,87 @@ export function CreateEscrow({ locked }: { locked: LockedObject }) {
       },
     );
 
-  const createEscrow = async () => {
+  const getObject = () => {
     const object = data?.find((x) => x.data?.objectId === objectId);
 
-    if (!object) {
+    if (!object || !object.data) {
       return;
     }
-
-    console.log({ object, locked });
-    const txb = new TransactionBlock();
-    txb.moveCall({
-      target: `${CONSTANTS.escrowContract.packageId}::shared::create`,
-      arguments: [
-        txb.object(object.data?.objectId!),
-        txb.pure.id(locked.keyId),
-        txb.pure.address(locked.creator),
-      ],
-      typeArguments: [object.data?.type!],
-    });
-
-    const res = await executeTransaction(txb);
-
-    if (res) {
-      console.log(res);
-      refetch();
-    }
+    return object.data;
   };
 
   return (
-    <div className="px-3 py-3  mt-3 rounded">
-      <label>Select which object you are putting on escrow:</label>
-      <Select.Root value={objectId} onValueChange={setObjectId}>
-        <Select.Trigger
-          className="h-auto min-h-[25px] w-full mt-3 py-2"
-          placeholder="Pick an object"
-        />
-        <Select.Content className="max-w-[550px] overflow-hidden">
-          <Select.Group>
-            <Select.Label>Select an Object</Select.Label>
+    <div className="px-3 py-3 grid grid-cols-1 gap-5  mt-3 rounded">
+      <div>
+        <label className="text-xs">The recipient will be:</label>
+        <ObjectLink id={locked.creator} isAddress />
+      </div>
+      <div>
+        <label className="text-xs">Select which object to put on escrow:</label>
+        <Select.Root value={objectId} onValueChange={setObjectId}>
+          <Select.Trigger
+            className="h-auto min-h-[25px] w-full mt-3 py-2"
+            placeholder="Pick an object"
+          />
+          <Select.Content className="max-w-[550px] overflow-hidden">
+            <Select.Group>
+              <Select.Label>Select an Object</Select.Label>
 
-            <InfiniteScrollArea
-              loadMore={() => fetchNextPage()}
-              hasNextPage={hasNextPage}
-              loading={isFetchingNextPage}
-              gridClasses="grid-cols-1 gap-2"
-            >
-              {data?.map((object) => {
-                return (
-                  <Select.Item
-                    key={object.data?.objectId!}
-                    value={object.data?.objectId!}
-                    className="h-auto w-full data-[state=checked]:bg-blue-50 whitespace-pre-wrap overlfow-hidden break-words hover:bg-blue-50 bg-white text-black cursor-pointer"
-                  >
-                    <div className="flex items-center break-words">
-                      <Avatar
-                        size="2"
-                        radius="medium"
-                        fallback="O"
-                        className="mr-3"
-                        src={object.data?.display?.data?.image_url!}
-                      />
-                      <div className="text-xs overflow-ellipsis">
-                        {(
-                          object.data?.display?.data?.name || "No name"
-                        ).substring(0, 100)}
-                        <p className="text-gray-600">
-                          {formatAddress(object.data?.objectId!)}
-                        </p>
+              <InfiniteScrollArea
+                loadMore={() => fetchNextPage()}
+                hasNextPage={hasNextPage}
+                loading={isFetchingNextPage}
+                gridClasses="grid-cols-1 gap-2"
+              >
+                {data?.map((object) => {
+                  return (
+                    <Select.Item
+                      key={object.data?.objectId!}
+                      value={object.data?.objectId!}
+                      className="h-auto w-full data-[state=checked]:bg-blue-50 whitespace-pre-wrap overlfow-hidden break-words hover:bg-blue-50 bg-white text-black cursor-pointer"
+                    >
+                      <div className="flex items-center break-words">
+                        <Avatar
+                          size="2"
+                          radius="medium"
+                          fallback="*"
+                          className="mr-3"
+                          src={object.data?.display?.data?.image_url!}
+                        />
+                        <div className="text-xs overflow-ellipsis">
+                          {(object.data?.display?.data?.name || "-").substring(
+                            0,
+                            100,
+                          )}
+                          <p className="text-gray-600">
+                            {formatAddress(object.data?.objectId!)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </Select.Item>
-                );
-              })}
-            </InfiniteScrollArea>
-          </Select.Group>
-        </Select.Content>
-      </Select.Root>
-      <div className="mt-6 text-right">
-        <Button className="cursor-pointer" onClick={createEscrow}>
+                    </Select.Item>
+                  );
+                })}
+              </InfiniteScrollArea>
+            </Select.Group>
+          </Select.Content>
+        </Select.Root>
+      </div>
+      <div className="text-right">
+        <Button
+          className="cursor-pointer"
+          disabled={isPending}
+          onClick={() => {
+            createEscrowMutation(
+              { locked, object: getObject()! },
+              {
+                onSuccess: () => {
+                  refetch();
+                  setObjectId(undefined);
+                },
+              },
+            );
+          }}
+        >
           Create Escrow
         </Button>
       </div>

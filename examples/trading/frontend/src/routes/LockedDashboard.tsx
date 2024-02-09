@@ -3,22 +3,19 @@
 
 import { useState } from "react";
 import { Tabs } from "@radix-ui/themes";
-import { LockedList } from "../locked/LockedList";
-import { EscrowList } from "./EscrowList";
+import { LockItems } from "../components/locked/LockItems";
+import { LockedList } from "../components/locked/LockedList";
 
-export function EscrowDashboard() {
+// SPDX-License-Identifier: Apache-2.0
+export function LockedDashboard() {
   const tabs = [
     {
-      name: "Browse Locked Objects",
-      component: () => <LockedList />,
+      name: "My Locked Objects",
+      component: () => <LockedList isPersonal />,
     },
     {
-      name: "Pending Escrows",
-      component: () => <EscrowList sent />,
-    },
-    {
-      name: "Requested Escrows",
-      component: () => <EscrowList received />,
+      name: "Lock Owned objects",
+      component: () => <LockItems />,
     },
   ];
 

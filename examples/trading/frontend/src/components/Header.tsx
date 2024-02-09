@@ -1,23 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGenerateDemoData } from "@/mutations/demo";
 import { ConnectButton } from "@mysten/dapp-kit";
 import { SizeIcon } from "@radix-ui/react-icons";
-import { Box, Container, Flex, Heading } from "@radix-ui/themes";
-import { Link } from "react-router-dom";
+import { Box, Button, Container, Flex, Heading } from "@radix-ui/themes";
+import { NavLink } from "react-router-dom";
 
 const menu = [
-  {
-    title: "Manage Objects",
-    link: "/locked",
-  },
   {
     title: "Escrows",
     link: "/escrows",
   },
+  {
+    title: "Manage Objects",
+    link: "/locked",
+  },
 ];
 
 export function Header() {
+  const { mutate: demoBearMutation, isPending } = useGenerateDemoData();
   return (
     <Container>
       <Flex
@@ -25,7 +27,7 @@ export function Header() {
         px="4"
         py="2"
         justify="between"
-        className="border-b"
+        className="border-b flex flex-wrap"
       >
         <Box>
           <Heading className="flex items-center gap-3">
@@ -36,10 +38,33 @@ export function Header() {
 
         <Box className="flex gap-5 items-center">
           {menu.map((item) => (
-            <Link to={item.link} className="cursor-pointer">
+            <NavLink
+              to={item.link}
+              className={({ isActive, isPending }) =>
+                `cursor-pointer flex items-center gap-2 ${
+                  isPending
+                    ? "pending"
+                    : isActive
+                    ? "font-bold text-blue-600"
+                    : ""
+                }`
+              }
+            >
               {item.title}
-            </Link>
+            </NavLink>
           ))}
+        </Box>
+        <Box>
+          <Button
+            color="brown"
+            className="cursor-pointer"
+            disabled={isPending}
+            onClick={() => {
+              demoBearMutation();
+            }}
+          >
+            New Demo Bear
+          </Button>
         </Box>
 
         <Box className="connect-wallet-wrapper">
