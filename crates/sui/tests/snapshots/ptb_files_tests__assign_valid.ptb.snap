@@ -1,0 +1,49 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭───────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                               │
+├───────────────┬─────────────────────────────────────────┬─────────────────┤
+│ command       │ from                                    │ value(s)        │
+├───────────────┼─────────────────────────────────────────┼─────────────────┤
+│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ a @0x0          │
+│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ b a             │
+│ make_move_vec │ tests/ptb_files/assign/assign_valid.ptb │ <address> [a,b] │
+│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ c               │
+│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ c0 c.0          │
+│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ c1 c.1          │
+│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ a @0x0          │
+│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ b a             │
+│ make_move_vec │ tests/ptb_files/assign/assign_valid.ptb │ <address> [a,b] │
+│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ c               │
+│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ c0 c.0          │
+│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ c1 c.1          │
+│ gas_budget    │ tests/ptb_files/assign/assign_valid.ptb │ 1               │
+│ preview       │ console                                 │ true            │
+╰───────────────┴─────────────────────────────────────────┴─────────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/assign/assign_valid.ptb\""]
+cmd: assign, value: ["a", "@0x0"]
+cmd: assign, value: ["b", "a"]
+cmd: make_move_vec, value: ["<address>", "[a, b]"]
+cmd: assign, value: ["c"]
+cmd: assign, value: ["c0", "c.0"]
+cmd: assign, value: ["c1", "c.1"]
+cmd: assign, value: ["a", "@0x0"]
+cmd: assign, value: ["b", "a"]
+cmd: make_move_vec, value: ["<address>", "[a, b]"]
+cmd: assign, value: ["c"]
+cmd: assign, value: ["c0", "c.0"]
+cmd: assign, value: ["c1", "c.1"]
+cmd: gas_budget, value: ["1u64"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/assign/assign_valid.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILT PTB === 
+Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+Command 0: MakeMoveVec(Someaddress,[Input(0),Input(0)])
+Command 1: MakeMoveVec(Someaddress,[Input(0),Input(0)])

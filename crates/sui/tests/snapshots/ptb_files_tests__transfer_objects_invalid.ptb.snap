@@ -1,0 +1,56 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                               │
+├──────────────────┬───────────────────────────────────────────────────────────────┬────────────────────────┤
+│ command          │ from                                                          │ value(s)               │
+├──────────────────┼───────────────────────────────────────────────────────────────┼────────────────────────┤
+│ transfer_objects │ tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb │ @0x1                   │
+│ transfer_objects │ tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb │ @0x1 [@0x1, @0x2] @0x2 │
+│ split_coins      │ tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb │ gas [1,2,3]            │
+│ assign           │ tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb │ s                      │
+│ transfer_objects │ tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb │ @0x1 s                 │
+│ gas_budget       │ tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb │ 100                    │
+│ preview          │ console                                                       │ true                   │
+╰──────────────────┴───────────────────────────────────────────────────────────────┴────────────────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb\""]
+cmd: transfer_objects, value: ["@0x1"]
+cmd: transfer_objects, value: ["@0x1", "[@0x1, @0x2]", "@0x2"]
+cmd: split_coins, value: ["gas", "[1u64, 2u64, 3u64]"]
+cmd: assign, value: ["s"]
+cmd: transfer_objects, value: ["@0x1", "s"]
+cmd: gas_budget, value: ["100u64"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILDING PTB ERRORS === 
+  × Error at command 0 in PTB file 'tests/ptb_files/transfer_objects/
+  │ transfer_objects_invalid.ptb'
+   ╭────
+ 1 │ transfer_objects @0x1 
+   · ────────┬───────
+   ·         ╰── Expected 2 arguments but got 1
+   ╰────
+
+  × Error at command 1 in PTB file 'tests/ptb_files/transfer_objects/
+  │ transfer_objects_invalid.ptb'
+   ╭────
+ 1 │ transfer_objects @0x1 [@0x1, @0x2] @0x2 
+   · ────────┬───────
+   ·         ╰── Expected 2 arguments but got 3
+   ╰────
+
+  × Error at command 4 in PTB file 'tests/ptb_files/transfer_objects/
+  │ transfer_objects_invalid.ptb'
+   ╭────
+ 1 │ transfer_objects @0x1 s 
+   ·                       ┬
+   ·                       ╰── Expected array of objects
+   ╰────
+

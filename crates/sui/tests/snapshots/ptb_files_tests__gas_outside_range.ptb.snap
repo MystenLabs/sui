@@ -1,0 +1,21 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                                                         │
+├────────────┬───────────────────────────────────────────┬────────────────────────────────────────────────────────────────────────────┤
+│ command    │ from                                      │ value(s)                                                                   │
+├────────────┼───────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────┤
+│ gas_budget │ tests/ptb_files/gas/gas_outside_range.ptb │ 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF │
+│ preview    │ console                                   │ true                                                                       │
+╰────────────┴───────────────────────────────────────────┴────────────────────────────────────────────────────────────────────────────╯
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error at command 0 in PTB file 'tests/ptb_files/gas/gas_outside_range.ptb'
+   ╭────
+ 1 │ gas_budget 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF 
+   ·            ─────────────────────────────────────┬────────────────────────────────────
+   ·                                                 ╰── Failed to parse arguments for 'gas_budget' command. Invalid number
+   ╰────
+

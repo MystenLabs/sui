@@ -1,0 +1,32 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭─────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                             │
+├────────────┬──────────────────────────────────────────────────────────┬─────────────────┤
+│ command    │ from                                                     │ value(s)        │
+├────────────┼──────────────────────────────────────────────────────────┼─────────────────┤
+│ gas_budget │ tests/ptb_files/publish/publish_non_existent_package.ptb │ 1000            │
+│ publish    │ tests/ptb_files/publish/publish_non_existent_package.ptb │ not_a_valid_pkg │
+│ preview    │ console                                                  │ true            │
+╰────────────┴──────────────────────────────────────────────────────────┴─────────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/publish/publish_non_existent_package.ptb\""]
+cmd: gas_budget, value: ["1000u64"]
+cmd: publish, value: ["\"not_a_valid_pkg\""]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/publish/publish_non_existent_package.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILDING PTB ERRORS === 
+  × Error at command 1 in PTB file 'tests/ptb_files/publish/
+  │ publish_non_existent_package.ptb'
+   ╭────
+ 1 │ publish not_a_valid_pkg 
+   ·         ───────┬───────
+   ·                ╰── No such file or directory (os error 2)
+   ╰────
+

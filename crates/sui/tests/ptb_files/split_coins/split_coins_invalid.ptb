@@ -1,0 +1,8 @@
+# Too few arguments
+--split-coins 1
+
+# Too many arguments
+--split-coins gas [0] 5
+
+# Non-array for splits (e.g., reversed args)
+--split-coins [1] gas

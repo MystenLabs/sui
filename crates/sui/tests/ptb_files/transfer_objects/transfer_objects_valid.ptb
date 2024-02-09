@@ -1,0 +1,4 @@
+--gas-budget 10000000
+--split-coins gas [1,2,3] 
+--assign s 
+--transfer-objects @0x1 [s.0, s.1, s.2]

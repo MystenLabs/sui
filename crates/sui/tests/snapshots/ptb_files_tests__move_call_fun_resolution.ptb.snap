@@ -1,0 +1,113 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                                  │
+├────────────┬────────────────────────────────────────────────────────┬────────────────────────────────────────┤
+│ command    │ from                                                   │ value(s)                               │
+├────────────┼────────────────────────────────────────────────────────┼────────────────────────────────────────┤
+│ gas_budget │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ 1000                                   │
+│ move_call  │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ invalid_access                         │
+│ move_call  │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ zero_x_zero::option::is_none<u64> none │
+│ assign     │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ a none                                 │
+│ assign     │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ zero_x_zero @0x0                       │
+│ move_call  │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ zero_x_zero::option::is_none<u64> a    │
+│ move_call  │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ std::Option::is_none<u64> a            │
+│ move_call  │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ std::option::isnone<u64> a             │
+│ move_call  │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ std::option::is_none<u64>              │
+│ move_call  │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ std::option::is_none<u64> a b          │
+│ move_call  │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ sui::coin::destroy_zero @0x1           │
+│ move_call  │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ std::option::is_none<u64, bool> a      │
+│ preview    │ console                                                │ true                                   │
+╰────────────┴────────────────────────────────────────────────────────┴────────────────────────────────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/move_call/move_call_fun_resolution.ptb\""]
+cmd: gas_budget, value: ["1000u64"]
+cmd: move_call, value: ["invalid_access"]
+cmd: move_call, value: ["zero_x_zero::option::is_none", "<u64>", "none"]
+cmd: assign, value: ["a", "none"]
+cmd: assign, value: ["zero_x_zero", "@0x0"]
+cmd: move_call, value: ["zero_x_zero::option::is_none", "<u64>", "a"]
+cmd: move_call, value: ["std::Option::is_none", "<u64>", "a"]
+cmd: move_call, value: ["std::option::isnone", "<u64>", "a"]
+cmd: move_call, value: ["std::option::is_none", "<u64>"]
+cmd: move_call, value: ["std::option::is_none", "<u64>", "a", "b"]
+cmd: move_call, value: ["sui::coin::destroy_zero", "@0x1"]
+cmd: move_call, value: ["std::option::is_none", "<u64, bool>", "a"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/move_call/move_call_fun_resolution.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILDING PTB ERRORS === 
+  × Error at command 1 in PTB file 'tests/ptb_files/move_call/
+  │ move_call_fun_resolution.ptb'
+   ╭────
+ 1 │ move_call invalid_access 
+   ·           ───────┬──────
+   ·                  ╰── Expected module access/function for 'move_call' command here
+   ╰────
+
+  × Error at command 2 in PTB file 'tests/ptb_files/move_call/
+  │ move_call_fun_resolution.ptb'
+   ╭────
+ 1 │ move_call zero_x_zero::option::is_none<u64> none 
+   ·           ─────┬─────
+   ·                ╰── Unbound named address: 'zero_x_zero'
+   ╰────
+  help: This is most likely because the named address 'zero_x_zero' is not
+        in scope. You can either bind a variable to the address that you
+        want to use or use the address in the command.
+
+  × Error at command 5 in PTB file 'tests/ptb_files/move_call/
+  │ move_call_fun_resolution.ptb'
+   ╭────
+ 1 │ move_call zero_x_zero::option::is_none<u64> a 
+   ·           ─────┬─────
+   ·                ╰── Object 0x0000000000000000000000000000000000000000000000000000000000000000 does not exist.
+   ╰────
+
+  × Error at command 6 in PTB file 'tests/ptb_files/move_call/
+  │ move_call_fun_resolution.ptb'
+   ╭────
+ 1 │ move_call std::Option::is_none<u64> a 
+   ·                ───┬──
+   ·                   ╰── Module not found in package: "Option".
+   ╰────
+  help: Did you mean 'option'?
+
+  × Error at command 7 in PTB file 'tests/ptb_files/move_call/
+  │ move_call_fun_resolution.ptb'
+   ╭────
+ 1 │ move_call std::option::isnone<u64> a 
+   ·                        ───┬──
+   ·                           ╰── Could not resolve function 'isnone' in module 'option'
+   ╰────
+  help: Did you mean 'is_none'?
+
+  × Error at command 8 in PTB file 'tests/ptb_files/move_call/
+  │ move_call_fun_resolution.ptb'
+   ╭────
+ 1 │ move_call std::option::is_none<u64> 
+   ·           ──────────┬─────────
+   ·                     ╰── Expected 1 arguments, but got 0
+   ╰────
+
+  × Error at command 9 in PTB file 'tests/ptb_files/move_call/
+  │ move_call_fun_resolution.ptb'
+   ╭────
+ 1 │ move_call std::option::is_none<u64> a b 
+   ·                                     ─┬─
+   ·                                      ╰── Expected 1 arguments, but got 2
+   ╰────
+
+  × Error at command 10 in PTB file 'tests/ptb_files/move_call/
+  │ move_call_fun_resolution.ptb'
+   ╭────
+ 1 │ move_call sui::coin::destroy_zero @0x1 
+   ·                                    ─┬─
+   ·                                     ╰── Not enough type parameters supplied for Move call
+   ╰────
+

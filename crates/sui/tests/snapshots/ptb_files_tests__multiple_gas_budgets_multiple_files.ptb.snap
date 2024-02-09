@@ -1,0 +1,73 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                          │
+├────────────┬──────────────────────────────────────────────────────────────┬──────────┤
+│ command    │ from                                                         │ value(s) │
+├────────────┼──────────────────────────────────────────────────────────────┼──────────┤
+│ gas_budget │ tests/ptb_files/file/multiple_gas_budgets_multiple_files.ptb │ 1        │
+│ gas_budget │ a.ptb.include_only                                           │ 2        │
+│ gas_budget │ b.ptb.include_only                                           │ 2        │
+│ gas_budget │ a.ptb.include_only                                           │ 2        │
+│ preview    │ console                                                      │ true     │
+╰────────────┴──────────────────────────────────────────────────────────────┴──────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/file/multiple_gas_budgets_multiple_files.ptb\""]
+cmd: gas_budget, value: ["1u64"]
+cmd: file-include-start, value: ["\"a.ptb.include_only\""]
+cmd: gas_budget, value: ["2u64"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"a.ptb.include_only\""]
+cmd: file-include-start, value: ["\"b.ptb.include_only\""]
+cmd: gas_budget, value: ["2u64"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"b.ptb.include_only\""]
+cmd: file-include-start, value: ["\"a.ptb.include_only\""]
+cmd: gas_budget, value: ["2u64"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"a.ptb.include_only\""]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/file/multiple_gas_budgets_multiple_files.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILDING PTB ERRORS === 
+  × Error at command 0 in PTB file 'tests/ptb_files/file/
+  │ multiple_gas_budgets_multiple_files.ptb'
+   ╭────
+ 1 │ gas_budget 1 
+   ·            ┬
+   ·            ╰── Multiple gas budgets set for transaction with no gas picker. Gas budget is set for the first time here.
+   ╰────
+  help: You should either remove all but one usage of setting the gas
+        budget, or use the 'pick_gas_budget' command to handle multiple
+        gas budgets
+
+  × Error at command 0 in PTB file 'a.ptb.include_only'
+   ╭────
+ 1 │ gas_budget 2 
+   ·            ┬
+   ·            ╰── Gas budget is set for the 2nd time here.
+   ╰────
+
+  × Error at command 0 in PTB file 'b.ptb.include_only'
+   ╭────
+ 1 │ gas_budget 2 
+   ·            ┬
+   ·            ╰── Gas budget is set for the 3rd time here.
+   ╰────
+
+  × Error at command 0 in PTB file 'a.ptb.include_only' (2nd usage of the
+  │ file)
+   ╭────
+ 1 │ gas_budget 2 
+   ·            ┬
+   ·            ╰── Gas budget is set for the 4th time here.
+   ╰────
+
