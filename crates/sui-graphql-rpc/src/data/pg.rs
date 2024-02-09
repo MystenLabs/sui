@@ -188,15 +188,15 @@ mod tests {
     use diesel::QueryDsl;
     use sui_framework::BuiltInFramework;
     use sui_indexer::{
-        get_pg_pool_connection, models_v2::objects::StoredObject, new_pg_connection_pool_impl,
+        get_pg_pool_connection, models_v2::objects::StoredObject, new_pg_connection_pool,
         schema_v2::objects, types_v2::IndexedObject, utils::reset_database,
     };
 
     #[test]
     fn test_query_cost() {
-        let pool = new_pg_connection_pool_impl(DEFAULT_SERVER_DB_URL, Some(5)).unwrap();
+        let pool = new_pg_connection_pool(DEFAULT_SERVER_DB_URL, Some(5)).unwrap();
         let mut conn = get_pg_pool_connection(&pool).unwrap();
-        reset_database(&mut conn, /* drop_all */ true, /* use_v2 */ true).unwrap();
+        reset_database(&mut conn, /* drop_all */ true).unwrap();
 
         let objects: Vec<StoredObject> = BuiltInFramework::iter_system_packages()
             .map(|pkg| IndexedObject::from_object(1, pkg.genesis_object(), None).into())
