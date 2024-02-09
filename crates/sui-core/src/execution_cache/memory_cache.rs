@@ -176,12 +176,11 @@ impl UncommittedData {
 
 /// CachedData stores data that has been committed to the db, but is likely to be read soon.
 struct CachedData {
-    /// Contains live, non-package objects that have been committed to the db.
-    /// As with `objects`, we remove objects from this table in FIFO order (or we allow the cache
-    /// to evict all versions of the object at once), which ensures that the the cached sequence
-    /// of objects has no gaps. See the comment above for more details.
-    // TODO(cache): this is not populated yet, we will populate it when we implement flushing.
+    // See module level comment for an explanation of caching strategy.
     object_cache: MokaCache<ObjectID, Arc<Mutex<CachedVersionMap<ObjectEntry>>>>,
+
+    // See module level comment for an explanation of caching strategy.
+    marker_cache: MokaCache<MarkerKey, Arc<Mutex<CachedVersionMap<MarkerValue>>>>,
 
     // Packages are cached separately from objects because they are immutable and can be used by any
     // number of transactions. Additionally, many operations require loading large numbers of packages
@@ -189,15 +188,6 @@ struct CachedData {
     // Note that, like any other dirty object, all packages are also stored in `objects` until they are
     // flushed to disk.
     packages: MokaCache<ObjectID, PackageObject>,
-
-    // Because markers (e.g. received markers) can be read by many transactions, we also cache
-    // them. Markers are added to this cache in two ways:
-    // 1. When they are committed to the db and removed from the `markers` table.
-    // 2. After a cache miss in which we retrieve the marker from the db.
-
-    // Note that MokaCache can only return items by value, so we store the map as an Arc<Mutex>.
-    // (There should be no contention on the inner mutex, it is used only for interior mutability.)
-    marker_cache: MokaCache<MarkerKey, Arc<Mutex<CachedVersionMap<MarkerValue>>>>,
 
     // Objects that were read at transaction signing time - allows us to access them again at
     // execution time with a single lock / hash lookup
