@@ -16,31 +16,34 @@ use crate::{
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
+    is_source_def: bool,
+    current_package: Option<Symbol>,
 }
 
 impl<'env> Context<'env> {
-    fn new(compilation_env: &'env mut CompilationEnv) -> Self {
+    fn new(env: &'env mut CompilationEnv) -> Self {
         Self {
-            env: compilation_env,
+            env,
+            is_source_def: false,
+            current_package: None,
         }
     }
 }
 
 impl FilterContext for Context<'_> {
-    fn should_remove_by_attributes(
-        &mut self,
-        attrs: &[P::Attributes],
-        is_source_def: bool,
-    ) -> bool {
-        should_remove_node(self.env, attrs, is_source_def)
+    fn set_current_package(&mut self, package: Option<Symbol>) {
+        self.current_package = package;
+    }
+
+    fn set_is_source_def(&mut self, is_source_def: bool) {
+        self.is_source_def = is_source_def;
     }
 
     fn filter_map_module(
         &mut self,
         mut module_def: P::ModuleDefinition,
-        is_source_def: bool,
     ) -> Option<P::ModuleDefinition> {
-        if self.should_remove_by_attributes(&module_def.attributes, is_source_def) {
+        if self.should_remove_by_attributes(&module_def.attributes) {
             return None;
         }
 
@@ -52,6 +55,22 @@ impl FilterContext for Context<'_> {
         let poison_function = create_test_poison(module_def.loc);
         module_def.members.push(poison_function);
         Some(module_def)
+    }
+
+    // A module member should be removed if:
+    // * It is annotated as a test function (test_only, test, abort) and test mode is not set; or
+    // * If it is a library and is annotated as #[test]
+    fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
+        use known_attributes::TestingAttribute;
+        let flattened_attrs: Vec<_> = attrs.iter().flat_map(test_attributes).collect();
+        let is_test_only = flattened_attrs
+            .iter()
+            .any(|attr| matches!(attr.1, TestingAttribute::Test | TestingAttribute::TestOnly));
+        is_test_only && !self.env.flags().keep_testing_functions()
+            || (!self.is_source_def
+                && flattened_attrs
+                    .iter()
+                    .any(|attr| attr.1 == TestingAttribute::Test))
     }
 }
 
@@ -175,22 +194,6 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
             )),
         ),
     })
-}
-
-// A module member should be removed if:
-// * It is annotated as a test function (test_only, test, abort) and test mode is not set; or
-// * If it is a library and is annotated as #[test]
-fn should_remove_node(env: &CompilationEnv, attrs: &[P::Attributes], is_source_def: bool) -> bool {
-    use known_attributes::TestingAttribute;
-    let flattened_attrs: Vec<_> = attrs.iter().flat_map(test_attributes).collect();
-    let is_test_only = flattened_attrs
-        .iter()
-        .any(|attr| matches!(attr.1, TestingAttribute::Test | TestingAttribute::TestOnly));
-    is_test_only && !env.flags().keep_testing_functions()
-        || (!is_source_def
-            && flattened_attrs
-                .iter()
-                .any(|attr| attr.1 == TestingAttribute::Test))
 }
 
 fn test_attributes(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::TestingAttribute)> {

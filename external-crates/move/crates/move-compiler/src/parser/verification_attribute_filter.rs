@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_ir_types::location::Loc;
+use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
@@ -15,23 +16,59 @@ use crate::{
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
+    is_source_def: bool,
+    current_package: Option<Symbol>,
 }
 
 impl<'env> Context<'env> {
-    fn new(compilation_env: &'env mut CompilationEnv) -> Self {
+    fn new(env: &'env mut CompilationEnv) -> Self {
         Self {
-            env: compilation_env,
+            env,
+            is_source_def: false,
+            current_package: None,
         }
     }
 }
 
 impl FilterContext for Context<'_> {
-    fn should_remove_by_attributes(
-        &mut self,
-        attrs: &[P::Attributes],
-        _is_source_def: bool,
-    ) -> bool {
-        should_remove_node(self.env, attrs)
+    fn set_current_package(&mut self, package: Option<Symbol>) {
+        self.current_package = package;
+    }
+
+    fn set_is_source_def(&mut self, is_source_def: bool) {
+        self.is_source_def = is_source_def;
+    }
+
+    // An AST element should be removed if:
+    // * It is annotated #[verify_only] and verify mode is not set
+    fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
+        use known_attributes::VerificationAttribute;
+        let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
+        let is_verify_only_loc = flattened_attrs
+            .iter()
+            .map(|attr| match attr {
+                (loc, VerificationAttribute::VerifyOnly) => loc,
+            })
+            .next();
+        let should_remove = is_verify_only_loc.is_some();
+        // TODO this is a bit of a hack
+        // but we don't have a better way of suppressing this unless the filtering was done after
+        // expansion
+        // Ideally we would just have a warning filter scope here
+        // (but again, need expansion for that)
+        let silence_warning =
+            !self.is_source_def || self.env.package_config(self.current_package).is_dependency;
+        if !silence_warning {
+            if let Some(loc) = is_verify_only_loc {
+                let msg = format!(
+                    "The '{}' attribute has been deprecated along with specification blocks",
+                    VerificationAttribute::VERIFY_ONLY
+                );
+                self.env
+                    .add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (*loc, msg)));
+            }
+        }
+        should_remove
     }
 }
 
@@ -45,29 +82,6 @@ impl FilterContext for Context<'_> {
 pub fn program(compilation_env: &mut CompilationEnv, prog: P::Program) -> P::Program {
     let mut context = Context::new(compilation_env);
     filter_program(&mut context, prog)
-}
-
-// An AST element should be removed if:
-// * It is annotated #[verify_only] and verify mode is not set
-fn should_remove_node(env: &mut CompilationEnv, attrs: &[P::Attributes]) -> bool {
-    use known_attributes::VerificationAttribute;
-    let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
-    let is_verify_only_loc = flattened_attrs
-        .iter()
-        .map(|attr| match attr {
-            (loc, VerificationAttribute::VerifyOnly) => loc,
-        })
-        .next();
-    if let Some(loc) = is_verify_only_loc {
-        let msg = format!(
-            "The '{}' attribute has been deprecated along with specification blocks",
-            VerificationAttribute::VERIFY_ONLY
-        );
-        env.add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (*loc, msg)));
-        true
-    } else {
-        false
-    }
 }
 
 fn verification_attributes(
