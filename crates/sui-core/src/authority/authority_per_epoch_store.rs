@@ -345,7 +345,7 @@ pub struct AuthorityEpochTables {
     /// executions not ordered by indices. For now, tracking inflight certificates as a map
     /// seems easier.
     #[default_options_override_fn = "pending_execution_table_default_config"]
-    pending_execution: DBMap<TransactionDigest, TrustedExecutableTransaction>,
+    pub(crate) pending_execution: DBMap<TransactionDigest, TrustedExecutableTransaction>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
     /// sure to advance next_shared_object_versions exactly once for each transaction we receive from

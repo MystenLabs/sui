@@ -4676,11 +4676,28 @@ impl RandomnessRoundReceiver {
                 .expect("randomness state obj must exist"),
         );
         debug!(
-            "created randomness state update transaction: {:?}",
+            "created randomness state update transaction for epoch {epoch}, round {round}: {:?}",
             transaction.digest()
         );
         let transaction = VerifiedExecutableTransaction::new_system(transaction, epoch);
         let key = transaction.key();
+
+        // RandomnessStateUpdates are not sent through consensus, so we have to add the user
+        // signatures here once the digest becomes known.
+        let Ok(tables) = epoch_store.tables() else {
+            debug!("dropping randomness for epoch {epoch}, round {round}, because current epoch is ending");
+            return;
+        };
+        let mut batch = tables.pending_execution.batch();
+        if let Err(e) =
+            epoch_store.finish_consensus_certificate_process_with_batch(&mut batch, &transaction)
+        {
+            warn!("dropping randomness for epoch {epoch}, round {round}: {e:?}");
+            return;
+        }
+        batch.write().expect("storage should not fail");
+
+        // Send transaction to TransactionManager for execution.
         if let Err(e) = self
             .authority_state
             .transaction_manager()
@@ -4699,7 +4716,8 @@ impl RandomnessRoundReceiver {
         };
         let effects = effects.pop().expect("should return effects");
         if *effects.status() != ExecutionStatus::Success {
-            error!("BUG: failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
+            // TODO-DNS should this be error or panic? Seems bad enough to panic?
+            panic!("BUG: failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
         }
     }
 }
