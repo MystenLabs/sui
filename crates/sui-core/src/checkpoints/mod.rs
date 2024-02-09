@@ -153,6 +153,7 @@ impl CheckpointStore {
         )
     }
 
+    #[instrument(level = "info", skip_all)]
     pub fn insert_genesis_checkpoint(
         &self,
         checkpoint: VerifiedCheckpoint,
@@ -831,7 +832,8 @@ impl CheckpointBuilder {
             debug!(
                 checkpoint_commit_height = height,
                 checkpoint_seq = summary.sequence_number,
-                "Created checkpoint",
+                contents_digest = ?contents.digest(),
+                "writing checkpoint",
             );
             self.output
                 .checkpoint_created(summary, contents, &self.epoch_store)
