@@ -279,21 +279,9 @@ impl GasBudget {
         let budget = if self.gas_budgets.len() == 1 {
             self.gas_budgets[0].value
         } else {
-            match self.picker.get(0).map(|x| &x.value) {
-                Some(GasPicker::Max) => self
-                    .gas_budgets
-                    .iter()
-                    .map(|x| x.value)
-                    .max()
-                    .unwrap()
-                    .clone(),
-                Some(GasPicker::Min) => self
-                    .gas_budgets
-                    .iter()
-                    .map(|x| x.value)
-                    .min()
-                    .unwrap()
-                    .clone(),
+            match self.picker.first().map(|x| &x.value) {
+                Some(GasPicker::Max) => self.gas_budgets.iter().map(|x| x.value).max().unwrap(),
+                Some(GasPicker::Min) => self.gas_budgets.iter().map(|x| x.value).min().unwrap(),
                 Some(GasPicker::Sum) => self.gas_budgets.iter().map(|x| x.value).sum(),
                 None => return Err(GasBudgetError::NoGasPicker(self.gas_budgets)),
             }
@@ -434,7 +422,7 @@ impl<'a> PTBBuilder<'a> {
             }
         };
 
-        if self.errors.len() > 0 {
+        if !self.errors.is_empty() {
             return Err(self.errors);
         }
 
@@ -483,7 +471,7 @@ impl<'a> PTBBuilder<'a> {
                     "{}.{}",
                     head.value,
                     fields
-                        .into_iter()
+                        .iter()
                         .map(|f| f.value.clone())
                         .collect::<Vec<_>>()
                         .join(".")
@@ -733,13 +721,13 @@ impl<'a> PTBBuilder<'a> {
                 let arg = self.arguments_to_resolve[&i].clone();
                 let resolved = self.resolve(arg, ctx).await?;
                 self.arguments_to_resolve.remove(&i);
-                self.resolved_arguments.insert(i, resolved.clone());
+                self.resolved_arguments.insert(i, resolved);
                 Ok(resolved)
             }
             // If the identifier does not need to be resolved, but has already been resolved, then
             // we return the resolved value.
             PTBArg::Identifier(i) if self.resolved_arguments.contains_key(&i) => {
-                Ok(self.resolved_arguments[&i].clone())
+                Ok(self.resolved_arguments[&i])
             }
             // Lastly -- look to see if this is an address that has been either declared in scope,
             // or that is coming from an external soruce (e.g., the keystore).
@@ -761,14 +749,8 @@ impl<'a> PTBBuilder<'a> {
                 self.resolve(span(arg_loc, PTBArg::Identifier(i)), ctx)
                     .await
             }
-            x @ PTBArg::Option(_) => {
-                ctx.pure(self, arg_loc, x.into_move_value_opt(arg_loc)?)
-                    .await
-            }
-            x @ PTBArg::Vector(_) => {
-                ctx.pure(self, arg_loc, x.into_move_value_opt(arg_loc)?)
-                    .await
-            }
+            x @ PTBArg::Option(_) => ctx.pure(self, arg_loc, x.to_move_value_opt(arg_loc)?).await,
+            x @ PTBArg::Vector(_) => ctx.pure(self, arg_loc, x.to_move_value_opt(arg_loc)?).await,
             PTBArg::Address(addr) => {
                 let object_id = ObjectID::from_address(addr.into_inner());
                 ctx.resolve_object_id(self, arg_loc, object_id).await
@@ -1042,9 +1024,7 @@ impl<'a> PTBBuilder<'a> {
                     let arg = self.resolve(arg, ToPure).await?;
                     args.push(arg);
                 }
-                let res = self
-                    .ptb
-                    .command(Tx::Command::SplitCoins(coin.clone(), args));
+                let res = self.ptb.command(Tx::Command::SplitCoins(coin, args));
                 self.last_command = Some(res);
             }
             CommandToken::MergeCoins => {
@@ -1069,9 +1049,7 @@ impl<'a> PTBBuilder<'a> {
                     let arg = self.resolve(arg, ToObject::default()).await?;
                     args.push(arg);
                 }
-                let res = self
-                    .ptb
-                    .command(Tx::Command::MergeCoins(coin.clone(), args));
+                let res = self.ptb.command(Tx::Command::MergeCoins(coin, args));
                 self.last_command = Some(res);
             }
             CommandToken::PickGasBudget => {

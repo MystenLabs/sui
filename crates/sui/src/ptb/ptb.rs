@@ -99,10 +99,10 @@ pub struct PTBCommand {
 
 #[derive(clap::ValueEnum, Clone, Debug, Serialize, Default)]
 enum PTBGas {
-    MIN,
+    Min,
     #[default]
-    MAX,
-    SUM,
+    Max,
+    Sum,
 }
 
 pub struct PTBPreview {
@@ -141,14 +141,14 @@ impl PTB {
             }
 
             if arg_name.as_str() == "pick_gas_budget" {
-                insert_value::<PTBGas>(arg_name, &matches, &mut order)?;
+                insert_value::<PTBGas>(arg_name, matches, &mut order)?;
             } else if arg_name.as_str() == "preview" || arg_name.as_str() == "warn_shadows" {
-                insert_value::<bool>(arg_name, &matches, &mut order)?;
+                insert_value::<bool>(arg_name, matches, &mut order)?;
             } else {
-                insert_value::<String>(arg_name, &matches, &mut order)?;
+                insert_value::<String>(arg_name, matches, &mut order)?;
             }
         }
-        Ok(self.build_ptb_for_parsing(cwd, order, included_files)?)
+        self.build_ptb_for_parsing(cwd, order, included_files)
     }
 
     /// Builds a sequential list of ptb commands that should be fed into the parser
@@ -221,10 +221,7 @@ impl PTB {
         // Preview the PTB instead of executing if preview flag is set
         let preview = commands
             .values()
-            .find(|x| {
-                x.name == "preview" && x.values.iter().find(|x| x.as_str() == "true").is_some()
-            })
-            .is_some();
+            .any(|x| x.name == "preview" && x.values.iter().any(|f| f == "true"));
         preview.then_some(PTBPreview {
             cmds: commands.clone().into_values().collect::<Vec<_>>(),
         })
@@ -264,13 +261,13 @@ impl PTB {
         // any remaining quotes.
         let file_content = std::fs::read_to_string(file_path.clone())?
             .replace("\\\"", "'") // Handle escaped quotes \" and replace with '
-            .replace("\\", ""); // Remove newlines
+            .replace('\\', ""); // Remove newlines
 
         let ignore_comments = file_content
             .lines()
-            .filter(|x| !x.starts_with("#"))
+            .filter(|x| !x.starts_with('#'))
             .collect::<Vec<_>>();
-        if ignore_comments.iter().any(|x| x.contains("#")) {
+        if ignore_comments.iter().any(|x| x.contains('#')) {
             return Err(anyhow!(
                 "Found inlined comments in file {filename}, which are not allowed. Only line comments are supported."
             ));
@@ -304,10 +301,10 @@ impl PTB {
             included_files.insert(file_path, files_to_resolve);
         }
 
-        check_for_cyclic_file_inclusions(&included_files)?;
+        check_for_cyclic_file_inclusions(included_files)?;
         let splits = Self::split_into_args(ignore_comments.join(" "))
             .into_iter()
-            .map(|x| x.replace("\"", ""))
+            .map(|x| x.replace('\"', ""))
             .filter(|x| !x.is_empty())
             .collect::<Vec<_>>();
 
@@ -322,7 +319,7 @@ impl PTB {
         output.insert(
             start_index,
             PTBCommand {
-                name: format!("file-include-start"),
+                name: "file-include-start".to_string(),
                 values: vec![filename.to_string()],
             },
         );
@@ -334,7 +331,7 @@ impl PTB {
         output.insert(
             start_index + len_cmds + 1,
             PTBCommand {
-                name: format!("file-include-end"),
+                name: "file-include-end".to_string(),
                 values: vec![filename.to_string()],
             },
         );
@@ -490,8 +487,7 @@ impl PTB {
             context
         } else {
             let config_path = sui_config::sui_config_dir()?.join(sui_config::SUI_CLIENT_CONFIG);
-            let context = WalletContext::new(&config_path, None, None).await?;
-            context
+            WalletContext::new(&config_path, None, None).await?
         };
 
         let client = context.get_client().await?;
@@ -582,14 +578,12 @@ impl Display for PTBPreview {
         let mut from = "console";
         for cmd in &self.cmds {
             if cmd.name == "file-include-start" {
-                from = cmd.values.get(0).unwrap();
+                from = cmd.values.first().unwrap();
                 continue;
             } else if cmd.name == "file-include-end" {
                 from = "console";
                 continue;
-            } else if cmd.name == "preview" && cmd.is_preview_false() {
-                continue;
-            } else if cmd.name == "warn_shadows" && cmd.is_warn_shadows_false() {
+            } else if cmd.is_preview_false() || cmd.is_warn_shadows_false() {
                 continue;
             }
             builder.push_record([
@@ -599,7 +593,7 @@ impl Display for PTBPreview {
             ]);
         }
         let mut table = builder.build();
-        table.with(TablePanel::header(format!("PTB Preview")));
+        table.with(TablePanel::header("PTB Preview"));
         table.with(TableStyle::rounded().horizontals([
             HorizontalLine::new(1, TableStyle::modern().get_horizontal()),
             HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
@@ -614,11 +608,11 @@ impl Display for PTBPreview {
 impl Display for PTBGas {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let r = match self {
-            PTBGas::MIN => "min",
-            PTBGas::MAX => "max",
-            PTBGas::SUM => "sum",
+            PTBGas::Min => "min",
+            PTBGas::Max => "max",
+            PTBGas::Sum => "sum",
         };
-        write!(f, "{}", r.to_string())
+        write!(f, "{}", r)
     }
 }
 

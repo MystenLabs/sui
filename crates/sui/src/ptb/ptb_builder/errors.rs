@@ -127,7 +127,7 @@ impl FileIndexedErrors {
             [("console".to_owned(), 0)].into_iter().collect();
         let mut scope_stack = vec![];
         let mut current_scope = ("console".to_string(), 0);
-        for (_, command) in commands {
+        for command in commands.values() {
             if command.name == FILE_START {
                 // Push a dummy command to keep indices in line with the usage of the `--file`
                 // command.
@@ -197,11 +197,7 @@ impl Span {
     /// `None` is returned.
     pub fn union_spans(others: impl IntoIterator<Item = Span>) -> Option<Span> {
         let mut iter = others.into_iter();
-        if let Some(first) = iter.next() {
-            Some(first.union_with(iter))
-        } else {
-            None
-        }
+        iter.next().map(|first| first.union_with(iter))
     }
 
     /// A span representing the command string of whichever file scope this span is in.
@@ -276,7 +272,7 @@ impl DisplayableError {
             let mut range = (span.start, span.end);
             for (i, arg) in original_command.values.iter().enumerate() {
                 offset += 1;
-                final_string.push_str(" ");
+                final_string.push(' ');
                 if i != span.arg_idx {
                     offset += arg.len();
                     final_string.push_str(arg);
@@ -291,7 +287,7 @@ impl DisplayableError {
             // Handle range boundaries for e.g., unexpected tokens at the end of the token stream
             // by pushing on a space at the end of the string. This will capture any unexpected
             // token errors and allow us to point "to the end" of the argument.
-            final_string.push_str(" ");
+            final_string.push(' ');
             (range.0..range.1, final_string)
         };
         let label = LabeledSpan::at(range, message.clone());
@@ -348,17 +344,16 @@ pub fn render_errors(
     for error in errors {
         let PTBError::WithSource { span, .. } = &error;
         let command_opt = file_indexed_commands.get(&span.file_scope);
-        if span.is_out_of_band_span() || command_opt.is_none() {
+        if let Some(command_opt) = command_opt {
+            rendered.push(DisplayableError::new(command_opt.clone(), error).create_report());
+        } else if span.is_out_of_band_span() || command_opt.is_none() {
             rendered.push(miette!(
                 labels = vec![],
                 "Error at command {} in PTB file '{}': {}",
                 span.file_scope.file_command_index,
                 span.file_scope.name,
                 error
-            ))
-        } else {
-            rendered
-                .push(DisplayableError::new(command_opt.unwrap().clone(), error).create_report())
+            ));
         }
     }
     rendered
