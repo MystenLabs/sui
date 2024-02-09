@@ -1,6 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! MemoryCache is a cache for the transaction execution which delays writes to the database until
+//! transaction results are certified (i.e. they appear in a certified checkpoint, or an effects cert
+//! is observed by a fullnode). The cache also stores committed data in memory in order to serve
+//! future reads without hitting the database.
+//!
+//! For storing uncommitted transaction outputs, we cannot evict the data at all until it is written
+//! to disk. Committed data not only can be evicted, but it is also unbounded (imagine a stream of
+//! transactions that keep splitting a coin into smaller coins).
+//! 
+//! We also want to be able to support negative cache hits (i.e. the case where we can determine an
+//! object does not exist without hitting the database).
+//!
+//! 
+//! The cache is divided into two parts: dirty and cached. The dirty part contains data that has been
+
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{
     ExecutionLockReadGuard, ExecutionLockWriteGuard, SuiLockResult,
@@ -54,11 +69,23 @@ use super::{
     NotifyReadWrapper, StateSyncAPI,
 };
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 enum ObjectEntry {
     Object(Object),
     Deleted,
     Wrapped,
+}
+
+impl std::fmt::Debug for ObjectEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ObjectEntry::Object(o) => {
+                write!(f, "ObjectEntry::Object({:?})", o.compute_object_reference())
+            }
+            ObjectEntry::Deleted => write!(f, "ObjectEntry::Deleted"),
+            ObjectEntry::Wrapped => write!(f, "ObjectEntry::Wrapped"),
+        }
+    }
 }
 
 impl From<Object> for ObjectEntry {
@@ -143,8 +170,32 @@ struct UncommittedData {
     objects: DashMap<ObjectID, CachedVersionMap<ObjectEntry>>,
 
     // Mirrors the owned_object_transaction_locks table in the db, but with the following
-    // difference: Since only one version of an object can ever be locked at a time, this
-    // map is keyed by ObjectID. We store the full ObjectRef in the value.
+    // difference: Since there cannot be locks for multiple object versions in existence
+    // at the same time, this map is keyed by ObjectID. We store the full ObjectRef in the
+    // value. (This is done so that we can find the lock by ObjectID).
+    //
+    // This map is mutated in the following situations:
+    // 1. When we load a lock, if it is not in this map, we attempt to load it from the db.
+    //    If it is found, it is inserted into this map.
+    // 2. When we lock an object for a transaction, we change the entry in this map from
+    //    None to Some(LockDetails(..)). In this situation we also write the lock to the db.
+    // 3. In write_transaction_outputs:
+    //    - If a lock is deleted, and a lock for the next version of the same object is created,
+    //      we update the entry in this map to reflect the new objref and set the lock to None
+    //    - If a lock is deleted (and no new lock is created), we set the entry to Lock::Deleted.
+    //      This is necessary so that readers cannot observe the deleted lock in undeleted state
+    //      via a cache miss.
+    //    - If a lock is created (and no prior version existed), we insert the lock into this map.
+    //      In this situation, there will be no record of the lock in the db until commit_transaction_outputs
+    //      is called.
+    //
+    // NB: Suppose a lock is created, inserted into the cache, and then locked to a new transaction.
+    // The previous version of the lock may still exist on disk if commit_transaction_outputs has not
+    // run. To lock the transaction we immediately write the new LockDetails to the db. Now the db has
+    // locks for multiple versions of the object, a situation that is normally impossible!
+    // To deal with this, we should actually use a log to persist locked transactions rather than eagerly
+    // writing to the db. This will ensure that while the db can only be behind the cache, it cannot
+    // contain illegal states.
     owned_object_transaction_locks: LockMap,
 
     // Markers for received objects and deleted shared objects. This contains all of the dirty
@@ -459,6 +510,7 @@ impl MemoryCache {
                     }
                 }
             }
+
             let lock_details = LockDetails { epoch, tx_digest };
             previous_values.push(previous_value.clone());
             locks_to_write.push((*obj_ref, Some(lock_details.clone().into())));
@@ -528,6 +580,7 @@ impl MemoryCache {
         static MAX_VERSIONS: usize = 3;
 
         // Now, remove each piece of committed data from the dirty state and insert it into the cache.
+        // TODO: outputs should have a strong count of 1 so we should be able to move out of it
         let TransactionOutputs {
             transaction,
             effects,
@@ -538,83 +591,48 @@ impl MemoryCache {
             locks_to_delete,
             new_locks_to_init,
             events,
-            ..
         } = &*outputs;
 
         // Move dirty markers to cache
         for (object_key, marker_value) in markers.iter() {
-            let key = (epoch, object_key.0);
-            let version = object_key.1;
-
-            // IMPORTANT: lock both the dirty set entry and the cache entry before modifying either
-            // this ensures that readers cannot see a value temporarily disappear.
-            let marker_cache_entry = self.cached.marker_cache.entry(key).or_default();
-            let mut marker_cache_map = marker_cache_entry.value().lock();
-            let marker_dirty_entry = self.dirty.markers.entry(key);
-
-            // insert into cache and drop old versions.
-            marker_cache_map.insert(version, *marker_value);
-            // TODO: make this automatic by giving CachedVersionMap an optional max capacity
-            marker_cache_map.truncate(MAX_VERSIONS);
-
-            let DashMapEntry::Occupied(mut entry) = marker_dirty_entry else {
-                panic!("dirty marker map must exist");
-            };
-
-            let removed = entry.get_mut().remove(&version);
-
-            assert_eq!(removed, Some(*marker_value), "dirty version must exist");
-
-            // if there are no versions remaining, remove the map entry
-            if entry.get().is_empty() {
-                entry.remove();
-            }
+            Self::move_version_from_dirty_to_cache(
+                &self.dirty.markers,
+                &self.cached.marker_cache,
+                (epoch, object_key.0),
+                object_key.1,
+                marker_value,
+            );
         }
 
-        // Move dirty objects to cache. We must be sure not to create a window during which
-        // another thread could observe a parent object without observing its most recent
-        // children. Because cache entries can be evicted at any time, we must remove parent
-        // objects from the dirty set first.
         for (object_id, object) in written.iter() {
-            if object.is_child_object() {
-                self.write_object(object_id, object);
-            }
-        }
-        for (object_id, object) in written.iter() {
-            if !object.is_child_object() {
-                self.write_object(object_id, object);
-                if object.is_package() {
-                    self.cached
-                        .packages
-                        .insert(*object_id, PackageObject::new(object.clone()));
-                }
-            }
+            Self::move_version_from_dirty_to_cache(
+                &self.dirty.objects,
+                &self.cached.object_cache,
+                *object_id,
+                object.version(),
+                &ObjectEntry::Object(object.clone()),
+            );
         }
 
-        for ObjectKey(id, version) in deleted.iter() {
-            self.write_deleted_tombstone(id, *version);
-        }
-        for ObjectKey(id, version) in wrapped.iter() {
-            self.write_wrapped_tombstone(id, *version);
+        for ObjectKey(object_id, version) in deleted.iter() {
+            Self::move_version_from_dirty_to_cache(
+                &self.dirty.objects,
+                &self.cached.object_cache,
+                *object_id,
+                *version,
+                &ObjectEntry::Deleted,
+            );
         }
 
-        // TODO(cache): remove dead objects from cache - this cannot actually be done
-        // until until objects are committed to the db, because
-        /*
-        for (id, version) in effects.modified_at_versions().iter() {
-            // delete the given id, version from self.objects. if no versions remain, remove the
-            // entry from self.objects
-            match self.objects.entry(*id) {
-                dashmap::mapref::entry::Entry::Occupied(mut entry) => {
-                    entry.get_mut().remove(version);
-                    if entry.get().is_empty() {
-                        entry.remove();
-                    }
-                }
-                dashmap::mapref::entry::Entry::Vacant(_) => panic!("object not found"),
-            }
+        for ObjectKey(object_id, version) in wrapped.iter() {
+            Self::move_version_from_dirty_to_cache(
+                &self.dirty.objects,
+                &self.cached.object_cache,
+                *object_id,
+                *version,
+                &ObjectEntry::Wrapped,
+            );
         }
-        */
 
         // process deleted and new locks
         let tx_digest = *transaction.digest();
@@ -636,6 +654,45 @@ impl MemoryCache {
             .notify(&tx_digest, &effects_digest);
 
         Ok(())
+    }
+
+    fn move_version_from_dirty_to_cache<K, V>(
+        dirty: &DashMap<K, CachedVersionMap<V>>,
+        cache: &MokaCache<K, Arc<Mutex<CachedVersionMap<V>>>>,
+        key: K,
+        version: SequenceNumber,
+        value: &V,
+    ) where
+        K: Eq + std::hash::Hash + Clone + Send + Sync + Copy + 'static,
+        V: Send + Sync + Clone + Eq + std::fmt::Debug + 'static,
+    {
+        static MAX_VERSIONS: usize = 3;
+        //let key = (epoch, object_key.0);
+        //let version = object_key.1;
+
+        // IMPORTANT: lock both the dirty set entry and the cache entry before modifying either
+        // this ensures that readers cannot see a value temporarily disappear.
+        let cache_entry = cache.entry(key).or_default();
+        let mut cache_map = cache_entry.value().lock();
+        let dirty_entry = dirty.entry(key);
+
+        // insert into cache and drop old versions.
+        cache_map.insert(version, value.clone());
+        // TODO: make this automatic by giving CachedVersionMap an optional max capacity
+        cache_map.truncate(MAX_VERSIONS);
+
+        let DashMapEntry::Occupied(mut occupied_dirty_entry) = dirty_entry else {
+            panic!("dirty map must exist");
+        };
+
+        let removed = occupied_dirty_entry.get_mut().remove(&version);
+
+        assert_eq!(removed.as_ref(), Some(value), "dirty version must exist");
+
+        // if there are no versions remaining, remove the map entry
+        if occupied_dirty_entry.get().is_empty() {
+            occupied_dirty_entry.remove();
+        }
     }
 
     pub async fn prune_objects_and_compact_for_testing(
@@ -1157,7 +1214,6 @@ impl ExecutionCacheWrite for MemoryCache {
             locks_to_delete,
             new_locks_to_init,
             events,
-            ..
         } = &*tx_outputs;
 
         // Update all markers
@@ -1195,24 +1251,12 @@ impl ExecutionCacheWrite for MemoryCache {
             self.write_wrapped_tombstone(id, *version);
         }
 
-        // TODO(cache): remove dead objects from cache - this cannot actually be done
-        // until until objects are committed to the db, because
-        /*
-        for (id, version) in effects.modified_at_versions().iter() {
-            // delete the given id, version from self.objects. if no versions remain, remove the
-            // entry from self.objects
-            match self.objects.entry(*id) {
-                dashmap::mapref::entry::Entry::Occupied(mut entry) => {
-                    entry.get_mut().remove(version);
-                    if entry.get().is_empty() {
-                        entry.remove();
-                    }
-                }
-                dashmap::mapref::entry::Entry::Vacant(_) => panic!("object not found"),
-            }
-        }
-        */
-
+        // Create / update / delete locks
+        //
+        // Note that deleted locks must be marked with Lock::Deleted instead of being removed
+        // from the map, because we have not yet persisted any writes to the db. The
+        // Lock::Deleted entry is necessary to prevent a subsequent query from finding the
+        // not-yet-deleted db entry.
         let deleted_locks_iter: AssertOrdered<_> = locks_to_delete.iter().into();
         let new_locks_iter: AssertOrdered<_> = new_locks_to_init.iter().into();
         let mut deleted_locks_iter = deleted_locks_iter.peekable();
