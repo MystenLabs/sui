@@ -53,9 +53,9 @@ impl Display for PTBPreview {
 impl Display for PTBGas {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let r = match self {
-            PTBGas::MIN => "min",
-            PTBGas::MAX => "max",
-            PTBGas::SUM => "sum",
+            PTBGas::Min => "min",
+            PTBGas::Max => "max",
+            PTBGas::Sum => "sum",
         };
         write!(f, "{}", r)
     }
