@@ -43,7 +43,7 @@ pub enum Argument {
 impl Argument {
     /// Resolve an `Argument` into a `MoveValue` if possible. Errors if the `Argument` is not
     /// convertible to a `MoveValue`.
-    pub fn into_move_value_opt(&self, loc: Span) -> PTBResult<MoveValue> {
+    pub fn to_move_value_opt(&self, loc: Span) -> PTBResult<MoveValue> {
         Ok(match self {
             Argument::Bool(b) => MoveValue::Bool(*b),
             Argument::U8(u) => MoveValue::U8(*u),
@@ -55,7 +55,7 @@ impl Argument {
             Argument::Address(a) => MoveValue::Address(a.into_inner()),
             Argument::Vector(vs) => MoveValue::Vector(
                 vs.iter()
-                    .map(|sp!(loc, v)| v.into_move_value_opt(*loc))
+                    .map(|sp!(loc, v)| v.to_move_value_opt(*loc))
                     .collect::<PTBResult<Vec<_>>>()
                     .map_err(|e| e.with_help(
                             format!("Was unable to parse '{self}' as a pure PTB value. This is most likely because \
@@ -64,11 +64,11 @@ impl Argument {
                             ))?
             ),
             Argument::String(s) => {
-                MoveValue::Vector(s.bytes().into_iter().map(MoveValue::U8).collect::<Vec<_>>())
+                MoveValue::Vector(s.bytes().map(MoveValue::U8).collect::<Vec<_>>())
             }
             Argument::Option(sp!(loc, o)) => {
                 if let Some(v) = o {
-                    let v = v.as_ref().into_move_value_opt(*loc).map_err(|e| e.with_help(
+                    let v = v.as_ref().to_move_value_opt(*loc).map_err(|e| e.with_help(
                             format!(
                                 "Was unable to parse '{self}' as a pure PTB value. This is most likely because \
                                 the option contains a non-primitive (e.g., object or array) \
@@ -141,8 +141,8 @@ impl fmt::Display for Argument {
                 function_name,
             } => {
                 let addr_string = match &address.value {
-                    ParsedAddress::Named(name) => format!("{}", name),
-                    ParsedAddress::Numerical(addr) => format!("{}", addr),
+                    ParsedAddress::Named(name) => name.to_string(),
+                    ParsedAddress::Numerical(addr) => addr.to_string(),
                 };
                 write!(
                     f,

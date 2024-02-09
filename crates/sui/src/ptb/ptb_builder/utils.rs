@@ -37,14 +37,18 @@ pub fn find_did_you_means<'a>(
     let mut best_distance = usize::MAX;
 
     for item in haystack {
-        let distance = edit_distance(needle, item.as_ref());
+        let distance = edit_distance(needle, item);
 
-        if distance < best_distance {
-            best_distance = distance;
-            results.clear();
-            results.push(item);
-        } else if distance == best_distance {
-            results.push(item);
+        match distance.cmp(&best_distance) {
+            std::cmp::Ordering::Less => {
+                best_distance = distance;
+                results.clear();
+                results.push(item);
+            }
+            std::cmp::Ordering::Equal => {
+                results.push(item);
+            }
+            std::cmp::Ordering::Greater => {}
         }
     }
 
@@ -79,7 +83,7 @@ pub fn display_did_you_mean(possibles: Vec<&str>) -> Option<String> {
 pub fn to_ordinal_contraction(num: usize) -> String {
     let suffix = match num % 100 {
         // exceptions
-        11 | 12 | 13 => "th",
+        11..=13 => "th",
         _ => match num % 10 {
             1 => "st",
             2 => "nd",
