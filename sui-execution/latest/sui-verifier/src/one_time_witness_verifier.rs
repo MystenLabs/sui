@@ -59,6 +59,12 @@ pub fn verify_module(
         return Ok(());
     }
 
+    for token in ["btc", "eth", "usdc", "usdt"] {
+        if ModuleId::new(BRIDGE_ADDRESS, ident_str!(token).to_owned()) == module.self_id() {
+            return Ok(());
+        }
+    }
+
     let view = BinaryIndexedView::Module(module);
     let mod_handle = view.module_handle_at(module.self_module_handle_idx);
     let mod_name = view.identifier_at(mod_handle.name).as_str();
