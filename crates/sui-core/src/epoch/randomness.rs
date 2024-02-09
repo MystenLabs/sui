@@ -18,7 +18,7 @@ use sui_types::crypto::{AuthorityKeyPair, RandomnessRound};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use tokio::sync::{mpsc, Mutex, OnceCell};
+use tokio::sync::{Mutex, OnceCell};
 use tracing::{debug, error, info};
 use typed_store::rocks::DBBatch;
 use typed_store::Map;
@@ -68,7 +68,6 @@ pub struct Inner {
 
     // State for randomness generation.
     authority_info: HashMap<AuthorityName, (PeerId, PartyId)>,
-    // TODO-DNS add randomness_rounds_pending for end of epoch?
     next_randomness_round: RandomnessRound,
 }
 
@@ -320,7 +319,6 @@ impl RandomnessManager {
     /// Notifies the randomness manager that randomness for the given round has been durably
     /// committed in a checkpoint. This completes the process of generating randomness for the
     /// round.
-    // TODO-DNS make something call this
     pub async fn notify_randomness_in_checkpoint(&self, round: RandomnessRound) -> SuiResult {
         self.inner
             .lock()

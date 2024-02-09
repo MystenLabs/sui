@@ -17,7 +17,6 @@ use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::collections::HashSet;
 use std::sync::Arc;
 use sui_storage::package_object_cache::PackageObjectCache;
-use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::message_envelope::Message;
@@ -33,6 +32,10 @@ use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber},
     object::Owner,
     storage::InputKey,
+};
+use sui_types::{
+    digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest},
+    transaction::TransactionKey,
 };
 use tracing::instrument;
 use typed_store::Map;
@@ -274,11 +277,11 @@ pub trait ExecutionCacheRead: Send + Sync {
 
     fn multi_get_executed_effects_digests(
         &self,
-        digests: &[TransactionDigest],
+        keys: &[TransactionKey],
     ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>>;
 
     fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
-        self.multi_get_executed_effects_digests(&[*digest])
+        self.multi_get_executed_effects_digests(&[TransactionKey::Digest(*digest)])
             .map(|mut digests| {
                 digests
                     .pop()
@@ -289,14 +292,14 @@ pub trait ExecutionCacheRead: Send + Sync {
 
     fn multi_get_executed_effects(
         &self,
-        digests: &[TransactionDigest],
+        keys: &[TransactionKey],
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        let effects_digests = self.multi_get_executed_effects_digests(digests)?;
-        assert_eq!(effects_digests.len(), digests.len());
+        let effects_digests = self.multi_get_executed_effects_digests(&keys)?;
+        assert_eq!(effects_digests.len(), keys.len());
 
-        let mut results = vec![None; digests.len()];
-        let mut fetch_digests = Vec::with_capacity(digests.len());
-        let mut fetch_indices = Vec::with_capacity(digests.len());
+        let mut results = vec![None; keys.len()];
+        let mut fetch_digests = Vec::with_capacity(keys.len());
+        let mut fetch_indices = Vec::with_capacity(keys.len());
 
         for (i, digest) in effects_digests.into_iter().enumerate() {
             if let Some(digest) = digest {
@@ -317,7 +320,7 @@ pub trait ExecutionCacheRead: Send + Sync {
         &self,
         digest: &TransactionDigest,
     ) -> SuiResult<Option<TransactionEffects>> {
-        self.multi_get_executed_effects(&[*digest])
+        self.multi_get_executed_effects(&[TransactionKey::Digest(*digest)])
             .map(|mut effects| {
                 effects
                     .pop()
@@ -356,15 +359,15 @@ pub trait ExecutionCacheRead: Send + Sync {
 
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
-        digests: &'a [TransactionDigest],
+        keys: &'a [TransactionKey],
     ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffectsDigest>>>;
 
     fn notify_read_executed_effects<'a>(
         &'a self,
-        digests: &'a [TransactionDigest],
+        keys: &'a [TransactionKey],
     ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffects>>> {
         async move {
-            let digests = self.notify_read_executed_effects_digests(digests).await?;
+            let digests = self.notify_read_executed_effects_digests(keys).await?;
             // once digests are available, effects must be present as well
             self.multi_get_effects(&digests).map(|effects| {
                 effects
@@ -484,7 +487,7 @@ pub struct PassthroughCache {
     store: Arc<AuthorityStore>,
     metrics: Option<ExecutionCacheMetrics>,
     package_cache: Arc<PackageObjectCache>,
-    executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
+    executed_effects_digests_notify_read: NotifyRead<TransactionKey, TransactionEffectsDigest>,
 }
 
 impl PassthroughCache {
@@ -597,9 +600,9 @@ impl ExecutionCacheRead for PassthroughCache {
 
     fn multi_get_executed_effects_digests(
         &self,
-        digests: &[TransactionDigest],
+        keys: &[TransactionKey],
     ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
-        self.store.multi_get_executed_effects_digests(digests)
+        self.store.multi_get_executed_effects_digests(keys)
     }
 
     fn multi_get_effects(
@@ -611,14 +614,12 @@ impl ExecutionCacheRead for PassthroughCache {
 
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
-        digests: &'a [TransactionDigest],
+        keys: &'a [TransactionKey],
     ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffectsDigest>>> {
         async move {
-            let registrations = self
-                .executed_effects_digests_notify_read
-                .register_all(digests);
+            let registrations = self.executed_effects_digests_notify_read.register_all(keys);
 
-            let executed_effects_digests = self.multi_get_executed_effects_digests(digests)?;
+            let executed_effects_digests = self.multi_get_executed_effects_digests(keys)?;
 
             let results = executed_effects_digests
                 .into_iter()
@@ -672,13 +673,18 @@ impl ExecutionCacheWrite for PassthroughCache {
     ) -> BoxFuture<'a, SuiResult> {
         async move {
             let tx_digest = *tx_outputs.transaction.digest();
+            let tx_secondary_key = tx_outputs.transaction.non_digest_key();
             let effects_digest = tx_outputs.effects.digest();
             self.store
                 .write_transaction_outputs(epoch_id, tx_outputs)
                 .await?;
 
             self.executed_effects_digests_notify_read
-                .notify(&tx_digest, &effects_digest);
+                .notify(&TransactionKey::Digest(tx_digest), &effects_digest);
+            if let Some(key) = tx_secondary_key {
+                self.executed_effects_digests_notify_read
+                    .notify(&key, &effects_digest);
+            }
 
             if let Some(metrics) = &self.metrics {
                 metrics
@@ -711,23 +717,23 @@ pub struct NotifyReadWrapper<T>(Arc<T>);
 impl<T: ExecutionCacheRead + 'static> EffectsNotifyRead for NotifyReadWrapper<T> {
     async fn notify_read_executed_effects(
         &self,
-        digests: Vec<TransactionDigest>,
+        keys: Vec<TransactionKey>,
     ) -> SuiResult<Vec<TransactionEffects>> {
-        self.0.notify_read_executed_effects(&digests).await
+        self.0.notify_read_executed_effects(&keys).await
     }
 
     async fn notify_read_executed_effects_digests(
         &self,
-        digests: Vec<TransactionDigest>,
+        keys: Vec<TransactionKey>,
     ) -> SuiResult<Vec<TransactionEffectsDigest>> {
-        self.0.notify_read_executed_effects_digests(&digests).await
+        self.0.notify_read_executed_effects_digests(&keys).await
     }
 
     fn multi_get_executed_effects(
         &self,
-        digests: &[TransactionDigest],
+        keys: &[TransactionKey],
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        self.0.multi_get_executed_effects(digests)
+        self.0.multi_get_executed_effects(keys)
     }
 }
 

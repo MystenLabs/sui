@@ -51,7 +51,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
 
     // Quorum driver does not execute txn locally
     let txn = txns.swap_remove(0);
-    let digest = *txn.digest();
+    let key = txn.key();
     orchestrator
         .quorum_driver()
         .submit_transaction_no_ticket(txn)
@@ -61,7 +61,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     handle
         .state()
         .get_effects_notify_read()
-        .notify_read_executed_effects(vec![digest])
+        .notify_read_executed_effects(vec![key])
         .await
         .unwrap();
 

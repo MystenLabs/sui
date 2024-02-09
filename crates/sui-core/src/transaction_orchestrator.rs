@@ -44,7 +44,7 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
 
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{TransactionKey, VerifiedTransaction};
 
 // How long to wait for local execution (including parents) before a timeout
 // is returned to client.
@@ -283,8 +283,8 @@ where
         let cache_reader = self.validator_state.get_cache_reader().clone();
         let qd = self.clone_quorum_driver();
         Ok(async move {
-            let digests = [tx_digest];
-            let effects_await = cache_reader.notify_read_executed_effects(&digests);
+            let keys = [TransactionKey::Digest(tx_digest)];
+            let effects_await = cache_reader.notify_read_executed_effects(&keys);
             // let-and-return necessary to satisfy borrow checker.
             #[allow(clippy::let_and_return)]
             let res = match select(ticket, effects_await.boxed()).await {

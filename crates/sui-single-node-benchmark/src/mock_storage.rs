@@ -9,10 +9,7 @@ use prometheus::core::{Atomic, AtomicU64};
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_storage::package_object_cache::PackageObjectCache;
-use sui_types::base_types::{
-    EpochId, ObjectID, ObjectRef, SequenceNumber, TransactionDigest, VersionNumber,
-};
-use sui_types::crypto::RandomnessRound;
+use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{

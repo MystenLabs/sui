@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cmp::Ordering;
+use std::collections::VecDeque;
 use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
@@ -342,12 +343,35 @@ impl AuthorityStore {
         }
     }
 
-    /// Given a list of transaction digests, returns a list of the corresponding effects only if they have been
+    /// Given a list of transaction keys, returns a list of the corresponding effects only if they have been
     /// executed. For transactions that have not been executed, None is returned.
     pub fn multi_get_executed_effects_digests(
         &self,
-        digests: &[TransactionDigest],
+        keys: &[TransactionKey],
     ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
+        let secondary_keys: Vec<_> = keys
+            .iter()
+            .filter_map(|key| match key {
+                TransactionKey::Digest(_) => None,
+                key => Some(key),
+            })
+            .collect();
+        let mut secondary_key_digests = VecDeque::from(
+            self.perpetual_tables
+                .transaction_digests_by_key
+                .multi_get(secondary_keys)?,
+        );
+        // Combine provided digests with the ones we had to look up from secondary keys.
+        let digests: Vec<_> = keys
+            .into_iter()
+            .map(|key| match key {
+                TransactionKey::Digest(digest) => *digest,
+                _ => secondary_key_digests
+                    .pop_front()
+                    .expect("size of `non_digest_keys_digests` should match the number of elements in `keys` that are not of type TransactionKey::Digest")
+                    .unwrap_or_default(), // ok to use default here, it will return None in the lookup below
+            })
+            .collect();
         Ok(self.perpetual_tables.executed_effects.multi_get(digests)?)
     }
 
@@ -816,6 +840,14 @@ impl AuthorityStore {
             &self.perpetual_tables.transactions,
             iter::once((transaction_digest, transaction.serializable_ref())),
         )?;
+
+        // Update table for any secondary keys.
+        if let Some(key) = transaction.non_digest_key() {
+            write_batch.insert_batch(
+                &self.perpetual_tables.transaction_digests_by_key,
+                iter::once((key, transaction_digest)),
+            )?;
+        }
 
         // Add batched writes for objects and locks.
         let effects_digest = effects.digest();
@@ -1383,6 +1415,8 @@ impl AuthorityStore {
                 [(transaction_effects.digest(), transaction_effects)],
             )?;
 
+        // TODO-DNS decide if it's necessary here to write the secondary keys
+
         write_batch.write()?;
         Ok(())
     }
@@ -1403,6 +1437,8 @@ impl AuthorityStore {
                     [(tx.effects.digest(), &tx.effects)],
                 )?;
         }
+
+        // TODO-DNS decide if it's necessary here to write the secondary keys
 
         write_batch.write()?;
         Ok(())

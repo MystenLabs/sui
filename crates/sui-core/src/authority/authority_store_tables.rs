@@ -69,6 +69,12 @@ pub struct AuthorityPerpetualTables {
     #[default_options_override_fn = "transactions_table_default_config"]
     pub(crate) transactions: DBMap<TransactionDigest, TrustedTransaction>,
 
+    /// This is a map between non-digest transaction keys and the corresponding transaction digest.
+    /// Used to support waiting for execution of transactions for which the digest may not yet be
+    /// known.
+    // TODO-DNS figure out how this gets pruned
+    pub(crate) transaction_digests_by_key: DBMap<TransactionKey, TransactionDigest>,
+
     /// A map between the transaction digest of a certificate to the effects of its execution.
     /// We store effects into this table in two different cases:
     /// 1. When a transaction is synced through state_sync, we store the effects here. These effects

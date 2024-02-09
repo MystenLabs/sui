@@ -59,7 +59,7 @@ use sui_types::messages_checkpoint::{CheckpointRequestV2, SignedCheckpointSummar
 use sui_types::messages_consensus::ConsensusTransactionKey;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
-use sui_types::transaction::{TransactionDataAPI, TransactionKind};
+use sui_types::transaction::{TransactionDataAPI, TransactionKey, TransactionKind};
 use tokio::{
     sync::{watch, Notify},
     time::timeout,
@@ -91,6 +91,12 @@ pub struct PendingCheckpointInfo {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PendingCheckpoint {
     pub roots: Vec<TransactionDigest>,
+    pub details: PendingCheckpointInfo,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PendingCheckpointV2 {
+    pub roots: Vec<TransactionKey>,
     pub details: PendingCheckpointInfo,
 }
 
@@ -777,7 +783,7 @@ impl CheckpointBuilder {
     async fn make_checkpoint(
         &self,
         height: CheckpointCommitHeight,
-        pending: PendingCheckpoint,
+        pending: PendingCheckpointV2,
     ) -> anyhow::Result<()> {
         self.metrics
             .checkpoint_roots_count
@@ -1218,16 +1224,18 @@ impl CheckpointBuilder {
             if pending.is_empty() {
                 break;
             }
-            let pending = pending.into_iter().collect::<Vec<_>>();
+            let pending = pending
+                .into_iter()
+                .map(TransactionKey::Digest)
+                .collect::<Vec<_>>();
             let effects = self.effects_store.multi_get_executed_effects(&pending)?;
             let effects = effects
                 .into_iter()
                 .zip(pending)
-                .map(|(opt, digest)| match opt {
+                .map(|(opt, key)| match opt {
                     Some(x) => x,
                     None => panic!(
-                        "Can not find effect for transaction {:?}, however transaction that depend on it was already executed",
-                        digest
+                        "Can not find effect for transaction {key:?}, however transaction that depend on it was already executed",
                     ),
                 })
                 .collect::<Vec<_>>();
@@ -1682,7 +1690,7 @@ pub trait CheckpointServiceNotify {
         info: &CheckpointSignatureMessage,
     ) -> SuiResult;
 
-    fn notify_checkpoint(&self, checkpoint: &PendingCheckpoint) -> SuiResult;
+    fn notify_checkpoint(&self, checkpoint: &PendingCheckpointV2) -> SuiResult;
 }
 
 /// This is a service used to communicate with other pieces of sui(for ex. authority)
@@ -1763,7 +1771,7 @@ impl CheckpointService {
     fn write_and_notify_checkpoint_for_testing(
         &self,
         epoch_store: &AuthorityPerEpochStore,
-        checkpoint: PendingCheckpoint,
+        checkpoint: PendingCheckpointV2,
     ) -> SuiResult {
         let mut batch = epoch_store.db_batch_for_test();
         epoch_store.write_pending_checkpoint(&mut batch, &checkpoint)?;
@@ -1816,7 +1824,7 @@ impl CheckpointServiceNotify for CheckpointService {
         Ok(())
     }
 
-    fn notify_checkpoint(&self, checkpoint: &PendingCheckpoint) -> SuiResult {
+    fn notify_checkpoint(&self, checkpoint: &PendingCheckpointV2) -> SuiResult {
         debug!(
             checkpoint_commit_height = checkpoint.height(),
             "Notifying builder about checkpoint",
@@ -1837,7 +1845,7 @@ impl CheckpointServiceNotify for CheckpointServiceNoop {
         Ok(())
     }
 
-    fn notify_checkpoint(&self, _: &PendingCheckpoint) -> SuiResult {
+    fn notify_checkpoint(&self, _: &PendingCheckpointV2) -> SuiResult {
         Ok(())
     }
 }
@@ -1845,6 +1853,36 @@ impl CheckpointServiceNotify for CheckpointServiceNoop {
 impl PendingCheckpoint {
     pub fn height(&self) -> CheckpointCommitHeight {
         self.details.commit_height
+    }
+}
+
+impl PendingCheckpointV2 {
+    pub fn height(&self) -> CheckpointCommitHeight {
+        self.details.commit_height
+    }
+
+    pub fn expect_v1(self) -> PendingCheckpoint {
+        PendingCheckpoint {
+            roots: self
+                .roots
+                .into_iter()
+                .map(|root| *root.expect_digest())
+                .collect(),
+            details: self.details,
+        }
+    }
+}
+
+impl From<PendingCheckpoint> for PendingCheckpointV2 {
+    fn from(value: PendingCheckpoint) -> Self {
+        PendingCheckpointV2 {
+            roots: value
+                .roots
+                .into_iter()
+                .map(|root| TransactionKey::Digest(root))
+                .collect(),
+            details: value.details,
+        }
     }
 }
 
@@ -1906,7 +1944,7 @@ mod tests {
                 .unwrap();
         }
 
-        let mut store = HashMap::<TransactionDigest, TransactionEffects>::new();
+        let mut store = HashMap::<TransactionKey, TransactionEffects>::new();
         commit_cert_for_test(
             &mut store,
             state.clone(),
@@ -1953,7 +1991,7 @@ mod tests {
                 GasCostSummary::new(51, 52, 51, 1),
             );
         }
-        let all_digests: Vec<_> = store.keys().copied().collect();
+        let all_digests: Vec<_> = store.keys().map(|k| *k.expect_digest()).collect();
         for digest in all_digests {
             let signature = Signature::Ed25519SuiSignature(Default::default()).into();
             state
@@ -2072,25 +2110,25 @@ mod tests {
     }
 
     #[async_trait]
-    impl EffectsNotifyRead for HashMap<TransactionDigest, TransactionEffects> {
+    impl EffectsNotifyRead for HashMap<TransactionKey, TransactionEffects> {
         async fn notify_read_executed_effects(
             &self,
-            digests: Vec<TransactionDigest>,
+            keys: Vec<TransactionKey>,
         ) -> SuiResult<Vec<TransactionEffects>> {
-            Ok(digests
+            Ok(keys
                 .into_iter()
-                .map(|d| self.get(&d).expect("effects not found").clone())
+                .map(|k| self.get(&k).expect("effects not found").clone())
                 .collect())
         }
 
         async fn notify_read_executed_effects_digests(
             &self,
-            digests: Vec<TransactionDigest>,
+            keys: Vec<TransactionKey>,
         ) -> SuiResult<Vec<TransactionEffectsDigest>> {
-            Ok(digests
+            Ok(keys
                 .into_iter()
-                .map(|d| {
-                    self.get(&d)
+                .map(|k| {
+                    self.get(&k)
                         .map(|fx| fx.digest())
                         .expect("effects not found")
                 })
@@ -2099,9 +2137,9 @@ mod tests {
 
         fn multi_get_executed_effects(
             &self,
-            digests: &[TransactionDigest],
+            keys: &[TransactionKey],
         ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-            Ok(digests.iter().map(|d| self.get(d).cloned()).collect())
+            Ok(keys.iter().map(|k| self.get(k).cloned()).collect())
         }
     }
 
@@ -2129,9 +2167,12 @@ mod tests {
         }
     }
 
-    fn p(i: u64, t: Vec<u8>) -> PendingCheckpoint {
-        PendingCheckpoint {
-            roots: t.into_iter().map(d).collect(),
+    fn p(i: u64, t: Vec<u8>) -> PendingCheckpointV2 {
+        PendingCheckpointV2 {
+            roots: t
+                .into_iter()
+                .map(|t| TransactionKey::Digest(d(t)))
+                .collect(),
             details: PendingCheckpointInfo {
                 timestamp_ms: 0,
                 last_of_epoch: false,
@@ -2159,7 +2200,7 @@ mod tests {
     }
 
     fn commit_cert_for_test(
-        store: &mut HashMap<TransactionDigest, TransactionEffects>,
+        store: &mut HashMap<TransactionKey, TransactionEffects>,
         state: Arc<AuthorityState>,
         digest: TransactionDigest,
         dependencies: Vec<TransactionDigest>,
@@ -2167,7 +2208,7 @@ mod tests {
     ) {
         let epoch_store = state.epoch_store_for_testing();
         let effects = e(digest, dependencies, gas_used);
-        store.insert(digest, effects.clone());
+        store.insert(TransactionKey::Digest(digest), effects.clone());
         epoch_store
             .insert_tx_cert_and_effects_signature(
                 &digest,

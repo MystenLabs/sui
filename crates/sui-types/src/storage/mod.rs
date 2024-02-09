@@ -9,11 +9,8 @@ mod write_store;
 
 use crate::base_types::{TransactionDigest, VersionNumber};
 use crate::committee::EpochId;
-use crate::crypto::RandomnessRound;
 use crate::error::SuiError;
-use crate::executable_transaction::{CertificateProof, VerifiedExecutableTransaction};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
-use crate::message_envelope::VerifiedEnvelope;
 use crate::move_package::MovePackage;
 use crate::transaction::{SenderSignedData, TransactionDataAPI, TransactionKey};
 use crate::{

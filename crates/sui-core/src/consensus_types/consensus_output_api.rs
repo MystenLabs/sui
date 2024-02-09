@@ -3,10 +3,10 @@
 
 use crate::consensus_types::AuthorityIndex;
 use fastcrypto::hash::Hash;
-use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutputDigest, HeaderAPI, SystemMessage};
+use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutputDigest, HeaderAPI};
 use std::fmt::Display;
 use sui_types::digests::ConsensusCommitDigest;
-use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
+use sui_types::messages_consensus::ConsensusTransaction;
 
 /// A list of tuples of:
 /// (certificate origin authority index, all transactions corresponding to the certificate).
@@ -70,26 +70,26 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
             .zip(&self.batches)
             .map(|(cert, batches)| {
                 assert_eq!(cert.header().payload().len(), batches.len());
-                let transactions: Vec<(&[u8], ConsensusTransaction)> = 
-                batches.iter().flat_map(|batch| {
-                    let digest = batch.digest();
-                    assert!(cert.header().payload().contains_key(&digest));
-                    batch.transactions().iter().map(move |serialized_transaction| {
-                        let transaction = match bcs::from_bytes::<ConsensusTransaction>(
-                            serialized_transaction,
-                        ) {
-                            Ok(transaction) => transaction,
-                            Err(err) => {
-                                // This should have been prevented by Narwhal batch verification.
-                                panic!(
-                                    "Unexpected malformed transaction (failed to deserialize): {}\nCertificate={:?} BatchDigest={:?} Transaction={:?}",
-                                    err, cert, digest, serialized_transaction
-                                );
-                            }
-                        };
-                        (serialized_transaction.as_ref(), transaction)
-                    })
-                }).collect();
+                let transactions: Vec<(&[u8], ConsensusTransaction)> =
+                    batches.iter().flat_map(|batch| {
+                        let digest = batch.digest();
+                        assert!(cert.header().payload().contains_key(&digest));
+                        batch.transactions().iter().map(move |serialized_transaction| {
+                            let transaction = match bcs::from_bytes::<ConsensusTransaction>(
+                                serialized_transaction,
+                            ) {
+                                Ok(transaction) => transaction,
+                                Err(err) => {
+                                    // This should have been prevented by Narwhal batch verification.
+                                    panic!(
+                                        "Unexpected malformed transaction (failed to deserialize): {}\nCertificate={:?} BatchDigest={:?} Transaction={:?}",
+                                        err, cert, digest, serialized_transaction
+                                    );
+                                }
+                            };
+                            (serialized_transaction.as_ref(), transaction)
+                        })
+                    }).collect();
                 (cert.origin().0, transactions)
             }).collect()
     }

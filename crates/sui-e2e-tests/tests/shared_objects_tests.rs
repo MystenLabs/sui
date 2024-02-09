@@ -18,7 +18,7 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::messages_grpc::{LayoutGenerationOption, ObjectInfoRequest};
-use sui_types::transaction::{CallArg, ObjectArg};
+use sui_types::transaction::{CallArg, ObjectArg, TransactionKey};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
 
@@ -133,7 +133,12 @@ async fn shared_object_deletion_multiple_times() {
     fullnode
         .state()
         .get_effects_notify_read()
-        .notify_read_executed_effects(digests)
+        .notify_read_executed_effects(
+            digests
+                .iter()
+                .map(|d| TransactionKey::Digest(*d))
+                .collect::<Vec<_>>(),
+        )
         .await
         .unwrap();
 }
@@ -189,7 +194,12 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
     fullnode
         .state()
         .get_effects_notify_read()
-        .notify_read_executed_effects(digests)
+        .notify_read_executed_effects(
+            digests
+                .iter()
+                .map(|d| TransactionKey::Digest(*d))
+                .collect::<Vec<_>>(),
+        )
         .await
         .unwrap();
 }
@@ -302,7 +312,10 @@ async fn shared_object_deletion_multi_certs() {
     fullnode
         .state()
         .get_effects_notify_read()
-        .notify_read_executed_effects(vec![inc_tx_a_digest, inc_tx_b_digest])
+        .notify_read_executed_effects(vec![
+            TransactionKey::Digest(inc_tx_a_digest),
+            TransactionKey::Digest(inc_tx_b_digest),
+        ])
         .await
         .unwrap();
 }

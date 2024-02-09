@@ -19,7 +19,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     fp_ensure,
     storage::InputKey,
-    transaction::{TransactionDataAPI, TransactionKey, VerifiedCertificate},
+    transaction::{TransactionDataAPI, VerifiedCertificate},
 };
 use sui_types::{executable_transaction::VerifiedExecutableTransaction, fp_bail};
 use tokio::sync::mpsc::UnboundedSender;

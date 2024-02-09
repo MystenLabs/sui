@@ -902,10 +902,9 @@ impl AuthorityState {
             .metrics
             .execute_certificate_with_effects_latency
             .start_timer();
-        let digest = *transaction.digest();
         debug!("execute_certificate_with_effects");
         fp_ensure!(
-            *effects.data().transaction_digest() == digest,
+            effects.data().transaction_digest() == transaction.digest(),
             SuiError::ErrorWhileProcessingCertificate {
                 err: "effects/tx digest mismatch".to_string()
             }
@@ -928,7 +927,7 @@ impl AuthorityState {
 
         let observed_effects = self
             .execution_cache
-            .notify_read_executed_effects(&[digest])
+            .notify_read_executed_effects(&[transaction.key()])
             .instrument(tracing::debug_span!(
                 "notify_read_effects_in_execute_certificate_with_effects"
             ))
@@ -1063,7 +1062,7 @@ impl AuthorityState {
         certificate: &VerifiedCertificate,
     ) -> SuiResult<TransactionEffects> {
         self.execution_cache
-            .notify_read_executed_effects(&[*certificate.digest()])
+            .notify_read_executed_effects(&[certificate.key()])
             .await
             .map(|mut r| r.pop().expect("must return correct number of effects"))
     }
@@ -4696,7 +4695,7 @@ impl RandomnessRoundReceiver {
             transaction.digest()
         );
         let transaction = VerifiedExecutableTransaction::new_system(transaction, epoch);
-        let digest = *transaction.digest();
+        let key = transaction.key();
         if let Err(e) = self
             .authority_state
             .transaction_manager()
@@ -4707,7 +4706,7 @@ impl RandomnessRoundReceiver {
         let Ok(mut effects) = self
             .authority_state
             .execution_cache
-            .notify_read_executed_effects(&[digest])
+            .notify_read_executed_effects(&[key])
             .await
         else {
             error!("BUG: failed to get effects for randomness state update transaction at epoch {epoch}, round {round}");
@@ -4742,8 +4741,9 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
             vec![]
         };
 
+        let fx_keys: Vec<_> = effects.iter().map(|d| TransactionKey::Digest(*d)).collect();
         let fx = if !effects.is_empty() {
-            self.execution_cache.multi_get_executed_effects(effects)?
+            self.execution_cache.multi_get_executed_effects(&fx_keys)?
         } else {
             vec![]
         };

@@ -3,11 +3,6 @@
 
 use super::{Randomness, RandomnessMessage, SendPartialSignaturesRequest};
 use anemo::{Request, Response};
-use std::sync::{Arc, RwLock};
-use sui_types::{
-    committee::EpochId,
-    crypto::{RandomnessPartialSignature, RandomnessRound},
-};
 use tokio::sync::mpsc;
 
 pub(super) struct Server {

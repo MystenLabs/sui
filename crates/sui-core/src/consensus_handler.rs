@@ -38,6 +38,7 @@ use sui_types::messages_consensus::{
 };
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
+use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use tracing::{debug, error, info, instrument, trace_span};
 
 pub struct ConsensusHandlerInitializer {
@@ -730,6 +731,19 @@ impl SequencedConsensusTransaction {
             self.transaction,
             SequencedConsensusTransactionKind::System(_)
         )
+    }
+
+    pub fn is_user_tx_with_randomness(&self) -> bool {
+        let SequencedConsensusTransactionKind::External(ConsensusTransaction {
+            kind: ConsensusTransactionKind::UserTransaction(certificate),
+            ..
+        }) = &self.transaction
+        else {
+            return false;
+        };
+        certificate
+            .shared_input_objects()
+            .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
     }
 
     pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {

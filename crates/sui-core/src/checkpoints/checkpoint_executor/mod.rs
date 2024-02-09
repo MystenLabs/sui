@@ -31,9 +31,11 @@ use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
 use prometheus::Registry;
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::{fail_point, fail_point_async};
+use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
+use sui_types::transaction::{TransactionKey, TransactionKind};
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
@@ -542,7 +544,12 @@ impl CheckpointExecutor {
 
                     let effects = self
                         .cache_reader
-                        .notify_read_executed_effects(&all_tx_digests)
+                        .notify_read_executed_effects(
+                            &all_tx_digests
+                                .iter()
+                                .map(|d| TransactionKey::Digest(*d))
+                                .collect::<Vec<_>>(),
+                        )
                         .await
                         .expect("Failed to get executed effects for finalizing checkpoint");
 
@@ -601,12 +608,13 @@ async fn execute_checkpoint(
     //   get_unexecuted_transactions()
     // - Second, we execute all remaining transactions.
 
-    let (execution_digests, all_tx_digests, executable_txns) = get_unexecuted_transactions(
-        checkpoint.clone(),
-        cache_reader,
-        checkpoint_store.clone(),
-        epoch_store.clone(),
-    );
+    let (execution_digests, all_tx_digests, executable_txns, randomness_round) =
+        get_unexecuted_transactions(
+            checkpoint.clone(),
+            cache_reader,
+            checkpoint_store.clone(),
+            epoch_store.clone(),
+        );
 
     let tx_count = execution_digests.len();
     debug!("Number of transactions in the checkpoint: {:?}", tx_count);
@@ -629,6 +637,17 @@ async fn execute_checkpoint(
         data_ingestion_dir,
     )
     .await?;
+
+    // Once execution is complete, we know that any randomness contained in this checkpoint has
+    // been successfully included in a checkpoint certified by quorum of validators.
+    if let Some(round) = randomness_round {
+        epoch_store
+            .randomness_manager()
+            .expect("should never see randomness in an epoch if RandomnessManager does not exist")
+            .notify_randomness_in_checkpoint(round)
+            .await?;
+    }
+
     Ok(())
 }
 
@@ -646,13 +665,18 @@ async fn handle_execution_effects(
     local_execution_timeout_sec: u64,
     data_ingestion_dir: Option<PathBuf>,
 ) {
+    let all_tx_keys: Vec<_> = all_tx_digests
+        .iter()
+        .map(|d| TransactionKey::Digest(*d))
+        .collect();
+
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
     let log_timeout_sec = Duration::from_secs(local_execution_timeout_sec);
     // Whether the checkpoint is next to execute and blocking additional executions.
     let mut blocking_execution = false;
     loop {
-        let effects_future = cache_reader.notify_read_executed_effects(&all_tx_digests);
+        let effects_future = cache_reader.notify_read_executed_effects(&all_tx_keys);
 
         match timeout(log_timeout_sec, effects_future).await {
             Err(_elapsed) => {
@@ -688,7 +712,7 @@ async fn handle_execution_effects(
                 // Only log details when the checkpoint is next to execute, but has not finished
                 // execution within log_timeout_sec.
                 let missing_digests: Vec<TransactionDigest> = cache_reader
-                    .multi_get_executed_effects_digests(&all_tx_digests)
+                    .multi_get_executed_effects_digests(&all_tx_keys)
                     .expect("multi_get_executed_effects cannot fail")
                     .iter()
                     .zip(all_tx_digests.clone())
@@ -857,6 +881,7 @@ fn get_unexecuted_transactions(
     Vec<ExecutionDigests>,
     Vec<TransactionDigest>,
     Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
+    Option<RandomnessRound>,
 ) {
     let checkpoint_sequence = checkpoint.sequence_number();
     let full_contents = checkpoint_store
@@ -896,18 +921,41 @@ fn get_unexecuted_transactions(
             .expect("read cannot fail")
             .unwrap_or_else(||
                 panic!(
-                    "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {}",
-                    change_epoch_tx_digest, checkpoint.sequence_number()
+                    "state-sync should have ensured that transaction with digest {change_epoch_tx_digest:?} exists for checkpoint: {}",
+                    checkpoint.sequence_number()
                 )
             );
         assert!(change_epoch_tx.data().intent_message().value.is_end_of_epoch_tx());
     });
 
-    let all_tx_digests: Vec<TransactionDigest> =
-        execution_digests.iter().map(|tx| tx.transaction).collect();
+    // Look for a randomness state update tx, which must be first if it exists.
+    let randomness_round = if let Some(first_digest) = execution_digests.first() {
+        let maybe_randomness_tx = cache_reader.get_transaction_block(&first_digest.transaction)
+            .expect("read cannot fail")
+            .unwrap_or_else(||
+                panic!(
+                    "state-sync should have ensured that transaction with digest {first_digest:?} exists for checkpoint: {}",
+                    checkpoint.sequence_number()
+                )
+            );
+        if let TransactionKind::RandomnessStateUpdate(rsu) =
+            maybe_randomness_tx.data().transaction_data().kind()
+        {
+            Some(rsu.randomness_round)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let (all_tx_digests, all_tx_keys): (Vec<_>, Vec<_>) = execution_digests
+        .iter()
+        .map(|tx| (tx.transaction, TransactionKey::Digest(tx.transaction)))
+        .unzip();
 
     let executed_effects_digests = cache_reader
-        .multi_get_executed_effects_digests(&all_tx_digests)
+        .multi_get_executed_effects_digests(&all_tx_keys)
         .expect("failed to read executed_effects from store");
 
     let (unexecuted_txns, expected_effects_digests): (Vec<_>, Vec<_>) =
@@ -978,7 +1026,12 @@ fn get_unexecuted_transactions(
             .collect()
     };
 
-    (execution_digests, all_tx_digests, executable_txns)
+    (
+        execution_digests,
+        all_tx_digests,
+        executable_txns,
+        randomness_round,
+    )
 }
 
 // Logs within the function are annotated with the checkpoint sequence number and epoch,

@@ -44,7 +44,6 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 use sui_types::storage::GetSharedLocks;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
-use sui_types::transaction::TransactionKey;
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };

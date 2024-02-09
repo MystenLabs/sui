@@ -257,6 +257,12 @@ impl RandomnessEventLoop {
                 );
             return;
         }
+        if self.completed_sigs.contains_key(&(epoch, round)) {
+            info!(
+                "skipping sending partial sigs for epoch {epoch} round {round}, we already have completed this sig"
+            );
+            return;
+        }
 
         self.pending_tasks.insert((epoch, round), ());
         self.maybe_start_pending_tasks();

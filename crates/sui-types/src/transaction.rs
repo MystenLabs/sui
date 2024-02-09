@@ -2358,12 +2358,26 @@ impl<S> Envelope<SenderSignedData, S> {
             .into_iter()
     }
 
+    // Returns the primary key for this transaction.
     pub fn key(&self) -> TransactionKey {
         match &self.data().intent_message().value.kind() {
             TransactionKind::RandomnessStateUpdate(rsu) => {
                 TransactionKey::RandomnessRound(rsu.randomness_round)
             }
             _ => TransactionKey::Digest(*self.digest()),
+        }
+    }
+
+    // Returns non-Digest keys that could be used to refer to this transaction.
+    //
+    // At the moment this returns a single Option for efficiency, but if more key types are added,
+    // the second return type could change to Vec<TransactionKey>.
+    pub fn non_digest_key(&self) -> Option<TransactionKey> {
+        match &self.data().intent_message().value.kind() {
+            TransactionKind::RandomnessStateUpdate(rsu) => {
+                Some(TransactionKey::RandomnessRound(rsu.randomness_round))
+            }
+            _ => None,
         }
     }
 
@@ -3057,8 +3071,17 @@ impl Display for CertifiedTransaction {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum TransactionKey {
     Digest(TransactionDigest),
     RandomnessRound(RandomnessRound),
+}
+
+impl TransactionKey {
+    pub fn expect_digest(&self) -> &TransactionDigest {
+        match self {
+            TransactionKey::Digest(d) => d,
+            _ => panic!("called expect_digest on a non-Digest TransactionKey: {self:?}"),
+        }
+    }
 }
