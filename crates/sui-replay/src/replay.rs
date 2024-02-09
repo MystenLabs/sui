@@ -20,6 +20,7 @@ use move_core_types::{
 };
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Map};
 use shared_crypto::intent::Intent;
 use similar::{ChangeTag, TextDiff};
 use std::{
@@ -86,6 +87,8 @@ pub struct ExecutionSandboxState {
     pub local_exec_status: Option<Result<(), ExecutionError>>,
     /// Pre exec diag info
     pub pre_exec_diag: DiagInfo,
+    /// Json data of transaction output
+    pub json: String,
 }
 
 impl ExecutionSandboxState {
@@ -715,6 +718,7 @@ impl LocalExec {
                 local_exec_effects: effects,
                 local_exec_status: Some(Ok(())),
                 pre_exec_diag: self.diag.clone(),
+                json: "".to_string(),
             });
         }
         // Initialize the state necessary for execution
@@ -779,13 +783,19 @@ impl LocalExec {
 
         trace!(target: "replay_gas_info", "{}", Pretty(&gas_status));
 
-        if let ProgrammableTransaction(pt) = transaction_kind {
-            trace!(target: "replay_ptb_info", "{}", Pretty(&pt));
+        if let ProgrammableTransaction(ref pt) = transaction_kind {
+            trace!(target: "replay_ptb_info", "{}", Pretty(pt));
         };
 
         let all_required_objects = self.storage.all_objects();
         let effects =
             SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;
+
+        let mut json_map = Map::new();
+        json_map.insert("effects".to_string(), json!(effects));
+        json_map.insert("gas_status".to_string(), json!(gas_status));
+        json_map.insert("transaction_info".to_string(), json!(transaction_kind));
+        let combined_json = serde_json::Value::Object(json_map).to_string();
 
         Ok(ExecutionSandboxState {
             transaction_info: tx_info.clone(),
@@ -794,6 +804,7 @@ impl LocalExec {
             local_exec_effects: effects,
             local_exec_status: Some(result),
             pre_exec_diag: self.diag.clone(),
+            json: combined_json,
         })
     }
 
@@ -948,6 +959,7 @@ impl LocalExec {
             local_exec_effects: effects,
             local_exec_status: Some(exec_res),
             pre_exec_diag: pre_exec_diag.clone(),
+            json: "".to_string(),
         })
     }
 

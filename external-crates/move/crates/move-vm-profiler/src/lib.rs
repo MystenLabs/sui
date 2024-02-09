@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use move_vm_config::runtime::VMProfilerConfig;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[cfg(feature = "gas-profiler")]
 use tracing::info;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FrameName {
     name: String,
     file: String,
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Shared {
     frames: Vec<FrameName>,
 
@@ -22,7 +22,7 @@ pub struct Shared {
     frame_table: BTreeMap<String, usize>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
     #[serde(rename(serialize = "type"))]
     ty: String,
@@ -30,7 +30,7 @@ pub struct Event {
     at: u64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     #[serde(rename(serialize = "type"))]
@@ -43,7 +43,7 @@ pub struct Profile {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GasProfiler {
     exporter: String,
