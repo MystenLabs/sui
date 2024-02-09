@@ -104,7 +104,6 @@ pub struct PTBCommand {
 
 #[derive(clap::ValueEnum, Clone, Debug, Serialize, Default)]
 pub enum PTBGas {
-    Min,
     #[default]
     Max,
     Sum,
