@@ -13,14 +13,12 @@ use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::{
-    base_types::TransactionDigest, error::SuiResult, fp_ensure, message_envelope::Message,
-};
-use sui_types::{
     base_types::{ObjectID, SequenceNumber, TransactionDigest},
     committee::EpochId,
     digests::TransactionEffectsDigest,
     error::{SuiError, SuiResult},
     fp_ensure,
+    message_envelope::Message,
     storage::InputKey,
     transaction::{TransactionDataAPI, VerifiedCertificate},
 };

@@ -36,7 +36,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{TransactionKey, VerifiedTransaction};
 use tap::TapFallible;
 use tracing::{error, instrument};
 use typed_store::Map;
@@ -50,7 +50,7 @@ pub struct PassthroughCache {
     store: Arc<AuthorityStore>,
     metrics: Option<ExecutionCacheMetrics>,
     package_cache: Arc<PackageObjectCache>,
-    executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
+    executed_effects_digests_notify_read: NotifyRead<TransactionKey, TransactionEffectsDigest>,
 }
 
 impl PassthroughCache {
@@ -203,9 +203,9 @@ impl ExecutionCacheRead for PassthroughCache {
 
     fn multi_get_executed_effects_digests(
         &self,
-        digests: &[TransactionDigest],
+        keys: &[TransactionKey],
     ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
-        self.store.multi_get_executed_effects_digests(digests)
+        self.store.multi_get_executed_effects_digests(keys)
     }
 
     fn multi_get_effects(
@@ -217,14 +217,12 @@ impl ExecutionCacheRead for PassthroughCache {
 
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
-        digests: &'a [TransactionDigest],
+        keys: &'a [TransactionKey],
     ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffectsDigest>>> {
         async move {
-            let registrations = self
-                .executed_effects_digests_notify_read
-                .register_all(digests);
+            let registrations = self.executed_effects_digests_notify_read.register_all(keys);
 
-            let executed_effects_digests = self.multi_get_executed_effects_digests(digests)?;
+            let executed_effects_digests = self.multi_get_executed_effects_digests(keys)?;
 
             let results = executed_effects_digests
                 .into_iter()
@@ -305,13 +303,18 @@ impl ExecutionCacheWrite for PassthroughCache {
     ) -> BoxFuture<'a, SuiResult> {
         async move {
             let tx_digest = *tx_outputs.transaction.digest();
+            let tx_secondary_key = tx_outputs.transaction.non_digest_key();
             let effects_digest = tx_outputs.effects.digest();
             self.store
                 .write_transaction_outputs(epoch_id, tx_outputs)
                 .await?;
 
             self.executed_effects_digests_notify_read
-                .notify(&tx_digest, &effects_digest);
+                .notify(&TransactionKey::Digest(tx_digest), &effects_digest);
+            if let Some(key) = tx_secondary_key {
+                self.executed_effects_digests_notify_read
+                    .notify(&key, &effects_digest);
+            }
 
             if let Some(metrics) = &self.metrics {
                 metrics
