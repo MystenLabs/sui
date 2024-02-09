@@ -851,7 +851,7 @@ impl AuthorityPerEpochStore {
             .set(randomness_manager.clone())
             .is_err()
         {
-            error!("`set_randomness_manager` called more than once; this should never happen");
+            error!("BUG: `set_randomness_manager` called more than once; this should never happen");
         }
         randomness_manager.start_dkg().await
     }
@@ -2349,13 +2349,13 @@ impl AuthorityPerEpochStore {
 
         // Once commit processing is recorded, kick off randomness generation.
         if let Some(randomness_round) = randomness_round {
-            // Spawn a task for this, because we can't await while holding `lock`.
             let epoch = self.epoch();
             let randomness_manager = self
                 .randomness_manager
                 .get()
                 .expect("randomness manager should exist if randomness round is provided")
                 .clone();
+            // Spawn a task for this, because we can't await while holding `lock`.
             spawn_monitored_task!(async move {
                 randomness_manager
                     .generate_randomness(epoch, randomness_round)
