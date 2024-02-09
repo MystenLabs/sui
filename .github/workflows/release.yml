@@ -213,11 +213,18 @@ jobs:
         shell: bash
         run: |
           echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
+          echo "versionless_tag=$(echo ${{ env.sui_tag }} | sed s/'testnet\-v'//)" >> $GITHUB_ENV
       - uses: mislav/bump-homebrew-formula-action@b3327118b2153c82da63fd9cbf58942146ee99f0 # pin@v3
         with:
           formula-name: sui
           create-pullrequest: true
           tag-name: "${{ env.sui_tag }}"
+          commit-message: |
+            {{formulaName}} ${{ env.versionless_tag }}
+
+            Created by https://github.com/mislav/bump-homebrew-formula-action
+
+            From release: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         env:
           # https://github.com/settings/tokens/new?scopes=public_repo,workflow
           COMMITTER_TOKEN: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
