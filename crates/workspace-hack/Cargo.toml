@@ -16,7 +16,6 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 Inflector = { version = "0.11" }
-addr2line = { version = "0.19", default-features = false }
 adler = { version = "1", default-features = false }
 aead = { version = "0.5", default-features = false, features = ["alloc", "getrandom"] }
 aes = { version = "0.8", default-features = false }
@@ -113,6 +112,7 @@ axum-extra = { version = "0.4" }
 axum-server = { version = "0.5", default-features = false, features = ["tls-rustls"] }
 backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3", features = ["gimli-symbolize"] }
+backtrace-ext = { version = "0.2", default-features = false }
 base-x = { version = "0.2", default-features = false }
 base16ct-6f8ce4dd05d13bba = { package = "base16ct", version = "0.2", default-features = false, features = ["alloc"] }
 base16ct-c65f7effa3be6d31 = { package = "base16ct", version = "0.1", default-features = false }
@@ -340,7 +340,6 @@ getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-f
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
 gettid = { version = "0.1", default-features = false }
 ghash = { version = "0.5", default-features = false }
-gimli = { version = "0.27", default-features = false, features = ["read"] }
 git-version = { version = "0.3", default-features = false }
 glob = { version = "0.3", default-features = false }
 globset = { version = "0.4" }
@@ -400,6 +399,7 @@ internment = { version = "0.5", default-features = false, features = ["arc"] }
 io-lifetimes = { version = "1" }
 iri-string = { version = "0.4" }
 is-terminal = { version = "0.4", default-features = false }
+is_ci = { version = "1", default-features = false }
 itertools-93f6ce9d446188ac = { package = "itertools", version = "0.10" }
 itoa = { version = "1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
@@ -447,13 +447,13 @@ memchr = { version = "2" }
 memmap2-ca01ad9e24f5d932 = { package = "memmap2", version = "0.7", default-features = false }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
+miette = { version = "7", features = ["fancy"] }
 migrations_internals = { version = "2", default-features = false }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
 minibytes = { git = "https://github.com/MystenLabs/mysticeti", rev = "318d61d27f47d257d99a86983d835e9e9756bc59", default-features = false, features = ["frommmap"] }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
-miniz_oxide-3b31131e45eafb45 = { package = "miniz_oxide", version = "0.6", default-features = false }
-miniz_oxide-ca01ad9e24f5d932 = { package = "miniz_oxide", version = "0.7", default-features = false, features = ["with-alloc"] }
+miniz_oxide = { version = "0.7", default-features = false, features = ["with-alloc"] }
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext"] }
 mockall = { version = "0.11", default-features = false }
 more-asserts = { version = "0.3", default-features = false }
@@ -522,7 +522,6 @@ num_cpus = { version = "1", default-features = false }
 num_enum-3b31131e45eafb45 = { package = "num_enum", version = "0.6" }
 num_enum-d8f496e17d97b5cb = { package = "num_enum", version = "0.5" }
 number_prefix = { version = "0.4" }
-object = { version = "0.30", default-features = false, features = ["archive", "elf", "macho", "pe", "read_core", "unaligned"] }
 oid-registry = { version = "0.6", features = ["crypto", "x509"] }
 once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
@@ -543,7 +542,8 @@ ordered-float-f595c2ba2a3f28df = { package = "ordered-float", version = "2" }
 ouroboros = { version = "0.17" }
 outref = { version = "0.5", default-features = false }
 overload = { version = "0.1", default-features = false }
-owo-colors = { version = "3", default-features = false }
+owo-colors-164d15cefe24d7eb = { package = "owo-colors", version = "4", default-features = false }
+owo-colors-7b89eefb6aaa9bf3 = { package = "owo-colors", version = "3", default-features = false }
 p256 = { version = "0.13" }
 pairing = { version = "0.23", default-features = false }
 papergrid = { version = "0.9", default-features = false, features = ["std"] }
@@ -710,6 +710,7 @@ sized-chunks = { version = "0.6" }
 slab = { version = "0.4" }
 slip10_ed25519 = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
+smawk = { version = "0.3", default-features = false }
 snap = { version = "1", default-features = false }
 snowflake-api = { version = "0.6", default-features = false }
 socket2-9fbad63c4bcf4a8f = { package = "socket2", version = "0.4", default-features = false, features = ["all"] }
@@ -727,6 +728,9 @@ strsim = { version = "0.10", default-features = false }
 strum-adf3d7031871b0af = { package = "strum", version = "0.24", features = ["derive"] }
 subtle = { version = "2" }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
+supports-color = { version = "3", default-features = false }
+supports-hyperlinks = { version = "3", default-features = false }
+supports-unicode = { version = "3", default-features = false }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 sync_wrapper = { version = "0.1", default-features = false }
 sysinfo = { version = "0.27" }
@@ -740,11 +744,13 @@ task-local-extensions = { version = "0.1", default-features = false }
 tempfile = { version = "3", default-features = false }
 term = { version = "0.7" }
 termcolor = { version = "1", default-features = false }
-terminal_size = { version = "0.2", default-features = false }
+terminal_size-468e82937335b1c9 = { package = "terminal_size", version = "0.3", default-features = false }
+terminal_size-6f8ce4dd05d13bba = { package = "terminal_size", version = "0.2", default-features = false }
 termtree = { version = "0.4", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
+textwrap = { version = "0.16" }
 thiserror = { version = "1", default-features = false }
 thread_local = { version = "1", default-features = false }
 threadpool = { version = "1", default-features = false }
@@ -801,6 +807,7 @@ unescape = { version = "0.1", default-features = false }
 unicase = { version = "2", default-features = false }
 unicode-bidi = { version = "0.3" }
 unicode-ident = { version = "1", default-features = false }
+unicode-linebreak = { version = "0.1", default-features = false }
 unicode-normalization = { version = "0.1" }
 unicode-segmentation = { version = "1", default-features = false }
 unicode-width = { version = "0.1" }
@@ -848,7 +855,6 @@ zstd-sys = { version = "2", features = ["std"] }
 [build-dependencies]
 Inflector = { version = "0.11" }
 addchain = { version = "0.2", default-features = false }
-addr2line = { version = "0.19", default-features = false }
 adler = { version = "1", default-features = false }
 aead = { version = "0.5", default-features = false, features = ["alloc", "getrandom"] }
 aes = { version = "0.8", default-features = false }
@@ -957,6 +963,7 @@ axum-extra = { version = "0.4" }
 axum-server = { version = "0.5", default-features = false, features = ["tls-rustls"] }
 backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3", features = ["gimli-symbolize"] }
+backtrace-ext = { version = "0.2", default-features = false }
 base-x = { version = "0.2", default-features = false }
 base16ct-6f8ce4dd05d13bba = { package = "base16ct", version = "0.2", default-features = false, features = ["alloc"] }
 base16ct-c65f7effa3be6d31 = { package = "base16ct", version = "0.1", default-features = false }
@@ -1219,7 +1226,6 @@ getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-f
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
 gettid = { version = "0.1", default-features = false }
 ghash = { version = "0.5", default-features = false }
-gimli = { version = "0.27", default-features = false, features = ["read"] }
 git-version = { version = "0.3", default-features = false }
 git-version-macro = { version = "0.3", default-features = false }
 glob = { version = "0.3", default-features = false }
@@ -1287,6 +1293,7 @@ internment = { version = "0.5", default-features = false, features = ["arc"] }
 io-lifetimes = { version = "1" }
 iri-string = { version = "0.4" }
 is-terminal = { version = "0.4", default-features = false }
+is_ci = { version = "1", default-features = false }
 itertools-93f6ce9d446188ac = { package = "itertools", version = "0.10" }
 itertools-a6292c17cd707f01 = { package = "itertools", version = "0.11", default-features = false, features = ["use_alloc"] }
 itoa = { version = "1", default-features = false }
@@ -1339,14 +1346,15 @@ memchr = { version = "2" }
 memmap2-ca01ad9e24f5d932 = { package = "memmap2", version = "0.7", default-features = false }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
+miette = { version = "7", features = ["fancy"] }
+miette-derive = { version = "7", default-features = false }
 migrations_internals = { version = "2", default-features = false }
 migrations_macros = { version = "2" }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
 minibytes = { git = "https://github.com/MystenLabs/mysticeti", rev = "318d61d27f47d257d99a86983d835e9e9756bc59", default-features = false, features = ["frommmap"] }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
-miniz_oxide-3b31131e45eafb45 = { package = "miniz_oxide", version = "0.6", default-features = false }
-miniz_oxide-ca01ad9e24f5d932 = { package = "miniz_oxide", version = "0.7", default-features = false, features = ["with-alloc"] }
+miniz_oxide = { version = "0.7", default-features = false, features = ["with-alloc"] }
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext"] }
 mockall = { version = "0.11", default-features = false }
 mockall_derive = { version = "0.11", default-features = false }
@@ -1424,7 +1432,6 @@ num_enum-d8f496e17d97b5cb = { package = "num_enum", version = "0.5" }
 num_enum_derive-3b31131e45eafb45 = { package = "num_enum_derive", version = "0.6", default-features = false, features = ["std"] }
 num_enum_derive-d8f496e17d97b5cb = { package = "num_enum_derive", version = "0.5", default-features = false, features = ["std"] }
 number_prefix = { version = "0.4" }
-object = { version = "0.30", default-features = false, features = ["archive", "elf", "macho", "pe", "read_core", "unaligned"] }
 oid-registry = { version = "0.6", features = ["crypto", "x509"] }
 once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
@@ -1447,7 +1454,8 @@ ouroboros = { version = "0.17" }
 ouroboros_macro = { version = "0.17", default-features = false, features = ["std"] }
 outref = { version = "0.5", default-features = false }
 overload = { version = "0.1", default-features = false }
-owo-colors = { version = "3", default-features = false }
+owo-colors-164d15cefe24d7eb = { package = "owo-colors", version = "4", default-features = false }
+owo-colors-7b89eefb6aaa9bf3 = { package = "owo-colors", version = "3", default-features = false }
 p256 = { version = "0.13" }
 pairing = { version = "0.23", default-features = false }
 papergrid = { version = "0.9", default-features = false, features = ["std"] }
@@ -1654,6 +1662,7 @@ sized-chunks = { version = "0.6" }
 slab = { version = "0.4" }
 slip10_ed25519 = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
+smawk = { version = "0.3", default-features = false }
 snap = { version = "1", default-features = false }
 snowflake-api = { version = "0.6", default-features = false }
 socket2-9fbad63c4bcf4a8f = { package = "socket2", version = "0.4", default-features = false, features = ["all"] }
@@ -1675,6 +1684,9 @@ strum_macros-adf3d7031871b0af = { package = "strum_macros", version = "0.24", de
 subprocess = { version = "0.2", default-features = false }
 subtle = { version = "2" }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
+supports-color = { version = "3", default-features = false }
+supports-hyperlinks = { version = "3", default-features = false }
+supports-unicode = { version = "3", default-features = false }
 syn-3575ec1268b04181 = { package = "syn", version = "0.15", features = ["extra-traits", "full", "visit"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
@@ -1692,12 +1704,14 @@ task-local-extensions = { version = "0.1", default-features = false }
 tempfile = { version = "3", default-features = false }
 term = { version = "0.7" }
 termcolor = { version = "1", default-features = false }
-terminal_size = { version = "0.2", default-features = false }
+terminal_size-468e82937335b1c9 = { package = "terminal_size", version = "0.3", default-features = false }
+terminal_size-6f8ce4dd05d13bba = { package = "terminal_size", version = "0.2", default-features = false }
 termtree = { version = "0.4", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-macro = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
+textwrap = { version = "0.16" }
 thiserror = { version = "1", default-features = false }
 thiserror-impl = { version = "1", default-features = false }
 thread_local = { version = "1", default-features = false }
@@ -1761,6 +1775,7 @@ unescape = { version = "0.1", default-features = false }
 unicase = { version = "2", default-features = false }
 unicode-bidi = { version = "0.3" }
 unicode-ident = { version = "1", default-features = false }
+unicode-linebreak = { version = "0.1", default-features = false }
 unicode-normalization = { version = "0.1" }
 unicode-segmentation = { version = "1", default-features = false }
 unicode-width = { version = "0.1" }
@@ -1817,6 +1832,7 @@ zstd-safe-a490c3000a992113 = { package = "zstd-safe", version = "6", default-fea
 zstd-sys = { version = "2", features = ["std"] }
 
 [target.aarch64-apple-darwin.dependencies]
+addr2line = { version = "0.21", default-features = false }
 ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8", default-features = false, features = ["runtime-rng"] }
 async-compression-9fbad63c4bcf4a8f = { package = "async-compression", version = "0.4", default-features = false, features = ["gzip", "tokio"] }
 bitflags-f595c2ba2a3f28df = { package = "bitflags", version = "2", default-features = false, features = ["std"] }
@@ -1830,6 +1846,7 @@ errno-6f8ce4dd05d13bba = { package = "errno", version = "0.2", default-features 
 eth-keystore = { version = "0.5", default-features = false }
 findshlibs = { version = "0.10", default-features = false }
 fsevent-sys = { version = "4", default-features = false }
+gimli = { version = "0.28", default-features = false, features = ["read"] }
 hyperlocal = { version = "0.8" }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 ipnet = { version = "2" }
@@ -1843,11 +1860,12 @@ mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util"
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
 nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
 num_threads = { version = "0.1", default-features = false }
+object = { version = "0.32", default-features = false, features = ["archive", "elf", "macho", "pe", "read_core", "unaligned"] }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
 pprof = { version = "0.11", features = ["frame-pointer"] }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rustix-4e55305914c60c55 = { package = "rustix", version = "0.36", features = ["fs"] }
-rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38", features = ["fs"] }
+rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38", features = ["fs", "termios"] }
 rustix-d736d0ac4424f0f1 = { package = "rustix", version = "0.37", features = ["termios"] }
 salsa20 = { version = "0.10", default-features = false }
 scrypt = { version = "0.10", default-features = false }
@@ -1863,6 +1881,7 @@ uuid-c38e5c1d305a1b54 = { package = "uuid", version = "0.8", features = ["serde"
 xattr = { version = "1" }
 
 [target.aarch64-apple-darwin.build-dependencies]
+addr2line = { version = "0.21", default-features = false }
 ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8", default-features = false, features = ["runtime-rng"] }
 async-compression-9fbad63c4bcf4a8f = { package = "async-compression", version = "0.4", default-features = false, features = ["gzip", "tokio"] }
 autotools = { version = "0.2", default-features = false }
@@ -1877,6 +1896,7 @@ errno-6f8ce4dd05d13bba = { package = "errno", version = "0.2", default-features 
 eth-keystore = { version = "0.5", default-features = false }
 findshlibs = { version = "0.10", default-features = false }
 fsevent-sys = { version = "4", default-features = false }
+gimli = { version = "0.28", default-features = false, features = ["read"] }
 hyperlocal = { version = "0.8" }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 ipnet = { version = "2" }
@@ -1890,12 +1910,13 @@ mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util"
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
 nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
 num_threads = { version = "0.1", default-features = false }
+object = { version = "0.32", default-features = false, features = ["archive", "elf", "macho", "pe", "read_core", "unaligned"] }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
 pprof = { version = "0.11", features = ["frame-pointer"] }
 protobuf-src = { version = "1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rustix-4e55305914c60c55 = { package = "rustix", version = "0.36", features = ["fs"] }
-rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38", features = ["fs"] }
+rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38", features = ["fs", "termios"] }
 rustix-d736d0ac4424f0f1 = { package = "rustix", version = "0.37", features = ["termios"] }
 salsa20 = { version = "0.10", default-features = false }
 scrypt = { version = "0.10", default-features = false }
@@ -1911,6 +1932,7 @@ uuid-c38e5c1d305a1b54 = { package = "uuid", version = "0.8", features = ["serde"
 xattr = { version = "1" }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
+addr2line = { version = "0.21", default-features = false }
 ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8", default-features = false, features = ["runtime-rng"] }
 async-compression-9fbad63c4bcf4a8f = { package = "async-compression", version = "0.4", default-features = false, features = ["gzip", "tokio"] }
 bitflags-f595c2ba2a3f28df = { package = "bitflags", version = "2", default-features = false, features = ["std"] }
@@ -1919,6 +1941,7 @@ cpufeatures = { version = "0.2", default-features = false }
 debugid = { version = "0.8", default-features = false }
 eth-keystore = { version = "0.5", default-features = false }
 findshlibs = { version = "0.10", default-features = false }
+gimli = { version = "0.28", default-features = false, features = ["read"] }
 hyperlocal = { version = "0.8" }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 inotify = { version = "0.9", default-features = false }
@@ -1936,13 +1959,14 @@ mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util"
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
 nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
 num_threads = { version = "0.1", default-features = false }
+object = { version = "0.32", default-features = false, features = ["archive", "elf", "macho", "pe", "read_core", "unaligned"] }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
 openssl-probe = { version = "0.1", default-features = false }
 pprof = { version = "0.11", features = ["frame-pointer"] }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 raw-cpuid = { version = "10", default-features = false }
 rustix-4e55305914c60c55 = { package = "rustix", version = "0.36", features = ["fs"] }
-rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38", features = ["fs"] }
+rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38", features = ["fs", "termios"] }
 rustix-d736d0ac4424f0f1 = { package = "rustix", version = "0.37", features = ["termios"] }
 salsa20 = { version = "0.10", default-features = false }
 scrypt = { version = "0.10", default-features = false }
@@ -1956,6 +1980,7 @@ uuid-c38e5c1d305a1b54 = { package = "uuid", version = "0.8", features = ["serde"
 xattr = { version = "1" }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
+addr2line = { version = "0.21", default-features = false }
 ahash-c38e5c1d305a1b54 = { package = "ahash", version = "0.8", default-features = false, features = ["runtime-rng"] }
 async-compression-9fbad63c4bcf4a8f = { package = "async-compression", version = "0.4", default-features = false, features = ["gzip", "tokio"] }
 autotools = { version = "0.2", default-features = false }
@@ -1966,6 +1991,7 @@ curve25519-dalek-derive = { version = "0.1", default-features = false }
 debugid = { version = "0.8", default-features = false }
 eth-keystore = { version = "0.5", default-features = false }
 findshlibs = { version = "0.10", default-features = false }
+gimli = { version = "0.28", default-features = false, features = ["read"] }
 hyperlocal = { version = "0.8" }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 inotify = { version = "0.9", default-features = false }
@@ -1983,6 +2009,7 @@ mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util"
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
 nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
 num_threads = { version = "0.1", default-features = false }
+object = { version = "0.32", default-features = false, features = ["archive", "elf", "macho", "pe", "read_core", "unaligned"] }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
 openssl-probe = { version = "0.1", default-features = false }
 pprof = { version = "0.11", features = ["frame-pointer"] }
@@ -1990,7 +2017,7 @@ protobuf-src = { version = "1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 raw-cpuid = { version = "10", default-features = false }
 rustix-4e55305914c60c55 = { package = "rustix", version = "0.36", features = ["fs"] }
-rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38", features = ["fs"] }
+rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38", features = ["fs", "termios"] }
 rustix-d736d0ac4424f0f1 = { package = "rustix", version = "0.37", features = ["termios"] }
 salsa20 = { version = "0.10", default-features = false }
 scrypt = { version = "0.10", default-features = false }

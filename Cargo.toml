@@ -358,6 +358,7 @@ leb128 = "0.2.5"
 lru = "0.10"
 markdown-gen = "1.2.1"
 match_opt = "0.1.2"
+miette = {version = "7", features = ["fancy"] }
 mime = "0.3"
 mockall = "0.11.4"
 more-asserts = "0.3.1"
@@ -516,7 +517,6 @@ x509-parser = "0.14.0"
 zstd = "0.12.3"
 zeroize = "1.6.0"
 versions = "4.1.0"
-miette = {version = "5.10.0", features = ["fancy"] }
 
 # Move dependencies
 move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
