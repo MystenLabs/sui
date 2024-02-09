@@ -1,10 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use axum::{routing::get, Router};
 use clap::Parser;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tracing::{error, info};
 
 use sui_indexer::errors::IndexerError;
+use sui_indexer::health_check::{health_check_handler, ready_check_handler};
 use sui_indexer::indexer_v2::IndexerV2;
 use sui_indexer::metrics::IndexerMetrics;
 use sui_indexer::start_prometheus_server;
@@ -101,6 +104,20 @@ async fn main() -> Result<(), IndexerError> {
             return IndexerV2::start_analytical_worker(store, indexer_metrics.clone()).await;
         }
     }
+
+    // start basic health check endpoints
+    // these need to be expanded upon to be useful for k8s health checks
+    tokio::spawn(async move {
+        let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
+        let app = Router::new()
+            .route("/health", get(health_check_handler))
+            .route("/ready", get(ready_check_handler));
+
+        axum::Server::bind(&socket)
+            .serve(app.into_make_service())
+            .await
+            .unwrap()
+    });
 
     let store = PgIndexerStore::new(blocking_cp, indexer_metrics.clone());
     Indexer::start(&indexer_config, &registry, store, indexer_metrics, None).await

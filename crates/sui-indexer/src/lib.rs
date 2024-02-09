@@ -39,6 +39,7 @@ pub mod apis;
 pub mod errors;
 pub mod framework;
 mod handlers;
+pub mod health_check;
 pub mod indexer_reader;
 pub mod indexer_v2;
 pub mod metrics;
