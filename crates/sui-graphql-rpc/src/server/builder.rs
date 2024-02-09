@@ -37,17 +37,19 @@ use axum::middleware::{self};
 use axum::response::IntoResponse;
 use axum::routing::{post, MethodRouter, Route};
 use axum::{headers::Header, Router};
-use http::Request;
+use http::{HeaderValue, Method, Request};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
 use hyper::Server as HyperServer;
 use std::convert::Infallible;
 use std::net::TcpStream;
 use std::{any::Any, net::SocketAddr, time::Instant};
+use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -172,10 +174,42 @@ impl ServerBuilder {
         self
     }
 
+    fn cors() -> Result<CorsLayer, Error> {
+        let acl = match std::env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
+            Ok(value) => {
+                let allow_hosts = value
+                    .split(',')
+                    .map(HeaderValue::from_str)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| {
+                        Error::Internal(
+                            "Cannot resolve access control origin env variable".to_string(),
+                        )
+                    })?;
+                AllowOrigin::list(allow_hosts)
+            }
+            _ => AllowOrigin::any(),
+        };
+        info!("Access control allow origin set to: {acl:?}");
+
+        let cors = CorsLayer::new()
+            // Allow `POST` when accessing the resource
+            .allow_methods([Method::POST])
+            // Allow requests from any origin
+            .allow_origin(acl)
+            .allow_headers([
+                hyper::header::CONTENT_TYPE,
+                VERSION_HEADER.clone(),
+                LIMITS_HEADER.clone(),
+            ]);
+        Ok(cors)
+    }
+
     pub fn build(self) -> Result<Server, Error> {
         let (address, schema, router) = self.build_components();
-
-        let app = router.layer(axum::extract::Extension(schema));
+        let app = router
+            .layer(axum::extract::Extension(schema))
+            .layer(Self::cors()?);
 
         Ok(Server {
             server: axum::Server::bind(
