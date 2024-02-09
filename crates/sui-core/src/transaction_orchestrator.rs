@@ -71,7 +71,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
         let safe_client_metrics_base = SafeClientMetricsBase::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         let validators = AuthorityAggregator::new_from_local_system_state(
-            &validator_state.db(),
+            validator_state.get_cache_reader(),
             validator_state.committee_store(),
             safe_client_metrics_base.clone(),
             auth_agg_metrics.clone(),
@@ -79,7 +79,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
 
         let observer = OnsiteReconfigObserver::new(
             reconfig_channel,
-            validator_state.db(),
+            validator_state.get_cache_reader().clone(),
             validator_state.clone_committee_store(),
             safe_client_metrics_base,
             auth_agg_metrics,

@@ -35,6 +35,48 @@ Response: {
           {
             "name": {
               "type": {
+                "repr": "u64"
+              },
+              "data": {
+                "Number": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "vector<u8>"
+              },
+              "data": {
+                "Vector": []
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "u64"
+              },
+              "data": {
+                "Number": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          },
+          {
+            "name": {
+              "type": {
                 "repr": "bool"
               },
               "data": {
@@ -45,7 +87,28 @@ Response: {
             "value": {
               "__typename": "MoveValue"
             }
-          },
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 7 'run'. lines 89-89:
+created: object(7,0)
+mutated: object(0,0)
+wrapped: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 8 'create-checkpoint'. lines 91-91:
+Checkpoint created: 2
+
+task 9 'run-graphql'. lines 93-116:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFields": {
+        "nodes": [
           {
             "name": {
               "type": {
@@ -87,35 +150,7 @@ Response: {
             "value": {
               "__typename": "MoveValue"
             }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 7 'run'. lines 89-89:
-created: object(7,0)
-mutated: object(0,0)
-wrapped: object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
-
-task 8 'create-checkpoint'. lines 91-91:
-Checkpoint created: 2
-
-task 9 'run-graphql'. lines 93-116:
-Response: {
-  "data": {
-    "object": null
-  }
-}
-
-task 10 'run-graphql'. lines 118-143:
-Response: {
-  "data": {
-    "owner": {
-      "dynamicFields": {
-        "nodes": [
+          },
           {
             "name": {
               "type": {
@@ -127,13 +162,21 @@ Response: {
               "bcs": "AA=="
             },
             "value": {
-              "bcs": "AgAAAAAAAAA=",
-              "data": {
-                "Number": "2"
-              },
               "__typename": "MoveValue"
             }
-          },
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 118-143:
+Response: {
+  "data": {
+    "owner": {
+      "dynamicFields": {
+        "nodes": [
           {
             "name": {
               "type": {
@@ -180,6 +223,24 @@ Response: {
               "bcs": "AAAAAAAAAAA=",
               "data": {
                 "Number": "0"
+              },
+              "__typename": "MoveValue"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "bool"
+              },
+              "data": {
+                "Bool": false
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "bcs": "AgAAAAAAAAA=",
+              "data": {
+                "Number": "2"
               },
               "__typename": "MoveValue"
             }

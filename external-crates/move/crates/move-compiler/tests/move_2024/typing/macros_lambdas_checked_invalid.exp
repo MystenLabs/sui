@@ -1,0 +1,39 @@
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid.move:10:17
+   │
+ 9 │         foo!<u64, vector<u8>>(
+   │              ---  ---------- Expected: 'vector<u8>'
+   │              │     
+   │              Given: 'u64'
+10 │             |x| x, // invalid
+   │                 ^ Invalid type annotation
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid.move:16:20
+   │
+14 │         foo!<u64, vector<u8>>(
+   │              ---         -- Expected: 'u8'
+   │              │            
+   │              Given: 'u64'
+15 │             |_| vector[],
+16 │             |a, b| vector[a, b], // invalid
+   │                    ^^^^^^^^^^^^ Invalid type annotation
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid.move:22:16
+   │
+19 │         foo!<u64, vector<u8>>(
+   │                          -- Expected: 'u8'
+   ·
+22 │             || vector[vector[]], // invalid
+   │                ^^^^^^^^^^^^^^^^
+   │                │      │
+   │                │      Given: 'vector<_>'
+   │                Invalid type annotation
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid.move:22:23
+   │
+22 │             || vector[vector[]], // invalid
+   │                       ^^^^^^^^ Could not infer this type. Try adding an annotation
+

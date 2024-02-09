@@ -8,7 +8,6 @@ use diesel::{PgConnection, RunQueryDsl};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::info;
 
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 const MIGRATIONS_V2: EmbeddedMigrations = embed_migrations!("migrations_v2");
 
 /// Resets the database by reverting all migrations and reapplying them.
@@ -16,22 +15,16 @@ const MIGRATIONS_V2: EmbeddedMigrations = embed_migrations!("migrations_v2");
 /// If `drop_all` is set to `true`, the function will drop all tables in the database before
 /// resetting the migrations. This option is destructive and will result in the loss of all
 /// data in the tables. Use with caution, especially in production environments.
-pub fn reset_database(
-    conn: &mut PgPoolConnection,
-    drop_all: bool,
-    use_v2: bool,
-) -> Result<(), anyhow::Error> {
+pub fn reset_database(conn: &mut PgPoolConnection, drop_all: bool) -> Result<(), anyhow::Error> {
     info!("Resetting database ...");
-    let migration = if use_v2 { MIGRATIONS_V2 } else { MIGRATIONS };
     if drop_all {
         drop_all_tables(conn)
             .map_err(|e| anyhow!("Encountering error when dropping all tables {e}"))?;
     } else {
-        conn.revert_all_migrations(migration)
+        conn.revert_all_migrations(MIGRATIONS_V2)
             .map_err(|e| anyhow!("Error reverting all migrations {e}"))?;
     }
-    let migration = if use_v2 { MIGRATIONS_V2 } else { MIGRATIONS };
-    conn.run_migrations(&migration.migrations().unwrap())
+    conn.run_migrations(&MIGRATIONS_V2.migrations().unwrap())
         .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
     info!("Reset database complete.");
     Ok(())

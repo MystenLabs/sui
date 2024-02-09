@@ -130,7 +130,7 @@ pub trait TypingVisitorContext {
         self.pop_warning_filter_scope();
     }
 
-    fn visit_seq(&mut self, seq: &mut T::Sequence) {
+    fn visit_seq(&mut self, (_, seq): &mut T::Sequence) {
         for s in seq {
             self.visit_seq_item(s);
         }
@@ -165,7 +165,7 @@ pub trait TypingVisitorContext {
                 self.visit_exp(e2);
                 self.visit_exp(e3);
             }
-            E::While(e1, _, e2) => {
+            E::While(_, e1, e2) => {
                 self.visit_exp(e1);
                 self.visit_exp(e2);
             }

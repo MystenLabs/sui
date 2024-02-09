@@ -5,5 +5,5 @@ error[E04001]: restricted visibility
    │         --- This function is internal to its module. Only 'public', 'public(friend)', and 'public(package)' functions can be called outside of their module
    ·
 10 │         X::foo()
-   │         ^^^^^^^^ Invalid call to '0x2::X::foo'
+   │         ^^^^^^^^ Invalid call to internal function '0x2::X::foo'
 

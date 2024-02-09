@@ -72,6 +72,7 @@ impl IndexerV2 {
             rest_client.clone(),
             last_seq_from_db,
             downloaded_checkpoint_data_sender,
+            metrics.clone(),
         );
         spawn_monitored_task!(fetcher.run());
 

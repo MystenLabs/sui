@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/spec_lambda_return_missing.move:2:22
+  │
+2 │     spec fun do(f: ||) { }
+  │                      ^
+  │                      │
+  │                      Unexpected ')'
+  │                      Expected a type name
+

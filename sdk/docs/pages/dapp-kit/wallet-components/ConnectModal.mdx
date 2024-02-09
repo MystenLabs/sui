@@ -3,12 +3,12 @@ import {
 	UncontrolledConnectModalExample,
 } from '../../../examples/wallet-components';
 
-# `ConnectModal`
+# ConnectModal
 
 The `ConnectModal` component opens a modal that guides the user through connecting their wallet to
 the dApp.
 
-## Controlled Example
+## Controlled example
 
 ```tsx
 import { ConnectModal, useCurrentAccount } from '@mysten/dapp-kit';
@@ -29,9 +29,11 @@ export function YourApp() {
 }
 ```
 
+Click **Connect** to connect your wallet and see the previous code in action:
+
 <ControlledConnectModalExample />
 
-## Uncontrolled Example
+## Uncontrolled example
 
 ```tsx
 import { ConnectModal, useCurrentAccount } from '@mysten/dapp-kit';
@@ -48,6 +50,8 @@ export function YourApp() {
 	);
 }
 ```
+
+Click **Connect** to connect your wallet and see the previous code in action:
 
 <UncontrolledConnectModalExample />
 

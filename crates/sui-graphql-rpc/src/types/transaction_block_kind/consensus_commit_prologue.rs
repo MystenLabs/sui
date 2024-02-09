@@ -24,6 +24,8 @@ pub(crate) struct ConsensusCommitPrologueTransaction {
     round: u64,
     commit_timestamp_ms: CheckpointTimestamp,
     consensus_commit_digest: Option<ConsensusCommitDigest>,
+    /// The checkpoint sequence number this was viewed at.
+    checkpoint_viewed_at: u64,
 }
 
 /// System transaction that runs at the beginning of a checkpoint, and is responsible for setting
@@ -32,9 +34,13 @@ pub(crate) struct ConsensusCommitPrologueTransaction {
 impl ConsensusCommitPrologueTransaction {
     /// Epoch of the commit prologue transaction.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.epoch))
-            .await
-            .extend()
+        Epoch::query(
+            ctx.data_unchecked(),
+            Some(self.epoch),
+            Some(self.checkpoint_viewed_at),
+        )
+        .await
+        .extend()
     }
 
     /// Consensus round of the commit.
@@ -55,24 +61,30 @@ impl ConsensusCommitPrologueTransaction {
     }
 }
 
-impl From<NativeConsensusCommitPrologueTransactionV1> for ConsensusCommitPrologueTransaction {
-    fn from(ccp: NativeConsensusCommitPrologueTransactionV1) -> Self {
+impl ConsensusCommitPrologueTransaction {
+    pub(crate) fn from_v1(
+        ccp: NativeConsensusCommitPrologueTransactionV1,
+        checkpoint_viewed_at: u64,
+    ) -> Self {
         Self {
             epoch: ccp.epoch,
             round: ccp.round,
             commit_timestamp_ms: ccp.commit_timestamp_ms,
             consensus_commit_digest: None,
+            checkpoint_viewed_at,
         }
     }
-}
 
-impl From<NativeConsensusCommitPrologueTransactionV2> for ConsensusCommitPrologueTransaction {
-    fn from(ccp: NativeConsensusCommitPrologueTransactionV2) -> Self {
+    pub(crate) fn from_v2(
+        ccp: NativeConsensusCommitPrologueTransactionV2,
+        checkpoint_viewed_at: u64,
+    ) -> Self {
         Self {
             epoch: ccp.epoch,
             round: ccp.round,
             commit_timestamp_ms: ccp.commit_timestamp_ms,
             consensus_commit_digest: Some(ccp.consensus_commit_digest),
+            checkpoint_viewed_at,
         }
     }
 }

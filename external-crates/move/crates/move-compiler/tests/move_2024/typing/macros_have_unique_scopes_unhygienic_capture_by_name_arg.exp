@@ -1,0 +1,48 @@
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_have_unique_scopes_unhygienic_capture_by_name_arg.move:3:23
+   │
+ 3 │     macro fun foo($f: u64): u64 {
+   │                       ^^^
+   │                       │
+   │                       Invalid type annotation
+   │                       Expected: 'u64'
+   ·
+14 │         let x = vector<u64>[];
+   │                 ------------- Given: 'vector<u64>'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_have_unique_scopes_unhygienic_capture_by_name_arg.move:3:23
+   │
+ 3 │     macro fun foo($f: u64): u64 {
+   │                       ^^^
+   │                       │
+   │                       Invalid type annotation
+   │                       Expected: 'u64'
+   ·
+18 │         let x = vector<u64>[];
+   │                 ------------- Given: 'vector<u64>'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_have_unique_scopes_unhygienic_capture_by_name_arg.move:8:23
+   │
+ 8 │     macro fun bar($f: u64): u64 {
+   │                       ^^^
+   │                       │
+   │                       Invalid type annotation
+   │                       Expected: 'u64'
+   ·
+14 │         let x = vector<u64>[];
+   │                 ------------- Given: 'vector<u64>'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_have_unique_scopes_unhygienic_capture_by_name_arg.move:8:23
+   │
+ 8 │     macro fun bar($f: u64): u64 {
+   │                       ^^^
+   │                       │
+   │                       Invalid type annotation
+   │                       Expected: 'u64'
+   ·
+18 │         let x = vector<u64>[];
+   │                 ------------- Given: 'vector<u64>'
+

@@ -172,6 +172,23 @@ impl ConnectionConfig {
         }
     }
 
+    pub fn ci_integration_test_cfg_with_db_name(
+        db_name: String,
+        port: u16,
+        prom_port: u16,
+    ) -> Self {
+        Self {
+            db_url: format!("postgres://postgres:postgrespw@localhost:5432/{}", db_name),
+            port,
+            prom_port,
+            ..Default::default()
+        }
+    }
+
+    pub fn db_name(&self) -> String {
+        self.db_url.split('/').last().unwrap().to_string()
+    }
+
     pub fn db_url(&self) -> String {
         self.db_url.clone()
     }

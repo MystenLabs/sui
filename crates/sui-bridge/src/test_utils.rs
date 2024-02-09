@@ -3,7 +3,12 @@
 
 use crate::abi::EthToSuiTokenBridgeV1;
 use crate::eth_mock_provider::EthMockProvider;
+use crate::events::SuiBridgeEvent;
 use crate::server::mock_handler::run_mock_server;
+use crate::sui_transaction_builder::{
+    get_bridge_package_id, get_root_bridge_object_arg, get_sui_token_type_tag,
+};
+use crate::types::BridgeInnerDynamicField;
 use crate::{
     crypto::{BridgeAuthorityKeyPair, BridgeAuthorityPublicKey, BridgeAuthoritySignInfo},
     events::EmittedSuiToEthTokenBridgeV1,
@@ -22,10 +27,19 @@ use ethers::types::{
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
 use hex_literal::hex;
+use std::collections::BTreeMap;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use sui_config::local_ip_utils;
+use sui_json_rpc_types::ObjectChange;
+use sui_sdk::wallet_context::WalletContext;
+use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::ObjectRef;
+use sui_types::object::Owner;
+use sui_types::transaction::{CallArg, ObjectArg};
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
 use tokio::task::JoinHandle;
 
@@ -60,9 +74,9 @@ pub fn get_test_sui_to_eth_bridge_action(
         sui_tx_event_index: sui_tx_event_index.unwrap_or(0),
         sui_bridge_event: EmittedSuiToEthTokenBridgeV1 {
             nonce: nonce.unwrap_or_default(),
-            sui_chain_id: BridgeChainId::SuiTestnet,
+            sui_chain_id: BridgeChainId::SuiLocalTest,
             sui_address: SuiAddress::random_for_testing_only(),
-            eth_chain_id: BridgeChainId::EthSepolia,
+            eth_chain_id: BridgeChainId::EthLocalTest,
             eth_address: EthAddress::random(),
             token_id: TokenId::Sui,
             amount: amount.unwrap_or(100_000),
@@ -230,4 +244,193 @@ pub fn get_test_log_and_action(
         },
     });
     (log, bridge_action)
+}
+
+pub async fn publish_bridge_package(context: &WalletContext) -> BTreeMap<TokenId, ObjectRef> {
+    let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["..", "..", "examples", "move", "bridge"]);
+
+    let txn = context.sign_transaction(
+        &TestTransactionBuilder::new(sender, gas_object, gas_price)
+            .publish(path)
+            .build(),
+    );
+    let resp = context.execute_transaction_must_succeed(txn).await;
+    let object_changes = resp.object_changes.unwrap();
+    let package_id = object_changes
+        .iter()
+        .find(|change| matches!(change, ObjectChange::Published { .. }))
+        .map(|change| change.object_id())
+        .unwrap();
+
+    let mut treasury_caps = BTreeMap::new();
+    object_changes.iter().for_each(|change| {
+        if let ObjectChange::Created { object_type, .. } = change {
+            let object_type_str = object_type.to_string();
+            if object_type_str.contains("TreasuryCap") {
+                if object_type_str.contains("BTC") {
+                    treasury_caps.insert(TokenId::BTC, change.object_ref());
+                } else if object_type_str.contains("ETH") {
+                    treasury_caps.insert(TokenId::ETH, change.object_ref());
+                } else if object_type_str.contains("USDC") {
+                    treasury_caps.insert(TokenId::USDC, change.object_ref());
+                } else if object_type_str.contains("USDT") {
+                    treasury_caps.insert(TokenId::USDT, change.object_ref());
+                }
+            }
+        }
+    });
+
+    let root_bridge_object_ref = object_changes
+        .iter()
+        .find(|change| match change {
+            ObjectChange::Created {
+                object_type, owner, ..
+            } => {
+                object_type.to_string().contains("Bridge") && matches!(owner, Owner::Shared { .. })
+            }
+            _ => false,
+        })
+        .map(|change| change.object_ref())
+        .unwrap();
+
+    let bridge_inner_object_ref = object_changes
+        .iter()
+        .find(|change| match change {
+            ObjectChange::Created { object_type, .. } => {
+                object_type.to_string().contains("BridgeInner")
+            }
+            _ => false,
+        })
+        .map(|change| change.object_ref())
+        .unwrap();
+
+    let client = context.get_client().await.unwrap();
+    let bcs_bytes = client
+        .read_api()
+        .get_move_object_bcs(bridge_inner_object_ref.0)
+        .await
+        .unwrap();
+    let bridge_inner_object: BridgeInnerDynamicField = bcs::from_bytes(&bcs_bytes).unwrap();
+    let bridge_record_id = bridge_inner_object.value.bridge_records.id;
+
+    // TODO: remove once we don't rely on env var to get package id
+    std::env::set_var("BRIDGE_PACKAGE_ID", package_id.to_string());
+    std::env::set_var("BRIDGE_RECORD_ID", bridge_record_id.to_string());
+    std::env::set_var(
+        "ROOT_BRIDGE_OBJECT_ID",
+        root_bridge_object_ref.0.to_string(),
+    );
+    std::env::set_var(
+        "ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION",
+        u64::from(root_bridge_object_ref.1).to_string(),
+    );
+    std::env::set_var("BRIDGE_OBJECT_ID", bridge_inner_object_ref.0.to_string());
+
+    treasury_caps
+}
+
+pub async fn mint_tokens(
+    context: &mut WalletContext,
+    treasury_cap_ref: ObjectRef,
+    amount: u64,
+    token_id: TokenId,
+) -> (ObjectRef, ObjectRef) {
+    let rgp = context.get_reference_gas_price().await.unwrap();
+    let sender = context.active_address().unwrap();
+    let gas_obj_ref = context.get_one_gas_object().await.unwrap().unwrap().1;
+    let tx = TestTransactionBuilder::new(sender, gas_obj_ref, rgp)
+        .move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            "coin",
+            "mint_and_transfer",
+            vec![
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(treasury_cap_ref)),
+                CallArg::Pure(bcs::to_bytes(&amount).unwrap()),
+                CallArg::Pure(sender.to_vec()),
+            ],
+        )
+        .with_type_args(vec![get_sui_token_type_tag(token_id)])
+        .build();
+    let signed_tn = context.sign_transaction(&tx);
+    let resp = context.execute_transaction_must_succeed(signed_tn).await;
+    let object_changes = resp.object_changes.unwrap();
+
+    let treasury_cap_obj_ref = object_changes
+        .iter()
+        .find(|change| matches!(change, ObjectChange::Mutated { object_type, .. } if object_type.to_string().contains("TreasuryCap")))
+        .map(|change| change.object_ref())
+        .unwrap();
+
+    let minted_coin_obj_ref = object_changes
+        .iter()
+        .find(|change| matches!(change, ObjectChange::Created { .. }))
+        .map(|change| change.object_ref())
+        .unwrap();
+
+    (treasury_cap_obj_ref, minted_coin_obj_ref)
+}
+
+pub async fn transfer_treasury_cap(
+    context: &mut WalletContext,
+    treasury_cap_ref: ObjectRef,
+    token_id: TokenId,
+) {
+    let rgp = context.get_reference_gas_price().await.unwrap();
+    let sender = context.active_address().unwrap();
+    let gas_object = context.get_one_gas_object().await.unwrap().unwrap().1;
+    let tx = TestTransactionBuilder::new(sender, gas_object, rgp)
+        .move_call(
+            *get_bridge_package_id(),
+            "bridge",
+            "add_treasury_cap",
+            vec![
+                CallArg::Object(*get_root_bridge_object_arg()),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(treasury_cap_ref)),
+            ],
+        )
+        .with_type_args(vec![get_sui_token_type_tag(token_id)])
+        .build();
+    let signed_tn = context.sign_transaction(&tx);
+    context.execute_transaction_must_succeed(signed_tn).await;
+}
+
+pub async fn bridge_token(
+    context: &mut WalletContext,
+    recv_address: EthAddress,
+    token_ref: ObjectRef,
+    token_id: TokenId,
+) -> EmittedSuiToEthTokenBridgeV1 {
+    let rgp = context.get_reference_gas_price().await.unwrap();
+    let sender = context.active_address().unwrap();
+    let gas_object = context.get_one_gas_object().await.unwrap().unwrap().1;
+    let tx = TestTransactionBuilder::new(sender, gas_object, rgp)
+        .move_call(
+            *get_bridge_package_id(),
+            "bridge",
+            "send_token",
+            vec![
+                CallArg::Object(*get_root_bridge_object_arg()),
+                CallArg::Pure(bcs::to_bytes(&(BridgeChainId::EthLocalTest as u8)).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&recv_address.as_bytes()).unwrap()),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(token_ref)),
+            ],
+        )
+        .with_type_args(vec![get_sui_token_type_tag(token_id)])
+        .build();
+    let signed_tn = context.sign_transaction(&tx);
+    let resp = context.execute_transaction_must_succeed(signed_tn).await;
+    let events = resp.events.unwrap();
+    let mut bridge_events = events
+        .data
+        .iter()
+        .filter_map(|event| SuiBridgeEvent::try_from_sui_event(event).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(bridge_events.len(), 1);
+    match bridge_events.remove(0) {
+        SuiBridgeEvent::SuiToEthTokenBridgeV1(event) => event,
+    }
 }

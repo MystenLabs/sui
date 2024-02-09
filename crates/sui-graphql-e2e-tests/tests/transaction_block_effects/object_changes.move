@@ -52,7 +52,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors 10
+//# run-graphql --cursors {"i":10,"c":1}
 {
   transactionBlocks(first: 1) {
     nodes {

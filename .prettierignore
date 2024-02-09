@@ -18,6 +18,7 @@ build/
 coverage/
 dist/
 out/
+generated/
 playwright-report/
 storybook-static/
 CHANGELOG.md

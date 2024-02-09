@@ -3,13 +3,15 @@
 
 use std::str::FromStr;
 
-use super::cursor::{self, Page, Target};
+use super::checkpoint::Checkpoint;
+use super::cursor::{self, Page, Paginated, Target};
 use super::digest::Digest;
 use super::type_filter::{ModuleFilter, TypeFilter};
 use super::{
     address::Address, base64::Base64, date_time::DateTime, move_module::MoveModule,
     move_value::MoveValue, sui_address::SuiAddress,
 };
+use crate::consistency::Checkpointed;
 use crate::data::{self, QueryExecutor};
 use crate::{data::Db, error::Error};
 use async_graphql::connection::{Connection, CursorType, Edge};
@@ -18,7 +20,6 @@ use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
 use serde::{Deserialize, Serialize};
 use sui_indexer::models_v2::{events::StoredEvent, transactions::StoredTransaction};
 use sui_indexer::schema_v2::{events, transactions, tx_senders};
-use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::ObjectID;
 use sui_types::Identifier;
 use sui_types::{
@@ -36,6 +37,8 @@ use sui_types::{
 pub(crate) struct Event {
     pub stored: Option<StoredEvent>,
     pub native: NativeEvent,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Contents of an Event's cursor.
@@ -46,6 +49,10 @@ pub(crate) struct EventKey {
 
     /// Event Sequence Number
     e: u64,
+
+    /// The checkpoint sequence number this was viewed at.
+    #[serde(rename = "c")]
+    checkpoint_viewed_at: u64,
 }
 
 pub(crate) type Cursor = cursor::JsonCursor<EventKey>;
@@ -96,6 +103,7 @@ impl Event {
             ctx.data_unchecked(),
             self.native.package_id.into(),
             &self.native.transaction_module.to_string(),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -109,6 +117,7 @@ impl Event {
 
         Ok(Some(Address {
             address: self.native.sender.into(),
+            checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
         }))
     }
 
@@ -131,61 +140,98 @@ impl Event {
 }
 
 impl Event {
-    /// Query the database for a `page` of events. The Page uses a combination of transaction and
-    /// event sequence numbers as the cursor, and can optionally be further `filter`-ed by the
-    /// `EventFilter`.
+    /// Query the database for a `page` of events. The Page uses the transaction, event, and
+    /// checkpoint sequence numbers as the cursor to determine the correct page of results. The
+    /// query can optionally be further `filter`-ed by the `EventFilter`.
+    ///
+    /// The `checkpoint_viewed_at` parameter is an Option<u64> representing the
+    /// checkpoint_sequence_number at which this page was queried for, or `None` if the data was
+    /// requested at the latest checkpoint. Each entity returned in the connection will inherit this
+    /// checkpoint, so that when viewing that entity's state, it will be from the reference of this
+    /// checkpoint_viewed_at parameter.
+    ///
+    /// If the `Page<Cursor>` is set, then this function will defer to the `checkpoint_viewed_at` in
+    /// the cursor if they are consistent.
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<Cursor>,
         filter: EventFilter,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, Event>, Error> {
-        let (prev, next, results) = db
-            .execute(move |conn| {
-                page.paginate_query::<StoredEvent, _, _, _>(conn, move || {
-                    let mut query = events::dsl::events.into_boxed();
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
 
-                    // The transactions table doesn't have an index on the senders column, so use
-                    // `tx_senders`.
-                    if let Some(sender) = &filter.sender {
+        let ((prev, next, results), checkpoint_viewed_at) = db
+            .execute_repeatable(move |conn| {
+                let checkpoint_viewed_at = match checkpoint_viewed_at {
+                    Some(value) => Ok(value),
+                    None => Checkpoint::available_range(conn).map(|(_, rhs)| rhs),
+                }?;
+
+                let result = page.paginate_query::<StoredEvent, _, _, _>(
+                    conn,
+                    checkpoint_viewed_at,
+                    move || {
+                        let mut query = events::dsl::events.into_boxed();
+
+                        // Bound events by the provided `checkpoint_viewed_at`. From EXPLAIN
+                        // ANALYZE, using the checkpoint sequence number directly instead of
+                        // translating into a transaction sequence number bound is more efficient.
                         query = query.filter(
-                            events::dsl::tx_sequence_number.eq_any(
-                                tx_senders::dsl::tx_senders
-                                    .select(tx_senders::dsl::tx_sequence_number)
-                                    .filter(tx_senders::dsl::sender.eq(sender.into_vec())),
-                            ),
-                        )
-                    }
+                            events::dsl::checkpoint_sequence_number.le(checkpoint_viewed_at as i64),
+                        );
 
-                    if let Some(digest) = &filter.transaction_digest {
-                        query = query.filter(
-                            events::dsl::tx_sequence_number.eq_any(
-                                transactions::dsl::transactions
-                                    .select(transactions::dsl::tx_sequence_number)
-                                    .filter(
-                                        transactions::dsl::transaction_digest.eq(digest.to_vec()),
-                                    ),
-                            ),
-                        )
-                    }
+                        // The transactions table doesn't have an index on the senders column, so use
+                        // `tx_senders`.
+                        if let Some(sender) = &filter.sender {
+                            query = query.filter(
+                                events::dsl::tx_sequence_number.eq_any(
+                                    tx_senders::dsl::tx_senders
+                                        .select(tx_senders::dsl::tx_sequence_number)
+                                        .filter(tx_senders::dsl::sender.eq(sender.into_vec())),
+                                ),
+                            )
+                        }
 
-                    if let Some(module) = &filter.emitting_module {
-                        query = module.apply(query, events::dsl::package, events::dsl::module);
-                    }
+                        if let Some(digest) = &filter.transaction_digest {
+                            query = query.filter(
+                                events::dsl::tx_sequence_number.eq_any(
+                                    transactions::dsl::transactions
+                                        .select(transactions::dsl::tx_sequence_number)
+                                        .filter(
+                                            transactions::dsl::transaction_digest
+                                                .eq(digest.to_vec()),
+                                        ),
+                                ),
+                            )
+                        }
 
-                    if let Some(type_) = &filter.event_type {
-                        query = type_.apply(query, events::dsl::event_type);
-                    }
+                        if let Some(module) = &filter.emitting_module {
+                            query = module.apply(query, events::dsl::package, events::dsl::module);
+                        }
 
-                    query
-                })
+                        if let Some(type_) = &filter.event_type {
+                            query = type_.apply(query, events::dsl::event_type);
+                        }
+
+                        query
+                    },
+                )?;
+
+                Ok::<_, diesel::result::Error>((result, checkpoint_viewed_at))
             })
             .await?;
 
         let mut conn = Connection::new(prev, next);
 
+        // Defer to the provided checkpoint_viewed_at, but if it is not provided, use the
+        // current available range. This sets a consistent upper bound for the nested queries.
         for stored in results {
-            let cursor = stored.cursor().encode_cursor();
-            conn.edges.push(Edge::new(cursor, stored.try_into()?));
+            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
+            conn.edges.push(Edge::new(
+                cursor,
+                Event::try_from_stored_event(stored, checkpoint_viewed_at)?,
+            ));
         }
 
         Ok(conn)
@@ -194,6 +240,7 @@ impl Event {
     pub(crate) fn try_from_stored_transaction(
         stored_tx: &StoredTransaction,
         idx: usize,
+        checkpoint_viewed_at: u64,
     ) -> Result<Self, Error> {
         let Some(Some(serialized_event)) = stored_tx.events.get(idx) else {
             return Err(Error::Internal(format!(
@@ -227,30 +274,14 @@ impl Event {
         Ok(Self {
             stored: Some(stored_event),
             native: native_event,
+            checkpoint_viewed_at,
         })
     }
-}
 
-impl From<SuiEvent> for Event {
-    fn from(event: SuiEvent) -> Self {
-        let native = NativeEvent {
-            sender: event.sender,
-            package_id: event.package_id,
-            transaction_module: event.transaction_module,
-            type_: event.type_,
-            contents: event.bcs,
-        };
-        Self {
-            stored: None,
-            native,
-        }
-    }
-}
-
-impl TryFrom<StoredEvent> for Event {
-    type Error = Error;
-
-    fn try_from(stored: StoredEvent) -> Result<Self, Self::Error> {
+    fn try_from_stored_event(
+        stored: StoredEvent,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Self, Error> {
         let Some(Some(sender_bytes)) = stored.senders.first() else {
             return Err(Error::Internal("No senders found for event".to_string()));
         };
@@ -273,11 +304,12 @@ impl TryFrom<StoredEvent> for Event {
                 type_,
                 contents,
             },
+            checkpoint_viewed_at,
         })
     }
 }
 
-impl Target<Cursor> for StoredEvent {
+impl Paginated<Cursor> for StoredEvent {
     type Source = events::table;
 
     fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
@@ -308,11 +340,20 @@ impl Target<Cursor> for StoredEvent {
                 .then_order_by(dsl::event_sequence_number.desc())
         }
     }
+}
 
-    fn cursor(&self) -> Cursor {
+impl Target<Cursor> for StoredEvent {
+    fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
         Cursor::new(EventKey {
             tx: self.tx_sequence_number as u64,
             e: self.event_sequence_number as u64,
+            checkpoint_viewed_at,
         })
+    }
+}
+
+impl Checkpointed for Cursor {
+    fn checkpoint_viewed_at(&self) -> u64 {
+        self.checkpoint_viewed_at
     }
 }

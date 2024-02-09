@@ -89,7 +89,7 @@ pub fn run_model_builder_with_options<
         move_sources,
         deps,
         options,
-        Flags::verification(),
+        Flags::empty(),
         warning_filter,
     )
 }

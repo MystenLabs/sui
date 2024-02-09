@@ -32,6 +32,10 @@ mod tests {
         let cluster =
             sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
 
+        cluster
+            .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
+            .await;
+
         let query = r#"
             {
                 chainIdentifier
@@ -86,6 +90,9 @@ mod tests {
             None,
         )
         .await;
+        cluster
+            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
+            .await;
 
         let query = r#"
             {
@@ -118,6 +125,9 @@ mod tests {
             None,
         )
         .await;
+        cluster
+            .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
+            .await;
 
         let query = r#"
             {
@@ -160,6 +170,9 @@ mod tests {
             None,
         )
         .await;
+        cluster
+            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
+            .await;
 
         let query = r#"{obj1: object(address: $framework_addr) {address}
             obj2: object(address: $deepbook_addr) {address}}"#;
@@ -491,6 +504,53 @@ mod tests {
             .unwrap();
         assert_eq!(sender_read, sender.to_string());
         assert!(res.get("results").unwrap().is_array());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_epoch_data() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        cluster
+            .validator_fullnode_handle
+            .trigger_reconfiguration()
+            .await;
+
+        // Wait for the epoch to be indexed
+        sleep(Duration::from_secs(10)).await;
+
+        // Query the epoch
+        let query = "
+            {
+                epoch(id: 0){
+                    liveObjectSetDigest
+                }
+            }
+        ";
+
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, vec![], vec![])
+            .await
+            .unwrap();
+        tracing::error!("res: {:?}", res);
+
+        let binding = res.response_body().data.clone().into_json().unwrap();
+
+        // Check that liveObjectSetDigest is not null
+        assert!(!binding
+            .get("epoch")
+            .unwrap()
+            .get("liveObjectSetDigest")
+            .unwrap()
+            .is_null());
     }
 
     use sui_graphql_rpc::server::builder::tests::*;

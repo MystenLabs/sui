@@ -11,6 +11,7 @@ use crate::{
     typing::visitor::TypingVisitor,
 };
 use move_ir_types::location::Loc;
+use move_symbol_pool::Symbol;
 
 pub mod coin_field;
 pub mod collection_equality;
@@ -58,7 +59,7 @@ pub const VEC_MAP_STRUCT_NAME: &str = "VecMap";
 pub const VEC_SET_MOD_NAME: &str = "vec_set";
 pub const VEC_SET_STRUCT_NAME: &str = "VecSet";
 
-pub const ALLOW_ATTR_NAME: &str = "lint_allow";
+pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 
 pub const SHARE_OWNED_FILTER_NAME: &str = "share_owned";
@@ -83,49 +84,47 @@ pub enum LinterDiagCategory {
 /// codes are needed, otherwise they should be defined to be unique per-category).
 pub const LINTER_DEFAULT_DIAG_CODE: u8 = 1;
 
-pub fn known_filters() -> (E::AttributeName_, Vec<WarningFilter>) {
-    (
-        E::AttributeName_::Unknown(ALLOW_ATTR_NAME.into()),
-        vec![
-            WarningFilter::All(Some(LINT_WARNING_PREFIX)),
-            WarningFilter::code(
-                Some(LINT_WARNING_PREFIX),
-                LinterDiagCategory::ShareOwned as u8,
-                LINTER_DEFAULT_DIAG_CODE,
-                Some(SHARE_OWNED_FILTER_NAME),
-            ),
-            WarningFilter::code(
-                Some(LINT_WARNING_PREFIX),
-                LinterDiagCategory::SelfTransfer as u8,
-                LINTER_DEFAULT_DIAG_CODE,
-                Some(SELF_TRANSFER_FILTER_NAME),
-            ),
-            WarningFilter::code(
-                Some(LINT_WARNING_PREFIX),
-                LinterDiagCategory::CustomStateChange as u8,
-                LINTER_DEFAULT_DIAG_CODE,
-                Some(CUSTOM_STATE_CHANGE_FILTER_NAME),
-            ),
-            WarningFilter::code(
-                Some(LINT_WARNING_PREFIX),
-                LinterDiagCategory::CoinField as u8,
-                LINTER_DEFAULT_DIAG_CODE,
-                Some(COIN_FIELD_FILTER_NAME),
-            ),
-            WarningFilter::code(
-                Some(LINT_WARNING_PREFIX),
-                LinterDiagCategory::FreezeWrapped as u8,
-                LINTER_DEFAULT_DIAG_CODE,
-                Some(FREEZE_WRAPPED_FILTER_NAME),
-            ),
-            WarningFilter::code(
-                Some(LINT_WARNING_PREFIX),
-                LinterDiagCategory::CollectionEquality as u8,
-                LINTER_DEFAULT_DIAG_CODE,
-                Some(COLLECTION_EQUALITY_FILTER_NAME),
-            ),
-        ],
-    )
+pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
+    let filters = vec![
+        WarningFilter::All(Some(LINT_WARNING_PREFIX)),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagCategory::ShareOwned as u8,
+            LINTER_DEFAULT_DIAG_CODE,
+            Some(SHARE_OWNED_FILTER_NAME),
+        ),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagCategory::SelfTransfer as u8,
+            LINTER_DEFAULT_DIAG_CODE,
+            Some(SELF_TRANSFER_FILTER_NAME),
+        ),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagCategory::CustomStateChange as u8,
+            LINTER_DEFAULT_DIAG_CODE,
+            Some(CUSTOM_STATE_CHANGE_FILTER_NAME),
+        ),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagCategory::CoinField as u8,
+            LINTER_DEFAULT_DIAG_CODE,
+            Some(COIN_FIELD_FILTER_NAME),
+        ),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagCategory::FreezeWrapped as u8,
+            LINTER_DEFAULT_DIAG_CODE,
+            Some(FREEZE_WRAPPED_FILTER_NAME),
+        ),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagCategory::CollectionEquality as u8,
+            LINTER_DEFAULT_DIAG_CODE,
+            Some(COLLECTION_EQUALITY_FILTER_NAME),
+        ),
+    ];
+    (Some(ALLOW_ATTR_CATEGORY.into()), filters)
 }
 
 pub fn linter_visitors() -> Vec<Visitor> {
@@ -144,7 +143,7 @@ pub fn base_type(t: &N::Type) -> Option<&N::Type> {
     match &t.value {
         T::Ref(_, inner_t) => base_type(inner_t),
         T::Apply(_, _, _) | T::Param(_) => Some(t),
-        T::Unit | T::Var(_) | T::Anything | T::UnresolvedError => None,
+        T::Unit | T::Var(_) | T::Anything | T::UnresolvedError | T::Fun(_, _) => None,
     }
 }
 

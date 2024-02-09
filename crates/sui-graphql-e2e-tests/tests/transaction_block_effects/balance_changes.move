@@ -44,7 +44,7 @@
   }
 }
 
-//# run-graphql --cursors 2
+//# run-graphql --cursors {"i":2,"c":1}
 {
   address(address: "@{C}") {
     transactionBlocks(last: 1) {
@@ -70,7 +70,7 @@
   }
 }
 
-//# run-graphql --cursors 3
+//# run-graphql --cursors {"i":3,"c":1}
 {
   address(address: "@{C}") {
     transactionBlocks(last: 1) {

@@ -34,6 +34,8 @@ use self::{
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
+use crate::crypto::group_ops;
+use crate::crypto::group_ops::GroupOpsCostParams;
 use crate::crypto::poseidon::PoseidonBN254CostParams;
 use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
@@ -145,6 +147,9 @@ pub struct NativesCostTable {
 
     // hmac
     pub hmac_hmac_sha3_256_cost_params: HmacHmacSha3256CostParams,
+
+    // group ops
+    pub group_ops_cost_params: GroupOpsCostParams,
 
     // zklogin
     pub check_zklogin_id_cost_params: CheckZkloginIdCostParams,
@@ -512,6 +517,98 @@ impl NativesCostTable {
                     .poseidon_bn254_cost_per_block_as_option()
                     .map(Into::into),
             },
+            group_ops_cost_params: GroupOpsCostParams {
+                bls12381_decode_scalar_cost: protocol_config
+                    .group_ops_bls12381_decode_scalar_cost_as_option()
+                    .map(Into::into),
+                bls12381_decode_g1_cost: protocol_config
+                    .group_ops_bls12381_decode_g1_cost_as_option()
+                    .map(Into::into),
+                bls12381_decode_g2_cost: protocol_config
+                    .group_ops_bls12381_decode_g2_cost_as_option()
+                    .map(Into::into),
+                bls12381_decode_gt_cost: protocol_config
+                    .group_ops_bls12381_decode_gt_cost_as_option()
+                    .map(Into::into),
+                bls12381_scalar_add_cost: protocol_config
+                    .group_ops_bls12381_scalar_add_cost_as_option()
+                    .map(Into::into),
+                bls12381_g1_add_cost: protocol_config
+                    .group_ops_bls12381_g1_add_cost_as_option()
+                    .map(Into::into),
+                bls12381_g2_add_cost: protocol_config
+                    .group_ops_bls12381_g2_add_cost_as_option()
+                    .map(Into::into),
+                bls12381_gt_add_cost: protocol_config
+                    .group_ops_bls12381_gt_add_cost_as_option()
+                    .map(Into::into),
+                bls12381_scalar_sub_cost: protocol_config
+                    .group_ops_bls12381_scalar_sub_cost_as_option()
+                    .map(Into::into),
+                bls12381_g1_sub_cost: protocol_config
+                    .group_ops_bls12381_g1_sub_cost_as_option()
+                    .map(Into::into),
+                bls12381_g2_sub_cost: protocol_config
+                    .group_ops_bls12381_g2_sub_cost_as_option()
+                    .map(Into::into),
+                bls12381_gt_sub_cost: protocol_config
+                    .group_ops_bls12381_gt_sub_cost_as_option()
+                    .map(Into::into),
+                bls12381_scalar_mul_cost: protocol_config
+                    .group_ops_bls12381_scalar_mul_cost_as_option()
+                    .map(Into::into),
+                bls12381_g1_mul_cost: protocol_config
+                    .group_ops_bls12381_g1_mul_cost_as_option()
+                    .map(Into::into),
+                bls12381_g2_mul_cost: protocol_config
+                    .group_ops_bls12381_g2_mul_cost_as_option()
+                    .map(Into::into),
+                bls12381_gt_mul_cost: protocol_config
+                    .group_ops_bls12381_gt_mul_cost_as_option()
+                    .map(Into::into),
+                bls12381_scalar_div_cost: protocol_config
+                    .group_ops_bls12381_scalar_div_cost_as_option()
+                    .map(Into::into),
+                bls12381_g1_div_cost: protocol_config
+                    .group_ops_bls12381_g1_div_cost_as_option()
+                    .map(Into::into),
+                bls12381_g2_div_cost: protocol_config
+                    .group_ops_bls12381_g2_div_cost_as_option()
+                    .map(Into::into),
+                bls12381_gt_div_cost: protocol_config
+                    .group_ops_bls12381_gt_div_cost_as_option()
+                    .map(Into::into),
+                bls12381_g1_hash_to_base_cost: protocol_config
+                    .group_ops_bls12381_g1_hash_to_base_cost_as_option()
+                    .map(Into::into),
+                bls12381_g2_hash_to_base_cost: protocol_config
+                    .group_ops_bls12381_g2_hash_to_base_cost_as_option()
+                    .map(Into::into),
+                bls12381_g1_hash_to_cost_per_byte: protocol_config
+                    .group_ops_bls12381_g1_hash_to_cost_per_byte_as_option()
+                    .map(Into::into),
+                bls12381_g2_hash_to_cost_per_byte: protocol_config
+                    .group_ops_bls12381_g2_hash_to_cost_per_byte_as_option()
+                    .map(Into::into),
+                bls12381_g1_msm_base_cost: protocol_config
+                    .group_ops_bls12381_g1_msm_base_cost_as_option()
+                    .map(Into::into),
+                bls12381_g2_msm_base_cost: protocol_config
+                    .group_ops_bls12381_g2_msm_base_cost_as_option()
+                    .map(Into::into),
+                bls12381_g1_msm_base_cost_per_input: protocol_config
+                    .group_ops_bls12381_g1_msm_base_cost_per_input_as_option()
+                    .map(Into::into),
+                bls12381_g2_msm_base_cost_per_input: protocol_config
+                    .group_ops_bls12381_g2_msm_base_cost_per_input_as_option()
+                    .map(Into::into),
+                bls12381_msm_max_len: protocol_config
+                    .group_ops_bls12381_msm_max_len_as_option()
+                    .map(Into::into),
+                bls12381_pairing_cost: protocol_config
+                    .group_ops_bls12381_pairing_cost_as_option()
+                    .map(Into::into),
+            },
         }
     }
 }
@@ -611,6 +708,46 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
         ),
         ("hmac", "hmac_sha3_256", make_native!(hmac::hmac_sha3_256)),
         ("hash", "keccak256", make_native!(hash::keccak256)),
+        (
+            "group_ops",
+            "internal_validate",
+            make_native!(group_ops::internal_validate),
+        ),
+        (
+            "group_ops",
+            "internal_add",
+            make_native!(group_ops::internal_add),
+        ),
+        (
+            "group_ops",
+            "internal_sub",
+            make_native!(group_ops::internal_sub),
+        ),
+        (
+            "group_ops",
+            "internal_mul",
+            make_native!(group_ops::internal_mul),
+        ),
+        (
+            "group_ops",
+            "internal_div",
+            make_native!(group_ops::internal_div),
+        ),
+        (
+            "group_ops",
+            "internal_hash_to",
+            make_native!(group_ops::internal_hash_to),
+        ),
+        (
+            "group_ops",
+            "internal_multi_scalar_mul",
+            make_native!(group_ops::internal_multi_scalar_mul),
+        ),
+        (
+            "group_ops",
+            "internal_pairing",
+            make_native!(group_ops::internal_pairing),
+        ),
         ("object", "delete_impl", make_native!(object::delete_impl)),
         ("object", "borrow_uid", make_native!(object::borrow_uid)),
         (

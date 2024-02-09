@@ -20,6 +20,7 @@ use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
 use crate::FileType;
 
 pub mod checkpoint_handler;
+pub mod df_handler;
 pub mod event_handler;
 pub mod move_call_handler;
 pub mod object_handler;

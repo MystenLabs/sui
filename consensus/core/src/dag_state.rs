@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cmp::max,
     collections::{BTreeMap, BTreeSet},
     ops::Bound::{Excluded, Included, Unbounded},
     panic,
@@ -12,7 +13,7 @@ use consensus_config::AuthorityIndex;
 
 use crate::{
     block::{BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
-    commit::Commit,
+    commit::{Commit, CommitIndex},
     context::Context,
     storage::Store,
 };
@@ -43,6 +44,9 @@ pub(crate) struct DagState {
     // Last consensus commit of the dag.
     last_commit: Option<Commit>,
 
+    // Highest round of blocks accepted.
+    highest_accepted_round: Round,
+
     // Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
 }
@@ -63,6 +67,7 @@ impl DagState {
             recent_blocks: BTreeMap::new(),
             cached_refs: vec![BTreeSet::new(); num_authorities],
             last_commit,
+            highest_accepted_round: 0,
             store,
         };
 
@@ -83,6 +88,7 @@ impl DagState {
     /// Accepts a block into DagState and keeps it in memory.
     pub(crate) fn accept_block(&mut self, block: VerifiedBlock) {
         let block_ref = block.reference();
+        let block_round = block.round();
 
         // TODO: Move this check to core
         // Ensure we don't write multiple blocks per slot for our own index
@@ -96,6 +102,7 @@ impl DagState {
         }
         self.recent_blocks.insert(block_ref, block);
         self.cached_refs[block_ref.author].insert(block_ref);
+        self.highest_accepted_round = max(self.highest_accepted_round, block_round);
     }
 
     /// Accepts a blocks into DagState and keeps it in memory.
@@ -110,6 +117,18 @@ impl DagState {
     /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
     pub(crate) fn get_uncommitted_block(&self, reference: &BlockRef) -> Option<VerifiedBlock> {
         self.recent_blocks.get(reference).cloned()
+    }
+
+    /// Gets a copy of the uncommitted blocks. Returns None for each block not found.
+    /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
+    pub(crate) fn get_uncommitted_blocks(
+        &self,
+        references: Vec<BlockRef>,
+    ) -> Vec<Option<VerifiedBlock>> {
+        references
+            .into_iter()
+            .map(|reference| self.recent_blocks.get(&reference).cloned())
+            .collect()
     }
 
     /// Gets all uncommitted blocks in a slot.
@@ -193,6 +212,30 @@ impl DagState {
                     .clone()
             })
             .collect()
+    }
+
+    pub(crate) fn highest_accepted_round(&self) -> Round {
+        self.highest_accepted_round
+    }
+
+    /// Index of the last commit.
+    pub(crate) fn last_commit_index(&self) -> CommitIndex {
+        match &self.last_commit {
+            Some(commit) => commit.index,
+            None => 0,
+        }
+    }
+
+    /// Last committed round per authority.
+    pub(crate) fn last_committed_rounds(&self) -> Vec<Round> {
+        match &self.last_commit {
+            Some(commit) => commit.last_committed_rounds.clone(),
+            None => vec![0; self.context.committee.size()],
+        }
+    }
+
+    pub(crate) fn set_last_commit(&mut self, commit: Commit) {
+        self.last_commit = Some(commit);
     }
 
     /// Highest round where a block is committed, which is last commit's leader round.

@@ -8,6 +8,7 @@ use sui_analytics_indexer::{
     AnalyticsIndexerConfig,
 };
 use sui_indexer::framework::IndexerBuilder;
+use sui_indexer::metrics::IndexerMetrics;
 use tracing::info;
 
 #[tokio::main]
@@ -29,17 +30,17 @@ async fn main() -> Result<(), AnalyticsIndexerError> {
     let registry: Registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&registry);
     let metrics = AnalyticsMetrics::new(&registry);
+    let indexer_metrics = IndexerMetrics::new(&registry);
 
     let rest_url = config.rest_url.clone();
     let processor = make_analytics_processor(config, metrics)
         .await
         .map_err(|e| AnalyticsIndexerError::GenericError(e.to_string()))?;
-    IndexerBuilder::new()
+    IndexerBuilder::new(indexer_metrics)
         .last_downloaded_checkpoint(processor.last_committed_checkpoint())
         .rest_url(&rest_url)
         .handler(processor)
         .run()
         .await;
-
     Ok(())
 }

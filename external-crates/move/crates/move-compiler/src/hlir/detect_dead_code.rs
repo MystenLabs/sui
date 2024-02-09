@@ -4,6 +4,7 @@
 use crate::{
     diag,
     expansion::ast::ModuleIdent,
+    ice,
     naming::ast::{self as N, BlockLabel},
     parser::ast::BinOp_,
     shared::{unique_map::UniqueMap, *},
@@ -11,7 +12,7 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::iter::Peekable;
+use std::{collections::VecDeque, iter::Peekable};
 
 //**************************************************************************************************
 // Description
@@ -248,7 +249,7 @@ fn function(context: &mut Context, _name: &Symbol, f: &T::Function) {
 
 fn function_body(context: &mut Context, sp!(_, tb_): &T::FunctionBody) {
     use T::FunctionBody_ as TB;
-    if let TB::Defined(seq) = tb_ {
+    if let TB::Defined((_, seq)) = tb_ {
         body(context, seq)
     }
 }
@@ -263,7 +264,7 @@ fn constant(context: &mut Context, _name: &Symbol, cdef: &T::Constant) {
         .add_warning_filter_scope(cdef.warning_filter.clone());
     let eloc = cdef.value.exp.loc;
     let tseq = {
-        let mut v = T::Sequence::new();
+        let mut v = VecDeque::new();
         v.push_back(sp(
             eloc,
             T::SequenceItem_::Seq(Box::new(cdef.value.clone())),
@@ -282,7 +283,7 @@ fn constant(context: &mut Context, _name: &Symbol, cdef: &T::Constant) {
 // Tail Position
 // -------------------------------------------------------------------------------------------------
 
-fn body(context: &mut Context, seq: &T::Sequence) {
+fn body(context: &mut Context, seq: &VecDeque<T::SequenceItem>) {
     if !seq.is_empty() {
         tail_block(context, seq);
     }
@@ -322,7 +323,7 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         }
         // Whiles and loops Loops are currently moved to statement position
         E::While(_, _, _) | E::Loop { .. } => statement(context, e),
-        E::NamedBlock(name, seq) => {
+        E::NamedBlock(name, (_, seq)) => {
             // a named block in tail position checks for bad semicolons plus if the body exits that
             // block; if so, at least some of that code is live.
             let body_result = tail_block(context, seq);
@@ -332,7 +333,7 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 body_result
             }
         }
-        E::Block(seq) => tail_block(context, seq),
+        E::Block((_, seq)) => tail_block(context, seq),
 
         // -----------------------------------------------------------------------------------------
         //  statements
@@ -347,7 +348,7 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
     }
 }
 
-fn tail_block(context: &mut Context, seq: &T::Sequence) -> Option<ControlFlow> {
+fn tail_block(context: &mut Context, seq: &VecDeque<T::SequenceItem>) -> Option<ControlFlow> {
     use T::SequenceItem_ as S;
     let last_exp = seq.iter().last();
     let stmt_flow = statement_block(
@@ -363,7 +364,13 @@ fn tail_block(context: &mut Context, seq: &T::Sequence) -> Option<ControlFlow> {
         match last_exp {
             None => None,
             Some(sp!(_, S::Seq(last))) => tail(context, last),
-            Some(_) => panic!("ICE last sequence item should be an exp"),
+            Some(sp!(loc, _)) => {
+                context.env.add_diag(ice!((
+                    *loc,
+                    "ICE last sequence item should have been an exp in dead code analysis"
+                )));
+                None
+            }
         }
     }
 }
@@ -411,7 +418,7 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             None
         }
         E::While(..) | E::Loop { .. } => statement(context, e),
-        E::NamedBlock(name, seq) => {
+        E::NamedBlock(name, (_, seq)) => {
             // a named block in value position checks if the body exits that block; if so, at least
             // some of that code is live.
             let body_result = value_block(context, seq);
@@ -421,7 +428,7 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 body_result
             }
         }
-        E::Block(seq) => value_block(context, seq),
+        E::Block((_, seq)) => value_block(context, seq),
 
         // -----------------------------------------------------------------------------------------
         //  calls and nested expressions
@@ -445,7 +452,13 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                                 return next;
                             }
                         }
-                        T::ExpListItem::Splat(_, _, _) => panic!("ICE splat is unsupported."),
+                        T::ExpListItem::Splat(_, _, _) => {
+                            context.env.add_diag(ice!((
+                                *eloc,
+                                "ICE splat exp unsupported by dead code analysis"
+                            )));
+                            return None;
+                        }
                     }
                 }
                 None
@@ -486,7 +499,7 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
     }
 }
 
-fn value_block(context: &mut Context, seq: &T::Sequence) -> Option<ControlFlow> {
+fn value_block(context: &mut Context, seq: &VecDeque<T::SequenceItem>) -> Option<ControlFlow> {
     use T::SequenceItem_ as S;
     let last_exp = seq.iter().last();
     let stmt_flow = statement_block(
@@ -502,7 +515,13 @@ fn value_block(context: &mut Context, seq: &T::Sequence) -> Option<ControlFlow> 
         match last_exp {
             None => None,
             Some(sp!(_, S::Seq(last))) => value(context, last),
-            Some(_) => panic!("ICE last sequence item should be an exp"),
+            Some(sp!(loc, _)) => {
+                context.env.add_diag(ice!((
+                    *loc,
+                    "ICE last sequence item should have been an exp in dead code analysis"
+                )));
+                None
+            }
         }
     }
 }
@@ -536,7 +555,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             }
         }
 
-        E::While(test, _, body) => {
+        E::While(_, test, body) => {
             if let Some(test_control_flow) = value(context, test) {
                 context.report_value_error(test_control_flow);
                 already_reported(*eloc)
@@ -562,7 +581,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 body_result
             }
         }
-        E::NamedBlock(name, seq) => {
+        E::NamedBlock(name, (_, seq)) => {
             // a named block in statement position checks if the body exits that block; if so, at
             // least some of that code is live.
             let body_result = value_block(context, seq);
@@ -572,7 +591,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 body_result
             }
         }
-        E::Block(seq) => statement_block(
+        E::Block((_, seq)) => statement_block(
             context, seq, /* stmt_pos */ true, /* skip_last */ false,
         ),
         E::Return(rhs) => {
@@ -638,13 +657,18 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         // -----------------------------------------------------------------------------------------
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
-        E::Use(_) => panic!("ICE unexpanded use"),
+        E::Use(_) => {
+            context
+                .env
+                .add_diag(ice!((*eloc, "ICE found unexpanded use")));
+            None
+        }
     }
 }
 
 fn statement_block(
     context: &mut Context,
-    seq: &T::Sequence,
+    seq: &VecDeque<T::SequenceItem>,
     stmt_pos: bool,
     skip_last: bool,
 ) -> Option<ControlFlow> {
@@ -719,7 +743,7 @@ trait SkipLast: Iterator + Sized {
 }
 impl<I: Iterator> SkipLast for I {}
 
-fn has_trailing_unit(seq: &T::Sequence) -> bool {
+fn has_trailing_unit(seq: &VecDeque<T::SequenceItem>) -> bool {
     use T::SequenceItem_ as S;
     if let Some(sp!(_, S::Seq(exp))) = &seq.back() {
         matches!(exp.exp.value, T::UnannotatedExp_::Unit { trailing: true })

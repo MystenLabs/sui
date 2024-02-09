@@ -233,9 +233,7 @@ describe('Multisig scenarios', () => {
 		expect(isValidSig2).toBe(true);
 
 		// publickey.ts
-		expect(() => multiSigPublicKey.combinePartialSignatures([sig3.signature])).toThrow(
-			new Error(`Unsupported signature scheme`),
-		);
+		expect(() => multiSigPublicKey.combinePartialSignatures([sig3.signature])).toThrowError();
 	});
 
 	it('providing signatures with invalid order', async () => {

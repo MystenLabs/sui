@@ -66,9 +66,9 @@ const guides = [
 						type: 'category',
 						label: 'Working with PTBs',
 						items: [
-							'guides/developer/sui-101/simulating-refs',
-							'guides/developer/sui-101/coin-mgt',
 							'guides/developer/sui-101/building-ptb',
+							'guides/developer/sui-101/coin-mgt',
+							'guides/developer/sui-101/simulating-refs',
 						],
 					},
 				],
@@ -90,7 +90,10 @@ const guides = [
 			{
 				type: 'category',
 				label: 'Advanced Topics',
-				items: ['guides/developer/advanced/asset-tokenization'],
+				items: [
+					'guides/developer/advanced/asset-tokenization',
+					'guides/developer/advanced/graphql-migration',
+				],
 			},
 			/*{
 				type: 'category',

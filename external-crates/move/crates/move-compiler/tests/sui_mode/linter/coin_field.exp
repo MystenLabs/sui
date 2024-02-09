@@ -7,7 +7,7 @@ warning[Lint W03001]: sub-optimal 'sui::coin::Coin' field type
 13 │         c: Coin<S1>,
    │         - Storing 'sui::balance::Balance' in this field will typically be more space-efficient
    │
-   = This warning can be suppressed with '#[lint_allow(coin_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(coin_field))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W03001]: sub-optimal 'sui::coin::Coin' field type
    ┌─ tests/sui_mode/linter/coin_field.move:25:12
@@ -18,5 +18,5 @@ warning[Lint W03001]: sub-optimal 'sui::coin::Coin' field type
 27 │         c: Balance<S1>,
    │         - Storing 'sui::balance::Balance' in this field will typically be more space-efficient
    │
-   = This warning can be suppressed with '#[lint_allow(coin_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(coin_field))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

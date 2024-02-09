@@ -19,24 +19,24 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x36745a3db02833931ee18f8a3c9e808e26a6459f26c38def9212203e24424154",
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0xc2b6ee5f2ea8fdaed698a0e58a853669f7f9d53f1766fbff608df09d5c5d4b68",
+                    "address": "0x354a3acd2a90d7d9e9d98d45f8328f31af4a88badec8a2501877a6dd62c39707",
                     "asMovePackage": {
                       "module": {
                         "name": "m",
                         "package": {
-                          "address": "0xc2b6ee5f2ea8fdaed698a0e58a853669f7f9d53f1766fbff608df09d5c5d4b68"
+                          "address": "0x354a3acd2a90d7d9e9d98d45f8328f31af4a88badec8a2501877a6dd62c39707"
                         },
                         "fileFormatVersion": 6,
-                        "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1ZcK27l8uqP2u1pig5YqFNmn3+dU/F2b7/2CN8J1cXUtoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",
-                        "disassembly": "// Move bytecode v6\nmodule c2b6ee5f2ea8fdaed698a0e58a853669f7f9d53f1766fbff608df09d5c5d4b68.m {\nuse 0000000000000000000000000000000000000000000000000000000000000002::coin;\nuse 0000000000000000000000000000000000000000000000000000000000000002::sui;\n\n\n\n\npublic foo<Ty0: drop>(Arg0: u64, Arg1: &Coin<Ty0>): u64 {\nB0:\n\t0: MoveLoc[1](Arg1: &Coin<Ty0>)\n\t1: Call coin::value<Ty0>(&Coin<Ty0>): u64\n\t2: MoveLoc[0](Arg0: u64)\n\t3: Add\n\t4: Ret\n}\npublic bar(Arg0: &Coin<SUI>): u64 {\nB0:\n\t0: LdU64(42)\n\t1: CopyLoc[0](Arg0: &Coin<SUI>)\n\t2: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t3: LdU64(43)\n\t4: MoveLoc[0](Arg0: &Coin<SUI>)\n\t5: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t6: Mul\n\t7: Ret\n}\n}"
+                        "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1ZTVKOs0qkNfZ6dmNRfgyjzGvSoi63siiUBh3pt1iw5cHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",
+                        "disassembly": "// Move bytecode v6\nmodule 354a3acd2a90d7d9e9d98d45f8328f31af4a88badec8a2501877a6dd62c39707.m {\nuse 0000000000000000000000000000000000000000000000000000000000000002::coin;\nuse 0000000000000000000000000000000000000000000000000000000000000002::sui;\n\n\n\n\npublic foo<Ty0: drop>(Arg0: u64, Arg1: &Coin<Ty0>): u64 {\nB0:\n\t0: MoveLoc[1](Arg1: &Coin<Ty0>)\n\t1: Call coin::value<Ty0>(&Coin<Ty0>): u64\n\t2: MoveLoc[0](Arg0: u64)\n\t3: Add\n\t4: Ret\n}\npublic bar(Arg0: &Coin<SUI>): u64 {\nB0:\n\t0: LdU64(42)\n\t1: CopyLoc[0](Arg0: &Coin<SUI>)\n\t2: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t3: LdU64(43)\n\t4: MoveLoc[0](Arg0: &Coin<SUI>)\n\t5: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t6: Mul\n\t7: Ret\n}\n}"
                       }
                     }
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xce98258d7cb1dec5a72b353608cbb074910b847bea96b6d4f3e12aa2509cf6b6",
+                    "asMovePackage": null
                   }
                 }
               ]
@@ -59,30 +59,24 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x36745a3db02833931ee18f8a3c9e808e26a6459f26c38def9212203e24424154",
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0xc2b6ee5f2ea8fdaed698a0e58a853669f7f9d53f1766fbff608df09d5c5d4b68",
+                    "address": "0x354a3acd2a90d7d9e9d98d45f8328f31af4a88badec8a2501877a6dd62c39707",
                     "asMovePackage": {
                       "all": {
                         "edges": [
                           {
-                            "cursor": "Im0i",
+                            "cursor": "eyJuIjoibSIsImMiOjF9",
                             "node": {
                               "name": "m"
                             }
                           },
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
                           },
                           {
-                            "cursor": "Im8i",
+                            "cursor": "eyJuIjoibyIsImMiOjF9",
                             "node": {
                               "name": "o"
                             }
@@ -96,13 +90,13 @@ Response: {
                       "after": {
                         "edges": [
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
                           },
                           {
-                            "cursor": "Im8i",
+                            "cursor": "eyJuIjoibyIsImMiOjF9",
                             "node": {
                               "name": "o"
                             }
@@ -116,13 +110,13 @@ Response: {
                       "before": {
                         "edges": [
                           {
-                            "cursor": "Im0i",
+                            "cursor": "eyJuIjoibSIsImMiOjF9",
                             "node": {
                               "name": "m"
                             }
                           },
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
@@ -134,6 +128,12 @@ Response: {
                         }
                       }
                     }
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xce98258d7cb1dec5a72b353608cbb074910b847bea96b6d4f3e12aa2509cf6b6",
+                    "asMovePackage": null
                   }
                 }
               ]
@@ -156,18 +156,12 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x36745a3db02833931ee18f8a3c9e808e26a6459f26c38def9212203e24424154",
-                    "asMovePackage": null
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0xc2b6ee5f2ea8fdaed698a0e58a853669f7f9d53f1766fbff608df09d5c5d4b68",
+                    "address": "0x354a3acd2a90d7d9e9d98d45f8328f31af4a88badec8a2501877a6dd62c39707",
                     "asMovePackage": {
                       "prefix": {
                         "edges": [
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
@@ -181,13 +175,13 @@ Response: {
                       "prefixAll": {
                         "edges": [
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
                           },
                           {
-                            "cursor": "Im8i",
+                            "cursor": "eyJuIjoibyIsImMiOjF9",
                             "node": {
                               "name": "o"
                             }
@@ -201,13 +195,13 @@ Response: {
                       "prefixExcess": {
                         "edges": [
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
                           },
                           {
-                            "cursor": "Im8i",
+                            "cursor": "eyJuIjoibyIsImMiOjF9",
                             "node": {
                               "name": "o"
                             }
@@ -221,7 +215,7 @@ Response: {
                       "suffix": {
                         "edges": [
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
@@ -235,13 +229,13 @@ Response: {
                       "suffixAll": {
                         "edges": [
                           {
-                            "cursor": "Im0i",
+                            "cursor": "eyJuIjoibSIsImMiOjF9",
                             "node": {
                               "name": "m"
                             }
                           },
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
@@ -255,13 +249,13 @@ Response: {
                       "suffixExcess": {
                         "edges": [
                           {
-                            "cursor": "Im0i",
+                            "cursor": "eyJuIjoibSIsImMiOjF9",
                             "node": {
                               "name": "m"
                             }
                           },
                           {
-                            "cursor": "Im4i",
+                            "cursor": "eyJuIjoibiIsImMiOjF9",
                             "node": {
                               "name": "n"
                             }
@@ -273,6 +267,12 @@ Response: {
                         }
                       }
                     }
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xce98258d7cb1dec5a72b353608cbb074910b847bea96b6d4f3e12aa2509cf6b6",
+                    "asMovePackage": null
                   }
                 }
               ]

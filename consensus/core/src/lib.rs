@@ -14,11 +14,15 @@ mod core_thread;
 mod dag_state;
 mod error;
 mod leader_schedule;
+mod linearizer;
 mod metrics;
+mod network;
 mod stake_aggregator;
 mod storage;
 mod threshold_clock;
 mod transactions_client;
+mod universal_committer;
 
+mod leader_timeout;
 #[cfg(test)]
 mod test_dag;

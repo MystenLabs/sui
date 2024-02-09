@@ -95,4 +95,8 @@ export class EnokiKeypair extends Keypair {
 	export(): never {
 		throw new Error('EnokiKeypair does not support exporting');
 	}
+
+	getSecretKey(): never {
+		throw new Error('EnokiKeypair does not support get secret key');
+	}
 }

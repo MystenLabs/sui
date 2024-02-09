@@ -3,7 +3,6 @@
 
 import { type ZkLoginProvider } from '_src/background/accounts/zklogin/providers';
 import { type Wallet } from '_src/shared/qredo-api';
-import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import {
 	createContext,
 	useCallback,
@@ -19,7 +18,7 @@ export type AccountsFormValues =
 	| { type: 'new-mnemonic' }
 	| { type: 'import-mnemonic'; entropy: string }
 	| { type: 'mnemonic-derived'; sourceID: string }
-	| { type: 'imported'; keyPair: ExportedKeypair }
+	| { type: 'imported'; keyPair: string }
 	| {
 			type: 'ledger';
 			accounts: { publicKey: string; derivationPath: string; address: string }[];

@@ -5,8 +5,8 @@ module 0x42::m {
 
     #[allow(dead_code)]
     public fun t00(): u64 {
-        if ('name:  { return 'name 10 } == 10) {
-            loop 'outer: {
+        if ('name: { return 'name 10 } == 10) {
+            'outer: loop {
                 return 10
             }
         } else {
@@ -17,12 +17,12 @@ module 0x42::m {
     #[allow(dead_code)]
     public fun t01(): u64 {
         if ('name:  { return 'name 20 } == 10) {
-            loop 'outer: {
+            'outer: loop {
                 return 20
             }
         };
         return ('name: {
-            loop 'inner: {
+            'inner: loop {
                 return 'name 10
             }
         });
@@ -31,9 +31,9 @@ module 0x42::m {
 
     #[allow(dead_code)]
     public fun t02(): u64 {
-        let x = loop 'outer: {
-            if ('name:  { return 'name 20 } == 10) {
-                loop 'outer: {
+        let x = 'outer: loop {
+            if ('name: { return 'name 20 } == 10) {
+                'outer: loop {
                     return 20
                 }
             };
@@ -47,9 +47,9 @@ module 0x42::m {
 
     #[allow(dead_code)]
     public fun t03(): u64 {
-        let x = loop 'outer: {
+        let x = 'outer: loop {
             if ('name:  { return 'name 20 } == 10) {
-                loop 'outer: {
+                'outer: loop {
                     return 20
                 }
             };
@@ -65,9 +65,9 @@ module 0x42::m {
     public fun t04(): u64 {
         let a = 'all: {
             loop {
-                let x = loop 'outer: {
+                let x = 'outer: loop {
                     if ('name:  { return 'name 20 } == 10) {
-                        loop 'outer: {
+                        'outer: loop {
                             return 20
                         }
                     };
@@ -86,9 +86,9 @@ module 0x42::m {
     public fun t05(): u64 {
         let a = 'all: {
             loop {
-                let x = loop 'outer: {
+                let x = 'outer: loop {
                     if ('name:  { return 'name 20 } == 10) {
-                        loop 'outer: {
+                        'outer: loop {
                             return 20
                         }
                     };

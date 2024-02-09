@@ -8,8 +8,6 @@ Sui object identifiers
 
 -  [Struct `ID`](#0x2_object_ID)
 -  [Struct `UID`](#0x2_object_UID)
--  [Struct `Ownership`](#0x2_object_Ownership)
--  [Struct `DynamicFields`](#0x2_object_DynamicFields)
 -  [Constants](#@Constants_0)
 -  [Function `id_to_bytes`](#0x2_object_id_to_bytes)
 -  [Function `id_to_address`](#0x2_object_id_to_address)
@@ -100,69 +98,6 @@ This is a privileged type that can only be derived from a <code>TxContext</code>
 <dl>
 <dt>
 <code>id: <a href="object.md#0x2_object_ID">object::ID</a></code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_object_Ownership"></a>
-
-## Struct `Ownership`
-
-Ownership information for a given object (stored at the object's address)
-
-
-<pre><code><b>struct</b> <a href="object.md#0x2_object_Ownership">Ownership</a>
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>owner: <b>address</b></code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>status: u64</code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_object_DynamicFields"></a>
-
-## Struct `DynamicFields`
-
-List of fields with a given name type of an object containing fields (stored at the
-containing object's address)
-
-
-<pre><code><b>struct</b> <a href="object.md#0x2_object_DynamicFields">DynamicFields</a>&lt;K: <b>copy</b>, drop, store&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>names: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;</code>
 </dt>
 <dd>
 
@@ -455,7 +390,7 @@ This should only be called once from <code><a href="random.md#0x2_random">random
 ## Function `sui_deny_list_object_id`
 
 Create the <code><a href="object.md#0x2_object_UID">UID</a></code> for the singleton <code>DenyList</code> object.
-This should only be called once from <code><a href="coin.md#0x2_coin">coin</a></code>.
+This should only be called once from <code><a href="deny_list.md#0x2_deny_list">deny_list</a></code>.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="object.md#0x2_object_sui_deny_list_object_id">sui_deny_list_object_id</a>(): <a href="object.md#0x2_object_UID">object::UID</a>

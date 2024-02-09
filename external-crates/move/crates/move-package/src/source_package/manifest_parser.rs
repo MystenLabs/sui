@@ -18,7 +18,7 @@ use super::layout::SourcePackageLayout;
 
 const EMPTY_ADDR_STR: &str = "_";
 
-const PACKAGE_NAME: &str = "package";
+pub const PACKAGE_NAME: &str = "package";
 const BUILD_NAME: &str = "build";
 const ADDRESSES_NAME: &str = "addresses";
 const DEV_ADDRESSES_NAME: &str = "dev-addresses";
@@ -37,13 +37,18 @@ const KNOWN_NAMES: &[&str] = &[
 const REQUIRED_FIELDS: &[&str] = &[PACKAGE_NAME];
 
 pub fn parse_move_manifest_from_file(path: &Path) -> Result<PM::SourceManifest> {
-    let file_contents = if path.is_file() {
-        std::fs::read_to_string(path)
-    } else {
-        std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path()))
-    }
-    .with_context(|| format!("Unable to find package manifest at {:?}", path))?;
+    let toml_path = resolve_move_manifest_path(path);
+    let file_contents = std::fs::read_to_string(toml_path)
+        .with_context(|| format!("Unable to find package manifest at {:?}", path))?;
     parse_source_manifest(parse_move_manifest_string(file_contents)?)
+}
+
+pub fn resolve_move_manifest_path(path: &Path) -> PathBuf {
+    if path.is_file() {
+        path.into()
+    } else {
+        path.join(SourcePackageLayout::Manifest.path())
+    }
 }
 
 pub fn parse_move_manifest_string(manifest_string: String) -> Result<TV> {
@@ -108,12 +113,14 @@ pub fn parse_source_manifest(tval: TV) -> Result<PM::SourceManifest> {
     }
 }
 
+pub const EDITION_NAME: &str = "edition";
+
 pub fn parse_package_info(tval: TV) -> Result<PM::PackageInfo> {
     match tval {
         TV::Table(mut table) => {
             check_for_required_field_names(&table, &["name"])?;
             let hook_names = package_hooks::custom_package_info_fields();
-            let known_names = ["name", "authors", "license", "edition", "flavor"]
+            let known_names = ["name", "authors", "license", EDITION_NAME, "flavor"]
                 .into_iter()
                 .chain(hook_names.iter().map(|s| s.as_str()))
                 .collect::<Vec<_>>();

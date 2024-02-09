@@ -24,6 +24,7 @@ pub struct FunctionInfo {
     pub defined_loc: Loc,
     pub visibility: Visibility,
     pub entry: Option<Loc>,
+    pub macro_: Option<Loc>,
     pub signature: FunctionSignature,
 }
 
@@ -62,6 +63,7 @@ macro_rules! program_info {
                 defined_loc: fname.loc(),
                 visibility: fdef.visibility.clone(),
                 entry: fdef.entry,
+                macro_: fdef.macro_,
                 signature: fdef.signature.clone(),
             });
             let constants = mdef.constants.ref_map(|cname, cdef| ConstantInfo {

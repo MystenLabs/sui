@@ -3,7 +3,7 @@
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "A CLI for creating new Sui dApps",
 	"homepage": "https://sdk.mystenlabs.com",
-	"version": "0.2.1",
+	"version": "0.2.4",
 	"license": "Apache-2.0",
 	"files": [
 		"CHANGELOG.md",
@@ -36,7 +36,7 @@
 	},
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
-		"typescript": "^5.1.6"
+		"typescript": "^5.3.3"
 	},
 	"dependencies": {
 		"@mysten/dapp-kit": "workspace:*",

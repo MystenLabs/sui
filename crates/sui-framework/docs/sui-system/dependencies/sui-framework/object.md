@@ -7,8 +7,6 @@
 
 -  [Struct `ID`](#0x2_object_ID)
 -  [Struct `UID`](#0x2_object_UID)
--  [Struct `Ownership`](#0x2_object_Ownership)
--  [Struct `DynamicFields`](#0x2_object_DynamicFields)
 -  [Constants](#@Constants_0)
 -  [Function `id_to_bytes`](#0x2_object_id_to_bytes)
 -  [Function `id_to_address`](#0x2_object_id_to_address)
@@ -87,66 +85,6 @@
 <dl>
 <dt>
 <code>id: <a href="../../dependencies/sui-framework/object.md#0x2_object_ID">object::ID</a></code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_object_Ownership"></a>
-
-## Struct `Ownership`
-
-
-
-<pre><code><b>struct</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_Ownership">Ownership</a>
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>owner: <b>address</b></code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>status: u64</code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_object_DynamicFields"></a>
-
-## Struct `DynamicFields`
-
-
-
-<pre><code><b>struct</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_DynamicFields">DynamicFields</a>&lt;K: <b>copy</b>, drop, store&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>names: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;</code>
 </dt>
 <dd>
 

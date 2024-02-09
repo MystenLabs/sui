@@ -1,0 +1,32 @@
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/typing/unused_use_fun.move:5:5
+  │
+5 │     use fun foo as u64.f;
+  │     ^^^^^^^^^^^^^^^^^^^^^ Unused 'use fun' of 'u64.f'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/typing/unused_use_fun.move:8:9
+  │
+8 │         use fun foo as u64.f;
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unused 'use fun' of 'u64.f'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/move_2024/typing/unused_use_fun.move:19:23
+   │
+19 │     use a::x::drop as f;
+   │                       ^ Unused 'use' of alias 'f'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/move_2024/typing/unused_use_fun.move:22:27
+   │
+22 │         use a::x::drop as f;
+   │                           ^ Unused 'use' of alias 'f'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

@@ -49,6 +49,7 @@
         asMoveObject {
           asStakedSui {
             principal
+            poolId
           }
         }
       }

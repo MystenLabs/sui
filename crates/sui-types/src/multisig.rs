@@ -14,7 +14,7 @@ use fastcrypto::{
     hash::HashFunction,
     secp256k1::Secp256k1PublicKey,
     secp256r1::Secp256r1PublicKey,
-    traits::{ToFromBytes, VerifyingKey},
+    traits::{EncodeDecodeBase64, ToFromBytes, VerifyingKey},
 };
 use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
@@ -192,8 +192,9 @@ impl AuthenticatorTrait for MultiSig {
             } else {
                 return res.map_err(|e| SuiError::InvalidSignature {
                     error: format!(
-                        "Invalid signature for pk={:?} {:?}",
-                        subsig_pubkey,
+                        "Invalid signature for pk={:?} address={:?} error={:?}",
+                        subsig_pubkey.encode_base64(),
+                        SuiAddress::from(subsig_pubkey),
                         e.to_string()
                     ),
                 });

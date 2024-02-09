@@ -20,18 +20,30 @@ $ psql "postgres://$ME:$ME@localhost:5432/postgres" \
     -c "CREATE ROLE postgres WITH SUPERUSER LOGIN PASSWORD 'postgrespw';"
 ```
 
-3. Then, create the database that the tests expect, using the `postgres` user:
+3. Then, create the database that the tests expect, using the `postgres` user and increase the max connections since many tests might run in parallel.
 
 ```sh
 $ psql "postgres://postgres:postgrespw@localhost:5432/postgres" \
-    -c "CREATE DATABASE sui_indexer_v2;"
+    -c "CREATE DATABASE sui_indexer_v2; -c 'ALTER SYSTEM SET max_connections = 500;"
+```
+
+4. Finally, restart the `postgres` server so the max connections change takes effect.
+
+Mac
+```sh
+brew services restart postgres
+
+```
+
+Linux
+```sh
+/etc/init.d/postgresql restart
 ```
 
 # Running Locally
 
-When running the tests locally, they need to be run serially (one at a time),
-and with the `pg_integration` feature enabled:
+When running the tests locally, they must be run with the `pg_integration` feature enabled:
 
 ```sh
-$ cargo nextest run -j 1 --features pg_integration
+$ cargo nextest run --features pg_integration
 ```

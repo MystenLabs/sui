@@ -146,23 +146,32 @@ fn run_pulumi_new_from_template(
     };
     let opts = project_opts.join(" ");
     info!("extra pulumi options added: {}", &opts.bright_purple());
+    let cmd = &format!(
+        r#"pulumi new {3}/templates/{2} --dir {0} -d "pulumi project for {1}" --name "{1}"  --stack mysten/dev {4}"#,
+        project_dir_str,
+        project_name,
+        template_dir,
+        get_pulumi_dir()?
+            .to_str()
+            .expect("getting pulumi dir for template"),
+        opts,
+    );
+    info!("running command: {}", cmd.bright_purple());
+
     run_cmd(
-        vec![
-            "bash",
-            "-c",
-            &format!(
-                r#"pulumi new {3}/templates/{2} --dir {0} -d "pulumi project for {1}" --name "{1}"  --stack mysten/dev {4}"#,
-                project_dir_str,
-                project_name,
-                template_dir,
-                get_pulumi_dir()?
-                    .to_str()
-                    .expect("getting pulumi dir for template"),
-                opts,
-            ),
-        ],
+        vec!["bash", "-c", cmd],
         Some(CommandOptions::new(true, false)),
     )?;
+    Ok(())
+}
+
+fn run_go_mod_tidy(project_dir_str: &str) -> Result<()> {
+    let cmd = &format!("cd {} && go mod tidy", project_dir_str);
+    info!(
+        "running `{}` to make sure all Golang dependencies are installed.",
+        cmd
+    );
+    run_cmd(vec!["bash", "-c", cmd], None)?;
     Ok(())
 }
 
@@ -243,6 +252,8 @@ fn create_basic_project(
         remove_stack(&backend, project_name, "mysten/dev").unwrap();
         e
     })?;
+    // run go mod tidy to make sure all dependencies are installed
+    run_go_mod_tidy(project_dir_str)?;
     // try a pulumi preview to make sure it's good
     run_pulumi_preview(project_dir_str)
 }
@@ -260,14 +271,15 @@ fn create_mysten_k8s_project(
     );
     fs::create_dir_all(project_dir).context("failed to create project directory")?;
     // initialize pulumi project
-    run_pulumi_new_from_template(project_name, project_dir_str, project_type, project_opts).map_err(
-        |e| {
+    run_pulumi_new_from_template(project_name, project_dir_str, project_type, project_opts)
+        .map_err(|e| {
             remove_project_dir(project_dir).unwrap();
             let backend = get_current_backend().unwrap();
             remove_stack(&backend, project_name, "mysten/dev").unwrap();
             e
-        },
-    )
+        })?;
+    // run go mod tidy to make sure all dependencies are installed
+    run_go_mod_tidy(project_dir_str)
     // we don't run preview for templated apps because the user
     // has to give the repo dir (improvements to this coming soon)
 }

@@ -4,7 +4,7 @@
 
 use base::{
     build::Build, coverage::Coverage, disassemble::Disassemble, docgen::Docgen, errmap::Errmap,
-    info::Info, new::New, prove::Prove, test::Test,
+    info::Info, migrate::Migrate, new::New, prove::Prove, test::Test,
 };
 use move_package::BuildConfig;
 
@@ -64,6 +64,7 @@ pub enum Command {
     Docgen(Docgen),
     Errmap(Errmap),
     Info(Info),
+    Migrate(Migrate),
     New(New),
     Prove(Prove),
     Test(Test),
@@ -96,6 +97,7 @@ pub fn run_cli(
         Command::Docgen(c) => c.execute(move_args.package_path, move_args.build_config),
         Command::Errmap(c) => c.execute(move_args.package_path, move_args.build_config),
         Command::Info(c) => c.execute(move_args.package_path, move_args.build_config),
+        Command::Migrate(c) => c.execute(move_args.package_path, move_args.build_config),
         Command::New(c) => c.execute_with_defaults(move_args.package_path),
         Command::Prove(c) => c.execute(move_args.package_path, move_args.build_config),
         Command::Test(c) => c.execute(

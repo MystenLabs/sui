@@ -4,7 +4,21 @@
 const concepts = [
 	'concepts',
 	'concepts/components',
-	'concepts/graphql-rpc',
+	{
+		type: 'category',
+		label: 'Sui GraphQL RPC',
+		link: {
+			type: 'doc',
+			id: 'concepts/graphql-rpc',
+		},
+		items: [
+			'concepts/graphql-rpc/headers',
+			'concepts/graphql-rpc/variables',
+			'concepts/graphql-rpc/fragments',
+			'concepts/graphql-rpc/pagination',
+			'concepts/graphql-rpc/limits',
+		],
+	},
 	{
 		type: 'category',
 		label: 'App Developers',

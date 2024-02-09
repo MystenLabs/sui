@@ -3,6 +3,7 @@
 
 use crate::authority::authority_tests::{send_consensus, send_consensus_no_execution};
 use crate::authority::AuthorityState;
+use crate::authority::EffectsNotifyRead;
 use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
 };
@@ -588,6 +589,7 @@ async fn test_txn_age_overload() {
             gas_objects.clone(),
             OverloadThresholdConfig {
                 max_txn_age_in_queue: Duration::from_secs(5),
+                ..Default::default()
             },
         )
         .await;

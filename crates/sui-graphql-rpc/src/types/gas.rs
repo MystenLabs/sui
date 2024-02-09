@@ -10,7 +10,7 @@ use sui_types::{
     transaction::GasData,
 };
 
-use super::{address::Address, big_int::BigInt, object::ObjectVersionKey, sui_address::SuiAddress};
+use super::{address::Address, big_int::BigInt, object::ObjectLookupKey, sui_address::SuiAddress};
 use super::{
     cursor::Page,
     object::{self, ObjectFilter, ObjectKey},
@@ -22,6 +22,9 @@ pub(crate) struct GasInput {
     pub price: u64,
     pub budget: u64,
     pub payment_obj_keys: Vec<ObjectKey>,
+    /// The checkpoint sequence number at which this was viewed at, or None if the data was
+    /// requested at the latest checkpoint.
+    pub checkpoint_viewed_at: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +40,8 @@ pub(crate) struct GasEffects {
     pub summary: GasCostSummary,
     pub object_id: SuiAddress,
     pub object_version: u64,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Configuration for this transaction's gas price and the coins used to pay for gas.
@@ -46,6 +51,7 @@ impl GasInput {
     async fn gas_sponsor(&self) -> Option<Address> {
         Some(Address {
             address: self.owner,
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
         })
     }
 
@@ -58,6 +64,12 @@ impl GasInput {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, Object>> {
+        // A possible user error during dry run or execution would be to supply a gas payment that
+        // is not a Move object (i.e a package). Even though the transaction would fail to run, this
+        // service will still attempt to present execution results. If the return type of this field
+        // is a `MoveObject`, then GraphQL will fail on the top-level with an internal error.
+        // Instead, we return an `Object` here, so that the rest of the `TransactionBlock` will
+        // still be viewable.
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let filter = ObjectFilter {
@@ -65,9 +77,14 @@ impl GasInput {
             ..Default::default()
         };
 
-        Object::paginate(ctx.data_unchecked(), page, filter)
-            .await
-            .extend()
+        Object::paginate(
+            ctx.data_unchecked(),
+            page,
+            filter,
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     /// An unsigned integer specifying the number of native tokens per gas unit this transaction
@@ -116,7 +133,10 @@ impl GasEffects {
         Object::query(
             ctx.data_unchecked(),
             self.object_id,
-            ObjectVersionKey::Historical(self.object_version),
+            ObjectLookupKey::VersionAt {
+                version: self.object_version,
+                checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
+            },
         )
         .await
         .extend()
@@ -128,18 +148,27 @@ impl GasEffects {
 }
 
 impl GasEffects {
-    pub(crate) fn from(effects: &NativeTransactionEffects) -> Self {
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `GasEffects`
+    /// was queried for, or `None` if the data was requested at the latest checkpoint. This is
+    /// stored on `GasEffects` so that when viewing that entity's state, it will be as if it was
+    /// read at the same checkpoint.
+    pub(crate) fn from(effects: &NativeTransactionEffects, checkpoint_viewed_at: u64) -> Self {
         let ((id, version, _digest), _owner) = effects.gas_object();
         Self {
             summary: GasCostSummary::from(effects.gas_cost_summary()),
             object_id: SuiAddress::from(id),
             object_version: version.value(),
+            checkpoint_viewed_at,
         }
     }
 }
 
-impl From<&GasData> for GasInput {
-    fn from(s: &GasData) -> Self {
+impl GasInput {
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `GasInput`
+    /// was queried for, or `None` if the data was requested at the latest checkpoint. This is
+    /// stored on `GasInput` so that when viewing that entity's state, it will be as if it was read
+    /// at the same checkpoint.
+    pub(crate) fn from(s: &GasData, checkpoint_viewed_at: Option<u64>) -> Self {
         Self {
             owner: s.owner.into(),
             price: s.price,
@@ -152,6 +181,7 @@ impl From<&GasData> for GasInput {
                     version: o.1.value(),
                 })
                 .collect(),
+            checkpoint_viewed_at,
         }
     }
 }

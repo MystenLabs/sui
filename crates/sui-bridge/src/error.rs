@@ -3,7 +3,7 @@
 
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BridgeError {
     // The input is not an invalid transaction digest/hash
     InvalidTxHash,
@@ -47,6 +47,8 @@ pub enum BridgeError {
     MismatchedAction,
     // Authority has invalid url
     AuthoirtyUrlInvalid,
+    // Action is not token transfer
+    NotTokenTransferAction,
     // Sui transaction failure due to generic error
     SuiTxFailureGeneric(String),
     // Storage Error

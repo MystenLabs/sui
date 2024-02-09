@@ -57,7 +57,7 @@ pub(crate) struct StakedSui {
 #[Object]
 impl StakedSui {
     pub(crate) async fn address(&self) -> SuiAddress {
-        OwnerImpl(self.super_.super_.address).address().await
+        OwnerImpl::from(&self.super_.super_).address().await
     }
 
     /// Objects owned by this object, optionally `filter`-ed.
@@ -70,7 +70,7 @@ impl StakedSui {
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, MoveObject>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -82,7 +82,7 @@ impl StakedSui {
         ctx: &Context<'_>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .balance(ctx, type_)
             .await
     }
@@ -96,7 +96,7 @@ impl StakedSui {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .balances(ctx, first, after, last, before)
             .await
     }
@@ -113,7 +113,7 @@ impl StakedSui {
         before: Option<object::Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .coins(ctx, first, after, last, before, type_)
             .await
     }
@@ -127,14 +127,14 @@ impl StakedSui {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .staked_suis(ctx, first, after, last, before)
             .await
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .default_suins_name(ctx)
             .await
     }
@@ -149,7 +149,7 @@ impl StakedSui {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, SuinsRegistration>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .suins_registrations(ctx, first, after, last, before)
             .await
     }
@@ -247,8 +247,8 @@ impl StakedSui {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
-            .dynamic_field(ctx, name)
+        OwnerImpl::from(&self.super_.super_)
+            .dynamic_field(ctx, name, Some(self.super_.super_.version_impl()))
             .await
     }
 
@@ -264,8 +264,8 @@ impl StakedSui {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
-            .dynamic_object_field(ctx, name)
+        OwnerImpl::from(&self.super_.super_)
+            .dynamic_object_field(ctx, name, Some(self.super_.super_.version_impl()))
             .await
     }
 
@@ -281,8 +281,15 @@ impl StakedSui {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
-            .dynamic_fields(ctx, first, after, last, before)
+        OwnerImpl::from(&self.super_.super_)
+            .dynamic_fields(
+                ctx,
+                first,
+                after,
+                last,
+                before,
+                Some(self.super_.super_.version_impl()),
+            )
             .await
     }
 
@@ -297,16 +304,29 @@ impl StakedSui {
 
     /// The epoch at which this stake became active.
     async fn activated_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.native.activation_epoch()))
-            .await
-            .extend()
+        Epoch::query(
+            ctx.data_unchecked(),
+            Some(self.native.activation_epoch()),
+            self.super_.super_.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     /// The epoch at which this object was requested to join a stake pool.
     async fn requested_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.native.request_epoch()))
-            .await
-            .extend()
+        Epoch::query(
+            ctx.data_unchecked(),
+            Some(self.native.request_epoch()),
+            self.super_.super_.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
+    }
+
+    /// The object id of the validator staking pool this stake belongs to.
+    async fn pool_id(&self) -> Option<SuiAddress> {
+        Some(self.native.pool_id().into())
     }
 
     /// The SUI that was initially staked.
@@ -336,10 +356,16 @@ impl StakedSui {
 impl StakedSui {
     /// Query the database for a `page` of Staked SUI. The page uses the same cursor type as is used
     /// for `Object`, and is further filtered to a particular `owner`.
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
+    /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
+    /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
+    /// state, it will be as if it was read at the same checkpoint.
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<object::Cursor>,
         owner: SuiAddress,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, StakedSui>, Error> {
         let type_: StructTag = MoveObjectType::staked_sui().into();
 
@@ -349,7 +375,7 @@ impl StakedSui {
             ..Default::default()
         };
 
-        Object::paginate_subtype(db, page, filter, |object| {
+        Object::paginate_subtype(db, page, filter, checkpoint_viewed_at, |object| {
             let address = object.address;
             let move_object = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(

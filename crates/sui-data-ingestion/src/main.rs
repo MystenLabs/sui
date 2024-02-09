@@ -7,16 +7,18 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
 use sui_data_ingestion::{
-    BlobTaskConfig, BlobWorker, DataIngestionMetrics, DynamoDBProgressStore, KVStoreTaskConfig,
-    KVStoreWorker,
+    ArchivalConfig, ArchivalWorker, BlobTaskConfig, BlobWorker, DynamoDBProgressStore,
+    KVStoreTaskConfig, KVStoreWorker,
 };
-use sui_data_ingestion::{IndexerExecutor, WorkerPool};
+use sui_data_ingestion_core::DataIngestionMetrics;
+use sui_data_ingestion_core::{IndexerExecutor, WorkerPool};
 use tokio::signal;
 use tokio::sync::oneshot;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "lowercase")]
 enum Task {
+    Archival(ArchivalConfig),
     Blob(BlobTaskConfig),
     KV(KVStoreTaskConfig),
 }
@@ -115,6 +117,14 @@ async fn main() -> Result<()> {
     let mut executor = IndexerExecutor::new(progress_store, config.tasks.len(), metrics);
     for task_config in config.tasks {
         match task_config.task {
+            Task::Archival(archival_config) => {
+                let worker_pool = WorkerPool::new(
+                    ArchivalWorker::new(archival_config).await?,
+                    task_config.name,
+                    task_config.concurrency,
+                );
+                executor.register(worker_pool).await?;
+            }
             Task::Blob(blob_config) => {
                 let worker_pool = WorkerPool::new(
                     BlobWorker::new(blob_config),

@@ -18,8 +18,20 @@ pub enum ConsensusError {
     #[error("Failed to verify the block's signature with error: {0}")]
     SignatureVerificationFailure(#[from] FastCryptoError),
 
-    #[error("Unknown authority provided: {0}")]
-    UnknownAuthority(String),
+    #[error("Unknown authority index: {0}")]
+    UnknownAuthorityIndex(usize),
+
+    #[error("Unknown network peer: {0}")]
+    UnknownNetworkPeer(String),
+
+    #[error("Peer {0} is disconnected.")]
+    PeerDisconnected(String),
+
+    #[error("Network error: {0:?}")]
+    NetworkError(String),
+
+    #[error("Consensus has shut down!")]
+    Shutdown,
 }
 
 #[allow(unused)]

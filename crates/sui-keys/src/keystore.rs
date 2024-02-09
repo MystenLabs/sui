@@ -225,7 +225,7 @@ impl AccountKeystore for FileBasedKeystore {
             address,
             Alias {
                 alias,
-                public_key_base64: EncodeDecodeBase64::encode_base64(&keypair.public()),
+                public_key_base64: keypair.public().encode_base64(),
             },
         );
         self.keys.insert(address, keypair);
@@ -370,8 +370,7 @@ impl FileBasedKeystore {
                 .iter()
                 .zip(names)
                 .map(|((sui_address, skp), alias)| {
-                    let public_key_base64 = EncodeDecodeBase64::encode_base64(&skp.public());
-
+                    let public_key_base64 = skp.public().encode_base64();
                     (
                         *sui_address,
                         Alias {
@@ -422,12 +421,18 @@ impl FileBasedKeystore {
     }
 
     pub fn save_keystore(&self) -> Result<(), anyhow::Error> {
+        println!(
+            "Keys saved as Base64 with 33 bytes `flag || privkey` ($BASE64_STR). 
+        To see Bech32 format encoding, use `sui keytool export $SUI_ADDRESS` where 
+        $SUI_ADDRESS can be found with `sui keytool list`. Or use `sui keytool convert $BASE64_STR`."
+        );
+
         if let Some(path) = &self.path {
             let store = serde_json::to_string_pretty(
                 &self
                     .keys
                     .values()
-                    .map(EncodeDecodeBase64::encode_base64)
+                    .map(|k| k.encode_base64())
                     .collect::<Vec<_>>(),
             )
             .with_context(|| format!("Cannot serialize keystore to file: {}", path.display()))?;
@@ -491,7 +496,7 @@ impl AccountKeystore for InMemKeystore {
             )
         });
 
-        let public_key_base64 = EncodeDecodeBase64::encode_base64(&keypair.public());
+        let public_key_base64 = keypair.public().encode_base64();
         let alias = Alias {
             alias,
             public_key_base64,
@@ -584,7 +589,7 @@ impl InMemKeystore {
             .iter()
             .zip(random_names(HashSet::new(), keys.len()))
             .map(|((sui_address, skp), alias)| {
-                let public_key_base64 = EncodeDecodeBase64::encode_base64(&skp.public());
+                let public_key_base64 = skp.public().encode_base64();
                 (
                     *sui_address,
                     Alias {

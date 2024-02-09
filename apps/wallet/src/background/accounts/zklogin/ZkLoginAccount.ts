@@ -7,7 +7,6 @@ import { deobfuscate, obfuscate } from '_src/shared/cryptography/keystore';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
 import {
 	toSerializedSignature,
-	type ExportedKeypair,
 	type PublicKey,
 	type SerializedSignature,
 } from '@mysten/sui.js/cryptography';
@@ -38,7 +37,7 @@ function serializeNetwork(network: NetworkEnvType): SerializedNetwork {
 }
 
 type CredentialData = {
-	ephemeralKeyPair: ExportedKeypair;
+	ephemeralKeyPair: string;
 	proofs?: PartialZkLoginSignature;
 	minEpoch: number;
 	maxEpoch: number;
@@ -278,7 +277,7 @@ export class ZkLoginAccount
 		const ephemeralValue = (await this.getEphemeralValue()) || {};
 		const activeNetwork = await networkEnv.getActiveNetwork();
 		const credentialsData: CredentialData = {
-			ephemeralKeyPair: ephemeralKeyPair.export(),
+			ephemeralKeyPair: ephemeralKeyPair.getSecretKey(),
 			minEpoch: Number(epoch),
 			maxEpoch,
 			network: activeNetwork,

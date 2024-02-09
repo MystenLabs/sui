@@ -8,14 +8,14 @@ module 0x42::m {
     }
 
     fun t1(cond: bool): u64 {
-        loop 'name: {
+        'name: loop {
             if (cond) { return 'name 10 };
         }
     }
 
     fun t2(cond: bool): u64 {
-        loop 'outer: {
-            loop 'inner: {
+        'outer: loop {
+            'inner: loop {
                 if (cond) { return 'outer 10 };
                 if (cond) { return 'inner 20 };
             };
@@ -23,8 +23,8 @@ module 0x42::m {
     }
 
     fun t3(cond: bool) {
-        while (cond) 'outer: {
-            while (cond) 'inner: {
+        'outer: while (cond) {
+            'inner: while (cond) {
                 if (cond) { return 'outer };
                 if (cond) { return 'inner };
             }
@@ -32,7 +32,7 @@ module 0x42::m {
     }
 
     fun t4(cond: bool) {
-        while (cond) 'outer: {
+        'outer: while (cond) {
             let _x = 'inner: {
                 if (cond) { return 'outer };
                 if (cond) { break 'inner 10 };
@@ -42,8 +42,8 @@ module 0x42::m {
     }
 
     fun t5() {
-        loop 'l: {
-            loop 'l: {
+        'l: loop {
+            'l: loop {
                 return 'l
             }
         }
@@ -57,15 +57,15 @@ module 0x42::m {
     }
 
     fun t7(cond: bool): u64 {
-        loop 'name: {
+        'name: loop {
             if (cond) { continue 'name2 };
             if (cond) { break 'name2 10 };
         }
     }
 
     fun t8(cond: bool): u64 {
-        loop 'outer2: {
-            loop 'inner2: {
+        'outer2: loop {
+            'inner2: loop {
                 if (cond) { break 'outer 10 };
                 if (cond) { break 'inner 20 };
             };
@@ -73,8 +73,8 @@ module 0x42::m {
     }
 
     fun t9(cond: bool) {
-        while (cond) 'outer: {
-            while (cond) 'inner: {
+        'outer: while (cond) {
+            'inner: while (cond) {
                 if (cond) { continue 'outer2 };
                 if (cond) { break 'inner2 };
             }
@@ -82,8 +82,8 @@ module 0x42::m {
     }
 
     fun t10() {
-        loop 'l: {
-            loop 'l: {
+        'l: loop {
+            'l: loop {
                 break 'l2
             }
         }

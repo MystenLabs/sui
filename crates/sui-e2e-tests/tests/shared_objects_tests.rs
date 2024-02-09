@@ -7,6 +7,7 @@ use rand::distributions::Distribution;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
 use sui_config::node::OverloadThresholdConfig;
+use sui_core::authority::EffectsNotifyRead;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::{register_fail_point_async, sim_test};
@@ -548,6 +549,7 @@ async fn shared_object_sync() {
         // Set the threshold high enough so it won't be triggered.
         .with_overload_threshold_config(OverloadThresholdConfig {
             max_txn_age_in_queue: Duration::from_secs(60),
+            ..Default::default()
         })
         .build()
         .await;

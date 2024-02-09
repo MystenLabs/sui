@@ -1,0 +1,10 @@
+# Direct dependencies of the root package (A and B) depend on different versions of C.
+# This should cause a conflict.
+
+[package]
+name = "Root"
+version = "1"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }

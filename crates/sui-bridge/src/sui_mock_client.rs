@@ -19,7 +19,7 @@ use sui_types::transaction::Transaction;
 use sui_types::Identifier;
 
 use crate::sui_client::SuiClientInner;
-use crate::types::MoveTypeBridgeCommittee;
+use crate::types::{BridgeAction, BridgeActionDigest, BridgeActionStatus, MoveTypeBridgeCommittee};
 
 /// Mock client used in test environments.
 #[allow(clippy::type_complexity)]
@@ -30,11 +30,13 @@ pub struct SuiMockClient {
     latest_checkpoint_sequence_number: u64,
     events: Arc<Mutex<HashMap<(ObjectID, Identifier, EventID), EventPage>>>,
     past_event_query_params: Arc<Mutex<VecDeque<(ObjectID, Identifier, EventID)>>>,
-    events_by_tx_digest: Arc<Mutex<HashMap<TransactionDigest, Vec<SuiEvent>>>>,
+    events_by_tx_digest:
+        Arc<Mutex<HashMap<TransactionDigest, Result<Vec<SuiEvent>, sui_sdk::error::Error>>>>,
     transaction_responses:
         Arc<Mutex<HashMap<TransactionDigest, BridgeResult<SuiTransactionBlockResponse>>>>,
     wildcard_transaction_response: Arc<Mutex<Option<BridgeResult<SuiTransactionBlockResponse>>>>,
     get_object_info: Arc<Mutex<HashMap<ObjectID, (GasCoin, ObjectRef, Owner)>>>,
+    onchain_status: Arc<Mutex<HashMap<BridgeActionDigest, BridgeActionStatus>>>,
 
     requested_transactions_tx: tokio::sync::broadcast::Sender<TransactionDigest>,
 }
@@ -50,6 +52,7 @@ impl SuiMockClient {
             transaction_responses: Default::default(),
             wildcard_transaction_response: Default::default(),
             get_object_info: Default::default(),
+            onchain_status: Default::default(),
             requested_transactions_tx: tokio::sync::broadcast::channel(10000).0,
         }
     }
@@ -67,15 +70,18 @@ impl SuiMockClient {
             .insert((package, module, cursor), events);
     }
 
-    pub fn pop_front_past_event_query_params(&self) -> Option<(ObjectID, Identifier, EventID)> {
-        self.past_event_query_params.lock().unwrap().pop_front()
-    }
-
     pub fn add_events_by_tx_digest(&self, tx_digest: TransactionDigest, events: Vec<SuiEvent>) {
         self.events_by_tx_digest
             .lock()
             .unwrap()
-            .insert(tx_digest, events);
+            .insert(tx_digest, Ok(events));
+    }
+
+    pub fn add_events_by_tx_digest_error(&self, tx_digest: TransactionDigest) {
+        self.events_by_tx_digest.lock().unwrap().insert(
+            tx_digest,
+            Err(sui_sdk::error::Error::DataError("".to_string())),
+        );
     }
 
     pub fn add_transaction_response(
@@ -87,6 +93,13 @@ impl SuiMockClient {
             .lock()
             .unwrap()
             .insert(tx_digest, response);
+    }
+
+    pub fn set_action_onchain_status(&self, action: &BridgeAction, status: BridgeActionStatus) {
+        self.onchain_status
+            .lock()
+            .unwrap()
+            .insert(action.digest(), status);
     }
 
     pub fn set_wildcard_transaction_response(
@@ -147,13 +160,16 @@ impl SuiClientInner for SuiMockClient {
         &self,
         tx_digest: TransactionDigest,
     ) -> Result<Vec<SuiEvent>, Self::Error> {
-        Ok(self
-            .events_by_tx_digest
-            .lock()
-            .unwrap()
+        let events = self.events_by_tx_digest.lock().unwrap();
+
+        match events
             .get(&tx_digest)
-            .cloned()
-            .unwrap_or_else(|| panic!("No preset events found for tx_digest: {:?}", tx_digest)))
+            .unwrap_or_else(|| panic!("No preset events found for tx_digest: {:?}", tx_digest))
+        {
+            Ok(events) => Ok(events.clone()),
+            // sui_sdk::error::Error is not Clone
+            Err(_) => Err(sui_sdk::error::Error::DataError("".to_string())),
+        }
     }
 
     async fn get_chain_identifier(&self) -> Result<String, Self::Error> {
@@ -166,6 +182,19 @@ impl SuiClientInner for SuiMockClient {
 
     async fn get_bridge_committee(&self) -> Result<MoveTypeBridgeCommittee, Self::Error> {
         unimplemented!()
+    }
+
+    async fn get_token_transfer_action_onchain_status(
+        &self,
+        action: &BridgeAction,
+    ) -> Result<BridgeActionStatus, BridgeError> {
+        Ok(self
+            .onchain_status
+            .lock()
+            .unwrap()
+            .get(&action.digest())
+            .cloned()
+            .unwrap_or(BridgeActionStatus::Pending))
     }
 
     async fn execute_transaction_block_with_effects(

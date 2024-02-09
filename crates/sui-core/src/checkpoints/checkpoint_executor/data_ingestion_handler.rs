@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::checkpoints::CheckpointStore;
-use crate::in_mem_execution_cache::ExecutionCacheRead;
+use crate::execution_cache::ExecutionCacheRead;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -92,7 +92,7 @@ pub(crate) fn store_checkpoint_locally(
             .collect::<Vec<_>>();
 
         let input_objects = cache_reader
-            .multi_get_object_by_key(&input_object_keys)?
+            .multi_get_objects_by_key(&input_object_keys)?
             .into_iter()
             .zip(&input_object_keys)
             .map(|(object, object_key)| {
@@ -112,7 +112,7 @@ pub(crate) fn store_checkpoint_locally(
             .collect::<Vec<_>>();
 
         let output_objects = cache_reader
-            .multi_get_object_by_key(&output_object_keys)?
+            .multi_get_objects_by_key(&output_object_keys)?
             .into_iter()
             .zip(&output_object_keys)
             .map(|(object, object_key)| {

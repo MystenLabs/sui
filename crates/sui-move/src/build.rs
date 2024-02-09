@@ -3,6 +3,7 @@
 
 use clap::Parser;
 use move_cli::base;
+use move_package::source_package::layout::SourcePackageLayout;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde_json::json;
 use std::{fs, path::PathBuf};
@@ -99,7 +100,7 @@ pub fn resolve_lock_file_path(
 ) -> Result<MoveBuildConfig, anyhow::Error> {
     if build_config.lock_file.is_none() {
         let package_root = base::reroot_path(package_path)?;
-        let lock_file_path = package_root.join("Move.lock");
+        let lock_file_path = package_root.join(SourcePackageLayout::Lock.path());
         build_config.lock_file = Some(lock_file_path);
     }
     Ok(build_config)

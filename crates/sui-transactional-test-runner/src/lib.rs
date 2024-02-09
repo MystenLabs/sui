@@ -20,7 +20,6 @@ use sui_core::authority::AuthorityState;
 use sui_json_rpc::authority_state::StateRead;
 use sui_json_rpc_types::DevInspectResults;
 use sui_json_rpc_types::EventFilter;
-use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
@@ -36,8 +35,8 @@ use sui_types::event::Event;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
-use sui_types::storage::ObjectKey;
 use sui_types::storage::ObjectStore;
+use sui_types::storage::ReadStore;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::Transaction;
@@ -62,7 +61,7 @@ pub struct ValidatorWithFullnode {
 #[allow(unused_variables)]
 /// TODO: better name?
 #[async_trait::async_trait]
-pub trait TransactionalAdapter: Send + Sync + ObjectStore + NodeStateGetter {
+pub trait TransactionalAdapter: Send + Sync + ReadStore {
     async fn execute_txn(
         &mut self,
         transaction: Transaction,
@@ -202,68 +201,125 @@ impl TransactionalAdapter for ValidatorWithFullnode {
     }
 }
 
-#[async_trait::async_trait]
-impl NodeStateGetter for ValidatorWithFullnode {
-    fn get_verified_checkpoint_by_sequence_number(
+impl ReadStore for ValidatorWithFullnode {
+    fn get_committee(
         &self,
-        sequence_number: u64,
-    ) -> SuiResult<VerifiedCheckpoint> {
+        _epoch: sui_types::committee::EpochId,
+    ) -> sui_types::storage::error::Result<Option<Arc<sui_types::committee::Committee>>> {
+        todo!()
+    }
+
+    fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        let sequence_number = self
+            .validator
+            .get_latest_checkpoint_sequence_number()
+            .unwrap();
+        self.get_checkpoint_by_sequence_number(sequence_number)
+            .map(|c| c.unwrap())
+    }
+
+    fn get_highest_verified_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        todo!()
+    }
+
+    fn get_highest_synced_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        todo!()
+    }
+
+    fn get_lowest_available_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<sui_types::messages_checkpoint::CheckpointSequenceNumber>
+    {
+        todo!()
+    }
+
+    fn get_checkpoint_by_digest(
+        &self,
+        _digest: &sui_types::messages_checkpoint::CheckpointDigest,
+    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
+        todo!()
+    }
+
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
         self.validator
-            .get_verified_checkpoint_by_sequence_number(sequence_number)
+            .get_checkpoint_store()
+            .get_checkpoint_by_sequence_number(sequence_number)
+            .map_err(sui_types::storage::error::Error::custom)
     }
 
-    fn get_latest_checkpoint_sequence_number(&self) -> SuiResult<u64> {
-        self.validator.get_latest_checkpoint_sequence_number()
-    }
-
-    fn get_checkpoint_contents(
+    fn get_checkpoint_contents_by_digest(
         &self,
-        content_digest: CheckpointContentsDigest,
-    ) -> SuiResult<sui_types::messages_checkpoint::CheckpointContents> {
-        self.validator.get_checkpoint_contents(content_digest)
-    }
-
-    fn multi_get_transaction_blocks(
-        &self,
-        tx_digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<sui_types::transaction::VerifiedTransaction>>> {
-        self.validator.multi_get_transaction_blocks(tx_digests)
-    }
-
-    fn multi_get_executed_effects(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<sui_types::effects::TransactionEffects>>> {
-        self.validator.multi_get_executed_effects(digests)
-    }
-
-    fn multi_get_events(
-        &self,
-        event_digests: &[TransactionEventsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        self.validator.multi_get_events(event_digests)
-    }
-
-    fn multi_get_object_by_key(
-        &self,
-        object_keys: &[ObjectKey],
-    ) -> Result<Vec<Option<Object>>, SuiError> {
-        self.validator.multi_get_object_by_key(object_keys)
-    }
-
-    fn get_object_by_key(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
-        self.validator.get_object_by_key(object_id, version)
-    }
-
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        digest: &CheckpointContentsDigest,
+    ) -> sui_types::storage::error::Result<Option<sui_types::messages_checkpoint::CheckpointContents>>
+    {
         self.validator
-            .database
-            .get_object(object_id)
-            .map_err(Into::into)
+            .get_checkpoint_store()
+            .get_checkpoint_contents(digest)
+            .map_err(sui_types::storage::error::Error::custom)
+    }
+
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        _sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<Option<sui_types::messages_checkpoint::CheckpointContents>>
+    {
+        todo!()
+    }
+
+    fn get_transaction(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<Arc<sui_types::transaction::VerifiedTransaction>>>
+    {
+        self.validator
+            .get_cache_reader()
+            .get_transaction_block(tx_digest)
+            .map_err(sui_types::storage::error::Error::custom)
+    }
+
+    fn get_transaction_effects(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<TransactionEffects>> {
+        self.validator
+            .get_cache_reader()
+            .get_executed_effects(tx_digest)
+            .map_err(sui_types::storage::error::Error::custom)
+    }
+
+    fn get_events(
+        &self,
+        event_digest: &TransactionEventsDigest,
+    ) -> sui_types::storage::error::Result<Option<TransactionEvents>> {
+        self.validator
+            .get_cache_reader()
+            .get_events(event_digest)
+            .map_err(sui_types::storage::error::Error::custom)
+    }
+
+    fn get_full_checkpoint_contents_by_sequence_number(
+        &self,
+        _sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
+    > {
+        todo!()
+    }
+
+    fn get_full_checkpoint_contents(
+        &self,
+        _digest: &CheckpointContentsDigest,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
+    > {
+        todo!()
     }
 }
 
@@ -272,7 +328,7 @@ impl ObjectStore for ValidatorWithFullnode {
         &self,
         object_id: &ObjectID,
     ) -> Result<Option<Object>, sui_types::storage::error::Error> {
-        self.validator.database.get_object(object_id)
+        self.validator.get_object_store().get_object(object_id)
     }
 
     fn get_object_by_key(
@@ -281,7 +337,7 @@ impl ObjectStore for ValidatorWithFullnode {
         version: VersionNumber,
     ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         self.validator
-            .database
+            .get_object_store()
             .get_object_by_key(object_id, version)
     }
 }

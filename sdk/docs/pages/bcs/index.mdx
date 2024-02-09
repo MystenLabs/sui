@@ -205,7 +205,7 @@ const U8Container = Container(bcs.u8());
 const bytes = U8Container.serialize({ contents: 100 }).toBytes();
 
 // Using multiple generics
-function VecMap<K, V>, (K: BcsType<K>, V: BcsType<V>) {
+function VecMap<K, V>(K: BcsType<K>, V: BcsType<V>) {
 	// You can use the names of the generic params in the type name to
 	return bcs.struct(
 		// You can use the names of the generic params to give your type a more useful name

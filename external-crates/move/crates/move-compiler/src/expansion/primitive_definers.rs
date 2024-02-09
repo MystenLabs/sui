@@ -15,7 +15,7 @@ use crate::{
     FullyCompiledProgram,
 };
 
-use super::ast::{AttributeName_, Attribute_};
+use super::ast::Attribute_;
 
 /// Gather primitive defines from module declarations, erroring on duplicates for a given base
 /// type or for unknown base types.
@@ -55,11 +55,9 @@ fn check_prim_definer(
     mident: ModuleIdent,
     m: &ModuleDefinition,
 ) {
-    let defines_prim_attr =
-        m.attributes
-            .get_(&AttributeName_::Known(KnownAttribute::DefinesPrimitive(
-                DefinesPrimitive,
-            )));
+    let defines_prim_attr = m
+        .attributes
+        .get_(&KnownAttribute::DefinesPrimitive(DefinesPrimitive));
     let Some(sp!(attr_loc, attr_)) = defines_prim_attr else {
         return;
     };

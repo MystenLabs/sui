@@ -7,6 +7,8 @@ use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
+pub type PackageIdentifier = Symbol;
+
 // TODO: remove static hooks and refactor this crate for better customizability
 
 /// A trait providing hooks to customize the package system for a particular Move application.
@@ -28,7 +30,10 @@ pub trait PackageHooks {
         info: &CustomDepInfo,
     ) -> anyhow::Result<()>;
 
-    fn custom_resolve_pkg_name(&self, manifest: &SourceManifest) -> anyhow::Result<Symbol>;
+    fn custom_resolve_pkg_id(&self, manifest: &SourceManifest)
+        -> anyhow::Result<PackageIdentifier>;
+
+    fn resolve_version(&self, manifest: &SourceManifest) -> anyhow::Result<Option<Symbol>>;
 }
 static HOOKS: Lazy<Mutex<Option<Box<dyn PackageHooks + Send + Sync>>>> =
     Lazy::new(|| Mutex::new(None));
@@ -67,10 +72,20 @@ pub(crate) fn custom_package_info_fields() -> Vec<String> {
     }
 }
 
-pub(crate) fn custom_resolve_pkg_name(manifest: &SourceManifest) -> anyhow::Result<Symbol> {
+pub(crate) fn custom_resolve_pkg_id(
+    manifest: &SourceManifest,
+) -> anyhow::Result<PackageIdentifier> {
     if let Some(hooks) = &*HOOKS.lock().unwrap() {
-        hooks.custom_resolve_pkg_name(manifest)
+        hooks.custom_resolve_pkg_id(manifest)
     } else {
         Ok(manifest.package.name)
+    }
+}
+
+pub(crate) fn resolve_version(manifest: &SourceManifest) -> anyhow::Result<Option<Symbol>> {
+    if let Some(hooks) = &*HOOKS.lock().unwrap() {
+        hooks.resolve_version(manifest)
+    } else {
+        Ok(None)
     }
 }

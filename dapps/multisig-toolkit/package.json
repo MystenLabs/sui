@@ -33,6 +33,7 @@
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
 		"react-hook-form": "^7.45.2",
+		"react-hot-toast": "^2.4.1",
 		"react-router-dom": "^6.14.2",
 		"tailwind-merge": "^1.14.0",
 		"zod": "^3.21.4"
@@ -48,7 +49,7 @@
 		"postcss": "^8.4.31",
 		"tailwindcss": "^3.3.3",
 		"tailwindcss-animate": "^1.0.6",
-		"typescript": "^5.1.6",
+		"typescript": "^5.3.3",
 		"vite": "^4.4.4",
 		"vite-tsconfig-paths": "^4.2.0"
 	}

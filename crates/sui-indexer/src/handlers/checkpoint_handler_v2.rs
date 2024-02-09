@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::handlers::committer::start_tx_checkpoint_commit_task;
-use crate::handlers::tx_processor::IndexingPackageCache;
+use crate::handlers::tx_processor::IndexingPackageBuffer;
 use crate::models_v2::display::StoredDisplay;
 use async_trait::async_trait;
 use itertools::Itertools;
-use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
+use sui_package_resolver::{PackageStore, Resolver};
 use sui_rest_api::CheckpointData;
 use sui_rest_api::CheckpointTransaction;
 use sui_types::base_types::ObjectRef;
@@ -40,14 +42,14 @@ use crate::errors::IndexerError;
 use crate::framework::interface::Handler;
 use crate::metrics::IndexerMetrics;
 
-use crate::store::module_resolver_v2::InterimModuleResolver;
-use crate::store::IndexerStoreV2;
+use crate::store::module_resolver_v2::{IndexerStorePackageModuleResolver, InterimPackageResolver};
+use crate::store::{IndexerStoreV2, PgIndexerStoreV2};
 use crate::types_v2::IndexedEpochInfo;
 use crate::types_v2::{
     IndexedCheckpoint, IndexedEvent, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
 };
 use crate::types_v2::{IndexedDeletedObject, IndexedObject, IndexedPackage};
-use crate::IndexerConfig;
+use crate::{IndexerConfig, PgConnectionPool};
 
 use super::tx_processor::EpochEndIndexingObjectStore;
 use super::tx_processor::TxChangesProcessor;
@@ -81,7 +83,7 @@ where
     let state_clone = state.clone();
     let metrics_clone = metrics.clone();
     let config_clone = config.clone();
-    let (tx, rx) = watch::channel(None);
+    let (tx, package_tx) = watch::channel(None);
     spawn_monitored_task!(start_tx_checkpoint_commit_task(
         state_clone,
         metrics_clone,
@@ -94,7 +96,7 @@ where
         state,
         metrics,
         indexed_checkpoint_sender,
-        package_cache: IndexingPackageCache::start(rx),
+        package_buffer: IndexingPackageBuffer::start(package_tx),
     };
 
     Ok(checkpoint_handler)
@@ -104,9 +106,9 @@ pub struct CheckpointHandler<S> {
     state: S,
     metrics: IndexerMetrics,
     indexed_checkpoint_sender: mysten_metrics::metered_channel::Sender<CheckpointDataToCommit>,
-    // Map from checkpoint sequence number and its starting transaction sequence number
-    // This thing is small enough to be kept in memory
-    package_cache: Arc<Mutex<IndexingPackageCache>>,
+    // buffers for packages that are being indexed but not committed to DB,
+    // they will be periodically GCed to avoid OOM.
+    package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
 }
 
 #[async_trait]
@@ -141,12 +143,18 @@ where
         let indexing_timer = self.metrics.checkpoint_index_latency.start_timer();
         // It's important to index packages first to populate ModuleResolver
         let packages = Self::index_packages(checkpoints, &self.metrics);
-        let module_resolver = Arc::new(InterimModuleResolver::new(
-            self.state.module_cache(),
-            self.package_cache.clone(),
-            &packages,
+        let package_objects = Self::get_package_objects(checkpoints);
+
+        let pg_blocking_cp = self.pg_blocking_cp()?;
+        let module_package_db_resolver = IndexerStorePackageModuleResolver::new(pg_blocking_cp);
+        let in_mem_package_resolver = InterimPackageResolver::new(
+            module_package_db_resolver,
+            self.package_buffer.clone(),
+            &package_objects,
             self.metrics.clone(),
-        ));
+        );
+        let package_resolver = Arc::new(Resolver::new(in_mem_package_resolver));
+
         let mut packages_per_checkpoint: HashMap<_, Vec<_>> = HashMap::new();
         for package in packages {
             packages_per_checkpoint
@@ -166,7 +174,7 @@ where
                 checkpoint.clone(),
                 metrics_clone.clone(),
                 packages,
-                module_resolver.clone(),
+                package_resolver.clone(),
             )));
         }
         let checkpoint_data_to_commit = futures::future::join_all(tasks)
@@ -298,7 +306,7 @@ where
         data: CheckpointData,
         metrics: Arc<IndexerMetrics>,
         packages: Vec<IndexedPackage>,
-        module_resolver: Arc<impl GetModule>,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<CheckpointDataToCommit, IndexerError> {
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
         info!(checkpoint_seq, "Indexing checkpoint data blob");
@@ -308,9 +316,9 @@ where
 
         // Index Objects
         let object_changes: TransactionObjectChangesToCommit =
-            Self::index_objects(data.clone(), &metrics, &module_resolver);
+            Self::index_objects(data.clone(), &metrics, package_resolver.clone()).await?;
         let object_history_changes: TransactionObjectChangesToCommit =
-            Self::index_objects_history(data.clone(), &module_resolver);
+            Self::index_objects_history(data.clone(), package_resolver.clone()).await?;
 
         let (checkpoint, db_transactions, db_events, db_indices, db_displays) = {
             let CheckpointData {
@@ -515,11 +523,11 @@ where
         Ok((db_transactions, db_events, db_indices, db_displays))
     }
 
-    fn index_objects(
+    async fn index_objects(
         data: CheckpointData,
         metrics: &IndexerMetrics,
-        module_resolver: &impl GetModule,
-    ) -> TransactionObjectChangesToCommit {
+        package_resolver: Arc<Resolver<impl PackageStore>>,
+    ) -> Result<TransactionObjectChangesToCommit, IndexerError> {
         let _timer = metrics.indexing_objects_latency.start_timer();
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
         let deleted_objects = data
@@ -542,7 +550,7 @@ where
 
         let (objects, intermediate_versions) = get_latest_objects(data.output_objects());
 
-        let changed_objects = data
+        let history_objects: Vec<Object> = data
             .transactions
             .iter()
             .flat_map(|tx| {
@@ -568,36 +576,50 @@ where
                             )
                         });
                         assert_eq!(oref.1, object.version());
-                        let df_info =
-                            try_create_dynamic_field_info(object, &objects, module_resolver)
-                                .unwrap_or_else(|e| {
-                                    tracing::error!(
-                                "failed to create dynamic field info for obj: {:?}:{:?}. Err: {e}",
-                                object.id(),
-                                object.version()
-                            );
-                                    None
-                                });
-                        Some(IndexedObject::from_object(
-                            checkpoint_seq,
-                            object.clone(),
-                            df_info,
-                        ))
+                        Some(object.clone())
                     })
                     .collect::<Vec<_>>()
             })
             .collect();
-        TransactionObjectChangesToCommit {
+        let changed_objects_futures = history_objects
+            .into_iter()
+            .map(|history_object| {
+                let history_object_clone = history_object.clone();
+                let latest_objects_clone = objects.clone();
+                let package_resolver_clone = package_resolver.clone();
+                async move {
+                    let df_info = try_create_dynamic_field_info(
+                        &history_object_clone,
+                        &latest_objects_clone,
+                        package_resolver_clone,
+                    )
+                    .await;
+                    df_info.map(|info| {
+                        IndexedObject::from_object(checkpoint_seq, history_object_clone, info)
+                    })
+                }
+            })
+            .collect::<Vec<_>>();
+        let changed_objects = futures::future::try_join_all(changed_objects_futures)
+            .await
+            .map_err(|e| {
+                IndexerError::DynamicFieldError(format!(
+                    "Fail to join futures of df_info with {:?}.",
+                    e
+                ))
+            })?;
+
+        Ok(TransactionObjectChangesToCommit {
             changed_objects,
             deleted_objects: indexed_deleted_objects,
-        }
+        })
     }
 
     // similar to index_objects, but objects_history keeps all versions of objects
-    fn index_objects_history(
+    async fn index_objects_history(
         data: CheckpointData,
-        module_resolver: &impl GetModule,
-    ) -> TransactionObjectChangesToCommit {
+        package_resolver: Arc<Resolver<impl PackageStore>>,
+    ) -> Result<TransactionObjectChangesToCommit, IndexerError> {
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
         let deleted_objects = data
             .transactions
@@ -620,7 +642,7 @@ where
             .map(|o| ((o.id(), o.version()), o.clone()))
             .collect::<HashMap<_, _>>();
 
-        let changed_objects: Vec<IndexedObject> = data
+        let history_objects: Vec<Object> = data
             .transactions
             .iter()
             .flat_map(|tx| {
@@ -641,26 +663,44 @@ where
                             )
                         });
                         assert_eq!(oref.2, history_object.digest());
-                        let df_info =
-                            try_create_dynamic_field_info(history_object, &latest_objects, module_resolver)
-                                .unwrap_or_else(|e| {
-                                    tracing::error!(
-                                        "failed to create dynamic field info for history obj: {:?}:{:?}. Err: {e}",
-                                        history_object.id(),
-                                        history_object.version()
-                                    );
-                                    None
-                                });
-
-                        IndexedObject::from_object(checkpoint_seq, history_object.clone(), df_info)
+                        history_object.clone()
                     })
                     .collect::<Vec<_>>()
             })
             .collect();
-        TransactionObjectChangesToCommit {
+
+        let changed_objects_futures = history_objects
+            .into_iter()
+            .map(|history_object| {
+                let history_object_clone = history_object.clone();
+                let latest_objects_clone = latest_objects.clone();
+                let package_resolver_clone = package_resolver.clone();
+                async move {
+                    let df_info = try_create_dynamic_field_info(
+                        &history_object,
+                        &latest_objects_clone,
+                        package_resolver_clone,
+                    )
+                    .await;
+                    df_info.map(|info| {
+                        IndexedObject::from_object(checkpoint_seq, history_object_clone, info)
+                    })
+                }
+            })
+            .collect::<Vec<_>>();
+        let changed_objects = futures::future::try_join_all(changed_objects_futures)
+            .await
+            .map_err(|e| {
+                IndexerError::DynamicFieldError(format!(
+                    "Fail to join futures of df_info with {:?}.",
+                    e
+                ))
+            })?;
+
+        Ok(TransactionObjectChangesToCommit {
             changed_objects,
             deleted_objects: indexed_deleted_objects,
-        }
+        })
     }
 
     fn index_packages(
@@ -688,6 +728,40 @@ where
                     .collect::<Vec<_>>()
             })
             .collect()
+    }
+
+    fn get_package_objects(checkpoint_data: &[CheckpointData]) -> Vec<(IndexedPackage, Object)> {
+        checkpoint_data
+            .iter()
+            .flat_map(|data| {
+                let checkpoint_sequence_number = data.checkpoint_summary.sequence_number;
+                data.output_objects()
+                    .iter()
+                    .filter_map(|o| {
+                        if let sui_types::object::Data::Package(p) = &o.data {
+                            let indexed_pkg = IndexedPackage {
+                                package_id: o.id(),
+                                move_package: p.clone(),
+                                checkpoint_sequence_number,
+                            };
+                            Some((indexed_pkg, (**o).clone()))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    fn pg_blocking_cp(&self) -> Result<PgConnectionPool, IndexerError> {
+        let state_as_any = self.state.as_any();
+        if let Some(pg_state) = state_as_any.downcast_ref::<PgIndexerStoreV2>() {
+            return Ok(pg_state.blocking_cp());
+        }
+        Err(IndexerError::UncategorizedError(anyhow::anyhow!(
+            "Failed to downcast state to PgIndexerStoreV2"
+        )))
     }
 }
 
@@ -725,10 +799,10 @@ pub fn get_latest_objects(
     (latest_objects, discarded_versions)
 }
 
-fn try_create_dynamic_field_info(
+async fn try_create_dynamic_field_info(
     o: &Object,
     written: &HashMap<ObjectID, Object>,
-    resolver: &impl GetModule,
+    package_resolver: Arc<Resolver<impl PackageStore>>,
 ) -> IndexerResult<Option<DynamicFieldInfo>> {
     // Skip if not a move object
     let Some(move_object) = o.data.try_as_move().cloned() else {
@@ -739,8 +813,10 @@ fn try_create_dynamic_field_info(
         return Ok(None);
     }
 
-    let move_struct = move_object
-        .to_move_struct_with_resolver(resolver)
+    let struct_tag: StructTag = move_object.type_().clone().into();
+    let move_type_layout = package_resolver
+        .type_layout(TypeTag::Struct(Box::new(struct_tag)))
+        .await
         .map_err(|e| {
             IndexerError::ResolveMoveStructError(format!(
                 "Failed to create dynamic field info for obj {}:{}, type: {}. Error: {e}",
@@ -749,6 +825,13 @@ fn try_create_dynamic_field_info(
                 move_object.type_(),
             ))
         })?;
+    let move_struct_layout = match move_type_layout {
+        MoveTypeLayout::Struct(s) => Ok(s),
+        _ => Err(IndexerError::ResolveMoveStructError(
+            "MoveTypeLayout is not Struct".to_string(),
+        )),
+    }?;
+    let move_struct = move_object.to_move_struct(&move_struct_layout)?;
 
     let (name_value, type_, object_id) =
         DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;

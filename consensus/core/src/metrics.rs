@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
+    IntCounterVec, IntGauge, Registry,
 };
 use std::sync::Arc;
 
@@ -36,6 +37,8 @@ pub(crate) fn test_metrics() -> Arc<Metrics> {
 pub(crate) struct NodeMetrics {
     pub uptime: Histogram,
     pub quorum_receive_latency: Histogram,
+    #[allow(unused)]
+    pub committed_leaders_total: IntCounterVec,
     pub core_lock_enqueued: IntCounter,
     pub core_lock_dequeued: IntCounter,
     pub leader_timeout_total: IntCounter,
@@ -56,6 +59,13 @@ impl NodeMetrics {
                 "quorum_receive_latency",
                 "The time it took to receive a new round quorum of blocks",
                 registry
+            )
+            .unwrap(),
+            committed_leaders_total: register_int_counter_vec_with_registry!(
+                "committed_leaders_total",
+                "Total number of (direct or indirect) committed leaders per authority",
+                &["authority", "commit_type"],
+                registry,
             )
             .unwrap(),
             core_lock_enqueued: register_int_counter_with_registry!(

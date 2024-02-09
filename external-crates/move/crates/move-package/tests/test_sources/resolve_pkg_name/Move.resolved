@@ -1,8 +1,8 @@
 ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/resolve_pkg_name",
-        root_package: "Root-resolved",
-        root_package_orig_name: "Root-rename",
+        root_package_id: "Root-resolved",
+        root_package_name: "Root-rename",
         package_graph: {
             "Root-resolved": [
                 (
@@ -50,18 +50,21 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/A-rename",
                 ),
+                version: None,
                 resolver: None,
             },
             "B-resolved": Package {
                 kind: Local(
                     "deps_only/B-rename",
                 ),
+                version: None,
                 resolver: None,
             },
             "C-resolved": Package {
                 kind: Local(
                     "deps_only/C-rename",
                 ),
+                version: None,
                 resolver: None,
             },
         },
