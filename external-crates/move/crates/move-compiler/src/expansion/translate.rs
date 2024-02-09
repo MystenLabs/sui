@@ -555,6 +555,10 @@ fn module(
     module_def: P::ModuleDefinition,
 ) {
     assert!(context.address.is_none());
+    if module_def.is_spec_module {
+        context.spec_deprecated(module_def.name.0.loc, /* is_error */ false);
+        return;
+    }
     let (mident, mod_) = module_(context, package_name, module_address, module_def);
     if let Err((mident, old_loc)) = module_map.add(mident, mod_) {
         duplicate_module(context, module_map, mident, old_loc)
@@ -595,13 +599,10 @@ fn module_(
         attributes,
         loc,
         address,
-        is_spec_module,
+        is_spec_module: _,
         name,
         members,
     } = mdef;
-    if is_spec_module {
-        context.spec_deprecated(name.0.loc, /* is_error */ true)
-    }
     let attributes = flatten_attributes(context, AttributePosition::Module, attributes);
     let mut warning_filter = module_warning_filter(context, &attributes);
     let config = context.env().package_config(package_name);
