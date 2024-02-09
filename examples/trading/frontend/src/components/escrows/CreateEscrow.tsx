@@ -101,6 +101,12 @@ export function CreateEscrow({ locked }: { locked: LockedObject }) {
           </Select.Content>
         </Select.Root>
       </div>
+      {objectId && (
+        <div>
+          <label className="text-xs">You'll be offering:</label>
+          <ObjectLink id={objectId} />
+        </div>
+      )}
       <div className="text-right">
         <Button
           className="cursor-pointer"

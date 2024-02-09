@@ -12,7 +12,7 @@ export function ObjectLink({
   isAddress,
 }: {
   id: string;
-  isAddress: boolean;
+  isAddress?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const { network } = useSuiClientContext();
