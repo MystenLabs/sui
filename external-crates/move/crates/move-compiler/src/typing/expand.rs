@@ -4,9 +4,10 @@
 
 use super::core::{self, Context};
 use crate::{
-    diag,
+    debug_display, diag,
     editions::FeatureGate,
     expansion::ast::Value_,
+    ice,
     naming::ast::{BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_},
     parser::ast::Ability_,
     typing::ast as T,
@@ -57,7 +58,14 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
             let ty_tvar = sp(ty.loc, Var(*tvar));
             let replacement = core::unfold_type(&context.subst, ty_tvar);
             let replacement = match replacement {
-                sp!(_, Var(_)) => panic!("ICE unfold_type_base failed to expand"),
+                sp!(loc, Var(_)) => {
+                    let diag = ice!((
+                        ty.loc,
+                        "ICE unfold_type_base failed to expand type inf. var"
+                    ));
+                    context.env.add_diag(diag);
+                    sp(loc, UnresolvedError)
+                }
                 sp!(loc, Anything) => {
                     let msg = "Could not infer this type. Try adding an annotation";
                     context
@@ -76,7 +84,14 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
             type_(context, ty);
         }
         Apply(Some(_), sp!(_, TypeName_::Builtin(_)), tys) => types(context, tys),
-        Apply(Some(_), _, _) => panic!("ICE expanding pre expanded type"),
+        aty @ Apply(Some(_), _, _) => {
+            let diag = ice!((
+                ty.loc,
+                format!("ICE expanding pre-expanded type {}", debug_display!(aty))
+            ));
+            context.env.add_diag(diag);
+            *ty = sp(ty.loc, UnresolvedError)
+        }
         Apply(None, _, _) => {
             let abilities = core::infer_abilities(&context.modules, &context.subst, ty.clone());
             match &mut ty.value {
@@ -84,7 +99,11 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                     *abilities_opt = Some(abilities);
                     types(context, tys);
                 }
-                _ => panic!("ICE impossible. tapply switched to nontapply"),
+                _ => {
+                    let diag = ice!((ty.loc, "ICE type-apply switched to non-apply"));
+                    context.env.add_diag(diag);
+                    *ty = sp(ty.loc, UnresolvedError)
+                }
             }
         }
         Fun(args, result) => {
@@ -181,7 +200,16 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             use BuiltinTypeName_ as BT;
             let bt = match e.ty.value.builtin_name() {
                 Some(sp!(_, bt)) if bt.is_numeric() => bt,
-                _ => panic!("ICE inferred num failed {:?}", &e.ty.value),
+                _ => {
+                    let diag = ice!((
+                        e.exp.loc,
+                        format!("ICE failed to infer number type for {}", debug_display!(e))
+                    ));
+                    context.env.add_diag(diag);
+                    let _ = std::mem::replace(&mut e.ty.value, Type_::UnresolvedError);
+                    let _ = std::mem::replace(&mut e.exp.value, E::UnresolvedError);
+                    return;
+                }
             };
             let v = *v;
             let u8_max = U256::from(std::u8::MAX);

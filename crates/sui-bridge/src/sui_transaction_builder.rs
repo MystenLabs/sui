@@ -99,6 +99,18 @@ pub fn build_transaction(
             // TODO: handle this case
             unimplemented!()
         }
+        BridgeAction::LimitUpdateAction(_) => {
+            // TODO: handle this case
+            unimplemented!()
+        }
+        BridgeAction::AssetPriceUpdateAction(_) => {
+            // TODO: handle this case
+            unimplemented!()
+        }
+        BridgeAction::EvmContractUpgradeAction(_) => {
+            // TODO: handle this case
+            unimplemented!()
+        }
     }
 }
 

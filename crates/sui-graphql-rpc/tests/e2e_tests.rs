@@ -32,6 +32,10 @@ mod tests {
         let cluster =
             sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
 
+        cluster
+            .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
+            .await;
+
         let query = r#"
             {
                 chainIdentifier
@@ -86,6 +90,9 @@ mod tests {
             None,
         )
         .await;
+        cluster
+            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
+            .await;
 
         let query = r#"
             {
@@ -118,6 +125,9 @@ mod tests {
             None,
         )
         .await;
+        cluster
+            .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
+            .await;
 
         let query = r#"
             {
@@ -160,6 +170,9 @@ mod tests {
             None,
         )
         .await;
+        cluster
+            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
+            .await;
 
         let query = r#"{obj1: object(address: $framework_addr) {address}
             obj2: object(address: $deepbook_addr) {address}}"#;

@@ -6618,18 +6618,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-bytecode-verifier-next-vm"
-version = "0.1.0"
-dependencies = [
- "move-abstract-stack",
- "move-binary-format",
- "move-borrow-graph",
- "move-core-types",
- "move-vm-config",
- "petgraph 0.5.1",
-]
-
-[[package]]
 name = "move-bytecode-verifier-v0"
 version = "0.1.0"
 dependencies = [
@@ -7044,27 +7032,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-stdlib-next-vm"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "hex",
- "log",
- "move-binary-format",
- "move-command-line-common",
- "move-core-types",
- "move-docgen",
- "move-errmapgen",
- "move-prover",
- "move-vm-runtime-next-vm",
- "move-vm-types",
- "sha2 0.9.9",
- "sha3 0.9.1",
- "smallvec",
- "walkdir",
-]
-
-[[package]]
 name = "move-stdlib-v0"
 version = "0.1.1"
 dependencies = [
@@ -7200,25 +7167,6 @@ dependencies = [
  "fail",
  "move-binary-format",
  "move-bytecode-verifier",
- "move-core-types",
- "move-vm-config",
- "move-vm-profiler",
- "move-vm-types",
- "once_cell",
- "parking_lot 0.11.2",
- "sha3 0.9.1",
- "smallvec",
- "tracing",
-]
-
-[[package]]
-name = "move-vm-runtime-next-vm"
-version = "0.1.0"
-dependencies = [
- "better_any",
- "fail",
- "move-binary-format",
- "move-bytecode-verifier-next-vm",
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
@@ -7452,6 +7400,7 @@ dependencies = [
  "futures",
  "http",
  "multiaddr",
+ "pin-project-lite",
  "serde",
  "snap",
  "tokio",
@@ -9059,9 +9008,9 @@ dependencies = [
 
 [[package]]
 name = "pin-project-lite"
-version = "0.2.9"
+version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0a7ae3ac2f1173085d398531c705756c94a4c56843785df85a60c1a0afac116"
+checksum = "8afb450f006bf6385ca15ef45d71d2288452bc3683ce2e2cacc0d18e4be60b58"
 
 [[package]]
 name = "pin-utils"
@@ -11629,33 +11578,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-adapter-next-vm"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcs",
- "leb128",
- "move-binary-format",
- "move-bytecode-utils",
- "move-bytecode-verifier-next-vm",
- "move-core-types",
- "move-package",
- "move-vm-config",
- "move-vm-profiler",
- "move-vm-runtime-next-vm",
- "move-vm-types",
- "parking_lot 0.12.1",
- "serde",
- "sui-macros",
- "sui-move-natives-next-vm",
- "sui-protocol-config",
- "sui-types",
- "sui-verifier-next-vm",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
 name = "sui-adapter-transactional-tests"
 version = "0.1.0"
 dependencies = [
@@ -12186,6 +12108,32 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.8.26",
  "sui-archival",
+ "sui-data-ingestion-core",
+ "sui-storage",
+ "sui-types",
+ "telemetry-subscribers",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-data-ingestion-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "backoff",
+ "futures",
+ "mysten-metrics",
+ "notify",
+ "object_store 0.7.0",
+ "prometheus",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",
@@ -12264,27 +12212,22 @@ dependencies = [
  "cargo_metadata",
  "move-binary-format",
  "move-bytecode-verifier",
- "move-bytecode-verifier-next-vm",
  "move-bytecode-verifier-v0",
  "move-bytecode-verifier-v1",
  "move-vm-config",
  "move-vm-runtime",
- "move-vm-runtime-next-vm",
  "move-vm-runtime-v0",
  "move-vm-runtime-v1",
  "petgraph 0.5.1",
  "sui-adapter-latest",
- "sui-adapter-next-vm",
  "sui-adapter-v0",
  "sui-adapter-v1",
  "sui-move-natives-latest",
- "sui-move-natives-next-vm",
  "sui-move-natives-v0",
  "sui-move-natives-v1",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
- "sui-verifier-next-vm",
  "sui-verifier-v0",
  "sui-verifier-v1",
  "workspace-hack",
@@ -12468,6 +12411,7 @@ dependencies = [
  "move-disassembler",
  "move-ir-types",
  "mysten-metrics",
+ "mysten-network",
  "once_cell",
  "prometheus",
  "rand 0.8.5",
@@ -12566,6 +12510,7 @@ dependencies = [
  "sui-keys",
  "sui-move-build",
  "sui-open-rpc",
+ "sui-package-resolver",
  "sui-protocol-config",
  "sui-rest-api",
  "sui-sdk",
@@ -12896,27 +12841,6 @@ dependencies = [
  "move-core-types",
  "move-stdlib",
  "move-vm-runtime",
- "move-vm-types",
- "smallvec",
- "sui-protocol-config",
- "sui-types",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
-name = "sui-move-natives-next-vm"
-version = "0.1.0"
-dependencies = [
- "bcs",
- "better_any",
- "fastcrypto",
- "fastcrypto-zkp",
- "linked-hash-map",
- "move-binary-format",
- "move-core-types",
- "move-stdlib-next-vm",
- "move-vm-runtime-next-vm",
  "move-vm-types",
  "smallvec",
  "sui-protocol-config",
@@ -13981,20 +13905,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-verifier-next-vm"
-version = "0.1.0"
-dependencies = [
- "move-abstract-stack",
- "move-binary-format",
- "move-bytecode-utils",
- "move-bytecode-verifier-next-vm",
- "move-core-types",
- "move-vm-config",
- "sui-types",
- "workspace-hack",
-]
-
-[[package]]
 name = "sui-verifier-transactional-tests"
 version = "0.1.0"
 dependencies = [
@@ -14057,7 +13967,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
- "sui-data-ingestion",
+ "sui-data-ingestion-core",
  "sui-json-rpc",
  "sui-storage",
  "sui-types",
@@ -16496,7 +16406,6 @@ dependencies = [
  "move-bytecode-source-map",
  "move-bytecode-utils",
  "move-bytecode-verifier",
- "move-bytecode-verifier-next-vm",
  "move-bytecode-verifier-v0",
  "move-bytecode-verifier-v1",
  "move-bytecode-viewer",
@@ -16520,7 +16429,6 @@ dependencies = [
  "move-stackless-bytecode",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
- "move-stdlib-next-vm",
  "move-stdlib-v0",
  "move-stdlib-v1",
  "move-symbol-pool",

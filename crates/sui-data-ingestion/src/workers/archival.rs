@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::Worker;
 use anyhow::Result;
 use async_trait::async_trait;
 use byteorder::BigEndian;
@@ -17,6 +16,7 @@ use sui_archival::{
     create_file_metadata_from_bytes, finalize_manifest, read_manifest_from_bytes, FileType,
     Manifest, CHECKPOINT_FILE_MAGIC, SUMMARY_FILE_MAGIC,
 };
+use sui_data_ingestion_core::Worker;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::{compress, FileCompression, StorageFormat};
 use sui_types::base_types::{EpochId, ExecutionData};
@@ -162,23 +162,25 @@ impl Worker for ArchivalWorker {
                 .map(|t| ExecutionData::new(t.transaction.clone(), t.effects.clone())),
         );
         let contents_blob = Blob::encode(&full_checkpoint_contents, BlobEncoding::Bcs)?;
+        let blob_size = contents_blob.size();
+        let summary_blob = Blob::encode(&checkpoint.checkpoint_summary, BlobEncoding::Bcs)?;
+        state.buffer.extend(contents_blob.data);
+        state.summary_buffer.extend(summary_blob.data);
+        state.checkpoint_range.end += 1;
+
         if !state.buffer.is_empty()
-            && (((state.buffer.len() + contents_blob.size()) > self.commit_file_size)
+            && (((state.buffer.len() + blob_size) > self.commit_file_size)
                 || state.epoch != epoch
                 || state.last_commit_instant.elapsed() > self.commit_duration)
         {
             self.upload(&state).await?;
             state.epoch = epoch;
-            state.checkpoint_range = sequence_number..sequence_number;
+            state.checkpoint_range = sequence_number + 1..sequence_number + 1;
             state.buffer = vec![];
             state.summary_buffer = vec![];
             state.last_commit_instant = Instant::now();
             state.should_update_progress = true;
         }
-        let summary_blob = Blob::encode(&checkpoint.checkpoint_summary, BlobEncoding::Bcs)?;
-        state.buffer.extend(contents_blob.data);
-        state.summary_buffer.extend(summary_blob.data);
-        state.checkpoint_range.end += 1;
         Ok(())
     }
 

@@ -55,7 +55,7 @@ pub(crate) struct BaseCommitter {
     /// The consensus leader schedule to be used to resolve the leader for a
     /// given round.
     leader_schedule: LeaderSchedule,
-    /// Block store representing the Dag state
+    /// In memory block store representing the dag state
     dag_state: Arc<RwLock<DagState>>,
     /// The options used by this committer
     options: BaseCommitterOptions,

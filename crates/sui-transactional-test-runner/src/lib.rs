@@ -276,10 +276,10 @@ impl ReadStore for ValidatorWithFullnode {
     fn get_transaction(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> sui_types::storage::error::Result<Option<sui_types::transaction::VerifiedTransaction>>
+    ) -> sui_types::storage::error::Result<Option<Arc<sui_types::transaction::VerifiedTransaction>>>
     {
         self.validator
-            .database
+            .get_cache_reader()
             .get_transaction_block(tx_digest)
             .map_err(sui_types::storage::error::Error::custom)
     }
@@ -289,7 +289,7 @@ impl ReadStore for ValidatorWithFullnode {
         tx_digest: &TransactionDigest,
     ) -> sui_types::storage::error::Result<Option<TransactionEffects>> {
         self.validator
-            .database
+            .get_cache_reader()
             .get_executed_effects(tx_digest)
             .map_err(sui_types::storage::error::Error::custom)
     }
@@ -299,7 +299,7 @@ impl ReadStore for ValidatorWithFullnode {
         event_digest: &TransactionEventsDigest,
     ) -> sui_types::storage::error::Result<Option<TransactionEvents>> {
         self.validator
-            .database
+            .get_cache_reader()
             .get_events(event_digest)
             .map_err(sui_types::storage::error::Error::custom)
     }
@@ -328,7 +328,7 @@ impl ObjectStore for ValidatorWithFullnode {
         &self,
         object_id: &ObjectID,
     ) -> Result<Option<Object>, sui_types::storage::error::Error> {
-        self.validator.database.get_object(object_id)
+        self.validator.get_object_store().get_object(object_id)
     }
 
     fn get_object_by_key(
@@ -337,7 +337,7 @@ impl ObjectStore for ValidatorWithFullnode {
         version: VersionNumber,
     ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         self.validator
-            .database
+            .get_object_store()
             .get_object_by_key(object_id, version)
     }
 }

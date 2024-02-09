@@ -1,0 +1,99 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query getCurrentEpoch {
+	epoch {
+		epochId
+		validatorSet {
+			activeValidators {
+				pageInfo {
+					hasNextPage
+					endCursor
+				}
+				nodes {
+					...RPC_VALIDATOR_FIELDS
+				}
+			}
+		}
+		# epochTotalTransactions
+		firstCheckpoint: checkpoints(first: 1) {
+			nodes {
+				sequenceNumber
+			}
+		}
+		startTimestamp
+		endTimestamp
+		referenceGasPrice
+	}
+}
+
+query paginateEpochValidators($id: Int!, $after: String) {
+	epoch(id: $id) {
+		validatorSet {
+			activeValidators(after: $after) {
+				pageInfo {
+					hasNextPage
+					endCursor
+				}
+				nodes {
+					...RPC_VALIDATOR_FIELDS
+				}
+			}
+		}
+	}
+}
+
+fragment RPC_VALIDATOR_FIELDS on Validator {
+	atRisk
+	commissionRate
+	exchangeRatesSize
+	exchangeRates {
+		contents {
+			json
+		}
+		address
+	}
+	description
+	gasPrice
+	imageUrl
+	name
+	credentials {
+		...RPC_CREDENTIAL_FIELDS
+	}
+	nextEpochCommissionRate
+	nextEpochGasPrice
+	nextEpochCredentials {
+		...RPC_CREDENTIAL_FIELDS
+	}
+	nextEpochStake
+	nextEpochCommissionRate
+	operationCap {
+		address
+	}
+	pendingPoolTokenWithdraw
+	pendingStake
+	pendingTotalSuiWithdraw
+	poolTokenBalance
+	projectUrl
+	rewardsPool
+	stakingPool {
+		address
+	}
+	stakingPoolActivationEpoch
+	stakingPoolSuiBalance
+	address {
+		address
+	}
+	votingPower
+}
+
+fragment RPC_CREDENTIAL_FIELDS on ValidatorCredentials {
+	netAddress
+	networkPubKey
+	p2PAddress
+	primaryAddress
+	workerPubKey
+	workerAddress
+	proofOfPossession
+	protocolPubKey
+}

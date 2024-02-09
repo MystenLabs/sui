@@ -5,12 +5,11 @@ use anyhow::anyhow;
 use arc_swap::Guard;
 use async_trait::async_trait;
 use move_core_types::language_storage::TypeTag;
-use mysten_metrics::spawn_monitored_task;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::AuthorityState;
-use sui_core::in_mem_execution_cache::ExecutionCacheRead;
+use sui_core::execution_cache::ExecutionCacheRead;
 use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc_types::{
     Coin as SuiCoin, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
@@ -88,11 +87,11 @@ pub trait StateRead: Send + Sync {
         limit: usize,
     ) -> StateReadResult<Vec<(ObjectID, DynamicFieldInfo)>>;
 
-    fn get_cache_reader(&self) -> Arc<dyn ExecutionCacheRead>;
+    fn get_cache_reader(&self) -> &Arc<dyn ExecutionCacheRead>;
 
-    fn get_object_store(&self) -> Arc<dyn ObjectStore>;
+    fn get_object_store(&self) -> &Arc<dyn ObjectStore + Send + Sync>;
 
-    fn get_backing_package_store(&self) -> Arc<dyn BackingPackageStore>;
+    fn get_backing_package_store(&self) -> &Arc<dyn BackingPackageStore + Send + Sync>;
 
     fn get_owner_objects(
         &self,
@@ -307,15 +306,15 @@ impl StateRead for AuthorityState {
         Ok(self.get_dynamic_fields(owner, cursor, limit)?)
     }
 
-    fn get_cache_reader(&self) -> Arc<dyn ExecutionCacheRead> {
+    fn get_cache_reader(&self) -> &Arc<dyn ExecutionCacheRead> {
         self.get_cache_reader()
     }
 
-    fn get_object_store(&self) -> Arc<dyn ObjectStore> {
+    fn get_object_store(&self) -> &Arc<dyn ObjectStore + Send + Sync> {
         self.get_object_store()
     }
 
-    fn get_backing_package_store(&self) -> Arc<dyn BackingPackageStore> {
+    fn get_backing_package_store(&self) -> &Arc<dyn BackingPackageStore + Send + Sync> {
         self.get_backing_package_store()
     }
 
@@ -428,7 +427,9 @@ impl StateRead for AuthorityState {
             .await?)
     }
     fn get_system_state(&self) -> StateReadResult<SuiSystemState> {
-        Ok(self.database.get_sui_system_state_object_unsafe()?)
+        Ok(self
+            .get_cache_reader()
+            .get_sui_system_state_object_unsafe()?)
     }
     fn get_or_latest_committee(&self, epoch: Option<BigInt<u64>>) -> StateReadResult<Committee> {
         Ok(self
@@ -520,7 +521,7 @@ impl StateRead for AuthorityState {
         digests: &[TransactionDigest],
     ) -> StateReadResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>> {
         Ok(self
-            .database
+            .get_checkpoint_cache()
             .deprecated_multi_get_transaction_checkpoint(digests)?)
     }
 
@@ -529,7 +530,7 @@ impl StateRead for AuthorityState {
         digest: &TransactionDigest,
     ) -> StateReadResult<Option<(EpochId, CheckpointSequenceNumber)>> {
         Ok(self
-            .database
+            .get_checkpoint_cache()
             .deprecated_get_transaction_checkpoint(digest)?)
     }
 
@@ -588,12 +589,9 @@ impl<S: ?Sized + StateRead> ObjectProvider for Arc<S> {
         id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<Option<Object>, Self::Error> {
-        let cache = self.get_cache_reader();
-        let id = *id;
-        let version = *version;
-        spawn_monitored_task!(async move { cache.find_object_lt_or_eq_version(id, version) })
-            .await
-            .map_err(StateReadError::from)
+        Ok(self
+            .get_cache_reader()
+            .find_object_lt_or_eq_version(*id, *version)?)
     }
 }
 
@@ -623,12 +621,10 @@ impl<S: ?Sized + StateRead> ObjectProvider for (Arc<S>, Arc<TransactionKeyValueS
         id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<Option<Object>, Self::Error> {
-        let cache = self.0.get_cache_reader();
-        let id = *id;
-        let version = *version;
-        spawn_monitored_task!(async move { cache.find_object_lt_or_eq_version(id, version) })
-            .await
-            .map_err(StateReadError::from)
+        Ok(self
+            .0
+            .get_cache_reader()
+            .find_object_lt_or_eq_version(*id, *version)?)
     }
 }
 

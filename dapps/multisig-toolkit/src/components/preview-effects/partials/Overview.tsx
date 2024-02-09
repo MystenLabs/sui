@@ -8,13 +8,11 @@ import { ReactNode } from 'react';
 import { ObjectLink } from '../ObjectLink';
 import { onChainAmountToFloat } from '../utils';
 
-const calculateGas = (gas: GasCostSummary, gasPrice: string): string => {
+const calculateGas = (gas: GasCostSummary): string => {
 	return (
 		onChainAmountToFloat(
 			(
-				BigInt(gasPrice) +
 				BigInt(gas.computationCost) +
-				BigInt(gas.nonRefundableStorageFee) +
 				BigInt(gas.storageCost) -
 				BigInt(gas.storageRebate)
 			).toString(),
@@ -44,7 +42,7 @@ export function Overview({ output }: { output: DryRunTransactionBlockResponse })
 			</span>
 		),
 		epoch: output.effects.executedEpoch,
-		gas: calculateGas(output.effects.gasUsed, output.input.gasData.price) + ' SUI',
+		gas: calculateGas(output.effects.gasUsed) + ' SUI',
 	};
 
 	return (

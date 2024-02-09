@@ -463,7 +463,6 @@ move-borrow-graph = { path = "../../external-crates/move/crates/move-borrow-grap
 move-bytecode-source-map = { path = "../../external-crates/move/crates/move-bytecode-source-map" }
 move-bytecode-utils = { path = "../../external-crates/move/crates/move-bytecode-utils", default-features = false }
 move-bytecode-verifier = { path = "../../external-crates/move/crates/move-bytecode-verifier" }
-move-bytecode-verifier-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-bytecode-verifier" }
 move-bytecode-verifier-v0 = { path = "../../external-crates/move/move-execution/v0/move-bytecode-verifier" }
 move-bytecode-verifier-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-bytecode-verifier" }
 move-bytecode-viewer = { path = "../../external-crates/move/crates/move-bytecode-viewer" }
@@ -486,7 +485,6 @@ move-read-write-set-types = { path = "../../external-crates/move/crates/move-rea
 move-stackless-bytecode = { path = "../../external-crates/move/crates/move-stackless-bytecode", default-features = false }
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/crates/move-stackless-bytecode-interpreter", default-features = false }
 move-stdlib = { path = "../../external-crates/move/crates/move-stdlib", features = ["testing"] }
-move-stdlib-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-stdlib" }
 move-stdlib-v0 = { path = "../../external-crates/move/move-execution/v0/move-stdlib", default-features = false }
 move-stdlib-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-stdlib" }
 move-symbol-pool = { path = "../../external-crates/move/crates/move-symbol-pool" }
@@ -1359,7 +1357,6 @@ move-borrow-graph = { path = "../../external-crates/move/crates/move-borrow-grap
 move-bytecode-source-map = { path = "../../external-crates/move/crates/move-bytecode-source-map" }
 move-bytecode-utils = { path = "../../external-crates/move/crates/move-bytecode-utils", default-features = false }
 move-bytecode-verifier = { path = "../../external-crates/move/crates/move-bytecode-verifier" }
-move-bytecode-verifier-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-bytecode-verifier" }
 move-bytecode-verifier-v0 = { path = "../../external-crates/move/move-execution/v0/move-bytecode-verifier" }
 move-bytecode-verifier-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-bytecode-verifier" }
 move-bytecode-viewer = { path = "../../external-crates/move/crates/move-bytecode-viewer" }
@@ -1383,7 +1380,6 @@ move-read-write-set-types = { path = "../../external-crates/move/crates/move-rea
 move-stackless-bytecode = { path = "../../external-crates/move/crates/move-stackless-bytecode", default-features = false }
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/crates/move-stackless-bytecode-interpreter", default-features = false }
 move-stdlib = { path = "../../external-crates/move/crates/move-stdlib", features = ["testing"] }
-move-stdlib-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-stdlib" }
 move-stdlib-v0 = { path = "../../external-crates/move/move-execution/v0/move-stdlib", default-features = false }
 move-stdlib-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-stdlib" }
 move-symbol-pool = { path = "../../external-crates/move/crates/move-symbol-pool" }

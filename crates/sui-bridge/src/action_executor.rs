@@ -192,13 +192,13 @@ where
     // Checks if the action is already processed on chain.
     // If yes, skip this action and remove it from the pending log.
     // Returns true if the action is already processed.
-    async fn handle_already_processed_action_maybe(
+    async fn handle_already_processed_token_transfer_action_maybe(
         sui_client: &Arc<SuiClient<C>>,
         action: &BridgeAction,
         store: &Arc<BridgeOrchestratorTables>,
     ) -> bool {
         let status = sui_client
-            .get_action_onchain_status_until_success(action)
+            .get_token_transfer_action_onchain_status_until_success(action)
             .await;
         match status {
             BridgeActionStatus::Approved | BridgeActionStatus::Claimed => {
@@ -230,8 +230,17 @@ where
         >,
     ) {
         let BridgeActionExecutionWrapper(action, attempt_times) = action;
+
+        // Only token transfer action should reach here
+        match &action {
+            BridgeAction::SuiToEthBridgeAction(_) | BridgeAction::EthToSuiBridgeAction(_) => (),
+            _ => unreachable!("Non token transfer action should not reach here"),
+        };
+
         // If the action is already processed, skip it.
-        if Self::handle_already_processed_action_maybe(&sui_client, &action, &store).await {
+        if Self::handle_already_processed_token_transfer_action_maybe(&sui_client, &action, &store)
+            .await
+        {
             return;
         }
 
@@ -288,7 +297,13 @@ where
 
             let action = certificate.data();
             // If the action is already processed, skip it.
-            if Self::handle_already_processed_action_maybe(&sui_client, action, &store).await {
+            if Self::handle_already_processed_token_transfer_action_maybe(
+                &sui_client,
+                action,
+                &store,
+            )
+            .await
+            {
                 return;
             }
 

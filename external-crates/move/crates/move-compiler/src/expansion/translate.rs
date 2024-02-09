@@ -14,6 +14,7 @@ use crate::{
         byte_string, hex_string, legacy_aliases,
         translate::known_attributes::KnownAttribute,
     },
+    ice,
     parser::ast::{
         self as P, Ability, BlockLabel, ConstantName, Field, FieldBindings, FunctionName,
         ModuleName, Mutability, StructName, Var, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
@@ -1220,11 +1221,16 @@ impl PathExpander for LegacyPathExpander {
                 }
             }
             (Access::Term, PN::One(n)) => EN::Name(n),
-            (Access::Module, PN::One(_n)) => panic!("ICE invalid resolution"),
+            (Access::Module, PN::One(_n)) => {
+                context.env.add_diag(ice!((
+                    loc,
+                    "ICE path resolution produced an impossible path for a module"
+                )));
+                return None;
+            }
             (_, PN::Two(sp!(nloc, LN::AnonymousAddress(_)), _)) => {
-                context
-                    .env
-                    .add_diag(unexpected_address_module_error(loc, nloc, access));
+                let diag = unexpected_address_module_error(loc, nloc, access);
+                context.env.add_diag(diag);
                 return None;
             }
 
@@ -1308,7 +1314,15 @@ fn unexpected_address_module_error(loc: Loc, nloc: Loc, access: Access) -> Diagn
     let case = match access {
         Access::Type | Access::ApplyNamed | Access::ApplyPositional => "type",
         Access::Term => "expression",
-        Access::Module => panic!("ICE expected a module name and got one, but hit error"),
+        Access::Module => {
+            return ice!(
+                (
+                    loc,
+                    "ICE expected a module name and got one, but tried to report an error"
+                ),
+                (nloc, "Name location")
+            )
+        }
     };
     let unexpected_msg = format!(
         "Unexpected module identifier. A module identifier is not a valid {}",
@@ -1409,7 +1423,13 @@ impl Move2024PathExpander {
             Some(AliasEntry::Address(address)) => {
                 Address(name.loc, make_address(context, name, name.loc, address))
             }
-            Some(AliasEntry::TypeParam) => panic!("ICE alias map lookup error"),
+            Some(AliasEntry::TypeParam) => {
+                context.env.add_diag(ice!((
+                    name.loc,
+                    "ICE alias map misresolved name as type param"
+                )));
+                UnresolvedName(name.loc, name)
+            }
             None => UnresolvedName(name.loc, name),
         }
     }
@@ -1435,7 +1455,12 @@ impl Move2024PathExpander {
                     InvalidKind("a module or address".to_string()),
                 ),
                 result @ ResolutionFailure(_, _) => result,
-                UnresolvedName(_, _) => panic!("ICE failed in access chain expansion"),
+                result @ UnresolvedName(_, _) => {
+                    context
+                        .env
+                        .add_diag(ice!((loc, "ICE access chain expansion failed")));
+                    result
+                }
             },
             PN::Three(sp!(ident_loc, (root_name, next_name)), last_name) => {
                 match self.resolve_root(context, root_name) {
@@ -1448,7 +1473,12 @@ impl Move2024PathExpander {
                         ResolutionFailure(Box::new(result), InvalidKind("an address".to_string()))
                     }
                     result @ ResolutionFailure(_, _) => result,
-                    UnresolvedName(_, _) => panic!("ICE failed in access chain expansion"),
+                    result @ UnresolvedName(_, _) => {
+                        context
+                            .env
+                            .add_diag(ice!((loc, "ICE access chain expansion failed")));
+                        result
+                    }
                 }
             }
         }
@@ -1644,7 +1674,11 @@ impl PathExpander for Move2024PathExpander {
                     }
                 },
                 Access::Module => {
-                    panic!("ICE module accesses can never resolve to a module member")
+                    context.env.add_diag(ice!((
+                        loc,
+                        "ICE module access should never resolve to a module member"
+                    )));
+                    return None;
                 }
             };
             Some(sp(loc, module_access))
@@ -1753,7 +1787,10 @@ fn access_chain_resolution_error(result: AccessChainResult) -> Diagnostic {
         };
         diag!(NameResolution::NamePositionMismatch, (loc, msg))
     } else {
-        panic!("ICE miscalled resolution error handler")
+        ice!((
+            result.loc(),
+            "ICE compiler miscalled access chain resolution error handler"
+        ))
     }
 }
 

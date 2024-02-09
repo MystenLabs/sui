@@ -11,7 +11,7 @@ use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
 use crate::consensus_types::committee_api::CommitteeAPI;
 use crate::consensus_types::consensus_output_api::ConsensusOutputAPI;
 use crate::consensus_types::AuthorityIndex;
-use crate::in_mem_execution_cache::ExecutionCacheRead;
+use crate::execution_cache::ExecutionCacheRead;
 use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
 use arc_swap::ArcSwap;

@@ -7,14 +7,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diag,
+    debug_display, debug_display_verbose, diag,
     editions::{FeatureGate, Flavor},
     expansion::ast::{self as E, Fields, ModuleIdent},
     hlir::ast::{self as H, Block, BlockLabel, MoveOpAnnotation},
     hlir::detect_dead_code::program as detect_dead_code_analysis,
+    ice,
     naming::ast as N,
     parser::ast::{Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName},
-    shared::{ast_debug::AstDebug, process_binops, unique_map::UniqueMap, *},
+    shared::{process_binops, unique_map::UniqueMap, *},
     sui_mode::ID_FIELD_NAME,
     typing::ast as T,
     FullyCompiledProgram,
@@ -529,43 +530,52 @@ fn type_name(_context: &Context, sp!(loc, ntn_): N::TypeName) -> H::TypeName {
 }
 
 fn base_types<R: std::iter::FromIterator<H::BaseType>>(
-    context: &Context,
+    context: &mut Context,
     tys: impl IntoIterator<Item = N::Type>,
 ) -> R {
     tys.into_iter().map(|t| base_type(context, t)).collect()
 }
 
-fn base_type(context: &Context, sp!(loc, nb_): N::Type) -> H::BaseType {
+fn base_type(context: &mut Context, sp!(loc, nb_): N::Type) -> H::BaseType {
     use H::BaseType_ as HB;
     use N::Type_ as NT;
     let b_ = match nb_ {
-        NT::Var(_) => panic!(
-            "ICE tvar not expanded: {}:{}-{}",
-            loc.file_hash(),
-            loc.start(),
-            loc.end()
-        ),
-        NT::Apply(None, n, tys) => {
-            NT::Apply(None, n, tys).print_verbose();
-            panic!("ICE kind not expanded: {:#?}", loc)
+        NT::Var(_) => {
+            context.env.add_diag(ice!((
+                loc,
+                format!(
+                    "ICE type inf. var not expanded: {}",
+                    debug_display_verbose!(nb_)
+                )
+            )));
+            return error_base_type(loc);
+        }
+        NT::Apply(None, _, _) => {
+            context.env.add_diag(ice!((
+                loc,
+                format!("ICE kind not expanded: {}", debug_display_verbose!(nb_))
+            )));
+            return error_base_type(loc);
         }
         NT::Apply(Some(k), n, nbs) => HB::Apply(k, type_name(context, n), base_types(context, nbs)),
         NT::Param(tp) => HB::Param(tp),
         NT::UnresolvedError => HB::UnresolvedError,
         NT::Anything => HB::Unreachable,
         NT::Ref(_, _) | NT::Unit | NT::Fun(_, _) => {
-            panic!(
-                "ICE type constraints failed {}:{}-{}",
-                loc.file_hash(),
-                loc.start(),
-                loc.end()
-            )
+            context.env.add_diag(ice!((
+                loc,
+                format!(
+                    "ICE base type constraint failed: {}",
+                    debug_display_verbose!(nb_)
+                )
+            )));
+            return error_base_type(loc);
         }
     };
     sp(loc, b_)
 }
 
-fn expected_types(context: &Context, loc: Loc, nss: Vec<Option<N::Type>>) -> H::Type {
+fn expected_types(context: &mut Context, loc: Loc, nss: Vec<Option<N::Type>>) -> H::Type {
     let any = || {
         sp(
             loc,
@@ -579,11 +589,11 @@ fn expected_types(context: &Context, loc: Loc, nss: Vec<Option<N::Type>>) -> H::
     H::Type_::from_vec(loc, ss)
 }
 
-fn single_types(context: &Context, ss: Vec<N::Type>) -> Vec<H::SingleType> {
+fn single_types(context: &mut Context, ss: Vec<N::Type>) -> Vec<H::SingleType> {
     ss.into_iter().map(|s| single_type(context, s)).collect()
 }
 
-fn single_type(context: &Context, sp!(loc, ty_): N::Type) -> H::SingleType {
+fn single_type(context: &mut Context, sp!(loc, ty_): N::Type) -> H::SingleType {
     use H::SingleType_ as HS;
     use N::Type_ as NT;
     let s_ = match ty_ {
@@ -593,19 +603,30 @@ fn single_type(context: &Context, sp!(loc, ty_): N::Type) -> H::SingleType {
     sp(loc, s_)
 }
 
-fn type_(context: &Context, sp!(loc, ty_): N::Type) -> H::Type {
+fn type_(context: &mut Context, sp!(loc, ty_): N::Type) -> H::Type {
     use H::Type_ as HT;
     use N::{TypeName_ as TN, Type_ as NT};
     let t_ = match ty_ {
         NT::Unit => HT::Unit,
-        NT::Apply(None, n, tys) => {
-            NT::Apply(None, n, tys).print_verbose();
-            panic!("ICE kind not expanded: {:#?}", loc)
+        NT::Apply(None, _, _) => {
+            context.env.add_diag(ice!((
+                loc,
+                format!("ICE kind not expanded: {}", debug_display_verbose!(ty_))
+            )));
+            return error_type(loc);
         }
         NT::Apply(Some(_), sp!(_, TN::Multiple(_)), ss) => HT::Multiple(single_types(context, ss)),
         _ => HT::Single(single_type(context, sp(loc, ty_))),
     };
     sp(loc, t_)
+}
+
+fn error_base_type(loc: Loc) -> H::BaseType {
+    sp(loc, H::BaseType_::UnresolvedError)
+}
+
+fn error_type(loc: Loc) -> H::Type {
+    H::Type_::base(error_base_type(loc))
 }
 
 //**************************************************************************************************
@@ -780,7 +801,12 @@ fn tail(
         | E::Give(_, _)
         | E::Continue(_)
         | E::Assign(_, _, _)
-        | E::Mutate(_, _) => panic!("ICE statement mishandled"),
+        | E::Mutate(_, _) => {
+            context
+                .env
+                .add_diag(ice!((eloc, "ICE statement mishandled in HLIR lowering")));
+            None
+        }
 
         // -----------------------------------------------------------------------------------------
         //  value-like expression
@@ -807,7 +833,12 @@ fn tail_block(
     match last_exp {
         None => None,
         Some(sp!(_, S::Seq(last))) => tail(context, block, expected_type, *last),
-        Some(_) => panic!("ICE last sequence item should be an exp"),
+        Some(sp!(loc, _)) => {
+            context
+                .env
+                .add_diag(ice!((loc, "ICE statement mishandled in HLIR lowering")));
+            None
+        }
     }
 }
 
@@ -865,11 +896,21 @@ fn value(
             use T::ExpListItem as TI;
             let [cond_item, code_item]: [TI; 2] = match arguments.exp.value {
                 E::ExpList(arg_list) => arg_list.try_into().unwrap(),
-                _ => panic!("ICE type checking failed"),
+                _ => {
+                    context
+                        .env
+                        .add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    return error_exp(eloc);
+                }
             };
             let (econd, ecode) = match (cond_item, code_item) {
                 (TI::Single(econd, _), TI::Single(ecode, _)) => (econd, ecode),
-                _ => panic!("ICE type checking failed"),
+                _ => {
+                    context
+                        .env
+                        .add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    return error_exp(eloc);
+                }
             };
             let cond_value = value(context, block, Some(&tbool(eloc)), econd);
             let code_value = value(context, block, None, ecode);
@@ -893,11 +934,21 @@ fn value(
             use T::ExpListItem as TI;
             let [cond_item, code_item]: [TI; 2] = match arguments.exp.value {
                 E::ExpList(arg_list) => arg_list.try_into().unwrap(),
-                _ => panic!("ICE type checking failed"),
+                _ => {
+                    context
+                        .env
+                        .add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    return error_exp(eloc);
+                }
             };
             let (econd, ecode) = match (cond_item, code_item) {
                 (TI::Single(econd, _), TI::Single(ecode, _)) => (econd, ecode),
-                _ => panic!("ICE type checking failed"),
+                _ => {
+                    context
+                        .env
+                        .add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    return error_exp(eloc);
+                }
             };
             let cond = value(context, block, Some(&tbool(eloc)), econd);
             let mut else_block = make_block!();
@@ -995,7 +1046,7 @@ fn value(
             context.record_named_block_binders(name, binders.clone());
             context.record_named_block_type(name, out_type.clone());
             let mut body_block = make_block!();
-            let final_exp = value_block(context, &mut body_block, Some(&out_type), seq);
+            let final_exp = value_block(context, &mut body_block, Some(&out_type), eloc, seq);
             bind_value_in_block(context, binders, Some(out_type), &mut body_block, final_exp);
             block.push_back(sp(
                 eloc,
@@ -1006,7 +1057,7 @@ fn value(
             ));
             bound_exp
         }
-        E::Block((_, seq)) => value_block(context, block, Some(&out_type), seq),
+        E::Block((_, seq)) => value_block(context, block, Some(&out_type), eloc, seq),
 
         // -----------------------------------------------------------------------------------------
         //  calls
@@ -1157,7 +1208,16 @@ fn value(
                     annotation: MoveOpAnnotation::InferredLastUsage,
                     var,
                 } => var,
-                _ => panic!("ICE invalid bind_exp for single value"),
+                _ => {
+                    context.env.add_diag(ice!((
+                        eloc,
+                        format!(
+                            "ICE invalid bind_exp for single value: {}",
+                            debug_display!(bound_exp)
+                        )
+                    )));
+                    return error_exp(eloc);
+                }
             };
             make_exp(HE::BorrowLocal(mut_, tmp))
         }
@@ -1172,7 +1232,17 @@ fn value(
                 | Some(bt @ sp!(_, BT::U64))
                 | Some(bt @ sp!(_, BT::U128))
                 | Some(bt @ sp!(_, BT::U256)) => *bt,
-                _ => panic!("ICE typing failed for cast"),
+                _ => {
+                    context.env.add_diag(ice!((
+                        eloc,
+                        format!(
+                            "ICE typing failed for cast: {} : {}",
+                            debug_display_verbose!(new_base),
+                            debug_display_verbose!(rhs_ty)
+                        )
+                    )));
+                    return error_exp(eloc);
+                }
             };
             make_exp(HE::Cast(Box::new(new_base), bt))
         }
@@ -1194,7 +1264,7 @@ fn value(
             };
             make_exp(new_unit)
         }
-        E::Value(ev) => make_exp(HE::Value(process_value(ev))),
+        E::Value(ev) => make_exp(HE::Value(process_value(context, ev))),
         E::Constant(_m, c) => make_exp(HE::Constant(c)), // only private constants (for now)
         E::Move { from_user, var } => {
             let annotation = if from_user {
@@ -1220,13 +1290,20 @@ fn value(
         | E::Give(_, _)
         | E::Continue(_)
         | E::Assign(_, _, _)
-        | E::Mutate(_, _) => panic!("ICE statement mishandled"),
+        | E::Mutate(_, _) => {
+            context
+                .env
+                .add_diag(ice!((eloc, "ICE statement mishandled in HLIR lowering")));
+            error_exp(eloc)
+        }
 
         // -----------------------------------------------------------------------------------------
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
-        E::Use(_) => panic!("ICE unexpanded use"),
-
+        E::Use(_) => {
+            context.env.add_diag(ice!((eloc, "ICE unexpanded use")));
+            error_exp(eloc)
+        }
         E::UnresolvedError => {
             assert!(context.env.has_errors());
             make_exp(HE::UnresolvedError)
@@ -1239,6 +1316,7 @@ fn value_block(
     context: &mut Context,
     block: &mut Block,
     expected_type: Option<&H::Type>,
+    seq_loc: Loc,
     mut seq: VecDeque<T::SequenceItem>,
 ) -> H::Exp {
     use T::SequenceItem_ as S;
@@ -1246,7 +1324,18 @@ fn value_block(
     statement_block(context, block, seq);
     match last_exp {
         Some(sp!(_, S::Seq(last))) => value(context, block, expected_type, *last),
-        _ => panic!("ICE last sequence item should be an exp"),
+        Some(sp!(loc, _)) => {
+            context
+                .env
+                .add_diag(ice!((loc, "ICE last sequence item should be an exp")));
+            error_exp(loc)
+        }
+        None => {
+            context
+                .env
+                .add_diag(ice!((seq_loc, "ICE empty sequence in value position")));
+            error_exp(seq_loc)
+        }
     }
 }
 
@@ -1364,7 +1453,7 @@ fn value_list_opt(
                     tys.push(t);
                     item_exprs.push((te, expected_ty));
                 }
-                T::ExpListItem::Splat(_, _, _) => panic!("ICE spalt is unsupported."),
+                T::ExpListItem::Splat(_, _, _) => panic!("ICE splat is unsupported."),
             }
         }
         let exprs = value_evaluation_order(context, block, item_exprs);
@@ -1378,6 +1467,13 @@ fn value_list_opt(
     } else {
         vec![value(context, block, ty, e)]
     }
+}
+
+fn error_exp(loc: Loc) -> H::Exp {
+    H::exp(
+        H::Type_::base(sp(loc, H::BaseType_::UnresolvedError)),
+        sp(loc, H::UnannotatedExp_::UnresolvedError),
+    )
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -1537,7 +1633,9 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         // -----------------------------------------------------------------------------------------
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
-        E::Use(_) => panic!("ICE unexpanded use"),
+        E::Use(_) => {
+            context.env.add_diag(ice!((eloc, "ICE unexpanded use")));
+        }
     }
 }
 
@@ -1812,28 +1910,30 @@ fn assign(
 }
 
 fn assign_fields(
-    context: &Context,
+    context: &mut Context,
     m: &ModuleIdent,
     s: &StructName,
     tfields: Fields<(N::Type, T::LValue)>,
 ) -> Vec<(usize, Field, H::BaseType, T::LValue)> {
-    let decl_fields = context.fields(m, s);
-    let mut count = 0;
-    let mut decl_field = |f: &Field| -> usize {
-        match decl_fields {
-            Some(m) => *m.get(f).unwrap(),
-            None => {
-                // none can occur with errors in typing
-                let i = count;
-                count += 1;
-                i
-            }
-        }
+    let decl_fields = context.fields(m, s).cloned();
+    let mut tfields_vec: Vec<_> = match decl_fields {
+        Some(m) => tfields
+            .into_iter()
+            .map(|(f, (_idx, (tbt, tfa)))| {
+                let field = *m.get(&f).unwrap();
+                let base_ty = base_type(context, tbt);
+                (field, f, base_ty, tfa)
+            })
+            .collect(),
+        None => tfields
+            .into_iter()
+            .enumerate()
+            .map(|(ndx, (f, (_idx, (tbt, tfa))))| {
+                let base_ty = base_type(context, tbt);
+                (ndx, f, base_ty, tfa)
+            })
+            .collect(),
     };
-    let mut tfields_vec = tfields
-        .into_iter()
-        .map(|(f, (_idx, (tbt, tfa)))| (decl_field(&f), f, base_type(context, tbt), tfa))
-        .collect::<Vec<_>>();
     tfields_vec.sort_by(|(idx1, _, _, _), (idx2, _, _, _)| idx1.cmp(idx2));
     tfields_vec
 }
@@ -1941,11 +2041,24 @@ fn bind_value_in_block(
     value_exp: H::Exp,
 ) {
     use H::{Command_ as C, Statement_ as S};
-    for sp!(_, lvalue) in &binders {
+    let mut binders_valid = true;
+    for sp!(loc, lvalue) in &binders {
         match lvalue {
             H::LValue_::Var(_, _) => (),
-            _ => panic!("ICE tried bind_value for non-var lvalue"),
+            lv => {
+                context.env.add_diag(ice!((
+                    *loc,
+                    format!(
+                        "ICE tried bind_value for non-var lvalue {}",
+                        debug_display!(lv)
+                    )
+                )));
+                binders_valid = false;
+            }
         }
+    }
+    if !binders_valid {
+        return;
     }
     let rhs_exp = maybe_freeze(context, stmts, binders_type, value_exp);
     let loc = rhs_exp.exp.loc;
@@ -2020,11 +2133,16 @@ fn builtin(
     }
 }
 
-fn process_value(sp!(loc, ev_): E::Value) -> H::Value {
+fn process_value(context: &mut Context, sp!(loc, ev_): E::Value) -> H::Value {
     use E::Value_ as EV;
     use H::Value_ as HV;
     let v_ = match ev_ {
-        EV::InferredNum(_) => panic!("ICE should have been expanded"),
+        EV::InferredNum(_) => {
+            context
+                .env
+                .add_diag(ice!((loc, "ICE not expanded to value")));
+            HV::U64(0)
+        }
         EV::Address(a) => HV::Address(a.into_addr_bytes()),
         EV::U8(u) => HV::U8(u),
         EV::U16(u) => HV::U16(u),
@@ -2195,7 +2313,13 @@ enum Freeze {
     Sub(Vec<bool>),
 }
 
-fn needs_freeze(context: &Context, sp!(_, actual): &H::Type, sp!(_, expected): &H::Type) -> Freeze {
+fn needs_freeze(
+    context: &mut Context,
+    sp!(loc, actual): &H::Type,
+    sp!(eloc, expected): &H::Type,
+) -> Freeze {
+    use H::BaseType_ as BT;
+    use H::SingleType_ as ST;
     use H::Type_ as T;
     match (actual, expected) {
         (T::Unit, T::Unit) => Freeze::NotNeeded,
@@ -2219,17 +2343,24 @@ fn needs_freeze(context: &Context, sp!(_, actual): &H::Type, sp!(_, expected): &
                 Freeze::NotNeeded
             }
         }
-        (T::Single(sp!(_, H::SingleType_::Base(sp!(_, H::BaseType_::Unreachable)))), _expected) => {
-            Freeze::NotNeeded
-        }
+        (T::Single(sp!(_, ST::Base(sp!(_, BT::UnresolvedError)))), _)
+        | (_, T::Single(sp!(_, ST::Base(sp!(_, BT::UnresolvedError)))))
+        | (T::Single(sp!(_, ST::Base(sp!(_, BT::Unreachable)))), _)
+        | (_, T::Single(sp!(_, ST::Base(sp!(_, BT::Unreachable))))) => Freeze::NotNeeded,
         (_actual, _expected) => {
             if !context.env.has_errors() {
-                println!("typing produced the following actual and expected types: ");
-                print!("actual: ");
-                _actual.print();
-                print!("expected: ");
-                _expected.print();
-                panic!("ICE HLIR freezing went wrong")
+                let diag = ice!(
+                    (*loc, "ICE HLIR freezing went wrong"),
+                    (
+                        *loc,
+                        format!("Actual type: {}", debug_display_verbose!(_actual))
+                    ),
+                    (
+                        *eloc,
+                        format!("Expected type: {}", debug_display_verbose!(_expected))
+                    ),
+                );
+                context.env.add_diag(diag);
             }
             Freeze::NotNeeded
         }
@@ -2265,7 +2396,14 @@ fn freeze(context: &mut Context, expected_type: &H::Type, e: H::Exp) -> (Block, 
                     .iter()
                     .map(|e| match &e.ty.value {
                         T::Single(s) => s.clone(),
-                        _ => panic!("ICE list item has Multple type"),
+                        _ => {
+                            let msg = format!(
+                                "ICE list item has Multple type: {}",
+                                debug_display_verbose!(e.ty)
+                            );
+                            context.env.add_diag(ice!((e.ty.loc, msg)));
+                            H::SingleType_::base(error_base_type(e.ty.loc))
+                        }
                     })
                     .collect();
                 (

@@ -534,7 +534,7 @@ impl FullCheckpointContents {
                 store.get_transaction(&tx.transaction)?,
                 store.get_transaction_effects(&tx.transaction)?,
             ) {
-                transactions.push(ExecutionData::new(t.into_inner(), e))
+                transactions.push(ExecutionData::new((*t).clone().into_inner(), e))
             } else {
                 return Ok(None);
             }
@@ -650,6 +650,10 @@ impl VerifiedCheckpointContents {
 
     pub fn iter(&self) -> Iter<'_, VerifiedExecutionData> {
         self.transactions.iter()
+    }
+
+    pub fn transactions(&self) -> &[VerifiedExecutionData] {
+        &self.transactions
     }
 
     pub fn into_inner(self) -> FullCheckpointContents {

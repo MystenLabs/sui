@@ -30,6 +30,7 @@ tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 sui-archival.workspace = true
 sui-storage.workspace = true
+sui-data-ingestion-core.workspace = true
 sui-types.workspace = true
 url.workspace = true
 workspace-hack.workspace = true

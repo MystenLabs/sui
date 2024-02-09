@@ -114,8 +114,14 @@ impl ReadStore for SharedInMemoryStore {
             .pipe(Ok)
     }
 
-    fn get_transaction(&self, digest: &TransactionDigest) -> Result<Option<VerifiedTransaction>> {
-        self.inner().get_transaction_block(digest).cloned().pipe(Ok)
+    fn get_transaction(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<Arc<VerifiedTransaction>>> {
+        self.inner()
+            .get_transaction_block(digest)
+            .map(|tx| Arc::new(tx.clone()))
+            .pipe(Ok)
     }
 
     fn get_transaction_effects(
@@ -527,7 +533,10 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
         self.0.get_committee(epoch)
     }
 
-    fn get_transaction(&self, digest: &TransactionDigest) -> Result<Option<VerifiedTransaction>> {
+    fn get_transaction(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<Arc<VerifiedTransaction>>> {
         self.0.get_transaction(digest)
     }
 

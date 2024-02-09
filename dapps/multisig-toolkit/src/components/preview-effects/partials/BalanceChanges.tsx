@@ -4,7 +4,7 @@
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { type BalanceChange } from '@mysten/sui.js/src/client';
 
-import PreviewCard from '../PreviewCard';
+import { PreviewCard } from '../PreviewCard';
 import { onChainAmountToFloat } from '../utils';
 
 export function BalanceChanges({ changes }: { changes: BalanceChange[] }) {

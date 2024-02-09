@@ -513,15 +513,25 @@ macro_rules! diag {
     }};
 }
 
+pub const ICE_BUG_REPORT_MESSAGE: &str =
+    "The Move compiler has encountered an internal compiler error.\n \
+    Please report this this issue to the Mysten Labs Move language team,\n \
+    including this error and any relevant code, to the Mysten Labs issue tracker\n \
+    at : https://github.com/MystenLabs/sui/issues";
+
 #[macro_export]
 macro_rules! ice {
     ($primary: expr $(,)?) => {{
         $crate::diagnostics::print_stack_trace();
-        diag!($crate::diagnostics::codes::Bug::ICE, $primary)
+        let mut diag = diag!($crate::diagnostics::codes::Bug::ICE, $primary);
+        diag.add_note($crate::diagnostics::ICE_BUG_REPORT_MESSAGE.to_string());
+        diag
     }};
     ($primary: expr, $($secondary: expr),+ $(,)?) => {{
         $crate::diagnostics::print_stack_trace();
-        diag!($crate::diagnostics::codes::Bug::ICE, $primary, $($secondary, )*)
+        let mut diag = diag!($crate::diagnostics::codes::Bug::ICE, $primary, $($secondary, )*);
+        diag.add_note($crate::diagnostics::ICE_BUG_REPORT_MESSAGE.to_string());
+        diag
     }}
 }
 

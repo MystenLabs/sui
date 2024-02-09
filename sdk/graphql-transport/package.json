@@ -1,0 +1,66 @@
+{
+	"name": "@mysten/graphql-transport",
+	"version": "0.0.1",
+	"description": "A GraphQL transport to allow SuiClient to work with RPC 2.0",
+	"license": "Apache-2.0",
+	"author": "Mysten Labs <build@mystenlabs.com>",
+	"type": "commonjs",
+	"main": "./dist/cjs/index.js",
+	"module": "./dist/esm/index.js",
+	"types": "./dist/cjs/index.d.ts",
+	"exports": {
+		".": {
+			"import": "./dist/esm/index.js",
+			"require": "./dist/cjs/index.js"
+		}
+	},
+	"sideEffects": false,
+	"files": [
+		"CHANGELOG.md",
+		"dist"
+	],
+	"scripts": {
+		"build": "build-package",
+		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
+		"codegen": "graphql-codegen --config codegen.ts",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"prepublishOnly": "pnpm build",
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"test:e2e:nowait": "vitest run e2e",
+		"test:e2e:prepare": "docker-compose down && docker-compose up -d && cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=info,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator -- --with-indexer --use-indexer-v2 --pg-port 5435 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125",
+		"test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 180000 && vitest"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/mystenlabs/sui.git"
+	},
+	"bugs": {
+		"url": "https://github.com/mystenlabs/sui/issues"
+	},
+	"homepage": "https://github.com/mystenlabs/sui#readme",
+	"devDependencies": {
+		"@graphql-codegen/add": "^5.0.2",
+		"@graphql-codegen/cli": "^5.0.2",
+		"@graphql-codegen/typed-document-node": "^5.0.4",
+		"@graphql-codegen/typescript": "4.0.4",
+		"@graphql-codegen/typescript-document-nodes": "4.0.4",
+		"@graphql-codegen/typescript-operations": "^4.1.2",
+		"@mysten/build-scripts": "workspace:*",
+		"@parcel/watcher": "^2.3.0",
+		"@types/node": "^20.4.2",
+		"graphql-config": "^5.0.3",
+		"typescript": "^5.3.3",
+		"vitest": "^0.33.0",
+		"wait-on": "^7.0.1"
+	},
+	"dependencies": {
+		"@graphql-typed-document-node/core": "^3.2.0",
+		"@mysten/bcs": "workspace:*",
+		"@mysten/sui.js": "workspace:*",
+		"graphql": "^16.8.1"
+	}
+}
