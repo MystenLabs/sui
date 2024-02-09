@@ -1,5 +1,16 @@
 # @mysten/dapp-kit
 
+## 0.12.2
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+- Updated dependencies [4830361fa4]
+- Updated dependencies [4fd676671b]
+  - @mysten/wallet-standard@0.10.3
+  - @mysten/sui.js@0.50.1
+  - @mysten/zksend@0.2.2
+
 ## 0.12.1
 
 ### Patch Changes

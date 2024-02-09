@@ -1,5 +1,13 @@
 # @mysten/sui.js
 
+## 0.50.1
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+- Updated dependencies [4830361fa4]
+  - @mysten/bcs@0.11.1
+
 ## 0.50.0
 
 ### Minor Changes
