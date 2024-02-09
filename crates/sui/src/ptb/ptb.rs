@@ -579,19 +579,13 @@ impl PTB {
         }
 
         let summary = {
-            let effects = transaction_response.effects.clone();
+            let effects = transaction_response.effects.as_ref().ok_or_else(|| {
+                anyhow!("Internal error: no transaction effects after PTB was executed.")
+            })?;
             Summary {
                 digest: transaction_response.digest,
-                status: effects
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("Error"))?
-                    .status()
-                    .clone(),
-                gas_cost: effects
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("Bail"))?
-                    .gas_cost_summary()
-                    .clone(),
+                status: effects.status().clone(),
+                gas_cost: effects.gas_cost_summary().clone(),
             }
         };
 
