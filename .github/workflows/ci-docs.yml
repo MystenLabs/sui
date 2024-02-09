@@ -22,15 +22,11 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          # Upgrade below after the workspace upgrades to Rust 1.72 or later.
-          # https://substrate.stackexchange.com/a/9069
-          toolchain: nightly-2023-06-15
+          toolchain: stable
           override: true
 
       - name: Generate documentation
         uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # pin@v1
-        env:
-          RUSTDOCFLAGS: "--enable-index-page -Zunstable-options"
         with:
           command: doc
           args: --workspace --exclude "sui-benchmark" --no-deps
