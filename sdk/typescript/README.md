@@ -4,9 +4,8 @@ For more complete docs, visit the [Sui TypeScript SDK docs](https://sdk.mystenla
 
 # Sui TypeScript SDK
 
-This is the Sui TypeScript SDK built on the Sui
-[JSON RPC API](https://github.com/MystenLabs/sui/blob/main/docs/content/references
-/sui-api.mdx). It provides
+This is the Sui TypeScript SDK built on the Sui [JSON RPC
+API](https://github.com/MystenLabs/sui/blob/main/docs/content/references /sui-api.mdx). It provides
 utility classes and functions for applications to sign transactions and interact with the Sui
 network.
 
@@ -17,10 +16,9 @@ upcoming TestNet launch.
 ## Working with DevNet
 
 The SDK will be published to [npm registry](https://www.npmjs.com/package/@mysten/sui.js) with the
-same bi-weekly release cycle as the DevNet validators and
-[RPC Server](https://github.com/MystenLabs/sui/blob/main/docs/content/references
-/sui-api.mdx). To use the SDK
-in your project, you can do:
+same bi-weekly release cycle as the DevNet validators and [RPC
+Server](https://github.com/MystenLabs/sui/blob/main/docs/content/references /sui-api.mdx). To use
+the SDK in your project, you can do:
 
 ```bash
 $ npm install @mysten/sui.js
@@ -40,8 +38,7 @@ npm install @mysten/sui.js@experimental
 ```
 
 Refer to the [JSON RPC](https://github.com/MystenLabs/sui/blob/main/docs/content/references
-/sui-api.mdx) topic
-for instructions about how to start a local network and local RPC server.
+/sui-api.mdx) topic for instructions about how to start a local network and local RPC server.
 
 ## Building Locally
 
