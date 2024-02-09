@@ -662,7 +662,6 @@ fn start_summary_sync(
         )
         .await?;
         let state_sync_store = RocksDbStore::new(
-            store.clone(),
             Arc::new(ExecutionCache::new_with_no_metrics(store)),
             committee_store,
             checkpoint_store.clone(),
@@ -1240,7 +1239,6 @@ pub async fn state_sync_from_archive(
         .map(|c| c.sequence_number)
         .unwrap_or(0);
     let state_sync_store = RocksDbStore::new(
-        store.clone(),
         Arc::new(ExecutionCache::new_with_no_metrics(store)),
         committee_store,
         checkpoint_store.clone(),
