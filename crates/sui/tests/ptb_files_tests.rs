@@ -12,9 +12,18 @@ use test_cluster::TestClusterBuilder;
 
 const TEST_DIR: &str = "tests";
 
+#[cfg_attr(msim, msim::main)]
 #[cfg_attr(not(msim), tokio::main)]
 async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    std::env::set_var("NO_COLOR", "true"); // we need this for the miette errors
+    miette::set_hook(Box::new(|_| {
+        Box::new(
+            miette::MietteHandlerOpts::new()
+                .color(false)
+                .width(80)
+                .build(),
+        )
+    }));
+
     let fname = || path.file_name().unwrap().to_string_lossy().to_string();
     let ptb = PTB::default();
     let cmd = PTB::command();

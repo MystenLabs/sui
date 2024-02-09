@@ -48,6 +48,10 @@ cmd: warn_shadows, value: ["false"]
    ·                  ╰── Expected array of amounts
    ╰────
 
-  × Error at command 0 in PTB file 'console': No gas budget set for
-  │ transaction at command 0 in file 'console'
+  × Error at command 0 from console input
+   ╭────
+ 1 │ file-include-start tests/ptb_files/split_coins/split_coins_invalid.ptb
+   · ─────────┬────────
+   ·          ╰── No gas budget set for transaction
+   ╰────
 

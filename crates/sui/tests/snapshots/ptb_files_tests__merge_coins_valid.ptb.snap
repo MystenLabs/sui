@@ -42,9 +42,12 @@ cmd: file-include-end, value: ["\"tests/ptb_files/merge_coins/merge_coins_valid.
 cmd: preview, value: ["true"]
 cmd: warn_shadows, value: ["false"]
  === BUILT PTB === 
-SplitCoins(GasCoinInput(0),Input(1),Input(2))
-MergeCoins(NestedResult(0,0),NestedResult(0,1),NestedResult(0,2))
-MergeCoins(GasCoin,NestedResult(0,0))
-SplitCoins(GasCoinInput(0),Input(1),Input(2))
-MergeCoins(NestedResult(3,0),NestedResult(3,1),NestedResult(3,2))
-MergeCoins(GasCoin,NestedResult(3,0))
+Input 0: Pure([1, 0, 0, 0, 0, 0, 0, 0])
+Input 1: Pure([2, 0, 0, 0, 0, 0, 0, 0])
+Input 2: Pure([3, 0, 0, 0, 0, 0, 0, 0])
+Command 0: SplitCoins(GasCoinInput(0),Input(1),Input(2))
+Command 1: MergeCoins(NestedResult(0,0),NestedResult(0,1),NestedResult(0,2))
+Command 2: MergeCoins(GasCoin,NestedResult(0,0))
+Command 3: SplitCoins(GasCoinInput(0),Input(1),Input(2))
+Command 4: MergeCoins(NestedResult(3,0),NestedResult(3,1),NestedResult(3,2))
+Command 5: MergeCoins(GasCoin,NestedResult(3,0))

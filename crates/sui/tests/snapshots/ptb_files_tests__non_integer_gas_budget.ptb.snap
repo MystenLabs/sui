@@ -28,6 +28,10 @@ cmd: warn_shadows, value: ["false"]
    ·              ╰── Expected an integer as the gas budget
    ╰────
 
-  × Error at command 0 in PTB file 'console': No gas budget set for
-  │ transaction at command 0 in file 'console'
+  × Error at command 0 from console input
+   ╭────
+ 1 │ file-include-start tests/ptb_files/gas/non_integer_gas_budget.ptb
+   · ─────────┬────────
+   ·          ╰── No gas budget set for transaction
+   ╰────
 
