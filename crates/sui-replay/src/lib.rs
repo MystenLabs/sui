@@ -13,6 +13,7 @@ use sui_types::message_envelope::Message;
 use tracing::warn;
 use transaction_provider::{FuzzStartPoint, TransactionSource};
 
+use crate::displays::html_formatter;
 use crate::replay::ExecutionSandboxState;
 use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
@@ -100,6 +101,9 @@ pub enum ReplayToolCommand {
         /// Write a json that contains comprehensive data about this transaction, in a file `replay_output_{tx_digest}.json` to the working directory.
         #[arg(long)]
         json: bool,
+        /// Write html that contains comprehensive data about this transaction, in a file `replay_output_{tx_digest}.html` to the working directory.
+        #[arg(long)]
+        html: bool,
     },
 
     /// Replay transactions listed in a file
@@ -403,6 +407,7 @@ pub async fn execute_replay_command(
             executor_version,
             protocol_version,
             json,
+            html,
         } => {
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
@@ -426,16 +431,12 @@ pub async fn execute_replay_command(
             }
 
             if json {
-                let mut filename = OsString::new();
-                filename.push("replay_output_");
-                filename.push(tx_digest.to_string());
-                filename.push(".json");
-                let mut p = std::path::PathBuf::from(".");
-                p.set_file_name(filename);
-                let mut file = File::create(&p).expect("Unable to create file");
-                file.write_all(sandbox_state.json.as_bytes())
-                    .expect("Unable to write file");
-                info!("Wrote json file to {:?}", p);
+                write_to_file(tx_digest, &sandbox_state.json, "json");
+            }
+
+            if html {
+                let html_content = html_formatter::generate_html_from_json(&sandbox_state.json);
+                write_to_file(tx_digest, &html_content, "html");
             }
 
             sandbox_state.check_effects()?;
@@ -601,6 +602,21 @@ pub async fn execute_replay_command(
             }
         }
     })
+}
+
+fn write_to_file(tx_digest: TransactionDigest, content: &String, extension: &str) {
+    let mut filename = OsString::new();
+    filename.push("replay_output_");
+    filename.push(tx_digest.to_string());
+    filename.push(".");
+    filename.push(extension);
+    let mut output_path = std::path::PathBuf::from(".");
+    output_path.set_file_name(filename);
+    let mut html_file = File::create(&output_path).expect("Unable to create file");
+    html_file
+        .write_all(content.as_bytes())
+        .expect("Unable to write file");
+    info!("Wrote file to {:?}", output_path);
 }
 
 pub(crate) fn chain_from_chain_id(chain: &str) -> Chain {
