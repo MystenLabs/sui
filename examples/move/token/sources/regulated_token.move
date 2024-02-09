@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// docs:: http://docs.sui.io/standards/closed-loop-token
-
 /// This example demonstrates how to use Closed Loop to create a regulated coin
 /// that follows different regulatory requirements for actions:
 ///

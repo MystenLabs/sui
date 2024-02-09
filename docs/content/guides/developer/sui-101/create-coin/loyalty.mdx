@@ -1,6 +1,13 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+---
+title: Loyalty Tokens
+---
 
+Using the Sui [Closed-Loop Token](../../../../standards/closed-loop-token.mdx) standard, you can create tokens that are valid only for a specific service, like an airline that wants to grant tokens to frequent flyers to purchase tickets or upgrades. 
+
+The following example demonstrates the creation of a loyalty token that bearers can use to make purchases in a digital gift shop. Use the comments in the code to follow the logic of the example.
+
+
+```move title="examples/move/token/sources/loyalty.move"
 /// This module illustrates a Closed Loop Loyalty Token. The `Token` is sent to
 /// users as a reward for their loyalty by the application Admin. The `Token`
 /// can be used to buy a `Gift` in the shop.
@@ -100,3 +107,5 @@ module examples::loyalty {
         (gift, req)
     }
 }
+
+```

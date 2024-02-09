@@ -10,64 +10,6 @@ The [Coin standard](./coin.mdx) on Sui is an example of an open-loop system - co
 
 Some applications, however, require constraining the scope of the token to a specific purpose. For example, some applications might need a token that you can only use for a specific service, or that an authorized account can only use, or a token that you can block certain accounts from using. A real-world analogy would be a bank account - regulated, bank-controlled, and compliant with certain rules and policies.
 
-Specific domains that can benefit from a closed-loop token include:
-
-### Loyalty points
-
-Tokens that you can only use for a specific service, like an airline that wants to grant tokens to frequent flyers to purchase tickets or upgrades. 
-
-The following example demonstrates the creation of a loyalty token that bearers can use to make purchases in a digital gift shop.
-
-```mdx-code-block
-<details>
-  <summary>
-  Toggle example code
-  </summary>
-```
-
-{@inject: examples/move/token/sources/loyalty.move}
-
-```mdx-code-block
-</details>
-```
-
-### Regulatory-compliant tokens
-
-Tokens that only a verified user can access, or ones that put a limit on a single operation. Some jurisdictions require certain checks or restrictions on tokens, so you can attach rules to your tokens that satisfy those requirements.
-
-The following example creates a regulated token with rules that regulate access to the token and limits transactions by value.
-
-```mdx-code-block
-<details>
-  <summary>
-  Toggle example code
-  </summary>
-```
-
-{@inject: examples/move/token/sources/regulated_token.move}
-
-```mdx-code-block
-</details>
-```
-
-
-### In-game currency
-
-Tokens in mobile games, like gems or diamonds, that you can grant to players for their actions or to purchase, which they can use in-game only. Tokens of this kind are often not transferrable and minted in predefined amounts to maintain scarcity and game balance.
-
-The following example creates an in-game currency called a GEM, which represents a certain number of SUI. In the example, the user can buy fungible GEMs using SUI, which can then be used as currency within the game.  
-
-```mdx-code-block
-<details>
-<summary>
-Toggle example code
-</summary>
-```
-{@inject: examples/move/token/sources/gems.move}
-
-```mdx-code-block
-</details>
-```
 
 ## Difference with coins
 
@@ -90,17 +32,6 @@ You can set up any rules for transfers, spends, and conversions for the tokens y
 For example, a policy can set a limit on a transfer - `X` tokens per operation; or require user verification before spending tokens; or allow spending tokens only on a specific service.
 
 You can reuse rules across different policies and applications; and you can freely combine rules to create complex policies.
-
-## Basics
-
-The Closed-Loop Token standard reuses the `TreasuryCap` defined in the `sui::coin` module and therefore has the same initialization process. The `coin::create_currency` method guarantees the uniqueness of the `TreasuryCap` and forces the creation of a `CoinMetadata` object.
-
-Coin-like methods perform the minting and burning of tokens. Both require the `TreasuryCap`:
-
-- `token::mint` - mint a token
-- `token::burn` - burn a token
-
-See [Create a Coin](/guides/developer/sui-101/create-coin.mdx) for more details on how to create a coin.
 
 ## Public actions
 

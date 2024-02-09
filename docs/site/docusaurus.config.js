@@ -33,7 +33,6 @@ const config = {
     mermaid: true,
   },
   plugins: [
-    "./src/plugins/sui-docs-inject-code",
     [
       "@graphql-markdown/docusaurus",
       {

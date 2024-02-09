@@ -22,8 +22,8 @@ Tokens have four protected actions that create an `ActionRequest`:
 - `name`: Name of the performed action, standard ones are `transfer`, `spend`, `to_coin` and `from_coin`, and you can create custom actions.
 - `amount`: The amount of the token that is being transferred, spent, converted, and so on.
 - `sender`: The account that initiated the action.
-- `recipient`: The account that receives the token in `transfer` action (you can use for custom actions).
-- `spent_balance`: The balance of a spent token in the [`spend` action](./spending.mdx) (you can use in custom actions).
+- `recipient`: The account that receives the token in `transfer` action (use for custom actions).
+- `spent_balance`: The balance of a spent token in the [`spend` action](./spending.mdx) (use in custom actions).
 
 Rules can use these fields to determine whether the action should be allowed or not. Rules are custom modules that implement restriction logic. See [Rules](./rules.mdx) for more details.
 
@@ -41,8 +41,8 @@ public fun transfer<T>(
 There are three ways to confirm an `ActionRequest` using a:
 
 1. `TreasuryCap` - you (or an application storing the `TreasuryCap`) can call the `token::confirm_with_treasury_cap` function to confirm any request. This method is useful for applications that store the `TreasuryCap` and implement custom logic; it also allows you to `mint` and `transfer` tokens, bypassing the restrictions.
-2. [`TokenPolicy`](./token-policy.mdx) - you can create a shared `TokenPolicy` and set up allowed actions and requirements for each action. This way, applications or wallets know which actions are considered `public` and so they are able to perform them.
-3. `TokenPolicyCap` - you can use the capability managing the `TokenPolicy` to confirm requests. This can be useful for applications that have the `TreasuryCap` wrapped and inaccessible; and you need to authorize some administrator action.
+2. [`TokenPolicy`](./token-policy.mdx) - create a shared `TokenPolicy` and set up allowed actions and requirements for each action. This way, applications or wallets know which actions are considered `public` and so they are able to perform them.
+3. `TokenPolicyCap` - use the capability managing the `TokenPolicy` to confirm requests. This can be useful for applications that have the `TreasuryCap` wrapped and inaccessible; and you need to authorize some administrator action.
 
 :::info
 
@@ -52,7 +52,7 @@ You can't use `TokenPolicyCap` to confirm `spend` requests.
 
 ### Confirming with TreasuryCap
 
-You can use the `TreasuryCap` to confirm any action request for the token. It's useful for administrator actions (like `mint` and `transfer`), as well as for simple applications that don't require a token policy and wrap the `TreasuryCap` into the main object.
+Use the `TreasuryCap` to confirm any action request for the token. It's useful for administrator actions (like `mint` and `transfer`), as well as for simple applications that don't require a token policy and wrap the `TreasuryCap` into the main object.
 
 The signature for the `token::confirm_with_treasury_cap` function is:
 
@@ -146,7 +146,7 @@ tx.moveCall({
 
 ### Confirming with TokenPolicyCap
 
-You can use `TokenPolicyCap` to confirm action requests. A convenient approach when the `TreasuryCap` is wrapped in another object, and `TokenPolicy` does not allow certain action or has rules that make the default way of confirming impossible.
+Use `TokenPolicyCap` to confirm action requests. A convenient approach when the `TreasuryCap` is wrapped in another object, and `TokenPolicy` does not allow certain action or has rules that make the default way of confirming impossible.
 
 :::info
 
