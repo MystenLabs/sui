@@ -18,7 +18,7 @@ import {
 export { LinkProps };
 
 /** Query params that we want to be preserved between all pages. */
-export const PRESERVE_QUERY = ['network'];
+export const PRESERVE_QUERY = ['network', 'forceGraphQL'];
 
 export function useNavigateWithQuery() {
 	const navigate = useNavigate();

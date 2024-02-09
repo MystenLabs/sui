@@ -32,6 +32,7 @@
 		"@headlessui/react": "^1.7.15",
 		"@mysten/core": "workspace:*",
 		"@mysten/dapp-kit": "workspace:*",
+		"@mysten/graphql-transport": "workspace:*",
 		"@mysten/icons": "workspace:*",
 		"@mysten/sui.js": "workspace:*",
 		"@mysten/ui": "workspace:*",

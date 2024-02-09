@@ -1,25 +1,53 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SuiClientGraphQLTransport } from '@mysten/graphql-transport';
 import { SuiHTTPTransport } from '@mysten/sui.js/client';
 import * as Sentry from '@sentry/react';
 
 const IGNORED_METHODS = ['suix_resolveNameServiceNames', 'suix_resolveNameServiceAddresses'];
 
+interface SentryHttpTransportOptions {
+	url: string;
+	graphqlUrl?: string;
+	mode?: 'http' | 'graphql';
+}
+
 export class SentryHttpTransport extends SuiHTTPTransport {
 	#url: string;
-	constructor(url: string) {
-		super({ url });
-		this.#url = url;
+	#graphqlUrl?: string;
+	#mode: 'http' | 'graphql';
+	#graphqlTransport?: SuiClientGraphQLTransport;
+
+	constructor(options: SentryHttpTransportOptions) {
+		super({ url: options.url });
+		this.#mode = options.mode || 'http';
+		this.#url = options.url;
+		this.#graphqlUrl = options.graphqlUrl;
+
+		if (this.#mode === 'graphql') {
+			if (!this.#graphqlUrl) {
+				throw new Error('GraphQL URL is required for GraphQL mode');
+			}
+
+			this.#graphqlTransport = new SuiClientGraphQLTransport({
+				url: this.#graphqlUrl,
+				fallbackFullNodeUrl: this.#url,
+			});
+		}
 	}
 
-	async #withRequest<T>(input: { method: string; params: unknown[] }, handler: () => Promise<T>) {
+	async #withRequest<T>(
+		url: string,
+		input: { method: string; params: unknown[] },
+		handler: () => Promise<T>,
+	) {
 		const transaction = Sentry.startTransaction({
 			name: input.method,
-			op: 'http.rpc-request',
+			op: this.#mode === 'graphql' ? 'graphql.rpc-request' : 'http.rpc-request',
 			data: input.params,
 			tags: {
-				url: this.#url,
+				url,
 			},
 		});
 
@@ -42,6 +70,10 @@ export class SentryHttpTransport extends SuiHTTPTransport {
 			return super.request<T>(input);
 		}
 
-		return this.#withRequest(input, () => super.request<T>(input));
+		return this.#withRequest(this.#mode === 'graphql' ? this.#graphqlUrl! : this.#url, input, () =>
+			this.#mode === 'graphql'
+				? this.#graphqlTransport!.request<T>(input)
+				: super.request<T>(input),
+		);
 	}
 }

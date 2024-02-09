@@ -21,7 +21,7 @@ export function getSuiClient({ env, customRpcUrl }: NetworkEnvType): SuiClient {
 			new SuiClient({
 				transport:
 					!customRpcUrl && SENTRY_MONITORED_ENVS.includes(env)
-						? new SentryHttpTransport(connection)
+						? new SentryHttpTransport({ url: connection })
 						: new SuiHTTPTransport({ url: connection }),
 			}),
 		);

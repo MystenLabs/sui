@@ -106,6 +106,9 @@ importers:
       '@mysten/dapp-kit':
         specifier: workspace:*
         version: link:../../sdk/dapp-kit
+      '@mysten/graphql-transport':
+        specifier: workspace:*
+        version: link:../../sdk/graphql-transport
       '@mysten/kiosk':
         specifier: workspace:*
         version: link:../../sdk/kiosk
@@ -200,6 +203,9 @@ importers:
       '@mysten/dapp-kit':
         specifier: workspace:*
         version: link:../../sdk/dapp-kit
+      '@mysten/graphql-transport':
+        specifier: workspace:*
+        version: link:../../sdk/graphql-transport
       '@mysten/icons':
         specifier: workspace:*
         version: link:../icons
