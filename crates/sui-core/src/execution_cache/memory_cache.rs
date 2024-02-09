@@ -9,12 +9,40 @@
 //! For storing uncommitted transaction outputs, we cannot evict the data at all until it is written
 //! to disk. Committed data not only can be evicted, but it is also unbounded (imagine a stream of
 //! transactions that keep splitting a coin into smaller coins).
-//! 
+//!
 //! We also want to be able to support negative cache hits (i.e. the case where we can determine an
 //! object does not exist without hitting the database).
 //!
-//! 
-//! The cache is divided into two parts: dirty and cached. The dirty part contains data that has been
+//! To achieve both of these goals, we split the cache data into two pieces, a dirty set and a cached
+//! set. The dirty set has no automatic evictions, data is only removed after being committed. The
+//! cached set is in a bounded-sized cache with automatic evictions. In order to support negative
+//! cache hits, we treat the two halves of the cache as FIFO queue. Newly written (dirty) versions are
+//! inserted to one end of the dirty queue. As versions are committed to disk, they are
+//! removed from the other end of the dirty queue and inserted into the cache queue. The cache queue
+//! is truncated if it exceeds its maximum size, by removing the oldest versions.
+//!
+//! This gives us the property that the sequence of versions in the dirty and cached queues are the
+//! most recent versions of the object, i.e. there can be no "gaps". This allows for the following:
+//!
+//!   - Negative cache hits: If the queried version is not in the cache, but is higher than the smallest
+//!     version in the queue, it does not exist in the db either.
+//!   - Bounded reads: When reading the most recent version that is <= some version bound, we can
+//!     correctly satisfy this query from the cache, or determine that we must go to the db.
+//!
+//! Note that at any time, either or both the dirty or the cached queue may be non-existent. There may be no
+//! dirty versions of the objects, in which case there will be no dirty queue. And, the cached queue
+//! may be evicted from the cache, in which case there will be no cached queue. Because only the cached
+//! queue can be evicted (the dirty queue can only become empty by moving versions from it to the cached
+//! queue), the "highest versions" property still holds in all cases.
+//!
+//! The above design is used for both objects and markers.
+//!
+//! Owned Object Locks require a different approach, for the following reasons:
+//!
+//!  - Owned Object Locks never have multiple extant versions. Each owned object in the live set has exactly
+//!    one lock, and it is always the most recent lock.
+//!  - When locking an object to a transaction, we must record the lock durably, so that the validator does
+//!    not equivocate due to restarts.
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{
