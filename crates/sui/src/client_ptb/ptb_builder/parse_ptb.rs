@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    ptb::{
+    client_ptb::{
         ptb::PTBCommand,
         ptb_builder::{
             argument::Argument,

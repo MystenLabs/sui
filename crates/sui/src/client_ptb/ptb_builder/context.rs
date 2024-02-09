@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ptb::ptb_builder::errors::{PTBError, PTBResult, Span};
+use crate::client_ptb::ptb_builder::errors::{PTBError, PTBResult, Span};
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, path::PathBuf};
 

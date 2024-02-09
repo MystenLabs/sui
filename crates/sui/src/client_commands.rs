@@ -16,7 +16,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::ptb::ptb::PTB;
+use crate::client_ptb::ptb::PTB;
 
 use json_to_table::json_to_table;
 use move_core_types::language_storage::TypeTag;

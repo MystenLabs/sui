@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ptb::display::Pretty;
+use crate::client_ptb::displays::Pretty;
 use std::fmt::{Display, Formatter};
-
 use sui_types::gas::GasCostSummary;
 
 impl<'a> Display for Pretty<'a, GasCostSummary> {

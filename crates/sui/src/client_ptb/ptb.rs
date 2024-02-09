@@ -1,43 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ptb::display::Pretty;
-use crate::ptb::ptb_builder::build_ptb::PTBBuilder;
-use crate::ptb::ptb_builder::errors::render_errors;
-use crate::ptb::ptb_builder::parse_ptb::PTBParser;
-use anyhow::anyhow;
-use anyhow::Error;
-use clap::parser::ValuesRef;
-use clap::ArgMatches;
-use clap::CommandFactory;
-use clap::Parser;
+use super::ptb_builder::{errors::PTBError, parse_ptb::ParsedPTBCommand};
+use crate::client_ptb::{
+    displays::Pretty,
+    ptb_builder::{build_ptb::PTBBuilder, errors::render_errors, parse_ptb::PTBParser},
+};
+
+use anyhow::{anyhow, Error};
+use clap::{parser::ValuesRef, ArgMatches, CommandFactory, Parser};
 use move_core_types::account_address::AccountAddress;
 use petgraph::prelude::DiGraphMap;
 use serde::Serialize;
 use shared_crypto::intent::Intent;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::fmt::Display;
-use std::path::Path;
-use std::path::PathBuf;
-use sui_json_rpc_types::SuiExecutionStatus;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_sdk::SuiClient;
-use sui_types::base_types::ObjectID;
-use sui_types::digests::TransactionDigest;
-use sui_types::gas::GasCostSummary;
-use sui_types::transaction::ProgrammableTransaction;
-
-use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Display,
+    path::{Path, PathBuf},
+};
+use sui_json_rpc_types::{
+    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
+};
 use sui_keys::keystore::AccountKeystore;
-use sui_sdk::wallet_context::WalletContext;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
-
-use sui_types::transaction::Transaction;
-use sui_types::transaction::TransactionData;
-
-use super::ptb_builder::errors::PTBError;
-use super::ptb_builder::parse_ptb::ParsedPTBCommand;
+use sui_sdk::{wallet_context::WalletContext, SuiClient};
+use sui_types::{
+    base_types::ObjectID,
+    digests::TransactionDigest,
+    gas::GasCostSummary,
+    quorum_driver_types::ExecuteTransactionRequestType,
+    transaction::{ProgrammableTransaction, Transaction, TransactionData},
+};
 
 const SKIP_ARGS: [&str; 3] = ["json", "gas", "summary"];
 

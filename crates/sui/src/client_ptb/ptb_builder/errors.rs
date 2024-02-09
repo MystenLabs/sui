@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ptb::{
+use crate::client_ptb::{
     ptb::PTBCommand,
     ptb_builder::{
         command_token::{FILE_END, FILE_START},
@@ -27,14 +27,14 @@ macro_rules! error {
 #[macro_export]
 macro_rules! err {
     ($l:expr, $($arg:tt)*) => {
-        $crate::ptb::ptb_builder::errors::PTBError::WithSource {
+        $crate::client_ptb::ptb_builder::errors::PTBError::WithSource {
             message: format!($($arg)*),
             span: $l,
             help: None,
         }
     };
     ($l:expr => help: { $($h:expr),* }, $($arg:tt)*) => {
-        $crate::ptb::ptb_builder::errors::PTBError::WithSource {
+        $crate::client_ptb::ptb_builder::errors::PTBError::WithSource {
             message: format!($($arg)*),
             span: $l,
             help: Some(format!($($h),*)),
@@ -45,13 +45,13 @@ macro_rules! err {
 #[macro_export]
 macro_rules! sp {
     (_, $value:pat) => {
-        $crate::ptb::ptb_builder::errors::Spanned { value: $value, .. }
+        $crate::client_ptb::ptb_builder::errors::Spanned { value: $value, .. }
     };
     ($loc:pat, _) => {
-        $crate::ptb::ptb_builder::errors::Spanned { span: $loc, .. }
+        $crate::client_ptb::ptb_builder::errors::Spanned { span: $loc, .. }
     };
     ($loc:pat, $value:pat) => {
-        $crate::ptb::ptb_builder::errors::Spanned {
+        $crate::client_ptb::ptb_builder::errors::Spanned {
             span: $loc,
             value: $value,
         }
