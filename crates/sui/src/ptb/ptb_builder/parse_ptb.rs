@@ -47,6 +47,12 @@ pub struct PTBParser {
     context: PTBContext,
 }
 
+impl Default for PTBParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PTBParser {
     /// Create a new PTB parser.
     pub fn new() -> Self {
@@ -191,7 +197,7 @@ impl PTBParser {
             .values
             .iter()
             .enumerate()
-            .map(|(i, v)| Self::parse_values(&v, i, self.context.current_file_scope()))
+            .map(|(i, v)| Self::parse_values(v, i, self.context.current_file_scope()))
             .collect::<ParsingResult<Vec<_>>>()
             .map_err(|e| PTBError::WithSource {
                 message: format!(
@@ -513,19 +519,18 @@ impl<'a> ValueParser<'a> {
                     Identifier::new(
                         parser
                             .advance(Tok::Ident)
-                            .with_context(|| format!("Unable to parse module name"))?,
+                            .with_context(|| "Unable to parse module name".to_string())?,
                     )
-                    .with_context(|| format!("Unable to parse module name"))
-                    .into()
+                    .with_context(|| "Unable to parse module name".to_string())
                 })?;
                 self.spanned(|p| {
                     p.advance(Tok::ColonColon)
-                        .with_context(|| format!("Missing '::' after module name"))
+                        .with_context(|| "Missing '::' after module name".to_string())
                 })?;
                 let function_name = self.spanned(|p| {
                     Identifier::new(
                         p.advance(Tok::Ident)
-                            .with_context(|| format!("Unable to parse function name"))?,
+                            .with_context(|| "Unable to parse function name".to_string())?,
                     )
                 })?;
                 // Insert a whitepace before the type argument token if none is present.

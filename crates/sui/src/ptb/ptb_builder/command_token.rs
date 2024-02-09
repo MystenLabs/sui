@@ -90,7 +90,7 @@ impl FromStr for CommandToken {
     }
 }
 
-pub const ALL_PUBLIC_COMMAND_TOKENS: &[&'static str] = &[
+pub const ALL_PUBLIC_COMMAND_TOKENS: &[&str] = &[
     TRANSFER_OBJECTS,
     SPLIT_COINS,
     MERGE_COINS,
