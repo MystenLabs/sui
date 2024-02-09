@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::ptb::display::Pretty;
 use crate::ptb::ptb_builder::build_ptb::PTBBuilder;
 use crate::ptb::ptb_builder::errors::render_errors;
 use crate::ptb::ptb_builder::parse_ptb::PTBParser;
@@ -17,11 +18,14 @@ use shared_crypto::intent::Intent;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt::Display;
-use std::fmt::Formatter;
 use std::path::Path;
 use std::path::PathBuf;
+use sui_json_rpc_types::SuiExecutionStatus;
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_sdk::SuiClient;
 use sui_types::base_types::ObjectID;
+use sui_types::digests::TransactionDigest;
+use sui_types::gas::GasCostSummary;
 use sui_types::transaction::ProgrammableTransaction;
 
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
@@ -32,13 +36,10 @@ use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 
-use tabled::{
-    builder::Builder as TableBuilder,
-    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
-};
-
 use super::ptb_builder::errors::PTBError;
 use super::ptb_builder::parse_ptb::ParsedPTBCommand;
+
+const SKIP_ARGS: [&str; 3] = ["json", "gas", "summary"];
 
 /// The ProgrammableTransactionBlock structure used in the CLI ptb command
 #[derive(Parser, Debug, Default)]
@@ -89,6 +90,10 @@ pub struct PTB {
     /// Pick gas budget strategy if multiple gas-budgets are provided.
     #[clap(long)]
     pick_gas_budget: Option<PTBGas>,
+    /// Show only a short summary (digest, execution status, gas cost).
+    /// Do not use this flag when you need all the transaction data and the execution effects.
+    #[clap(long)]
+    summary: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -98,7 +103,7 @@ pub struct PTBCommand {
 }
 
 #[derive(clap::ValueEnum, Clone, Debug, Serialize, Default)]
-enum PTBGas {
+pub enum PTBGas {
     Min,
     #[default]
     Max,
@@ -106,14 +111,21 @@ enum PTBGas {
 }
 
 pub struct PTBPreview {
-    cmds: Vec<PTBCommand>,
+    pub cmds: Vec<PTBCommand>,
+}
+
+#[derive(Serialize)]
+pub struct Summary {
+    pub digest: TransactionDigest,
+    pub status: SuiExecutionStatus,
+    pub gas_cost: GasCostSummary,
 }
 
 impl PTBCommand {
-    fn is_preview_false(&self) -> bool {
+    pub fn is_preview_false(&self) -> bool {
         self.name == "preview" && self.values == ["false".to_string()]
     }
-    fn is_warn_shadows_false(&self) -> bool {
+    pub fn is_warn_shadows_false(&self) -> bool {
         self.name == "warn_shadows" && self.values == ["false".to_string()]
     }
 }
@@ -135,8 +147,8 @@ impl PTB {
                 continue;
             }
 
-            // we need to skip the json as this is handled in the execute fn
-            if arg_name.as_str() == "json" || arg_name.as_str() == "gas" {
+            // we need to skip some args as these are handled in the execute fn
+            if SKIP_ARGS.contains(&arg_name.as_str()) {
                 continue;
             }
 
@@ -441,6 +453,7 @@ impl PTB {
             .subcommand_matches("ptb")
             .ok_or_else(|| anyhow!("Expected the ptb subcommand but got a different command"))?;
         let json = ptb_args_matches.get_flag("json");
+        let summary_flag = ptb_args_matches.get_flag("summary");
         let gas_coin = ptb_args_matches.get_one::<String>("gas");
         let cwd =
             std::env::current_dir().map_err(|_| anyhow!("Cannot get the working directory."))?;
@@ -544,7 +557,6 @@ impl PTB {
                 .sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
 
         // execute the transaction
-        println!("Executing the transaction...");
         let transaction_response = context
             .get_client()
             .await?
@@ -556,63 +568,43 @@ impl PTB {
             )
             .await?;
 
-        println!("Transaction executed");
+        if let Some(effects) = transaction_response.effects.as_ref() {
+            if effects.status().is_err() {
+                return Err(anyhow!(
+                    "PTB execution {}. Transaction digest is: {}",
+                    Pretty(effects.status()),
+                    effects.transaction_digest()
+                ));
+            }
+        }
+
+        let summary = {
+            let effects = transaction_response.effects.as_ref().ok_or_else(|| {
+                anyhow!("Internal error: no transaction effects after PTB was executed.")
+            })?;
+            Summary {
+                digest: transaction_response.digest,
+                status: effects.status().clone(),
+                gas_cost: effects.gas_cost_summary().clone(),
+            }
+        };
+
         if json {
-            let json_string =
+            let json_string = if summary_flag {
+                serde_json::to_string_pretty(&serde_json::json!(summary))
+                    .map_err(|_| anyhow!("Cannot serialize PTB result to json"))?
+            } else {
                 serde_json::to_string_pretty(&serde_json::json!(transaction_response))
-                    .map_err(|_| anyhow!("Cannot serialize PTB result to json"))?;
+                    .map_err(|_| anyhow!("Cannot serialize PTB result to json"))?
+            };
             println!("{}", json_string);
+        } else if summary_flag {
+            println!("{}", Pretty(&summary));
         } else {
             println!("{}", transaction_response);
         }
 
         Ok(())
-    }
-}
-
-impl Display for PTBPreview {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut builder = TableBuilder::default();
-        let columns = vec!["command", "from", "value(s)"];
-        builder.set_header(columns);
-        let mut from = "console";
-        for cmd in &self.cmds {
-            if cmd.name == "file-include-start" {
-                from = cmd.values.first().unwrap();
-                continue;
-            } else if cmd.name == "file-include-end" {
-                from = "console";
-                continue;
-            } else if cmd.is_preview_false() || cmd.is_warn_shadows_false() {
-                continue;
-            }
-            builder.push_record([
-                cmd.name.to_string(),
-                from.to_string(),
-                cmd.values.join(" ").to_string(),
-            ]);
-        }
-        let mut table = builder.build();
-        table.with(TablePanel::header("PTB Preview"));
-        table.with(TableStyle::rounded().horizontals([
-            HorizontalLine::new(1, TableStyle::modern().get_horizontal()),
-            HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
-            HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
-        ]));
-        table.with(tabled::settings::style::BorderSpanCorrection);
-
-        write!(f, "{}", table)
-    }
-}
-
-impl Display for PTBGas {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let r = match self {
-            PTBGas::Min => "min",
-            PTBGas::Max => "max",
-            PTBGas::Sum => "sum",
-        };
-        write!(f, "{}", r)
     }
 }
 
