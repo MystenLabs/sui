@@ -1,5 +1,14 @@
 # @mysten/create-dapp
 
+## 0.2.4
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+- Updated dependencies [4830361fa4]
+  - @mysten/sui.js@0.50.1
+  - @mysten/dapp-kit@0.12.2
+
 ## 0.2.3
 
 ### Patch Changes

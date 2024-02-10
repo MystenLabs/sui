@@ -14,7 +14,7 @@
 	"license": "Apache-2.0",
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
-		"typescript": "^5.1.6",
+		"typescript": "^5.3.3",
 		"vitest": "^0.33.0",
 		"wasm-pack": "^0.12.1"
 	}

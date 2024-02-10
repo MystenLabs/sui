@@ -77,7 +77,6 @@ use std::{
     fmt,
     path::{Path, PathBuf},
     sync::{Arc, Condvar, Mutex},
-    thread,
 };
 use tempfile::tempdir;
 use url::Url;
@@ -663,89 +662,84 @@ impl SymbolicatorRunner {
         let thread_mtx_cvar = mtx_cvar.clone();
         let runner = SymbolicatorRunner { mtx_cvar };
 
-        thread::Builder::new()
-            .stack_size(STACK_SIZE_BYTES)
-            .spawn(move || {
-                let (mtx, cvar) = &*thread_mtx_cvar;
-                // Locations opened in the IDE (files or directories) for which manifest file is missing
-                let mut missing_manifests = BTreeSet::new();
-                // infinite loop to wait for symbolication requests
-                eprintln!("starting symbolicator runner loop");
-                loop {
-                    let starting_path_opt = {
-                        // hold the lock only as long as it takes to get the data, rather than through
-                        // the whole symbolication process (hence a separate scope here)
-                        let mut symbolicate = mtx.lock().unwrap();
+        let (mtx, cvar) = &*thread_mtx_cvar;
+        // Locations opened in the IDE (files or directories) for which manifest file is missing
+        let mut missing_manifests = BTreeSet::new();
+        // infinite loop to wait for symbolication requests
+        eprintln!("starting symbolicator runner loop");
+        loop {
+            let starting_path_opt = {
+                // hold the lock only as long as it takes to get the data, rather than through
+                // the whole symbolication process (hence a separate scope here)
+                let mut symbolicate = mtx.lock().unwrap();
+                match symbolicate.clone() {
+                    RunnerState::Quit => break,
+                    RunnerState::Run(root_dir) => {
+                        *symbolicate = RunnerState::Wait;
+                        Some(root_dir)
+                    }
+                    RunnerState::Wait => {
+                        // wait for next request
+                        symbolicate = cvar.wait(symbolicate).unwrap();
                         match symbolicate.clone() {
                             RunnerState::Quit => break,
                             RunnerState::Run(root_dir) => {
                                 *symbolicate = RunnerState::Wait;
                                 Some(root_dir)
                             }
-                            RunnerState::Wait => {
-                                // wait for next request
-                                symbolicate = cvar.wait(symbolicate).unwrap();
-                                match symbolicate.clone() {
-                                    RunnerState::Quit => break,
-                                    RunnerState::Run(root_dir) => {
-                                        *symbolicate = RunnerState::Wait;
-                                        Some(root_dir)
-                                    }
-                                    RunnerState::Wait => None,
-                                }
-                            }
-                        }
-                    };
-                    if let Some(starting_path) = starting_path_opt {
-                        let root_dir = Self::root_dir(&starting_path);
-                        if root_dir.is_none() && !missing_manifests.contains(&starting_path) {
-                            eprintln!("reporting missing manifest");
-
-                            // report missing manifest file only once to avoid cluttering IDE's UI in
-                            // cases when developer indeed intended to open a standalone file that was
-                            // not meant to compile
-                            missing_manifests.insert(starting_path);
-                            if let Err(err) = sender.send(Err(anyhow!(
-                                "Unable to find package manifest. Make sure that
-                            the source files are located in a sub-directory of a package containing
-                            a Move.toml file. "
-                            ))) {
-                                eprintln!("could not pass missing manifest error: {:?}", err);
-                            }
-                            continue;
-                        }
-                        eprintln!("symbolication started");
-                        match get_symbols(root_dir.unwrap().as_path(), lint) {
-                            Ok((symbols_opt, lsp_diagnostics)) => {
-                                eprintln!("symbolication finished");
-                                if let Some(new_symbols) = symbols_opt {
-                                    // merge the new symbols with the old ones to support a
-                                    // (potentially) new project/package that symbolication information
-                                    // was built for
-                                    //
-                                    // TODO: we may consider "unloading" symbolication information when
-                                    // files/directories are being closed but as with other performance
-                                    // optimizations (e.g. incrementalizatino of the vfs), let's wait
-                                    // until we know we actually need it
-                                    let mut old_symbols = symbols.lock().unwrap();
-                                    (*old_symbols).merge(new_symbols);
-                                }
-                                // set/reset (previous) diagnostics
-                                if let Err(err) = sender.send(Ok(lsp_diagnostics)) {
-                                    eprintln!("could not pass diagnostics: {:?}", err);
-                                }
-                            }
-                            Err(err) => {
-                                eprintln!("symbolication failed: {:?}", err);
-                                if let Err(err) = sender.send(Err(err)) {
-                                    eprintln!("could not pass compiler error: {:?}", err);
-                                }
-                            }
+                            RunnerState::Wait => None,
                         }
                     }
                 }
-            })
-            .unwrap();
+            };
+            if let Some(starting_path) = starting_path_opt {
+                let root_dir = Self::root_dir(&starting_path);
+                if root_dir.is_none() && !missing_manifests.contains(&starting_path) {
+                    eprintln!("reporting missing manifest");
+
+                    // report missing manifest file only once to avoid cluttering IDE's UI in
+                    // cases when developer indeed intended to open a standalone file that was
+                    // not meant to compile
+                    missing_manifests.insert(starting_path);
+                    if let Err(err) = sender.send(Err(anyhow!(
+                        "Unable to find package manifest. Make sure that
+                            the source files are located in a sub-directory of a package containing
+                            a Move.toml file. "
+                    ))) {
+                        eprintln!("could not pass missing manifest error: {:?}", err);
+                    }
+                    continue;
+                }
+                eprintln!("symbolication started");
+                match get_symbols(root_dir.unwrap().as_path(), lint) {
+                    Ok((symbols_opt, lsp_diagnostics)) => {
+                        eprintln!("symbolication finished");
+                        if let Some(new_symbols) = symbols_opt {
+                            // merge the new symbols with the old ones to support a
+                            // (potentially) new project/package that symbolication information
+                            // was built for
+                            //
+                            // TODO: we may consider "unloading" symbolication information when
+                            // files/directories are being closed but as with other performance
+                            // optimizations (e.g. incrementalizatino of the vfs), let's wait
+                            // until we know we actually need it
+                            let mut old_symbols = symbols.lock().unwrap();
+                            (*old_symbols).merge(new_symbols);
+                        }
+                        // set/reset (previous) diagnostics
+                        if let Err(err) = sender.send(Ok(lsp_diagnostics)) {
+                            eprintln!("could not pass diagnostics: {:?}", err);
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("symbolication failed: {:?}", err);
+                        if let Err(err) = sender.send(Err(err)) {
+                            eprintln!("could not pass compiler error: {:?}", err);
+                        }
+                    }
+                }
+            }
+        }
 
         runner
     }

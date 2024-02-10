@@ -1,5 +1,14 @@
 # @mysten/enoki
 
+## 0.1.3
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+- Updated dependencies [4830361fa4]
+  - @mysten/sui.js@0.50.1
+  - @mysten/zklogin@0.4.3
+
 ## 0.1.2
 
 ### Patch Changes

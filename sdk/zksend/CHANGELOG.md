@@ -1,5 +1,15 @@
 # @mysten/zksend
 
+## 0.2.2
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+- 4fd676671b: Fix issue with overwriting balances when adding multiple balances for the same unnormalized coinType"
+- Updated dependencies [4830361fa4]
+  - @mysten/wallet-standard@0.10.3
+  - @mysten/sui.js@0.50.1
+
 ## 0.2.1
 
 ### Patch Changes

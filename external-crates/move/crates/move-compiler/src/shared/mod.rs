@@ -344,11 +344,7 @@ impl CompilationEnv {
     }
 
     pub fn add_diag(&mut self, mut diag: Diagnostic) {
-        let filter = self.warning_filter.last();
-        let is_filtered = filter
-            .map(|filter| filter.is_filtered(&diag))
-            .unwrap_or(false);
-        if !is_filtered {
+        if !self.is_filtered(&diag) {
             // add help to suppress warning, if applicable
             // TODO do we want a centralized place for tips like this?
             if diag.info().severity() == Severity::Warning {
@@ -366,7 +362,7 @@ impl CompilationEnv {
                 }
             }
             self.diags.add(diag)
-        } else if !filter.unwrap().for_dependency() {
+        } else if !self.filter_for_dependency() {
             // unwrap above is safe as the filter has been used (thus it must exist)
             self.diags.add_source_filtered(diag)
         }
@@ -424,22 +420,26 @@ impl CompilationEnv {
     }
 
     /// Add a new filter for warnings
-    pub fn add_warning_filter_scope(&mut self, mut filter: WarningFilters) {
-        // This essentially "clones" the current filter into the next scope. This should be
-        // efficient enough since the diag_filter vec should be only about 2 or 3 elements deep
-        // and the size of the filter should only be relatively small (at most 10 or so elements)
-        debug_assert!(
-            self.warning_filter.len() <= 3,
-            "TODO If triggered this TODO you might want to make this more efficient"
-        );
-        if let Some(cur_filter) = self.warning_filter.last() {
-            filter.union(cur_filter)
-        }
+    pub fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
         self.warning_filter.push(filter)
     }
 
     pub fn pop_warning_filter_scope(&mut self) {
         self.warning_filter.pop().unwrap();
+    }
+
+    fn is_filtered(&self, diag: &Diagnostic) -> bool {
+        self.warning_filter
+            .iter()
+            .rev()
+            .any(|filter| filter.is_filtered(diag))
+    }
+
+    fn filter_for_dependency(&self) -> bool {
+        self.warning_filter
+            .iter()
+            .rev()
+            .any(|filter| filter.for_dependency())
     }
 
     pub fn known_filter_names(&self) -> impl IntoIterator<Item = FilterPrefix> + '_ {

@@ -4,7 +4,6 @@
 use anyhow::Result;
 use move_binary_format::CompiledModule;
 use move_package::BuildConfig as MoveBuildConfig;
-use std::thread::Builder;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -28,19 +27,12 @@ fn main() {
     let sui_framework_path_clone = sui_framework_path.clone();
     let move_stdlib_path = packages_path.join("move-stdlib");
 
-    Builder::new()
-        .stack_size(16 * 1024 * 1024) // build_packages require bigger stack size on windows.
-        .spawn(move || {
-            build_packages(
-                deepbook_path_clone,
-                sui_system_path_clone,
-                sui_framework_path_clone,
-                out_dir,
-            )
-        })
-        .unwrap()
-        .join()
-        .unwrap();
+    build_packages(
+        deepbook_path_clone,
+        sui_system_path_clone,
+        sui_framework_path_clone,
+        out_dir,
+    );
 
     println!("cargo:rerun-if-changed=build.rs");
     println!(

@@ -89,7 +89,8 @@ export class ZkSendLinkBuilder {
 	}
 
 	addClaimableBalance(coinType: string, amount: bigint) {
-		this.#balances.set(normalizeStructTag(coinType), (this.#balances.get(coinType) ?? 0n) + amount);
+		const normalizedType = normalizeStructTag(coinType);
+		this.#balances.set(normalizedType, (this.#balances.get(normalizedType) ?? 0n) + amount);
 	}
 
 	addClaimableObject(id: string) {
