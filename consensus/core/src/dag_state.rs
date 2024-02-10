@@ -283,7 +283,25 @@ impl DagState {
         }
     }
 
+    // Write commits to store. Commits should be provided in commit order, meaning
+    // the last element in commits is the new last_commit.
+    pub(crate) fn write_commits(
+        &mut self,
+        commits: Vec<Commit>,
+        committed_blocks: Vec<VerifiedBlock>,
+    ) {
+        assert!(!commits.is_empty());
+        let last_commit = commits.last().unwrap().clone();
+        self.store
+            .write(committed_blocks, commits)
+            .expect("Writing commits to store should not fail");
+        self.set_last_commit(last_commit);
+    }
+
     pub(crate) fn set_last_commit(&mut self, commit: Commit) {
+        if let Some(last_commit) = &self.last_commit {
+            assert!(commit.index >= last_commit.index);
+        }
         self.last_commit = Some(commit);
     }
 

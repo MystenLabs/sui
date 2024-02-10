@@ -13,14 +13,15 @@ use crate::{
 
 /// Role of CommitObserver
 /// - Called by core when block is created via try_new_block or force_new_block
-/// and try_commit returns newly comitted leaders
+/// and try_commit() returns newly committed leaders
 /// - The newly committed leaders are sent to commit observer and then commit observer
 /// gets subdags for each leader via the commit interpreter (linearizer)
 /// - The committed subdags are sent as consensus output via an unbounded tokio channel.
 /// No back pressure mechanism is needed as backpressure is handled as input into
 /// consenus.
-/// - Last commit index is persisted in store as soon as the subdag is sent to
-/// output channel.
+/// - Commits are persisted in store as soon as subdags have been collected in
+/// the commit interpreter (linearizer). Last commit & last commit index can then
+/// be retrieved from store at anytime.
 /// - When CommitObserver is initialized a last received commit index can be used
 /// to ensure any missing commits are re-sent.
 
@@ -62,34 +63,20 @@ impl CommitObserver {
         &mut self,
         committed_leaders: Vec<VerifiedBlock>,
     ) -> Vec<CommittedSubDag> {
-        let commits = self.commit_interpreter.handle_commit(committed_leaders);
-        let mut sent_sub_dags = vec![];
-        let mut sent_commit_data = vec![];
+        let committed_sub_dags = self.commit_interpreter.handle_commit(committed_leaders);
 
-        for (commit_data, committed_sub_dag) in commits.into_iter() {
+        for committed_sub_dag in committed_sub_dags.iter() {
             if let Err(err) = self.sender.send(committed_sub_dag.clone()) {
                 tracing::error!(
                     "Failed to send committed sub-dag, probably due to shutdown: {err:?}"
                 );
-                break;
+                // TODO: revisit this to see if we should pass error/shutdown signal
+                // back to core.
             }
-            sent_sub_dags.push(committed_sub_dag);
-            sent_commit_data.push(commit_data);
         }
 
-        // Persist sent commits to store
-        self.store
-            .write(
-                sent_sub_dags
-                    .iter()
-                    .flat_map(|subdag| subdag.blocks.clone())
-                    .collect::<Vec<_>>(),
-                sent_commit_data,
-            )
-            .expect("Writing commits to store should not fail");
-
-        self.report_metrics(&sent_sub_dags);
-        sent_sub_dags
+        self.report_metrics(&committed_sub_dags);
+        committed_sub_dags
     }
 
     fn send_missing_commits(&mut self, last_received_index: CommitIndex) {
@@ -160,23 +147,24 @@ impl CommitObserver {
 mod tests {
     use super::*;
 
-    use consensus_config::AuthorityIndex;
     use parking_lot::RwLock;
     use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
     use crate::{
-        block::{BlockRef, BlockTimestampMs, TestBlock},
+        block::BlockRef,
         commit::DEFAULT_WAVE_LENGTH,
         context::Context,
         dag_state::DagState,
         leader_schedule::LeaderSchedule,
         storage::mem_store::MemStore,
+        test_dag::{build_dag, get_all_leader_blocks},
     };
 
     #[test]
     fn test_handle_commit() {
         telemetry_subscribers::init_for_testing();
-        let context = Arc::new(Context::new_for_test(4).0);
+        let num_authorities = 4;
+        let context = Arc::new(Context::new_for_test(num_authorities).0);
         let mem_store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
@@ -198,13 +186,14 @@ mod tests {
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds = 10;
-        let num_authorities = 4;
-        let leaders = setup_test(
-            context.clone(),
+        build_dag(context.clone(), dag_state.clone(), None, num_rounds);
+        let leaders = get_all_leader_blocks(
             dag_state.clone(),
             leader_schedule,
             num_rounds,
-            num_authorities,
+            DEFAULT_WAVE_LENGTH,
+            false,
+            1,
         );
 
         let commits = observer.handle_commit(leaders.clone());
@@ -220,14 +209,14 @@ mod tests {
                 // of the leader minus the genesis round blocks
                 assert_eq!(
                     subdag.blocks.len(),
-                    (num_authorities * (DEFAULT_WAVE_LENGTH - 1)) as usize + 1
+                    (num_authorities * (DEFAULT_WAVE_LENGTH - 1) as usize) + 1
                 );
             } else {
                 // Every subdag after will be missing the leader block from the previous
                 // committed subdag
                 assert_eq!(
                     subdag.blocks.len(),
-                    (num_authorities * DEFAULT_WAVE_LENGTH) as usize
+                    (num_authorities * DEFAULT_WAVE_LENGTH as usize)
                 );
             }
             for block in subdag.blocks.iter() {
@@ -238,17 +227,11 @@ mod tests {
         }
 
         // Check commits sent over consensus output channel is accurate
-        let mut received_subdag_count = 0;
+        let mut received_subdag_index = 0;
         while let Ok(subdag) = receiver.try_recv() {
-            assert_eq!(subdag.leader, commits[received_subdag_count].leader);
-            assert_eq!(subdag.blocks, commits[received_subdag_count].blocks);
-            assert_eq!(
-                subdag.commit_index,
-                commits[received_subdag_count].commit_index
-            );
-            received_subdag_count += 1;
-
-            if received_subdag_count == leaders.len() {
+            assert_eq!(subdag, commits[received_subdag_index]);
+            received_subdag_index = subdag.commit_index as usize;
+            if received_subdag_index == leaders.len() {
                 break;
             }
         }
@@ -267,7 +250,8 @@ mod tests {
     #[test]
     fn test_send_missing_commits_from_index() {
         telemetry_subscribers::init_for_testing();
-        let context = Arc::new(Context::new_for_test(4).0);
+        let num_authorities = 4;
+        let context = Arc::new(Context::new_for_test(num_authorities).0);
         let mem_store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
@@ -289,13 +273,14 @@ mod tests {
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds = 10;
-        let num_authorities = 4;
-        let leaders = setup_test(
-            context.clone(),
+        build_dag(context.clone(), dag_state.clone(), None, num_rounds);
+        let leaders = get_all_leader_blocks(
             dag_state.clone(),
             leader_schedule,
             num_rounds,
-            num_authorities,
+            DEFAULT_WAVE_LENGTH,
+            false,
+            1,
         );
 
         // Commit first batch of leaders (2) and "receive" the subdags as the
@@ -313,14 +298,8 @@ mod tests {
         let mut received_subdag_index = 0;
         while let Ok(subdag) = receiver.try_recv() {
             tracing::info!("Received {subdag}");
-            assert_eq!(subdag.leader, commits[received_subdag_index].leader);
-            assert_eq!(subdag.blocks, commits[received_subdag_index].blocks);
-            assert_eq!(
-                subdag.commit_index,
-                commits[received_subdag_index].commit_index
-            );
+            assert_eq!(subdag, commits[received_subdag_index]);
             received_subdag_index = subdag.commit_index as usize;
-
             if received_subdag_index == expected_last_received_index {
                 break;
             }
@@ -351,14 +330,8 @@ mod tests {
         let expected_last_sent_index = 3;
         while let Ok(subdag) = receiver.try_recv() {
             tracing::info!("{subdag} was sent but not received by consumer");
-            assert_eq!(subdag.leader, commits[received_subdag_index].leader);
-            assert_eq!(subdag.blocks, commits[received_subdag_index].blocks);
-            assert_eq!(
-                subdag.commit_index,
-                commits[received_subdag_index].commit_index
-            );
+            assert_eq!(subdag, commits[received_subdag_index]);
             received_subdag_index = subdag.commit_index as usize;
-
             if received_subdag_index == expected_last_sent_index {
                 break;
             }
@@ -387,14 +360,8 @@ mod tests {
         received_subdag_index = expected_last_received_index;
         while let Ok(subdag) = receiver.try_recv() {
             tracing::info!("Received {subdag} on resubmission");
-            assert_eq!(subdag.leader, commits[received_subdag_index].leader);
-            assert_eq!(subdag.blocks, commits[received_subdag_index].blocks);
-            assert_eq!(
-                subdag.commit_index,
-                commits[received_subdag_index].commit_index
-            );
+            assert_eq!(subdag, commits[received_subdag_index]);
             received_subdag_index = subdag.commit_index as usize;
-
             if received_subdag_index == expected_last_sent_index {
                 break;
             }
@@ -406,7 +373,8 @@ mod tests {
     #[test]
     fn test_send_no_missing_commits() {
         telemetry_subscribers::init_for_testing();
-        let context = Arc::new(Context::new_for_test(4).0);
+        let num_authorities = 4;
+        let context = Arc::new(Context::new_for_test(num_authorities).0);
         let mem_store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
@@ -428,13 +396,14 @@ mod tests {
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds = 10;
-        let num_authorities = 4;
-        let leaders = setup_test(
-            context.clone(),
+        build_dag(context.clone(), dag_state.clone(), None, num_rounds);
+        let leaders = get_all_leader_blocks(
             dag_state.clone(),
             leader_schedule,
             num_rounds,
-            num_authorities,
+            DEFAULT_WAVE_LENGTH,
+            false,
+            1,
         );
 
         // Commit all of the leaders and "receive" the subdags as the consumer of
@@ -446,14 +415,8 @@ mod tests {
         let mut received_subdag_index = 0;
         while let Ok(subdag) = receiver.try_recv() {
             tracing::info!("Received {subdag}");
-            assert_eq!(subdag.leader, commits[received_subdag_index].leader);
-            assert_eq!(subdag.blocks, commits[received_subdag_index].blocks);
-            assert_eq!(
-                subdag.commit_index,
-                commits[received_subdag_index].commit_index
-            );
+            assert_eq!(subdag, commits[received_subdag_index]);
             received_subdag_index = subdag.commit_index as usize;
-
             if received_subdag_index == expected_last_received_index {
                 break;
             }
@@ -481,55 +444,6 @@ mod tests {
         // No commits should be resubmitted as consensus store's last commit index
         // is equal to last received index by consumer
         verify_channel_empty(&mut receiver);
-    }
-
-    /// Populate fully connected test blocks for round & authorities provided.
-    fn setup_test(
-        context: Arc<Context>,
-        dag_state: Arc<RwLock<DagState>>,
-        leader_schedule: LeaderSchedule,
-        num_rounds: u32,
-        num_authorities: u32,
-    ) -> Vec<VerifiedBlock> {
-        let mut leaders = vec![];
-
-        let (genesis_references, genesis): (Vec<_>, Vec<_>) = context
-            .committee
-            .authorities()
-            .map(|index| {
-                let author_idx = index.0.value() as u32;
-                let block = TestBlock::new(0, author_idx).build();
-                VerifiedBlock::new_for_test(block)
-            })
-            .map(|block| (block.reference(), block))
-            .unzip();
-        dag_state.write().accept_blocks(genesis);
-
-        let mut ancestors = genesis_references;
-        for round in 1..=num_rounds {
-            let mut new_ancestors = vec![];
-            for author in 0..num_authorities {
-                let base_ts = round as BlockTimestampMs * 1000;
-                let block = VerifiedBlock::new_for_test(
-                    TestBlock::new(round, author)
-                        .set_timestamp_ms(base_ts + (author + round) as u64)
-                        .set_ancestors(ancestors.clone())
-                        .build(),
-                );
-                dag_state.write().accept_block(block.clone());
-                new_ancestors.push(block.reference());
-
-                if round % DEFAULT_WAVE_LENGTH == 0
-                    && AuthorityIndex::new_for_test(author)
-                        == leader_schedule.elect_leader(round, 0)
-                {
-                    leaders.push(block.clone());
-                }
-            }
-            ancestors = new_ancestors;
-        }
-
-        leaders
     }
 
     /// After receiving all expected subdags, ensure channel is empty
