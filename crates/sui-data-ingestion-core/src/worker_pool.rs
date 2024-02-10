@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::executor::MAX_CHECKPOINTS_IN_PROGRESS;
-use crate::workers::Worker;
+use crate::Worker;
 use mysten_metrics::spawn_monitored_task;
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::sync::Arc;
@@ -76,7 +76,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
                             .await
                             .expect("checkpoint processing failed for checkpoint");
                             info!("finished checkpoint processing {} for workflow {} in {:?}", sequence_number, task_name, start_time.elapsed());
-                            cloned_progress_sender.send((worker_id, sequence_number, worker.save_progress().await)).await.expect("failed to update progress");
+                            cloned_progress_sender.send((worker_id, sequence_number, worker.save_progress(sequence_number).await)).await.expect("failed to update progress");
                         }
                     }
                 }
@@ -97,14 +97,14 @@ impl<W: Worker + 'static> WorkerPool<W> {
                         workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
                     }
                 }
-                Some((worker_id, status_update, should_save_progress)) = progress_receiver.recv() => {
+                Some((worker_id, status_update, progress_watermark)) = progress_receiver.recv() => {
                     idle.insert(worker_id);
-                    updates.insert(status_update, should_save_progress);
+                    updates.insert(status_update, progress_watermark);
                     if status_update == current_checkpoint_number {
                         let mut executor_status_update = None;
-                        while let Some(should_save_progress) = updates.remove(&current_checkpoint_number) {
-                            if should_save_progress {
-                                executor_status_update = Some(current_checkpoint_number + 1);
+                        while let Some(progress_watermark) = updates.remove(&current_checkpoint_number) {
+                            if let Some(watermark) =  progress_watermark {
+                                executor_status_update = Some(watermark + 1);
                             }
                             current_checkpoint_number += 1;
                         }

@@ -4,8 +4,8 @@
 use crate::progress_store::{ExecutorProgress, ProgressStore, ProgressStoreWrapper};
 use crate::reader::CheckpointReader;
 use crate::worker_pool::WorkerPool;
-use crate::workers::Worker;
 use crate::DataIngestionMetrics;
+use crate::Worker;
 use anyhow::Result;
 use futures::Future;
 use mysten_metrics::spawn_monitored_task;
