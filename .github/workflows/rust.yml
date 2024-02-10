@@ -53,14 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-      - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@30f432979e99f3ea66a8fa2eede53c07063995d8
-        with:
-          crate: cargo-hakari
-          locked: true
       - run: cargo xlint
-      - run: |
-          cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
 
   release-notes-description-check:
     name: release-notes-check
@@ -155,11 +148,6 @@ jobs:
       - name: rustdoc
         run: |
           cargo doc --workspace --no-deps
-      - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@30f432979e99f3ea66a8fa2eede53c07063995d8
-        with:
-          crate: cargo-hakari
-          locked: true
       - name: Install rustfmt
         run: rustup component add rustfmt
       - name: sui-execution
@@ -359,11 +347,6 @@ jobs:
     runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@v3
-      - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@30f432979e99f3ea66a8fa2eede53c07063995d8
-        with:
-          crate: cargo-hakari
-          locked: true
       - name: Make cut
         run: ./scripts/execution_layer.py cut for_ci_test
       - name: Check execution builds
