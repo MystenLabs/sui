@@ -2819,7 +2819,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
             };
             EE::IfElse(eb, et, ef)
         }
-        PE::Labled(name, pe) => {
+        PE::Labeled(name, pe) => {
             let e = exp(context, pe);
             return maybe_labeled_exp(context, loc, name, e);
         }

@@ -624,7 +624,7 @@ pub enum Exp_ {
     Loop(Box<Exp>),
 
     // 'label: e
-    Labled(BlockLabel, Box<Exp>),
+    Labeled(BlockLabel, Box<Exp>),
     // { seq }
     Block(Sequence),
     // |lv1, ..., lvn| e
@@ -1845,7 +1845,7 @@ impl AstDebug for Exp_ {
                 w.write("loop ");
                 e.ast_debug(w);
             }
-            E::Labled(name, e) => {
+            E::Labeled(name, e) => {
                 w.write(format!("'{name}: "));
                 e.ast_debug(w)
             }

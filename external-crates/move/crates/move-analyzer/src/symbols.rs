@@ -1556,7 +1556,7 @@ impl<'a> ParsingSymbolicator<'a> {
                 self.exp_symbols(e2);
             }
             E::Loop(e) => self.exp_symbols(e),
-            E::Labled(_, e) => self.exp_symbols(e),
+            E::Labeled(_, e) => self.exp_symbols(e),
             E::Block(seq) => self.seq_symbols(seq),
             E::ExpList(l) => l.iter().for_each(|e| self.exp_symbols(e)),
             E::Assign(e1, e2) => {
