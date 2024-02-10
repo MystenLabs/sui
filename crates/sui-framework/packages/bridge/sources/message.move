@@ -356,6 +356,14 @@ module bridge::message {
         self.op_type
     }
 
+    public fun blocklist_type(self: &Blocklist): u8 {
+        self.blocklist_type
+    }
+
+    public fun blocklist_validator_addresses(self: &Blocklist): &vector<vector<u8>> {
+        &self.validator_addresses
+    }
+
     fun reverse_bytes(bytes: vector<u8>): vector<u8> {
         vector::reverse(&mut bytes);
         bytes

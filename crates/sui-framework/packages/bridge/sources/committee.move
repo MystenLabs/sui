@@ -11,9 +11,12 @@ module bridge::committee {
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set;
+    use bridge::crypto;
 
-    use bridge::message::{Self, BridgeMessage};
+    use bridge::message::{Self, BridgeMessage, Blocklist};
     use bridge::message_types;
+    #[test_only]
+    use bridge::chain_ids;
 
     friend bridge::bridge;
 
@@ -106,6 +109,20 @@ module bridge::committee {
         assert!(threshold >= required_threshold, ESignatureBelowThreshold);
     }
 
+    // This function applys the blocklist to the committee members, we won't need to run this very often so this is not gas optimised.
+    public(friend) fun execute_blocklist(self: &mut BridgeCommittee, blocklist: Blocklist) {
+        let i = 0;
+        let blocklisted = message::blocklist_type(&blocklist) != 1;
+        while (i < vec_map::size(&self.members)) {
+            let (pub_key, member) = vec_map::get_entry_by_idx_mut(&mut self.members, i);
+            let address = crypto::ecdsa_pub_key_to_eth_address(*pub_key);
+            if (vector::contains(message::blocklist_validator_addresses(&blocklist), &address)) {
+                member.blocklisted = blocklisted;
+            };
+            i = i + 1;
+        }
+    }
+
     #[test_only]
     const TEST_MSG: vector<u8> =
         b"00010a0000000000000000200000000000000000000000000000000000000000000000000000000000000064012000000000000000000000000000000000000000000000000000000000000000c8033930000000000000";
@@ -180,6 +197,51 @@ module bridge::committee {
             )],
         );
         abort 0
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ESignatureBelowThreshold)]
+    fun test_verify_signatures_with_blocked_committee_member() {
+        let committee = setup_test();
+        let msg = message::deserialize_message(hex::decode(TEST_MSG));
+        // good path, this test should have passed in previous test
+        verify_signatures(
+            &committee,
+            msg,
+            vector[hex::decode(
+                b"8ba030a450cb1e36f61e572645fc9da1dea5f79b6db663a21ab63286d7fc29af447433abdd0c0b35ab751154ac5b612ae64d3be810f0d9e10ff68e764514ced300"
+            ), hex::decode(
+                b"439379cc7b3ee3ebe1ff59d011dafc1caac47da6919b089c90f6a24e8c284b963b20f1f5421385456e57ac6b69c4b5f0d345aa09b8bc96d88d87051c7349e83801"
+            )],
+        );
+
+        let (validator1, _) = vec_map::get_entry_by_idx(&committee.members, 0);
+        // Block a member
+        let blocklist = message::create_block_list_message(
+            chain_ids::sui_testnet(),
+            0,
+            0, // type 0 is block
+            vector[crypto::ecdsa_pub_key_to_eth_address(*validator1)]
+        );
+        let blocklist = message::extract_blocklist_payload(&blocklist);
+        execute_blocklist(&mut committee, blocklist);
+
+        // Verify signature should fail now
+        verify_signatures(
+            &committee,
+            msg,
+            vector[hex::decode(
+                b"8ba030a450cb1e36f61e572645fc9da1dea5f79b6db663a21ab63286d7fc29af447433abdd0c0b35ab751154ac5b612ae64d3be810f0d9e10ff68e764514ced300"
+            ), hex::decode(
+                b"439379cc7b3ee3ebe1ff59d011dafc1caac47da6919b089c90f6a24e8c284b963b20f1f5421385456e57ac6b69c4b5f0d345aa09b8bc96d88d87051c7349e83801"
+            )],
+        );
+
+        // Clean up
+        let BridgeCommittee {
+            members: _,
+            thresholds: _
+        } = committee;
     }
 
     #[test_only]

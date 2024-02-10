@@ -18,7 +18,9 @@ module bridge::bridge {
 
     use bridge::chain_ids;
     use bridge::committee::{Self, BridgeCommittee};
-    use bridge::message::{Self, BridgeMessage, BridgeMessageKey};
+    use bridge::message::{Self, BridgeMessage, BridgeMessageKey, EmergencyOp, UpdateBridgeLimit,
+        UpdateAssetPrice
+    };
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury};
 
@@ -199,7 +201,9 @@ module bridge::bridge {
         let key = message::key(&message);
 
         // retrieve pending message if source chain is Sui, the initial message must exist on chain.
-        if (message::message_type(&message) == message_types::token() && message::source_chain(&message) == inner.chain_id) {
+        if (message::message_type(&message) == message_types::token() && message::source_chain(
+            &message
+        ) == inner.chain_id) {
             let record = linked_table::borrow_mut(&mut inner.bridge_records, key);
             assert!(record.message == message, EMalformedMessageError);
             assert!(!record.claimed, EInvariantSuiInitializedTokenTransferShouldNotBeClaimed);
@@ -287,7 +291,12 @@ module bridge::bridge {
 
     // This function can only be called by the token recipient
     // Returns None if the token has already been claimed.
-    public fun claim_token<T>(self: &mut Bridge, source_chain: u8, bridge_seq_num: u64, ctx: &mut TxContext): Option<Coin<T>> {
+    public fun claim_token<T>(
+        self: &mut Bridge,
+        source_chain: u8,
+        bridge_seq_num: u64,
+        ctx: &mut TxContext
+    ): Option<Coin<T>> {
         let (token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
         // Only token owner can claim the token
         assert!(tx_context::sender(ctx) == owner, EUnauthorisedClaim);
@@ -310,19 +319,38 @@ module bridge::bridge {
         transfer::public_transfer(option::destroy_some(token), owner)
     }
 
-    public fun execute_emergency_op(
+    public fun execute_system_message(
         self: &mut Bridge,
         message: BridgeMessage,
         signatures: vector<vector<u8>>,
     ) {
-        assert!(message::message_type(&message) == message_types::emergency_op(), EUnexpectedMessageType);
+        let message_type = message::message_type(&message);
         let inner = load_inner_mut(self);
-        // check emergency ops seq number, emergency ops can only be executed in sequence order.
-        let emergency_op_seq_num = next_seq_num(inner, message_types::emergency_op());
-        assert!(message::seq_num(&message) == emergency_op_seq_num, EUnexpectedSeqNum);
-        committee::verify_signatures(&inner.committee, message, signatures);
-        let payload = message::extract_emergency_op_payload(&message);
 
+        // check system ops seq number, system ops can only be executed in sequence order.
+        let system_op_seq_num = next_seq_num(inner, message_type);
+        assert!(message::seq_num(&message) == system_op_seq_num, EUnexpectedSeqNum);
+
+        committee::verify_signatures(&inner.committee, message, signatures);
+
+        if (message_type == message_types::emergency_op()) {
+            let payload = message::extract_emergency_op_payload(&message);
+            execute_emergency_op(inner, payload);
+        } else if (message_type == message_types::committee_blocklist()) {
+            let payload = message::extract_blocklist_payload(&message);
+            committee::execute_blocklist(&mut inner.committee, payload);
+        } else if (message_type == message_types::update_bridge_limit()) {
+            let payload = message::extract_update_bridge_limit(&message);
+            execute_update_bridge_limit(inner, payload);
+        } else if (message_type == message_types::update_asset_price()) {
+            let payload = message::extract_update_asset_price(&message);
+            execute_update_asset_price(inner, payload);
+        } else {
+            abort EUnexpectedMessageType
+        };
+    }
+
+    fun execute_emergency_op(inner: &BridgeInner, payload: EmergencyOp) {
         if (message::emergency_op_type(&payload) == FREEZE) {
             inner.frozen == true;
         } else if (message::emergency_op_type(&payload) == UNFREEZE) {
@@ -330,6 +358,14 @@ module bridge::bridge {
         } else {
             abort EUnexpectedOperation
         };
+    }
+
+    fun execute_update_bridge_limit(_inner: &mut BridgeInner, _payload: UpdateBridgeLimit) {
+        // TODO: Implement when Limiter is merged
+    }
+
+    fun execute_update_asset_price(_inner: &mut BridgeInner, _payload: UpdateAssetPrice) {
+        // TODO: Implement when Limiter is merged
     }
 
     fun next_seq_num(self: &mut BridgeInner, msg_type: u8): u64 {
