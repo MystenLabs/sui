@@ -292,6 +292,9 @@ h4 {
   row-gap: 1rem;
   column-gap: 1rem;
 }
+.markdown h1:first-child {
+  margin-top: 1rem;
+}
 
 
 /** Globals **/

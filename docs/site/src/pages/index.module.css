@@ -137,6 +137,7 @@
   column-gap: .5rem;
   margin: 0 auto;
   padding: 0 1rem;
+  row-gap: 1rem;
 }
 
 .TwoColParagraph {

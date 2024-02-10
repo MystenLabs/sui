@@ -1,9 +1,9 @@
 :root {
-  --sui-cards-border-color: #030f1c;
-  --sui-cards-background: rgba(247, 247, 248, 0.05);
-  --sui-cards-header: #030f1c;
-  --sui-cards-copy: #030f1c;
-  --sui-cards-background-hover: rgba(247, 247, 248, 0.25);
+  --sui-cards-border-color: transparent;
+  --sui-cards-background: #F5F8FA;
+  --sui-cards-header: #4DA2FF;
+  --sui-cards-copy: #91A3B1;
+  --sui-cards-background-hover: #EBF1F5;
 }
 
 [data-theme='dark'] {
