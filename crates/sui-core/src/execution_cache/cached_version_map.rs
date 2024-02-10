@@ -10,25 +10,19 @@ use sui_types::base_types::SequenceNumber;
 /// - The key (SequenceNumber) must be monotonically increasing for each insert. If
 ///   a key is inserted that is less than the previous key, it results in an assertion
 ///   failure.
-/// - Similarly, only the item with the least key can be removed. If an item is removed
-///   from the middle of the map, it is marked for removal by setting its corresponding
-///   `should_remove` flag to true. If the item with the least key is removed, it is removed
-///   immediately, and any consecutive entries that are marked as `should_remove` are also
-///   removed.
+/// - Similarly, only the item with the least key can be removed.
 /// - The intent of these constraints is to ensure that there are never gaps in the collection,
 ///   so that membership in the map can be tested by comparing to both the highest and lowest
 ///   (first and last) entries.
 #[derive(Debug)]
 pub struct CachedVersionMap<V> {
     values: VecDeque<(SequenceNumber, V)>,
-    should_remove: VecDeque<bool>,
 }
 
 impl<V> Default for CachedVersionMap<V> {
     fn default() -> Self {
         Self {
             values: VecDeque::new(),
-            should_remove: VecDeque::new(),
         }
     }
 }
@@ -39,12 +33,16 @@ impl<V> CachedVersionMap<V> {
     }
 
     pub fn insert(&mut self, version: SequenceNumber, value: V) {
-        assert!(
-            self.values.is_empty() || self.values.back().unwrap().0 < version,
-            "version must be monotonically increasing"
-        );
+        if !self.values.is_empty() {
+            let back = self.values.back().unwrap().0;
+            assert!(
+                back < version,
+                "version must be monotonically increasing ({} < {})",
+                back,
+                version
+            );
+        }
         self.values.push_back((version, value));
-        self.should_remove.push_back(false);
     }
 
     pub fn all_lt_or_eq_rev<'a>(
@@ -90,45 +88,18 @@ impl<V> CachedVersionMap<V> {
     // pop items from the front of the map until the first item is >= version
     pub fn truncate(&mut self, limit: usize) {
         while self.values.len() > limit {
-            self.should_remove.pop_front();
             self.values.pop_front();
         }
     }
-}
 
-impl<V> CachedVersionMap<V>
-where
-    V: Clone,
-{
     // remove the value if it is the first element in values. otherwise mark it
     // for removal.
-    pub fn remove(&mut self, version: &SequenceNumber) -> Option<V> {
-        if self.values.is_empty() {
-            return None;
-        }
-
-        if self.values.front().unwrap().0 == *version {
-            self.should_remove.pop_front();
-            let ret = self.values.pop_front().unwrap().1;
-
-            // process any deferred removals
-            while *self.should_remove.front().unwrap_or(&false) {
-                self.should_remove.pop_front();
-                self.values.pop_front();
-            }
-
-            Some(ret)
-        } else {
-            // Removals from the interior are deferred.
-            // Removals will generally be from the front, and the collection will usually
-            // be short, so linear search is preferred.
-            if let Some(index) = self.values.iter().position(|(v, _)| v == version) {
-                self.should_remove[index] = true;
-                Some(self.values[index].1.clone())
-            } else {
-                None
-            }
-        }
+    pub fn pop_oldest(&mut self, version: &SequenceNumber) -> Option<V> {
+        let oldest = self.values.pop_front()?;
+        // if this assert fails it indicates we are committing transaction data out
+        // of causal order
+        assert_eq!(oldest.0, *version, "version must be the oldest in the map");
+        Some(oldest.1)
     }
 }
 
@@ -172,20 +143,21 @@ mod tests {
         map.insert(version1, "First");
         map.insert(version2, "Second");
 
-        let removed = map.remove(&version1);
+        let removed = map.pop_oldest(&version1);
         assert_eq!(removed, Some("First"));
         assert!(!map.values.iter().any(|(v, _)| *v == version1));
     }
 
     #[test]
-    fn remove_second_item_deferred() {
+    #[should_panic(expected = "version must be the oldest in the map")]
+    fn remove_second_item_panics() {
         let mut map = CachedVersionMap::default();
         let version1 = seq(1);
         let version2 = seq(2);
         map.insert(version1, "First");
         map.insert(version2, "Second");
 
-        let removed = map.remove(&version2);
+        let removed = map.pop_oldest(&version2);
         assert_eq!(removed, Some("Second"));
         assert!(!map.values.iter().any(|(v, _)| *v == version2));
     }
@@ -200,14 +172,15 @@ mod tests {
     #[test]
     fn remove_from_empty_map_returns_none() {
         let mut map: CachedVersionMap<&str> = CachedVersionMap::default();
-        assert_eq!(map.remove(&seq(1)), None);
+        assert_eq!(map.pop_oldest(&seq(1)), None);
     }
 
     #[test]
+    #[should_panic(expected = "version must be the oldest in the map")]
     fn remove_nonexistent_item() {
         let mut map = CachedVersionMap::default();
         map.insert(seq(1), "First");
-        assert_eq!(map.remove(&seq(2)), None);
+        assert_eq!(map.pop_oldest(&seq(2)), None);
     }
 
     #[test]

@@ -79,11 +79,16 @@ use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::VerifiedTransaction;
 use tracing::instrument;
 
+use super::ExecutionCacheAPI;
 use super::{
     cached_version_map::CachedVersionMap, implement_passthrough_traits, CheckpointCache,
     ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheRead, ExecutionCacheReconfigAPI,
     ExecutionCacheWrite, NotifyReadWrapper, StateSyncAPI,
 };
+
+#[cfg(test)]
+#[path = "unit_tests/memory_cache_tests.rs"]
+mod authority_tests;
 
 #[derive(Clone, PartialEq, Eq)]
 enum ObjectEntry {
@@ -499,7 +504,7 @@ impl MemoryCache {
             panic!("dirty map must exist");
         };
 
-        let removed = occupied_dirty_entry.get_mut().remove(&version);
+        let removed = occupied_dirty_entry.get_mut().pop_oldest(&version);
 
         assert_eq!(removed.as_ref(), Some(value), "dirty version must exist");
 
@@ -536,7 +541,17 @@ impl MemoryCache {
     pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper<Self> {
         NotifyReadWrapper(self)
     }
+
+    #[cfg(test)]
+    pub fn clear_caches(&self) {
+        self.cached.object_cache.invalidate_all();
+        self.cached.packages.invalidate_all();
+        self.cached.marker_cache.invalidate_all();
+        self.cached._transaction_objects.invalidate_all();
+    }
 }
+
+impl ExecutionCacheAPI for MemoryCache {}
 
 impl ExecutionCacheCommit for MemoryCache {
     fn commit_transaction_outputs(
