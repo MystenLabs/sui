@@ -350,11 +350,11 @@ module bridge::bridge {
         };
     }
 
-    fun execute_emergency_op(inner: &BridgeInner, payload: EmergencyOp) {
+    fun execute_emergency_op(inner: &mut BridgeInner, payload: EmergencyOp) {
         if (message::emergency_op_type(&payload) == FREEZE) {
-            inner.frozen == true;
+            inner.frozen = true;
         } else if (message::emergency_op_type(&payload) == UNFREEZE) {
-            inner.frozen == false;
+            inner.frozen = false;
         } else {
             abort EUnexpectedOperation
         };
