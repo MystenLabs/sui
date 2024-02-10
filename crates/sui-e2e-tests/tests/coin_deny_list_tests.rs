@@ -37,12 +37,12 @@ async fn test_coin_deny_list_creation() {
     let mut prev_tx = None;
     for handle in test_cluster.all_node_handles() {
         handle.with(|node| {
-            assert_eq!(
+            assert!(
                 node.state()
                     .epoch_store_for_testing()
                     .protocol_version()
-                    .as_u64(),
-                35
+                    .as_u64()
+                    >= 35
             );
             let version = node
                 .state()
