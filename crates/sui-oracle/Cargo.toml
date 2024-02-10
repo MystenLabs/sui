@@ -27,7 +27,6 @@ sui-sdk = { path = "../sui-sdk" }
 sui-types = { path = "../sui-types" }
 mysten-metrics = { path = "../mysten-metrics" }
 telemetry-subscribers.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 sui-keys = { path = "../sui-keys" }

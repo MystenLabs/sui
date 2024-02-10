@@ -47,7 +47,6 @@ mysten-metrics.workspace = true
 narwhal-node.workspace = true
 test-cluster.workspace = true
 sysinfo.workspace = true
-workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-framework.workspace = true

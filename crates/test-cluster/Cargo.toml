@@ -29,7 +29,6 @@ sui-sdk.workspace = true
 sui-test-transaction-builder.workspace = true
 
 move-binary-format.workspace = true
-workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true

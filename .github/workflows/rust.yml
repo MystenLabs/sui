@@ -61,7 +61,6 @@ jobs:
       - run: cargo xlint
       - run: |
           cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
-          cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
 
   release-notes-description-check:
     name: release-notes-check

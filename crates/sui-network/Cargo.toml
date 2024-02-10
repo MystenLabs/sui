@@ -30,7 +30,6 @@ rand.workspace = true
 anyhow.workspace = true
 prometheus.workspace = true
 mysten-metrics.workspace = true
-workspace-hack.workspace = true
 
 [build-dependencies]
 anemo-build.workspace = true

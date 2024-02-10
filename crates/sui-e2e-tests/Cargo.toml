@@ -7,7 +7,6 @@ edition = "2021"
 version = "0.1.0"
 
 [dependencies]
-workspace-hack.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

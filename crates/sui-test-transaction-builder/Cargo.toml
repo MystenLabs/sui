@@ -16,4 +16,3 @@ sui-sdk.workspace = true
 sui-types.workspace = true
 
 move-core-types.workspace = true
-workspace-hack.workspace = true
