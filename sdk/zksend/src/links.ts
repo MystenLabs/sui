@@ -3,6 +3,7 @@
 
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import type { CoinStruct, ObjectOwner, SuiObjectChange } from '@mysten/sui.js/client';
+import { decodeSuiPrivateKey } from '@mysten/sui.js/cryptography';
 import type { Keypair, Signer } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import type { TransactionObjectInput } from '@mysten/sui.js/transactions';
@@ -14,6 +15,7 @@ import {
 	normalizeSuiObjectId,
 	parseStructTag,
 	SUI_TYPE_ARG,
+	toB64,
 } from '@mysten/sui.js/utils';
 
 interface ZkSendLinkRedirect {
@@ -87,7 +89,8 @@ export class ZkSendLinkBuilder {
 	}
 
 	addClaimableBalance(coinType: string, amount: bigint) {
-		this.#balances.set(normalizeStructTag(coinType), (this.#balances.get(coinType) ?? 0n) + amount);
+		const normalizedType = normalizeStructTag(coinType);
+		this.#balances.set(normalizedType, (this.#balances.get(normalizedType) ?? 0n) + amount);
 	}
 
 	addClaimableObject(id: string) {
@@ -97,7 +100,7 @@ export class ZkSendLinkBuilder {
 	getLink(): string {
 		const link = new URL(this.#host);
 		link.pathname = this.#path;
-		link.hash = this.#keypair.export().privateKey;
+		link.hash = toB64(decodeSuiPrivateKey(this.#keypair.getSecretKey()).secretKey);
 
 		if (this.#redirect) {
 			link.searchParams.set('redirect_url', this.#redirect.url);
@@ -234,12 +237,13 @@ export class ZkSendLink {
 		type: string;
 	}> = [];
 	#gasCoin?: CoinStruct;
+	#hasSui = false;
 	#creatorAddress?: string;
 
 	constructor({
 		client = DEFAULT_ZK_SEND_LINK_OPTIONS.client,
 		keypair = new Ed25519Keypair(),
-	}: ZkSendLinkOptions) {
+	}: ZkSendLinkOptions & { linkAddress?: string }) {
 		this.#client = client;
 		this.#keypair = keypair;
 	}
@@ -272,7 +276,10 @@ export class ZkSendLink {
 	) {
 		const normalizedAddress = normalizeSuiAddress(address);
 		const txb = this.createClaimTransaction(normalizedAddress, options);
-		txb.setGasPayment([]);
+
+		if (this.#gasCoin || !this.#hasSui) {
+			txb.setGasPayment([]);
+		}
 
 		const dryRun = await this.#client.dryRunTransactionBlock({
 			transactionBlock: await txb.build({ client: this.#client }),
@@ -390,10 +397,11 @@ export class ZkSendLink {
 	async #loadOwnedObjects() {
 		this.#ownedObjects = [];
 		let nextCursor: string | null | undefined;
+		const owner = this.#keypair.toSuiAddress();
 		do {
 			const ownedObjects = await this.#client.getOwnedObjects({
 				cursor: nextCursor,
-				owner: this.#keypair.toSuiAddress(),
+				owner,
 				options: {
 					showType: true,
 				},
@@ -415,26 +423,26 @@ export class ZkSendLink {
 
 		const coins = await this.#client.getCoins({
 			coinType: SUI_COIN_TYPE,
-			owner: this.#keypair.toSuiAddress(),
+			owner,
 		});
 
+		this.#hasSui = coins.data.length > 0;
 		this.#gasCoin = coins.data.find((coin) => BigInt(coin.balance) % 1000n === 987n);
 	}
 
 	async #loadInitialTransactionData() {
+		const address = this.#keypair.toSuiAddress();
 		const result = await this.#client.queryTransactionBlocks({
 			limit: 1,
 			order: 'ascending',
 			filter: {
-				ToAddress: this.#keypair.toSuiAddress(),
+				ToAddress: address,
 			},
 			options: {
 				showObjectChanges: true,
 				showInput: true,
 			},
 		});
-
-		const address = this.#keypair.toSuiAddress();
 
 		result.data[0]?.objectChanges?.forEach((objectChange) => {
 			if (ownedAfterChange(objectChange, address)) {

@@ -85,6 +85,8 @@ static_symbols!(
     "loop",
     "deny_list",
     "DenyList",
+    "%implicit",
+    "%macro",
     "lint",
     "migration",
 );

@@ -1,0 +1,12 @@
+error[E04026]: invalid 'copy' usage
+  ┌─ tests/move_2024/typing/macro_arg_by_name_invalid_usage_value.move:4:9
+  │
+4 │         copy $x;
+  │         ^^^^ Invalid 'copy'. Expected a variable or path.
+
+error[E04027]: invalid 'move' usage
+  ┌─ tests/move_2024/typing/macro_arg_by_name_invalid_usage_value.move:5:9
+  │
+5 │         move $x;
+  │         ^^^^ Invalid 'move'. Expected a variable or path.
+

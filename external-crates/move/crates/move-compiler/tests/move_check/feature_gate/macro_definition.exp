@@ -1,0 +1,8 @@
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/feature_gate/macro_definition.move:2:12
+  │
+2 │     public macro fun do($f: || ()) { $f() }
+  │            ^^^^^ 'macro' functions are not supported by current edition 'legacy', only '2024.alpha' support this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+

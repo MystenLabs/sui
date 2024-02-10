@@ -76,7 +76,7 @@ export class SuiHTTPTransport implements SuiTransport {
 			this.#websocketClient = new WebsocketClient(
 				this.#options.websocket?.url ?? this.#options.url,
 				{
-					WebSocketConstructor: this.#options.WebSocketConstructor,
+					WebSocketConstructor,
 					...this.#options.websocket,
 				},
 			);

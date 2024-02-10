@@ -2074,7 +2074,7 @@ async fn test_conflicting_transactions() {
                 .auth_sig()
         );
 
-        authority_state.database.reset_locks_for_test(
+        authority_state.database_for_testing().reset_locks_for_test(
             &[*tx1.digest(), *tx2.digest()],
             &[
                 gas_object.compute_object_reference(),
@@ -3146,7 +3146,7 @@ async fn test_invalid_randomness_parameter() {
     let epoch_store = authority_state.load_epoch_store_one_call_per_task();
 
     let init_random_version =
-        get_randomness_state_obj_initial_shared_version(&authority_state.database)
+        get_randomness_state_obj_initial_shared_version(authority_state.get_object_store())
             .unwrap()
             .unwrap();
     let random_mut = CallArg::Object(ObjectArg::SharedObject {
@@ -3431,8 +3431,8 @@ async fn test_store_revert_transfer_sui() {
         .await
         .unwrap();
 
-    let db = &authority_state.database;
-    db.revert_state_update(&tx_digest).await.unwrap();
+    let db = &authority_state.database_for_testing();
+    db.revert_state_update(&tx_digest).unwrap();
 
     assert_eq!(
         db.get_object(&gas_object_id).unwrap().unwrap().owner,
@@ -3447,7 +3447,7 @@ async fn test_store_revert_transfer_sui() {
     // Transaction should not be deleted on revert in case it's needed
     // to execute a future state sync checkpoint.
     assert!(db.get_transaction_block(&tx_digest).unwrap().is_some());
-    assert!(!db.as_ref().is_tx_already_executed(&tx_digest).unwrap());
+    assert!(!db.is_tx_already_executed(&tx_digest).unwrap());
 }
 
 #[tokio::test]
@@ -3505,8 +3505,8 @@ async fn test_store_revert_wrap_move_call() {
 
     let wrapper_v0 = wrap_effects.created()[0].0;
 
-    let db = &authority_state.database;
-    db.revert_state_update(&wrap_digest).await.unwrap();
+    let db = &authority_state.database_for_testing();
+    db.revert_state_update(&wrap_digest).unwrap();
 
     // The wrapped object is unwrapped once again (accessible from storage).
     let object = db.get_object(&object_v0.0).unwrap().unwrap();
@@ -3592,9 +3592,9 @@ async fn test_store_revert_unwrap_move_call() {
     assert_eq!(unwrap_effects.unwrapped().len(), 1);
     assert_eq!(unwrap_effects.unwrapped()[0].0 .0, object_v0.0);
 
-    let db = &authority_state.database;
+    let db = &authority_state.database_for_testing();
 
-    db.revert_state_update(&unwrap_digest).await.unwrap();
+    db.revert_state_update(&unwrap_digest).unwrap();
 
     // The unwrapped object is wrapped once again
     assert!(db.get_object(&object_v0.0).unwrap().is_none());
@@ -3848,7 +3848,7 @@ async fn test_store_revert_add_ofield() {
     let outer_v1 = find_by_id(&add_effects.mutated(), outer_v0.0).unwrap();
     let inner_v1 = find_by_id(&add_effects.mutated(), inner_v0.0).unwrap();
 
-    let db = &authority_state.database;
+    let db = &authority_state.database_for_testing();
 
     let outer = db.get_object(&outer_v0.0).unwrap().unwrap();
     assert_eq!(outer.version(), outer_v1.1);
@@ -3860,7 +3860,7 @@ async fn test_store_revert_add_ofield() {
     assert_eq!(inner.version(), inner_v1.1);
     assert_eq!(inner.owner, Owner::ObjectOwner(field_v0.0.into()));
 
-    db.revert_state_update(&add_digest).await.unwrap();
+    db.revert_state_update(&add_digest).unwrap();
 
     let outer = db.get_object(&outer_v0.0).unwrap().unwrap();
     assert_eq!(outer.version(), outer_v0.1);
@@ -3961,7 +3961,7 @@ async fn test_store_revert_remove_ofield() {
     let outer_v2 = find_by_id(&remove_effects.mutated(), outer_v0.0).unwrap();
     let inner_v2 = find_by_id(&remove_effects.mutated(), inner_v0.0).unwrap();
 
-    let db = &authority_state.database;
+    let db = &authority_state.database_for_testing();
 
     let outer = db.get_object(&outer_v0.0).unwrap().unwrap();
     assert_eq!(outer.version(), outer_v2.1);
@@ -3970,7 +3970,7 @@ async fn test_store_revert_remove_ofield() {
     assert_eq!(inner.owner, Owner::AddressOwner(sender));
     assert_eq!(inner.version(), inner_v2.1);
 
-    db.revert_state_update(&remove_ofield_digest).await.unwrap();
+    db.revert_state_update(&remove_ofield_digest).unwrap();
 
     let outer = db.get_object(&outer_v0.0).unwrap().unwrap();
     assert_eq!(outer.version(), outer_v1.1);
@@ -4860,7 +4860,7 @@ async fn test_consensus_message_processed() {
                 .unwrap();
             authority2.try_execute_for_test(&certificate).await.unwrap();
             authority2
-                .database
+                .get_cache_reader()
                 .get_executed_effects(transaction_digest)
                 .unwrap()
                 .unwrap()

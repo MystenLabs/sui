@@ -1,0 +1,34 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:7:30
+  │
+7 │         call!(|x| -> u64 'a: 0); // parsing error needs a block
+  │                              ^
+  │                              │
+  │                              Unexpected '0'
+  │                              Expected '{'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:11:30
+   │
+11 │         call!(|x| -> u64 'a: loop { break 'a 0 }); // parsing error needs a block
+   │                              ^^^^
+   │                              │
+   │                              Unexpected 'loop'
+   │                              Expected '{'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:15:46
+   │
+15 │         call!(|x| -> u64 'a: { return 'a x } + 1); // parsing error, lambdas cant appear in binop
+   │              -                               ^ Expected ')'
+   │              │                                
+   │              To match this '('
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/labeled_lambda_body_invalid.move:19:31
+   │
+19 │         call!(|x| -> u6 { x } + 1); // parsing error, lambdas cant appear in binop
+   │              -                ^ Expected ')'
+   │              │                 
+   │              To match this '('
+

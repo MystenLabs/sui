@@ -4,7 +4,6 @@
 use parking_lot::Mutex;
 use std::sync::Arc;
 use sui_types::storage::ObjectStore;
-use typed_store::Map;
 
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
@@ -25,15 +24,19 @@ use sui_types::storage::WriteStore;
 use sui_types::storage::{ObjectKey, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
 
-use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::in_mem_execution_cache::ExecutionCacheRead;
+use crate::execution_cache::ExecutionCacheRead;
+use crate::execution_cache::StateSyncAPI;
 
 #[derive(Clone)]
 pub struct RocksDbStore {
-    authority_store: Arc<AuthorityStore>,
+    // Note: All three of these Arcs point to the same object,
+    // but we need to store them separately to satisfy the trait bounds.
     execution_cache: Arc<dyn ExecutionCacheRead>,
+    object_store: Arc<dyn ObjectStore + Send + Sync>,
+    state_sync_store: Arc<dyn StateSyncAPI>,
+
     committee_store: Arc<CommitteeStore>,
     checkpoint_store: Arc<CheckpointStore>,
     // in memory checkpoint watermark sequence numbers
@@ -43,14 +46,14 @@ pub struct RocksDbStore {
 
 impl RocksDbStore {
     pub fn new(
-        authority_store: Arc<AuthorityStore>,
-        execution_cache: Arc<dyn ExecutionCacheRead>,
+        execution_cache: Arc<impl ExecutionCacheRead + ObjectStore + StateSyncAPI + 'static>,
         committee_store: Arc<CommitteeStore>,
         checkpoint_store: Arc<CheckpointStore>,
     ) -> Self {
         Self {
-            authority_store,
-            execution_cache,
+            execution_cache: execution_cache.clone(),
+            object_store: execution_cache.clone(),
+            state_sync_store: execution_cache.clone(),
             committee_store,
             checkpoint_store,
             highest_verified_checkpoint: Arc::new(Mutex::new(None)),
@@ -59,7 +62,7 @@ impl RocksDbStore {
     }
 
     pub fn get_objects(&self, object_keys: &[ObjectKey]) -> Result<Vec<Option<Object>>, SuiError> {
-        self.execution_cache.multi_get_object_by_key(object_keys)
+        self.execution_cache.multi_get_objects_by_key(object_keys)
     }
 
     pub fn get_last_executed_checkpoint(&self) -> Result<Option<VerifiedCheckpoint>, SuiError> {
@@ -154,14 +157,14 @@ impl ReadStore for RocksDbStore {
                 for tx in contents.iter() {
                     if let (Some(t), Some(e)) = (
                         self.get_transaction(&tx.transaction)?,
-                        self.authority_store
-                            .perpetual_tables
-                            .effects
-                            .get(&tx.effects)
+                        self.execution_cache
+                            .get_effects(&tx.effects)
                             .map_err(sui_types::storage::error::Error::custom)?,
                     ) {
-                        transactions
-                            .push(sui_types::base_types::ExecutionData::new(t.into_inner(), e))
+                        transactions.push(sui_types::base_types::ExecutionData::new(
+                            (*t).clone().into_inner(),
+                            e,
+                        ))
                     } else {
                         return Result::<
                             Option<FullCheckpointContents>,
@@ -191,10 +194,9 @@ impl ReadStore for RocksDbStore {
     fn get_transaction(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedTransaction>, StorageError> {
+    ) -> Result<Option<Arc<VerifiedTransaction>>, StorageError> {
         self.execution_cache
             .get_transaction_block(digest)
-            .map(|tx| tx.map(|tx| (*tx).clone()))
             .map_err(StorageError::custom)
     }
 
@@ -248,7 +250,7 @@ impl ObjectStore for RocksDbStore {
         &self,
         object_id: &sui_types::base_types::ObjectID,
     ) -> sui_types::storage::error::Result<Option<Object>> {
-        ObjectStore::get_object(&self.authority_store, object_id)
+        self.object_store.get_object(object_id)
     }
 
     fn get_object_by_key(
@@ -256,7 +258,7 @@ impl ObjectStore for RocksDbStore {
         object_id: &sui_types::base_types::ObjectID,
         version: sui_types::base_types::VersionNumber,
     ) -> sui_types::storage::error::Result<Option<Object>> {
-        ObjectStore::get_object_by_key(&self.authority_store, object_id, version)
+        self.object_store.get_object_by_key(object_id, version)
     }
 }
 
@@ -316,8 +318,8 @@ impl WriteStore for RocksDbStore {
         checkpoint: &VerifiedCheckpoint,
         contents: VerifiedCheckpointContents,
     ) -> Result<(), sui_types::storage::error::Error> {
-        self.authority_store
-            .multi_insert_transaction_and_effects(contents.iter())
+        self.state_sync_store
+            .multi_insert_transaction_and_effects(contents.transactions())
             .map_err(sui_types::storage::error::Error::custom)?;
         self.checkpoint_store
             .insert_verified_checkpoint_contents(checkpoint, contents)

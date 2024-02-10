@@ -1,5 +1,29 @@
 # @mysten/sui.js
 
+## 0.50.1
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+- Updated dependencies [4830361fa4]
+  - @mysten/bcs@0.11.1
+
+## 0.50.0
+
+### Minor Changes
+
+- a34f1cb67d: Use Bech32 instead of Hex for private key export, supports both Hex and Bech32 for importing
+
+### Patch Changes
+
+- a34f1cb67d: deprecate ExportedKeypair
+- c08e3569ef: Export all keypair utilities
+- 9a14e61db4: Allow signer in signAndExecuteTransactionBlock to be a Signer rather than a Keypair
+- 13e922d9b1: Fix multiple shared objects not respecting mutable correctly
+- 220a766d86: Fix WebSocket constructor not being properly assigned in SuiClient HTTP transport
+- Updated dependencies [bae8802fe3]
+  - @mysten/bcs@0.11.0
+
 ## 0.49.1
 
 ### Patch Changes

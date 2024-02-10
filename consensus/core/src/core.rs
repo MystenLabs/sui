@@ -347,13 +347,15 @@ impl CoreSignalsReceivers {
 
 #[cfg(test)]
 mod test {
+    use std::collections::BTreeSet;
+    use std::time::Duration;
+
+    use consensus_config::{local_committee_and_keys, Stake};
+    use sui_protocol_config::ProtocolConfig;
+
     use super::*;
     use crate::block::TestBlock;
     use crate::transactions_client::TransactionsClient;
-    use consensus_config::{Committee, Stake};
-    use std::collections::BTreeSet;
-    use std::time::Duration;
-    use sui_protocol_config::ProtocolConfig;
 
     #[tokio::test]
     async fn test_core_propose_after_genesis() {
@@ -636,7 +638,7 @@ mod test {
         let mut cores = Vec::new();
 
         for index in 0..authorities.len() {
-            let (committee, mut signers) = Committee::new_for_test(0, authorities.clone());
+            let (committee, mut signers) = local_committee_and_keys(0, authorities.clone());
             let (mut context, _) = Context::new_for_test(4);
             context = context
                 .with_committee(committee)

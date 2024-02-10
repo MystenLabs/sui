@@ -5,7 +5,7 @@ error[E04001]: restricted visibility
    │     - This function is internal to its module. Only 'public', 'public(friend)', and 'public(package)' functions can be called outside of their module
    ·
 18 │     x.f();
-   │     ^^^^^ Invalid call to '0x42::t::f'
+   │     ^^^^^ Invalid call to internal function '0x42::t::f'
 
 error[E04001]: restricted visibility
    ┌─ tests/move_2024/typing/dot_call_private.move:19:5
@@ -14,5 +14,5 @@ error[E04001]: restricted visibility
    │     - This function is internal to its module. Only 'public', 'public(friend)', and 'public(package)' functions can be called outside of their module
    ·
 19 │     y.x.f();
-   │     ^^^^^^^ Invalid call to '0x42::t::f'
+   │     ^^^^^^^ Invalid call to internal function '0x42::t::f'
 

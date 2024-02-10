@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/zklogin",
-	"version": "0.4.1",
+	"version": "0.4.3",
 	"description": "Utilities for interacting with zkLogin in Sui",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
@@ -43,7 +43,7 @@
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
 		"@types/node": "^20.4.2",
-		"typescript": "^5.1.6",
+		"typescript": "^5.3.3",
 		"vitest": "^0.33.0"
 	},
 	"dependencies": {

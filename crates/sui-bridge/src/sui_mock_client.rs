@@ -184,7 +184,7 @@ impl SuiClientInner for SuiMockClient {
         unimplemented!()
     }
 
-    async fn get_action_onchain_status(
+    async fn get_token_transfer_action_onchain_status(
         &self,
         action: &BridgeAction,
     ) -> Result<BridgeActionStatus, BridgeError> {

@@ -338,7 +338,7 @@ impl SignedBlock {
 
         ensure!(
             context.committee.exists(self.inner.author()),
-            ConsensusError::UnknownAuthority(self.inner.author().to_string())
+            ConsensusError::UnknownAuthorityIndex(self.inner.author().value())
         );
         let authority = context.committee.authority(self.inner.author());
 

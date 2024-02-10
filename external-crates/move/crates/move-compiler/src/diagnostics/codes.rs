@@ -181,6 +181,7 @@ codes!(
         InvalidRestrictedIdentifier:
             { msg: "invalid identifier escape", severity: NonblockingError },
         InvalidMoveOrCopy: { msg: "invalid 'move' or 'copy'", severity: NonblockingError },
+        InvalidLabel: { msg: "invalid expression label", severity: NonblockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [
@@ -224,6 +225,9 @@ codes!(
         UnboundMacro: { msg: "unbound macro", severity: BlockingError },
         PositionalCallMismatch: { msg: "positional call mismatch", severity: NonblockingError },
         InvalidLabel: { msg: "invalid use of label", severity: BlockingError },
+        UnboundLabel: { msg: "unbound label", severity: BlockingError },
+        InvalidMut: { msg: "invalid 'mut' declaration", severity: NonblockingError },
+        InvalidMacroParameter: { msg: "invalid macro parameter", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [
@@ -262,6 +266,10 @@ codes!(
         InvalidCopyOp: { msg: "invalid 'copy' usage", severity: NonblockingError },
         InvalidMoveOp: { msg: "invalid 'move' usage", severity: NonblockingError },
         ImplicitConstantCopy: { msg: "implicit copy of a constant", severity: Warning },
+        InvalidCallTarget: { msg: "invalid function call", severity: BlockingError },
+        UnexpectedFunctionType: { msg: "invalid usage of lambda type", severity: BlockingError },
+        UnexpectedLambda: { msg: "invalid usage of lambda", severity: BlockingError },
+        CannotExpandMacro: { msg: "unable to expand macro function", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
@@ -322,6 +330,7 @@ codes!(
     Bug: [
         BytecodeGeneration: { msg: "BYTECODE GENERATION FAILED", severity: Bug },
         BytecodeVerification: { msg: "BYTECODE VERIFICATION FAILED", severity: Bug },
+        ICE: { msg: "INTERNAL COMPILER ERROR", severity: Bug },
     ],
     Editions: [
         FeatureTooNew: {

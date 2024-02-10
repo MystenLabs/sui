@@ -2147,7 +2147,7 @@ async fn create_epoch_store(
     let epoch_start_config = EpochStartConfiguration::new(
         sys_state,
         CheckpointDigest::random(),
-        &authority_state.database,
+        &authority_state.get_object_store(),
     )
     .unwrap();
 

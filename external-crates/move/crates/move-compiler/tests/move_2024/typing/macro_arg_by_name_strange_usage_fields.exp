@@ -1,0 +1,10 @@
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_2024/typing/macro_arg_by_name_strange_usage_fields.move:14:14
+   │
+14 │         foo!(s); // TODO improve this error message
+   │              ^
+   │              │
+   │              Invalid usage of previously moved variable 's'.
+   │              Suggestion: use 'copy s' to avoid the move.
+   │              In a loop, this typically means it was moved in the first iteration, and is not available by the second iteration.
+

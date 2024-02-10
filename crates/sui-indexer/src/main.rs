@@ -9,10 +9,9 @@ use sui_indexer::indexer_v2::IndexerV2;
 use sui_indexer::metrics::IndexerMetrics;
 use sui_indexer::start_prometheus_server;
 use sui_indexer::store::PgIndexerAnalyticalStore;
-use sui_indexer::store::PgIndexerStore;
 use sui_indexer::store::PgIndexerStoreV2;
 use sui_indexer::utils::reset_database;
-use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, Indexer, IndexerConfig};
+use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, IndexerConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), IndexerError> {
@@ -30,7 +29,7 @@ async fn main() -> Result<(), IndexerError> {
             e
         ))
     })?;
-    let blocking_cp = new_pg_connection_pool(&db_url).map_err(|e| {
+    let blocking_cp = new_pg_connection_pool(&db_url, None).map_err(|e| {
         error!(
             "Failed creating Postgres connection pool with error {:?}",
             e
@@ -45,7 +44,7 @@ async fn main() -> Result<(), IndexerError> {
             );
             e
         })?;
-        reset_database(&mut conn, /* drop_all */ true, indexer_config.use_v2).map_err(|e| {
+        reset_database(&mut conn, /* drop_all */ true).map_err(|e| {
             let db_err_msg = format!(
                 "Failed resetting database with url: {:?} and error: {:?}",
                 db_url, e
@@ -101,7 +100,5 @@ async fn main() -> Result<(), IndexerError> {
             return IndexerV2::start_analytical_worker(store, indexer_metrics.clone()).await;
         }
     }
-
-    let store = PgIndexerStore::new(blocking_cp, indexer_metrics.clone());
-    Indexer::start(&indexer_config, &registry, store, indexer_metrics, None).await
+    Ok(())
 }

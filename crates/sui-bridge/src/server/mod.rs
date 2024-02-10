@@ -25,6 +25,9 @@ pub const APPLICATION_JSON: &str = "application/json";
 // Important: the paths need to match the ones in bridge_client.rs
 pub const ETH_TO_SUI_TX_PATH: &str = "/sign/bridge_tx/eth/sui/:tx_hash/:event_index";
 pub const SUI_TO_ETH_TX_PATH: &str = "/sign/bridge_tx/sui/eth/:tx_digest/:event_index";
+pub const COMMITTEE_BLOCKLIST_UPDATE_PATH: &str =
+    "/sign/update_committee_blocklist/:chain_id/:nonce/:type/:keys";
+pub const EMERGENCY_BUTTON_PATH: &str = "/sign/emergency_button/:chain_id/:nonce/:type";
 
 pub async fn run_server(socket_address: &SocketAddr, handler: BridgeRequestHandler) {
     axum::Server::bind(socket_address)
@@ -40,6 +43,8 @@ pub(crate) fn make_router(
         .route("/", get(health_check))
         .route(ETH_TO_SUI_TX_PATH, get(handle_eth_tx_hash))
         .route(SUI_TO_ETH_TX_PATH, get(handle_sui_tx_digest))
+        // TODO: handle COMMITTEE_BLOCKLIST_UPDATE_PATH
+        // TODO: handle EMERGENCY_BUTTON_PATH
         .with_state(handler)
 }
 

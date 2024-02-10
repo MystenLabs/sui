@@ -4,6 +4,7 @@
 use crate::{
     diag,
     expansion::ast::ModuleIdent,
+    ice,
     naming::ast::{self as N, BlockLabel},
     parser::ast::BinOp_,
     shared::{unique_map::UniqueMap, *},
@@ -363,7 +364,13 @@ fn tail_block(context: &mut Context, seq: &VecDeque<T::SequenceItem>) -> Option<
         match last_exp {
             None => None,
             Some(sp!(_, S::Seq(last))) => tail(context, last),
-            Some(_) => panic!("ICE last sequence item should be an exp"),
+            Some(sp!(loc, _)) => {
+                context.env.add_diag(ice!((
+                    *loc,
+                    "ICE last sequence item should have been an exp in dead code analysis"
+                )));
+                None
+            }
         }
     }
 }
@@ -445,7 +452,13 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                                 return next;
                             }
                         }
-                        T::ExpListItem::Splat(_, _, _) => panic!("ICE splat is unsupported."),
+                        T::ExpListItem::Splat(_, _, _) => {
+                            context.env.add_diag(ice!((
+                                *eloc,
+                                "ICE splat exp unsupported by dead code analysis"
+                            )));
+                            return None;
+                        }
                     }
                 }
                 None
@@ -502,7 +515,13 @@ fn value_block(context: &mut Context, seq: &VecDeque<T::SequenceItem>) -> Option
         match last_exp {
             None => None,
             Some(sp!(_, S::Seq(last))) => value(context, last),
-            Some(_) => panic!("ICE last sequence item should be an exp"),
+            Some(sp!(loc, _)) => {
+                context.env.add_diag(ice!((
+                    *loc,
+                    "ICE last sequence item should have been an exp in dead code analysis"
+                )));
+                None
+            }
         }
     }
 }
@@ -536,7 +555,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             }
         }
 
-        E::While(test, _, body) => {
+        E::While(_, test, body) => {
             if let Some(test_control_flow) = value(context, test) {
                 context.report_value_error(test_control_flow);
                 already_reported(*eloc)
@@ -638,7 +657,12 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         // -----------------------------------------------------------------------------------------
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
-        E::Use(_) => panic!("ICE unexpanded use"),
+        E::Use(_) => {
+            context
+                .env
+                .add_diag(ice!((*eloc, "ICE found unexpanded use")));
+            None
+        }
     }
 }
 

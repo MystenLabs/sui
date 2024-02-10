@@ -9,7 +9,7 @@ Response: {
     "objects": {
       "edges": [
         {
-          "cursor": "ICZtjEgSSf/xHPO5ZciA0FSQ3KUiURHHhvSQ6kT3f1HUAAAAAAAAAAA=",
+          "cursor": "IE7WiIEKdASr0tAH0ROg6RMEO0TiLomnYdr7ExkfY0QaAAAAAAAAAAA=",
           "node": {
             "asMoveObject": {
               "asStakedSui": {
@@ -34,7 +34,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3 'run'. lines 37-37:
-events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [76, 122, 66, 132, 163, 70, 180, 210, 65, 199, 40, 25, 229, 195, 103, 244, 94, 216, 242, 200, 70, 100, 130, 235, 79, 193, 14, 251, 113, 60, 114, 2, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [223, 36, 129, 27, 9, 15, 208, 154, 86, 96, 116, 194, 48, 140, 107, 111, 170, 219, 84, 179, 12, 140, 147, 138, 50, 178, 131, 234, 131, 183, 185, 129, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
 created: object(3,0), object(3,1)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0)
 deleted: object(_), object(2,0)
@@ -52,23 +52,23 @@ Response: {
     "objects": {
       "edges": [
         {
-          "cursor": "ICZtjEgSSf/xHPO5ZciA0FSQ3KUiURHHhvSQ6kT3f1HUAgAAAAAAAAA=",
+          "cursor": "IDgAObG+QZCY/t63D5+iBrbDf1Vtqze+zdjejAU3cFNqAgAAAAAAAAA=",
           "node": {
             "asMoveObject": {
               "asStakedSui": {
-                "principal": "20000000000000000",
-                "poolId": "0x4c7a4284a346b4d241c72819e5c367f45ed8f2c8466482eb4fc10efb713c7202"
+                "principal": "10000000000",
+                "poolId": "0xdf24811b090fd09a566074c2308c6b6faadb54b30c8c938a32b283ea83b7b981"
               }
             }
           }
         },
         {
-          "cursor": "IDLuQPCJwtNtJdWpqvgnIYNh9j3UPusKYypeSFizl71GAgAAAAAAAAA=",
+          "cursor": "IE7WiIEKdASr0tAH0ROg6RMEO0TiLomnYdr7ExkfY0QaAgAAAAAAAAA=",
           "node": {
             "asMoveObject": {
               "asStakedSui": {
-                "principal": "10000000000",
-                "poolId": "0x4c7a4284a346b4d241c72819e5c367f45ed8f2c8466482eb4fc10efb713c7202"
+                "principal": "20000000000000000",
+                "poolId": "0xdf24811b090fd09a566074c2308c6b6faadb54b30c8c938a32b283ea83b7b981"
               }
             }
           }
@@ -79,7 +79,7 @@ Response: {
             "asMoveObject": {
               "asStakedSui": {
                 "principal": "40000",
-                "poolId": "0x4c7a4284a346b4d241c72819e5c367f45ed8f2c8466482eb4fc10efb713c7202"
+                "poolId": "0xdf24811b090fd09a566074c2308c6b6faadb54b30c8c938a32b283ea83b7b981"
               }
             }
           }
@@ -90,7 +90,7 @@ Response: {
       "stakedSuis": {
         "edges": [
           {
-            "cursor": "IDLuQPCJwtNtJdWpqvgnIYNh9j3UPusKYypeSFizl71GAgAAAAAAAAA=",
+            "cursor": "IDgAObG+QZCY/t63D5+iBrbDf1Vtqze+zdjejAU3cFNqAgAAAAAAAAA=",
             "node": {
               "principal": "10000000000"
             }

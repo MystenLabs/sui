@@ -18,6 +18,10 @@ use crate::{
 #[path = "tests/universal_committer_tests.rs"]
 pub mod universal_committer_tests;
 
+#[cfg(test)]
+#[path = "tests/pipelined_committer_tests.rs"]
+pub mod pipelined_committer_tests;
+
 /// A universal committer uses a collection of committers to commit a sequence of leaders.
 /// It can be configured to use a combination of different commit strategies, including
 /// multi-leaders, backup leaders, and pipelines.
@@ -25,7 +29,7 @@ pub mod universal_committer_tests;
 pub(crate) struct UniversalCommitter {
     /// The per-epoch configuration of this authority.
     context: Arc<Context>,
-    /// Block store representing the Dag state
+    /// In memory block store representing the dag state
     dag_state: Arc<RwLock<DagState>>,
     /// The list of committers for multi-leader or pipelining
     committers: Vec<BaseCommitter>,

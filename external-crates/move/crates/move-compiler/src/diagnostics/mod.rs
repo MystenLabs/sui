@@ -283,12 +283,25 @@ impl Diagnostics {
 
     pub fn max_severity(&self) -> Option<Severity> {
         let Self(Some(inner)) = self else { return None };
+        // map would be empty at the severity, so it should never be zero
         debug_assert!(inner.severity_count.values().all(|count| *count > 0));
         inner
             .severity_count
             .iter()
             .max_by_key(|(sev, _count)| **sev)
             .map(|(sev, _count)| *sev)
+    }
+
+    pub fn count_diags_at_or_above_severity(&self, threshold: Severity) -> usize {
+        let Self(Some(inner)) = self else { return 0 };
+        // map would be empty at the severity, so it should never be zero
+        debug_assert!(inner.severity_count.values().all(|count| *count > 0));
+        inner
+            .severity_count
+            .iter()
+            .filter(|(sev, _count)| **sev >= threshold)
+            .map(|(_sev, count)| *count)
+            .sum()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -498,6 +511,41 @@ macro_rules! diag {
             std::iter::empty::<String>(),
         )
     }};
+}
+
+pub const ICE_BUG_REPORT_MESSAGE: &str =
+    "The Move compiler has encountered an internal compiler error.\n \
+    Please report this this issue to the Mysten Labs Move language team,\n \
+    including this error and any relevant code, to the Mysten Labs issue tracker\n \
+    at : https://github.com/MystenLabs/sui/issues";
+
+#[macro_export]
+macro_rules! ice {
+    ($primary: expr $(,)?) => {{
+        $crate::diagnostics::print_stack_trace();
+        let mut diag = diag!($crate::diagnostics::codes::Bug::ICE, $primary);
+        diag.add_note($crate::diagnostics::ICE_BUG_REPORT_MESSAGE.to_string());
+        diag
+    }};
+    ($primary: expr, $($secondary: expr),+ $(,)?) => {{
+        $crate::diagnostics::print_stack_trace();
+        let mut diag = diag!($crate::diagnostics::codes::Bug::ICE, $primary, $($secondary, )*);
+        diag.add_note($crate::diagnostics::ICE_BUG_REPORT_MESSAGE.to_string());
+        diag
+    }}
+}
+
+#[allow(clippy::wildcard_in_or_patterns)]
+pub fn print_stack_trace() {
+    use std::backtrace::{Backtrace, BacktraceStatus};
+    let stacktrace = Backtrace::capture();
+    match stacktrace.status() {
+        BacktraceStatus::Captured => {
+            eprintln!("stacktrace:");
+            eprintln!("{}", stacktrace);
+        }
+        BacktraceStatus::Unsupported | BacktraceStatus::Disabled | _ => (),
+    }
 }
 
 impl WarningFilters {

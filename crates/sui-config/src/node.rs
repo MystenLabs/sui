@@ -710,6 +710,11 @@ pub struct OverloadThresholdConfig {
     // transactions to shed.
     #[serde(default = "default_min_load_shedding_percentage_above_hard_limit")]
     pub min_load_shedding_percentage_above_hard_limit: u32,
+
+    // If transaction ready rate is below this rate, we consider the validator
+    // is well under used, and will not enter load shedding mode.
+    #[serde(default = "default_safe_transaction_ready_rate")]
+    pub safe_transaction_ready_rate: u32,
     // TODO: Move other thresholds here as well, including `MAX_TM_QUEUE_LENGTH`
     // and `MAX_PER_OBJECT_QUEUE_LENGTH`.
 }
@@ -738,6 +743,10 @@ fn default_min_load_shedding_percentage_above_hard_limit() -> u32 {
     50
 }
 
+fn default_safe_transaction_ready_rate() -> u32 {
+    100
+}
+
 impl Default for OverloadThresholdConfig {
     fn default() -> Self {
         Self {
@@ -748,6 +757,7 @@ impl Default for OverloadThresholdConfig {
             max_load_shedding_percentage: default_max_load_shedding_percentage(),
             min_load_shedding_percentage_above_hard_limit:
                 default_min_load_shedding_percentage_above_hard_limit(),
+            safe_transaction_ready_rate: default_safe_transaction_ready_rate(),
         }
     }
 }

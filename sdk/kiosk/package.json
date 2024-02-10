@@ -2,7 +2,7 @@
 	"name": "@mysten/kiosk",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui Kiosk library",
-	"version": "0.8.1",
+	"version": "0.8.3",
 	"license": "Apache-2.0",
 	"type": "commonjs",
 	"main": "./dist/cjs/index.js",
@@ -45,7 +45,7 @@
 		"cross-env": "^7.0.3",
 		"tmp": "^0.2.1",
 		"ts-retry-promise": "^0.7.0",
-		"typescript": "^5.1.6",
+		"typescript": "^5.3.3",
 		"vite": "^4.4.4",
 		"vitest": "^0.33.0",
 		"wait-on": "^7.0.1"

@@ -35,58 +35,52 @@ error[E04003]: built-in operation not supported
    │          Found: '(u64, u64)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/cast_invalid.move:12:15
+   ┌─ tests/move_check/typing/cast_invalid.move:12:10
    │
 12 │         (0 as bool);
-   │               ^^^^
-   │               │
-   │               Invalid argument to 'as'
-   │               Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          ^    ---- Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          │     
+   │          Invalid argument to 'as'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/cast_invalid.move:13:15
+   ┌─ tests/move_check/typing/cast_invalid.move:13:10
    │
 13 │         (0 as address);
-   │               ^^^^^^^
-   │               │
-   │               Invalid argument to 'as'
-   │               Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          ^    ------- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          │     
+   │          Invalid argument to 'as'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/cast_invalid.move:14:21
+   ┌─ tests/move_check/typing/cast_invalid.move:14:16
    │
 14 │         R{} = (0 as R);
-   │                     ^
-   │                     │
-   │                     Invalid argument to 'as'
-   │                     Found: '0x8675309::M::R'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                ^    - Found: '0x8675309::M::R'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │                │     
+   │                Invalid argument to 'as'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/cast_invalid.move:15:15
+   ┌─ tests/move_check/typing/cast_invalid.move:15:10
    │
 15 │         (0 as Cup<u8>);
-   │               ^^^^^^^
-   │               │
-   │               Invalid argument to 'as'
-   │               Found: '0x8675309::M::Cup<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          ^    ------- Found: '0x8675309::M::Cup<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          │     
+   │          Invalid argument to 'as'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/cast_invalid.move:16:15
+   ┌─ tests/move_check/typing/cast_invalid.move:16:10
    │
 16 │         (0 as ());
-   │               ^^
-   │               │
-   │               Invalid argument to 'as'
-   │               Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          ^    -- Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          │     
+   │          Invalid argument to 'as'
 
 error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/typing/cast_invalid.move:17:15
+   ┌─ tests/move_check/typing/cast_invalid.move:17:10
    │
 17 │         (0 as (u64, u8));
-   │               ^^^^^^^^^
-   │               │
-   │               Invalid argument to 'as'
-   │               Found: '(u64, u8)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          ^    --------- Found: '(u64, u8)'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          │     
+   │          Invalid argument to 'as'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_check/typing/cast_invalid.move:19:7

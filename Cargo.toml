@@ -55,9 +55,6 @@ exclude = [
   "external-crates/move/crates/move-vm-types",
   "external-crates/move/crates/serializer-tests",
   "external-crates/move/crates/test-generation",
-  "external-crates/move/move-execution/next-vm/crates/move-bytecode-verifier",
-  "external-crates/move/move-execution/next-vm/crates/move-stdlib",
-  "external-crates/move/move-execution/next-vm/crates/move-vm-runtime",
   "external-crates/move/move-execution/v0/move-bytecode-verifier",
   "external-crates/move/move-execution/v0/move-stdlib",
   "external-crates/move/move-execution/v0/move-vm/runtime",
@@ -97,6 +94,7 @@ members = [
   "crates/sui-core",
   "crates/sui-cost",
   "crates/sui-data-ingestion",
+  "crates/sui-data-ingestion-core",
   "crates/sui-e2e-tests",
   "crates/sui-enum-compat-util",
   "crates/sui-faucet",
@@ -155,6 +153,7 @@ members = [
   "crates/sui-types",
   "crates/sui-upgrade-compatibility-transactional-tests",
   "crates/sui-verifier-transactional-tests",
+  "crates/suins-indexer",
   "crates/suiop-cli",
   "crates/telemetry-subscribers",
   "crates/test-cluster",
@@ -179,9 +178,6 @@ members = [
   "sui-execution/latest/sui-adapter",
   "sui-execution/latest/sui-move-natives",
   "sui-execution/latest/sui-verifier",
-  "sui-execution/next-vm/sui-adapter",
-  "sui-execution/next-vm/sui-move-natives",
-  "sui-execution/next-vm/sui-verifier",
   "sui-execution/v0/sui-adapter",
   "sui-execution/v0/sui-move-natives",
   "sui-execution/v0/sui-verifier",
@@ -580,6 +576,7 @@ sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion = { path = "crates/sui-data-ingestion" }
+sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
 sui-e2e-tests = { path = "crates/sui-e2e-tests" }
 sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }
