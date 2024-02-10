@@ -32,4 +32,3 @@ sui-genesis-builder.workspace = true
 sui-execution.workspace = true
 sui-swarm-config.workspace = true
 sui-transaction-checks.workspace = true
-workspace-hack.workspace = true

@@ -17,7 +17,6 @@ git-version.workspace = true
 sui-framework.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

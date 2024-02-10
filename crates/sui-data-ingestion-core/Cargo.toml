@@ -23,7 +23,6 @@ tracing.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 url.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

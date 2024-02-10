@@ -43,7 +43,6 @@ reqwest.workspace = true
 fastcrypto.workspace = true
 tap.workspace = true
 rand.workspace = true
-workspace-hack.workspace = true
 lru.workspace = true
 shared-crypto.workspace = true
 backoff = { version = "0.4.0", features = [

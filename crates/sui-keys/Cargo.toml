@@ -18,7 +18,6 @@ slip10_ed25519.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 shared-crypto.workspace = true
 sui-types.workspace = true
-workspace-hack.workspace = true
 regex.workspace = true
 
 [dev-dependencies]

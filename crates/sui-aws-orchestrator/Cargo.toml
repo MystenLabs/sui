@@ -32,7 +32,6 @@ sui-config = { path = "../sui-config" }
 narwhal-config.workspace = true
 sui-types = { path = "../sui-types" }
 sui-swarm-config = { path = "../sui-swarm-config" }
-workspace-hack.workspace = true
 
 [dev-dependencies]
 tempfile = "3.6.0"

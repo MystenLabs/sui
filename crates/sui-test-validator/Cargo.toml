@@ -19,4 +19,3 @@ uuid.workspace = true
 sui-faucet.workspace = true
 sui-cluster-test.workspace = true
 telemetry-subscribers.workspace = true
-workspace-hack.workspace = true
