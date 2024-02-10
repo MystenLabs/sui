@@ -78,7 +78,7 @@ Headers: {
     "content-length": "157",
     "x-sui-rpc-version": "2024.1.1",
 }
-Service version: 2024.1.0
+Service version: 2024.1.1
 Response: {
   "data": {
     "checkpoint": {
