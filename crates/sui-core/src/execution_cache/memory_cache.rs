@@ -85,6 +85,10 @@ use super::{
     NotifyReadWrapper, StateSyncAPI,
 };
 
+#[cfg(test)]
+#[path = "unit_tests/memory_cache_tests.rs"]
+mod authority_tests;
+
 #[derive(Clone, PartialEq, Eq)]
 enum ObjectEntry {
     Object(Object),
