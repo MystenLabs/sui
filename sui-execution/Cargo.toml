@@ -40,7 +40,6 @@ move-vm-runtime-v0 = { path = "../external-crates/move/move-execution/v0/move-vm
 move-vm-runtime-v1 = { path = "../external-crates/move/move-execution/v1/crates/move-vm-runtime" }
 move-vm-runtime-next-vm = { path = "../external-crates/move/move-execution/next-vm/crates/move-vm-runtime" }
 # move-vm-runtime-$CUT = { path = "../external-crates/move/move-execution/$CUT/crates/move-vm-runtime" }
-workspace-hack.workspace = true
 
 [dev-dependencies]
 cargo_metadata = "0.15.4"

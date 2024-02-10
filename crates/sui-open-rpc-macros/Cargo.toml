@@ -17,4 +17,3 @@ proc-macro2.workspace = true
 itertools.workspace = true
 derive-syn-parse.workspace = true
 unescape.workspace = true
-workspace-hack.workspace = true

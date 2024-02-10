@@ -52,7 +52,6 @@ move-binary-format.workspace = true
 
 diesel_migrations.workspace = true
 cached.workspace = true
-workspace-hack.workspace = true
 
 [features]
 pg_integration = []

@@ -30,7 +30,6 @@ sui-macros.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 parking_lot.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 move-package.workspace = true
