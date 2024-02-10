@@ -288,6 +288,11 @@ h4 {
   display: none !important;
 }
 
+.grid-card {
+  row-gap: 1rem;
+  column-gap: 1rem;
+}
+
 
 /** Globals **/
 .button-cta {
