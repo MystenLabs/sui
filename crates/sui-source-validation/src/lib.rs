@@ -615,7 +615,7 @@ fn download_and_compile(
 
     if !dest_canonical_binary.exists() {
         // Check the platform and proceed if we can download a binary. If not, the user should follow error instructions to sideload the binary.
-        let platform = detect_platform(&root, compiler_version, &dest_canonical_binary)?;
+        let mut platform = detect_platform(&root, compiler_version, &dest_canonical_binary)?;
         // Download if binary does not exist.
         let mainnet_url = format!(
             "https://github.com/MystenLabs/sui/releases/download/mainnet-v{compiler_version}/sui-mainnet-v{compiler_version}-{platform}.tgz",
@@ -664,6 +664,9 @@ fn download_and_compile(
             .map_err(|e| anyhow!("failed to untar compiler binary: {e}"))?;
 
         let mut dest_binary = dest_version.clone();
+        if platform == "windows-x86_64" {
+            platform = format!("{platform}.exe");
+        }
         dest_binary.extend(["target", "release", &format!("sui-{platform}")]);
         let dest_binary_os = OsStr::new(dest_binary.as_path());
         set_executable_permission(dest_binary_os)?;
