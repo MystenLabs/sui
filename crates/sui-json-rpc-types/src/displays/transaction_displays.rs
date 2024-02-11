@@ -16,61 +16,75 @@ use tabled::{
 
 impl<'a> Display for Pretty<'a, SuiProgrammableTransactionBlock> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut builder = TableBuilder::default();
-
         let Pretty(ptb) = self;
         let SuiProgrammableTransactionBlock { inputs, commands } = ptb;
-
-        for (i, input) in inputs.iter().enumerate() {
-            match input {
-                SuiCallArg::Pure(v) => {
-                    let pure_arg = if let Some(t) = v.value_type() {
-                        format!(
-                            "{i:<3} Pure Arg: Type: {}, Value: {}",
-                            t,
-                            v.value().to_json_value()
-                        )
-                    } else {
-                        format!("{i:<3} Pure Arg: {}", v.value().to_json_value())
-                    };
-                    builder.push_record(vec![pure_arg]);
-                }
-                SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject { object_id, .. }) => {
-                    builder.push_record(vec![format!("{i:<3} Imm/Owned Object ID: {}", object_id)]);
-                }
-                SuiCallArg::Object(SuiObjectArg::SharedObject { object_id, .. }) => {
-                    builder.push_record(vec![format!("{i:<3} Shared Object    ID: {}", object_id)]);
-                }
-                SuiCallArg::Object(SuiObjectArg::Receiving { object_id, .. }) => {
-                    builder.push_record(vec![format!("{i:<3} Receiving Object ID: {}", object_id)]);
+        if !inputs.is_empty() {
+            let mut builder = TableBuilder::default();
+            for (i, input) in inputs.iter().enumerate() {
+                match input {
+                    SuiCallArg::Pure(v) => {
+                        let pure_arg = if let Some(t) = v.value_type() {
+                            format!(
+                                "{i:<3} Pure Arg: Type: {}, Value: {}",
+                                t,
+                                v.value().to_json_value()
+                            )
+                        } else {
+                            format!("{i:<3} Pure Arg: {}", v.value().to_json_value())
+                        };
+                        builder.push_record(vec![pure_arg]);
+                    }
+                    SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject { object_id, .. }) => {
+                        builder.push_record(vec![format!(
+                            "{i:<3} Imm/Owned Object ID: {}",
+                            object_id
+                        )]);
+                    }
+                    SuiCallArg::Object(SuiObjectArg::SharedObject { object_id, .. }) => {
+                        builder.push_record(vec![format!(
+                            "{i:<3} Shared Object    ID: {}",
+                            object_id
+                        )]);
+                    }
+                    SuiCallArg::Object(SuiObjectArg::Receiving { object_id, .. }) => {
+                        builder.push_record(vec![format!(
+                            "{i:<3} Receiving Object ID: {}",
+                            object_id
+                        )]);
+                    }
                 }
             }
+
+            let mut table = builder.build();
+            table.with(TablePanel::header("Input Objects"));
+            table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+                1,
+                TableStyle::modern().get_horizontal(),
+            )]));
+            write!(f, "\n{}", table)?;
+        } else {
+            write!(f, "\n  No input objects for this transaction")?;
         }
 
-        let mut table = builder.build();
-        table.with(TablePanel::header("Input Objects"));
-        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
-            1,
-            TableStyle::modern().get_horizontal(),
-        )]));
-        write!(f, "\n{}", table)?;
-
-        let mut builder = TableBuilder::default();
-
-        for (i, c) in commands.iter().enumerate() {
-            if i == commands.len() - 1 {
-                builder.push_record(vec![format!("{i:<2} {}", Pretty(c))]);
-            } else {
-                builder.push_record(vec![format!("{i:<2} {}\n", Pretty(c))]);
+        if !commands.is_empty() {
+            let mut builder = TableBuilder::default();
+            for (i, c) in commands.iter().enumerate() {
+                if i == commands.len() - 1 {
+                    builder.push_record(vec![format!("{i:<2} {}", Pretty(c))]);
+                } else {
+                    builder.push_record(vec![format!("{i:<2} {}\n", Pretty(c))]);
+                }
             }
+            let mut table = builder.build();
+            table.with(TablePanel::header("Commands"));
+            table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+                1,
+                TableStyle::modern().get_horizontal(),
+            )]));
+            write!(f, "\n{}", table)
+        } else {
+            write!(f, "\n  No commands for this transaction")
         }
-        let mut table = builder.build();
-        table.with(TablePanel::header("Commands"));
-        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
-            1,
-            TableStyle::modern().get_horizontal(),
-        )]));
-        write!(f, "\n{}", table)
     }
 }
 
