@@ -58,7 +58,7 @@ impl New {
         create_dir_all(path.join(SourcePackageLayout::Sources.path()))?;
         let mut w = std::fs::File::create(path.join(SourcePackageLayout::Manifest.path()))?;
         writeln!(
-            &mut w,
+            w,
             "[package]
 name = \"{name}\"
 
@@ -68,17 +68,47 @@ name = \"{name}\"
             writeln!(w, "{dep_name} = {dep_val}")?;
         }
 
-        writeln!(
-            w,
-            "
-[addresses]"
-        )?;
+        writeln!(w, "
+# For remote import, use the `git = \"URL\"`. With this type of import you can
+# specify the path to Move.toml `subdir = \"...\"` and the revision using
+# `rev = \"...\"`. Revision can be a branch, a tag, and a commit hash.
+# MyRemotePackage = {{ git = \"https://some.remote/host.git\", subdir = \"remote/path\", rev = \"01Move....\" }}
+
+# For local dependencies use `local = path`. Path is relative to the package root
+# Local = {{ local = \"../path/to\" }}
+
+# To resolve version conflict and force a specific version for dependency
+# override use `override = true`
+# Override = {{ override = true, local = \"../conflicting/version\" }}
+
+[addresses]")?;
+
+        // write named addresses
         for (addr_name, addr_val) in addrs {
             writeln!(w, "{addr_name} = \"{addr_val}\"")?;
         }
+
+        writeln!(w,"
+# Named addresses will be accessible in Move as `@name`. They're also exported:
+# for example, `std = \"0x1\"` is exported by the Standard Library.
+# alice = \"0xA11CE\"
+
+[dev-dependencies]
+# The dev-dependencies section allows overriding dependencies for `--test` and
+# `--dev` modes. New dependencies cannot be introduced
+# Local = {{ local = \"../path/to/dev-build\" }}
+
+[dev-addresses]
+# The dev-addresses section allows overloading named addresses for the `--test`
+# and `--dev` modes.
+# alice = \"0xB0B\"
+")?;
+
+        // custom addition in the end
         if !custom.is_empty() {
             writeln!(w, "{}", custom)?;
         }
+
         Ok(())
     }
 }
