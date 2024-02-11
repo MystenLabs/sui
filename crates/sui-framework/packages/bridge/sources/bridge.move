@@ -23,6 +23,14 @@ module bridge::bridge {
     };
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury};
+    #[test_only]
+    use sui::object;
+    #[test_only]
+    use sui::test_scenario;
+    #[test_only]
+    use sui::test_utils::destroy;
+    #[test_only]
+    use bridge::message::create_block_list_message;
 
     struct Bridge has key {
         id: UID,
@@ -327,6 +335,8 @@ module bridge::bridge {
         let message_type = message::message_type(&message);
         let inner = load_inner_mut(self);
 
+        assert!(message::source_chain(&message) == inner.chain_id, EUnexpectedChainID);
+
         // check system ops seq number, system ops can only be executed in sequence order.
         let system_op_seq_num = next_seq_num(inner, message_type);
         assert!(message::seq_num(&message) == system_op_seq_num, EUnexpectedSeqNum);
@@ -376,5 +386,35 @@ module bridge::bridge {
         let (key, seq_num) = vec_map::remove(&mut self.sequence_nums, &msg_type);
         vec_map::insert(&mut self.sequence_nums, key, seq_num + 1);
         seq_num
+    }
+
+    #[test_only]
+    fun new_for_testing(ctx: &mut TxContext): Bridge {
+        let chain_id = chain_ids::sui_devnet();
+        let bridge_inner = BridgeInner {
+            bridge_version: CURRENT_VERSION,
+            chain_id,
+            sequence_nums: vec_map::empty<u8, u64>(),
+            committee: committee::create(ctx),
+            treasury: treasury::create(ctx),
+            bridge_records: linked_table::new<BridgeMessageKey, BridgeRecord>(ctx),
+            frozen: false,
+        };
+        Bridge {
+            id: object::new(ctx),
+            inner: versioned::create(CURRENT_VERSION, bridge_inner, ctx)
+        }
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EUnexpectedChainID)]
+    fun test_system_msg_incorrect_chain_id() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let bridge = new_for_testing(ctx);
+        let blocklist = create_block_list_message(chain_ids::sui_mainnet(), 0, 0, vector[]);
+        execute_system_message(&mut bridge, blocklist, vector[]);
+        destroy(bridge);
+        test_scenario::end(scenario);
     }
 }

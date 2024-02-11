@@ -124,6 +124,7 @@ module bridge::committee {
     }
 
     #[test_only]
+    // This is a token transfer message for testing
     const TEST_MSG: vector<u8> =
         b"00010a0000000000000000200000000000000000000000000000000000000000000000000000000000000064012000000000000000000000000000000000000000000000000000000000000000c8033930000000000000";
 
@@ -215,7 +216,9 @@ module bridge::committee {
             )],
         );
 
-        let (validator1, _) = vec_map::get_entry_by_idx(&committee.members, 0);
+        let (validator1, member) = vec_map::get_entry_by_idx(&committee.members, 0);
+        assert!(!member.blocklisted, 0);
+
         // Block a member
         let blocklist = message::create_block_list_message(
             chain_ids::sui_testnet(),
@@ -225,6 +228,9 @@ module bridge::committee {
         );
         let blocklist = message::extract_blocklist_payload(&blocklist);
         execute_blocklist(&mut committee, blocklist);
+
+        let (_, blocked_member) = vec_map::get_entry_by_idx(&committee.members, 0);
+        assert!(blocked_member.blocklisted, 0);
 
         // Verify signature should fail now
         verify_signatures(
