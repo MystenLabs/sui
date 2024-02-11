@@ -5,26 +5,31 @@ use crate::server::BlockAddress;
 use crate::time::{get_ktime_get_ns, ttl};
 use anyhow::Result;
 use aya::maps::MapData;
-use aya::{maps::HashMap, Bpf};
-use log::{error, info};
+use aya::util::nr_cpus;
+use aya::{
+    maps::{PerCpuHashMap, PerCpuValues},
+    Bpf,
+};
+use log::{error, info, warn};
 use nodefw_common::Rule;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::net::{IpAddr, Ipv6Addr};
+use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 pub struct Firewall {
-    inner: Arc<RwLock<HashMap<MapData, [u8; 16usize], Rule>>>,
+    inner: Arc<RwLock<PerCpuHashMap<MapData, [u8; 16usize], Rule>>>,
     expirations: Arc<RwLock<BinaryHeap<TtlRecord>>>,
 }
 impl Firewall {
     pub fn new(map_name: &str, bpf: &mut Bpf) -> Self {
         Self {
             inner: Arc::new(RwLock::new(
-                HashMap::try_from(bpf.take_map(map_name).unwrap()).unwrap(),
+                PerCpuHashMap::try_from(bpf.take_map(map_name).unwrap()).unwrap(),
             )),
             expirations: Arc::new(RwLock::new(BinaryHeap::new())),
         }
@@ -47,7 +52,8 @@ impl Firewall {
                 port: addr.destination_port,
                 ttl: ttl(Duration::from_secs(addr.ttl)),
             };
-            fw.insert(parsed_ip.octets(), rule, 0)?;
+            let values = PerCpuValues::try_from(vec![rule; nr_cpus()?])?;
+            fw.insert(parsed_ip.octets(), values, 0)?;
             if addr.ttl > 0 {
                 expirations.push(TtlRecord {
                     key: parsed_ip.octets(),
@@ -62,19 +68,22 @@ impl Firewall {
         let fw = inner_guard.write().unwrap();
         Ok(fw
             .iter()
-            // aya HashMap uses a Result<(k,v), Error>
+            // aya PerCpuHashMap uses a Result<(k,v), Error>
             .filter_map(|map_iter| match map_iter {
                 Ok((k, v)) => Some((k, v)),
                 Err(_) => None,
             })
-            .map(|(k, v): ([u8; 16usize], Rule)| {
+            .map(|(k, v): ([u8; 16usize], PerCpuValues<Rule>)| {
+                let Some(rule) = v.deref().clone().into_vec().pop() else {
+                    panic!("invariant violation - we should always have values here");
+                };
                 let v6_source_address = Ipv6Addr::from(k);
                 let source_address = match v6_source_address.to_ipv4() {
                     Some(v) => v.to_string(),
                     None => v6_source_address.to_string(),
                 };
-                let destination_port = v.port;
-                let ttl = v.ttl;
+                let destination_port = rule.port;
+                let ttl = rule.ttl;
                 BlockAddress {
                     source_address,
                     destination_port,
@@ -92,7 +101,11 @@ impl Firewall {
         while let Some(expiry) = expirations.pop() {
             if expiry.expiration_time <= now {
                 if let Err(e) = fw.remove(&expiry.key) {
-                    error!("unable to remove key {}", e);
+                    // not always an actual error - there is some racey behavior if you
+                    // add or remove in a certain combination.  the kernel guarantees safe
+                    // access and sets but sometimes a get or a remove will fail until
+                    // thing settle.
+                    warn!("unable to remove key {}", e);
                     break;
                 };
                 let removed = Ipv6Addr::from(expiry.key);

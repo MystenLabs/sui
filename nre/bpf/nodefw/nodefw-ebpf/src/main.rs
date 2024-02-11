@@ -9,7 +9,7 @@ use aya_bpf::{
     bindings::xdp_action,
     helpers::gen::bpf_ktime_get_ns,
     macros::{map, xdp},
-    maps::HashMap,
+    maps::PerCpuHashMap,
     programs::XdpContext,
 };
 use aya_log_ebpf::{error, info};
@@ -32,8 +32,8 @@ const MAX_BLOCKLIST_SIZE: u32 = 1024;
 
 // the key is an ipv4 or ipv6 octet value expressed as an array.
 #[map]
-static BLOCKLIST: HashMap<[u8; 16usize], Rule> =
-    HashMap::with_max_entries(MAX_BLOCKLIST_SIZE, 0 | BPF_F_NO_PREALLOC);
+static BLOCKLIST: PerCpuHashMap<[u8; 16usize], Rule> =
+    PerCpuHashMap::with_max_entries(MAX_BLOCKLIST_SIZE, 0 | BPF_F_NO_PREALLOC);
 
 /// block_ip inspects our blocklist against the incoming packet and makes a filter determination
 fn block_ip(_ctx: &XdpContext, address: [u8; 16usize], dest_port: u16) -> bool {
