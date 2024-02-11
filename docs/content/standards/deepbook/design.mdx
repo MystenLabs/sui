@@ -8,7 +8,7 @@ slug: /deepbook-design
 
 At the center of DeepBook is a hyper-efficient per-current pair shared-object Pool structure. This architecture maximally utilizes Sui's Narwhal and Bullshark engine to minimize contention and achieve high throughput.
 
-For each base and quote asset trading pair, a globally shared Pool is created to 1) bookkeep open orders on the order book and 2) handle placement, cancelation, and settlement of orders. Under this architecture, transactions involving different trading pairs can be easily parallelized to maximize throughput.
+For each base and quote asset trading pair, a globally shared Pool is created to 1) bookkeep open orders on the order book and 2) handle placement, cancellation, and settlement of orders. Under this architecture, transactions involving different trading pairs can be easily parallelized to maximize throughput.
 
 ```move
 struct Pool<phantom BaseAsset, phantom QuoteAsset> has key {

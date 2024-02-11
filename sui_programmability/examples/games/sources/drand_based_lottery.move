@@ -34,7 +34,7 @@
 /// As long as someone is closing the game in time (or at least before round N) we have the guarantee that the winner is
 /// selected using unpredictable and unbiasable randomness. Otherwise, someone could wait until the randomness of round N
 /// is public, see if it could win the game and if so, join the game and drive it to completion. Therefore, honest users
-/// are encourged to close the game in time.
+/// are encouraged to close the game in time.
 ///
 /// All the external inputs needed for the following APIs can be retrieved from one of drand's public APIs, e.g. using
 /// the above curl commands.
