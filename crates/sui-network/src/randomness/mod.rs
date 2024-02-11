@@ -198,6 +198,8 @@ impl RandomnessEventLoop {
     ) -> Result<()> {
         assert!(self.dkg_output.is_none() || new_epoch > self.epoch);
 
+        debug!("updating randomness network loop to epoch {new_epoch}");
+
         self.peer_share_counts = Some(authority_info.iter().try_fold(
             HashMap::new(),
             |mut acc, (_name, (peer_id, party_id))| -> Result<_> {
@@ -215,11 +217,9 @@ impl RandomnessEventLoop {
         }
 
         // Throw away any signatures from old epochs.
-        self.received_partial_sigs = self.received_partial_sigs.split_off(&(
-            new_epoch + 1,
-            RandomnessRound(0),
-            PeerId([0; 32]),
-        ));
+        self.received_partial_sigs =
+            self.received_partial_sigs
+                .split_off(&(new_epoch, RandomnessRound(0), PeerId([0; 32])));
         self.completed_sigs = self
             .completed_sigs
             .split_off(&(new_epoch, RandomnessRound(0)));
@@ -228,7 +228,9 @@ impl RandomnessEventLoop {
         self.maybe_start_pending_tasks();
 
         // Aggregate any sigs received early from the new epoch.
-        let mut aggregate_rounds = Vec::new(); // can't call aggregate directly while iterating because it takes &mut self
+        // (We can't call `maybe_aggregate_partial_signatures` directly while iterating,
+        // because it takes `&mut self`, so we store in a Vec first.)
+        let mut aggregate_rounds = Vec::new();
         let mut next_eligible_round = 0;
         for (epoch, round, _) in self.received_partial_sigs.keys() {
             if *epoch != new_epoch {

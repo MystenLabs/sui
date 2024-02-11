@@ -292,6 +292,7 @@ impl CheckpointExecutor {
     fn process_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
         // Ensure that we are not skipping checkpoints at any point
         let seq = *checkpoint.sequence_number();
+        debug!("Bumping highest_executed_checkpoint watermark to {seq:?}");
         if let Some(prev_highest) = self
             .checkpoint_store
             .get_highest_executed_checkpoint_seq_number()
@@ -301,7 +302,6 @@ impl CheckpointExecutor {
         } else {
             assert_eq!(seq, 0);
         }
-        debug!("Bumping highest_executed_checkpoint watermark to {:?}", seq);
         if seq % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
             info!("Finished syncing and executing checkpoint {}", seq);
         }
@@ -641,11 +641,16 @@ async fn execute_checkpoint(
     // Once execution is complete, we know that any randomness contained in this checkpoint has
     // been successfully included in a checkpoint certified by quorum of validators.
     if let Some(round) = randomness_round {
-        epoch_store
-            .randomness_manager()
-            .expect("should never see randomness in an epoch if RandomnessManager does not exist")
-            .notify_randomness_in_checkpoint(round)
-            .await?;
+        // RandomnessManager is only present on validators.
+        if let Some(randomness_manager) = epoch_store.randomness_manager() {
+            debug!(
+                ?round,
+                "notifying RandomnessManager that randomness update was executed in checkpoint"
+            );
+            randomness_manager
+                .notify_randomness_in_checkpoint(round)
+                .await?;
+        }
     }
 
     Ok(())
