@@ -335,7 +335,8 @@ impl RandomnessEventLoop {
                     "skipping received partial sigs for epoch {epoch} round {round}, most recent round we completed was only {last_completed_round}",
                 );
                 return;
-            } else if round.0 >= MAX_PARTIAL_SIGS_ROUNDS_AHEAD {
+            }
+            if epoch > *last_completed_epoch && round.0 >= MAX_PARTIAL_SIGS_ROUNDS_AHEAD {
                 debug!(
                     "skipping received partial sigs for epoch {epoch} round {round}, most recent epoch we completed was only {last_completed_epoch}",
                 );
