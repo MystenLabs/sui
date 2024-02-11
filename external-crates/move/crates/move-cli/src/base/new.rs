@@ -62,6 +62,10 @@ impl New {
             "[package]
 name = \"{name}\"
 
+# version = \"0.1.1\"  # semver \"maj.min.patch\"
+# license = \"\"       # e.g., \"MIT\", \"GPL\", \"Apache 2.0\"
+# authors = [\"...\"]  # e.g., [\"Joe Smith (joesmith@noemail.com)\", \"John Snow (johnsnow@noemail.com)\"]
+
 [dependencies]"
         )?;
         for (dep_name, dep_val) in deps {
@@ -69,15 +73,14 @@ name = \"{name}\"
         }
 
         writeln!(w, "
-# For remote import, use the `git = \"URL\"`. With this type of import you can
-# specify the path to Move.toml `subdir = \"...\"` and the revision using
-# `rev = \"...\"`. Revision can be a branch, a tag, and a commit hash.
-# MyRemotePackage = {{ git = \"https://some.remote/host.git\", subdir = \"remote/path\", rev = \"01Move....\" }}
+# For remote import, use the `{{ git = \"...\", subdir = \"...\", rev = \"...\" }}`.
+# Revision can be a branch, a tag, and a commit hash.
+# MyRemotePackage = {{ git = \"https://some.remote/host.git\", subdir = \"remote/path\", rev = \"main\" }}
 
 # For local dependencies use `local = path`. Path is relative to the package root
 # Local = {{ local = \"../path/to\" }}
 
-# To resolve version conflict and force a specific version for dependency
+# To resolve a version conflict and force a specific version for dependency
 # override use `override = true`
 # Override = {{ override = true, local = \"../conflicting/version\" }}
 
