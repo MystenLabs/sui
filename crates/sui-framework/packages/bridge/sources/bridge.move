@@ -73,13 +73,10 @@ module bridge::bridge {
     const ENotSystemAddress: u64 = 5;
     const EUnexpectedSeqNum: u64 = 6;
     const EWrongInnerVersion: u64 = 7;
-    const EAlreadyClaimed: u64 = 8;
-    const ERecordAlreadyExists: u64 = 9;
-    const EBridgeUnavailable: u64 = 10;
-    const EUnexpectedOperation: u64 = 11;
-
-    const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 13;
-    const EMessageNotFoundInRecords: u64 = 14;
+    const EBridgeUnavailable: u64 = 8;
+    const EUnexpectedOperation: u64 = 9;
+    const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 10;
+    const EMessageNotFoundInRecords: u64 = 11;
 
     const CURRENT_VERSION: u64 = 1;
 
