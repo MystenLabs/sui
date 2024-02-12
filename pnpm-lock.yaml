@@ -1162,7 +1162,7 @@ importers:
         specifier: ^10.9.1
         version: 10.9.1(@types/node@20.4.2)(typescript@5.3.3)
       typescript:
-        specifier: ^5.1.6
+        specifier: ^5.3.3
         version: 5.3.3
 
   examples/trading/frontend:
@@ -1235,7 +1235,7 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3(ts-node@10.9.1)
       typescript:
-        specifier: ^5.1.6
+        specifier: ^5.3.3
         version: 5.3.3
       vite:
         specifier: ^4.4.4
