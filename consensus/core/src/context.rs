@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
-#[cfg(test)]
-use tempfile::TempDir;
 
 use consensus_config::{AuthorityIndex, Committee, Parameters};
 use sui_protocol_config::ProtocolConfig;
+
+#[cfg(test)]
+use tempfile::TempDir;
 
 use crate::metrics::Metrics;
 
