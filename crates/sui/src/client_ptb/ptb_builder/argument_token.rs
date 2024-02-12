@@ -282,7 +282,7 @@ fn extract_sub_parser_token_string(mut s: &str, start: &str, end: &str) -> anyho
 mod tests {
     use move_command_line_common::parser::Token;
 
-    use crate::ptb::ptb_builder::argument_token::ArgumentToken;
+    use crate::client_ptb::ptb_builder::argument_token::ArgumentToken;
 
     #[test]
     fn tokenize_vector() {

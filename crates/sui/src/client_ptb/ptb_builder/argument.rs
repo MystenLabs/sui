@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    error,
-    ptb::ptb_builder::errors::{PTBResult, Span, Spanned},
-    sp,
+    client_ptb::ptb_builder::errors::{PTBResult, Span, Spanned},
+    error, sp,
 };
 use core::fmt::{self, Debug};
 use move_command_line_common::{

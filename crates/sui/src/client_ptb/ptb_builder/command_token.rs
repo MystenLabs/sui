@@ -108,7 +108,7 @@ pub const ALL_PUBLIC_COMMAND_TOKENS: &[&str] = &[
 
 #[cfg(test)]
 mod tests {
-    use crate::ptb::ptb_builder::command_token::*;
+    use crate::client_ptb::ptb_builder::command_token::*;
 
     #[test]
     fn round_trip() {

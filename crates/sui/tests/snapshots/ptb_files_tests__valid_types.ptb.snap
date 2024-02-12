@@ -1,0 +1,87 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                                             │
+├───────────────┬─────────────────────────────────────────┬───────────────────────────────────────────────────────────────┤
+│ command       │ from                                    │ value(s)                                                      │
+├───────────────┼─────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤
+│ make_move_vec │ tests/ptb_files/parsing/valid_types.ptb │ <address> [@0x1]                                              │
+│ make_move_vec │ tests/ptb_files/parsing/valid_types.ptb │ <bool> [true, false]                                          │
+│ make_move_vec │ tests/ptb_files/parsing/valid_types.ptb │ <u8> [0]                                                      │
+│ make_move_vec │ tests/ptb_files/parsing/valid_types.ptb │ <u16> [0]                                                     │
+│ make_move_vec │ tests/ptb_files/parsing/valid_types.ptb │ <u32> [0]                                                     │
+│ make_move_vec │ tests/ptb_files/parsing/valid_types.ptb │ <u64> [0]                                                     │
+│ make_move_vec │ tests/ptb_files/parsing/valid_types.ptb │ <u128> [0]                                                    │
+│ make_move_vec │ tests/ptb_files/parsing/valid_types.ptb │ <u256> [0]                                                    │
+│ make_move_vec │ tests/ptb_files/parsing/valid_types.ptb │ <vector<u8>> [vector[0]]                                      │
+│ make_move_vec │ tests/ptb_files/parsing/valid_types.ptb │ <vector<u256>> [vector[0]]                                    │
+│ assign        │ tests/ptb_files/parsing/valid_types.ptb │ a 0u8                                                         │
+│ assign        │ tests/ptb_files/parsing/valid_types.ptb │ b 0u16                                                        │
+│ assign        │ tests/ptb_files/parsing/valid_types.ptb │ c 0u32                                                        │
+│ assign        │ tests/ptb_files/parsing/valid_types.ptb │ d 0u64                                                        │
+│ assign        │ tests/ptb_files/parsing/valid_types.ptb │ e 0u128                                                       │
+│ assign        │ tests/ptb_files/parsing/valid_types.ptb │ f 0u256                                                       │
+│ assign        │ tests/ptb_files/parsing/valid_types.ptb │ a 0x0u8                                                       │
+│ assign        │ tests/ptb_files/parsing/valid_types.ptb │ b 0x0u16                                                      │
+│ assign        │ tests/ptb_files/parsing/valid_types.ptb │ c 0x0u32                                                      │
+│ assign        │ tests/ptb_files/parsing/valid_types.ptb │ d 0x0u64                                                      │
+│ assign        │ tests/ptb_files/parsing/valid_types.ptb │ e 0x0u128                                                     │
+│ assign        │ tests/ptb_files/parsing/valid_types.ptb │ f 0x0u256                                                     │
+│ make_move_vec │ tests/ptb_files/parsing/valid_types.ptb │ <std::option::Option<std::option::Option<vector<u8>>>> [none] │
+│ make_move_vec │ tests/ptb_files/parsing/valid_types.ptb │ <std::option::Option<vector<u256>>> [vector[]]                │
+│ gas_budget    │ tests/ptb_files/parsing/valid_types.ptb │ 1                                                             │
+│ preview       │ console                                 │ true                                                          │
+╰───────────────┴─────────────────────────────────────────┴───────────────────────────────────────────────────────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/parsing/valid_types.ptb\""]
+cmd: make_move_vec, value: ["<address>", "[@0x1]"]
+cmd: make_move_vec, value: ["<bool>", "[true, false]"]
+cmd: make_move_vec, value: ["<u8>", "[0u64]"]
+cmd: make_move_vec, value: ["<u16>", "[0u64]"]
+cmd: make_move_vec, value: ["<u32>", "[0u64]"]
+cmd: make_move_vec, value: ["<u64>", "[0u64]"]
+cmd: make_move_vec, value: ["<u128>", "[0u64]"]
+cmd: make_move_vec, value: ["<u256>", "[0u64]"]
+cmd: make_move_vec, value: ["<vector<u8>>", "[vector[0u64]]"]
+cmd: make_move_vec, value: ["<vector<u256>>", "[vector[0u64]]"]
+cmd: assign, value: ["a", "0u8"]
+cmd: assign, value: ["b", "0u16"]
+cmd: assign, value: ["c", "0u32"]
+cmd: assign, value: ["d", "0u64"]
+cmd: assign, value: ["e", "0u128"]
+cmd: assign, value: ["f", "0u256"]
+cmd: assign, value: ["a", "0u8"]
+cmd: assign, value: ["b", "0u16"]
+cmd: assign, value: ["c", "0u32"]
+cmd: assign, value: ["d", "0u64"]
+cmd: assign, value: ["e", "0u128"]
+cmd: assign, value: ["f", "0u256"]
+cmd: make_move_vec, value: ["<0x1::option::Option<0x1::option::Option<vector<u8>>>>", "[none]"]
+cmd: make_move_vec, value: ["<0x1::option::Option<vector<u256>>>", "[vector[]]"]
+cmd: gas_budget, value: ["1u64"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/parsing/valid_types.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILT PTB === 
+Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
+Input 1: Pure([1])
+Input 2: Pure([0])
+Input 3: Pure([0, 0, 0, 0, 0, 0, 0, 0])
+Input 4: Pure([1, 0, 0, 0, 0, 0, 0, 0, 0])
+Command 0: MakeMoveVec(Someaddress,[Input(0)])
+Command 1: MakeMoveVec(Somebool,[Input(1),Input(2)])
+Command 2: MakeMoveVec(Someu8,[Input(3)])
+Command 3: MakeMoveVec(Someu16,[Input(3)])
+Command 4: MakeMoveVec(Someu32,[Input(3)])
+Command 5: MakeMoveVec(Someu64,[Input(3)])
+Command 6: MakeMoveVec(Someu128,[Input(3)])
+Command 7: MakeMoveVec(Someu256,[Input(3)])
+Command 8: MakeMoveVec(Somevector<u8>,[Input(4)])
+Command 9: MakeMoveVec(Somevector<u256>,[Input(4)])
+Command 10: MakeMoveVec(Some0x1::option::Option<0x1::option::Option<vector<u8>>>,[Input(2)])
+Command 11: MakeMoveVec(Some0x1::option::Option<vector<u256>>,[Input(2)])

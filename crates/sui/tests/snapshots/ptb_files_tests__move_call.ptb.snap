@@ -34,7 +34,8 @@ cmd: file-include-end, value: ["\"tests/ptb_files/move_call/move_call.ptb\""]
 cmd: preview, value: ["true"]
 cmd: warn_shadows, value: ["false"]
  === BUILT PTB === 
-MakeMoveVec(Some0x1::option::Option<u64>,[Input(0)])
-MoveCall(0x0000000000000000000000000000000000000000000000000000000000000001::option::is_none<u64>(Input(0)))
-MoveCall(0x0000000000000000000000000000000000000000000000000000000000000001::option::is_none<u64>(Input(0)))
-MoveCall(0x0000000000000000000000000000000000000000000000000000000000000001::option::is_none<u64>(Input(0)))
+Input 0: Pure([0])
+Command 0: MakeMoveVec(Some0x1::option::Option<u64>,[Input(0)])
+Command 1: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000001::option::is_none<u64>(Input(0)))
+Command 2: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000001::option::is_none<u64>(Input(0)))
+Command 3: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000001::option::is_none<u64>(Input(0)))

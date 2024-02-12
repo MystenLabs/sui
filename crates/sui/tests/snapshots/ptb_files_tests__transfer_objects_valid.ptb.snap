@@ -26,5 +26,9 @@ cmd: file-include-end, value: ["\"tests/ptb_files/transfer_objects/transfer_obje
 cmd: preview, value: ["true"]
 cmd: warn_shadows, value: ["false"]
  === BUILT PTB === 
-SplitCoins(GasCoinInput(0),Input(1),Input(2))
-TransferObjects([NestedResult(0,0),NestedResult(0,1),NestedResult(0,2)],Input(3))
+Input 0: Pure([1, 0, 0, 0, 0, 0, 0, 0])
+Input 1: Pure([2, 0, 0, 0, 0, 0, 0, 0])
+Input 2: Pure([3, 0, 0, 0, 0, 0, 0, 0])
+Input 3: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
+Command 0: SplitCoins(GasCoinInput(0),Input(1),Input(2))
+Command 1: TransferObjects([NestedResult(0,0),NestedResult(0,1),NestedResult(0,2)],Input(3))

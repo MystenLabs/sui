@@ -5,8 +5,7 @@ mod gas_cost_summary;
 mod status;
 mod summary;
 
-use crate::ptb::ptb::PTBGas;
-use crate::ptb::ptb::PTBPreview;
+use crate::client_ptb::ptb::{PTBGas, PTBPreview};
 use std::fmt::{Display, Formatter};
 use tabled::{
     builder::Builder as TableBuilder,

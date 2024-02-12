@@ -22,4 +22,4 @@ cmd: file-include-end, value: ["\"tests/ptb_files/publish/publish_valid.ptb\""]
 cmd: preview, value: ["true"]
 cmd: warn_shadows, value: ["false"]
  === BUILT PTB === 
-Publish(_,)
+Command 0: Publish(_,)

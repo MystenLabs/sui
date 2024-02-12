@@ -3,7 +3,7 @@
 
 use clap::CommandFactory;
 use std::{collections::BTreeMap, path::Path};
-use sui::ptb::{
+use sui::client_ptb::{
     ptb::PTB,
     ptb_builder::{errors::render_errors, parse_ptb::PTBParser},
 };
@@ -12,15 +12,19 @@ use test_cluster::TestClusterBuilder;
 
 const TEST_DIR: &str = "tests";
 
+#[cfg_attr(msim, msim::main)]
 #[cfg_attr(not(msim), tokio::main)]
 async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let fname = || {
-        format!(
-            "{}",
-            path.file_name().unwrap().to_string_lossy().to_string()
+    let _ = miette::set_hook(Box::new(|_| {
+        Box::new(
+            miette::MietteHandlerOpts::new()
+                .color(false)
+                .width(80)
+                .build(),
         )
-    };
-    std::env::set_var("NO_COLOR", "true"); // we need this for the miette errors
+    }));
+
+    let fname = || path.file_name().unwrap().to_string_lossy().to_string();
     let ptb = PTB::default();
     let cmd = PTB::command();
     let file = path.to_str().unwrap();
@@ -50,7 +54,7 @@ async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 
     // === PARSE COMMANDS ===
     let mut parser = PTBParser::new();
-    for (_, cmd) in &commands {
+    for cmd in commands.values() {
         parser.parse(cmd.clone());
     }
 
@@ -75,11 +79,7 @@ async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
             .iter()
             .map(|x| x.value.to_string())
             .collect::<Vec<_>>();
-        results.push(format!(
-            "cmd: {}, value: {:?}",
-            c.name.value.to_string(),
-            values
-        ));
+        results.push(format!("cmd: {}, value: {:?}", c.name.value, values));
     }
 
     // === BUILD PTB ===
@@ -95,7 +95,7 @@ async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
             results.push(format!("Input {}: {}", i, stable_call_arg_display(ca)));
         }
         for (i, c) in ptb.0.commands.iter().enumerate() {
-            results.push(format!("Command {}: {}", i, c.to_string()));
+            results.push(format!("Command {}: {}", i, c));
         }
     }
 

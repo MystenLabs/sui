@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    ptb::{
+    client_ptb::{
         ptb::PTBCommand,
         ptb_builder::{
             argument::Argument,
@@ -662,8 +662,7 @@ impl<'a> ValueParser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::ptb::ptb_builder::context::FileScope;
-    use crate::ptb::ptb_builder::parse_ptb::PTBParser;
+    use crate::client_ptb::ptb_builder::{context::FileScope, parse_ptb::PTBParser};
 
     fn dummy_file_scope() -> FileScope {
         FileScope {
