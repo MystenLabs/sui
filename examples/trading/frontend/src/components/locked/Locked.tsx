@@ -11,7 +11,7 @@ import {
 } from "@radix-ui/react-icons";
 import { ObjectLink } from "../ObjectLink";
 import { useState } from "react";
-import { LockedObject } from "@/types/types";
+import { ApiLockedObject } from "@/types/types";
 import { CreateEscrow } from "../escrows/CreateEscrow";
 import { useUnlockMutation } from "@/mutations/locked";
 
@@ -20,7 +20,7 @@ export function Locked({
   isManagement,
   hideControls,
 }: {
-  locked: LockedObject;
+  locked: ApiLockedObject;
   isManagement?: boolean;
   hideControls?: boolean;
 }) {
@@ -44,13 +44,13 @@ export function Locked({
   );
 
   const isOwner = () => {
-    return account?.address === locked.creator;
+    return !!locked.owner && account?.address === locked.owner;
   };
 
   const getLabel = () => {
     if (locked.deleted) return "Deleted";
     if (hideControls) {
-      if (locked.creator === account?.address) return "You offer this";
+      if (locked.owner === account?.address) return "You offer this";
       return "You'll receive this if accepted";
     }
     return undefined;
@@ -60,7 +60,7 @@ export function Locked({
     if (locked.deleted)
       return "bg-red-50 rounded px-3 py-1 text-sm text-red-500";
     if (hideControls) {
-      if (locked.creator === account?.address)
+      if (!!locked.owner && locked.owner === account?.address)
         return "bg-blue-50 rounded px-3 py-1 text-sm text-blue-500";
       return "bg-green-50 rounded px-3 py-1 text-sm text-green-700";
     }
@@ -85,7 +85,11 @@ export function Locked({
               className="ml-auto cursor-pointer"
               disabled={isPending}
               onClick={() => {
-                unlockMutation({ locked, suiObject: suiObject.data! });
+                unlockMutation({
+                  lockedId: locked.objectId,
+                  keyId: locked.keyId,
+                  suiObject: suiObject.data!,
+                });
               }}
             >
               <LockOpen1Icon /> Unlock

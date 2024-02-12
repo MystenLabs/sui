@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { Tabs, Tooltip } from "@radix-ui/themes";
-import { LockedList } from "../components/locked/LockedList";
+import { LockedList } from "../components/locked/ApiLockedList";
 import { EscrowList } from "../components/escrows/EscrowList";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
 import { useCurrentAccount } from "@mysten/dapp-kit";

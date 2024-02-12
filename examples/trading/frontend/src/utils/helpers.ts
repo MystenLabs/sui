@@ -18,6 +18,11 @@ export const constructUrlSearchParams = (
 
 /** A naive way to understand whether we have a next page or not */
 export const getNextPageParam = (lastPage: any) => {
+  if ("api" in lastPage) {
+    return lastPage.api.data.length < CONSTANTS.apiPageLimit
+      ? undefined
+      : lastPage.api.cursor;
+  }
   return lastPage.data.length < CONSTANTS.apiPageLimit
     ? undefined
     : lastPage.cursor;

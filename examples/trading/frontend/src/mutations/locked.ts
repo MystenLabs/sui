@@ -3,7 +3,6 @@
 
 import { CONSTANTS, QueryKey } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
-import { LockedObject } from "@/types/types";
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { SuiObjectData } from "@mysten/sui.js/client";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
@@ -41,16 +40,18 @@ export function useUnlockMutation() {
 
   return useMutation({
     mutationFn: async ({
-      locked,
+      lockedId,
+      keyId,
       suiObject,
     }: {
-      locked: LockedObject;
+      lockedId: string;
+      keyId: string;
       suiObject: SuiObjectData;
     }) => {
       if (!account?.address)
         throw new Error("You need to connect your wallet!");
       const key = await client.getObject({
-        id: locked.keyId,
+        id: keyId,
         options: {
           showOwner: true,
         },
@@ -71,7 +72,7 @@ export function useUnlockMutation() {
       const item = txb.moveCall({
         target: `${CONSTANTS.escrowContract.packageId}::lock::unlock`,
         typeArguments: [suiObject.type!],
-        arguments: [txb.object(locked.objectId), txb.object(locked.keyId)],
+        arguments: [txb.object(lockedId), txb.object(keyId)],
       });
 
       txb.transferObjects([item], txb.pure.address(account.address));

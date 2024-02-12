@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-export type LockedObject = {
+export type ApiLockedObject = {
   id: string;
   objectId: string;
   keyId: string;
-  creator: string;
+  owner?: string;
   itemId: string;
   deleted: boolean;
 };
 
-export type EscrowObject = {
+export type ApiEscrowObject = {
   id: string;
   objectId: string;
   sender: string;
@@ -29,7 +29,6 @@ export type EscrowListingQuery = {
 };
 
 export type LockedListingQuery = {
-  creator?: string;
   deleted?: string;
   keyId?: string;
 };

@@ -5,12 +5,12 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { CONSTANTS, QueryKey } from "@/constants";
 import { Loading } from "@/components/Loading";
 import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
-import { LockedListingQuery, LockedObject } from "@/types/types";
-import { Locked } from "./Locked";
+import { ApiLockedObject, LockedListingQuery } from "@/types/types";
 import { constructUrlSearchParams, getNextPageParam } from "@/utils/helpers";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { TextField } from "@radix-ui/themes";
 import { useState } from "react";
+import { LockedObject } from "./LockedObject";
 
 export function LockedList({
   enableSearch,
@@ -22,23 +22,40 @@ export function LockedList({
 }) {
   const account = useCurrentAccount();
   const [lockedId, setLockedId] = useState("");
+  const suiClient = useSuiClient();
 
   const { data, fetchNextPage, hasNextPage, isLoading, isFetchingNextPage } =
     useInfiniteQuery({
       initialPageParam: null,
       queryKey: [QueryKey.Locked, params, account?.address, lockedId],
       queryFn: async ({ pageParam }) => {
-        const data = await fetch(
-          CONSTANTS.apiEndpoint +
-            `locked${constructUrlSearchParams({
-              ...(pageParam ? { cursor: pageParam as string } : {}),
-              ...(lockedId ? { objectId: lockedId } : {}),
-              ...params,
-            })}`,
-        );
-        return data.json();
+        const data = await (
+          await fetch(
+            CONSTANTS.apiEndpoint +
+              "locked" +
+              constructUrlSearchParams({
+                deleted: "false",
+                ...(pageParam ? { cursor: pageParam as string } : {}),
+                ...(lockedId ? { objectId: lockedId } : {}),
+              }),
+          )
+        ).json();
+
+        console.log(data);
+
+        const objects = await suiClient.multiGetObjects({
+          ids: data.data.map((x: ApiLockedObject) => x.objectId),
+          options: {
+            showOwner: true,
+            showContent: true,
+          },
+        });
+        return {
+          suiObjects: objects.map((x) => x.data),
+          api: data,
+        };
       },
-      select: (data) => data.pages.flatMap((page) => page.data),
+      select: (data) => data.pages.flatMap((page) => page.suiObjects),
       getNextPageParam,
     });
 
@@ -59,8 +76,8 @@ export function LockedList({
         hasNextPage={hasNextPage}
         loading={isFetchingNextPage}
       >
-        {data?.map((locked: LockedObject) => (
-          <Locked key={locked.itemId} locked={locked} />
+        {data?.map((object) => (
+          <LockedObject key={object?.objectId!} object={object!} />
         ))}
       </InfiniteScrollArea>
     </>

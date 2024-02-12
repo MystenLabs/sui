@@ -3,7 +3,7 @@
 
 import { CONSTANTS, QueryKey } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
-import { EscrowObject, LockedObject } from "@/types/types";
+import { ApiEscrowObject, ApiLockedObject } from "@/types/types";
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { SuiObjectData } from "@mysten/sui.js/client";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
@@ -20,8 +20,8 @@ export function useAcceptEscrowMutation() {
       escrow,
       locked,
     }: {
-      escrow: EscrowObject;
-      locked: LockedObject;
+      escrow: ApiEscrowObject;
+      locked: ApiLockedObject;
     }) => {
       if (!currentAccount?.address)
         throw new Error("You need to connect your wallet!");
@@ -79,7 +79,7 @@ export function useCancelEscrowMutation() {
       escrow,
       suiObject,
     }: {
-      escrow: EscrowObject;
+      escrow: ApiEscrowObject;
       suiObject: SuiObjectData;
     }) => {
       if (!currentAccount?.address)
@@ -115,7 +115,7 @@ export function useCreateEscrowMutation() {
       locked,
     }: {
       object: SuiObjectData;
-      locked: LockedObject;
+      locked: ApiLockedObject;
     }) => {
       if (!currentAccount?.address)
         throw new Error("You need to connect your wallet!");
@@ -126,7 +126,7 @@ export function useCreateEscrowMutation() {
         arguments: [
           txb.object(object.objectId!),
           txb.pure.id(locked.keyId),
-          txb.pure.address(locked.creator),
+          txb.pure.address(locked.owner!),
         ],
         typeArguments: [object.type!],
       });

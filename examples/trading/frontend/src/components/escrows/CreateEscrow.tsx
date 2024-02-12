@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { LockedObject } from "@/types/types";
+import { ApiLockedObject } from "@/types/types";
 import { useCurrentAccount, useSuiClientInfiniteQuery } from "@mysten/dapp-kit";
 import { formatAddress } from "@mysten/sui.js/utils";
 import { Avatar, Button, Select } from "@radix-ui/themes";
@@ -9,7 +9,7 @@ import { useState } from "react";
 import { ObjectLink } from "../ObjectLink";
 import { useCreateEscrowMutation } from "@/mutations/escrow";
 
-export function CreateEscrow({ locked }: { locked: LockedObject }) {
+export function CreateEscrow({ locked }: { locked: ApiLockedObject }) {
   const [objectId, setObjectId] = useState<string | undefined>(undefined);
   const account = useCurrentAccount();
 
@@ -49,7 +49,7 @@ export function CreateEscrow({ locked }: { locked: LockedObject }) {
     <div className="px-3 py-3 grid grid-cols-1 gap-5  mt-3 rounded">
       <div>
         <label className="text-xs">The recipient will be:</label>
-        <ObjectLink id={locked.creator} isAddress />
+        <ObjectLink id={locked.owner!} isAddress />
       </div>
       <div>
         <label className="text-xs">Select which object to put on escrow:</label>
