@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { Tabs } from "@radix-ui/themes";
-import { LockItems } from "../components/locked/LockItems";
+import { LockOwnedObjects } from "../components/locked/LockOwnedObjects";
 import { OwnedLockedList } from "@/components/locked/OwnedLockedList";
 
 // SPDX-License-Identifier: Apache-2.0
@@ -15,7 +15,7 @@ export function LockedDashboard() {
     },
     {
       name: "Lock Owned objects",
-      component: () => <LockItems />,
+      component: () => <LockOwnedObjects />,
     },
   ];
 

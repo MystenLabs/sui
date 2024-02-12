@@ -6,7 +6,13 @@ import { useSuiClientQuery } from "@mysten/dapp-kit";
 import { Locked } from "./Locked";
 import { SuiObjectData } from "@mysten/sui.js/client";
 
-export function LockedObject({ object }: { object: SuiObjectData }) {
+export function LockedObject({
+  object,
+  itemId,
+}: {
+  object: SuiObjectData;
+  itemId?: string;
+}) {
   const owner = () => {
     if (
       !object.owner ||
@@ -40,14 +46,14 @@ export function LockedObject({ object }: { object: SuiObjectData }) {
     },
     {
       select: (data) => data.data,
+      enabled: !itemId,
     },
   );
 
   return (
     <Locked
       locked={{
-        id: "-1",
-        itemId: suiObjectId.data?.objectId!,
+        itemId: itemId || suiObjectId.data?.objectId!,
         objectId: object.objectId,
         keyId: getKeyId(object),
         owner: owner(),

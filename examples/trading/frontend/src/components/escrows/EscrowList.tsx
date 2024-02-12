@@ -7,7 +7,7 @@ import { Escrow } from "./Escrow";
 import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { constructUrlSearchParams, getNextPageParam } from "@/utils/helpers";
-import { EscrowListingQuery, EscrowObject } from "@/types/types";
+import { ApiEscrowObject, EscrowListingQuery } from "@/types/types";
 import { useState } from "react";
 import { TextField } from "@radix-ui/themes";
 
@@ -56,7 +56,7 @@ export function EscrowList({
         hasNextPage={hasNextPage}
         loading={isFetchingNextPage || isLoading}
       >
-        {data?.map((escrow: EscrowObject) => (
+        {data?.map((escrow: ApiEscrowObject) => (
           <Escrow key={escrow.itemId} escrow={escrow} />
         ))}
       </InfiniteScrollArea>

@@ -15,13 +15,13 @@ import { ObjectLink } from "../ObjectLink";
 import { useQuery } from "@tanstack/react-query";
 import { Locked } from "../locked/Locked";
 import { useState } from "react";
-import { EscrowObject } from "@/types/types";
+import { ApiEscrowObject } from "@/types/types";
 import {
   useAcceptEscrowMutation,
   useCancelEscrowMutation,
 } from "@/mutations/escrow";
 
-export function Escrow({ escrow }: { escrow: EscrowObject }) {
+export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
   const account = useCurrentAccount();
   const [isToggled, setIsToggled] = useState(true);
   const { mutate: acceptEscrowMutation, isPending } = useAcceptEscrowMutation();

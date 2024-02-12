@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 export type ApiLockedObject = {
-  id: string;
+  id?: string;
   objectId: string;
   keyId: string;
   owner?: string;

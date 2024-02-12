@@ -8,7 +8,7 @@ import { LockClosedIcon } from "@radix-ui/react-icons";
 import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { useLockObjectMutation } from "@/mutations/locked";
 
-export function LockItems() {
+export function LockOwnedObjects() {
   const account = useCurrentAccount();
 
   const { mutate: lockObjectMutation, isPending } = useLockObjectMutation();

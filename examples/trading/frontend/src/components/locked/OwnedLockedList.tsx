@@ -7,6 +7,10 @@ import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { useCurrentAccount, useSuiClientInfiniteQuery } from "@mysten/dapp-kit";
 import { LockedObject } from "./LockedObject";
 
+/**
+ * Similar to the `ApiLockedList` but fetches the owned locked objects
+ * but fetches the objects from the on-chain state, instead of relying on the indexer API.
+ */
 export function OwnedLockedList() {
   const account = useCurrentAccount();
 
