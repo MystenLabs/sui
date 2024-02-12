@@ -56,9 +56,7 @@ impl AuthorityNode {
         // Construct Core
         let (core_signals, signals_receivers) = CoreSignals::new();
         let block_manager = BlockManager::new();
-        let store = Arc::new(RocksDBStore::new(
-            context.parameters.db_path.as_path().to_str().unwrap(),
-        ));
+        let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
         let core = Core::new(
             context.clone(),
             tx_consumer,
@@ -120,7 +118,7 @@ mod tests {
         let registry = Registry::new();
         let temp_dir = TempDir::new().unwrap();
         let parameters = Parameters {
-            db_path: temp_dir.into_path(),
+            db_path: Some(temp_dir.into_path()),
             ..Default::default()
         };
         let block_verifier = TestBlockVerifier {};

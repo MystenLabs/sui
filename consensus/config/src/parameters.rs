@@ -18,9 +18,8 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_leader_timeout")]
     pub leader_timeout: Duration,
 
-    /// The database path
-    #[serde(default = "Parameters::default_db_path")]
-    pub db_path: PathBuf,
+    /// The database path. The path should be provided in order for the node to be able to boot
+    pub db_path: Option<PathBuf>,
 }
 
 impl Parameters {
@@ -28,8 +27,14 @@ impl Parameters {
         Duration::from_millis(250)
     }
 
-    pub fn default_db_path() -> PathBuf {
-        PathBuf::default()
+    pub fn db_path_str_unsafe(&self) -> String {
+        self.db_path
+            .clone()
+            .expect("DB path is not set")
+            .as_path()
+            .to_str()
+            .unwrap()
+            .to_string()
     }
 }
 
@@ -37,7 +42,7 @@ impl Default for Parameters {
     fn default() -> Self {
         Self {
             leader_timeout: Parameters::default_leader_timeout(),
-            db_path: Parameters::default_db_path(),
+            db_path: None,
         }
     }
 }
