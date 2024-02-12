@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Examples of cryptographic primitives that can be implemented in Move using group opeartions.
+// Examples of cryptographic primitives that can be implemented in Move using group operations.
 //
 // Functions with the prefix "insecure" are here for testing, but should be called off-chain (probably implemented in
 // other languages) to avoid leaking secrets.
@@ -357,7 +357,7 @@ module crypto::ec_ops {
         vector::reverse(&mut round_bytes);
         let target = sha2_256(round_bytes);
 
-        // Retreived with 'curl https://api.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/public/1234'.
+        // Retrieved with 'curl https://api.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/public/1234'.
         let sig_bytes = x"a81d4aad15461a0a02b43da857be1d782a2232a3c7bb370a2763e95ce1f2628460b24de2cee7453cd12e43c197ea2f23";
         let target_key = bls12381::g1_from_bytes(&sig_bytes);
         assert!(bls12381::bls12381_min_sig_verify(&sig_bytes, &pk_bytes, &target), 0);
