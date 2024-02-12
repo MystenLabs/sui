@@ -3,7 +3,7 @@
 
 module bridge::usdc {
     use std::option;
-
+    use sui::math::pow;
     use sui::coin;
     use sui::coin::TreasuryCap;
     use sui::transfer;
@@ -13,10 +13,12 @@ module bridge::usdc {
 
     struct USDC has drop {}
 
+    const DECIMAL: u8 = 6;
+
     public(friend) fun create(ctx: &mut TxContext): TreasuryCap<USDC> {
         let (treasury_cap, metadata) = coin::create_currency(
             USDC {},
-            6,
+            DECIMAL,
             b"USDC",
             b"USD Coin",
             b"Bridged USD Coin token",
@@ -25,5 +27,13 @@ module bridge::usdc {
         );
         transfer::public_freeze_object(metadata);
         treasury_cap
+    }
+
+    public fun decimal(): u8 {
+        DECIMAL
+    }
+
+    public fun multiplier(): u64 {
+        pow(10, DECIMAL)
     }
 }

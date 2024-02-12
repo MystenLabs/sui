@@ -6,7 +6,9 @@
 
 
 -  [Struct `BTC`](#0xb_btc_BTC)
+-  [Constants](#@Constants_0)
 -  [Function `create`](#0xb_btc_create)
+-  [Function `decimal`](#0xb_btc_decimal)
 
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
@@ -45,6 +47,20 @@
 
 </details>
 
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="0xb_btc_DECIMAL"></a>
+
+
+
+<pre><code><b>const</b> <a href="btc.md#0xb_btc_DECIMAL">DECIMAL</a>: u8 = 8;
+</code></pre>
+
+
+
 <a name="0xb_btc_create"></a>
 
 ## Function `create`
@@ -63,7 +79,7 @@
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="btc.md#0xb_btc_create">create</a>(ctx: &<b>mut</b> TxContext): TreasuryCap&lt;<a href="btc.md#0xb_btc_BTC">BTC</a>&gt; {
     <b>let</b> (treasury_cap, metadata) = <a href="dependencies/sui-framework/coin.md#0x2_coin_create_currency">coin::create_currency</a>(
         <a href="btc.md#0xb_btc_BTC">BTC</a> {},
-        8,
+        <a href="btc.md#0xb_btc_DECIMAL">DECIMAL</a>,
         b"<a href="btc.md#0xb_btc_BTC">BTC</a>",
         b"Bitcoin",
         b"Bridged Bitcoin token",
@@ -72,6 +88,30 @@
     );
     <a href="dependencies/sui-framework/transfer.md#0x2_transfer_public_freeze_object">transfer::public_freeze_object</a>(metadata);
     treasury_cap
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_btc_decimal"></a>
+
+## Function `decimal`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="btc.md#0xb_btc_decimal">decimal</a>(): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="btc.md#0xb_btc_decimal">decimal</a>(): u8 {
+    <a href="btc.md#0xb_btc_DECIMAL">DECIMAL</a>
 }
 </code></pre>
 

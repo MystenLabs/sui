@@ -3,7 +3,7 @@
 
 module bridge::eth {
     use std::option;
-
+    use sui::math::pow;
     use sui::coin;
     use sui::coin::TreasuryCap;
     use sui::transfer;
@@ -13,11 +13,12 @@ module bridge::eth {
 
     struct ETH has drop {}
 
+    const DECIMAL: u8 = 8;
+
     public(friend) fun create(ctx: &mut TxContext): TreasuryCap<ETH> {
         let (treasury_cap, metadata) = coin::create_currency(
             ETH {},
-            // ETC DP limited to 8 on Sui
-            8,
+            DECIMAL,
             b"ETH",
             b"Ethereum",
             b"Bridged Ethereum token",
@@ -26,5 +27,13 @@ module bridge::eth {
         );
         transfer::public_freeze_object(metadata);
         treasury_cap
+    }
+
+    public fun decimal(): u8 {
+        DECIMAL
+    }
+
+    public fun multiplier(): u64 {
+        pow(10, DECIMAL)
     }
 }
