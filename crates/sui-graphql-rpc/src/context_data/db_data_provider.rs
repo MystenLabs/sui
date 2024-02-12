@@ -44,7 +44,7 @@ impl PgManager {
     ) -> Result<IndexerReader, Error> {
         let mut config = PgConnectionPoolConfig::default();
         config.set_pool_size(pool_size);
-        config.set_connection_timeout(Duration::from_millis(timeout_ms));
+        config.set_statement_timeout(Duration::from_millis(timeout_ms));
         IndexerReader::new_with_config(db_url, config)
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }
