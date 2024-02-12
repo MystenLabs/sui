@@ -27,6 +27,7 @@ use sui_macros::fail_point;
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use typed_store::rocks::{default_db_options, read_size_from_env, DBOptions};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
@@ -73,6 +74,10 @@ use typed_store::{
 };
 use typed_store_derive::DBMapUtils;
 
+const ENV_VAR_CHECKPOINT_CONTENT_BLOCK_CACHE_SIZE: &str = "CHECKPOINT_CONTENT_BLOCK_CACHE_MB";
+const ENV_VAR_FULL_CHECKPOINT_CONTENT_BLOCK_CACHE_SIZE: &str =
+    "FULL_CHECKPOINT_CONTENT_BLOCK_CACHE_MB";
+
 pub type CheckpointCommitHeight = u64;
 
 pub struct EpochStats {
@@ -105,6 +110,7 @@ pub struct BuilderCheckpointSummary {
 #[derive(DBMapUtils)]
 pub struct CheckpointStore {
     /// Maps checkpoint contents digest to checkpoint contents
+    #[default_options_override_fn = "checkpoint_content_table_default_config"]
     pub(crate) checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
 
     /// Maps checkpoint contents digest to checkpoint sequence number
@@ -114,6 +120,7 @@ pub struct CheckpointStore {
     /// Stores entire checkpoint contents from state sync, indexed by sequence number, for
     /// efficient reads of full checkpoints. Entries from this table are deleted after state
     /// accumulation has completed.
+    #[default_options_override_fn = "full_checkpoint_content_table_default_config"]
     full_checkpoint_content: DBMap<CheckpointSequenceNumber, FullCheckpointContents>,
 
     /// Stores certified checkpoints
@@ -2203,4 +2210,16 @@ mod tests {
             )
             .expect("Inserting cert fx and sigs should not fail");
     }
+}
+
+fn checkpoint_content_table_default_config() -> DBOptions {
+    default_db_options().optimize_for_read(
+        read_size_from_env(ENV_VAR_CHECKPOINT_CONTENT_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024),
+    )
+}
+
+fn full_checkpoint_content_table_default_config() -> DBOptions {
+    default_db_options().optimize_for_read(
+        read_size_from_env(ENV_VAR_FULL_CHECKPOINT_CONTENT_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024),
+    )
 }
