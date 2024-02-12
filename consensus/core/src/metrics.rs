@@ -43,7 +43,7 @@ pub(crate) struct NodeMetrics {
     pub core_lock_dequeued: IntCounter,
     pub leader_timeout_total: IntCounter,
     pub threshold_clock_round: IntGauge,
-    pub uniquely_suspended_blocks: IntCounterVec,
+    pub suspended_blocks: IntCounterVec,
     pub unsuspended_blocks: IntCounterVec,
 }
 
@@ -93,8 +93,8 @@ impl NodeMetrics {
                 "The current threshold clock round. We only advance to a new round when a quorum of parents have been synced.",
                 registry,
             ).unwrap(),
-            uniquely_suspended_blocks: register_int_counter_vec_with_registry!(
-                "uniquely_suspended_blocks",
+            suspended_blocks: register_int_counter_vec_with_registry!(
+                "suspended_blocks",
                 "The number of suspended blocks. The counter is reported uniquely, so if a block is sent for reprocessing while alreadly suspended then is not double counted",
                 &["authority"],
                 registry,

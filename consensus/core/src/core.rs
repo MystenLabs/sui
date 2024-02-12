@@ -103,8 +103,8 @@ impl Core {
         // Try to accept them via the block manager
         let accepted_blocks = self
             .block_manager
-            .accept_blocks(blocks)
-            .expect("Fatal error");
+            .try_accept_blocks(blocks)
+            .unwrap_or_else(|err| panic!("Fatal error while accepting blocks: {err}"));
 
         // Now process them, basically move the threshold clock and add them to pending list
         self.add_accepted_blocks(accepted_blocks, None);
@@ -225,11 +225,10 @@ impl Core {
                 .or_default()
                 .push(verified_block.clone());
 
-            // TODO: use the DagState instead to accept the block directly. Will address on follow up PR when I'll inject
-            // the DagState. Now that's necessary to ensure that blocks aren't double processed.
             let _ = self
                 .block_manager
-                .accept_blocks(vec![verified_block.clone()]);
+                .try_accept_blocks(vec![verified_block.clone()])
+                .unwrap_or_else(|err| panic!("Fatal error while accepting our own block: {err}"));
 
             self.last_proposed_block = verified_block.clone();
 

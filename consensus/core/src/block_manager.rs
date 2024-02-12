@@ -1,21 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::block::{Block, BlockAPI, BlockRef, VerifiedBlock};
+use crate::block::{BlockAPI, BlockRef, VerifiedBlock};
 use crate::context::Context;
 use crate::dag_state::DagState;
 use crate::error::ConsensusResult;
 use parking_lot::RwLock;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 struct SuspendedBlock {
     block: VerifiedBlock,
-    missing_ancestors: HashSet<BlockRef>,
+    missing_ancestors: BTreeSet<BlockRef>,
 }
 
 impl SuspendedBlock {
-    fn new(block: VerifiedBlock, missing_ancestors: HashSet<BlockRef>) -> Self {
+    fn new(block: VerifiedBlock, missing_ancestors: BTreeSet<BlockRef>) -> Self {
         Self {
             block,
             missing_ancestors,
@@ -36,20 +36,16 @@ pub(crate) struct BlockManager {
     /// A map that keeps all the blocks that we are missing (keys) and the corresponding blocks that reference the missing blocks
     /// as ancestors and need them to get unsuspended. It is possible for a missing dependency (key) to be a suspended block, so
     /// the block has been already fetched but it self is still missing some of its ancestors to be processed.
-    missing_ancestors: BTreeMap<BlockRef, HashSet<BlockRef>>,
-    genesis: HashSet<BlockRef>,
+    missing_ancestors: BTreeMap<BlockRef, BTreeSet<BlockRef>>,
     dag_state: Arc<RwLock<DagState>>,
     context: Arc<Context>,
 }
 
 impl BlockManager {
     pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
-        let (_, genesis) = Block::genesis(context.clone());
-        let genesis = genesis.into_iter().map(|block| block.reference()).collect();
         Self {
             suspended_blocks: BTreeMap::new(),
             missing_ancestors: BTreeMap::new(),
-            genesis,
             context,
             dag_state,
         }
@@ -58,11 +54,11 @@ impl BlockManager {
     /// Tries to accept the provided blocks assuming that all their causal history exists. The method
     /// returns all the blocks that have been successfully processed in round ascending order, that includes also previously
     /// suspended blocks that have now been able to get accepted.
-    pub(crate) fn accept_blocks(
+    pub(crate) fn try_accept_blocks(
         &mut self,
         mut blocks: Vec<VerifiedBlock>,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
-        let mut accepted_blocks: Vec<VerifiedBlock> = vec![];
+        let mut accepted_blocks = vec![];
 
         blocks.sort_by_key(|b| b.round());
         for block in blocks {
@@ -71,7 +67,7 @@ impl BlockManager {
                 let mut children_blocks = self.try_unsuspend_children_blocks(&block);
                 children_blocks.push(block);
 
-                // Accept the state in DAG here so the next block to be processed can find any DAG/store any accepted blocks.
+                // Accept the state in DAG here so the next block to be processed can find in DAG/store any accepted blocks.
                 self.dag_state
                     .write()
                     .accept_blocks(children_blocks.clone());
@@ -89,32 +85,21 @@ impl BlockManager {
     /// has been already accepted before.
     fn try_accept_block(&mut self, block: VerifiedBlock) -> ConsensusResult<Option<VerifiedBlock>> {
         let block_ref = block.reference();
-        let mut missing_ancestors = HashSet::new();
+        let mut missing_ancestors = BTreeSet::new();
 
         // If block has been already received and suspended, or already processed and stored, or is a genesis block, then skip it.
         if self.suspended_blocks.contains_key(&block_ref)
-            || self
-                .dag_state
-                .read()
-                .contains_block_in_cache_or_store(&block_ref)?
-            || self.genesis.contains(&block_ref)
+            || self.dag_state.read().contains_block(&block_ref)?
         {
             return Ok(None);
         }
 
         // make sure that we have all the required ancestors in store
         for ancestor in block.ancestors() {
-            if self.genesis.contains(ancestor) {
-                continue;
-            }
-
             // If the reference is already missing, or is not included in the store then we mark the block as non processed
             // and we add the block_ref dependency to the `missing_blocks`
             if self.missing_ancestors.contains_key(ancestor)
-                || !self
-                    .dag_state
-                    .read()
-                    .contains_block_in_cache_or_store(ancestor)?
+                || !self.dag_state.read().contains_block(ancestor)?
             {
                 missing_ancestors.insert(*ancestor);
 
@@ -136,7 +121,7 @@ impl BlockManager {
             self.context
                 .metrics
                 .node_metrics
-                .uniquely_suspended_blocks
+                .suspended_blocks
                 .with_label_values(&[hostname])
                 .inc();
             self.suspended_blocks
@@ -147,7 +132,7 @@ impl BlockManager {
         Ok(Some(block))
     }
 
-    /// Given an accepted block `block` it attempts to accept all the suspended children blocks assuming such exist.
+    /// Given an accepted block `accepted_block` it attempts to accept all the suspended children blocks assuming such exist.
     /// All the unsuspended/accepted blocks are returned as a vector.
     fn try_unsuspend_children_blocks(
         &mut self,
@@ -270,7 +255,7 @@ mod tests {
 
         // WHEN
         let accepted_blocks = block_manager
-            .accept_blocks(round_2_blocks.clone())
+            .try_accept_blocks(round_2_blocks.clone())
             .expect("No error was expected");
 
         // THEN
@@ -306,7 +291,7 @@ mod tests {
 
         // WHEN
         let accepted_blocks = block_manager
-            .accept_blocks(all_blocks.clone())
+            .try_accept_blocks(all_blocks.clone())
             .expect("No error was expected");
 
         // THEN
@@ -322,7 +307,7 @@ mod tests {
 
         // WHEN trying to accept same blocks again, then none will be returned as those have been already accepted
         let accepted_blocks = block_manager
-            .accept_blocks(all_blocks)
+            .try_accept_blocks(all_blocks)
             .expect("No error was expected");
         assert!(accepted_blocks.is_empty());
     }
@@ -355,7 +340,7 @@ mod tests {
             let mut all_accepted_blocks = vec![];
             for block in &all_blocks {
                 let accepted_blocks = block_manager
-                    .accept_blocks(vec![block.clone()])
+                    .try_accept_blocks(vec![block.clone()])
                     .expect("No error was expected");
 
                 all_accepted_blocks.extend(accepted_blocks);
