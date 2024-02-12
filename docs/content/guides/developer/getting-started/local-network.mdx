@@ -108,52 +108,12 @@ Use the active address to get test SUI to use on your local network. Use the `su
 
 Transactions on your local network require SUI coins to pay for gas fees just like other networks. To send coins to a Sui Wallet connected to your local network, see [Set up a local Sui Wallet](#set-up-a-local-sui-wallet). You can use the address for the local Sui Wallet with the faucet.
 
-Use the following cURL command to get test coins from the local faucet.
+Sui CLI provides the `sui client faucet` command to get coins from the faucet. In the most basic case, run `sui client faucet` and wait up to 60 seconds for the coins to reach your wallet. Use `sui client gas` to check for the new coins.
 
-```bash
-curl --location --request POST 'http://127.0.0.1:9123/gas' \
---header 'Content-Type: application/json' \
---data-raw '{
-    "FixedAmountRequest": {
-        "recipient": "0xbc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de"
-    }
-}'
-```
+:::info
+The `faucet` command uses the active address and the active network environment by default. If you need to pass in a different address or faucet server URL, check the `help` menu. If you're using a different network than a local network or the public ones (fullnode.network.sui.io), you will have to pass the URL to the faucet server.
+:::
 
-If successful, the response resembles the following:
-
-```json
-{
-    "transferredGasObjects": [
-        {
-            "amount": 200000000,
-            "id": "0x192ce62506ed8705b76e8423be1f6e011064a3f887ba924605f27a8c83c8c970",
-            "transferTxDigest": "7sp4fFPH2WaUgvN43kjDzCpEhKfifqjx5RTki74y8T3E"
-        },
-        {
-            "amount": 200000000,
-            "id": "0x31d003ade00675d1ab82b225bfcceaa60bb993f5d90e9d0aa88f81dc24ec14d6",
-            "transferTxDigest": "7sp4fFPH2WaUgvN43kjDzCpEhKfifqjx5RTki74y8T3E"
-        },
-        {
-            "amount": 200000000,
-            "id": "0x98cbdc93ae672110f91bc0c39c0c87bc66f36984c79218bb2c0bac967260970c",
-            "transferTxDigest": "7sp4fFPH2WaUgvN43kjDzCpEhKfifqjx5RTki74y8T3E"
-        },
-        {
-            "amount": 200000000,
-            "id": "0xba66aee6289cc6d0203c451bea442ad30d4cfe699e50b36fed0ff3e99ba51529",
-            "transferTxDigest": "7sp4fFPH2WaUgvN43kjDzCpEhKfifqjx5RTki74y8T3E"
-        },
-        {
-            "amount": 200000000,
-            "id": "0xd9f0b521443d66227eddc2aac2e16f667ca9caeef9f1b7afb4a6c2fc7dcb58d8",
-            "transferTxDigest": "7sp4fFPH2WaUgvN43kjDzCpEhKfifqjx5RTki74y8T3E"
-        }
-    ],
-    "error": null
-}
-```
 
 ### Check the gas coin objects for the active address
 
