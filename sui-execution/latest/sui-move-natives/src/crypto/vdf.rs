@@ -39,7 +39,7 @@ pub struct VDFCostParams {
 }
 
 /***************************************************************************************************
- * native fun verify_vdf
+ * native fun vdf_verify_internal
  *
  * Implementation of the Move native function `vdf::verify_vdf_internal(
  *      discriminant: &vector<u8>,
@@ -124,16 +124,13 @@ pub fn vdf_verify_internal(
 }
 
 /***************************************************************************************************
- * native fun verify_vdf
+ * native fun hash_to_input_internal
  *
- * Implementation of the Move native function `vdf::verify_vdf_internal(
+ * Implementation of the Move native function `vdf::hash_to_input_internal(
  *      discriminant: &vector<u8>,
- *      input: &vector<u8>,
- *      output: &vector<u8>,
- *      proof: &vector<u8>,
- *      iterations: u64): bool`
+ *      message: &vector<u8>): vector<u8>`
  *
- * Gas cost: verify_vdf_cost
+ * Gas cost: hash_to_input_cost
  **************************************************************************************************/
 pub fn hash_to_input_internal(
     context: &mut NativeContext,
