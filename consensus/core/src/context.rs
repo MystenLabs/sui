@@ -67,7 +67,7 @@ impl Context {
                 db_path: temp_dir.into_path(),
                 ..Default::default()
             },
-            Self::default_protocol_config_for_testing(),
+            ProtocolConfig::get_for_max_version_UNSAFE(),
             metrics,
         );
         (context, keypairs)
