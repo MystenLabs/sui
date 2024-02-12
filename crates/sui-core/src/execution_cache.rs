@@ -813,3 +813,13 @@ use implement_passthrough_traits;
 
 implement_storage_traits!(PassthroughCache);
 implement_storage_traits!(MemoryCache);
+
+pub trait ExecutionCacheAPI:
+    ExecutionCacheRead
+    + ExecutionCacheWrite
+    + ExecutionCacheCommit
+    + ExecutionCacheReconfigAPI
+    + CheckpointCache
+    + StateSyncAPI
+{
+}

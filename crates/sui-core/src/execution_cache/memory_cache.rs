@@ -79,6 +79,7 @@ use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::VerifiedTransaction;
 use tracing::instrument;
 
+use super::ExecutionCacheAPI;
 use super::{
     implement_passthrough_traits, utils::CachedVersionMap, CheckpointCache, ExecutionCacheCommit,
     ExecutionCacheMetrics, ExecutionCacheRead, ExecutionCacheReconfigAPI, ExecutionCacheWrite,
@@ -503,7 +504,7 @@ impl MemoryCache {
             panic!("dirty map must exist");
         };
 
-        let removed = occupied_dirty_entry.get_mut().remove(&version);
+        let removed = occupied_dirty_entry.get_mut().pop_oldest(&version);
 
         assert_eq!(removed.as_ref(), Some(value), "dirty version must exist");
 
@@ -541,6 +542,8 @@ impl MemoryCache {
         NotifyReadWrapper(self)
     }
 }
+
+impl ExecutionCacheAPI for MemoryCache {}
 
 impl ExecutionCacheCommit for MemoryCache {
     fn commit_transaction_outputs(
