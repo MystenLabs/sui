@@ -6,7 +6,7 @@ to efficiently serve on-chain data for our app.
 The demo indexer uses polling to watch for new events.
 
 Everything is pre-configured on Testnet, but can be tweaked to work on any other network.
-You can easily change the network by creating a `.env` file with the variable `NETWORK=<mainnet|testnet|devnet|localnet>`
+You can change the network by creating a `.env` file with the variable `NETWORK=<mainnet|testnet|devnet|localnet>`
 
 ## Installation
 
