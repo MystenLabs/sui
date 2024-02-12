@@ -99,10 +99,7 @@ const config = {
           rehypePlugins: [katex],
         },
         theme: {
-          customCss: [
-            require.resolve("./src/css/fonts.css"),
-            require.resolve("./src/css/custom.css"),
-          ],
+          customCss: [require.resolve("./src/css/custom.css")],
         },
         googleTagManager: {
           containerId: "GTM-TTZ5J8V",
