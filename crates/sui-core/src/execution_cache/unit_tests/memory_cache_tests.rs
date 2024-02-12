@@ -145,6 +145,7 @@ impl Scenario {
                 .locks_to_delete
                 .push(object.compute_object_reference());
             let object = Self::bump_version(object);
+            self.objects.insert(*id, object.clone());
             self.outputs
                 .new_locks_to_init
                 .push(object.compute_object_reference());
@@ -156,8 +157,10 @@ impl Scenario {
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.remove(id).expect("object not found");
-            let object_ref = object.compute_object_reference();
+            let mut object_ref = object.compute_object_reference();
             self.outputs.locks_to_delete.push(object_ref);
+            // in the authority this would be set to the lamport version of the tx
+            object_ref.1.increment();
             self.outputs.deleted.push(object_ref.into());
         }
     }
@@ -207,7 +210,7 @@ impl Scenario {
         let outputs = Arc::new(outputs);
 
         let tx = *outputs.transaction.digest();
-        assert!(self.transactions.insert(tx));
+        assert!(self.transactions.insert(tx), "transaction is not unique");
 
         self.cache
             .write_transaction_outputs(1 /* epoch */, outputs.clone())
@@ -215,6 +218,10 @@ impl Scenario {
             .expect("write_transaction_outputs failed");
 
         tx
+    }
+
+    async fn commit(&self, tx: TransactionDigest) -> SuiResult {
+        self.cache.commit_transaction_outputs(1, &tx).await
     }
 
     fn reset_cache(&mut self) {
@@ -299,18 +306,41 @@ async fn test_committed() {
 }
 
 #[tokio::test]
+async fn test_mutated() {
+    telemetry_subscribers::init_for_testing();
+    let mut b = Scenario::new().await;
+    b.with_created(&[1, 2]);
+    b.do_tx().await;
+
+    b.with_mutated(&[1, 2]);
+    b.do_tx().await;
+
+    b.assert_live(&[1, 2]);
+}
+
+#[tokio::test]
+async fn test_deleted() {
+    telemetry_subscribers::init_for_testing();
+    let mut b = Scenario::new().await;
+    b.with_created(&[1, 2]);
+    b.do_tx().await;
+
+    b.with_deleted(&[1]);
+    b.do_tx().await;
+
+    b.assert_live(&[2]);
+    b.assert_not_exists(&[1]);
+}
+
+#[tokio::test]
 async fn test_out_of_order_commit() {
     telemetry_subscribers::init_for_testing();
     let mut b = Scenario::new().await;
     b.with_created(&[1, 2]);
-    let tx1 = b.do_tx().await;
+    b.do_tx().await;
 
     b.with_mutated(&[1, 2]);
     let tx2 = b.do_tx().await;
 
-    // cannot commit out of order
-    b.cache
-        .commit_transaction_outputs(1, &tx2)
-        .await
-        .unwrap_err();
+    b.commit(tx2).await.unwrap_err();
 }

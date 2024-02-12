@@ -33,10 +33,15 @@ impl<V> CachedVersionMap<V> {
     }
 
     pub fn insert(&mut self, version: SequenceNumber, value: V) {
-        assert!(
-            self.values.is_empty() || self.values.back().unwrap().0 < version,
-            "version must be monotonically increasing"
-        );
+        if !self.values.is_empty() {
+            let back = self.values.back().unwrap().0;
+            assert!(
+                back < version,
+                "version must be monotonically increasing ({} < {})",
+                back,
+                version
+            );
+        }
         self.values.push_back((version, value));
     }
 
