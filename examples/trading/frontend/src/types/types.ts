@@ -4,7 +4,7 @@ export type ApiLockedObject = {
   id?: string;
   objectId: string;
   keyId: string;
-  owner?: string;
+  creator?: string;
   itemId: string;
   deleted: boolean;
 };

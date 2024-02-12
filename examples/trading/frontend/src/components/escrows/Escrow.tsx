@@ -13,13 +13,14 @@ import {
 import { CONSTANTS, QueryKey } from "@/constants";
 import { ObjectLink } from "../ObjectLink";
 import { useQuery } from "@tanstack/react-query";
-import { Locked } from "../locked/Locked";
 import { useState } from "react";
 import { ApiEscrowObject } from "@/types/types";
 import {
   useAcceptEscrowMutation,
   useCancelEscrowMutation,
 } from "@/mutations/escrow";
+import { useGetLockedObject } from "@/hooks/useGetLockedObject";
+import { LockedObject } from "../locked/LockedObject";
 
 export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
   const account = useCurrentAccount();
@@ -46,6 +47,10 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
     },
     select: (data) => data.data[0],
     enabled: !escrow.cancelled,
+  });
+
+  const { data: suiLockedObject } = useGetLockedObject({
+    lockedId: lockedData.data?.objectId,
   });
 
   const getLabel = () => {
@@ -105,7 +110,13 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
             )}
           {isToggled && lockedData.data && (
             <div className="min-w-[340px] w-full justify-self-start text-left">
-              <Locked locked={lockedData.data} hideControls isManagement />
+              {suiLockedObject?.data && (
+                <LockedObject
+                  object={suiLockedObject.data}
+                  itemId={lockedData.data.itemId}
+                  hideControls
+                />
+              )}
 
               {!lockedData.data.deleted &&
                 escrow.recipient === account?.address && (

@@ -17,11 +17,9 @@ import { useUnlockMutation } from "@/mutations/locked";
 
 export function Locked({
   locked,
-  isManagement,
   hideControls,
 }: {
   locked: ApiLockedObject;
-  isManagement?: boolean;
   hideControls?: boolean;
 }) {
   const [isToggled, setIsToggled] = useState(false);
@@ -44,13 +42,13 @@ export function Locked({
   );
 
   const isOwner = () => {
-    return !!locked.owner && account?.address === locked.owner;
+    return !!locked.creator && account?.address === locked.creator;
   };
 
   const getLabel = () => {
     if (locked.deleted) return "Deleted";
     if (hideControls) {
-      if (locked.owner === account?.address) return "You offer this";
+      if (locked.creator === account?.address) return "You offer this";
       return "You'll receive this if accepted";
     }
     return undefined;
@@ -60,7 +58,7 @@ export function Locked({
     if (locked.deleted)
       return "bg-red-50 rounded px-3 py-1 text-sm text-red-500";
     if (hideControls) {
-      if (!!locked.owner && locked.owner === account?.address)
+      if (!!locked.creator && locked.creator === account?.address)
         return "bg-blue-50 rounded px-3 py-1 text-sm text-blue-500";
       return "bg-green-50 rounded px-3 py-1 text-sm text-green-700";
     }
@@ -95,7 +93,7 @@ export function Locked({
               <LockOpen1Icon /> Unlock
             </Button>
           )}
-          {!isManagement && !isOwner() && (
+          {!hideControls && !isOwner() && (
             <Button
               className="ml-auto cursor-pointer bg-transparent text-black disabled:opacity-40"
               disabled={!account?.address}

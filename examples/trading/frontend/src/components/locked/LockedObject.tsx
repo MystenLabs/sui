@@ -9,9 +9,11 @@ import { SuiObjectData } from "@mysten/sui.js/client";
 export function LockedObject({
   object,
   itemId,
+  hideControls,
 }: {
   object: SuiObjectData;
   itemId?: string;
+  hideControls?: boolean;
 }) {
   const owner = () => {
     if (
@@ -56,9 +58,10 @@ export function LockedObject({
         itemId: itemId || suiObjectId.data?.objectId!,
         objectId: object.objectId,
         keyId: getKeyId(object),
-        owner: owner(),
+        creator: owner(),
         deleted: false,
       }}
+      hideControls={hideControls}
     />
   );
 }

@@ -126,7 +126,7 @@ export function useCreateEscrowMutation() {
         arguments: [
           txb.object(object.objectId!),
           txb.pure.id(locked.keyId),
-          txb.pure.address(locked.owner!),
+          txb.pure.address(locked.creator!),
         ],
         typeArguments: [object.type!],
       });

@@ -49,7 +49,7 @@ export function CreateEscrow({ locked }: { locked: ApiLockedObject }) {
     <div className="px-3 py-3 grid grid-cols-1 gap-5  mt-3 rounded">
       <div>
         <label className="text-xs">The recipient will be:</label>
-        <ObjectLink id={locked.owner!} isAddress />
+        <ObjectLink id={locked.creator!} isAddress />
       </div>
       <div>
         <label className="text-xs">Select which object to put on escrow:</label>

@@ -11,6 +11,7 @@ import { useSuiClient } from "@mysten/dapp-kit";
 import { TextField } from "@radix-ui/themes";
 import { useState } from "react";
 import { LockedObject } from "./LockedObject";
+import { useGetLockedObject } from "@/hooks/useGetLockedObject";
 
 /**
  * Fetches all the non-deleted system `Locked` objects from the API in a paginated fashion.
@@ -31,6 +32,10 @@ export function LockedList({
   const [lockedId, setLockedId] = useState("");
   const suiClient = useSuiClient();
 
+  const { data: searchData } = useGetLockedObject({
+    lockedId,
+  });
+
   const { data, fetchNextPage, hasNextPage, isLoading, isFetchingNextPage } =
     useInfiniteQuery({
       initialPageParam: null,
@@ -43,7 +48,6 @@ export function LockedList({
               constructUrlSearchParams({
                 deleted: "false",
                 ...(pageParam ? { cursor: pageParam as string } : {}),
-                ...(lockedId ? { objectId: lockedId } : {}),
               }),
           )
         ).json();
@@ -55,6 +59,7 @@ export function LockedList({
             showContent: true,
           },
         });
+
         return {
           suiObjects: objects.map((x) => x.data),
           api: data,
@@ -62,9 +67,17 @@ export function LockedList({
       },
       select: (data) => data.pages,
       getNextPageParam,
+      enabled: !lockedId,
     });
 
   const suiObjects = () => {
+    if (lockedId) {
+      if (
+        !searchData?.data?.type?.startsWith(CONSTANTS.escrowContract.lockedType)
+      )
+        return [];
+      return [searchData?.data!];
+    }
     return data?.flatMap((x) => x.suiObjects) || [];
   };
 
