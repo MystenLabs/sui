@@ -1,6 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// A basic lottery game that depends on user-provided randomness which is processed by a verifiable delay function (VDF)
+/// to make sure that it is unbiasable. 
+/// 
+/// During the submission phase, players can buy tickets. When buying a ticket, a user must provide some randomness `r`. This 
+/// randomness is added to the combined randomness of the lottery, `h`, as `h = Sha2_256(h, r)`.
+/// 
+/// After the submission phase has ended, the combined randomness is used to generate an input to the VDF. Anyone may now
+/// compute the output and submit it along with a proof of correctness to the `complete` function. If the output and proof 
+/// verifies, the game ends, and the hash of the output is used to pick a winner.
+/// 
+/// The outcome is guaranteed to be fair if:
+///  1) At least one player contributes true randomness,
+///  2) The number of iterations is defined such that it takes at least `submission_phase_length` to compute the VDF.
 module games::vdf_based_lottery {
     use games::drand_lib::safe_selection;
     use std::option::{Self, Option};
@@ -84,9 +97,9 @@ module games::vdf_based_lottery {
         game.status = COMPLETED;
 
         // The randomness is derived from the VDF output by passing it through sha2_256 to make it uniform.
-        let digest = sha2_256(vdf_output);
+        let randomness = sha2_256(vdf_output);
 
-        game.winner = option::some(safe_selection(game.participants, &digest));
+        game.winner = option::some(safe_selection(game.participants, &randomness));
     }
 
     /// Anyone can participate in the game and receive a ticket.
