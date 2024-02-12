@@ -9,12 +9,19 @@ import {
   ArrowUpIcon,
   LockOpen1Icon,
 } from "@radix-ui/react-icons";
-import { ObjectLink } from "../ObjectLink";
+import { ObjectLink } from "../../ObjectLink";
 import { useState } from "react";
 import { ApiLockedObject } from "@/types/types";
-import { CreateEscrow } from "../escrows/CreateEscrow";
+import { CreateEscrow } from "../../escrows/CreateEscrow";
 import { useUnlockMutation } from "@/mutations/locked";
 
+/**
+ * Prefer to use the `Locked` component only through `LockedObject`.
+ *
+ * This can also render data directly from the API, but we prefer
+ * to also validate ownership from on-chain state (as objects are transferrable)
+ * and the API cannot track all the ownership changes.
+ */
 export function Locked({
   locked,
   hideControls,

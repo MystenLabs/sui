@@ -3,9 +3,18 @@
 
 import { CONSTANTS } from "@/constants";
 import { useSuiClientQuery } from "@mysten/dapp-kit";
-import { Locked } from "./Locked";
+import { Locked } from "./partials/Locked";
 import { SuiObjectData } from "@mysten/sui.js/client";
 
+/**
+ * Acts as a wrapper between the `Locked` object fetched from API
+ * and the on-chain object state.
+ *
+ * Accepts an `object` of type `::locked::Locked`, fetches the itemID (though the DOF)
+ * and then renders the `Locked` component.
+ *
+ * ItemId is optional because we trust the API to return the correct itemId for each Locked.
+ */
 export function LockedObject({
   object,
   itemId,
