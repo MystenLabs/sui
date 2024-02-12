@@ -178,8 +178,10 @@ mod sim_only_tests {
             .with_supported_protocol_version_callback(Arc::new(|idx, name| {
                 if name.is_some() && idx == 0 {
                     // first validator only does not support version FINISH.
+                    info!("node {name:?} supports protocol versions up to {START}");
                     SupportedProtocolVersions::new_for_testing(START, START)
                 } else {
+                    info!("node {name:?} supports protocol versions up to {FINISH}");
                     SupportedProtocolVersions::new_for_testing(START, FINISH)
                 }
             }))
