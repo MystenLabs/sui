@@ -386,6 +386,7 @@ impl CoreSignalsReceivers {
 
 #[cfg(test)]
 mod test {
+    use parking_lot::RwLock;
     use std::collections::BTreeSet;
     use std::time::Duration;
 
@@ -397,10 +398,6 @@ mod test {
     use crate::dag_state::DagState;
     use crate::storage::mem_store::MemStore;
     use crate::transactions_client::TransactionsClient;
-    use parking_lot::RwLock;
-    use std::collections::BTreeSet;
-    use std::time::Duration;
-    use sui_protocol_config::ProtocolConfig;
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
     #[tokio::test]
