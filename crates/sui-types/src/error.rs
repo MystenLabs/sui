@@ -748,44 +748,45 @@ impl SuiError {
     /// There should be only a handful of retryable errors. For now we list common
     /// non-retryable error below to help us find more retryable errors in logs.
     pub fn is_retryable(&self) -> (bool, bool) {
-        match self {
+        let retryable = match self {
             // Network error
-            SuiError::RpcError { .. } => (true, true),
+            SuiError::RpcError { .. } => true,
 
             // Reconfig error
-            SuiError::ValidatorHaltedAtEpochEnd => (true, true),
-            SuiError::MissingCommitteeAtEpoch(..) => (true, true),
-            SuiError::WrongEpoch { .. } => (true, true),
+            SuiError::ValidatorHaltedAtEpochEnd => true,
+            SuiError::MissingCommitteeAtEpoch(..) => true,
+            SuiError::WrongEpoch { .. } => true,
 
             SuiError::UserInputError { error } => {
                 match error {
                     // Only ObjectNotFound and DependentPackageNotFound is potentially retryable
-                    UserInputError::ObjectNotFound { .. } => (true, true),
-                    UserInputError::DependentPackageNotFound { .. } => (true, true),
-                    _ => (false, true),
+                    UserInputError::ObjectNotFound { .. } => true,
+                    UserInputError::DependentPackageNotFound { .. } => true,
+                    _ => false,
                 }
             }
 
-            SuiError::PotentiallyTemporarilyInvalidSignature { .. } => (true, true),
+            SuiError::PotentiallyTemporarilyInvalidSignature { .. } => true,
 
             // Overload errors
-            SuiError::TooManyTransactionsPendingExecution { .. } => (true, true),
-            SuiError::TooManyTransactionsPendingOnObject { .. } => (true, true),
-            SuiError::TooOldTransactionPendingOnObject { .. } => (true, true),
-            SuiError::TooManyTransactionsPendingConsensus => (true, true),
+            SuiError::TooManyTransactionsPendingExecution { .. } => true,
+            SuiError::TooManyTransactionsPendingOnObject { .. } => true,
+            SuiError::TooOldTransactionPendingOnObject { .. } => true,
+            SuiError::TooManyTransactionsPendingConsensus => true,
 
             // Non retryable error
-            SuiError::ExecutionError(..) => (false, true),
-            SuiError::ByzantineAuthoritySuspicion { .. } => (false, true),
-            SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => {
-                (false, true)
-            }
-            SuiError::TxAlreadyFinalizedWithDifferentUserSigs => (false, true),
-            SuiError::FailedToVerifyTxCertWithExecutedEffects { .. } => (false, true),
-            SuiError::ObjectLockConflict { .. } => (false, true),
+            SuiError::ExecutionError(..) => false,
+            SuiError::ByzantineAuthoritySuspicion { .. } => false,
+            SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => false,
+            SuiError::TxAlreadyFinalizedWithDifferentUserSigs => false,
+            SuiError::FailedToVerifyTxCertWithExecutedEffects { .. } => false,
+            SuiError::ObjectLockConflict { .. } => false,
 
-            _ => (false, false),
-        }
+            // For all un-categorized errors, return here with categorized = false.
+            _ => return (false, false),
+        };
+
+        (retryable, true)
     }
 
     pub fn is_object_or_package_not_found(&self) -> bool {
