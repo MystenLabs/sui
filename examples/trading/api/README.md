@@ -1,7 +1,7 @@
 # Escrow API Demo
 
 This demo is built to showcase how we can build an event indexer + API
-to easily & efficiently serve on-chain data for our app.
+to efficiently serve on-chain data for our app.
 
 The demo indexer uses polling to watch for new events.
 
