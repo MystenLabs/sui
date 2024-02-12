@@ -117,7 +117,7 @@ curl --location 'http://localhost:3000/escrows?limit=5&recipient=0xfe09cf0b3d776
 
 ## Event Indexer
 
-> You should only run a single instance of the indexer.
+> Run only a single instance of the indexer.
 
 Indexer uses polling to watch for new events. We're saving the
 cursor data in the database so we can start from where we left off
