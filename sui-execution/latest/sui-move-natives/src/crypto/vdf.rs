@@ -166,7 +166,6 @@ pub fn hash_to_input_internal(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 2);
 
-    // The input is a reference to a vector of vector<u8>'s
     let message = pop_arg!(args, VectorRef);
     let discriminant_bytes = pop_arg!(args, VectorRef);
 
@@ -184,7 +183,6 @@ pub fn hash_to_input_internal(
     };
 
     let output_bytes = output.to_bytes();
-    println!("Output: {:?} ", output_bytes);
 
     Ok(NativeResult::ok(
         context.gas_used(),
