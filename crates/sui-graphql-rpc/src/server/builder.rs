@@ -258,6 +258,10 @@ impl ServerBuilder {
         let reader = PgManager::reader_with_config(
             config.connection.db_url.clone(),
             config.connection.db_pool_size,
+            // Bound each connection in a request with the overall request timeout, to bound DB
+            // utilisation (in the worst case we will use 2x the request timeout time in DB wall
+            // time).
+            config.service.limits.request_timeout_ms,
         )
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
 
