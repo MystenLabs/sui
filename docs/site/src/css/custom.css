@@ -7,8 +7,6 @@
  @tailwind components;
  @tailwind utilities;
 
- @import "./fonts.css";
-
 /* You can override the default Infima variables here. */
 :root {
   --ifm-color-primary: #4ca2ff;
