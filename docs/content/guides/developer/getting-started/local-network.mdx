@@ -108,14 +108,13 @@ Use the active address to get test SUI to use on your local network. Use the `su
 
 Transactions on your local network require SUI coins to pay for gas fees just like other networks. To send coins to a Sui Wallet connected to your local network, see [Set up a local Sui Wallet](#set-up-a-local-sui-wallet). You can use the address for the local Sui Wallet with the faucet.
 
-Sui CLI provides the `sui client faucet` command to get tokens from the faucet. If a different network than the usual ones (fullnode.network.sui.io) is used, it will complain and ask to pass the url to its faucet.
+Sui CLI provides the `sui client faucet` command to get tokens from the faucet. If a different network than the usual ones (fullnode.network.sui.io) is used, it will complain and ask to pass the url to the faucet server.
 
 There are two options for the command:
 `--url`, which is the URL to the gas faucet server
 `--address`, which can be either an address or the alias name corresponding to an address in the wallet.
 
 In the most simple case, just run `sui client faucet` and wait up to 60s for your tokens to reach your wallet. Use `sui client gas` to check for the new tokens. 
-
 
 ### Check the gas coin objects for the active address
 
