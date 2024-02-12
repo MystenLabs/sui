@@ -240,7 +240,7 @@ impl DagState {
             if self.cached_refs[block_ref.author].contains(&block_ref)
                 || self.genesis.contains_key(&block_ref)
             {
-                blocks.push(true);
+                blocks[index] = true;
             } else {
                 missing.push((index, block_ref));
             }

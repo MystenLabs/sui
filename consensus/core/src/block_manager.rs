@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use parking_lot::RwLock;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use crate::block::{BlockAPI, BlockRef, VerifiedBlock};
 use crate::context::Context;
 use crate::dag_state::DagState;
 use crate::error::ConsensusResult;
-use parking_lot::RwLock;
-use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
 
 struct SuspendedBlock {
     block: VerifiedBlock,
@@ -64,15 +64,15 @@ impl BlockManager {
         for block in blocks {
             if let Some(block) = self.try_accept_block(block)? {
                 // Try to unsuspend and accept any children blocks
-                let mut children_blocks = self.try_unsuspend_children_blocks(&block);
-                children_blocks.push(block);
+                let mut unsuspended_blocks = self.try_unsuspend_children_blocks(&block);
+                unsuspended_blocks.push(block);
 
                 // Accept the state in DAG here so the next block to be processed can find in DAG/store any accepted blocks.
                 self.dag_state
                     .write()
-                    .accept_blocks(children_blocks.clone());
+                    .accept_blocks(unsuspended_blocks.clone());
 
-                accepted_blocks.extend(children_blocks);
+                accepted_blocks.extend(unsuspended_blocks);
             }
         }
 
@@ -86,21 +86,22 @@ impl BlockManager {
     fn try_accept_block(&mut self, block: VerifiedBlock) -> ConsensusResult<Option<VerifiedBlock>> {
         let block_ref = block.reference();
         let mut missing_ancestors = BTreeSet::new();
+        let dag_state = self.dag_state.read();
 
         // If block has been already received and suspended, or already processed and stored, or is a genesis block, then skip it.
-        if self.suspended_blocks.contains_key(&block_ref)
-            || self.dag_state.read().contains_block(&block_ref)?
-        {
+        if self.suspended_blocks.contains_key(&block_ref) || dag_state.contains_block(&block_ref)? {
             return Ok(None);
         }
 
+        let ancestors = block.ancestors();
+
         // make sure that we have all the required ancestors in store
-        for ancestor in block.ancestors() {
-            // If the reference is already missing, or is not included in the store then we mark the block as non processed
-            // and we add the block_ref dependency to the `missing_blocks`
-            if self.missing_ancestors.contains_key(ancestor)
-                || !self.dag_state.read().contains_block(ancestor)?
-            {
+        for (found, ancestor) in dag_state
+            .contains_blocks(ancestors.to_vec())?
+            .into_iter()
+            .zip(ancestors.iter())
+        {
+            if !found {
                 missing_ancestors.insert(*ancestor);
 
                 // mark the block as having missing ancestors
