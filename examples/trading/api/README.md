@@ -47,7 +47,7 @@ There are some helper functions to:
 1. Publish the smart contract
 2. Create some demo data (for testnet)
 
-To produce demo data you should:
+To produce demo data:
 
 1. Publish the smart contract by running
 
