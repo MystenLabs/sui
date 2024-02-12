@@ -73,50 +73,48 @@ export function Locked({
   };
 
   return (
-    <div>
-      <SuiObjectDisplay
-        object={suiObject.data!}
-        label={getLabel()}
-        labelClasses={getLabelClasses()}
-      >
-        <div className="text-right flex flex-wrap items-center justify-between">
-          {
-            <p className="text-sm flex-shrink-0 flex items-center gap-2">
-              <ObjectLink id={locked.objectId} isAddress={false} />
-            </p>
-          }
-          {!hideControls && isOwner() && (
-            <Button
-              className="ml-auto cursor-pointer"
-              disabled={isPending}
-              onClick={() => {
-                unlockMutation({
-                  lockedId: locked.objectId,
-                  keyId: locked.keyId,
-                  suiObject: suiObject.data!,
-                });
-              }}
-            >
-              <LockOpen1Icon /> Unlock
-            </Button>
-          )}
-          {!hideControls && !isOwner() && (
-            <Button
-              className="ml-auto cursor-pointer bg-transparent text-black disabled:opacity-40"
-              disabled={!account?.address}
-              onClick={() => setIsToggled(!isToggled)}
-            >
-              Start Escrow
-              {isToggled ? <ArrowUpIcon /> : <ArrowDownIcon />}
-            </Button>
-          )}
-          {isToggled && (
-            <div className="min-w-[340px] w-full justify-self-start text-left">
-              <CreateEscrow locked={locked} />
-            </div>
-          )}
-        </div>
-      </SuiObjectDisplay>
-    </div>
+    <SuiObjectDisplay
+      object={suiObject.data!}
+      label={getLabel()}
+      labelClasses={getLabelClasses()}
+    >
+      <div className="text-right flex flex-wrap items-center justify-between">
+        {
+          <p className="text-sm flex-shrink-0 flex items-center gap-2">
+            <ObjectLink id={locked.objectId} isAddress={false} />
+          </p>
+        }
+        {!hideControls && isOwner() && (
+          <Button
+            className="ml-auto cursor-pointer"
+            disabled={isPending}
+            onClick={() => {
+              unlockMutation({
+                lockedId: locked.objectId,
+                keyId: locked.keyId,
+                suiObject: suiObject.data!,
+              });
+            }}
+          >
+            <LockOpen1Icon /> Unlock
+          </Button>
+        )}
+        {!hideControls && !isOwner() && (
+          <Button
+            className="ml-auto cursor-pointer bg-transparent text-black disabled:opacity-40"
+            disabled={!account?.address}
+            onClick={() => setIsToggled(!isToggled)}
+          >
+            Start Escrow
+            {isToggled ? <ArrowUpIcon /> : <ArrowDownIcon />}
+          </Button>
+        )}
+        {isToggled && (
+          <div className="min-w-[340px] w-full justify-self-start text-left">
+            <CreateEscrow locked={locked} />
+          </div>
+        )}
+      </div>
+    </SuiObjectDisplay>
   );
 }

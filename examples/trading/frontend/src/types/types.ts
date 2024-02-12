@@ -26,9 +26,11 @@ export type EscrowListingQuery = {
   recipient?: string;
   cancelled?: string;
   swapped?: string;
+  limit?: string;
 };
 
 export type LockedListingQuery = {
   deleted?: string;
   keyId?: string;
+  limit?: string;
 };

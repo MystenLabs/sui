@@ -40,32 +40,30 @@ export function LockOwnedObjects() {
       hasNextPage={hasNextPage}
       loading={isFetchingNextPage}
     >
-      <>
-        {data?.map((obj) => (
-          <SuiObjectDisplay object={obj.data!}>
-            <div className="text-right flex items-center justify-between">
-              <p className="text-sm">
-                Lock the item so it can be used for escrows.
-              </p>
-              <Button
-                className="cursor-pointer"
-                disabled={isPending}
-                onClick={() => {
-                  lockObjectMutation(
-                    { object: obj.data! },
-                    {
-                      onSuccess: () => refetch(),
-                    },
-                  );
-                }}
-              >
-                <LockClosedIcon />
-                Lock Item
-              </Button>
-            </div>
-          </SuiObjectDisplay>
-        ))}
-      </>
+      {data?.map((obj) => (
+        <SuiObjectDisplay object={obj.data!}>
+          <div className="text-right flex items-center justify-between">
+            <p className="text-sm">
+              Lock the item so it can be used for escrows.
+            </p>
+            <Button
+              className="cursor-pointer"
+              disabled={isPending}
+              onClick={() => {
+                lockObjectMutation(
+                  { object: obj.data! },
+                  {
+                    onSuccess: () => refetch(),
+                  },
+                );
+              }}
+            >
+              <LockClosedIcon />
+              Lock Item
+            </Button>
+          </div>
+        </SuiObjectDisplay>
+      ))}
     </InfiniteScrollArea>
   );
 }

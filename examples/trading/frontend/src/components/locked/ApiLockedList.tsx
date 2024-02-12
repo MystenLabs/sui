@@ -3,7 +3,6 @@
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { CONSTANTS, QueryKey } from "@/constants";
-import { Loading } from "@/components/Loading";
 import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { ApiLockedObject, LockedListingQuery } from "@/types/types";
 import { constructUrlSearchParams, getNextPageParam } from "@/utils/helpers";
@@ -48,6 +47,7 @@ export function LockedList({
               constructUrlSearchParams({
                 deleted: "false",
                 ...(pageParam ? { cursor: pageParam as string } : {}),
+                ...(params || {}),
               }),
           )
         ).json();
@@ -91,7 +91,6 @@ export function LockedList({
     return apiData()?.find((x) => x.objectId === objectId)?.itemId;
   };
 
-  if (isLoading) return <Loading />;
   return (
     <>
       {enableSearch && (
@@ -106,7 +105,7 @@ export function LockedList({
       <InfiniteScrollArea
         loadMore={() => fetchNextPage()}
         hasNextPage={hasNextPage}
-        loading={isFetchingNextPage}
+        loading={isFetchingNextPage || isLoading}
       >
         {suiObjects().map((object) => (
           <LockedObject

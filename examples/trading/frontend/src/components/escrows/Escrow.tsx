@@ -71,90 +71,88 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
   };
 
   return (
-    <div>
-      <SuiObjectDisplay
-        object={suiObject.data?.data!}
-        label={getLabel()}
-        labelClasses={getLabelClasses()}
-      >
-        <div className="flex gap-3 flex-wrap">
-          {
-            <p className="text-sm flex-shrink-0 flex items-center gap-2">
-              <ObjectLink id={escrow.objectId} isAddress={false} />
-            </p>
-          }
-          <Button
-            className="ml-auto cursor-pointer bg-transparent text-black"
-            onClick={() => setIsToggled(!isToggled)}
-          >
-            Details
-            {isToggled ? <ArrowUpIcon /> : <ArrowDownIcon />}
-          </Button>
-          {!escrow.cancelled &&
-            !escrow.swapped &&
-            escrow.sender === account?.address && (
-              <Button
-                color="amber"
-                className="cursor-pointer"
-                disabled={pendingCancellation}
-                onClick={() =>
-                  cancelEscrowMutation({
-                    escrow,
-                    suiObject: suiObject.data?.data!,
-                  })
-                }
-              >
-                <Cross1Icon />
-                Cancel request
-              </Button>
-            )}
-          {isToggled && lockedData.data && (
-            <div className="min-w-[340px] w-full justify-self-start text-left">
-              {suiLockedObject?.data && (
-                <LockedObject
-                  object={suiLockedObject.data}
-                  itemId={lockedData.data.itemId}
-                  hideControls
-                />
-              )}
-
-              {!lockedData.data.deleted &&
-                escrow.recipient === account?.address && (
-                  <div className="text-right mt-5">
-                    <p className="text-xs pb-3">
-                      When accepting the exchange, the escrowed item will be
-                      transferred to you and your locked item will be
-                      transferred to the sender.
-                    </p>
-                    <Button
-                      className="cursor-pointer"
-                      disabled={isPending}
-                      onClick={() =>
-                        acceptEscrowMutation({
-                          escrow,
-                          locked: lockedData.data,
-                        })
-                      }
-                    >
-                      <CheckCircledIcon /> Accept exchange
-                    </Button>
-                  </div>
-                )}
-              {lockedData.data.deleted &&
-                !escrow.swapped &&
-                escrow.recipient === account?.address && (
-                  <div>
-                    <p className="text-red-500 text-sm py-2 flex items-center gap-3">
-                      <Cross1Icon />
-                      The locked object has been deleted so you can't accept
-                      this anymore.
-                    </p>
-                  </div>
-                )}
-            </div>
+    <SuiObjectDisplay
+      object={suiObject.data?.data!}
+      label={getLabel()}
+      labelClasses={getLabelClasses()}
+    >
+      <div className="flex gap-3 flex-wrap">
+        {
+          <p className="text-sm flex-shrink-0 flex items-center gap-2">
+            <ObjectLink id={escrow.objectId} isAddress={false} />
+          </p>
+        }
+        <Button
+          className="ml-auto cursor-pointer bg-transparent text-black"
+          onClick={() => setIsToggled(!isToggled)}
+        >
+          Details
+          {isToggled ? <ArrowUpIcon /> : <ArrowDownIcon />}
+        </Button>
+        {!escrow.cancelled &&
+          !escrow.swapped &&
+          escrow.sender === account?.address && (
+            <Button
+              color="amber"
+              className="cursor-pointer"
+              disabled={pendingCancellation}
+              onClick={() =>
+                cancelEscrowMutation({
+                  escrow,
+                  suiObject: suiObject.data?.data!,
+                })
+              }
+            >
+              <Cross1Icon />
+              Cancel request
+            </Button>
           )}
-        </div>
-      </SuiObjectDisplay>
-    </div>
+        {isToggled && lockedData.data && (
+          <div className="min-w-[340px] w-full justify-self-start text-left">
+            {suiLockedObject?.data && (
+              <LockedObject
+                object={suiLockedObject.data}
+                itemId={lockedData.data.itemId}
+                hideControls
+              />
+            )}
+
+            {!lockedData.data.deleted &&
+              escrow.recipient === account?.address && (
+                <div className="text-right mt-5">
+                  <p className="text-xs pb-3">
+                    When accepting the exchange, the escrowed item will be
+                    transferred to you and your locked item will be transferred
+                    to the sender.
+                  </p>
+                  <Button
+                    className="cursor-pointer"
+                    disabled={isPending}
+                    onClick={() =>
+                      acceptEscrowMutation({
+                        escrow,
+                        locked: lockedData.data,
+                      })
+                    }
+                  >
+                    <CheckCircledIcon /> Accept exchange
+                  </Button>
+                </div>
+              )}
+            {lockedData.data.deleted &&
+              !escrow.swapped &&
+              escrow.recipient === account?.address && (
+                <div>
+                  <p className="text-red-500 text-sm py-2 flex items-center gap-3">
+                    <Cross1Icon />
+                    The locked object has been deleted so you can't accept this
+                    anymore.
+                  </p>
+                </div>
+              )}
+          </div>
+        )}
+      </div>
+    </SuiObjectDisplay>
   );
 }

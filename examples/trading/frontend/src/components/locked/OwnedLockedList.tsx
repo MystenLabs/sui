@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { CONSTANTS } from "@/constants";
-import { Loading } from "@/components/Loading";
 import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { useCurrentAccount, useSuiClientInfiniteQuery } from "@mysten/dapp-kit";
 import { LockedObject } from "./LockedObject";
@@ -33,13 +32,12 @@ export function OwnedLockedList() {
       },
     );
 
-  if (isLoading) return <Loading />;
   return (
     <>
       <InfiniteScrollArea
         loadMore={() => fetchNextPage()}
         hasNextPage={hasNextPage}
-        loading={isFetchingNextPage}
+        loading={isFetchingNextPage || isLoading}
       >
         {data?.map((item) => (
           <LockedObject key={item.data?.objectId} object={item.data!} />

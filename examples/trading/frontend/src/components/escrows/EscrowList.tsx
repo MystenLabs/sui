@@ -5,7 +5,6 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { CONSTANTS, QueryKey } from "@/constants";
 import { Escrow } from "./Escrow";
 import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
-import { useCurrentAccount } from "@mysten/dapp-kit";
 import { constructUrlSearchParams, getNextPageParam } from "@/utils/helpers";
 import { ApiEscrowObject, EscrowListingQuery } from "@/types/types";
 import { useState } from "react";
@@ -18,21 +17,21 @@ export function EscrowList({
   params: EscrowListingQuery;
   enableSearch?: boolean;
 }) {
-  const account = useCurrentAccount();
-
   const [escrowId, setEscrowId] = useState("");
 
   const { data, fetchNextPage, hasNextPage, isLoading, isFetchingNextPage } =
     useInfiniteQuery({
       initialPageParam: null,
-      queryKey: [QueryKey.Escrow, params, account?.address, escrowId],
+      queryKey: [QueryKey.Escrow, params, escrowId],
       queryFn: async ({ pageParam }) => {
         const data = await fetch(
-          `${CONSTANTS.apiEndpoint}escrows${constructUrlSearchParams({
-            ...params,
-            ...(pageParam ? { cursor: pageParam as string } : {}),
-            ...(escrowId ? { objectId: escrowId } : {}),
-          })}`,
+          CONSTANTS.apiEndpoint +
+            "escrows" +
+            constructUrlSearchParams({
+              ...params,
+              ...(pageParam ? { cursor: pageParam as string } : {}),
+              ...(escrowId ? { objectId: escrowId } : {}),
+            }),
         );
         return data.json();
       },

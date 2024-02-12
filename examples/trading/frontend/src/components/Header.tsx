@@ -39,6 +39,7 @@ export function Header() {
         <Box className="flex gap-5 items-center">
           {menu.map((item) => (
             <NavLink
+              key={item.link}
               to={item.link}
               className={({ isActive, isPending }) =>
                 `cursor-pointer flex items-center gap-2 ${

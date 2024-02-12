@@ -17,7 +17,6 @@ export const CONSTANTS = {
     lockedKeyType: `${escrowContract.packageId}::lock::Key`,
     lockedObjectDFKey: `${escrowContract.packageId}::lock::LockedObjectKey`,
   },
-  apiPageLimit: 20,
   demoContract: {
     ...demoContract,
     demoBearType: `${demoContract.packageId}::demo_bear::DemoBear`,
