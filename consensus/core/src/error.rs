@@ -1,25 +1,58 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use consensus_config::{AuthorityIndex, Epoch, Stake};
 use fastcrypto::error::FastCryptoError;
 use thiserror::Error;
 use typed_store::TypedStoreError;
+
+use crate::block::Round;
 
 /// Errors that can occur when processing blocks, reading from storage, or encountering shutdown.
 #[allow(unused)]
 #[derive(Clone, Debug, Error)]
 pub enum ConsensusError {
     #[error("Error deserializing block: {0}")]
-    MalformedBlock(#[from] bcs::Error),
+    MalformedBlock(bcs::Error),
+
+    #[error("Error serializing: {0}")]
+    SerializationFailure(bcs::Error),
+
+    #[error("Unexpected block authority {0} from peer {1}")]
+    UnexpectedAuthority(AuthorityIndex, AuthorityIndex),
+
+    #[error("Block has wrong epoch: expected {expected}, actual {actual}")]
+    WrongEpoch { expected: Epoch, actual: Epoch },
+
+    #[error("Genesis blocks should only be generated from Committee!")]
+    UnexpectedGenesisBlock,
+
+    #[error("Invalid authority index: {index} > {max}")]
+    InvalidAuthorityIndex { index: AuthorityIndex, max: usize },
+
+    #[error("Failed to deserialize signature: {0}")]
+    MalformedSignature(FastCryptoError),
+
+    #[error("Failed to verify the block's signature: {0}")]
+    SignatureVerificationFailure(FastCryptoError),
+
+    #[error("Ancestor's round ({ancestor}) should be lower than the block's round ({block})")]
+    InvalidAncestorRound { ancestor: Round, block: Round },
+
+    #[error("Too many ancestors in the block: {0} > {1}")]
+    TooManyAncestors(usize, usize),
+
+    #[error("Block is missing ancestor from own authority")]
+    MissingOwnAncestor,
+
+    #[error("Insufficient stake from parents: {parent_stakes} < {quorum}")]
+    InsufficientParentStakes { parent_stakes: Stake, quorum: Stake },
+
+    #[error("Invalid transaction: {0}")]
+    InvalidTransaction(String),
 
     #[error("RocksDB failure: {0}")]
     RocksDBFailure(#[from] TypedStoreError),
-
-    #[error("Failed to verify the block's signature with error: {0}")]
-    SignatureVerificationFailure(#[from] FastCryptoError),
-
-    #[error("Unknown authority index: {0}")]
-    UnknownAuthorityIndex(usize),
 
     #[error("Unknown network peer: {0}")]
     UnknownNetworkPeer(String),

@@ -47,7 +47,7 @@ impl SuiTxValidator {
         }
     }
 
-    async fn validate_transactions(
+    fn validate_transactions(
         &self,
         txs: Vec<ConsensusTransactionKind>,
     ) -> Result<(), eyre::Report> {
@@ -118,7 +118,6 @@ fn tx_from_bytes(tx: &[u8]) -> Result<ConsensusTransaction, eyre::Report> {
         .wrap_err("Malformed transaction (failed to deserialize)")
 }
 
-#[async_trait]
 impl TransactionValidator for SuiTxValidator {
     type Error = eyre::Report;
 
@@ -127,7 +126,7 @@ impl TransactionValidator for SuiTxValidator {
         Ok(())
     }
 
-    async fn validate_batch(
+    fn validate_batch(
         &self,
         b: &narwhal_types::Batch,
         protocol_config: &ProtocolConfig,
@@ -144,7 +143,7 @@ impl TransactionValidator for SuiTxValidator {
             .map(|tx| tx_from_bytes(tx).map(|tx| tx.kind))
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.validate_transactions(txs).await
+        self.validate_transactions(txs)
     }
 }
 
@@ -158,7 +157,7 @@ impl BlockVerifier for SuiTxValidator {
             .map(|(_locator, tx)| tx_from_bytes(tx.data()).map(|tx| tx.kind))
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.validate_transactions(txs).await
+        self.validate_transactions(txs)
     }
 }
 
@@ -252,9 +251,7 @@ mod tests {
             .collect();
 
         let batch = Batch::new(transaction_bytes, latest_protocol_config);
-        let res_batch = validator
-            .validate_batch(&batch, latest_protocol_config)
-            .await;
+        let res_batch = validator.validate_batch(&batch, latest_protocol_config);
         assert!(res_batch.is_ok(), "{res_batch:?}");
 
         let bogus_transaction_bytes: Vec<_> = certificates
@@ -270,26 +267,20 @@ mod tests {
             .collect();
 
         let batch = Batch::new(bogus_transaction_bytes, latest_protocol_config);
-        let res_batch = validator
-            .validate_batch(&batch, latest_protocol_config)
-            .await;
+        let res_batch = validator.validate_batch(&batch, latest_protocol_config);
         assert!(res_batch.is_err());
 
         // TODO: Remove once we have removed BatchV1 from the codebase.
         let batch_v1 = Batch::V1(BatchV1::new(vec![]));
 
         // Case #1: Receive BatchV1 but network has upgraded past v11 so we fail because we expect BatchV2
-        let res_batch = validator
-            .validate_batch(&batch_v1, latest_protocol_config)
-            .await;
+        let res_batch = validator.validate_batch(&batch_v1, latest_protocol_config);
         assert!(res_batch.is_err());
 
         let batch_v2 = Batch::new(vec![], latest_protocol_config);
 
         // Case #2: Receive BatchV2 and network is upgraded past v11 so we are okay
-        let res_batch = validator
-            .validate_batch(&batch_v2, latest_protocol_config)
-            .await;
+        let res_batch = validator.validate_batch(&batch_v2, latest_protocol_config);
         assert!(res_batch.is_ok());
     }
 }

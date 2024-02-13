@@ -45,6 +45,7 @@ pub(crate) struct NodeMetrics {
     pub threshold_clock_round: IntGauge,
     pub suspended_blocks: IntCounterVec,
     pub unsuspended_blocks: IntCounterVec,
+    pub invalid_blocks: IntCounterVec,
 }
 
 impl NodeMetrics {
@@ -105,14 +106,22 @@ impl NodeMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
+            // TODO: add a short status label.
+            invalid_blocks: register_int_counter_vec_with_registry!(
+                "invalid_blocks",
+                "Number of invalid blocks per peer authority",
+                &["authority"],
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
 
 pub(crate) struct ChannelMetrics {
-    /// occupancy of the channel from TransactionsClient to TransactionsConsumer
+    /// occupancy of the channel from TransactionClient to TransactionConsumer
     pub tx_transactions_submit: IntGauge,
-    /// total received on channel from TransactionsClient to TransactionsConsumer
+    /// total received on channel from TransactionClient to TransactionConsumer
     pub tx_transactions_submit_total: IntCounter,
     /// occupancy of the CoreThread commands channel
     pub core_thread: IntGauge,
@@ -125,12 +134,12 @@ impl ChannelMetrics {
         Self {
             tx_transactions_submit: register_int_gauge_with_registry!(
                 "tx_transactions_submit",
-                "occupancy of the channel from the `TransactionsClient` to the `TransactionsConsumer`",
+                "occupancy of the channel from the `TransactionClient` to the `TransactionConsumer`",
                 registry
             ).unwrap(),
             tx_transactions_submit_total: register_int_counter_with_registry!(
                 "tx_transactions_submit_total",
-                "total received on channel from the `TransactionsClient` to the `TransactionsConsumer`",
+                "total received on channel from the `TransactionClient` to the `TransactionConsumer`",
                 registry
             ).unwrap(),
             core_thread: register_int_gauge_with_registry!(

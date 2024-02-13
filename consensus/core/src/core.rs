@@ -4,6 +4,10 @@
 use std::collections::BTreeMap;
 use std::{collections::HashSet, sync::Arc};
 
+use consensus_config::{AuthorityIndex, ProtocolKeyPair};
+use mysten_metrics::monitored_scope;
+use tokio::sync::watch;
+
 use crate::{
     block::{
         timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
@@ -11,14 +15,10 @@ use crate::{
     },
     block_manager::BlockManager,
     context::Context,
+    storage::Store,
     threshold_clock::ThresholdClock,
-    transactions_client::TransactionsConsumer,
+    transaction::TransactionConsumer,
 };
-
-use crate::storage::Store;
-use consensus_config::{AuthorityIndex, NetworkKeyPair};
-use mysten_metrics::monitored_scope;
-use tokio::sync::watch;
 
 #[allow(dead_code)]
 pub(crate) struct Core {
@@ -28,7 +28,7 @@ pub(crate) struct Core {
     /// The last produced block
     last_proposed_block: VerifiedBlock,
     /// The consumer to use in order to pull transactions to be included for the next proposals
-    transactions_consumer: TransactionsConsumer,
+    transaction_consumer: TransactionConsumer,
     /// The pending ancestors to be included in proposals organised by round.
     pending_ancestors: BTreeMap<Round, Vec<VerifiedBlock>>,
     /// The block manager which is responsible for keeping track of the DAG dependencies when processing new blocks
@@ -37,7 +37,7 @@ pub(crate) struct Core {
     /// Signals that the component emits
     signals: CoreSignals,
     /// The keypair to be used for block signing
-    block_signer: NetworkKeyPair,
+    block_signer: ProtocolKeyPair,
     /// The node's storage
     store: Arc<dyn Store>,
 }
@@ -46,10 +46,10 @@ pub(crate) struct Core {
 impl Core {
     pub(crate) fn new(
         context: Arc<Context>,
-        transactions_consumer: TransactionsConsumer,
+        transaction_consumer: TransactionConsumer,
         block_manager: BlockManager,
         signals: CoreSignals,
-        block_signer: NetworkKeyPair,
+        block_signer: ProtocolKeyPair,
         store: Arc<dyn Store>,
     ) -> Self {
         let (my_genesis_block, all_genesis_blocks) = Block::genesis(context.clone());
@@ -58,7 +58,7 @@ impl Core {
             context: context.clone(),
             threshold_clock: ThresholdClock::new(0, context),
             last_proposed_block: my_genesis_block,
-            transactions_consumer,
+            transaction_consumer,
             pending_ancestors: BTreeMap::new(),
             block_manager,
             signals,
@@ -196,7 +196,7 @@ impl Core {
             let ancestors = self.ancestors_to_propose(clock_round, now);
 
             //2. consume the next transactions to be included.
-            let payload = self.transactions_consumer.next();
+            let payload = self.transaction_consumer.next();
 
             //3. create the block and insert to storage.
             // TODO: take a decision on whether we want to flush to disk at this point the DagState.
@@ -213,8 +213,11 @@ impl Core {
             ));
             let signed_block =
                 SignedBlock::new(block, &self.block_signer).expect("Block signing failed.");
-            let verified_block = VerifiedBlock::new_verified_unserialized(signed_block)
-                .expect("Fatal error, creating a verified block failed");
+            let serialized = signed_block
+                .serialize()
+                .expect("Block serialization failed.");
+            // Unnecessary to verify own blocks.
+            let verified_block = VerifiedBlock::new_verified(signed_block, serialized);
 
             //4. Add to the threshold clock
             self.threshold_clock.add_block(verified_block.reference());
@@ -386,18 +389,18 @@ impl CoreSignalsReceivers {
 
 #[cfg(test)]
 mod test {
-    use parking_lot::RwLock;
     use std::collections::BTreeSet;
     use std::time::Duration;
 
     use consensus_config::{local_committee_and_keys, Stake};
+    use parking_lot::RwLock;
     use sui_protocol_config::ProtocolConfig;
 
     use super::*;
     use crate::block::TestBlock;
     use crate::dag_state::DagState;
     use crate::storage::mem_store::MemStore;
-    use crate::transactions_client::TransactionsClient;
+    use crate::transaction::TransactionClient;
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
     #[tokio::test]
@@ -407,8 +410,8 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
         let block_manager = BlockManager::new(context.clone(), dag_state);
-        let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
-        let transactions_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
         // Create test blocks for all the authorities for 4 rounds and populate them in store
         let (_, mut last_round_blocks) = Block::genesis(context.clone());
@@ -433,10 +436,10 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new();
         let mut core = Core::new(
             context.clone(),
-            transactions_consumer,
+            transaction_consumer,
             block_manager,
             signals,
-            key_pairs.remove(context.own_index.value()).0,
+            key_pairs.remove(context.own_index.value()).1,
             store,
         );
 
@@ -467,8 +470,8 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
         let block_manager = BlockManager::new(context.clone(), dag_state);
-        let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
-        let transactions_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
         // Create test blocks for all authorities except our's (index = 0) .
         let (_, mut last_round_blocks) = Block::genesis(context.clone());
@@ -501,10 +504,10 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new();
         let mut core = Core::new(
             context.clone(),
-            transactions_consumer,
+            transaction_consumer,
             block_manager,
             signals,
-            key_pairs.remove(context.own_index.value()).0,
+            key_pairs.remove(context.own_index.value()).1,
             store,
         );
 
@@ -543,16 +546,16 @@ mod test {
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let block_manager = BlockManager::new(context.clone(), dag_state);
-        let (transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
-        let transactions_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
+        let (transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
 
         let mut core = Core::new(
             context.clone(),
-            transactions_consumer,
+            transaction_consumer,
             block_manager,
             signals,
-            key_pairs.remove(context.own_index.value()).0,
+            key_pairs.remove(context.own_index.value()).1,
             store,
         );
 
@@ -564,7 +567,7 @@ mod test {
                 bcs::to_bytes(&format!("Transaction {index}")).expect("Shouldn't fail");
             total += transaction.len();
             index += 1;
-            transactions_client.submit(transaction).await.unwrap();
+            transaction_client.submit(transaction).await.unwrap();
 
             // Create total size of transactions up to 1KB
             if total >= 1_000 {
@@ -614,20 +617,21 @@ mod test {
     async fn test_core_propose_once_receiving_a_quorum() {
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
+
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let block_manager = BlockManager::new(context.clone(), dag_state);
-        let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
-        let transactions_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
 
         let mut core = Core::new(
             context.clone(),
-            transactions_consumer,
+            transaction_consumer,
             block_manager,
             signals,
-            key_pairs.remove(context.own_index.value()).0,
+            key_pairs.remove(context.own_index.value()).1,
             store,
         );
 
@@ -828,16 +832,15 @@ mod test {
             let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
             let block_manager = BlockManager::new(context.clone(), dag_state);
-            let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
-            let transactions_consumer =
-                TransactionsConsumer::new(tx_receiver, context.clone(), None);
+            let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+            let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
             let (signals, signal_receivers) = CoreSignals::new();
 
-            let block_signer = signers.remove(index).0;
+            let block_signer = signers.remove(index).1;
 
             let core = Core::new(
                 context,
-                transactions_consumer,
+                transaction_consumer,
                 block_manager,
                 signals,
                 block_signer,

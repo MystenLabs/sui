@@ -19,7 +19,7 @@ use super::Store;
 use crate::{
     block::{BlockDigest, BlockRef, Round, SignedBlock, VerifiedBlock},
     commit::{Commit, CommitIndex},
-    error::ConsensusResult,
+    error::{ConsensusError, ConsensusResult},
 };
 
 /// Persistent storage with RocksDB.
@@ -107,16 +107,20 @@ impl Store for RocksDBStore {
     }
 
     fn read_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<Option<VerifiedBlock>>> {
-        let refs = refs
+        let keys = refs
             .iter()
             .map(|r| (r.round, r.author, r.digest))
             .collect::<Vec<_>>();
-        let serialized = self.blocks.multi_get(refs)?;
+        let serialized = self.blocks.multi_get(keys)?;
         let mut blocks = vec![];
-        for serialized in serialized {
+        for (key, serialized) in refs.iter().zip(serialized) {
             if let Some(serialized) = serialized {
-                let signed_block: SignedBlock = bcs::from_bytes(&serialized)?;
-                let block = VerifiedBlock::new_verified(signed_block, serialized)?;
+                let signed_block: SignedBlock =
+                    bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
+                // Only accepted blocks should have been written to storage.
+                let block = VerifiedBlock::new_verified(signed_block, serialized);
+                // Makes sure block data is not corrupted, by comparing digests.
+                assert_eq!(*key, block.reference());
                 blocks.push(Some(block));
             } else {
                 blocks.push(None);
