@@ -10,6 +10,7 @@ mod error;
 pub mod headers;
 mod objects;
 mod response;
+pub mod types;
 
 pub use client::Client;
 pub use error::{RestError, Result};
