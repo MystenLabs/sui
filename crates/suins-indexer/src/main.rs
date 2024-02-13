@@ -5,11 +5,14 @@ use anyhow::Result;
 use async_trait::async_trait;
 use diesel::{dsl::sql, Connection, ExpressionMethods, RunQueryDsl};
 use prometheus::Registry;
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 use sui_data_ingestion_core::{
     DataIngestionMetrics, FileProgressStore, IndexerExecutor, Worker, WorkerPool,
 };
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::{
+    base_types::{ObjectID, SequenceNumber},
+    full_checkpoint_content::CheckpointData,
+};
 use suins_indexer::{
     get_connection_pool,
     indexer::{format_update_field_query, format_update_subdomain_wrapper_query, SuinsIndexer},
@@ -37,7 +40,11 @@ impl SuinsIndexerWorker {
     /// - The second query is a bulk delete of all deletions.
     ///
     /// You can safely call this with empty updates/deletions as it will return Ok.
-    fn commit_to_db(&self, updates: &[VerifiedDomain], removals: &[String]) -> Result<()> {
+    fn commit_to_db(
+        &self,
+        updates: &[VerifiedDomain],
+        removals: &HashMap<ObjectID, SequenceNumber>,
+    ) -> Result<()> {
         if updates.is_empty() && removals.is_empty() {
             return Ok(());
         }
@@ -74,7 +81,7 @@ impl SuinsIndexerWorker {
 
             if !removals.is_empty() {
                 diesel::delete(domains::table)
-                    .filter(domains::field_id.eq_any(removals))
+                    .filter(domains::field_id.eq_any(removals.keys().map(|x| x.to_string())))
                     .execute(tx)
                     .unwrap_or_else(|_| panic!("Failed to process deletions: {:?}", removals));
             }
@@ -97,10 +104,11 @@ impl Worker for SuinsIndexerWorker {
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();
-    let aws_key_id = env::var("AWS_ACCESS_KEY_ID").ok();
-    let aws_secret_access_key = env::var("AWS_ACCESS_SECRET_KEY").ok();
-    let aws_session_token = env::var("AWS_SESSION_TOKEN").ok();
-    let aws_s3_endpoint = env::var("AWS_S3_ENDPOINT").ok();
+    let (remote_storage, registry_id, subdomain_wrapper_type) = (
+        env::var("REMOTE_STORAGE").ok(),
+        env::var("REGISTRY_ID").ok(),
+        env::var("SUBDOMAIN_WRAPPER_TYPE").ok(),
+    );
     let backfill_progress_file_path =
         env::var("BACKFILL_PROGRESS_FILE_PATH").unwrap_or("/tmp/backfill_progress".to_string());
     let checkpoints_dir = env::var("CHECKPOINTS_DIR").unwrap_or("/tmp/checkpoints".to_string());
@@ -112,11 +120,18 @@ async fn main() -> Result<()> {
     let metrics = DataIngestionMetrics::new(&Registry::new());
     let mut executor = IndexerExecutor::new(progress_store, 1, metrics);
 
+    let indexer_setup = if let (Some(registry_id), Some(subdomain_wrapper_type)) =
+        (registry_id, subdomain_wrapper_type)
+    {
+        SuinsIndexer::new(registry_id, subdomain_wrapper_type)
+    } else {
+        SuinsIndexer::default()
+    };
+
     let worker_pool = WorkerPool::new(
         SuinsIndexerWorker {
             pg_pool: get_connection_pool(),
-            // TODO(manos): This should be configurable from env.
-            indexer: SuinsIndexer::default(),
+            indexer: indexer_setup,
         },
         "suins_indexing".to_string(), /* task name used as a key in the progress store */
         100,                          /* concurrency */
@@ -126,21 +141,8 @@ async fn main() -> Result<()> {
     executor
         .run(
             PathBuf::from(checkpoints_dir), /* directory should exist but can be empty */
-            aws_s3_endpoint,                /* remote_read_endpoint: If set */
-            vec![
-                (
-                    "aws_access_key_id".to_string(),
-                    aws_key_id.unwrap_or("".to_string()),
-                ),
-                (
-                    "aws_secret_access_key".to_string(),
-                    aws_secret_access_key.unwrap_or("".to_string()),
-                ),
-                (
-                    "aws_session_token".to_string(),
-                    aws_session_token.unwrap_or("".to_string()),
-                ),
-            ], /* aws credentials */
+            remote_storage,                 /* remote_read_endpoint: If set */
+            vec![],                         /* aws credentials */
             100,                            /* remote_read_batch_size */
             exit_receiver,
         )

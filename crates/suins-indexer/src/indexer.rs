@@ -134,8 +134,12 @@ impl SuinsIndexer {
     /// For each input object, we're parsing the name record deletions
     /// A deletion we want to track is a deleted object which is of `NameRecord` type.
     /// Domain replacements do not count as deletions, but instead are an update to the latest state.
-    pub fn parse_name_record_deletions(&self, checkpoint: &CheckpointData) -> Vec<String> {
-        let mut removals: Vec<String> = vec![];
+    pub fn parse_name_record_deletions(
+        &self,
+        updates: &HashMap<ObjectID, NameRecordChange>,
+        checkpoint: &CheckpointData,
+    ) -> HashMap<ObjectID, SequenceNumber> {
+        let mut removals: HashMap<ObjectID, SequenceNumber> = HashMap::new();
 
         // Gather all object ids that got deleted.
         // This way, we can delete removed name records
@@ -148,8 +152,26 @@ impl SuinsIndexer {
             .collect();
 
         for input in checkpoint.input_objects() {
-            if self.is_name_record(input) && deleted_objects.contains(&input.id()) {
-                removals.push(input.id().to_string());
+            let id = input.id();
+            if self.is_name_record(input) && deleted_objects.contains(&id) {
+                let version = input.version();
+
+                // if our deletion is older than the latest update/creation on a name record, skip it.
+                if updates
+                    .get(&id)
+                    .is_some_and(|x| x.sequence_number > version)
+                {
+                    continue;
+                }
+
+                // A double removal can happen in a case where two different TXs in the same checkpoint
+                // remove the same leaf record.
+                // - If we do not have the removal: insert it.
+                // - If we have the removal, but the version is older: update it.
+                let removal: Option<&SequenceNumber> = removals.get(&id);
+                if removal.is_none() || removal.is_some_and(|x| x > &version) {
+                    removals.insert(id, version);
+                }
             }
         }
 
@@ -166,11 +188,11 @@ impl SuinsIndexer {
     pub fn process_checkpoint(
         &self,
         checkpoint: CheckpointData,
-    ) -> (Vec<VerifiedDomain>, Vec<String>) {
+    ) -> (Vec<VerifiedDomain>, HashMap<ObjectID, SequenceNumber>) {
         let (name_records, subdomain_wrappers) =
             self.parse_name_record_changes(&checkpoint.output_objects());
 
-        let removals = self.parse_name_record_deletions(&checkpoint);
+        let removals = self.parse_name_record_deletions(&name_records, &checkpoint);
 
         let updates = prepare_db_updates(
             &name_records,
