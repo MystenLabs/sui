@@ -17,7 +17,7 @@ use sui_config::node::{
     DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::node::{default_zklogin_oauth_providers, ConsensusProtocol, RunWithRange};
-use sui_config::p2p::{P2pConfig, SeedPeer};
+use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
 use sui_config::{
     local_ip_utils, ConsensusConfig, NodeConfig, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
     FULL_NODE_DB_PATH,
@@ -128,6 +128,12 @@ impl ValidatorConfigBuilder {
                     .unwrap()
             }),
             external_address: Some(validator.p2p_address),
+            // Set a shorter timeout for checkpoint content download in tests, since
+            // checkpoint pruning also happens much faster, and network is local.
+            state_sync: Some(StateSyncConfig {
+                checkpoint_content_timeout_ms: Some(10_000),
+                ..Default::default()
+            }),
             ..Default::default()
         };
 
@@ -364,6 +370,12 @@ impl FullnodeConfigBuilder {
                     .p2p_external_address
                     .or(Some(validator_config.p2p_address.clone())),
                 seed_peers,
+                // Set a shorter timeout for checkpoint content download in tests, since
+                // checkpoint pruning also happens much faster, and network is local.
+                state_sync: Some(StateSyncConfig {
+                    checkpoint_content_timeout_ms: Some(10_000),
+                    ..Default::default()
+                }),
                 ..Default::default()
             }
         };

@@ -283,7 +283,9 @@ impl TestCluster {
             unreachable!("Broken reconfig channel");
         })
         .await
-        .expect("Timed out waiting for cluster to target epoch")
+        .unwrap_or_else(|_| {
+            panic!("Timed out waiting for cluster to target epoch {target_epoch:?}")
+        })
     }
 
     pub async fn wait_for_run_with_range_shutdown_signal(&self) -> Option<RunWithRange> {

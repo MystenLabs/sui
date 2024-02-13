@@ -13,7 +13,6 @@ use std::{
     ops,
     path::{Path, PathBuf},
 };
-
 use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig, RunWithRange};
 use sui_config::NodeConfig;
 use sui_macros::nondeterministic;
@@ -28,6 +27,7 @@ use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::AuthorityName;
 use sui_types::object::Object;
 use tempfile::TempDir;
+use tracing::info;
 
 pub struct SwarmBuilder<R = OsRng> {
     rng: R,
@@ -295,7 +295,13 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
         let mut nodes: HashMap<_, _> = network_config
             .validator_configs()
             .iter()
-            .map(|config| (config.protocol_public_key(), Node::new(config.to_owned())))
+            .map(|config| {
+                info!(
+                    "SwarmBuilder configuring validator with name {}",
+                    config.protocol_public_key()
+                );
+                (config.protocol_public_key(), Node::new(config.to_owned()))
+            })
             .collect();
 
         let mut fullnode_config_builder = FullnodeConfigBuilder::new()
@@ -326,6 +332,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                     }
                 }
                 let config = builder.build(&mut OsRng, &network_config);
+                info!(
+                    "SwarmBuilder configuring full node with name {}",
+                    config.protocol_public_key()
+                );
                 nodes.insert(config.protocol_public_key(), Node::new(config));
             });
         }
