@@ -1399,7 +1399,7 @@ impl AuthorityState {
             inner_temporary_store,
         );
         self.execution_cache
-            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs)
+            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs.into())
             .await?;
 
         if certificate.transaction_data().is_end_of_epoch_tx() {

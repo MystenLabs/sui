@@ -20,7 +20,6 @@ use futures::{
 };
 use mysten_common::sync::notify_read::NotifyRead;
 use prometheus::Registry;
-use std::path::Path;
 use std::sync::Arc;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_protocol_config::ProtocolVersion;
@@ -37,13 +36,12 @@ use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::VerifiedTransaction;
-use tap::TapFallible;
-use tracing::{error, instrument};
+use tracing::instrument;
 use typed_store::Map;
 
 use super::{
-    CheckpointCache, ExecutionCacheMetrics, ExecutionCacheRead, ExecutionCacheReconfigAPI,
-    ExecutionCacheWrite, NotifyReadWrapper, StateSyncAPI,
+    implement_passthrough_traits, CheckpointCache, ExecutionCacheMetrics, ExecutionCacheRead,
+    ExecutionCacheReconfigAPI, ExecutionCacheWrite, NotifyReadWrapper, StateSyncAPI,
 };
 
 pub struct PassthroughCache {
@@ -98,18 +96,6 @@ impl PassthroughCache {
         )
         .await;
         let _ = AuthorityStorePruner::compact(&self.store.perpetual_tables);
-    }
-
-    /// This is a temporary method to be used when we enable simplified_unwrap_then_delete.
-    /// It re-accumulates state hash for the new epoch if simplified_unwrap_then_delete is enabled.
-    #[instrument(level = "error", skip_all)]
-    pub fn maybe_reaccumulate_state_hash(
-        &self,
-        cur_epoch_store: &AuthorityPerEpochStore,
-        new_protocol_version: ProtocolVersion,
-    ) {
-        self.store
-            .maybe_reaccumulate_state_hash(cur_epoch_store, new_protocol_version);
     }
 }
 
@@ -269,39 +255,12 @@ impl ExecutionCacheRead for PassthroughCache {
     }
 }
 
-impl CheckpointCache for PassthroughCache {
-    fn deprecated_get_transaction_checkpoint(
-        &self,
-        digest: &TransactionDigest,
-    ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>> {
-        self.store.deprecated_get_transaction_checkpoint(digest)
-    }
-
-    fn deprecated_multi_get_transaction_checkpoint(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>> {
-        self.store
-            .deprecated_multi_get_transaction_checkpoint(digests)
-    }
-
-    fn deprecated_insert_finalized_transactions(
-        &self,
-        digests: &[TransactionDigest],
-        epoch: EpochId,
-        sequence: CheckpointSequenceNumber,
-    ) -> SuiResult {
-        self.store
-            .deprecated_insert_finalized_transactions(digests, epoch, sequence)
-    }
-}
-
 impl ExecutionCacheWrite for PassthroughCache {
     #[instrument(level = "debug", skip_all)]
     fn write_transaction_outputs<'a>(
         &'a self,
         epoch_id: EpochId,
-        tx_outputs: TransactionOutputs,
+        tx_outputs: Arc<TransactionOutputs>,
     ) -> BoxFuture<'a, SuiResult> {
         async move {
             let tx_digest = *tx_outputs.transaction.digest();
@@ -333,73 +292,6 @@ impl ExecutionCacheWrite for PassthroughCache {
         self.store
             .acquire_transaction_locks(epoch_id, owned_input_objects, tx_digest)
             .boxed()
-    }
-}
-
-impl ExecutionCacheReconfigAPI for PassthroughCache {
-    fn insert_genesis_object(&self, object: Object) -> SuiResult {
-        self.store.insert_genesis_object(object)
-    }
-
-    fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult {
-        self.store.bulk_insert_genesis_objects(objects)
-    }
-
-    fn revert_state_update(&self, digest: &TransactionDigest) -> SuiResult {
-        self.store.revert_state_update(digest)
-    }
-
-    fn set_epoch_start_configuration(
-        &self,
-        epoch_start_config: &EpochStartConfiguration,
-    ) -> SuiResult {
-        self.store.set_epoch_start_configuration(epoch_start_config)
-    }
-
-    fn update_epoch_flags_metrics(&self, old: &[EpochFlag], new: &[EpochFlag]) {
-        self.store.update_epoch_flags_metrics(old, new)
-    }
-
-    fn clear_object_per_epoch_marker_table(&self, execution_guard: &ExecutionLockWriteGuard<'_>) {
-        self.store
-            .clear_object_per_epoch_marker_table(execution_guard)
-            .tap_err(|e| {
-                error!(?e, "Failed to clear object per-epoch marker table");
-            })
-            .ok();
-    }
-
-    fn expensive_check_sui_conservation(
-        &self,
-        old_epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult {
-        self.store
-            .expensive_check_sui_conservation(self, old_epoch_store)
-    }
-
-    fn checkpoint_db(&self, path: &Path) -> SuiResult {
-        self.store.perpetual_tables.checkpoint_db(path)
-    }
-}
-
-impl StateSyncAPI for PassthroughCache {
-    fn insert_transaction_and_effects(
-        &self,
-        transaction: &VerifiedTransaction,
-        transaction_effects: &TransactionEffects,
-    ) -> SuiResult {
-        Ok(self
-            .store
-            .insert_transaction_and_effects(transaction, transaction_effects)?)
-    }
-
-    fn multi_insert_transaction_and_effects(
-        &self,
-        transactions_and_effects: &[VerifiedExecutionData],
-    ) -> SuiResult {
-        Ok(self
-            .store
-            .multi_insert_transaction_and_effects(transactions_and_effects.iter())?)
     }
 }
 
@@ -443,3 +335,5 @@ impl AccumulatorStore for PassthroughCache {
         self.store.iter_live_object_set(include_wrapped_tombstone)
     }
 }
+
+implement_passthrough_traits!(PassthroughCache);
