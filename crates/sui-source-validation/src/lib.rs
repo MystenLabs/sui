@@ -628,22 +628,22 @@ fn download_and_compile(
         );
 
         let mut response = match ureq::get(&mainnet_url).call() {
-	    Ok(response) => response,
-	    Err(ureq::Error::Status(404, _)) => {
-		println!(
-		    "{} sui mainnet compiler {} not available, attempting to download testnet compiler release...",
-		    "WARNING".bold().yellow(),
-		    compiler_version.yellow()
-		);
-		println!(
-		    "{} testnet compiler @ {} (this may take a while)",
-		    "DOWNLOADING".bold().green(),
-		    compiler_version.yellow()
-		);
-		let testnet_url = format!("https://github.com/MystenLabs/sui/releases/download/testnet-v{compiler_version}/sui-testnet-v{compiler_version}-{platform}.tgz");
-		ureq::get(&testnet_url).call()?
-	    }
-	    Err(e) => return Err(e.into()),
+            Ok(response) => response,
+            Err(ureq::Error::Status(404, _)) => {
+                println!(
+                    "{} sui mainnet compiler {} not available, attempting to download testnet compiler release...",
+                    "WARNING".bold().yellow(),
+                    compiler_version.yellow()
+                );
+                println!(
+                    "{} testnet compiler @ {} (this may take a while)",
+                    "DOWNLOADING".bold().green(),
+                    compiler_version.yellow()
+                );
+                let testnet_url = format!("https://github.com/MystenLabs/sui/releases/download/testnet-v{compiler_version}/sui-testnet-v{compiler_version}-{platform}.tgz");
+                ureq::get(&testnet_url).call()?
+            }
+            Err(e) => return Err(e.into()),
         }.into_reader();
 
         let dest_tarball = dest_version.join(format!("{}.tgz", compiler_version));
@@ -718,14 +718,14 @@ fn detect_platform(
         ("linux", "x86_64") => "ubuntu-x86_64",
         ("windows", "x86_64") => "windows-x86_64",
         (os, arch) => bail!(
-	    "The package {} needs to be built with sui compiler version {compiler_version} but there \
-	     is no binary release available to download for your platform:\n\
-	     Operating System: {os}\n\
-	     Architecture: {arch}\n\
-	     You can manually put a `sui` binary for your platform in {} and rerun your command to continue.",
-	    package_path.display(),
-	    dest_dir.display(),
-	),
+            "The package {} needs to be built with sui compiler version {compiler_version} but there \
+             is no binary release available to download for your platform:\n\
+             Operating System: {os}\n\
+             Architecture: {arch}\n\
+             You can manually put a `sui` binary for your platform in {} and rerun your command to continue.",
+            package_path.display(),
+            dest_dir.display(),
+        ),
     };
     Ok(s.into())
 }
