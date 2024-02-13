@@ -542,7 +542,6 @@ export class TransactionBlock {
 			});
 		}
 
-		// Perform final validation on the transaction:
 		await plugins.validate(this.#blockData, {
 			maxPureArgumentSize: this.#getConfig('maxPureArgumentSize', options),
 		});
