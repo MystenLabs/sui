@@ -36,8 +36,11 @@ use sui_types::{
 };
 use tracing::instrument;
 
-mod passthrough_cache;
+pub(crate) mod cached_version_map;
+pub mod memory_cache;
+pub mod passthrough_cache;
 
+use memory_cache::MemoryCache;
 use passthrough_cache::PassthroughCache;
 
 struct ExecutionCacheMetrics {
@@ -809,3 +812,4 @@ macro_rules! implement_passthrough_traits {
 use implement_passthrough_traits;
 
 implement_storage_traits!(PassthroughCache);
+implement_storage_traits!(MemoryCache);
