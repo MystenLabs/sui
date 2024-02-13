@@ -896,10 +896,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         }
         T::UnannotatedExp_::Pack(m, s, _, _) => {
             if !context.in_test
-                && !context
-                    .current_module()
-                    .value
-                    .is(SUI_ADDR_NAME, SUI_MODULE_NAME)
+                && !otw_special_cases(context)
                 && context.one_time_witness.as_ref().is_some_and(|otw| {
                     otw.as_ref()
                         .is_ok_and(|o| m == context.current_module() && o == s)
@@ -914,6 +911,16 @@ fn exp(context: &mut Context, e: &T::Exp) {
         }
         _ => (),
     }
+}
+
+fn otw_special_cases(context: &Context) -> bool {
+    BRIDGE_SUPPORTED_ASSET
+        .iter()
+        .any(|token| context.current_module().value.is(BRIDGE_ADDR_NAME, token))
+        || context
+            .current_module()
+            .value
+            .is(SUI_ADDR_NAME, SUI_MODULE_NAME)
 }
 
 fn check_event_emit(context: &mut Context, loc: Loc, mcall: &ModuleCall) {

@@ -47,6 +47,10 @@ pub const RANDOMNESS_STATE_TYPE_NAME: Symbol = symbol!("Random");
 pub const RANDOMNESS_STATE_CREATE: Symbol = symbol!("create");
 pub const DENY_LIST_MODULE_NAME: Symbol = symbol!("deny_list");
 pub const DENY_LIST_CREATE: Symbol = symbol!("create");
+pub const BRIDGE_ADDR_NAME: Symbol = symbol!("bridge");
+pub const BRIDGE_MODULE_NAME: Symbol = symbol!("bridge");
+pub const BRIDGE_TYPE_NAME: Symbol = symbol!("Bridge");
+pub const BRIDGE_CREATE: Symbol = symbol!("create");
 
 pub const EVENT_MODULE_NAME: Symbol = symbol!("event");
 pub const EVENT_FUNCTION_NAME: Symbol = symbol!("emit");
@@ -139,3 +143,6 @@ pub const PRIVATE_TRANSFER_CALL_DIAG: DiagnosticInfo = custom(
     /* code */ 9,
     "invalid private transfer call",
 );
+
+// Bridge supported asset
+pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];
