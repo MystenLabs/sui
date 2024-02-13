@@ -243,6 +243,7 @@ mod tests {
                 break;
             }
         }
+        assert_eq!(processed_subdag_index, leaders.len());
 
         verify_channel_empty(&mut receiver);
 
@@ -312,6 +313,7 @@ mod tests {
                 break;
             }
         }
+        assert_eq!(processed_subdag_index, expected_last_processed_index);
 
         verify_channel_empty(&mut receiver);
 
@@ -344,6 +346,7 @@ mod tests {
                 break;
             }
         }
+        assert_eq!(processed_subdag_index, expected_last_sent_index);
 
         verify_channel_empty(&mut receiver);
 
@@ -374,6 +377,7 @@ mod tests {
                 break;
             }
         }
+        assert_eq!(processed_subdag_index, expected_last_sent_index);
 
         verify_channel_empty(&mut receiver);
     }
@@ -429,6 +433,7 @@ mod tests {
                 break;
             }
         }
+        assert_eq!(processed_subdag_index, expected_last_processed_index);
 
         verify_channel_empty(&mut receiver);
 
