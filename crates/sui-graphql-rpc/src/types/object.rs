@@ -755,7 +755,7 @@ impl Object {
                 let result = page.paginate_raw_query::<StoredHistoryObject>(
                     conn,
                     rhs,
-                    objects_query::<StoredHistoryObject>(&filter, lhs as i64, rhs as i64, &page),
+                    objects_query(&filter, lhs as i64, rhs as i64, &page),
                 )?;
 
                 Ok(Some((result, rhs)))
@@ -1213,13 +1213,6 @@ impl ObjectFilter {
 
         query
     }
-
-    pub(crate) fn has_filter(&self) -> bool {
-        self.object_ids.is_some()
-            || self.object_keys.is_some()
-            || self.owner.is_some()
-            || self.type_.is_some()
-    }
 }
 
 impl HistoricalObjectCursor {
@@ -1368,9 +1361,8 @@ pub(crate) async fn deserialize_move_struct(
 /// Constructs a raw query to fetch objects from the database. If an `owner` is provided as a filter,  filters are provided, the page
 /// limit and cursor are used to "filter" the inner queries against `objects_snapshot` and
 /// `objects_history` to reduce the number of rows to be fetched.
-fn objects_query<T>(filter: &ObjectFilter, lhs: i64, rhs: i64, page: &Page<Cursor>) -> RawQuery
+fn objects_query(filter: &ObjectFilter, lhs: i64, rhs: i64, page: &Page<Cursor>) -> RawQuery
 where
-    T: RawPaginated<Cursor>,
 {
     // Require a consistent view of objects if the owner is specified, to filter out object versions
     // that satisfy the criteria, but have a later version in the same checkpoint.
@@ -1380,25 +1372,7 @@ where
         View::Historical
     };
 
-    build_objects_query(view, lhs, rhs, move |mut query| {
-        let has_filter = filter.has_filter();
-        query = filter.apply(query);
-
-        if let View::Historical = view {
-            if let Some(after) = page.after() {
-                query = T::filter_ge(after, query);
-            }
-
-            if let Some(before) = page.before() {
-                query = T::filter_le(before, query);
-            }
-
-            query = T::order(page.is_from_front(), query);
-
-            query = query.limit(page.limit() as i64 + 2);
-        }
-        query
-    })
+    build_objects_query(view, lhs, rhs, &page, move |query| filter.apply(query))
 }
 
 #[cfg(test)]

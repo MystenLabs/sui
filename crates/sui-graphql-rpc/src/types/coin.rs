@@ -315,7 +315,7 @@ impl Coin {
                 let result = page.paginate_raw_query::<StoredHistoryObject>(
                     conn,
                     rhs,
-                    coins_query(coin_type, owner, lhs as i64, rhs as i64),
+                    coins_query(coin_type, owner, lhs as i64, rhs as i64, &page),
                 )?;
 
                 Ok(Some((result, rhs)))
@@ -371,7 +371,13 @@ impl TryFrom<&MoveObject> for Coin {
     }
 }
 
-fn coins_query(coin_type: TypeTag, owner: Option<SuiAddress>, lhs: i64, rhs: i64) -> RawQuery {
+fn coins_query(
+    coin_type: TypeTag,
+    owner: Option<SuiAddress>,
+    lhs: i64,
+    rhs: i64,
+    page: &Page<object::Cursor>,
+) -> RawQuery {
     // Require a consistent view of objects if the owner is specified, to filter out object versions
     // that satisfy the criteria, but have a later version in the same checkpoint.
     let view = if owner.is_some() {
@@ -380,7 +386,7 @@ fn coins_query(coin_type: TypeTag, owner: Option<SuiAddress>, lhs: i64, rhs: i64
         View::Historical
     };
 
-    build_objects_query(view, lhs, rhs, move |query| {
+    build_objects_query(view, lhs, rhs, &page, move |query| {
         apply_filter(query, &coin_type, owner)
     })
 }

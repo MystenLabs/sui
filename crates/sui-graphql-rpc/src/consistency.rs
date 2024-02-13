@@ -3,11 +3,13 @@
 
 use async_graphql::connection::CursorType;
 use serde::{Deserialize, Serialize};
+use sui_indexer::models_v2::objects::StoredHistoryObject;
 
 use crate::data::Conn;
 use crate::raw_query::RawQuery;
 use crate::types::checkpoint::Checkpoint;
-use crate::types::cursor::JsonCursor;
+use crate::types::cursor::{JsonCursor, Page};
+use crate::types::object::Cursor;
 use crate::{filter, query};
 
 #[derive(Copy, Clone)]
@@ -63,7 +65,13 @@ impl Checkpointed for JsonCursor<ConsistentNamedCursor> {
 /// out objects that satisfy the provided filters, but are not the most recent version of the object
 /// within the checkpoint range. If the view parameter is set to `Historical`, this final filter is
 /// not applied.
-pub(crate) fn build_objects_query<F>(view: View, lhs: i64, rhs: i64, filter_fn: F) -> RawQuery
+pub(crate) fn build_objects_query<F>(
+    view: View,
+    lhs: i64,
+    rhs: i64,
+    page: &Page<Cursor>,
+    filter_fn: F,
+) -> RawQuery
 where
     F: Fn(RawQuery) -> RawQuery,
 {
@@ -71,6 +79,9 @@ where
     // objects_snapshot and objects_history tables.
     let mut snapshot_objs = query!(r#"SELECT * FROM objects_snapshot as candidates"#);
     snapshot_objs = filter_fn(snapshot_objs);
+    if let View::Historical = view {
+        snapshot_objs = page.yeet::<StoredHistoryObject>(snapshot_objs);
+    }
 
     // Additionally filter objects_history table for results between the available range, or
     // checkpoint_viewed_at, if provided.
@@ -80,6 +91,9 @@ where
         history_objs,
         format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
     );
+    if let View::Historical = view {
+        history_objs = page.yeet::<StoredHistoryObject>(history_objs);
+    }
 
     // Combine the two queries, and select the most recent version of each object. The result set is
     // the most recent version of objects from `objects_snapshot` and `objects_history` that match
