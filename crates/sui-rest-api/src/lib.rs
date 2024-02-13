@@ -7,7 +7,6 @@ pub mod accept;
 mod checkpoints;
 mod client;
 mod error;
-pub mod headers;
 mod objects;
 mod response;
 pub mod types;
