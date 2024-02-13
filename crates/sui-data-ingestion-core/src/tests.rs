@@ -3,7 +3,7 @@
 
 use crate::progress_store::ExecutorProgress;
 use crate::reader::ENV_VAR_LOCAL_READ_TIMEOUT_MS;
-use crate::workers::Worker;
+use crate::Worker;
 use crate::{DataIngestionMetrics, FileProgressStore, IndexerExecutor, WorkerPool};
 use anyhow::Result;
 use async_trait::async_trait;
