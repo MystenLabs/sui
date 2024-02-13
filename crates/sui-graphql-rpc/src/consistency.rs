@@ -10,6 +10,7 @@ use crate::types::checkpoint::Checkpoint;
 use crate::types::cursor::JsonCursor;
 use crate::{filter, query};
 
+#[derive(Copy, Clone)]
 pub(crate) enum View {
     /// Return objects that fulfill the filtering criteria, even if there are more recent versions
     /// of the object within the checkpoint range
@@ -68,12 +69,12 @@ where
 {
     // Construct the filtered inner query - apply the same filtering criteria to both
     // objects_snapshot and objects_history tables.
-    let mut snapshot_objs = query!(r#"SELECT * FROM objects_snapshot"#);
+    let mut snapshot_objs = query!(r#"SELECT * FROM objects_snapshot as candidates"#);
     snapshot_objs = filter_fn(snapshot_objs);
 
     // Additionally filter objects_history table for results between the available range, or
     // checkpoint_viewed_at, if provided.
-    let mut history_objs = query!(r#"SELECT * FROM objects_history"#);
+    let mut history_objs = query!(r#"SELECT * FROM objects_history as candidates"#);
     history_objs = filter_fn(history_objs);
     history_objs = filter!(
         history_objs,
@@ -116,7 +117,7 @@ where
             filter!(query, "newer.object_version IS NULL")
         }
         View::Historical => {
-            query!("SELECT * FROM ({}) candidates", candidates)
+            query!("SELECT candidates.* FROM ({}) candidates", candidates)
         }
     }
 }

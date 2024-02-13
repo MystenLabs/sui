@@ -372,7 +372,15 @@ impl TryFrom<&MoveObject> for Coin {
 }
 
 fn coins_query(coin_type: TypeTag, owner: Option<SuiAddress>, lhs: i64, rhs: i64) -> RawQuery {
-    build_objects_query(View::Consistent, lhs, rhs, move |query| {
+    // Require a consistent view of objects if the owner is specified, to filter out object versions
+    // that satisfy the criteria, but have a later version in the same checkpoint.
+    let view = if owner.is_some() {
+        View::Consistent
+    } else {
+        View::Historical
+    };
+
+    build_objects_query(view, lhs, rhs, move |query| {
         apply_filter(query, &coin_type, owner)
     })
 }
