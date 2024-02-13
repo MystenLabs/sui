@@ -3,6 +3,7 @@
 
 use axum::{http::StatusCode, routing::get, Router};
 
+pub mod accept;
 mod checkpoints;
 mod client;
 pub mod headers;
