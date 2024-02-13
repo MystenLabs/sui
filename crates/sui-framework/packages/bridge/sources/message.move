@@ -149,9 +149,10 @@ module bridge::message {
             payload
         } = message;
 
-        let message = vector[];
-        vector::push_back(&mut message, message_type);
-        vector::push_back(&mut message, message_version);
+        let message = vector[
+            message_type,
+            message_version
+        ];
         // bcs serializes u64 as 8 bytes
         vector::append(&mut message, reverse_bytes(bcs::to_bytes(&seq_num)));
         vector::push_back(&mut message, source_chain);
