@@ -792,7 +792,7 @@ try-lock = { version = "0.2", default-features = false }
 ttl_cache = { version = "0.5" }
 tui = { version = "0.17" }
 tungstenite = { version = "0.20", default-features = false, features = ["handshake"] }
-twox-hash = { version = "1", default-features = false }
+twox-hash = { version = "1" }
 typenum = { version = "1", default-features = false }
 ucd-trie = { version = "0.1", default-features = false, features = ["std"] }
 uint = { version = "0.9" }
@@ -1752,7 +1752,7 @@ try-lock = { version = "0.2", default-features = false }
 ttl_cache = { version = "0.5" }
 tui = { version = "0.17" }
 tungstenite = { version = "0.20", default-features = false, features = ["handshake"] }
-twox-hash = { version = "1", default-features = false }
+twox-hash = { version = "1" }
 typenum = { version = "1", default-features = false }
 ucd-trie = { version = "0.1", default-features = false, features = ["std"] }
 uint = { version = "0.9" }

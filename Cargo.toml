@@ -490,6 +490,7 @@ tower-http = { version = "0.3.4", features = [
 ] }
 # tower-http = { version="0.4", features = ["trace"] }
 tower-layer = "0.3.2"
+twox-hash = "1.6.3"
 tracing = "0.1.37"
 tracing-appender = "0.2.2"
 tracing-subscriber = { version = "0.3.15", default-features = false, features = [

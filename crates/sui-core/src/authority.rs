@@ -30,6 +30,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
@@ -144,7 +145,9 @@ use crate::execution_driver::execution_process;
 use crate::metrics::LatencyObserver;
 use crate::metrics::RateTracker;
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::overload_monitor::{overload_monitor, AuthorityOverloadInfo};
+use crate::overload_monitor::{
+    overload_monitor, overload_monitor_accept_tx, AuthorityOverloadInfo,
+};
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::{AccumulatorStore, StateAccumulator, WrappedObject};
 use crate::subscription_handler::SubscriptionHandler;
@@ -931,15 +934,41 @@ impl AuthorityState {
         }
     }
 
+    pub fn check_system_overload_at_signing(&self) -> bool {
+        self.overload_threshold_config
+            .check_system_overload_at_signing
+    }
+
+    pub fn check_system_overload_at_execution(&self) -> bool {
+        self.overload_threshold_config
+            .check_system_overload_at_execution
+    }
+
     pub(crate) fn check_system_overload(
         &self,
         consensus_adapter: &Arc<ConsensusAdapter>,
         tx_data: &SenderSignedData,
+        do_authority_overload_check: bool,
     ) -> SuiResult {
+        if do_authority_overload_check {
+            self.check_authority_overload(tx_data)?;
+        }
         self.transaction_manager
             .check_execution_overload(self.max_txn_age_in_queue(), tx_data)?;
         consensus_adapter.check_consensus_overload()?;
         Ok(())
+    }
+
+    fn check_authority_overload(&self, tx_data: &SenderSignedData) -> SuiResult {
+        if !self.overload_info.is_overload.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+
+        let load_shedding_percentage = self
+            .overload_info
+            .load_shedding_percentage
+            .load(Ordering::Relaxed);
+        overload_monitor_accept_tx(load_shedding_percentage, tx_data.digest())
     }
 
     /// Executes a transaction that's known to have correct effects.
@@ -2530,8 +2559,11 @@ impl AuthorityState {
             rx_execution_shutdown,
         ));
 
-        let authority_state = Arc::downgrade(&state);
-        spawn_monitored_task!(overload_monitor(authority_state, overload_threshold_config));
+        // Don't start the overload monitor when max_load_shedding_percentage is 0.
+        if overload_threshold_config.max_load_shedding_percentage > 0 {
+            let authority_state = Arc::downgrade(&state);
+            spawn_monitored_task!(overload_monitor(authority_state, overload_threshold_config));
+        }
 
         // TODO: This doesn't belong to the constructor of AuthorityState.
         state

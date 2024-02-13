@@ -612,6 +612,9 @@ pub enum SuiError {
 
     #[error("Storage error: {0}")]
     Storage(String),
+
+    #[error("Validator cannot handle the request at the moment. Please retry after at least {retry_after_sec}.")]
+    ValidatorOverloadedRetryAfter { retry_after_sec: u64 },
 }
 
 #[repr(u64)]
@@ -773,6 +776,7 @@ impl SuiError {
             SuiError::TooManyTransactionsPendingOnObject { .. } => true,
             SuiError::TooOldTransactionPendingOnObject { .. } => true,
             SuiError::TooManyTransactionsPendingConsensus => true,
+            SuiError::ValidatorOverloadedRetryAfter { .. } => true,
 
             // Non retryable error
             SuiError::ExecutionError(..) => false,

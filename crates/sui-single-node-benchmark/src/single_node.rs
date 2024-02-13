@@ -157,7 +157,9 @@ impl SingleValidator {
                 let response = self
                     .validator_service
                     .execute_certificate_for_testing(cert)
-                    .await;
+                    .await
+                    .unwrap()
+                    .into_inner();
                 response.signed_effects.into_data()
             }
             Component::TxnSigning | Component::CheckpointExecutor | Component::ExecutionOnly => {
@@ -225,6 +227,8 @@ impl SingleValidator {
         self.validator_service
             .handle_transaction_for_testing(transaction)
             .await
+            .unwrap()
+            .into_inner()
     }
 
     pub(crate) async fn build_checkpoints(
