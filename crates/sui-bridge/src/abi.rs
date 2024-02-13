@@ -78,7 +78,7 @@ impl EthBridgeEvent {
 }
 
 // Sanity checked version of TokensBridgedToSuiFilter
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
 pub struct EthToSuiTokenBridgeV1 {
     pub nonce: u64,
     pub sui_chain_id: BridgeChainId,

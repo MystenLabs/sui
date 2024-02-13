@@ -90,6 +90,7 @@ async fn main() -> anyhow::Result<()> {
             server_config.key,
             server_config.sui_client,
             server_config.eth_client,
+            server_config.approved_governance_actions,
         ),
     )
     .await;

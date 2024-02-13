@@ -40,7 +40,7 @@ pub struct MoveTokenBridgeEvent {
 }
 
 // Sanitized version of MoveTokenBridgeEvent
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
 pub struct EmittedSuiToEthTokenBridgeV1 {
     pub nonce: u64,
     pub sui_chain_id: BridgeChainId,
