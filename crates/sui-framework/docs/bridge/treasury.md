@@ -8,7 +8,7 @@
 -  [Struct `BridgeTreasury`](#0xb_treasury_BridgeTreasury)
 -  [Constants](#@Constants_0)
 -  [Function `token_id`](#0xb_treasury_token_id)
--  [Function `token_decimals`](#0xb_treasury_token_decimals)
+-  [Function `decimal_multiplier`](#0xb_treasury_decimal_multiplier)
 -  [Function `create`](#0xb_treasury_create)
 -  [Function `burn`](#0xb_treasury_burn)
 -  [Function `mint`](#0xb_treasury_mint)
@@ -112,13 +112,13 @@
 
 </details>
 
-<a name="0xb_treasury_token_decimals"></a>
+<a name="0xb_treasury_decimal_multiplier"></a>
 
-## Function `token_decimals`
+## Function `decimal_multiplier`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_token_decimals">token_decimals</a>&lt;T&gt;(): u8
+<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_decimal_multiplier">decimal_multiplier</a>&lt;T&gt;(): u64
 </code></pre>
 
 
@@ -127,16 +127,16 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_token_decimals">token_decimals</a>&lt;T&gt;(): u8 {
+<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_decimal_multiplier">decimal_multiplier</a>&lt;T&gt;(): u64 {
     <b>let</b> coin_type = <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;();
     <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;BTC&gt;()) {
-        <a href="btc.md#0xb_btc_decimal">btc::decimal</a>()
+        <a href="btc.md#0xb_btc_multiplier">btc::multiplier</a>()
     } <b>else</b> <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;ETH&gt;()) {
-        <a href="eth.md#0xb_eth_decimal">eth::decimal</a>()
+        <a href="eth.md#0xb_eth_multiplier">eth::multiplier</a>()
     } <b>else</b> <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;USDC&gt;()) {
-        <a href="usdc.md#0xb_usdc_decimal">usdc::decimal</a>()
+        <a href="usdc.md#0xb_usdc_multiplier">usdc::multiplier</a>()
     } <b>else</b> <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;USDT&gt;()) {
-        <a href="usdt.md#0xb_usdt_decimal">usdt::decimal</a>()
+        <a href="usdt.md#0xb_usdt_multiplier">usdt::multiplier</a>()
     } <b>else</b> {
         <b>abort</b> <a href="treasury.md#0xb_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>
     }

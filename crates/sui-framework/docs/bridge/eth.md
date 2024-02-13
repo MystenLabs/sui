@@ -63,6 +63,25 @@
 
 
 
+<a name="0xb_eth_EDecimalMultiplierMismatch"></a>
+
+
+
+<pre><code><b>const</b> <a href="eth.md#0xb_eth_EDecimalMultiplierMismatch">EDecimalMultiplierMismatch</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0xb_eth_MULTIPLIER"></a>
+
+Multiplier of the token, it must be 10^DECIMAL
+
+
+<pre><code><b>const</b> <a href="eth.md#0xb_eth_MULTIPLIER">MULTIPLIER</a>: u64 = 100000000;
+</code></pre>
+
+
+
 <a name="0xb_eth_create"></a>
 
 ## Function `create`
@@ -79,6 +98,7 @@
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="eth.md#0xb_eth_create">create</a>(ctx: &<b>mut</b> TxContext): TreasuryCap&lt;<a href="eth.md#0xb_eth_ETH">ETH</a>&gt; {
+    <b>assert</b>!(<a href="eth.md#0xb_eth_MULTIPLIER">MULTIPLIER</a> == pow(10, <a href="eth.md#0xb_eth_DECIMAL">DECIMAL</a>), <a href="eth.md#0xb_eth_EDecimalMultiplierMismatch">EDecimalMultiplierMismatch</a>);
     <b>let</b> (treasury_cap, metadata) = <a href="dependencies/sui-framework/coin.md#0x2_coin_create_currency">coin::create_currency</a>(
         <a href="eth.md#0xb_eth_ETH">ETH</a> {},
         <a href="eth.md#0xb_eth_DECIMAL">DECIMAL</a>,
@@ -137,7 +157,7 @@
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="eth.md#0xb_eth_multiplier">multiplier</a>(): u64 {
-    pow(10, <a href="eth.md#0xb_eth_DECIMAL">DECIMAL</a>)
+    <a href="eth.md#0xb_eth_MULTIPLIER">MULTIPLIER</a>
 }
 </code></pre>
 
