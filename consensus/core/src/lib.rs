@@ -7,6 +7,7 @@ mod block;
 mod block_manager;
 mod block_verifier;
 mod commit;
+mod commit_observer;
 mod context;
 mod core;
 mod core_thread;
