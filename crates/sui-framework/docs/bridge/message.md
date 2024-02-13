@@ -40,6 +40,7 @@
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
 <b>use</b> <a href="dependencies/sui-framework/bcs.md#0x2_bcs">0x2::bcs</a>;
+<b>use</b> <a href="chain_ids.md#0xb_chain_ids">0xb::chain_ids</a>;
 <b>use</b> <a href="message_types.md#0xb_message_types">0xb::message_types</a>;
 <b>use</b> <a href="treasury.md#0xb_treasury">0xb::treasury</a>;
 </code></pre>
@@ -237,7 +238,7 @@
 
 </dd>
 <dt>
-<code>validator_addresses: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;</code>
+<code>validator_eth_addresses: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;</code>
 </dt>
 <dd>
 
@@ -264,13 +265,13 @@
 
 <dl>
 <dt>
-<code>source_chain: u8</code>
+<code>receiving_chain: u8</code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>target_chain: u8</code>
+<code>sending_chain: u8</code>
 </dt>
 <dd>
 
@@ -342,6 +343,15 @@
 
 
 
+<a name="0xb_message_EEmptyList"></a>
+
+
+
+<pre><code><b>const</b> <a href="message.md#0xb_message_EEmptyList">EEmptyList</a>: u64 = 2;
+</code></pre>
+
+
+
 <a name="0xb_message_EInvalidAddressLength"></a>
 
 
@@ -379,6 +389,8 @@
     <b>let</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a> = bcs::new(<a href="message.md#0xb_message">message</a>.payload);
     <b>let</b> sender_address = bcs::peel_vec_u8(&<b>mut</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a>);
     <b>let</b> target_chain = bcs::peel_u8(&<b>mut</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a>);
+    // TODO: add test case for invalid chain id
+    <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(target_chain);
     <b>let</b> target_address = bcs::peel_vec_u8(&<b>mut</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a>);
     <b>let</b> token_type = bcs::peel_u8(&<b>mut</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a>);
     <b>let</b> amount = <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a>);
@@ -445,20 +457,22 @@
     <b>let</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a> = bcs::new(<a href="message.md#0xb_message">message</a>.payload);
     <b>let</b> blocklist_type = bcs::peel_u8(&<b>mut</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a>);
     <b>let</b> address_count = bcs::peel_u8(&<b>mut</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a>);
-    <b>let</b> validator_addresses = <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[];
+    // TODO: add test case for 0 value
+    <b>assert</b>!(address_count != 0, <a href="message.md#0xb_message_EEmptyList">EEmptyList</a>);
+    <b>let</b> validator_eth_addresses = <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[];
     <b>while</b> (address_count &gt; 0) {
         <b>let</b> (<b>address</b>, i) = (<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[], 0);
         <b>while</b> (i &lt; <a href="message.md#0xb_message_ECDSA_ADDRESS_LENGTH">ECDSA_ADDRESS_LENGTH</a>) {
             <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> <b>address</b>, bcs::peel_u8(&<b>mut</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a>));
             i = i + 1;
         };
-        <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> validator_addresses, <b>address</b>);
+        <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> validator_eth_addresses, <b>address</b>);
         address_count = address_count - 1;
     };
     <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_is_empty">vector::is_empty</a>(&bcs::into_remainder_bytes(<a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a>)), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
     <a href="message.md#0xb_message_Blocklist">Blocklist</a> {
         blocklist_type,
-        validator_addresses
+        validator_eth_addresses
     }
 }
 </code></pre>
@@ -484,12 +498,14 @@
 
 <pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_update_bridge_limit">extract_update_bridge_limit</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): <a href="message.md#0xb_message_UpdateBridgeLimit">UpdateBridgeLimit</a> {
     <b>let</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a> = bcs::new(<a href="message.md#0xb_message">message</a>.payload);
-    <b>let</b> target_chain = bcs::peel_u8(&<b>mut</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a>);
+    <b>let</b> sending_chain = bcs::peel_u8(&<b>mut</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a>);
+    // TODO: add test case for invalid chain id
+    <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(sending_chain);
     <b>let</b> limit = <a href="message.md#0xb_message_peel_u64_be">peel_u64_be</a>(&<b>mut</b> <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a>);
     <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_is_empty">vector::is_empty</a>(&bcs::into_remainder_bytes(<a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a>)), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
     <a href="message.md#0xb_message_UpdateBridgeLimit">UpdateBridgeLimit</a> {
-        source_chain: <a href="message.md#0xb_message">message</a>.source_chain,
-        target_chain,
+        receiving_chain: <a href="message.md#0xb_message">message</a>.source_chain,
+        sending_chain,
         limit
     }
 }
@@ -605,6 +621,10 @@ Token Transfer Message Format:
     token_type: u8,
     amount: u64
 ): <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
+    // TODO: add test case for invalid chain id
+    <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(source_chain);
+    // TODO: add test case for invalid chain id
+    <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(target_chain);
     <b>let</b> payload = <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[];
     // sender <b>address</b> should be less than 255 bytes so can fit into u8
     <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> payload, (<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&sender_address) <b>as</b> u8));
@@ -657,6 +677,8 @@ Emergency Op Message Format:
     seq_num: u64,
     op_type: u8,
 ): <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
+    // TODO: add test case for invalid chain id
+    <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(source_chain);
     <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
         message_type: <a href="message_types.md#0xb_message_types_emergency_op">message_types::emergency_op</a>(),
         message_version: <a href="message.md#0xb_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
@@ -701,6 +723,8 @@ Block list Message Format:
     blocklist_type: u8,
     validator_ecdsa_addresses: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;,
 ): <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
+    // TODO: add test case for invalid chain id
+    <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(source_chain);
     <b>let</b> address_length = (<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&validator_ecdsa_addresses) <b>as</b> u8);
     <b>let</b> payload = <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[blocklist_type, address_length];
     <b>let</b> i = 0;
@@ -734,11 +758,12 @@ Update bridge limit Message Format:
 [message_type: u8]
 [version:u8]
 [nonce:u64]
-[chain_id: u8]
+[receiving_chain_id: u8]
+[sending_chain_id: u8]
 [new_limit: u64]
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_create_update_bridge_limit_message">create_update_bridge_limit_message</a>(source_chain: u8, seq_num: u64, target_chain: u8, new_limit: u64): <a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_create_update_bridge_limit_message">create_update_bridge_limit_message</a>(receiving_chain: u8, seq_num: u64, sending_chain: u8, new_limit: u64): <a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>
 </code></pre>
 
 
@@ -748,18 +773,22 @@ Update bridge limit Message Format:
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_create_update_bridge_limit_message">create_update_bridge_limit_message</a>(
-    source_chain: u8,
+    receiving_chain: u8,
     seq_num: u64,
-    target_chain: u8,
+    sending_chain: u8,
     new_limit: u64,
 ): <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
-    <b>let</b> payload = <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[target_chain];
+    // TODO: add test case for invalid chain id
+    <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(receiving_chain);
+    // TODO: add test case for invalid chain id
+    <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(sending_chain);
+    <b>let</b> payload = <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[sending_chain];
     <a href="dependencies/move-stdlib/vector.md#0x1_vector_append">vector::append</a>(&<b>mut</b> payload, <a href="message.md#0xb_message_reverse_bytes">reverse_bytes</a>(<a href="dependencies/move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&new_limit)));
     <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
         message_type: <a href="message_types.md#0xb_message_types_update_bridge_limit">message_types::update_bridge_limit</a>(),
         message_version: <a href="message.md#0xb_message_CURRENT_MESSAGE_VERSION">CURRENT_MESSAGE_VERSION</a>,
         seq_num,
-        source_chain,
+        source_chain: receiving_chain,
         payload,
     }
 }
@@ -796,6 +825,8 @@ Update asset price message
     seq_num: u64,
     new_price: u64,
 ): <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
+    // TODO: add test case for invalid chain id
+    <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(source_chain);
     <b>let</b> payload = <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;()];
     <a href="dependencies/move-stdlib/vector.md#0x1_vector_append">vector::append</a>(&<b>mut</b> payload, <a href="message.md#0xb_message_reverse_bytes">reverse_bytes</a>(<a href="dependencies/move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&new_price)));
     <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {

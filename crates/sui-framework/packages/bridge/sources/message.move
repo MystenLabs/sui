@@ -7,13 +7,13 @@ module bridge::message {
     use sui::bcs;
     use sui::bcs::{BCS};
     use bridge::treasury;
-
+    use bridge::chain_ids;
     use bridge::message_types;
 
     #[test_only]
-    use bridge::chain_ids;
-    #[test_only]
     use bridge::usdc::USDC;
+    #[test_only]
+    use bridge::btc::BTC;
     #[test_only]
     use sui::address;
     #[test_only]
@@ -28,12 +28,15 @@ module bridge::message {
     use bridge::eth::ETH;
     #[test_only]
     use bridge::treasury::token_id;
+    #[test_only]
+    use sui::test_utils::assert_eq;
 
     const CURRENT_MESSAGE_VERSION: u8 = 1;
     const ECDSA_ADDRESS_LENGTH: u64 = 20;
 
     const ETrailingBytes: u64 = 0;
     const EInvalidAddressLength: u64 = 1;
+    const EEmptyList: u64 = 2;
 
     struct BridgeMessage has copy, drop, store {
         message_type: u8,
@@ -63,12 +66,16 @@ module bridge::message {
 
     struct Blocklist has drop {
         blocklist_type: u8,
-        validator_addresses: vector<vector<u8>>
+        validator_eth_addresses: vector<vector<u8>>
     }
-
+    
+    // Update the limit for route from sending_chain to receiving_chain
+    // This message is supposed to be processed by `chain` or the receiving chain
     struct UpdateBridgeLimit has drop {
-        source_chain: u8,
-        target_chain: u8,
+        // The receiving chain, also the chain that checks and processes this message
+        receiving_chain: u8,
+        // The sending chain
+        sending_chain: u8,
         limit: u64
     }
 
@@ -85,6 +92,8 @@ module bridge::message {
         let bcs = bcs::new(message.payload);
         let sender_address = bcs::peel_vec_u8(&mut bcs);
         let target_chain = bcs::peel_u8(&mut bcs);
+        // TODO: add test case for invalid chain id
+        chain_ids::assert_valid_chain_id(target_chain);
         let target_address = bcs::peel_vec_u8(&mut bcs);
         let token_type = bcs::peel_u8(&mut bcs);
         let amount = peel_u64_be(&mut bcs);
@@ -111,31 +120,35 @@ module bridge::message {
         let bcs = bcs::new(message.payload);
         let blocklist_type = bcs::peel_u8(&mut bcs);
         let address_count = bcs::peel_u8(&mut bcs);
-        let validator_addresses = vector[];
+        // TODO: add test case for 0 value
+        assert!(address_count != 0, EEmptyList);
+        let validator_eth_addresses = vector[];
         while (address_count > 0) {
             let (address, i) = (vector[], 0);
             while (i < ECDSA_ADDRESS_LENGTH) {
                 vector::push_back(&mut address, bcs::peel_u8(&mut bcs));
                 i = i + 1;
             };
-            vector::push_back(&mut validator_addresses, address);
+            vector::push_back(&mut validator_eth_addresses, address);
             address_count = address_count - 1;
         };
         assert!(vector::is_empty(&bcs::into_remainder_bytes(bcs)), ETrailingBytes);
         Blocklist {
             blocklist_type,
-            validator_addresses
+            validator_eth_addresses
         }
     }
 
     public fun extract_update_bridge_limit(message: &BridgeMessage): UpdateBridgeLimit {
         let bcs = bcs::new(message.payload);
-        let target_chain = bcs::peel_u8(&mut bcs);
+        let sending_chain = bcs::peel_u8(&mut bcs);
+        // TODO: add test case for invalid chain id
+        chain_ids::assert_valid_chain_id(sending_chain);
         let limit = peel_u64_be(&mut bcs);
         assert!(vector::is_empty(&bcs::into_remainder_bytes(bcs)), ETrailingBytes);
         UpdateBridgeLimit {
-            source_chain: message.source_chain,
-            target_chain,
+            receiving_chain: message.source_chain,
+            sending_chain,
             limit
         }
     }
@@ -191,6 +204,10 @@ module bridge::message {
         token_type: u8,
         amount: u64
     ): BridgeMessage {
+        // TODO: add test case for invalid chain id
+        chain_ids::assert_valid_chain_id(source_chain);
+        // TODO: add test case for invalid chain id
+        chain_ids::assert_valid_chain_id(target_chain);
         let payload = vector[];
         // sender address should be less than 255 bytes so can fit into u8
         vector::push_back(&mut payload, (vector::length(&sender_address) as u8));
@@ -223,6 +240,8 @@ module bridge::message {
         seq_num: u64,
         op_type: u8,
     ): BridgeMessage {
+        // TODO: add test case for invalid chain id
+        chain_ids::assert_valid_chain_id(source_chain);
         BridgeMessage {
             message_type: message_types::emergency_op(),
             message_version: CURRENT_MESSAGE_VERSION,
@@ -247,6 +266,8 @@ module bridge::message {
         blocklist_type: u8,
         validator_ecdsa_addresses: vector<vector<u8>>,
     ): BridgeMessage {
+        // TODO: add test case for invalid chain id
+        chain_ids::assert_valid_chain_id(source_chain);
         let address_length = (vector::length(&validator_ecdsa_addresses) as u8);
         let payload = vector[blocklist_type, address_length];
         let i = 0;
@@ -271,21 +292,26 @@ module bridge::message {
     /// [message_type: u8]
     /// [version:u8]
     /// [nonce:u64]
-    /// [chain_id: u8]
+    /// [receiving_chain_id: u8]
+    /// [sending_chain_id: u8]
     /// [new_limit: u64]
     public fun create_update_bridge_limit_message(
-        source_chain: u8,
+        receiving_chain: u8,
         seq_num: u64,
-        target_chain: u8,
+        sending_chain: u8,
         new_limit: u64,
     ): BridgeMessage {
-        let payload = vector[target_chain];
+        // TODO: add test case for invalid chain id
+        chain_ids::assert_valid_chain_id(receiving_chain);
+        // TODO: add test case for invalid chain id
+        chain_ids::assert_valid_chain_id(sending_chain);
+        let payload = vector[sending_chain];
         vector::append(&mut payload, reverse_bytes(bcs::to_bytes(&new_limit)));
         BridgeMessage {
             message_type: message_types::update_bridge_limit(),
             message_version: CURRENT_MESSAGE_VERSION,
             seq_num,
-            source_chain,
+            source_chain: receiving_chain,
             payload,
         }
     }
@@ -302,6 +328,8 @@ module bridge::message {
         seq_num: u64,
         new_price: u64,
     ): BridgeMessage {
+        // TODO: add test case for invalid chain id
+        chain_ids::assert_valid_chain_id(source_chain);
         let payload = vector[treasury::token_id<T>()];
         vector::append(&mut payload, reverse_bytes(bcs::to_bytes(&new_price)));
         BridgeMessage {
@@ -372,14 +400,19 @@ module bridge::message {
     }
 
     #[test_only]
-    public fun deserialize_message(message: vector<u8>): BridgeMessage {
+    public fun deserialize_message_test_only(message: vector<u8>): BridgeMessage {
         let bcs = bcs::new(message);
+        let message_type = bcs::peel_u8(&mut bcs);
+        let message_version = bcs::peel_u8(&mut bcs);
+        let seq_num = peel_u64_be(&mut bcs);
+        let source_chain = bcs::peel_u8(&mut bcs);
+        let payload = bcs::into_remainder_bytes(bcs);
         BridgeMessage {
-            message_type: bcs::peel_u8(&mut bcs),
-            message_version: bcs::peel_u8(&mut bcs),
-            seq_num: peel_u64_be(&mut bcs),
-            source_chain: bcs::peel_u8(&mut bcs),
-            payload: bcs::into_remainder_bytes(bcs)
+            message_type,
+            message_version,
+            seq_num,
+            source_chain,
+            payload,
         }
     }
 
@@ -419,7 +452,7 @@ module bridge::message {
         );
 
         assert!(message == expected_msg, 0);
-        assert!(token_bridge_message == deserialize_message(message), 0);
+        assert!(token_bridge_message == deserialize_message_test_only(message), 0);
 
         coin::burn_for_testing(coin);
         test_scenario::end(scenario);
@@ -461,7 +494,7 @@ module bridge::message {
             b"0001000000000000000a0b1400000000000000000000000000000000000000c801200000000000000000000000000000000000000000000000000000000000000064030000000000003039",
         );
         assert!(message == expected_msg, 0);
-        assert!(token_bridge_message == deserialize_message(message), 0);
+        assert!(token_bridge_message == deserialize_message_test_only(message), 0);
 
         coin::burn_for_testing(coin);
         test_scenario::end(scenario);
@@ -482,7 +515,26 @@ module bridge::message {
         );
 
         assert!(message == expected_msg, 0);
-        assert!(emergency_op_message == deserialize_message(message), 0);
+        assert!(emergency_op_message == deserialize_message_test_only(message), 0);
+    }
+
+    // Do not change/remove this test, it uses move bytes generated by Rust
+    #[test]
+    fun test_emergency_op_message_serialization_regression() {
+        let emergency_op_message = create_emergency_op_message(
+            chain_ids::sui_local_test(),
+            55, // seq_num
+            0, // pause
+        );
+
+        // Test message serialization
+        let message = serialize_message(emergency_op_message);
+        let expected_msg = hex::decode(
+            b"020100000000000000370300",
+        );
+
+        assert!(message == expected_msg, 0);
+        assert!(emergency_op_message == deserialize_message_test_only(message), 0);
     }
 
     #[test]
@@ -490,12 +542,12 @@ module bridge::message {
         let validator_pub_key1 = hex::decode(b"b14d3c4f5fbfbcfb98af2d330000d49c95b93aa7");
         let validator_pub_key2 = hex::decode(b"f7e93cc543d97af6632c9b8864417379dba4bf15");
 
-        let validator_addresses = vector[validator_pub_key1, validator_pub_key2];
+        let validator_eth_addresses = vector[validator_pub_key1, validator_pub_key2];
         let blocklist_message = create_block_list_message(
             chain_ids::sui_testnet(), // source chain
             10, // seq_num
             0,
-            validator_addresses
+            validator_eth_addresses
         );
         // Test message serialization
         let message = serialize_message(blocklist_message);
@@ -505,10 +557,58 @@ module bridge::message {
         );
 
         assert!(message == expected_msg, 0);
-        assert!(blocklist_message == deserialize_message(message), 0);
+        assert!(blocklist_message == deserialize_message_test_only(message), 0);
 
         let blocklist = extract_blocklist_payload(&blocklist_message);
-        assert!(blocklist.validator_addresses == validator_addresses, 0)
+        assert!(blocklist.validator_eth_addresses == validator_eth_addresses, 0)
+    }
+
+    // Do not change/remove this test, it uses move bytes generated by Rust
+    #[test]
+    fun test_blocklist_message_serialization_regression() {
+        let validator_eth_addr_1 = hex::decode(b"68b43fd906c0b8f024a18c56e06744f7c6157c65");
+        let validator_eth_addr_2 = hex::decode(b"acaef39832cb995c4e049437a3e2ec6a7bad1ab5");
+        // Test 1
+        let validator_eth_addresses = vector[validator_eth_addr_1];
+        let blocklist_message = create_block_list_message(
+            chain_ids::sui_local_test(), // source chain
+            129, // seq_num
+            0, // blocklist
+            validator_eth_addresses
+        );
+        // Test message serialization
+        let message = serialize_message(blocklist_message);
+
+        let expected_msg = hex::decode(
+            b"0101000000000000008103000168b43fd906c0b8f024a18c56e06744f7c6157c65",
+        );
+
+        assert!(message == expected_msg, 0);
+        assert!(blocklist_message == deserialize_message_test_only(message), 0);
+
+        let blocklist = extract_blocklist_payload(&blocklist_message);
+        assert!(blocklist.validator_eth_addresses == validator_eth_addresses, 0);
+
+        // Test 2
+        let validator_eth_addresses = vector[validator_eth_addr_1, validator_eth_addr_2];
+        let blocklist_message = create_block_list_message(
+            chain_ids::sui_devnet(), // source chain
+            68, // seq_num
+            1, // unblocklist
+            validator_eth_addresses
+        );
+        // Test message serialization
+        let message = serialize_message(blocklist_message);
+
+        let expected_msg = hex::decode(
+            b"0101000000000000004402010268b43fd906c0b8f024a18c56e06744f7c6157c65acaef39832cb995c4e049437a3e2ec6a7bad1ab5",
+        );
+
+        assert!(message == expected_msg, 0);
+        assert!(blocklist_message == deserialize_message_test_only(message), 0);
+
+        let blocklist = extract_blocklist_payload(&blocklist_message);
+        assert!(blocklist.validator_eth_addresses == validator_eth_addresses, 0)
     }
 
     #[test]
@@ -527,12 +627,37 @@ module bridge::message {
         );
 
         assert!(message == expected_msg, 0);
-        assert!(update_bridge_limit == deserialize_message(message), 0);
+        assert!(update_bridge_limit == deserialize_message_test_only(message), 0);
 
         let bridge_limit = extract_update_bridge_limit(&update_bridge_limit);
-        assert!(bridge_limit.source_chain == chain_ids::sui_testnet(), 0);
-        assert!(bridge_limit.target_chain == chain_ids::eth_sepolia(), 0);
+        assert!(bridge_limit.receiving_chain == chain_ids::sui_testnet(), 0);
+        assert!(bridge_limit.sending_chain == chain_ids::eth_sepolia(), 0);
         assert!(bridge_limit.limit == 1000000000, 0);
+    }
+
+    // Do not change/remove this test, it uses move bytes generated by Rust
+    #[test]
+    fun test_update_bridge_limit_message_serialization_regression() {
+        let update_bridge_limit = create_update_bridge_limit_message(
+            chain_ids::sui_local_test(), // source chain
+            15, // seq_num
+            chain_ids::eth_local_test(),
+            10_000_000_000 // 1M USD
+        );
+
+        // Test message serialization
+        let message = serialize_message(update_bridge_limit);
+        let expected_msg = hex::decode(
+            b"0301000000000000000f030c00000002540be400",
+        );
+
+        assert_eq(message, expected_msg);
+        assert!(update_bridge_limit == deserialize_message_test_only(message), 0);
+
+        let bridge_limit = extract_update_bridge_limit(&update_bridge_limit);
+        assert!(bridge_limit.receiving_chain == chain_ids::sui_local_test(), 0);
+        assert!(bridge_limit.sending_chain == chain_ids::eth_local_test(), 0);
+        assert!(bridge_limit.limit == 10_000_000_000, 0);
     }
 
     #[test]
@@ -549,11 +674,33 @@ module bridge::message {
             b"0401000000000000000a01020000000000003039",
         );
         assert!(message == expected_msg, 0);
-        assert!(asset_price_message == deserialize_message(message), 0);
+        assert!(asset_price_message == deserialize_message_test_only(message), 0);
 
         let asset_price = extract_update_asset_price(&asset_price_message);
         assert!(asset_price.token_id == token_id<ETH>(), 0);
         assert!(asset_price.new_price == 12345, 0);
+    }
+
+    // Do not change/remove this test, it uses move bytes generated by Rust
+    #[test]
+    fun test_update_asset_price_message_serialization_regression() {
+        let asset_price_message = create_update_asset_price_message<BTC>(
+            chain_ids::sui_local_test(), // source chain
+            266, // seq_num
+            1_000_000_000 // $100k USD
+        );
+
+        // Test message serialization
+        let message = serialize_message(asset_price_message);
+        let expected_msg = hex::decode(
+            b"0401000000000000010a0301000000003b9aca00",
+        );
+        assert!(message == expected_msg, 0);
+        assert!(asset_price_message == deserialize_message_test_only(message), 0);
+
+        let asset_price = extract_update_asset_price(&asset_price_message);
+        assert!(asset_price.token_id == token_id<BTC>(), 0);
+        assert!(asset_price.new_price == 1_000_000_000, 0);
     }
 
     #[test]

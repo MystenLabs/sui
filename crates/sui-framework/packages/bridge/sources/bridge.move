@@ -19,11 +19,26 @@ module bridge::bridge {
 
     use bridge::chain_ids;
     use bridge::committee::{Self, BridgeCommittee};
-    use bridge::limiter;
-    use bridge::limiter::TransferLimiter;
-    use bridge::message::{Self, BridgeMessage, BridgeMessageKey};
+    use bridge::limiter::{Self, TransferLimiter};
+    use bridge::message::{Self, BridgeMessage, BridgeMessageKey, EmergencyOp, UpdateBridgeLimit,
+        UpdateAssetPrice
+    };
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury};
+    #[test_only]
+    use sui::object;
+    #[test_only]
+    use sui::test_scenario;
+    #[test_only]
+    use bridge::btc::BTC;
+    #[test_only]
+    use bridge::eth::ETH;
+    #[test_only]
+    use sui::test_utils::{destroy, assert_eq};
+    #[test_only]
+    use bridge::message::create_blocklist_message;
+
+    const ACCEPTED_MESSAGE_VERSION: u8 = 1;
 
     struct Bridge has key {
         id: UID,
@@ -34,6 +49,7 @@ module bridge::bridge {
         bridge_version: u64,
         chain_id: u8,
         // nonce for replay protection
+        // key: message type, value: next sequence number
         sequence_nums: VecMap<u8, u64>,
         // committee
         committee: BridgeCommittee,
@@ -49,6 +65,7 @@ module bridge::bridge {
     const UNFREEZE: u8 = 1;
 
     struct TokenBridgeEvent has copy, drop {
+        // TODO: do we need message_type here?
         message_type: u8,
         seq_num: u64,
         source_chain: u8,
@@ -57,6 +74,10 @@ module bridge::bridge {
         target_address: vector<u8>,
         token_type: u8,
         amount: u64
+    }
+
+    struct EmergencyOpEvent has copy, drop {
+        frozen: bool,
     }
 
     struct BridgeRecord has store, drop {
@@ -77,7 +98,10 @@ module bridge::bridge {
     const EUnexpectedOperation: u64 = 9;
     const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 10;
     const EMessageNotFoundInRecords: u64 = 11;
-    const ETokenAlreadyClaimed: u64 = 12;
+    const EUnexpectedMessageVersion: u64 = 12;
+    const EBridgeAlreadyFrozen: u64 = 13;
+    const EBridgeNotFrozen: u64 = 14;
+    const ETokenAlreadyClaimed: u64 = 15;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -130,7 +154,7 @@ module bridge::bridge {
         assert!(!inner.frozen, EBridgeUnavailable);
         let amount = balance::value(coin::balance(&token));
 
-        let bridge_seq_num = next_seq_num(inner, message_types::token());
+        let bridge_seq_num = get_current_seq_num_and_increment(inner, message_types::token());
         let token_id = treasury::token_id<T>();
         let token_amount = balance::value(coin::balance(&token));
 
@@ -171,6 +195,7 @@ module bridge::bridge {
 
     // Record bridge message approvals in Sui, called by the bridge client
     // If already approved, return early instead of aborting.
+    // TODO: rename this to `approve_token_transfer`
     public fun approve_bridge_message(
         self: &mut Bridge,
         message: BridgeMessage,
@@ -178,9 +203,13 @@ module bridge::bridge {
     ) {
         let inner = load_inner_mut(self);
         let key = message::key(&message);
+        // TODO: test this
+        assert!(message::message_version(&message) == ACCEPTED_MESSAGE_VERSION, EUnexpectedMessageVersion);
 
         // retrieve pending message if source chain is Sui, the initial message must exist on chain.
-        if (message::message_type(&message) == message_types::token() && message::source_chain(&message) == inner.chain_id) {
+        if (message::message_type(&message) == message_types::token() && message::source_chain(
+            &message
+        ) == inner.chain_id) {
             let record = linked_table::borrow_mut(&mut inner.bridge_records, key);
             assert!(record.message == message, EMalformedMessageError);
             assert!(!record.claimed, EInvariantSuiInitializedTokenTransferShouldNotBeClaimed);
@@ -241,28 +270,6 @@ module bridge::bridge {
             return
         };
         transfer::public_transfer(option::destroy_some(token), owner)
-    }
-
-    public fun execute_emergency_op(
-        self: &mut Bridge,
-        message: BridgeMessage,
-        signatures: vector<vector<u8>>,
-    ) {
-        assert!(message::message_type(&message) == message_types::emergency_op(), EUnexpectedMessageType);
-        let inner = load_inner_mut(self);
-        // check emergency ops seq number, emergency ops can only be executed in sequence order.
-        let emergency_op_seq_num = next_seq_num(inner, message_types::emergency_op());
-        assert!(message::seq_num(&message) == emergency_op_seq_num, EUnexpectedSeqNum);
-        committee::verify_signatures(&inner.committee, message, signatures);
-        let payload = message::extract_emergency_op_payload(&message);
-
-        if (message::emergency_op_type(&payload) == FREEZE) {
-            inner.frozen == true;
-        } else if (message::emergency_op_type(&payload) == UNFREEZE) {
-            inner.frozen == false;
-        } else {
-            abort EUnexpectedOperation
-        };
     }
 
     fun load_inner_mut(
@@ -348,13 +355,292 @@ module bridge::bridge {
         (option::some(token), owner)
     }
 
-    fun next_seq_num(self: &mut BridgeInner, msg_type: u8): u64 {
+    public fun execute_system_message(
+        self: &mut Bridge,
+        message: BridgeMessage,
+        signatures: vector<vector<u8>>,
+    ) {
+        let message_type = message::message_type(&message);
+        // TODO: test version mismatch
+        assert!(message::message_version(&message) == ACCEPTED_MESSAGE_VERSION, EUnexpectedMessageVersion);
+        let inner = load_inner_mut(self);
+
+        assert!(message::source_chain(&message) == inner.chain_id, EUnexpectedChainID);
+
+        // check system ops seq number and increment it
+        let expected_seq_num = get_current_seq_num_and_increment(inner, message_type);
+        assert!(message::seq_num(&message) == expected_seq_num, EUnexpectedSeqNum);
+
+        committee::verify_signatures(&inner.committee, message, signatures);
+
+        if (message_type == message_types::emergency_op()) {
+            let payload = message::extract_emergency_op_payload(&message);
+            execute_emergency_op(inner, payload);
+        } else if (message_type == message_types::committee_blocklist()) {
+            let payload = message::extract_blocklist_payload(&message);
+            committee::execute_blocklist(&mut inner.committee, payload);
+        } else if (message_type == message_types::update_bridge_limit()) {
+            let payload = message::extract_update_bridge_limit(&message);
+            execute_update_bridge_limit(inner, payload);
+        } else if (message_type == message_types::update_asset_price()) {
+            let payload = message::extract_update_asset_price(&message);
+            execute_update_asset_price(inner, payload);
+        } else {
+            abort EUnexpectedMessageType
+        };
+    }
+
+    fun execute_emergency_op(inner: &mut BridgeInner, payload: EmergencyOp) {
+        let op = message::emergency_op_type(&payload);
+        if (op == FREEZE) {
+            assert!(!inner.frozen, EBridgeAlreadyFrozen);
+            inner.frozen = true;
+            emit(EmergencyOpEvent { frozen: true });
+        } else if (op == UNFREEZE) {
+            assert!(inner.frozen, EBridgeNotFrozen);
+            inner.frozen = false;
+            emit(EmergencyOpEvent { frozen: false });
+        } else {
+            abort EUnexpectedOperation
+        };
+    }
+
+    fun execute_update_bridge_limit(inner: &mut BridgeInner, payload: UpdateBridgeLimit) {
+        let route = chain_ids::get_route(message::update_bridge_limit_payload_sending_chain(&payload), message::update_bridge_limit_payload_receiving_chain(&payload));
+        limiter::update_route_limit(&mut inner.limiter, &route, message::update_bridge_limit_payload_limit(&payload))
+    }
+
+    fun execute_update_asset_price(inner: &mut BridgeInner, payload: UpdateAssetPrice) {
+        limiter::update_asset_notional_price(&mut inner.limiter, message::update_asset_price_payload_token_id(&payload), message::update_asset_price_payload_new_price(&payload))
+    }
+
+    // Verify seq number matches the next expected seq number for the message type,
+    // and increment it.
+    fun get_current_seq_num_and_increment(self: &mut BridgeInner, msg_type: u8): u64 {
         if (!vec_map::contains(&self.sequence_nums, &msg_type)) {
             vec_map::insert(&mut self.sequence_nums, msg_type, 1);
             return 0
         };
-        let (key, seq_num) = vec_map::remove(&mut self.sequence_nums, &msg_type);
-        vec_map::insert(&mut self.sequence_nums, key, seq_num + 1);
+        let entry = vec_map::get_mut(&mut self.sequence_nums, &msg_type);
+        let seq_num = *entry;
+        *entry = seq_num + 1;
         seq_num
     }
+
+    #[test_only]
+    fun new_for_testing(ctx: &mut TxContext, chain_id: u8): Bridge {
+        let bridge_inner = BridgeInner {
+            bridge_version: CURRENT_VERSION,
+            chain_id,
+            sequence_nums: vec_map::empty<u8, u64>(),
+            committee: committee::create(ctx),
+            treasury: treasury::create(ctx),
+            bridge_records: linked_table::new<BridgeMessageKey, BridgeRecord>(ctx),
+            limiter: limiter::new(),
+            frozen: false,
+        };
+        Bridge {
+            id: object::new(ctx),
+            inner: versioned::create(CURRENT_VERSION, bridge_inner, ctx)
+        }
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EUnexpectedChainID)]
+    fun test_system_msg_incorrect_chain_id() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let chain_id = chain_ids::sui_devnet();
+        let bridge = new_for_testing(ctx, chain_id);
+        let blocklist = create_blocklist_message(chain_ids::sui_mainnet(), 0, 0, vector[]);
+        execute_system_message(&mut bridge, blocklist, vector[]);
+        destroy(bridge);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_get_current_seq_num_and_increment() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let chain_id = chain_ids::sui_devnet();
+        let bridge = new_for_testing(ctx, chain_id);
+
+        let inner = load_inner_mut(&mut bridge);
+        assert_eq(get_current_seq_num_and_increment(inner, message_types::committee_blocklist()), 0);
+        assert_eq(*vec_map::get(&inner.sequence_nums, &message_types::committee_blocklist()), 1);
+        assert_eq(get_current_seq_num_and_increment(inner, message_types::committee_blocklist()), 1);
+
+        // other message type nonce does not change
+        assert!(!vec_map::contains(&inner.sequence_nums, &message_types::token()), 99);
+        assert!(!vec_map::contains(&inner.sequence_nums, &message_types::emergency_op()), 99);
+        assert!(!vec_map::contains(&inner.sequence_nums, &message_types::update_bridge_limit()), 99);
+        assert!(!vec_map::contains(&inner.sequence_nums, &message_types::update_asset_price()), 99);
+
+        assert_eq(get_current_seq_num_and_increment(inner, message_types::token()), 0);
+        assert_eq(get_current_seq_num_and_increment(inner, message_types::emergency_op()), 0);
+        assert_eq(get_current_seq_num_and_increment(inner, message_types::update_bridge_limit()), 0);
+        assert_eq(get_current_seq_num_and_increment(inner, message_types::update_asset_price()), 0);
+
+        destroy(bridge);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_execute_update_bridge_limit() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let chain_id = chain_ids::sui_devnet();
+        let bridge = new_for_testing(ctx, chain_id);
+        let inner = load_inner_mut(&mut bridge);
+
+        // Assert the starting limit is a different value
+        assert!(limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())) != 1, 0);
+        // now shrink to 1 for SUI mainnet -> ETH mainnet
+        let msg = message::create_update_bridge_limit_message(
+            chain_ids::eth_mainnet(),
+            0,
+            chain_ids::sui_mainnet(),
+            1,
+        );
+        let payload = message::extract_update_bridge_limit(&msg);
+        execute_update_bridge_limit(inner, payload);
+
+        // should be 1 now
+        assert_eq(limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())), 1);
+        // other routes are not impacted
+        assert!(limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia())) != 1, 0);
+
+        destroy(bridge);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_execute_update_asset_price() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let chain_id = chain_ids::sui_devnet();
+        let bridge = new_for_testing(ctx, chain_id);
+        let inner = load_inner_mut(&mut bridge);
+
+        // Assert the starting limit is a different value
+        assert!(limiter::get_asset_notional_price(&inner.limiter, &treasury::token_id<BTC>()) != 1_001_000_000, 0);
+        // now change it to 100_001_000
+        let msg = message::create_update_asset_price_message<BTC>(
+            chain_ids::sui_mainnet(),
+            0,
+            1_001_000_000,
+        );
+        let payload = message::extract_update_asset_price(&msg);
+        execute_update_asset_price(inner, payload);
+
+        // should be 1_001_000_000 now
+        assert_eq(limiter::get_asset_notional_price(&inner.limiter, &treasury::token_id<BTC>()), 1_001_000_000);
+        // other assets are not impacted
+        assert!(limiter::get_asset_notional_price(&inner.limiter, &treasury::token_id<ETH>()) != 1_001_000_000, 0);
+
+        destroy(bridge);
+        test_scenario::end(scenario);
+    }
+
+
+    #[test]
+    fun test_execute_emergency_op() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let chain_id = chain_ids::sui_devnet();
+        let bridge = new_for_testing(ctx, chain_id);
+        let inner = load_inner_mut(&mut bridge);
+
+        // initially it's unfrozen
+        assert!(!inner.frozen, 0);
+        // freeze it
+        let msg = message::create_emergency_op_message(
+            chain_ids::sui_devnet(),
+            0, // seq num
+            0, // freeze op
+        );
+        let payload = message::extract_emergency_op_payload(&msg);
+        execute_emergency_op(inner, payload);
+
+        // should be frozen now
+        assert!(inner.frozen, 0);
+
+        // unfreeze it
+        let msg = message::create_emergency_op_message(
+            chain_ids::sui_devnet(),
+            1, // seq num, this is supposed to be the next seq num but it's not what we test here
+            1, // unfreeze op
+        );
+        let payload = message::extract_emergency_op_payload(&msg);
+        execute_emergency_op(inner, payload);
+
+        // should be unfrozen now
+        assert!(!inner.frozen, 0);
+
+        destroy(bridge);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EBridgeNotFrozen)]
+    fun test_execute_emergency_op_abort_when_not_frozen() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let chain_id = chain_ids::sui_devnet();
+        let bridge = new_for_testing(ctx, chain_id);
+        let inner = load_inner_mut(&mut bridge);
+
+        // initially it's unfrozen
+        assert!(!inner.frozen, 0);
+        // unfreeze it, should abort
+        let msg = message::create_emergency_op_message(
+            chain_ids::sui_devnet(),
+            0, // seq num
+            1, // freeze op
+        );
+        let payload = message::extract_emergency_op_payload(&msg);
+        execute_emergency_op(inner, payload);
+
+        destroy(bridge);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EBridgeAlreadyFrozen)]
+    fun test_execute_emergency_op_abort_when_already_frozen() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let chain_id = chain_ids::sui_devnet();
+        let bridge = new_for_testing(ctx, chain_id);
+        let inner = load_inner_mut(&mut bridge);
+
+        // initially it's unfrozen
+        assert!(!inner.frozen, 0);
+        // freeze it
+        let msg = message::create_emergency_op_message(
+            chain_ids::sui_devnet(),
+            0, // seq num
+            0, // freeze op
+        );
+        let payload = message::extract_emergency_op_payload(&msg);
+        execute_emergency_op(inner, payload);
+
+        // should be frozen now
+        assert!(inner.frozen, 0);
+
+        // freeze it again, should abort
+        let msg = message::create_emergency_op_message(
+            chain_ids::sui_devnet(),
+            1, // seq num, this is supposed to be the next seq num but it's not what we test here
+            0, // unfreeze op
+        );
+        let payload = message::extract_emergency_op_payload(&msg);
+        execute_emergency_op(inner, payload);
+
+        destroy(bridge);
+        test_scenario::end(scenario);
+    }
+
+
+    // TODO: Add tests for execute_system_message, including message validation and effects check
 }
