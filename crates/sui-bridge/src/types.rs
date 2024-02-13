@@ -156,7 +156,7 @@ impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum BridgeActionType {
     TokenTransfer = 0,
@@ -172,7 +172,7 @@ pub const ETH_TX_HASH_LENGTH: usize = 32;
 
 pub const BRIDGE_MESSAGE_PREFIX: &[u8] = b"SUI_BRIDGE_MESSAGE";
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, Hash)]
 #[repr(u8)]
 pub enum BridgeChainId {
     SuiMainnet = 0,
@@ -215,7 +215,7 @@ pub enum BridgeActionStatus {
     Claimed,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SuiToEthBridgeAction {
     // Digest of the transaction where the event was emitted
     pub sui_tx_digest: TransactionDigest,
@@ -258,7 +258,7 @@ impl SuiToEthBridgeAction {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct EthToSuiBridgeAction {
     // Digest of the transaction where the event was emitted
     pub eth_tx_hash: EthTransactionHash,
@@ -301,14 +301,14 @@ impl EthToSuiBridgeAction {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, Hash)]
 #[repr(u8)]
 pub enum BlocklistType {
     Blocklist = 0,
     Unblocklist = 1,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct BlocklistCommitteeAction {
     pub nonce: u64,
     pub chain_id: BridgeChainId,
@@ -347,14 +347,14 @@ impl BlocklistCommitteeAction {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, Hash)]
 #[repr(u8)]
 pub enum EmergencyActionType {
     Pause = 0,
     Unpause = 1,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct EmergencyAction {
     pub nonce: u64,
     pub chain_id: BridgeChainId,
@@ -378,7 +378,7 @@ impl EmergencyAction {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct LimitUpdateAction {
     pub nonce: u64,
     // The chain id that will receive this signed action. It's also the destination chain id
@@ -409,7 +409,7 @@ impl LimitUpdateAction {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct AssetPriceUpdateAction {
     pub nonce: u64,
     pub chain_id: BridgeChainId,
@@ -436,7 +436,7 @@ impl AssetPriceUpdateAction {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct EvmContractUpgradeAction {
     pub nonce: u64,
     pub chain_id: BridgeChainId,
@@ -469,7 +469,7 @@ impl EvmContractUpgradeAction {
 
 /// The type of actions Bridge Committee verify and sign off to execution.
 /// Its relationship with BridgeEvent is similar to the relationship between
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum BridgeAction {
     /// Sui to Eth bridge action
     SuiToEthBridgeAction(SuiToEthBridgeAction),
@@ -538,6 +538,17 @@ impl BridgeAction {
             BridgeAction::LimitUpdateAction(a) => a.chain_id,
             BridgeAction::AssetPriceUpdateAction(a) => a.chain_id,
             BridgeAction::EvmContractUpgradeAction(a) => a.chain_id,
+        }
+    }
+
+    pub fn is_governace_action(&self) -> bool {
+        match self.action_type() {
+            BridgeActionType::TokenTransfer => false,
+            BridgeActionType::UpdateCommitteeBlocklist => true,
+            BridgeActionType::EmergencyButton => true,
+            BridgeActionType::LimitUpdate => true,
+            BridgeActionType::AssetPriceUpdate => true,
+            BridgeActionType::EvmContractUpgrade => true,
         }
     }
 

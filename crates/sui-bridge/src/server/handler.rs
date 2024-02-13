@@ -22,6 +22,8 @@ use tokio::sync::{oneshot, Mutex};
 use tracing::info;
 use tracing::instrument;
 
+use super::governance_verifier::GovernanceVerifier;
+
 #[async_trait]
 pub trait BridgeRequestHandlerTrait {
     /// Handles a request to sign a BridgeAction that bridges assets
@@ -40,10 +42,16 @@ pub trait BridgeRequestHandlerTrait {
         tx_digest_base58: String,
         event_idx: u16,
     ) -> Result<Json<SignedBridgeAction>, BridgeError>;
+
+    /// Handles a request to sign a governance action.
+    async fn handle_governance_action(
+        &self,
+        action: BridgeAction,
+    ) -> Result<Json<SignedBridgeAction>, BridgeError>;
 }
 
 #[async_trait::async_trait]
-trait ActionVerifier<K>: Send + Sync {
+pub trait ActionVerifier<K>: Send + Sync {
     async fn verify(&self, key: K) -> BridgeResult<BridgeAction>;
 }
 
@@ -189,6 +197,10 @@ pub struct BridgeRequestHandler {
         (TxHash, u16),
         oneshot::Sender<BridgeResult<SignedBridgeAction>>,
     )>,
+    governance_signer_tx: mysten_metrics::metered_channel::Sender<(
+        BridgeAction,
+        oneshot::Sender<BridgeResult<SignedBridgeAction>>,
+    )>,
 }
 
 impl BridgeRequestHandler {
@@ -199,6 +211,7 @@ impl BridgeRequestHandler {
         signer: BridgeAuthorityKeyPair,
         sui_client: Arc<SuiClient<SC>>,
         eth_client: Arc<EthClient<EP>>,
+        approved_governance_actions: Vec<BridgeAction>,
     ) -> Self {
         let (sui_signer_tx, sui_rx) = mysten_metrics::metered_channel::channel(
             1000,
@@ -214,14 +227,27 @@ impl BridgeRequestHandler {
                 .channels
                 .with_label_values(&["server_eth_action_signing_queue"]),
         );
+        let (governance_signer_tx, governance_rx) = mysten_metrics::metered_channel::channel(
+            1000,
+            &mysten_metrics::get_metrics()
+                .unwrap()
+                .channels
+                .with_label_values(&["server_governance_action_signing_queue"]),
+        );
         let signer = Arc::new(signer);
 
         SignerWithCache::new(signer.clone(), SuiActionVerifier { sui_client }).spawn(sui_rx);
         SignerWithCache::new(signer.clone(), EthActionVerifier { eth_client }).spawn(eth_rx);
+        SignerWithCache::new(
+            signer.clone(),
+            GovernanceVerifier::new(approved_governance_actions).unwrap(),
+        )
+        .spawn(governance_rx);
 
         Self {
             sui_signer_tx,
             eth_signer_tx,
+            governance_signer_tx,
         }
     }
 }
@@ -265,6 +291,25 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
         let signed_action = rx
             .blocking_recv()
             .unwrap_or_else(|_| panic!("Server signing task's oneshot channel is dropped"))?;
+        Ok(Json(signed_action))
+    }
+
+    async fn handle_governance_action(
+        &self,
+        action: BridgeAction,
+    ) -> Result<Json<SignedBridgeAction>, BridgeError> {
+        info!("Received handle governace action request");
+        if !action.is_governace_action() {
+            return Err(BridgeError::ActionIsNotGovernanceAction(action));
+        }
+        let (tx, rx) = oneshot::channel();
+        self.governance_signer_tx
+            .send((action, tx))
+            .await
+            .unwrap_or_else(|_| panic!("Server governance action signing channel is closed"));
+        let signed_action = rx.blocking_recv().unwrap_or_else(|_| {
+            panic!("Server governance action task's oneshot channel is dropped")
+        })?;
         Ok(Json(signed_action))
     }
 }

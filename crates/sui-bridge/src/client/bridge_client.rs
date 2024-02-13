@@ -98,10 +98,15 @@ impl BridgeClient {
                 let nonce = a.nonce.to_string();
                 let proxy_address = Hex::encode(a.proxy_address.as_bytes());
                 let new_impl_address = Hex::encode(a.new_impl_address.as_bytes());
-                let call_data = Hex::encode(a.call_data.clone());
-                format!(
-                    "sign/upgrade_evm_contract/{chain_id}/{nonce}/{proxy_address}/{new_impl_address}/{call_data}"
-                )
+                let path = format!(
+                    "sign/upgrade_evm_contract/{chain_id}/{nonce}/{proxy_address}/{new_impl_address}"
+                );
+                if a.call_data.is_empty() {
+                    path
+                } else {
+                    let call_data = Hex::encode(a.call_data.clone());
+                    format!("{}/{}", path, call_data)
+                }
             }
         }
     }
@@ -471,7 +476,7 @@ mod tests {
             });
         assert_eq!(
             BridgeClient::bridge_action_to_path(&action),
-            "sign/upgrade_evm_contract/12/123/0606060606060606060606060606060606060606/0909090909090909090909090909090909090909/",
+            "sign/upgrade_evm_contract/12/123/0606060606060606060606060606060606060606/0909090909090909090909090909090909090909",
         );
 
         let function_signature = "initializeV2()";
