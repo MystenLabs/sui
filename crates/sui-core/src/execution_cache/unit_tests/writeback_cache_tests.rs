@@ -58,7 +58,7 @@ type ActionCb = Box<dyn Fn(&mut Scenario)>;
 
 struct Scenario {
     store: Arc<AuthorityStore>,
-    cache: Box<MemoryCache>,
+    cache: Box<WritebackCache>,
 
     id_map: BTreeMap<u32, ObjectID>,
     objects: BTreeMap<ObjectID, Object>,
@@ -72,7 +72,7 @@ struct Scenario {
 impl Scenario {
     async fn new(do_after: Option<(u32, ActionCb)>, action_count: Arc<AtomicU32>) -> Self {
         let store = init_authority_store().await;
-        let cache = Box::new(MemoryCache::new_with_no_metrics(store.clone()));
+        let cache = Box::new(WritebackCache::new_with_no_metrics(store.clone()));
         Self {
             store,
             cache,
@@ -286,7 +286,7 @@ impl Scenario {
     }
 
     fn reset_cache(&mut self) {
-        self.cache = Box::new(MemoryCache::new_with_no_metrics(self.store.clone()));
+        self.cache = Box::new(WritebackCache::new_with_no_metrics(self.store.clone()));
 
         // reset the scenario state to match the db
         let reverse_id_map: BTreeMap<_, _> = self.id_map.iter().map(|(k, v)| (*v, *k)).collect();

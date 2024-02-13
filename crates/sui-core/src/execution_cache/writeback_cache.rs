@@ -87,8 +87,8 @@ use super::{
 };
 
 #[cfg(test)]
-#[path = "unit_tests/memory_cache_tests.rs"]
-mod authority_tests;
+#[path = "unit_tests/writeback_cache_tests.rs"]
+mod writeback_cache_tests;
 
 #[derive(Clone, PartialEq, Eq)]
 enum ObjectEntry {
@@ -226,7 +226,7 @@ impl CachedData {
         }
     }
 }
-pub struct MemoryCache {
+pub struct WritebackCache {
     dirty: UncommittedData,
     cached: CachedData,
 
@@ -235,7 +235,7 @@ pub struct MemoryCache {
     metrics: Option<ExecutionCacheMetrics>,
 }
 
-impl MemoryCache {
+impl WritebackCache {
     pub fn new(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
         Self {
             dirty: UncommittedData::new(),
@@ -551,19 +551,19 @@ impl MemoryCache {
     }
 }
 
-impl ExecutionCacheAPI for MemoryCache {}
+impl ExecutionCacheAPI for WritebackCache {}
 
-impl ExecutionCacheCommit for MemoryCache {
+impl ExecutionCacheCommit for WritebackCache {
     fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
         digest: &TransactionDigest,
     ) -> BoxFuture<'_, SuiResult> {
-        MemoryCache::commit_transaction_outputs(self, epoch, *digest).boxed()
+        WritebackCache::commit_transaction_outputs(self, epoch, *digest).boxed()
     }
 }
 
-impl ExecutionCacheRead for MemoryCache {
+impl ExecutionCacheRead for WritebackCache {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         if let Some(p) = self.cached.packages.get(package_id) {
             #[cfg(debug_assertions)]
@@ -934,7 +934,7 @@ impl ExecutionCacheRead for MemoryCache {
     }
 }
 
-impl ExecutionCacheWrite for MemoryCache {
+impl ExecutionCacheWrite for WritebackCache {
     #[instrument(level = "trace", skip_all)]
     fn acquire_transaction_locks<'a>(
         &'a self,
@@ -1071,9 +1071,9 @@ fn do_fallback_lookup<K: Copy, V: Default + Clone>(
     Ok(results)
 }
 
-implement_passthrough_traits!(MemoryCache);
+implement_passthrough_traits!(WritebackCache);
 
-impl AccumulatorStore for MemoryCache {
+impl AccumulatorStore for WritebackCache {
     fn get_object_ref_prior_to_key_deprecated(
         &self,
         object_id: &ObjectID,
