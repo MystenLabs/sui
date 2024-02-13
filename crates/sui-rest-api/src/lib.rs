@@ -9,6 +9,7 @@ mod client;
 mod error;
 pub mod headers;
 mod objects;
+mod response;
 
 pub use client::Client;
 pub use error::{RestError, Result};
@@ -19,38 +20,9 @@ async fn health_check() -> StatusCode {
     StatusCode::OK
 }
 
-pub struct Bcs<T>(pub T);
-
 pub const TEXT_PLAIN_UTF_8: &str = "text/plain; charset=utf-8";
 pub const APPLICATION_BCS: &str = "application/bcs";
 pub const APPLICATION_JSON: &str = "application/json";
-
-impl<T> axum::response::IntoResponse for Bcs<T>
-where
-    T: serde::Serialize,
-{
-    fn into_response(self) -> axum::response::Response {
-        match bcs::to_bytes(&self.0) {
-            Ok(buf) => (
-                [(
-                    axum::http::header::CONTENT_TYPE,
-                    axum::http::HeaderValue::from_static(APPLICATION_BCS),
-                )],
-                buf,
-            )
-                .into_response(),
-            Err(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                [(
-                    axum::http::header::CONTENT_TYPE,
-                    axum::http::HeaderValue::from_static(TEXT_PLAIN_UTF_8),
-                )],
-                err.to_string(),
-            )
-                .into_response(),
-        }
-    }
-}
 
 pub fn rest_router<S>(state: S) -> Router
 where
