@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::{http::StatusCode, routing::get, Router};
+use axum::{routing::get, Router};
 
 pub mod accept;
 mod checkpoints;
 mod client;
 mod error;
+mod health;
 mod objects;
 mod response;
 pub mod types;
@@ -15,10 +16,6 @@ pub use client::Client;
 pub use error::{RestError, Result};
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::storage::ReadStore;
-
-async fn health_check() -> StatusCode {
-    StatusCode::OK
-}
 
 pub const TEXT_PLAIN_UTF_8: &str = "text/plain; charset=utf-8";
 pub const APPLICATION_BCS: &str = "application/bcs";
@@ -33,7 +30,7 @@ where
     };
 
     Router::new()
-        .route("/", get(health_check))
+        .route(health::HEALTH_PATH, get(health::health::<S>))
         .route(
             checkpoints::GET_FULL_CHECKPOINT_PATH,
             get(checkpoints::get_full_checkpoint::<S>),
