@@ -772,13 +772,13 @@ async fn test_authority_txn_signing_pushback() {
         rgp,
     );
 
-    // Txn shouldn't get signed with ValidatorPushbackAndRetry error.
+    // Txn shouldn't get signed with ValidatorOverloadedRetryAfter error.
     let response = validator_service
         .handle_transaction_for_testing(tx.clone())
         .await;
     assert!(matches!(
         SuiError::from(response.err().unwrap()),
-        SuiError::ValidatorPushbackAndRetry
+        SuiError::ValidatorOverloadedRetryAfter { .. }
     ));
 
     // Check that the input object should be locked by the above transaction.
@@ -798,7 +798,7 @@ async fn test_authority_txn_signing_pushback() {
             .err()
             .unwrap()
             .into(),
-        SuiError::ValidatorPushbackAndRetry
+        SuiError::ValidatorOverloadedRetryAfter { .. }
     ));
 
     // Send another transaction, that send the same object to a different recipient.
@@ -913,7 +913,7 @@ async fn test_authority_txn_execution_pushback() {
     )
     .unwrap();
 
-    // Ask the validator to execute the certificate, it should fail with ValidatorPushbackAndRetry error.
+    // Ask the validator to execute the certificate, it should fail with ValidatorOverloadedRetryAfter error.
     assert!(matches!(
         validator_service
             .execute_certificate_for_testing(cert.clone())
@@ -921,7 +921,7 @@ async fn test_authority_txn_execution_pushback() {
             .err()
             .unwrap()
             .into(),
-        SuiError::ValidatorPushbackAndRetry
+        SuiError::ValidatorOverloadedRetryAfter { .. }
     ));
 
     // Clear the validator overload status and retry the certificate. It should succeed.

@@ -313,7 +313,7 @@ impl ValidatorService {
         // to have enough quorum to form a certificate, causing the objects to be locked for
         // the entire epoch. By doing locking but pushback, retrying transaction will have
         // higher chance to succeed.
-        let mut lock_objects_but_push_back = false;
+        let mut validator_pushback_error = None;
         let overload_check_res = state.check_system_overload(
             &consensus_adapter,
             transaction.data(),
@@ -326,7 +326,9 @@ impl ValidatorService {
                 .inc();
             // TODO: consider change the behavior for other types of overload errors.
             match error {
-                SuiError::ValidatorPushbackAndRetry => lock_objects_but_push_back = true,
+                SuiError::ValidatorOverloadedRetryAfter { .. } => {
+                    validator_pushback_error = Some(error)
+                }
                 _ => return Err(error.into()),
             }
         }
@@ -354,8 +356,10 @@ impl ValidatorService {
                 }
             })?;
 
-        if lock_objects_but_push_back {
-            return Err(SuiError::ValidatorPushbackAndRetry.into());
+        if let Some(error) = validator_pushback_error {
+            // TODO: right now, we still sign the txn, but just don't return it. We can also skip signing
+            // to save more CPU.
+            return Err(error.into());
         }
         Ok(tonic::Response::new(info))
     }

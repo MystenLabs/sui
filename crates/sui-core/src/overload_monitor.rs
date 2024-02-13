@@ -217,6 +217,8 @@ fn should_reject_tx(
     tx_digest: TransactionDigest,
     minutes_since_epoch: u64,
 ) -> bool {
+    // TODO: we also need to add a secret salt (e.g. first consensus commit in the current epoch),
+    // to prevent gaming the system.
     let mut hasher = XxHash64::with_seed(minutes_since_epoch);
     hasher.write(tx_digest.inner());
     let value = hasher.finish();
@@ -237,7 +239,8 @@ pub fn overload_monitor_accept_tx(
         / 60;
 
     if should_reject_tx(load_shedding_percentage, tx_digest, minutes_since_epoch) {
-        fp_bail!(SuiError::ValidatorPushbackAndRetry);
+        // TODO: complete the suggestion for client retry deadline.
+        fp_bail!(SuiError::ValidatorOverloadedRetryAfter { retry_after_sec: 0 });
     }
     Ok(())
 }
@@ -253,6 +256,7 @@ mod tests {
         Rng, SeedableRng,
     };
     use std::sync::Arc;
+    use sui_macros::sim_test;
     use tokio::sync::mpsc::unbounded_channel;
     use tokio::sync::mpsc::UnboundedReceiver;
     use tokio::sync::mpsc::UnboundedSender;
@@ -704,9 +708,8 @@ mod tests {
     }
 
     // Tests that rejected transaction will have a chance to be accepted in the future.
-    #[test]
-    #[cfg_attr(msim, ignore)]
-    fn test_txn_rejection_over_time() {
+    #[sim_test]
+    async fn test_txn_rejection_over_time() {
         let start_time = Instant::now();
         let mut digest = TransactionDigest::random();
         let mut minutes_since_epoch = 28455473;
