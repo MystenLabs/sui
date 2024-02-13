@@ -14,6 +14,7 @@
 -  [Function `eth_mainnet`](#0xb_chain_ids_eth_mainnet)
 -  [Function `eth_sepolia`](#0xb_chain_ids_eth_sepolia)
 -  [Function `eth_local_test`](#0xb_chain_ids_eth_local_test)
+-  [Function `assert_valid_chain_id`](#0xb_chain_ids_assert_valid_chain_id)
 -  [Function `valid_routes`](#0xb_chain_ids_valid_routes)
 -  [Function `is_valid_route`](#0xb_chain_ids_is_valid_route)
 -  [Function `get_route`](#0xb_chain_ids_get_route)
@@ -295,6 +296,33 @@
 
 <pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_eth_local_test">eth_local_test</a>(): u8 {
     <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_chain_ids_assert_valid_chain_id"></a>
+
+## Function `assert_valid_chain_id`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">assert_valid_chain_id</a>(id: u8)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">assert_valid_chain_id</a>(id: u8) {
+    <b>if</b> (id != <a href="chain_ids.md#0xb_chain_ids_SuiMainnet">SuiMainnet</a> && id != <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a> && id != <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a> && id != <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a> &&
+        id != <a href="chain_ids.md#0xb_chain_ids_EthMainnet">EthMainnet</a> && id != <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a> && id != <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>) {
+        <b>abort</b> <a href="chain_ids.md#0xb_chain_ids_EInvalidBridgeRoute">EInvalidBridgeRoute</a>
+    }
 }
 </code></pre>
 
