@@ -864,8 +864,8 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     let args = if context.tokens.peek() == Tok::LParen {
         let current_loc = current_token_loc(context.tokens);
         context.env.check_feature(
-            FeatureGate::PositionalFields,
             context.package_name,
+            FeatureGate::PositionalFields,
             current_loc,
         );
         let args = parse_comma_list(
@@ -1875,8 +1875,8 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                 match context.tokens.peek() {
                     Tok::NumValue | Tok::NumTypedValue
                         if context.env.check_feature(
-                            FeatureGate::PositionalFields,
                             context.package_name,
+                            FeatureGate::PositionalFields,
                             loc,
                         ) =>
                     {
@@ -2615,8 +2615,8 @@ fn parse_postfix_ability_declarations(
 
     if postfix_ability_declaration {
         context.env.check_feature(
-            FeatureGate::PostFixAbilities,
             context.package_name,
+            FeatureGate::PostFixAbilities,
             has_location,
         );
 
@@ -2664,7 +2664,7 @@ fn parse_struct_fields(context: &mut Context) -> Result<StructFields, Box<Diagno
         let loc = current_token_loc(context.tokens);
         context
             .env
-            .check_feature(FeatureGate::PositionalFields, current_package, loc);
+            .check_feature(current_package, FeatureGate::PositionalFields, loc);
 
         let list = parse_comma_list(
             context,
@@ -2691,7 +2691,7 @@ fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context
     if let Some(Visibility::Public(loc)) = &visibility {
         context
             .env
-            .check_feature(FeatureGate::StructTypeVisibility, current_package, *loc);
+            .check_feature(current_package, FeatureGate::StructTypeVisibility, *loc);
     }
 
     let supports_public = context

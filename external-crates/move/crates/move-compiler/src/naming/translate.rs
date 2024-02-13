@@ -12,9 +12,9 @@ use crate::{
     },
     ice,
     naming::{
-        ast::{self as N, TParamID, BlockLabel, NominalBlockUsage},
-        syntax_methods::{resolve_syntax_attributes, validate_syntax_methods},
-        fake_natives
+        ast::{self as N, BlockLabel, NominalBlockUsage, TParamID},
+        fake_natives,
+        syntax_methods::resolve_syntax_attributes,
     },
     parser::ast::{self as P, ConstantName, Field, FunctionName, StructName, MACRO_MODIFIER},
     shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
@@ -103,7 +103,7 @@ pub(in crate::naming) struct Context<'env> {
     /// Indicates if the compiler is currently translating a function (set to true before starting
     /// to translate a function and to false after translation is over).
     translating_fun: bool,
-    current_package: Option<Symbol>,
+    pub current_package: Option<Symbol>,
 }
 
 impl<'env> Context<'env> {
@@ -741,7 +741,6 @@ fn module(
     if has_macro {
         mark_all_use_funs_as_used(&mut use_funs);
     }
-    validate_syntax_methods(context, &mut syntax_methods);
     context.restore_unscoped(unscoped);
     context.env.pop_warning_filter_scope();
     context.current_package = None;
@@ -996,7 +995,6 @@ fn function(
     name: FunctionName,
     ef: E::Function,
 ) -> N::Function {
-    resolve_syntax_attributes(context, syntax_methods, &module, &name, &ef);
     let E::Function {
         warning_filter,
         index,
@@ -1043,6 +1041,7 @@ fn function(
         signature,
         body,
     };
+    resolve_syntax_attributes(context, syntax_methods, &module, &name, &f);
     fake_natives::function(context.env, module, name, &f);
     let used_locals = std::mem::take(&mut context.used_locals);
     remove_unused_bindings_function(context, &used_locals, &mut f);
@@ -1646,7 +1645,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         EE::Call(ma, is_macro, tys_opt, rhs) if context.resolves_to_struct(&ma) => {
             context
                 .env
-                .check_feature(FeatureGate::PositionalFields, context.current_package, eloc);
+                .check_feature(context.current_package, FeatureGate::PositionalFields, eloc);
             if let Some(mloc) = is_macro {
                 let msg = "Unexpected macro invocation. Structs cannot be invoked as macros";
                 context
@@ -1724,8 +1723,8 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 ResolvedFunction::Module(mf) => {
                     if let Some(mloc) = is_macro {
                         context.env.check_feature(
-                            FeatureGate::MacroFuns,
                             context.current_package,
+                            FeatureGate::MacroFuns,
                             mloc,
                         );
                     }
@@ -1763,8 +1762,8 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 let nes = call_args(context, rhs);
                 if is_macro.is_some() {
                     context.env.check_feature(
-                        FeatureGate::MacroFuns,
                         context.current_package,
+                        FeatureGate::MacroFuns,
                         eloc,
                     );
                 }

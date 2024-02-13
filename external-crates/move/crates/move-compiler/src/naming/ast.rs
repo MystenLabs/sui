@@ -98,10 +98,10 @@ pub struct UseFuns {
 pub enum SyntaxMethodKind_ {
     Index,
     IndexMut,
-    ForMut,
-    ForImm,
-    ForVal,
-    Assign,
+    // ForMut,
+    // ForImm,
+    // ForVal,
+    // Assign,
 }
 
 pub type SyntaxMethodKind = Spanned<SyntaxMethodKind_>;
@@ -117,9 +117,14 @@ pub struct SyntaxMethod {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IndexSyntaxMethods {
+    pub index_mut: Option<Box<SyntaxMethod>>,
+    pub index: Option<Box<SyntaxMethod>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SyntaxMethodEntry {
-    pub index: Option<SyntaxMethod>,
-    pub index_mut: Option<SyntaxMethod>,
+    pub index: Option<Box<IndexSyntaxMethods>>,
 }
 
 // Mapping from type to their possible "syntax methods"
@@ -474,29 +479,59 @@ impl UseFuns {
 impl SyntaxMethodKind_ {
     const INDEX: &'static str = "index";
     const INDEX_MUT: &'static str = "index_mut";
-    const FOR_MUT: &'static str = "for_mut";
-    const FOR_IMM: &'static str = "for_imm";
-    const FOR_VAL: &'static str = "for_val";
-    const ASSIGN: &'static str = "assign";
+    // const FOR_MUT: &'static str = "for_mut";
+    // const FOR_IMM: &'static str = "for_imm";
+    // const FOR_VAL: &'static str = "for_val";
+    // const ASSIGN: &'static str = "assign";
 
     pub fn make_name(&self, loc: Loc) -> Name {
         match self {
             SyntaxMethodKind_::Index => sp(loc, Self::INDEX.into()),
             SyntaxMethodKind_::IndexMut => sp(loc, Self::INDEX_MUT.into()),
-            SyntaxMethodKind_::ForMut => sp(loc, Self::FOR_MUT.into()),
-            SyntaxMethodKind_::ForImm => sp(loc, Self::FOR_IMM.into()),
-            SyntaxMethodKind_::ForVal => sp(loc, Self::FOR_VAL.into()),
-            SyntaxMethodKind_::Assign => sp(loc, Self::ASSIGN.into()),
         }
+    }
+}
+
+impl IndexSyntaxMethods {
+    pub fn get_name_for_typing(&self) -> Option<(ModuleIdent, FunctionName)> {
+        // We prefer `index` over `index_mut` because its type is subject and return type are higher
+        // in the subtyping lattice.
+        if let Some(index) = &self.index {
+            Some(index.target_function.clone())
+        } else if let Some(index_mut) = &self.index_mut {
+            Some(index_mut.target_function.clone())
+        } else {
+            None
+        }
+    }
+}
+
+impl SyntaxMethodEntry {
+    pub fn lookup_kind_entry<'entry>(
+        &'entry mut self,
+        sp!(_, kind): &SyntaxMethodKind,
+    ) -> &'entry mut Option<Box<SyntaxMethod>> {
+        match kind {
+            SyntaxMethodKind_::Index => &mut self.index_entry().index,
+            SyntaxMethodKind_::IndexMut => &mut self.index_entry().index_mut,
+        }
+    }
+
+    fn index_entry<'entry>(&'entry mut self) -> &'entry mut IndexSyntaxMethods {
+        if self.index.is_none() {
+            let new_index_syntax_method = IndexSyntaxMethods {
+                index: None,
+                index_mut: None,
+            };
+            self.index = Some(Box::new(new_index_syntax_method));
+        }
+        self.index.as_mut().unwrap()
     }
 }
 
 impl Default for SyntaxMethodEntry {
     fn default() -> Self {
-        SyntaxMethodEntry {
-            index: None,
-            index_mut: None,
-        }
+        SyntaxMethodEntry { index: None }
     }
 }
 
@@ -674,6 +709,13 @@ impl TypeName_ {
             }
         }
     }
+
+    pub fn single_type(&self) -> Option<TypeName_> {
+        match self {
+            TypeName_::Multiple(_) => None,
+            TypeName_::Builtin(_) | TypeName_::ModuleType(_, _) => Some(self.clone()),
+        }
+    }
 }
 
 impl Type_ {
@@ -801,6 +843,19 @@ impl Type_ {
             Type_::Var(_) => None,
         }
     }
+
+    pub fn is_ref(&self) -> bool {
+        match self {
+            Type_::Ref(_, _) => true,
+            Type_::Unit
+            | Type_::Param(_)
+            | Type_::Apply(_, _, _)
+            | Type_::Fun(_, _)
+            | Type_::Var(_)
+            | Type_::Anything
+            | Type_::UnresolvedError => false,
+        }
+    }
 }
 
 impl Var_ {
@@ -892,10 +947,6 @@ impl fmt::Display for SyntaxMethodKind_ {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         let msg = match self {
             SyntaxMethodKind_::IndexMut | SyntaxMethodKind_::Index => SyntaxAttribute::INDEX,
-            SyntaxMethodKind_::ForMut | SyntaxMethodKind_::ForImm | SyntaxMethodKind_::ForVal => {
-                SyntaxAttribute::FOR
-            }
-            SyntaxMethodKind_::Assign => SyntaxAttribute::ASSIGN,
         };
         write!(f, "{}", msg)
     }
@@ -998,6 +1049,42 @@ impl AstDebug for UseFuns {
     }
 }
 
+impl AstDebug for SyntaxMethod {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let SyntaxMethod {
+            loc: _,
+            tname,
+            target_function: (target_m, target_f),
+            public_visibility: _,
+            kind,
+        } = self;
+        let kind_str = kind.value.make_name(kind.loc);
+        w.write(&format!(
+            "syntax({kind_str}) for {tname} -> {target_m}::{target_f}\n"
+        ));
+    }
+}
+
+impl AstDebug for (&TypeName, &SyntaxMethodEntry) {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let (_tn, methods) = *self;
+        let SyntaxMethodEntry { index } = methods;
+        if let Some(index) = &index {
+            let IndexSyntaxMethods { index_mut, index } = &**index;
+            index.as_ref().map(|index| index.ast_debug(w));
+            index_mut.as_ref().map(|index_mut| index_mut.ast_debug(w));
+        }
+    }
+}
+
+impl AstDebug for SyntaxMethods {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        for entry in self {
+            entry.ast_debug(w);
+        }
+    }
+}
+
 impl AstDebug for ModuleDefinition {
     fn ast_debug(&self, w: &mut AstWriter) {
         let ModuleDefinition {
@@ -1007,6 +1094,7 @@ impl AstDebug for ModuleDefinition {
             attributes,
             is_source_module,
             use_funs,
+            syntax_methods,
             friends,
             structs,
             constants,
@@ -1023,6 +1111,7 @@ impl AstDebug for ModuleDefinition {
             w.writeln("source module")
         }
         use_funs.ast_debug(w);
+        syntax_methods.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
             w.new_line();
@@ -1597,12 +1686,13 @@ impl AstDebug for ExpDotted_ {
             D::Dot(e, n) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n))
-            } // D::Index(e, sp!(_, args)) => {
-              //     e.ast_debug(w);
-              //     w.write("(");
-              //     w.comma(args, |w, e| e.ast_debug(w));
-              //     w.write(")");
-              // }
+            }
+            D::Index(e, sp!(_, args)) => {
+                e.ast_debug(w);
+                w.write("(");
+                w.comma(args, |w, e| e.ast_debug(w));
+                w.write(")");
+            }
         }
     }
 }

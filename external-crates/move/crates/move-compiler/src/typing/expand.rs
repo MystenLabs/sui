@@ -10,7 +10,6 @@ use crate::{
     ice,
     naming::ast::{BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_},
     parser::ast::Ability_,
-    shared::ast_debug::AstDebug,
     typing::ast as T,
 };
 use move_core_types::u256::U256;
@@ -122,7 +121,7 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
 fn unexpected_lambda_type(context: &mut Context, loc: Loc) {
     if context
         .env
-        .check_feature(FeatureGate::MacroFuns, context.current_package, loc)
+        .check_feature(context.current_package, FeatureGate::MacroFuns, loc)
     {
         let msg = "Unexpected lambda type. \
             Lambdas can only be used with 'macro' functions, as parameters or direct arguments";

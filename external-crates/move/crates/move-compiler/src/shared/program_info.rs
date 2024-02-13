@@ -9,7 +9,8 @@ use move_symbol_pool::Symbol;
 use crate::{
     expansion::ast::{AbilitySet, Attributes, ModuleIdent, Visibility},
     naming::ast::{
-        self as N, FunctionSignature, ResolvedUseFuns, StructDefinition, StructTypeParameter, Type,
+        self as N, FunctionSignature, ResolvedUseFuns, StructDefinition, StructTypeParameter,
+        SyntaxMethods, Type,
     },
     parser::ast::{ConstantName, FunctionName, StructName},
     shared::unique_map::UniqueMap,
@@ -40,6 +41,7 @@ pub struct ModuleInfo {
     pub attributes: Attributes,
     pub package: Option<Symbol>,
     pub use_funs: ResolvedUseFuns,
+    pub syntax_methods: SyntaxMethods,
     pub friends: UniqueMap<ModuleIdent, Loc>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub functions: UniqueMap<FunctionName, FunctionInfo>,
@@ -79,6 +81,7 @@ macro_rules! program_info {
                 attributes: mdef.attributes.clone(),
                 package: mdef.package_name,
                 use_funs,
+                syntax_methods: mdef.syntax_methods.clone(),
                 friends: mdef.friends.ref_map(|_, friend| friend.loc),
                 structs,
                 functions,

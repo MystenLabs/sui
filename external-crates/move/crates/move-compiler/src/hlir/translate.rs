@@ -285,6 +285,7 @@ fn module(
         immediate_neighbors: _,
         used_addresses: _,
         use_funs: _,
+        syntax_methods: _,
         friends,
         structs: tstructs,
         functions: tfunctions,

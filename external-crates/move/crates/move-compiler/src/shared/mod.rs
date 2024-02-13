@@ -514,8 +514,8 @@ impl CompilationEnv {
     // supported, and `true` otherwise.
     pub fn check_feature(
         &mut self,
-        feature: FeatureGate,
         package: Option<Symbol>,
+        feature: FeatureGate,
         loc: Loc,
     ) -> bool {
         edition_check_feature(self, self.package_config(package).edition, feature, loc)

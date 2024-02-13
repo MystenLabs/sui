@@ -2,12 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
-    core::{self, Context, Local, Subst},
-    expand, infinite_instantiations, recursive_structs,
-};
 use crate::{
-    diag,
+    debug_display, diag,
     diagnostics::{codes::*, Diagnostic},
     editions::{Edition, FeatureGate, Flavor},
     expansion::ast::{
@@ -15,19 +11,29 @@ use crate::{
         ModuleIdent, ModuleIdent_, Value_, Visibility,
     },
     ice,
-    naming::ast::{self as N, BlockLabel, TParam, TParamID, Type, TypeName_, Type_},
+    naming::ast::{
+        self as N, BlockLabel, IndexSyntaxMethods, TParam, TParamID, Type, TypeName_, Type_,
+    },
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_,
     },
     shared::{
-        ast_debug::AstDebug, known_attributes::TestingAttribute, process_binops,
-        program_info::TypingProgramInfo, unique_map::UniqueMap, *,
+        ast_debug::AstDebug,
+        known_attributes::{SyntaxAttribute, TestingAttribute},
+        process_binops,
+        program_info::TypingProgramInfo,
+        unique_map::UniqueMap,
+        *,
     },
     sui_mode,
     typing::{
         ast as T,
-        core::{make_tvar, public_testing_visibility, PublicForTesting, ResolvedFunctionType},
-        dependency_ordering, macro_expand,
+        core::{
+            self, make_tvar, public_testing_visibility, Context, Local, PublicForTesting,
+            ResolvedFunctionType, Subst,
+        },
+        dependency_ordering, expand, infinite_instantiations, macro_expand, recursive_structs,
+        syntax_methods::validate_syntax_methods,
     },
     FullyCompiledProgram,
 };
@@ -118,9 +124,15 @@ fn extract_macros(context: &mut Context, modules: &UniqueMap<ModuleIdent, N::Mod
 
 fn modules(
     context: &mut Context,
-    modules: UniqueMap<ModuleIdent, N::ModuleDefinition>,
+    mut modules: UniqueMap<ModuleIdent, N::ModuleDefinition>,
 ) -> UniqueMap<ModuleIdent, T::ModuleDefinition> {
     let mut all_new_friends = BTreeMap::new();
+    // We validate the syntax methods first so that processing syntax method forms later are
+    // better-typed. It would be preferable to do this in naming, but the typing machinery makes it
+    // much easier to enforce the typeclass-like constraints.
+    for (key, mdef) in modules.key_cloned_iter_mut() {
+        validate_syntax_methods(context, &key, mdef)
+    }
     let mut typed_modules = modules.map(|ident, mdef| {
         let (typed_mdef, new_friends) = module(context, ident, mdef);
         for (pub_package_module, loc) in new_friends {
@@ -166,6 +178,7 @@ fn module(
         package_name,
         attributes,
         is_source_module,
+        syntax_methods,
         use_funs,
         friends,
         mut structs,
@@ -176,6 +189,9 @@ fn module(
     context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
     context.add_use_funs_scope(use_funs);
+    if is_source_module {
+        println!("syntax methods:\n{}", debug_display!(syntax_methods));
+    }
     structs
         .iter_mut()
         .for_each(|(_, _, s)| struct_def(context, s));
@@ -196,6 +212,7 @@ fn module(
         immediate_neighbors: UniqueMap::new(),
         used_addresses: BTreeSet::new(),
         use_funs,
+        syntax_methods,
         friends,
         structs,
         constants,
@@ -1340,7 +1357,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         NE::Lambda(_) => {
             if context
                 .env
-                .check_feature(FeatureGate::MacroFuns, context.current_package, eloc)
+                .check_feature(context.current_package, FeatureGate::MacroFuns, eloc)
             {
                 let msg = "Lambdas can only be used directly as arguments to 'macro' functions";
                 context
@@ -2010,13 +2027,127 @@ fn add_field_types<T>(
 }
 
 //--------------------------------------------------------------------------------------------------
+// Index Type Resolution
+//--------------------------------------------------------------------------------------------------
+
+// Assumes tvars have already been readied
+fn find_index_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<IndexSyntaxMethods> {
+    use TypeName_ as TN;
+    use Type_ as T;
+    const UNINFERRED_MSG: &str =
+        "Could not infer the type before index access. Try annotating here";
+    let ty_str = core::error_format(&ty, &context.subst);
+    let msg = || {
+        format!(
+            "No valid '{}({})' method found for {}",
+            SyntaxAttribute::SYNTAX,
+            SyntaxAttribute::INDEX,
+            ty_str
+        )
+    };
+    match ty {
+        sp!(_, T::UnresolvedError) => None,
+        sp!(tloc, T::Anything) => {
+            context.env.add_diag(diag!(
+                TypeSafety::UninferredType,
+                (loc, msg()),
+                (*tloc, UNINFERRED_MSG),
+            ));
+            None
+        }
+        sp!(tloc, T::Var(i)) if !context.subst.is_num_var(*i) => {
+            context.env.add_diag(diag!(
+                TypeSafety::UninferredType,
+                (loc, msg()),
+                (*tloc, UNINFERRED_MSG),
+            ));
+            None
+        }
+        sp!(_, T::Apply(_, sp!(_, TN::ModuleType(m, n)), _)) => {
+            let index_opt = core::find_struct_index_funs(context, loc, m, n);
+            if index_opt.is_none() {
+                context
+                    .env
+                    .add_diag(diag!(Declarations::MissingSyntaxMethod, (loc, msg()),));
+            }
+            index_opt
+        }
+        sp!(_, T::Apply(_, sp!(_, TN::Builtin(bt_name)), _)) => {
+            let index_opt = core::find_builtin_index_funs(context, loc, bt_name);
+            if index_opt.is_none() {
+                context
+                    .env
+                    .add_diag(diag!(Declarations::MissingSyntaxMethod, (loc, msg()),));
+            }
+            index_opt
+        }
+        t => {
+            let smsg = format!(
+                "Expected a struct or builtin type but got: {}",
+                core::error_format(&t, &context.subst)
+            );
+            context.env.add_diag(diag!(
+                TypeSafety::ExpectedSpecificType,
+                (loc, msg()),
+                (t.loc, smsg),
+            ));
+            None
+        }
+    }
+}
+
+fn resolve_index_funs_and_type(
+    context: &mut Context,
+    loc: Loc,
+    ty: Type,
+    argloc: Loc,
+    args: &[T::Exp],
+) -> (Option<IndexSyntaxMethods>, Type) {
+    let ty_str = core::error_format(&ty, &context.subst);
+    let msg = || {
+        format!(
+            "No valid '{}({})' method found for {}",
+            SyntaxAttribute::SYNTAX,
+            SyntaxAttribute::INDEX,
+            ty_str
+        )
+    };
+    let readied = core::ready_tvars(&context.subst, ty);
+    println!("readied: {:?}", readied);
+    let Some(index) = find_index_funs(context, loc, &readied) else {
+        return (None, context.error_type(loc));
+    };
+    let Some((m, f)) = index.get_name_for_typing() else {
+        context
+            .env
+            .add_diag(diag!(Declarations::MissingSyntaxMethod, (loc, msg()),));
+        return (None, context.error_type(loc));
+    };
+    let fty = core::make_function_type(context, loc, &m, &f, None);
+    let mut arg_types = args
+        .iter()
+        .map(|e| core::ready_tvars(&context.subst, e.ty.clone()))
+        .collect::<Vec<_>>();
+    // We insert a mut ref here because it will be a correct subtype regardless of if
+    // only `index` or `index_mut` is defined.
+    arg_types.insert(0, sp(loc, Type_::Ref(true, Box::new(readied))));
+    let ty = syntax_call_return_ty(context, loc, m, f, fty, argloc, arg_types);
+    (Some(index), ty)
+}
+
+//--------------------------------------------------------------------------------------------------
 // Dotted Expressions
 //--------------------------------------------------------------------------------------------------
 
 #[derive(Debug)]
 enum ExpDottedAccess {
-    Field(Field, Type),
-    Index(Vec<T::Exp>, Type),
+    Field(Field, /* base type */ Type),
+    Index {
+        index_loc: Loc,
+        syntax_methods: Option<IndexSyntaxMethods>,
+        args: Spanned<Vec<T::Exp>>,
+        base_type: Type, /* base (non-ref) return type */
+    },
 }
 
 #[derive(Debug)]
@@ -2040,7 +2171,7 @@ impl ExpDotted {
         if let Some(accessor) = self.accessors.last() {
             match accessor {
                 ExpDottedAccess::Field(_, ty) => ty.clone(),
-                ExpDottedAccess::Index(_, ty) => ty.clone(),
+                ExpDottedAccess::Index { base_type, .. } => base_type.clone(),
             }
         } else {
             self.base_type.clone()
@@ -2090,14 +2221,31 @@ fn process_exp_dotted(
                 .push(ExpDottedAccess::Field(field, field_type));
             inner
         }
-        N::ExpDotted_::Index(ndot, args) => {
+        N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
             let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
             let inner_ty = inner.last_type();
-            let field_type = resolve_field(context, dloc, inner_ty, &field);
+            let args_ = exp_vec(context, nargs_);
+            let (syntax_methods, result_type) =
+                resolve_index_funs_and_type(context, dloc, inner_ty, argloc, &args_);
+            let args = sp(argloc, args_);
+            let base_type = match result_type {
+                sp!(_, Type_::Ref(_, inner)) => *inner,
+                ty @ sp!(_, Type_::UnresolvedError) => ty,
+                _ => {
+                    context
+                        .env
+                        .add_diag(ice!((dloc, "Index should have failed in naming")));
+                    sp(dloc, Type_::UnresolvedError)
+                }
+            };
             inner.loc = dloc;
-            inner
-                .accessors
-                .push(ExpDottedAccess::Field(field, field_type));
+            let accessor = ExpDottedAccess::Index {
+                index_loc: dloc,
+                syntax_methods,
+                args,
+                base_type,
+            };
+            inner.accessors.push(accessor);
             inner
         }
     }
@@ -2110,15 +2258,13 @@ fn exp_dotted_usage(
     ndotted: N::ExpDotted,
 ) -> Box<T::Exp> {
     println!("{:#?}", ndotted);
-    let edotted = if matches!(ndotted.value, N::ExpDotted_::Exp(_)) {
-        process_exp_dotted(context, None, ndotted)
-    } else if matches!(usage, DottedUsage::Borrow(_)) {
-        process_exp_dotted(context, Some("borrow"), ndotted)
-    } else if matches!(ndotted.value, N::ExpDotted_::Dot(_)) {
-        process_exp_dotted(context, Some("dot access"), ndotted)
-    } else {
-        process_exp_dotted(context, Some("index"), ndotted)
+    let constraint_verb = match &ndotted.value {
+        N::ExpDotted_::Exp(_) => None,
+        _ if matches!(usage, DottedUsage::Borrow(_)) => Some("borrow"),
+        N::ExpDotted_::Dot(_, _) => Some("dot access"),
+        N::ExpDotted_::Index(_, _) => Some("index"),
     };
+    let edotted = process_exp_dotted(context, constraint_verb, ndotted);
     if matches!(usage, DottedUsage::Borrow(_)) && edotted.accessors.is_empty() {
         context.add_base_type_constraint(eloc, "Invalid borrow", edotted.base.ty.clone());
     }
@@ -2147,8 +2293,8 @@ fn resolve_exp_dotted(
     mut edotted: ExpDotted,
 ) -> Box<T::Exp> {
     use T::UnannotatedExp_ as TE;
-    println!("usage: {:#?}", usage);
-    println!("{:#?}", edotted);
+    // println!("usage: {:#?}", usage);
+    // println!("{:#?}", edotted);
 
     let make_exp = |ty, exp_| Box::new(T::exp(ty, sp(eloc, exp_)));
     let make_error = |context: &mut Context| make_error_exp(context, eloc);
@@ -2180,8 +2326,8 @@ fn resolve_exp_dotted(
                 }
                 _ => {
                     if context.env.check_feature(
-                        FeatureGate::Move2024Paths,
                         context.current_package(),
+                        FeatureGate::Move2024Paths,
                         loc,
                     ) {
                         // call for effect
@@ -2210,8 +2356,8 @@ fn resolve_exp_dotted(
                     ),
                     exp_ @ TE::Constant(_, _) => {
                         context.env.check_feature(
-                            FeatureGate::Move2024Paths,
                             context.current_package(),
+                            FeatureGate::Move2024Paths,
                             edotted.base.exp.loc,
                         );
                         make_exp(edotted.base.ty, exp_)
@@ -2242,6 +2388,7 @@ fn resolve_exp_dotted(
             copy_exp
         }
         DottedUsage::Use => {
+            warn_on_constant_borrow(context, edotted.base.exp.loc, &edotted.base);
             if edotted.accessors.is_empty() {
                 Box::new(edotted.base)
             } else {
@@ -2297,7 +2444,81 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
                 let e_ = TE::Borrow(mut_, exp, name);
                 let ty = sp(loc, Type_::Ref(mut_, Box::new(ty)));
                 exp = Box::new(T::exp(ty, sp(loc, e_)));
-            } // ExpDottedAccess::Index(_name, _ty) => todo!(),
+            }
+            ExpDottedAccess::Index {
+                index_loc,
+                syntax_methods,
+                args,
+                base_type,
+            } => {
+                let Some(index_methods) = syntax_methods else {
+                    assert!(context.env.has_errors());
+                    exp = make_error_exp(context, loc);
+                    break;
+                };
+                let (m, f) = if mut_ {
+                    if let Some(index_mut) = index_methods.index_mut {
+                        index_mut.target_function
+                    } else {
+                        let msg = "Could not find a mutable index 'syntax' method";
+                        context
+                            .env
+                            .add_diag(diag!(Declarations::MissingSyntaxMethod, (index_loc, msg),));
+                        exp = make_error_exp(context, index_loc);
+                        break;
+                    }
+                } else {
+                    if let Some(index) = index_methods.index {
+                        index.target_function
+                    } else {
+                        let msg = "Could not find an immutable index 'syntax' method";
+                        context
+                            .env
+                            .add_diag(diag!(Declarations::MissingSyntaxMethod, (index_loc, msg),));
+                        exp = make_error_exp(context, index_loc);
+                        break;
+                    }
+                };
+                let sp!(argloc, mut args_) = args;
+                args_.insert(0, *exp);
+                let (ret_ty, e_) = module_call(context, loc, m, f, None, argloc, args_);
+                // This is a bit like a join, but we make sure both mutability and underling type
+                // agree. Join would instead promote the ref mutability.
+                let ret_ty = core::ready_tvars(&context.subst, ret_ty);
+                let base_type = core::ready_tvars(&context.subst, base_type);
+                match &ret_ty.value {
+                    Type_::Ref(ref_mut, inner) if ref_mut == &mut_ && &**inner == &base_type => {
+                        exp = Box::new(T::exp(ret_ty, sp(index_loc, e_)));
+                    }
+                    Type_::Ref(ref_mut, _) if ref_mut != &mut_ => {
+                        let msg =
+                            format!("Index syntax method '{m}::{f}' had the wrong mutability: {ref_mut} vs expected {mut_}");
+                        context.env.add_diag(ice!((index_loc, msg)));
+                        exp = make_error_exp(context, index_loc);
+                        break;
+                    }
+                    Type_::Ref(_, inner) if &**inner != &base_type => {
+                        let inner_str = core::error_format(&**inner, &context.subst);
+                        let base_ty_str = core::error_format(&base_type, &context.subst);
+                        let msg =
+                            format!("Index syntax method '{m}::{f}' had the wrong base type: {} vs expected {}", inner_str, base_ty_str);
+                        context.env.add_diag(ice!((index_loc, msg)));
+                        exp = make_error_exp(context, index_loc);
+                        break;
+                    }
+                    ty_ => {
+                        println!("ty: {:?}", ty_);
+                        let ty_str = core::error_format_(ty_, &context.subst);
+                        let msg = format!(
+                            "Index syntax method '{m}::{f}' had the wrong return type {}",
+                            ty_str
+                        );
+                        context.env.add_diag(ice!((index_loc, msg)));
+                        exp = make_error_exp(context, index_loc);
+                        break;
+                    }
+                }
+            }
         }
     }
     exp
@@ -2308,7 +2529,9 @@ fn exp_dotted_to_owned(context: &mut Context, usage: DottedUsage, ed: ExpDotted)
     let (access_msg, access_type) = if let Some(accessor) = ed.accessors.last() {
         match accessor {
             ExpDottedAccess::Field(name, ty) => (format!("field '{}'", name), ty.clone()),
-            // ExpDottedAccess::Index(_, ty) => ("index result".to_string(), ty.clone()),
+            ExpDottedAccess::Index { base_type, .. } => {
+                ("index result".to_string(), base_type.clone())
+            }
         }
     } else {
         context.env.add_diag(ice!((
@@ -2337,7 +2560,7 @@ fn exp_dotted_to_owned(context: &mut Context, usage: DottedUsage, ed: ExpDotted)
         DottedUsage::Copy(loc) => {
             context
                 .env
-                .check_feature(FeatureGate::Move2024Paths, context.current_package(), loc);
+                .check_feature(context.current_package(), FeatureGate::Move2024Paths, loc);
             "'copy'"
         }
     };
@@ -2372,7 +2595,7 @@ fn exp_to_borrow(
 ) -> Box<T::Exp> {
     use Type_::*;
     use T::UnannotatedExp_ as TE;
-    warn_on_constant_borrow(context, loc, &eb);
+    warn_on_constant_borrow(context, eb.exp.loc, &eb);
     let eb_ty = eb.ty;
     let sp!(ebloc, eb_) = eb.exp;
     let e_ = match eb_ {
@@ -2394,6 +2617,16 @@ fn exp_to_borrow(
     };
     let ty = sp(loc, Ref(mut_, Box::new(cur_ty)));
     Box::new(T::exp(ty, sp(loc, e_)))
+}
+
+fn warn_on_constant_borrow(context: &mut Context, loc: Loc, e: &T::Exp) {
+    use T::UnannotatedExp_ as TE;
+    if matches!(&e.exp.value, TE::Constant(_, _)) {
+        let msg = "This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit";
+        context
+            .env
+            .add_diag(diag!(TypeSafety::ImplicitConstantCopy, (loc, msg)))
+    }
 }
 
 //**************************************************************************************************
@@ -2476,19 +2709,6 @@ fn method_call_resolve(
     };
     let first_arg = *resolve_exp_dotted(context, usage, loc, edotted);
     Some((m, f, fty, first_arg))
-}
-
-fn edotted_ty_base(ty: &Type) -> &Type {
-    match &ty.value {
-        Type_::Unit
-        | Type_::Param(_)
-        | Type_::Anything
-        | Type_::UnresolvedError
-        | Type_::Apply(_, _, _)
-        | Type_::Fun(_, _) => ty,
-        Type_::Ref(_, inner) => inner,
-        Type_::Var(_) => panic!("ICE unfolding failed"),
-    }
 }
 
 fn module_call(
@@ -2606,6 +2826,41 @@ fn builtin_call(
     }
     let call = T::UnannotatedExp_::Builtin(Box::new(sp(bloc, b_)), arguments);
     (ret_ty, call)
+}
+
+fn syntax_call_return_ty(
+    context: &mut Context,
+    loc: Loc,
+    m: ModuleIdent,
+    f: FunctionName,
+    fty: ResolvedFunctionType,
+    argloc: Loc,
+    tys: Vec<Type>,
+) -> Type {
+    let ResolvedFunctionType {
+        declared,
+        macro_,
+        ty_args: _,
+        params: parameters,
+        return_,
+    } = fty;
+    check_call_target(context, loc, macro_, macro_, declared, f);
+    let arg_tys = {
+        let msg = || format!("Invalid call of '{}::{}'", &m, &f);
+        let arity = parameters.len();
+        make_arg_types(context, loc, msg, arity, argloc, tys)
+    };
+    assert!(arg_tys.len() == parameters.len());
+    for (arg_ty, (param, param_ty)) in arg_tys.into_iter().zip(parameters.clone()) {
+        let msg = || {
+            format!(
+                "Invalid call of '{}::{}'. Invalid argument for parameter '{}'",
+                &m, &f, &param.value.name
+            )
+        };
+        subtype(context, loc, msg, arg_ty, param_ty);
+    }
+    return_
 }
 
 fn vector_pack(

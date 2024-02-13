@@ -40,6 +40,7 @@ pub enum FeatureGate {
     Move2024Paths,
     MacroFuns,
     Move2024Migration,
+    SyntaxMethods,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -119,6 +120,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::Move2024Paths,
     FeatureGate::MacroFuns,
     FeatureGate::Move2024Optimizations,
+    FeatureGate::SyntaxMethods,
 ];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
@@ -213,6 +215,7 @@ impl FeatureGate {
             FeatureGate::Move2024Paths => "Move 2024 paths are",
             FeatureGate::MacroFuns => "'macro' functions are",
             FeatureGate::Move2024Migration => "Move 2024 migration is",
+            FeatureGate::SyntaxMethods => "syntax methods are",
         }
     }
 }

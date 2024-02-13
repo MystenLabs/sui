@@ -706,7 +706,7 @@ fn check_visibility_modifiers(
             E::Visibility::Package(loc) => {
                 context
                     .env()
-                    .check_feature(FeatureGate::PublicPackage, package_name, loc);
+                    .check_feature(package_name, FeatureGate::PublicPackage, loc);
                 public_package_usage = Some(loc);
             }
             _ => (),
@@ -2024,7 +2024,7 @@ fn use_(
             method,
         } => {
             let pkg = context.current_package;
-            context.env().check_feature(FeatureGate::DotCall, pkg, loc);
+            context.env().check_feature(pkg, FeatureGate::DotCall, loc);
             let is_public = match visibility {
                 P::Visibility::Public(vis_loc) => Some(vis_loc),
                 P::Visibility::Internal => None,
@@ -2508,7 +2508,7 @@ fn function_(
         let current_package = context.current_package;
         context
             .env()
-            .check_feature(FeatureGate::MacroFuns, current_package, macro_loc);
+            .check_feature(current_package, FeatureGate::MacroFuns, macro_loc);
     }
     let visibility = visibility(pvisibility);
     let signature = function_signature(context, macro_, psignature);
@@ -2894,20 +2894,42 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 EE::UnresolvedError
             }
         },
-        pdotted_ @ (PE::Dot(_, _) | PE::Index(_, _)) => {
-            match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
-                Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, edotted),
-                None => {
-                    assert!(context.env().has_errors());
-                    EE::UnresolvedError
+        pdotted_ @ PE::Dot(_, _) => match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
+            Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, edotted),
+            None => {
+                assert!(context.env().has_errors());
+                EE::UnresolvedError
+            }
+        },
+
+        pdotted_ @ PE::Index(_, _) => {
+            let cur_pkg = context.current_package.clone();
+            let supports_paths = context
+                .env()
+                .supports_feature(cur_pkg, FeatureGate::Move2024Paths);
+            let supports_syntax_methods = context
+                .env()
+                .supports_feature(cur_pkg, FeatureGate::SyntaxMethods);
+            if !supports_paths || !supports_syntax_methods {
+                context.spec_deprecated(loc, /* is_error */ true);
+                assert!(context.env().has_errors());
+                EE::UnresolvedError
+            } else {
+                match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
+                    Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, edotted),
+                    None => {
+                        assert!(context.env().has_errors());
+                        EE::UnresolvedError
+                    }
                 }
             }
         }
+
         PE::DotCall(pdotted, n, is_macro, ptys_opt, sp!(rloc, prs)) => {
             match exp_dotted(context, pdotted) {
                 Some(edotted) => {
                     let pkg = context.current_package;
-                    context.env().check_feature(FeatureGate::DotCall, pkg, loc);
+                    context.env().check_feature(pkg, FeatureGate::DotCall, loc);
                     let tys_opt = optional_types(context, ptys_opt);
                     let ers = sp(rloc, exps(context, prs));
                     EE::MethodCall(edotted, n, is_macro, tys_opt, ers)
@@ -3027,7 +3049,7 @@ fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: Box<P::Exp>) ->
             let current_package = context.current_package;
             context
                 .env()
-                .check_feature(FeatureGate::Move2024Paths, current_package, cloc);
+                .check_feature(current_package, FeatureGate::Move2024Paths, cloc);
         }
     }
     Some(match case {
@@ -3046,6 +3068,13 @@ fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpD
             EE::Dot(lhs, field)
         }
         PE::Index(plhs, sp!(argloc, args)) => {
+            let cur_pkg = context.current_package.clone();
+            context
+                .env()
+                .check_feature(cur_pkg, FeatureGate::Move2024Paths, loc);
+            context
+                .env()
+                .check_feature(cur_pkg, FeatureGate::SyntaxMethods, loc);
             let lhs = exp_dotted(context, plhs)?;
             let args = args
                 .into_iter()
@@ -3266,7 +3295,7 @@ fn lvalues(context: &mut Context, e: Box<P::Exp>) -> Option<LValue> {
             let dotted = exp_dotted(context, Box::new(sp(loc, pdotted_)))?;
             L::FieldMutate(dotted)
         }
-        pdotted_ @ PE::Index(_, _) => {
+        PE::Index(_, _) => {
             context.env().add_diag(diag!(
                 Syntax::InvalidLValue,
                 (loc, "Cannot use index in left-hand positions")
@@ -3326,7 +3355,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
             let pkg = context.current_package;
             context
                 .env()
-                .check_feature(FeatureGate::PositionalFields, pkg, loc);
+                .check_feature(pkg, FeatureGate::PositionalFields, loc);
             let en = context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
             let tys_opt = optional_types(context, ptys_opt);
             let pfields: Option<_> = exprs.into_iter().map(|e| assign(context, e)).collect();
