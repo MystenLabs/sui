@@ -208,6 +208,7 @@ codes!(
             { msg: "invalid visibility modifier", severity: NonblockingError },
         InvalidUseFun: { msg: "invalid 'use fun' declaration", severity: NonblockingError },
         UnknownAttribute: { msg: "unknown attribute", severity: Warning },
+        InvalidSyntaxMethod: { msg: "invalid syntax method type", severity: BlockingError },
     ],
     // errors name resolution, mostly expansion/translate and naming/translate
     NameResolution: [

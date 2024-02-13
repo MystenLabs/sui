@@ -11,7 +11,11 @@ use crate::{
         translate::is_valid_struct_constant_or_schema_name as is_constant_name,
     },
     ice,
-    naming::ast::{self as N, BlockLabel, NominalBlockUsage},
+    naming::{
+        ast::{self as N, TParamID, BlockLabel, NominalBlockUsage},
+        syntax_methods::{resolve_syntax_attributes, validate_syntax_methods},
+        fake_natives
+    },
     parser::ast::{self as P, ConstantName, Field, FunctionName, StructName, MACRO_MODIFIER},
     shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -20,14 +24,12 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{ast::TParamID, fake_natives};
-
 //**************************************************************************************************
 // Context
 //**************************************************************************************************
 
 #[derive(Debug, Clone)]
-enum ResolvedType {
+pub(in crate::naming) enum ResolvedType {
     Module(Box<ResolvedModuleType>),
     TParam(Loc, N::TParam),
     BuiltinType(N::BuiltinTypeName_),
@@ -35,19 +37,19 @@ enum ResolvedType {
 }
 
 #[derive(Debug, Clone)]
-struct ResolvedModuleType {
+pub(in crate::naming) struct ResolvedModuleType {
     // original names/locs are provided to preserve loc information if needed
-    original_loc: Loc,
-    original_type_name: Name,
-    module_type: ModuleType,
+    pub original_loc: Loc,
+    pub original_type_name: Name,
+    pub module_type: ModuleType,
 }
 
 #[derive(Debug, Clone)]
-struct ModuleType {
-    original_mident: ModuleIdent,
-    decl_loc: Loc,
-    arity: usize,
-    is_positional: bool,
+pub(in crate::naming) struct ModuleType {
+    pub original_mident: ModuleIdent,
+    pub decl_loc: Loc,
+    pub arity: usize,
+    pub is_positional: bool,
 }
 
 enum ResolvedFunction {
@@ -84,8 +86,8 @@ enum NominalBlockType {
     LambdaLoopCapture,
 }
 
-struct Context<'env> {
-    env: &'env mut CompilationEnv,
+pub(in crate::naming) struct Context<'env> {
+    pub env: &'env mut CompilationEnv,
     current_module: Option<ModuleIdent>,
     scoped_types: BTreeMap<ModuleIdent, BTreeMap<Symbol, ModuleType>>,
     unscoped_types: BTreeMap<Symbol, ResolvedType>,
@@ -287,7 +289,7 @@ impl<'env> Context<'env> {
         }
     }
 
-    fn resolve_type(&mut self, sp!(nloc, ma_): E::ModuleAccess) -> ResolvedType {
+    pub fn resolve_type(&mut self, sp!(nloc, ma_): E::ModuleAccess) -> ResolvedType {
         use E::ModuleAccess_ as EN;
         match ma_ {
             EN::Name(n) => self.resolve_unscoped_type(nloc, n),
@@ -714,6 +716,7 @@ fn module(
     context.env.add_warning_filter_scope(warning_filter.clone());
     let unscoped = context.save_unscoped();
     let mut use_funs = use_funs(context, euse_funs);
+    let mut syntax_methods = N::SyntaxMethods::new();
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
     let structs = estructs.map(|name, s| {
         context.restore_unscoped(unscoped.clone());
@@ -721,7 +724,7 @@ fn module(
     });
     let functions = efunctions.map(|name, f| {
         context.restore_unscoped(unscoped.clone());
-        function(context, ident, name, f)
+        function(context, &mut syntax_methods, ident, name, f)
     });
     let constants = econstants.map(|name, c| {
         context.restore_unscoped(unscoped.clone());
@@ -738,6 +741,7 @@ fn module(
     if has_macro {
         mark_all_use_funs_as_used(&mut use_funs);
     }
+    validate_syntax_methods(context, &mut syntax_methods);
     context.restore_unscoped(unscoped);
     context.env.pop_warning_filter_scope();
     context.current_package = None;
@@ -748,6 +752,7 @@ fn module(
         attributes,
         is_source_module,
         use_funs,
+        syntax_methods,
         friends,
         structs,
         constants,
@@ -840,7 +845,7 @@ fn explicit_use_fun(
                 Declarations::InvalidUseFun,
                 (
                     loc,
-                    "Invalid 'use fun'. Cannot associate a method a type parameter"
+                    "Invalid 'use fun'. Cannot associate a method with a type parameter"
                 ),
                 (tloc, tmsg)
             ));
@@ -986,10 +991,12 @@ fn friend(context: &mut Context, mident: ModuleIdent, friend: E::Friend) -> Opti
 
 fn function(
     context: &mut Context,
+    syntax_methods: &mut N::SyntaxMethods,
     module: ModuleIdent,
     name: FunctionName,
     ef: E::Function,
 ) -> N::Function {
+    resolve_syntax_attributes(context, syntax_methods, &module, &name, &ef);
     let E::Function {
         warning_filter,
         index,
@@ -1810,7 +1817,6 @@ fn access_constant(context: &mut Context, ma: E::ModuleAccess) -> N::Exp_ {
     }
 }
 
-
 fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
     let sp!(loc, edot_) = edot;
     let nedot_ = match edot_ {
@@ -1826,8 +1832,7 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
             let args = call_args(context, args);
             let inner = Box::new(dotted(context, *inner)?);
             N::ExpDotted_::Index(inner, args)
-        },
-
+        }
     };
     Some(sp(loc, nedot_))
 }

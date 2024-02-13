@@ -13,7 +13,10 @@ use crate::{
         self as P, Ability_, BinOp, ConstantName, Field, FunctionName, Mutability, StructName,
         UnaryOp, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
-    shared::{ast_debug::*, program_info::NamingProgramInfo, unique_map::UniqueMap, *},
+    shared::{
+        ast_debug::*, known_attributes::SyntaxAttribute, program_info::NamingProgramInfo,
+        unique_map::UniqueMap, *,
+    },
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -44,6 +47,10 @@ pub enum Neighbor_ {
     Friend,
 }
 pub type Neighbor = Spanned<Neighbor_>;
+
+//**************************************************************************************************
+// Use Funs
+//**************************************************************************************************
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UseFunKind {
@@ -84,6 +91,41 @@ pub struct UseFuns {
 }
 
 //**************************************************************************************************
+// Syntax Methods
+//**************************************************************************************************
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum SyntaxMethodKind_ {
+    Index,
+    IndexMut,
+    ForMut,
+    ForImm,
+    ForVal,
+    Assign,
+}
+
+pub type SyntaxMethodKind = Spanned<SyntaxMethodKind_>;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct SyntaxMethod {
+    pub loc: Loc,
+    pub public_visibility: Loc,
+    pub tname: TypeName,
+    pub target_function: (ModuleIdent, FunctionName),
+    pub kind: SyntaxMethodKind,
+    // We don't track usage because we require these to be public.
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyntaxMethodEntry {
+    pub index: Option<SyntaxMethod>,
+    pub index_mut: Option<SyntaxMethod>,
+}
+
+// Mapping from type to their possible "syntax methods"
+pub type SyntaxMethods = BTreeMap<TypeName, SyntaxMethodEntry>;
+
+//**************************************************************************************************
 // Modules
 //**************************************************************************************************
 
@@ -96,6 +138,7 @@ pub struct ModuleDefinition {
     pub attributes: Attributes,
     pub is_source_module: bool,
     pub use_funs: UseFuns,
+    pub syntax_methods: SyntaxMethods,
     pub friends: UniqueMap<ModuleIdent, Friend>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
@@ -424,6 +467,35 @@ impl UseFuns {
             color,
             resolved: BTreeMap::new(),
             implicit_candidates: UniqueMap::new(),
+        }
+    }
+}
+
+impl SyntaxMethodKind_ {
+    const INDEX: &'static str = "index";
+    const INDEX_MUT: &'static str = "index_mut";
+    const FOR_MUT: &'static str = "for_mut";
+    const FOR_IMM: &'static str = "for_imm";
+    const FOR_VAL: &'static str = "for_val";
+    const ASSIGN: &'static str = "assign";
+
+    pub fn make_name(&self, loc: Loc) -> Name {
+        match self {
+            SyntaxMethodKind_::Index => sp(loc, Self::INDEX.into()),
+            SyntaxMethodKind_::IndexMut => sp(loc, Self::INDEX_MUT.into()),
+            SyntaxMethodKind_::ForMut => sp(loc, Self::FOR_MUT.into()),
+            SyntaxMethodKind_::ForImm => sp(loc, Self::FOR_IMM.into()),
+            SyntaxMethodKind_::ForVal => sp(loc, Self::FOR_VAL.into()),
+            SyntaxMethodKind_::Assign => sp(loc, Self::ASSIGN.into()),
+        }
+    }
+}
+
+impl Default for SyntaxMethodEntry {
+    fn default() -> Self {
+        SyntaxMethodEntry {
+            index: None,
+            index_mut: None,
         }
     }
 }
@@ -813,6 +885,19 @@ impl std::fmt::Display for NominalBlockUsage {
                 NominalBlockUsage::Continue => "continue",
             }
         )
+    }
+}
+
+impl fmt::Display for SyntaxMethodKind_ {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        let msg = match self {
+            SyntaxMethodKind_::IndexMut | SyntaxMethodKind_::Index => SyntaxAttribute::INDEX,
+            SyntaxMethodKind_::ForMut | SyntaxMethodKind_::ForImm | SyntaxMethodKind_::ForVal => {
+                SyntaxAttribute::FOR
+            }
+            SyntaxMethodKind_::Assign => SyntaxAttribute::ASSIGN,
+        };
+        write!(f, "{}", msg)
     }
 }
 
@@ -1512,13 +1597,12 @@ impl AstDebug for ExpDotted_ {
             D::Dot(e, n) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n))
-            }
-            // D::Index(e, sp!(_, args)) => {
-            //     e.ast_debug(w);
-            //     w.write("(");
-            //     w.comma(args, |w, e| e.ast_debug(w));
-            //     w.write(")");
-            // }
+            } // D::Index(e, sp!(_, args)) => {
+              //     e.ast_debug(w);
+              //     w.write("(");
+              //     w.comma(args, |w, e| e.ast_debug(w));
+              //     w.write(")");
+              // }
         }
     }
 }

@@ -2894,13 +2894,15 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 EE::UnresolvedError
             }
         },
-        pdotted_ @ (PE::Dot(_, _) | PE::Index(_, _)) => match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
-            Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, edotted),
-            None => {
-                assert!(context.env().has_errors());
-                EE::UnresolvedError
+        pdotted_ @ (PE::Dot(_, _) | PE::Index(_, _)) => {
+            match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
+                Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, edotted),
+                None => {
+                    assert!(context.env().has_errors());
+                    EE::UnresolvedError
+                }
             }
-        },
+        }
         PE::DotCall(pdotted, n, is_macro, ptys_opt, sp!(rloc, prs)) => {
             match exp_dotted(context, pdotted) {
                 Some(edotted) => {
@@ -3045,7 +3047,10 @@ fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpD
         }
         PE::Index(plhs, sp!(argloc, args)) => {
             let lhs = exp_dotted(context, plhs)?;
-            let args = args.into_iter().map(|arg| *exp(context, Box::new(arg))).collect::<Vec<_>>();
+            let args = args
+                .into_iter()
+                .map(|arg| *exp(context, Box::new(arg)))
+                .collect::<Vec<_>>();
             EE::Index(lhs, sp(argloc, args))
         }
         pe_ => EE::Exp(exp(context, Box::new(sp(loc, pe_)))),
@@ -3262,8 +3267,11 @@ fn lvalues(context: &mut Context, e: Box<P::Exp>) -> Option<LValue> {
             L::FieldMutate(dotted)
         }
         pdotted_ @ PE::Index(_, _) => {
-            context.env().add_diag(diag!(Syntax::InvalidLValue, (loc, "Cannot use index in left-hand positions")));
-            return None
+            context.env().add_diag(diag!(
+                Syntax::InvalidLValue,
+                (loc, "Cannot use index in left-hand positions")
+            ));
+            return None;
         }
         _ => L::Assigns(sp(loc, vec![assign(context, sp(loc, e_))?])),
     };

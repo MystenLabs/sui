@@ -20,8 +20,8 @@ use crate::{
         Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_,
     },
     shared::{
-        known_attributes::TestingAttribute, process_binops, program_info::TypingProgramInfo,
-        unique_map::UniqueMap, *, ast_debug::AstDebug,
+        ast_debug::AstDebug, known_attributes::TestingAttribute, process_binops,
+        program_info::TypingProgramInfo, unique_map::UniqueMap, *,
     },
     sui_mode,
     typing::{
@@ -1202,18 +1202,9 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             (ty, TE::Use(var))
         }
         NE::MethodCall(ndotted, f, /* is_macro */ None, ty_args_opt, sp!(argloc, nargs_)) => {
-            let (edotted, last_ty) = exp_dotted(context, None, ndotted);
+            let edotted = process_exp_dotted(context, None, ndotted);
             let args = exp_vec(context, nargs_);
-            let ty_call_opt = method_call(
-                context,
-                eloc,
-                edotted,
-                last_ty,
-                f,
-                ty_args_opt,
-                argloc,
-                args,
-            );
+            let ty_call_opt = method_call(context, eloc, edotted, f, ty_args_opt, argloc, args);
             match ty_call_opt {
                 None => {
                     assert!(context.env.has_errors());
@@ -1227,12 +1218,11 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             module_call(context, eloc, m, f, ty_args_opt, argloc, args)
         }
         NE::MethodCall(ndotted, f, Some(macro_call_loc), ty_args_opt, sp!(argloc, nargs_)) => {
-            let (edotted, last_ty) = exp_dotted(context, None, ndotted);
+            let edotted = process_exp_dotted(context, None, ndotted);
             let ty_call_opt = macro_method_call(
                 context,
                 eloc,
                 edotted,
-                last_ty,
                 f,
                 macro_call_loc,
                 ty_args_opt,
@@ -1375,12 +1365,16 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         }
 
         NE::FieldMutate(ndotted, nr) => {
-            let lhsloc = ndotted.loc;
             let er = exp(context, nr);
-            let (edotted, _) = exp_dotted(context, Some("mutation"), ndotted);
-            let eborrow = exp_dotted_to_borrow(context, lhsloc, true, edotted);
+            let eborrow = exp_dotted_expression(
+                context,
+                DottedUsage::Borrow(true),
+                Some("mutation"),
+                ndotted.loc,
+                ndotted,
+            );
             check_mutation(context, eborrow.exp.loc, eborrow.ty.clone(), &er.ty);
-            (sp(eloc, Type_::Unit), TE::Mutate(Box::new(eborrow), er))
+            (sp(eloc, Type_::Unit), TE::Mutate(eborrow, er))
         }
 
         NE::Return(nret) => {
@@ -1497,102 +1491,9 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             (bt, TE::Pack(m, n, targs, tfields))
         }
 
-        NE::ExpDotted(DottedUsage::Use, sp!(_, N::ExpDotted_::Exp(ner))) => {
-            let er = exp(context, ner);
-            (er.ty, er.exp.value)
-        }
-        NE::ExpDotted(DottedUsage::Borrow(mut_), sp!(_, N::ExpDotted_::Exp(ner))) => {
-            let er = exp(context, ner);
-            warn_on_constant_borrow(context, eloc, &er);
-            context.add_base_type_constraint(eloc, "Invalid borrow", er.ty.clone());
-            let ty = sp(eloc, Type_::Ref(mut_, Box::new(er.ty.clone())));
-            let eborrow = match er.exp {
-                sp!(_, TE::Use(v)) => {
-                    if mut_ {
-                        check_mutability(context, eloc, "mutable borrow", &v);
-                    }
-                    TE::BorrowLocal(mut_, v)
-                }
-                erexp => TE::TempBorrow(mut_, Box::new(T::exp(er.ty, erexp))),
-            };
-            (ty, eborrow)
-        }
-        NE::ExpDotted(DottedUsage::Move(loc), sp!(_, N::ExpDotted_::Exp(ner))) => {
-            let er = exp(context, ner);
-
-            match er.exp.value {
-                TE::Use(var) => (
-                    er.ty,
-                    TE::Move {
-                        var,
-                        from_user: true,
-                    },
-                ),
-                TE::UnresolvedError => (er.ty, TE::UnresolvedError),
-                er_ => {
-                    let msg = if matches!(er_, TE::Constant(_, _)) {
-                        "Invalid 'move'. Cannot 'move' constants"
-                    } else {
-                        "Invalid 'move'. Expected a variable or path."
-                    };
-                    context
-                        .env
-                        .add_diag(diag!(TypeSafety::InvalidMoveOp, (loc, msg)));
-                    (context.error_type(eloc), TE::UnresolvedError)
-                }
-            }
-        }
-        NE::ExpDotted(DottedUsage::Copy(loc), sp!(_, N::ExpDotted_::Exp(ner))) => {
-            let er = exp(context, ner);
-            let (ty, ecopy) = match er.exp.value {
-                TE::Use(var) => (
-                    er.ty,
-                    TE::Copy {
-                        var,
-                        from_user: true,
-                    },
-                ),
-                er_ @ TE::Constant(_, _) => {
-                    context.env.check_feature(
-                        FeatureGate::Move2024Paths,
-                        context.current_package(),
-                        loc,
-                    );
-                    (er.ty, er_)
-                }
-                TE::UnresolvedError => (er.ty, TE::UnresolvedError),
-                _ => {
-                    let msg = "Invalid 'copy'. Expected a variable or path.".to_owned();
-                    context
-                        .env
-                        .add_diag(diag!(TypeSafety::InvalidCopyOp, (loc, msg)));
-                    (context.error_type(eloc), TE::UnresolvedError)
-                }
-            };
-            if !matches!(ecopy, TE::UnresolvedError) {
-                context.add_ability_constraint(
-                    eloc,
-                    Some(format!(
-                        "Invalid 'copy' of owned value without the '{}' ability",
-                        Ability_::Copy
-                    )),
-                    ty.clone(),
-                    Ability_::Copy,
-                );
-            }
-            (ty, ecopy)
-        }
-
-        NE::ExpDotted(DottedUsage::Borrow(mut_), ndotted) => {
-            let (edotted, _) = exp_dotted(context, Some("borrow"), ndotted);
-            let eborrow = exp_dotted_to_borrow(context, eloc, mut_, edotted);
-            (eborrow.ty, eborrow.exp.value)
-        }
-
-        NE::ExpDotted(usage, ndotted) => {
-            let (edotted, inner_ty) = exp_dotted(context, Some("dot access"), ndotted);
-            let ederefborrow = exp_dotted_to_owned_value(context, usage, eloc, edotted, inner_ty);
-            (ederefborrow.ty, ederefborrow.exp.value)
+        NE::ExpDotted(usage, edotted) => {
+            let out_exp = *exp_dotted_usage(context, usage, eloc, edotted);
+            (out_exp.ty, out_exp.exp.value)
         }
 
         NE::Cast(nl, ty) => {
@@ -2108,216 +2009,391 @@ fn add_field_types<T>(
     })
 }
 
-enum ExpDotted_ {
-    Exp(Box<T::Exp>),
-    TmpBorrow(Box<T::Exp>, Box<Type>),
-    Dot(Box<ExpDotted>, Field, Box<Type>),
-    Borrow(Box<ExpDotted>, Vec<T::Exp>, Box<Type>),
-    BorrowMut(Box<ExpDotted>, Vec<T::Exp>, Box<Type>),
-}
-type ExpDotted = Spanned<ExpDotted_>;
+//--------------------------------------------------------------------------------------------------
+// Dotted Expressions
+//--------------------------------------------------------------------------------------------------
 
-// if constraint_verb is None, no single typeconstraint is applied
-fn exp_dotted(
+#[derive(Debug)]
+enum ExpDottedAccess {
+    Field(Field, Type),
+    Index(Vec<T::Exp>, Type),
+}
+
+#[derive(Debug)]
+enum BaseRefKind {
+    Owned,
+    MutRef,
+    ImmRef,
+}
+
+#[derive(Debug)]
+struct ExpDotted {
+    loc: Loc,
+    base_kind: BaseRefKind,
+    base: T::Exp,
+    base_type: N::Type,
+    accessors: Vec<ExpDottedAccess>,
+}
+
+impl ExpDotted {
+    fn last_type(&self) -> Type {
+        if let Some(accessor) = self.accessors.last() {
+            match accessor {
+                ExpDottedAccess::Field(_, ty) => ty.clone(),
+                ExpDottedAccess::Index(_, ty) => ty.clone(),
+            }
+        } else {
+            self.base_type.clone()
+        }
+    }
+}
+
+fn process_exp_dotted(
     context: &mut Context,
     constraint_verb: Option<&str>,
     sp!(dloc, ndot_): N::ExpDotted,
-) -> (ExpDotted, Type) {
-    use N::ExpDotted_ as NE;
-    let (edot_, ty) = match ndot_ {
-        NE::Exp(ne) => {
-            use Type_::*;
-            let e = exp(context, ne);
-            warn_on_constant_borrow(context, dloc, &e);
-            let ety = &e.ty;
-            let unfolded = core::unfold_type(&context.subst, ety.clone());
-            let (borrow_needed, ty) = match unfolded.value {
-                Ref(_, inner) => (false, *inner),
-                _ => (true, ety.clone()),
+) -> ExpDotted {
+    match ndot_ {
+        N::ExpDotted_::Exp(e) => {
+            let base = *exp(context, e);
+            let unfolded = core::unfold_type(&context.subst, base.ty.clone());
+            let (base_kind, base_type) = match unfolded.value {
+                Type_::Ref(true, inner) => (BaseRefKind::ImmRef, *inner.clone()),
+                Type_::Ref(false, inner) => (BaseRefKind::MutRef, *inner.clone()),
+                _ => (BaseRefKind::Owned, base.ty.clone()),
             };
-            let edot_ = if borrow_needed {
+            if matches!(base_kind, BaseRefKind::Owned) {
                 if let Some(verb) = constraint_verb {
                     context.add_single_type_constraint(
                         dloc,
                         format!("Invalid {}", verb),
-                        ty.clone(),
+                        base_type.clone(),
                     );
                 }
-                ExpDotted_::TmpBorrow(e, Box::new(ty.clone()))
-            } else {
-                ExpDotted_::Exp(e)
-            };
-            (edot_, ty)
-        }
-        NE::Dot(nlhs, field) => {
-            let (lhs, inner) = exp_dotted(context, Some("dot access"), *nlhs);
-            let field_ty = resolve_field(context, dloc, inner, &field);
-            (
-                ExpDotted_::Dot(Box::new(lhs), field, Box::new(field_ty.clone())),
-                field_ty,
-            )
-        }
-    };
-    (sp(dloc, edot_), ty)
-}
-
-fn exp_dotted_to_borrow(
-    context: &mut Context,
-    loc: Loc,
-    mut_: bool,
-    sp!(dloc, dot_): ExpDotted,
-) -> T::Exp {
-    use Type_::*;
-    use T::UnannotatedExp_ as TE;
-    match dot_ {
-        ExpDotted_::Exp(e) => *e,
-        ExpDotted_::TmpBorrow(eb, desired_inner_ty) => {
-            let eb_ty = eb.ty;
-            let sp!(ebloc, eb_) = eb.exp;
-            let e_ = match eb_ {
-                TE::Use(v) => {
-                    if mut_ {
-                        check_mutability(context, loc, "mutable borrow", &v);
-                    }
-                    TE::BorrowLocal(mut_, v)
-                }
-                eb_ => {
-                    match &eb_ {
-                        TE::Move { from_user, .. } | TE::Copy { from_user, .. } => {
-                            assert!(*from_user)
-                        }
-                        _ => (),
-                    }
-                    TE::TempBorrow(mut_, Box::new(T::exp(eb_ty, sp(ebloc, eb_))))
-                }
-            };
-            let ty = sp(loc, Ref(mut_, desired_inner_ty));
-            T::exp(ty, sp(dloc, e_))
-        }
-        ExpDotted_::Dot(lhs, field, field_ty) => {
-            let lhs_borrow = exp_dotted_to_borrow(context, dloc, mut_, *lhs);
-            let sp!(tyloc, unfolded_) = core::unfold_type(&context.subst, lhs_borrow.ty.clone());
-            let lhs_mut = match unfolded_ {
-                Ref(lhs_mut, _) => lhs_mut,
-                _ => panic!(
-                    "ICE expected a ref from exp_dotted borrow, otherwise should have gotten a \
-                     TmpBorrow"
-                ),
-            };
-            // lhs is immutable and current borrow is mutable
-            if !lhs_mut && mut_ {
-                context.env.add_diag(diag!(
-                    ReferenceSafety::RefTrans,
-                    (loc, "Invalid mutable borrow from an immutable reference"),
-                    (tyloc, "Immutable because of this position"),
-                ))
             }
-            let e_ = TE::Borrow(mut_, Box::new(lhs_borrow), field);
-            let ty = sp(loc, Ref(mut_, field_ty));
-            T::exp(ty, sp(dloc, e_))
+            let accessors = vec![];
+            return ExpDotted {
+                loc: dloc,
+                base,
+                base_kind,
+                base_type,
+                accessors,
+            };
+        }
+        N::ExpDotted_::Dot(ndot, field) => {
+            let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
+            let inner_ty = inner.last_type();
+            let field_type = resolve_field(context, dloc, inner_ty, &field);
+            inner.loc = dloc;
+            inner
+                .accessors
+                .push(ExpDottedAccess::Field(field, field_type));
+            inner
+        }
+        N::ExpDotted_::Index(ndot, args) => {
+            let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
+            let inner_ty = inner.last_type();
+            let field_type = resolve_field(context, dloc, inner_ty, &field);
+            inner.loc = dloc;
+            inner
+                .accessors
+                .push(ExpDottedAccess::Field(field, field_type));
+            inner
         }
     }
 }
 
-fn exp_dotted_to_owned_value(
+fn exp_dotted_usage(
     context: &mut Context,
     usage: DottedUsage,
     eloc: Loc,
-    edot: ExpDotted,
-    inner_ty: Type,
-) -> T::Exp {
+    ndotted: N::ExpDotted,
+) -> Box<T::Exp> {
+    println!("{:#?}", ndotted);
+    let edotted = if matches!(ndotted.value, N::ExpDotted_::Exp(_)) {
+        process_exp_dotted(context, None, ndotted)
+    } else if matches!(usage, DottedUsage::Borrow(_)) {
+        process_exp_dotted(context, Some("borrow"), ndotted)
+    } else if matches!(ndotted.value, N::ExpDotted_::Dot(_)) {
+        process_exp_dotted(context, Some("dot access"), ndotted)
+    } else {
+        process_exp_dotted(context, Some("index"), ndotted)
+    };
+    if matches!(usage, DottedUsage::Borrow(_)) && edotted.accessors.is_empty() {
+        context.add_base_type_constraint(eloc, "Invalid borrow", edotted.base.ty.clone());
+    }
+    resolve_exp_dotted(context, usage, eloc, edotted)
+}
+
+fn exp_dotted_expression(
+    context: &mut Context,
+    usage: DottedUsage,
+    constraint_verb: Option<&str>,
+    eloc: Loc,
+    ndotted: N::ExpDotted,
+) -> Box<T::Exp> {
+    println!("{:#?}", ndotted);
+    let edotted = process_exp_dotted(context, constraint_verb, ndotted);
+    if matches!(usage, DottedUsage::Borrow(_)) && edotted.accessors.is_empty() {
+        context.add_base_type_constraint(eloc, "Invalid borrow", edotted.base.ty.clone());
+    }
+    resolve_exp_dotted(context, usage, eloc, edotted)
+}
+
+fn resolve_exp_dotted(
+    context: &mut Context,
+    usage: DottedUsage,
+    eloc: Loc,
+    mut edotted: ExpDotted,
+) -> Box<T::Exp> {
     use T::UnannotatedExp_ as TE;
-    match edot {
-        sp!(_, ExpDotted_::Exp(lhs)) | sp!(_, ExpDotted_::TmpBorrow(lhs, _)) => {
-            debug_assert!(
-                usage == DottedUsage::Use,
-                "ICE this case should only come from method calls. \
-                move/copy/borrow should be covered above"
-            );
-            *lhs
-        }
-        edot => {
-            let name = match &edot {
-                sp!(_, ExpDotted_::Exp(_)) | sp!(_, ExpDotted_::TmpBorrow(_, _)) => {
-                    panic!("ICE covered above")
+    println!("usage: {:#?}", usage);
+    println!("{:#?}", edotted);
+
+    let make_exp = |ty, exp_| Box::new(T::exp(ty, sp(eloc, exp_)));
+    let make_error = |context: &mut Context| make_error_exp(context, eloc);
+
+    match usage {
+        DottedUsage::Move(loc) => {
+            match edotted.base.exp.value {
+                TE::Use(var) if edotted.accessors.is_empty() => make_exp(
+                    edotted.base.ty,
+                    TE::Move {
+                        var,
+                        from_user: true,
+                    },
+                ),
+                TE::Constant(_, _) if edotted.accessors.is_empty() => {
+                    context.env.add_diag(diag!(
+                        TypeSafety::InvalidMoveOp,
+                        (loc, "Invalid 'move'. Cannot 'move' constants")
+                    ));
+                    make_error(context)
                 }
-                sp!(_, ExpDotted_::Dot(_, name, _)) => *name,
-            };
-            let eborrow = exp_dotted_to_borrow(context, eloc, false, edot);
-            let case = match usage {
-                DottedUsage::Move(loc) => {
-                    let new_syntax = context.env.check_feature(
+                TE::UnresolvedError => make_exp(edotted.base.ty, TE::UnresolvedError),
+                _ if edotted.accessors.is_empty() => {
+                    context.env.add_diag(diag!(
+                        TypeSafety::InvalidMoveOp,
+                        (loc, "Invalid 'move'. Expected a variable or path.")
+                    ));
+                    make_error(context)
+                }
+                _ => {
+                    if context.env.check_feature(
                         FeatureGate::Move2024Paths,
                         context.current_package(),
                         loc,
-                    );
-                    if new_syntax {
+                    ) {
+                        // call for effect
+                        borrow_exp_dotted(context, false, edotted);
                         let msg = "Invalid 'move'. 'move' works only with \
-                            variables, e.g. 'move x'. 'move' on a path access is not supported";
+                        variables, e.g. 'move x'. 'move' on a path access is not supported";
                         context
                             .env
                             .add_diag(diag!(TypeSafety::InvalidMoveOp, (loc, msg)));
+                        make_error(context)
+                    } else {
+                        make_error(context)
                     }
-                    None
                 }
-                DottedUsage::Copy(loc) => {
-                    context.env.check_feature(
-                        FeatureGate::Move2024Paths,
-                        context.current_package(),
-                        loc,
-                    );
-                    Some("'copy'")
+            }
+        }
+        DottedUsage::Copy(loc) => {
+            let copy_exp = if edotted.accessors.is_empty() {
+                match edotted.base.exp.value {
+                    TE::Use(var) => make_exp(
+                        edotted.base.ty,
+                        TE::Copy {
+                            var,
+                            from_user: true,
+                        },
+                    ),
+                    exp_ @ TE::Constant(_, _) => {
+                        context.env.check_feature(
+                            FeatureGate::Move2024Paths,
+                            context.current_package(),
+                            edotted.base.exp.loc,
+                        );
+                        make_exp(edotted.base.ty, exp_)
+                    }
+                    TE::UnresolvedError => make_exp(edotted.base.ty, TE::UnresolvedError),
+                    _ => {
+                        let msg = "Invalid 'copy'. Expected a variable or path.".to_owned();
+                        context
+                            .env
+                            .add_diag(diag!(TypeSafety::InvalidCopyOp, (loc, msg)));
+                        make_error(context)
+                    }
                 }
-                DottedUsage::Use => Some("implicit copy"),
-                DottedUsage::Borrow(_) => unreachable!("ICE covered above"),
+            } else {
+                exp_dotted_to_owned(context, usage.clone(), edotted)
             };
-            if let Some(case) = case {
+            if !matches!(copy_exp.exp.value, TE::UnresolvedError) {
                 context.add_ability_constraint(
                     eloc,
                     Some(format!(
-                        "Invalid {} of field '{}' without the '{}' ability",
-                        case,
-                        name,
-                        Ability_::COPY,
+                        "Invalid 'copy' of owned value without the '{}' ability",
+                        Ability_::Copy
                     )),
-                    inner_ty.clone(),
+                    copy_exp.ty.clone(),
                     Ability_::Copy,
                 );
-                T::exp(inner_ty, sp(eloc, TE::Dereference(Box::new(eborrow))))
+            }
+            copy_exp
+        }
+        DottedUsage::Use => {
+            if edotted.accessors.is_empty() {
+                Box::new(edotted.base)
             } else {
-                // 'move' case, which is not supported
-                T::exp(context.error_type(eloc), sp(eloc, TE::UnresolvedError))
+                exp_dotted_to_owned(context, DottedUsage::Use, edotted)
             }
+        }
+        DottedUsage::Borrow(mut_) => {
+            // To maintain previous error reporting
+            edotted.loc = eloc;
+            borrow_exp_dotted(context, mut_, edotted)
         }
     }
 }
 
-fn warn_on_constant_borrow(context: &mut Context, loc: Loc, e: &T::Exp) {
+fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T::Exp> {
+    fn check_mut(context: &mut Context, loc: Loc, cur_type: Type, expected_mut: bool) {
+        let sp!(tyloc, cur_exp_type) = core::unfold_type(&context.subst, cur_type);
+        let cur_mut = match cur_exp_type {
+            Type_::Ref(cur_mut, _) => cur_mut,
+            _ => panic!(
+                "ICE expected a ref from exp_dotted borrow, otherwise should have gotten a \
+                 TmpBorrow"
+            ),
+        };
+        // lhs is immutable and current borrow is mutable
+        if !cur_mut && expected_mut {
+            context.env.add_diag(diag!(
+                ReferenceSafety::RefTrans,
+                (loc, "Invalid mutable borrow from an immutable reference"),
+                (tyloc, "Immutable because of this position"),
+            ))
+        }
+    }
+
     use T::UnannotatedExp_ as TE;
-    if matches!(&e.exp.value, TE::Constant(_, _)) {
-        let msg = "This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit";
-        context
-            .env
-            .add_diag(diag!(TypeSafety::ImplicitConstantCopy, (loc, msg)))
-    }
-}
+    let ExpDotted {
+        loc,
+        base,
+        base_type,
+        base_kind,
+        accessors,
+    } = ed;
 
-impl crate::shared::ast_debug::AstDebug for ExpDotted_ {
-    fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
-        use ExpDotted_ as D;
-        match self {
-            D::Exp(e) => e.ast_debug(w),
-            D::TmpBorrow(e, ty) => {
-                w.write("&tmp ");
-                w.annotate(|w| e.ast_debug(w), ty)
-            }
-            D::Dot(e, n, ty) => {
-                e.ast_debug(w);
-                w.write(".");
-                w.annotate(|w| w.write(&format!("{}", n)), ty)
-            }
+    let mut exp = match base_kind {
+        BaseRefKind::Owned => exp_to_borrow(context, loc, mut_, Box::new(base), base_type),
+        BaseRefKind::ImmRef | BaseRefKind::MutRef => Box::new(base),
+    };
+
+    for accessor in accessors {
+        check_mut(context, loc, exp.ty.clone(), mut_);
+        match accessor {
+            ExpDottedAccess::Field(name, ty) => {
+                let e_ = TE::Borrow(mut_, exp, name);
+                let ty = sp(loc, Type_::Ref(mut_, Box::new(ty)));
+                exp = Box::new(T::exp(ty, sp(loc, e_)));
+            } // ExpDottedAccess::Index(_name, _ty) => todo!(),
         }
     }
+    exp
+}
+
+fn exp_dotted_to_owned(context: &mut Context, usage: DottedUsage, ed: ExpDotted) -> Box<T::Exp> {
+    use T::UnannotatedExp_ as TE;
+    let (access_msg, access_type) = if let Some(accessor) = ed.accessors.last() {
+        match accessor {
+            ExpDottedAccess::Field(name, ty) => (format!("field '{}'", name), ty.clone()),
+            // ExpDottedAccess::Index(_, ty) => ("index result".to_string(), ty.clone()),
+        }
+    } else {
+        context.env.add_diag(ice!((
+            ed.loc,
+            "Attempted to make a dotted path with no dots"
+        )));
+        return make_error_exp(context, ed.loc);
+    };
+    let borrow_exp = borrow_exp_dotted(context, false, ed);
+    let case = match usage {
+        DottedUsage::Move(_) => {
+            context.env.add_diag(ice!((
+                borrow_exp.exp.loc,
+                "Invalid dotted usage 'move' in to_owned"
+            )));
+            return make_error_exp(context, borrow_exp.exp.loc);
+        }
+        DottedUsage::Borrow(_) => {
+            context.env.add_diag(ice!((
+                borrow_exp.exp.loc,
+                "Invalid dotted usage 'borrow' in to_owned"
+            )));
+            return make_error_exp(context, borrow_exp.exp.loc);
+        }
+        DottedUsage::Use => "implicit copy",
+        DottedUsage::Copy(loc) => {
+            context
+                .env
+                .check_feature(FeatureGate::Move2024Paths, context.current_package(), loc);
+            "'copy'"
+        }
+    };
+    let eloc = borrow_exp.exp.loc;
+    context.add_ability_constraint(
+        eloc,
+        Some(format!(
+            "Invalid {} of {} without the '{}' ability",
+            case,
+            access_msg,
+            Ability_::COPY,
+        )),
+        access_type.clone(),
+        Ability_::Copy,
+    );
+    Box::new(T::exp(access_type, sp(eloc, TE::Dereference(borrow_exp))))
+}
+
+fn make_error_exp(context: &mut Context, loc: Loc) -> Box<T::Exp> {
+    Box::new(T::exp(
+        context.error_type(loc),
+        sp(loc, T::UnannotatedExp_::UnresolvedError),
+    ))
+}
+
+fn exp_to_borrow(
+    context: &mut Context,
+    loc: Loc,
+    mut_: bool,
+    eb: Box<T::Exp>,
+    cur_ty: Type,
+) -> Box<T::Exp> {
+    use Type_::*;
+    use T::UnannotatedExp_ as TE;
+    warn_on_constant_borrow(context, loc, &eb);
+    let eb_ty = eb.ty;
+    let sp!(ebloc, eb_) = eb.exp;
+    let e_ = match eb_ {
+        TE::Use(v) => {
+            if mut_ {
+                check_mutability(context, loc, "mutable borrow", &v);
+            }
+            TE::BorrowLocal(mut_, v)
+        }
+        eb_ => {
+            match &eb_ {
+                TE::Move { from_user, .. } | TE::Copy { from_user, .. } => {
+                    assert!(*from_user)
+                }
+                _ => (),
+            }
+            TE::TempBorrow(mut_, Box::new(T::exp(eb_ty, sp(ebloc, eb_))))
+        }
+    };
+    let ty = sp(loc, Ref(mut_, Box::new(cur_ty)));
+    Box::new(T::exp(ty, sp(loc, e_)))
 }
 
 //**************************************************************************************************
@@ -2328,15 +2404,13 @@ fn method_call(
     context: &mut Context,
     loc: Loc,
     edotted: ExpDotted,
-    edotted_ty: Type,
     method: Name,
     ty_args_opt: Option<Vec<Type>>,
     argloc: Loc,
     mut args: Vec<T::Exp>,
 ) -> Option<(Type, T::UnannotatedExp_)> {
     use T::UnannotatedExp_ as TE;
-    let (m, f, fty, first_arg) =
-        method_call_resolve(context, loc, edotted, edotted_ty, method, ty_args_opt)?;
+    let (m, f, fty, first_arg) = method_call_resolve(context, loc, edotted, method, ty_args_opt)?;
     args.insert(0, first_arg);
     let (mut call, ret_ty) = module_call_impl(context, loc, m, f, fty, argloc, args);
     call.method_name = Some(method);
@@ -2347,15 +2421,16 @@ fn method_call_resolve(
     context: &mut Context,
     loc: Loc,
     mut edotted: ExpDotted,
-    edotted_ty: Type,
     method: Name,
     ty_args_opt: Option<Vec<Type>>,
 ) -> Option<(ModuleIdent, FunctionName, ResolvedFunctionType, T::Exp)> {
     use TypeName_ as TN;
     use Type_ as Ty;
-    let edotted_ty_unfolded = core::unfold_type(&context.subst, edotted_ty.clone());
-    let edotted_bty = edotted_ty_base(&edotted_ty_unfolded);
-    let tn = match &edotted_bty.value {
+
+    edotted.loc = loc;
+    let edotted_ty = core::unfold_type(&context.subst, edotted.last_type());
+
+    let tn = match &edotted_ty.value {
         Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => tn,
         t => {
             let msg = match t {
@@ -2380,9 +2455,7 @@ fn method_call_resolve(
                     assert!(context.env.has_errors());
                     return None;
                 }
-                rty_ @ (Ty::Ref(_, _) | Ty::Var(_)) => {
-                    format!("Expected a non-reference type, but found {}",  core::error_format_(rty_, &context.subst))
-                }
+                Ty::Ref(_, _) | Ty::Var(_) => panic!("ICE unfolding failed"),
                 Ty::Apply(_, _, _) => unreachable!(),
             };
             context.env.add_diag(diag!(
@@ -2396,28 +2469,12 @@ fn method_call_resolve(
     let (m, f, fty) =
         core::make_method_call_type(context, loc, &edotted_ty, tn, method, ty_args_opt)?;
 
-    let first_arg = match &fty.params[0].1.value {
-        Ty::Ref(mut_, _) => {
-            // add a borrow if needed
-            let mut cur = &mut edotted;
-            loop {
-                match cur {
-                    sp!(loc, ExpDotted_::Exp(e)) => {
-                        let e_ty = e.ty.clone();
-                        match core::unfold_type(&context.subst, e_ty.clone()).value {
-                            Ty::Ref(_, _) => (),
-                            _ => *cur = sp(*loc, ExpDotted_::TmpBorrow(e.clone(), Box::new(e_ty))),
-                        };
-                        break;
-                    }
-                    sp!(_, ExpDotted_::TmpBorrow(_, _)) => break,
-                    sp!(_, ExpDotted_::Dot(l, _, _)) => cur = l,
-                };
-            }
-            exp_dotted_to_borrow(context, loc, *mut_, edotted)
-        }
-        _ => exp_dotted_to_owned_value(context, DottedUsage::Use, loc, edotted, edotted_ty),
+    let usage = match &fty.params[0].1.value {
+        Type_::Ref(true, _) => DottedUsage::Borrow(true),
+        Type_::Ref(false, _) => DottedUsage::Borrow(false),
+        _ => DottedUsage::Use,
     };
+    let first_arg = *resolve_exp_dotted(context, usage, loc, edotted);
     Some((m, f, fty, first_arg))
 }
 
@@ -2692,15 +2749,13 @@ fn macro_method_call(
     context: &mut Context,
     loc: Loc,
     edotted: ExpDotted,
-    edotted_ty: Type,
     method: Name,
     macro_call_loc: Loc,
     ty_args_opt: Option<Vec<Type>>,
     argloc: Loc,
     nargs: Vec<N::Exp>,
 ) -> Option<(Type, T::UnannotatedExp_)> {
-    let (m, f, fty, first_arg) =
-        method_call_resolve(context, loc, edotted, edotted_ty, method, ty_args_opt)?;
+    let (m, f, fty, first_arg) = method_call_resolve(context, loc, edotted, method, ty_args_opt)?;
     let mut args = vec![macro_expand::EvalStrategy::ByValue(first_arg)];
     args.extend(
         nargs
