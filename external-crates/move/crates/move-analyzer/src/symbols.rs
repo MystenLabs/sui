@@ -5952,3 +5952,22 @@ fn dot_call_test() {
         None,
     );
 }
+
+#[test]
+/// Checks if module identifiers used during symbolication process at both parsing and typing are
+/// the same. They are used as a key to a map and if they look differently, it may lead to a crash
+/// due to keys used for insertion/ retrieval being different.
+fn mod_ident_uniform_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/mod-ident-uniform");
+
+    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M1.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    symbols.file_use_defs.get(&cpath).unwrap();
+}
