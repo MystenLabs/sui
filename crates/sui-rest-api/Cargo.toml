@@ -6,6 +6,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
+mime = "0.3.17"
 anyhow.workspace = true
 serde.workspace = true
 bcs.workspace = true
