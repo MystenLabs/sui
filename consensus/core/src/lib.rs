@@ -21,6 +21,7 @@ mod metrics;
 mod network;
 mod stake_aggregator;
 mod storage;
+mod synchronizer;
 mod threshold_clock;
 mod transaction;
 mod universal_committer;

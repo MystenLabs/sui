@@ -20,7 +20,7 @@ const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 32;
 
 enum CoreThreadCommand {
     /// Add blocks to be processed and accepted
-    AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<Vec<BlockRef>>),
+    AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<BTreeSet<BlockRef>>),
     /// Called when a leader timeout occurs and a block should be produced
     ForceNewBlock(Round, oneshot::Sender<()>),
     /// Request missing blocks that need to be synced.
@@ -36,8 +36,9 @@ pub enum CoreError {
 /// The interface to dispatch commands to CoreThread and Core.
 /// Also this allows the easier mocking during unit tests.
 #[async_trait]
-pub trait CoreThreadDispatcher: Sync + Send + 'static {
-    async fn add_blocks(&self, blocks: Vec<VerifiedBlock>) -> Result<Vec<BlockRef>, CoreError>;
+pub(crate) trait CoreThreadDispatcher: Sync + Send + 'static {
+    async fn add_blocks(&self, blocks: Vec<VerifiedBlock>)
+        -> Result<BTreeSet<BlockRef>, CoreError>;
 
     async fn force_new_block(&self, round: Round) -> Result<(), CoreError>;
 
@@ -141,7 +142,10 @@ impl ChannelCoreThreadDispatcher {
 
 #[async_trait]
 impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
-    async fn add_blocks(&self, blocks: Vec<VerifiedBlock>) -> Result<Vec<BlockRef>, CoreError> {
+    async fn add_blocks(
+        &self,
+        blocks: Vec<VerifiedBlock>,
+    ) -> Result<BTreeSet<BlockRef>, CoreError> {
         let (sender, receiver) = oneshot::channel();
         self.send(CoreThreadCommand::AddBlocks(blocks, sender))
             .await;
