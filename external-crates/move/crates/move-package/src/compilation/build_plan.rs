@@ -18,6 +18,7 @@ use move_compiler::{
         report_diagnostics_to_color_buffer, report_warnings, FilesSourceText, Migration,
     },
     editions::Edition,
+    shared::SourceFileReader,
     Compiler,
 };
 use std::{
@@ -68,7 +69,7 @@ impl BuildPlan {
 
     /// Compilation results in the process exit upon warning/failure
     pub fn compile<W: Write>(&self, writer: &mut W) -> Result<CompiledPackage> {
-        self.compile_with_driver(writer, |compiler| compiler.build_and_report())
+        self.compile_with_driver(None, writer, |compiler| compiler.build_and_report())
     }
 
     /// Compilation results in the process exit upon warning/failure
@@ -96,7 +97,7 @@ impl BuildPlan {
 
     /// Compilation process does not exit even if warnings/failures are encountered
     pub fn compile_no_exit<W: Write>(&self, writer: &mut W) -> Result<CompiledPackage> {
-        self.compile_with_driver(writer, |compiler| {
+        self.compile_with_driver(None, writer, |compiler| {
             let (files, units_res) = compiler.build()?;
             match units_res {
                 Ok((units, warning_diags)) => {
@@ -170,6 +171,7 @@ impl BuildPlan {
 
     pub fn compile_with_driver<W: Write>(
         &self,
+        source_file_reader: Option<Box<dyn SourceFileReader>>,
         writer: &mut W,
         mut compiler_driver: impl FnMut(
             Compiler,
@@ -188,6 +190,7 @@ impl BuildPlan {
             root_package,
             transitive_dependencies,
             &self.resolution_graph,
+            source_file_reader,
             &mut compiler_driver,
         )?;
 

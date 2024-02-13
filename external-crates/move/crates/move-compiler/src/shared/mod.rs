@@ -24,6 +24,8 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
     hash::Hash,
+    io::Read,
+    path::Path,
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering as AtomicOrdering},
 };
@@ -224,6 +226,8 @@ pub struct CompilationEnv {
     known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
     prim_definers:
         BTreeMap<crate::naming::ast::BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
+    /// Abstracted source file reader
+    source_file_reader: Box<dyn SourceFileReader>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
@@ -248,6 +252,7 @@ impl CompilationEnv {
         mut visitors: Vec<cli::compiler::Visitor>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
+        source_file_reader: Box<dyn SourceFileReader>,
     ) -> Self {
         use crate::diagnostics::codes::{TypeSafety, UnusedItem};
         visitors.extend([
@@ -340,6 +345,7 @@ impl CompilationEnv {
             known_filters,
             known_filter_names,
             prim_definers: BTreeMap::new(),
+            source_file_reader,
         }
     }
 
@@ -544,6 +550,10 @@ impl CompilationEnv {
 
     pub fn primitive_definer(&self, t: N::BuiltinTypeName_) -> Option<&E::ModuleIdent> {
         self.prim_definers.get(&t)
+    }
+
+    pub fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
+        self.source_file_reader.read_to_string(fpath, buf)
     }
 }
 
@@ -860,3 +870,21 @@ macro_rules! process_binops {
 }
 
 pub(crate) use process_binops;
+
+//**************************************************************************************************
+// Source file reader
+//**************************************************************************************************
+
+pub trait SourceFileReader {
+    fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize>;
+}
+
+pub struct FileSystemSourceFileReader;
+
+impl SourceFileReader for FileSystemSourceFileReader {
+    fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
+        let mut f = std::fs::File::open(fpath)
+            .map_err(|err| std::io::Error::new(err.kind(), format!("{}: {:?}", err, fpath)))?;
+        f.read_to_string(buf)
+    }
+}

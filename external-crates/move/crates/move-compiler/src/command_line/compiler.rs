@@ -15,8 +15,8 @@ use crate::{
     expansion, hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
-        CompilationEnv, Flags, IndexedPackagePath, NamedAddressMap, NamedAddressMaps,
-        NumericalAddress, PackageConfig, PackagePaths,
+        CompilationEnv, FileSystemSourceFileReader, Flags, IndexedPackagePath, NamedAddressMap,
+        NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths, SourceFileReader,
     },
     to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
@@ -54,6 +54,8 @@ pub struct Compiler<'a> {
     known_warning_filters: Vec<(/* Prefix */ Option<Symbol>, Vec<WarningFilter>)>,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
+    /// Abstracted source file reader
+    source_file_reader: Box<dyn SourceFileReader>,
 }
 
 pub struct SteppedCompiler<'a, const P: Pass> {
@@ -161,6 +163,7 @@ impl<'a> Compiler<'a> {
             known_warning_filters: vec![],
             package_configs,
             default_config: None,
+            source_file_reader: Box::new(FileSystemSourceFileReader),
         })
     }
 
@@ -259,6 +262,11 @@ impl<'a> Compiler<'a> {
         self
     }
 
+    pub fn set_source_file_reader(mut self, source_file_reader: Box<dyn SourceFileReader>) -> Self {
+        self.source_file_reader = source_file_reader;
+        self
+    }
+
     pub fn run<const TARGET: Pass>(
         self,
     ) -> anyhow::Result<(
@@ -278,14 +286,20 @@ impl<'a> Compiler<'a> {
             known_warning_filters,
             package_configs,
             default_config,
+            source_file_reader,
         } = self;
         generate_interface_files_for_deps(
             &mut deps,
             interface_files_dir_opt,
             &compiled_module_named_address_mapping,
         )?;
-        let mut compilation_env =
-            CompilationEnv::new(flags, visitors, package_configs, default_config);
+        let mut compilation_env = CompilationEnv::new(
+            flags,
+            visitors,
+            package_configs,
+            default_config,
+            source_file_reader,
+        );
         if let Some(filter) = warning_filter {
             compilation_env.add_warning_filter_scope(filter);
         }

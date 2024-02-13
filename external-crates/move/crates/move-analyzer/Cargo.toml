@@ -10,6 +10,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+chashmap.workspace = true
 codespan-reporting.workspace = true
 derivative.workspace = true
 dunce.workspace = true

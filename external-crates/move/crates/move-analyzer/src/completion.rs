@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{context::Context, symbols::Symbols};
+use chashmap::CHashMap;
 use lsp_server::Request;
 use lsp_types::{CompletionItem, CompletionItemKind, CompletionParams, Position};
 use move_command_line_common::files::FileHash;
@@ -14,7 +15,7 @@ use move_compiler::{
     },
 };
 use move_symbol_pool::Symbol;
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 /// Constructs an `lsp_types::CompletionItem` with the given `label` and `kind`.
 fn completion_item(label: &str, kind: CompletionItemKind) -> CompletionItem {
@@ -149,7 +150,12 @@ fn get_cursor_token(buffer: &str, position: &Position) -> Option<Tok> {
 /// Sends the given connection a response to a completion request.
 ///
 /// The completions returned depend upon where the user's cursor is positioned.
-pub fn on_completion_request(context: &Context, request: &Request, symbols: &Symbols) {
+pub fn on_completion_request(
+    context: &Context,
+    request: &Request,
+    files: Arc<CHashMap<PathBuf, String>>,
+    symbols: &Symbols,
+) {
     eprintln!("handling completion request");
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
         .expect("could not deserialize completion request");
@@ -160,38 +166,40 @@ pub fn on_completion_request(context: &Context, request: &Request, symbols: &Sym
         .uri
         .to_file_path()
         .unwrap();
-    let buffer = context.files.get(&path);
-    if buffer.is_none() {
-        eprintln!(
-            "Could not read '{:?}' when handling completion request",
-            path
-        );
-    }
-
-    // The completion items we provide depend upon where the user's cursor is positioned.
-    let cursor =
-        buffer.and_then(|buf| get_cursor_token(buf, &parameters.text_document_position.position));
 
     let mut items = vec![];
-    match cursor {
-        Some(Tok::Colon) => {
-            items.extend_from_slice(&primitive_types());
+    match files.get(&path) {
+        Some(buffer) => {
+            let buf = buffer.as_str();
+            let cursor = get_cursor_token(buf, &parameters.text_document_position.position);
+            match cursor {
+                Some(Tok::Colon) => {
+                    items.extend_from_slice(&primitive_types());
+                }
+                Some(Tok::Period) | Some(Tok::ColonColon) => {
+                    // `.` or `::` must be followed by identifiers, which are added to the completion items
+                    // below.
+                }
+                _ => {
+                    // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
+                    // offer them Move's keywords, operators, and builtins as completion items.
+                    items.extend_from_slice(&keywords());
+                    items.extend_from_slice(&builtins());
+                }
+            }
+
+            let identifiers = identifiers(buf, symbols, &path);
+            items.extend_from_slice(&identifiers);
         }
-        Some(Tok::Period) | Some(Tok::ColonColon) => {
-            // `.` or `::` must be followed by identifiers, which are added to the completion items
-            // below.
-        }
-        _ => {
-            // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
-            // offer them Move's keywords, operators, and builtins as completion items.
+        None => {
+            eprintln!(
+                "Could not read '{:?}' when handling completion request",
+                path
+            );
+            // no file found so jus add keywords and builtins
             items.extend_from_slice(&keywords());
             items.extend_from_slice(&builtins());
         }
-    }
-
-    if let Some(buffer) = &buffer {
-        let identifiers = identifiers(buffer, symbols, &path);
-        items.extend_from_slice(&identifiers);
     }
 
     let result = serde_json::to_value(items).expect("could not serialize completion response");
