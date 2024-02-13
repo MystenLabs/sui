@@ -96,7 +96,7 @@ pub struct StateSyncConfig {
     /// - in case of a fork, to prevent the node from syncing to the wrong chain.
     /// - in case of a network stall, to force the node to proceed with a manually-injected
     ///   checkpoint.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub pinned_checkpoints: Vec<(CheckpointSequenceNumber, CheckpointDigest)>,
 
     /// Query peers for their latest checkpoint every interval period.
