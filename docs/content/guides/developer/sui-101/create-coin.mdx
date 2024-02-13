@@ -64,12 +64,6 @@ Amount: <COIN-AMOUNT>
 
 ## DenyList
 
-:::info
-
-The `DenyList` object and regulated coins are currently available in Devnet only. 
-
-:::
-
 The Sui framework provides a `DenyList` singleton, shared object that the bearer of a `DenyCap` can access to specify a list of addresses that are unable to use a Sui core type. The initial use case for `DenyList`, however, focuses on limiting access to coins of a specified type. This is useful, for example, when creating a regulated coin on Sui that requires the ability to block certain addresses from using it as inputs to transactions. Regulated coins on Sui satisfy any regulations that require the ability to prevent known bad actors from having access to those coins. 
 
 :::info
@@ -193,4 +187,4 @@ MutatedObjects:
 
 ```
 
-For all `Coin` functions available on Devnet, see the [Sui framework documentation](https://github.com/MystenLabs/sui/blob/devnet/crates/sui-framework/docs/sui-framework/coin.md) on the `devnet` branch.
+For all `Coin` functions available, see the [Sui framework documentation](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui-framework/coin.md).
