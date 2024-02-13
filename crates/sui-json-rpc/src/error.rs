@@ -242,7 +242,8 @@ impl From<Error> for RpcError {
                         );
                         RpcError::Call(CallError::Custom(error_object))
                     }
-                    QuorumDriverError::SystemOverload { .. } => {
+                    QuorumDriverError::SystemOverload { .. }
+                    | QuorumDriverError::SystemOverloadRetryAfter { .. } => {
                         let error_object =
                             ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>);
                         RpcError::Call(CallError::Custom(error_object))

@@ -329,9 +329,6 @@ pub enum SuiError {
         threshold: u64,
     },
 
-    #[error("Validator cannot handle the request at the moment. Please retry later.")]
-    ValidatorPushbackAndRetry,
-
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
@@ -817,6 +814,10 @@ impl SuiError {
                 | SuiError::TooOldTransactionPendingOnObject { .. }
                 | SuiError::TooManyTransactionsPendingConsensus
         )
+    }
+
+    pub fn is_retryable_overload(&self) -> bool {
+        matches!(self, SuiError::ValidatorOverloadedRetryAfter { .. })
     }
 }
 
