@@ -6,10 +6,12 @@ use axum::{http::StatusCode, routing::get, Router};
 pub mod accept;
 mod checkpoints;
 mod client;
+mod error;
 pub mod headers;
 mod objects;
 
 pub use client::Client;
+pub use error::{RestError, Result};
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::storage::ReadStore;
 
