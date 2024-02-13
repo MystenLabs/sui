@@ -1,11 +1,4 @@
 {
-  "routes": [
-    {
-      "src": "/fonts(.*)",
-      "headers": { "cache-control": "s-maxage=604800" },
-      "dest": "/fonts/$1"
-    }
-  ],
   "redirects": [
       { "source": "/testnet/:path*", "destination": "/:path*", "permanent": false },
       { "source": "/devnet/:path*", "destination": "/:path*", "permanent": false },
