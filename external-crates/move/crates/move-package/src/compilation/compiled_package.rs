@@ -28,7 +28,7 @@ use move_compiler::{
     compiled_unit::{AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule},
     diagnostics::FilesSourceText,
     editions::Flavor,
-    shared::{NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths, SourceFileReader},
+    shared::{FileReader, NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
     sui_mode::linters::{known_filters, linter_visitors},
     Compiler,
 };
@@ -437,7 +437,7 @@ impl CompiledPackage {
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        source_file_reader: Option<Box<dyn SourceFileReader>>,
+        source_file_reader: Option<Box<dyn FileReader>>,
         mut compiler_driver: impl FnMut(Compiler) -> Result<T>,
     ) -> Result<BuildResult<T>> {
         let immediate_dependencies = transitive_dependencies
@@ -491,7 +491,7 @@ impl CompiledPackage {
             .unwrap()
             .set_flags(flags);
         if let Some(file_reader) = source_file_reader {
-            compiler = compiler.set_source_file_reader(file_reader);
+            compiler = compiler.set_file_reader(file_reader);
         }
         if sui_mode {
             let (filter_attr_name, filters) = known_filters();
@@ -533,7 +533,7 @@ impl CompiledPackage {
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        source_file_reader: Option<Box<dyn SourceFileReader>>,
+        source_file_reader: Option<Box<dyn FileReader>>,
         compiler_driver: impl FnMut(Compiler) -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
     ) -> Result<CompiledPackage> {
         let BuildResult {

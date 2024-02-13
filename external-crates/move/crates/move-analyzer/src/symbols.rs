@@ -90,7 +90,7 @@ use move_compiler::{
     expansion::ast::{self as E, Fields, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
     parser::ast::{self as P, StructName},
-    shared::{Identifier, Name, SourceFileReader},
+    shared::{FileReader, Identifier, Name},
     typing::ast::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
         ModuleCall, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,

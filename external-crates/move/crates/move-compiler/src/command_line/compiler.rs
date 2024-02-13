@@ -15,8 +15,8 @@ use crate::{
     expansion, hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
-        CompilationEnv, FileSystemSourceFileReader, Flags, IndexedPackagePath, NamedAddressMap,
-        NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths, SourceFileReader,
+        CompilationEnv, FileReader, Flags, IndexedPackagePath, NamedAddressMap, NamedAddressMaps,
+        NumericalAddress, PackageConfig, PackagePaths,
     },
     to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
@@ -55,7 +55,7 @@ pub struct Compiler<'a> {
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
     /// Abstracted source file reader
-    source_file_reader: Box<dyn SourceFileReader>,
+    file_reader: Option<Box<dyn FileReader>>,
 }
 
 pub struct SteppedCompiler<'a, const P: Pass> {
@@ -163,7 +163,7 @@ impl<'a> Compiler<'a> {
             known_warning_filters: vec![],
             package_configs,
             default_config: None,
-            source_file_reader: Box::new(FileSystemSourceFileReader),
+            file_reader: None,
         })
     }
 
@@ -262,8 +262,9 @@ impl<'a> Compiler<'a> {
         self
     }
 
-    pub fn set_source_file_reader(mut self, source_file_reader: Box<dyn SourceFileReader>) -> Self {
-        self.source_file_reader = source_file_reader;
+    pub fn set_file_reader(mut self, file_reader: Box<dyn FileReader>) -> Self {
+        assert!(self.file_reader.is_none());
+        self.file_reader = Some(file_reader);
         self
     }
 
@@ -286,7 +287,7 @@ impl<'a> Compiler<'a> {
             known_warning_filters,
             package_configs,
             default_config,
-            source_file_reader,
+            file_reader,
         } = self;
         generate_interface_files_for_deps(
             &mut deps,
@@ -298,7 +299,7 @@ impl<'a> Compiler<'a> {
             visitors,
             package_configs,
             default_config,
-            source_file_reader,
+            file_reader,
         );
         if let Some(filter) = warning_filter {
             compilation_env.add_warning_filter_scope(filter);

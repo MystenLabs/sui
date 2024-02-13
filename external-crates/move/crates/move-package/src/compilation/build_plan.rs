@@ -18,7 +18,7 @@ use move_compiler::{
         report_diagnostics_to_color_buffer, report_warnings, FilesSourceText, Migration,
     },
     editions::Edition,
-    shared::SourceFileReader,
+    shared::FileReader,
     Compiler,
 };
 use std::{
@@ -171,7 +171,7 @@ impl BuildPlan {
 
     pub fn compile_with_driver<W: Write>(
         &self,
-        source_file_reader: Option<Box<dyn SourceFileReader>>,
+        source_file_reader: Option<Box<dyn FileReader>>,
         writer: &mut W,
         mut compiler_driver: impl FnMut(
             Compiler,

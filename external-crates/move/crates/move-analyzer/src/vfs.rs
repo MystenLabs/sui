@@ -17,7 +17,7 @@ use lsp_types::{
     notification::Notification as _, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
     DidOpenTextDocumentParams, DidSaveTextDocumentParams,
 };
-use move_compiler::shared::SourceFileReader;
+use move_compiler::shared::FileReader;
 use std::{
     collections::HashMap,
     io::Read,
@@ -38,7 +38,7 @@ pub struct VirtualFileSystem {
     pub all_files: HashMap<PathBuf, String>,
 }
 
-impl SourceFileReader for VirtualFileSystem {
+impl FileReader for VirtualFileSystem {
     fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
         // We may have a race here between a file being pushed by the IDE (and available in
         // `ide_files`) and files only available in the file system. This should be OK, though, as

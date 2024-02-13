@@ -227,7 +227,7 @@ pub struct CompilationEnv {
     prim_definers:
         BTreeMap<crate::naming::ast::BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
     /// Abstracted source file reader
-    source_file_reader: Box<dyn SourceFileReader>,
+    file_reader: Option<Box<dyn FileReader>>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
@@ -252,7 +252,7 @@ impl CompilationEnv {
         mut visitors: Vec<cli::compiler::Visitor>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
-        source_file_reader: Box<dyn SourceFileReader>,
+        file_reader: Option<Box<dyn FileReader>>,
     ) -> Self {
         use crate::diagnostics::codes::{TypeSafety, UnusedItem};
         visitors.extend([
@@ -345,7 +345,7 @@ impl CompilationEnv {
             known_filters,
             known_filter_names,
             prim_definers: BTreeMap::new(),
-            source_file_reader,
+            file_reader,
         }
     }
 
@@ -553,7 +553,10 @@ impl CompilationEnv {
     }
 
     pub fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
-        self.source_file_reader.read_to_string(fpath, buf)
+        match self.file_reader.as_mut() {
+            Some(reader) => reader.read_to_string(fpath, buf),
+            None => FileSystemFileReader.read_to_string(fpath, buf),
+        }
     }
 }
 
@@ -875,13 +878,13 @@ pub(crate) use process_binops;
 // Source file reader
 //**************************************************************************************************
 
-pub trait SourceFileReader {
+pub trait FileReader {
     fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize>;
 }
 
-pub struct FileSystemSourceFileReader;
+pub struct FileSystemFileReader;
 
-impl SourceFileReader for FileSystemSourceFileReader {
+impl FileReader for FileSystemFileReader {
     fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
         let mut f = std::fs::File::open(fpath)
             .map_err(|err| std::io::Error::new(err.kind(), format!("{}: {:?}", err, fpath)))?;
