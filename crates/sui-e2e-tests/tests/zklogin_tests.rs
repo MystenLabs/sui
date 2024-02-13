@@ -99,7 +99,7 @@ async fn zklogin_end_to_end_test() {
     let context = &mut test_cluster.wallet;
 
     let (eph_kp, pk_zklogin, zklogin_inputs) =
-        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[0];
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
     let zklogin_addr = (pk_zklogin).into();
 
     let gas = fund_address_and_return_gas(context, rgp, zklogin_addr).await;

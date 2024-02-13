@@ -451,16 +451,6 @@ async fn test_zklogin_transfer_with_bad_ephemeral_sig() {
     .await;
 }
 
-// fn zklogin_key_pair_and_inputs() -> Vec<(Ed25519KeyPair, ZkLoginInputs)> {
-//     let key1 = Ed25519KeyPair::generate(&mut StdRng::from_seed([1; 32]));
-//     let key2 = Ed25519KeyPair::generate(&mut StdRng::from_seed([2; 32]));
-
-//     let inputs1 = ZkLoginInputs::from_json("{\"proofPoints\":{\"a\":[\"7351610957585487046328875967050889651854514987235893782501043846344306437586\",\"15901581830174345085102528605366245320934422564305327249129736514949843983391\",\"1\"],\"b\":[[\"8511334686125322419369086121569737536249817670014553268281989325333085952301\",\"4879445774811020644521006463993914729416121646921376735430388611804034116132\"],[\"17435652898871739253945717312312680537810513841582909477368887889905134847157\",\"14885460127400879557124294989610467103783286587437961743305395373299049315863\"],[\"1\",\"0\"]],\"c\":[\"18935582624804960299209074901817240117999581542763303721451852621662183299378\",\"5367019427921492326304024952457820199970536888356564030410757345854117465786\",\"1\"]},\"issBase64Details\":{\"value\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"indexMod4\":2},\"headerBase64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}", "20794788559620669596206457022966176986688727876128223628113916380927502737911").unwrap();
-//     let inputs2 = ZkLoginInputs::from_json("{\"proofPoints\":{\"a\":[\"7351610957585487046328875967050889651854514987235893782501043846344306437586\",\"15901581830174345085102528605366245320934422564305327249129736514949843983391\",\"1\"],\"b\":[[\"8511334686125322419369086121569737536249817670014553268281989325333085952301\",\"4879445774811020644521006463993914729416121646921376735430388611804034116132\"],[\"17435652898871739253945717312312680537810513841582909477368887889905134847157\",\"14885460127400879557124294989610467103783286587437961743305395373299049315863\"],[\"1\",\"0\"]],\"c\":[\"18935582624804960299209074901817240117999581542763303721451852621662183299378\",\"5367019427921492326304024952457820199970536888356564030410757345854117465786\",\"1\"]},\"issBase64Details\":{\"value\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"indexMod4\":2},\"headerBase64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}", "20794788559620669596206457022966176986688727876128223628113916380927502737911").unwrap();
-
-//     vec![(key1, inputs1), (key2, inputs2)]
-// }
-
 #[sim_test]
 async fn zklogin_test_cached_proof_wrong_key() {
     telemetry_subscribers::init_for_testing();
@@ -492,7 +482,7 @@ async fn zklogin_test_cached_proof_wrong_key() {
     */
 
     let (skp, _eph_pk, zklogin) =
-        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[0];
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
     let ephemeral_key = match skp {
         SuiKeyPair::Ed25519(kp) => kp,
         _ => panic!(),
@@ -621,7 +611,7 @@ async fn setup_zklogin_network(
     NetworkAuthorityClient,
 ) {
     let (skp, _eph_pk, zklogin) =
-        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[0];
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
     let ephemeral_key = match skp {
         SuiKeyPair::Ed25519(kp) => kp,
         _ => panic!(),
@@ -747,7 +737,7 @@ async fn zklogin_txn_fail_if_missing_jwk() {
 
     // Initialize an authorty state with some objects under a zklogin address.
     let (skp, _eph_pk, zklogin) =
-        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[0];
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
     let ephemeral_key = match skp {
         SuiKeyPair::Ed25519(kp) => kp,
         _ => panic!(),
@@ -875,13 +865,16 @@ async fn zk_multisig_test() {
 
     // Step 1. construct 2 zklogin signatures
     let test_vectors =
-        load_test_vectors("/crates/sui-types/src/unit_tests/zklogin_test_vectors.json");
+        &load_test_vectors("/crates/sui-types/src/unit_tests/zklogin_test_vectors.json")[1..];
     let mut zklogin_sigs = vec![];
     for (kp, _pk_zklogin, inputs) in test_vectors {
         let intent_message = IntentMessage::new(Intent::sui_transaction(), data.clone());
-        let eph_sig = Signature::new_secure(&intent_message, &kp);
-        let zklogin_sig =
-            GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(inputs, 10, eph_sig));
+        let eph_sig = Signature::new_secure(&intent_message, kp);
+        let zklogin_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+            inputs.clone(),
+            10,
+            eph_sig,
+        ));
         zklogin_sigs.push(zklogin_sig);
     }
 
