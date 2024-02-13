@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use parking_lot::RwLock;
 use std::sync::Arc;
 use std::time::Instant;
 
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
+use parking_lot::RwLock;
 use prometheus::Registry;
 use sui_protocol_config::ProtocolConfig;
 use tracing::info;
