@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 36;
+const MAX_PROTOCOL_VERSION: u64 = 37;
 
 // Record history of protocol version allocations here:
 //
@@ -108,6 +108,9 @@ const MAX_PROTOCOL_VERSION: u64 = 36;
 // Version 36: Enable group operations native functions in devnet.
 //             Enable shared object deletion in mainnet.
 //             Set the consensus accepted transaction size and the included transactions size in the proposed block.
+// Version 37: Add native bridge.
+//             Enable native bridge in devnet
+
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -334,6 +337,10 @@ struct FeatureFlags {
     // Enable random beacon protocol
     #[serde(skip_serializing_if = "is_false")]
     random_beacon: bool,
+
+    // Enable bridge protocol
+    #[serde(skip_serializing_if = "is_false")]
+    bridge: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     enable_effects_v2: bool,
@@ -1107,6 +1114,15 @@ impl ProtocolConfig {
         if ret {
             // random beacon requires narwhal v2 headers
             assert!(self.feature_flags.narwhal_header_v2);
+        }
+        ret
+    }
+
+    pub fn bridge(&self) -> bool {
+        let ret = self.feature_flags.bridge;
+        if ret {
+            // bridge required end-of-epoch transactions
+            assert!(self.feature_flags.end_of_epoch_transaction_supported);
         }
         ret
     }
@@ -1885,6 +1901,12 @@ impl ProtocolConfig {
                     cfg.consensus_max_transaction_size_bytes = Some(256 * 1024); // 256KB
                     cfg.consensus_max_transactions_in_block_bytes = Some(6 * 1_024 * 1024);
                     // 6 MB
+                }
+                37 => {
+                    // enable bridge in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.bridge = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
