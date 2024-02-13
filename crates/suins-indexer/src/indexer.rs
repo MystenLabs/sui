@@ -19,7 +19,7 @@ use crate::models::VerifiedDomain;
 
 const REGISTRY_TABLE_ID: &str =
     "0xe64cd9db9f829c6cc405d9790bd71567ae07259855f4fba6f02c84f52298c106";
-/// TODO(manos): Hardcode mainnet type once we publish the subdomains package.
+/// TODO(manos): Hardcode mainnet once we publish the subdomains package.
 const SUBDOMAIN_REGISTRATION_TYPE: &str =
     "0xPackageIdTBD::subdomain_registration::SubDomainRegistration";
 
@@ -149,8 +149,9 @@ impl SuinsIndexer {
     /// - `Vec<String>`: A list of IDs to be deleted from the database (`field_id` is the matching column)
     pub fn process_checkpoint(
         &self,
-        checkpoint: CheckpointData,
+        checkpoint: &CheckpointData,
     ) -> (Vec<VerifiedDomain>, Vec<String>) {
+        // Gather a list of name records, subdomain wrappers and removals on that checkpoint.
         let mut name_records: HashMap<ObjectID, NameRecordChange> = HashMap::new();
         let mut subdomain_wrappers: HashMap<String, String> = HashMap::new();
         let mut removals: HashSet<ObjectID> = HashSet::new();

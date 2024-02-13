@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use diesel::{dsl::sql, Connection, ExpressionMethods, RunQueryDsl};
+use diesel::{dsl::sql, BoolExpressionMethods, Connection, ExpressionMethods, RunQueryDsl};
 use prometheus::Registry;
 use std::path::PathBuf;
 use sui_data_ingestion_core::{
@@ -38,7 +38,12 @@ impl SuinsIndexerWorker {
     /// - The second query is a bulk delete of all deletions.
     ///
     /// You can safely call this with empty updates/deletions as it will return Ok.
-    fn commit_to_db(&self, updates: &[VerifiedDomain], removals: &[String]) -> Result<()> {
+    fn commit_to_db(
+        &self,
+        updates: &[VerifiedDomain],
+        removals: &[String],
+        checkpoint_seq_num: u64,
+    ) -> Result<()> {
         if updates.is_empty() && removals.is_empty() {
             return Ok(());
         }
@@ -74,8 +79,14 @@ impl SuinsIndexerWorker {
             }
 
             if !removals.is_empty() {
+                // We want to remove from the database all name records that were removed in the checkpoint
+                // but only if the checkpoint is newer than the last time the name record was updated.
                 diesel::delete(domains::table)
-                    .filter(domains::field_id.eq_any(removals))
+                    .filter(
+                        domains::field_id
+                            .eq_any(removals)
+                            .and(domains::last_checkpoint_updated.le(checkpoint_seq_num as i64)),
+                    )
                     .execute(tx)
                     .unwrap_or_else(|_| panic!("Failed to process deletions: {:?}", removals));
             }
@@ -88,9 +99,10 @@ impl SuinsIndexerWorker {
 #[async_trait]
 impl Worker for SuinsIndexerWorker {
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> Result<()> {
-        let (updates, removals) = self.indexer.process_checkpoint(checkpoint);
+        let checkpoint_seq_number = checkpoint.checkpoint_summary.sequence_number;
+        let (updates, removals) = self.indexer.process_checkpoint(&checkpoint);
 
-        self.commit_to_db(&updates, &removals)?;
+        self.commit_to_db(&updates, &removals, checkpoint_seq_number)?;
         Ok(())
     }
 }

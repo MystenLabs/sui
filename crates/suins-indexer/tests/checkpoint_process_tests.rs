@@ -24,7 +24,7 @@ fn process_22279187_checkpoint() {
     let checkpoint = read_checkpoint_from_file(include_bytes!("data/22279187.chk"));
     let indexer = get_test_indexer();
 
-    let (updates, removals) = indexer.process_checkpoint(checkpoint.clone());
+    let (updates, removals) = indexer.process_checkpoint(&checkpoint);
 
     // This checkpoint has no removals and adds 3 names.
     assert_eq!(removals.len(), 0);
@@ -41,7 +41,7 @@ fn process_22279187_checkpoint() {
 fn process_22279365_checkpoint() {
     let checkpoint = read_checkpoint_from_file(include_bytes!("data/22279365.chk"));
     let indexer = get_test_indexer();
-    let (updates, removals) = indexer.process_checkpoint(checkpoint.clone());
+    let (updates, removals) = indexer.process_checkpoint(&checkpoint);
 
     // This checkpoint has 1 removal and 1 addition.
     assert_eq!(removals.len(), 1);
@@ -62,7 +62,7 @@ fn process_22279365_checkpoint() {
 fn process_22279496_checkpoint() {
     let checkpoint = read_checkpoint_from_file(include_bytes!("data/22279496.chk"));
     let indexer = get_test_indexer();
-    let (updates, removals) = indexer.process_checkpoint(checkpoint.clone());
+    let (updates, removals) = indexer.process_checkpoint(&checkpoint);
 
     assert_eq!(removals.len(), 0);
     assert_eq!(updates.len(), 1);
@@ -85,7 +85,7 @@ fn process_22279496_checkpoint() {
 fn process_22279944_checkpoint() {
     let checkpoint = read_checkpoint_from_file(include_bytes!("data/22279944.chk"));
     let indexer = get_test_indexer();
-    let (updates, removals) = indexer.process_checkpoint(checkpoint.clone());
+    let (updates, removals) = indexer.process_checkpoint(&checkpoint);
 
     assert_eq!(removals.len(), 0);
     assert_eq!(updates.len(), 1);
@@ -106,7 +106,7 @@ fn process_22279944_checkpoint() {
 fn process_22280030_checkpoint() {
     let checkpoint = read_checkpoint_from_file(include_bytes!("data/22280030.chk"));
     let indexer = get_test_indexer();
-    let (updates, removals) = indexer.process_checkpoint(checkpoint.clone());
+    let (updates, removals) = indexer.process_checkpoint(&checkpoint);
 
     assert_eq!(removals.len(), 0);
     assert_eq!(updates.len(), 1);
