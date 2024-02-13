@@ -4,12 +4,21 @@
 import type { SerializedBcs } from '@mysten/bcs';
 import { isSerializedBcs } from '@mysten/bcs';
 import type { Infer } from 'superstruct';
-import { array, boolean, integer, object, string, union } from 'superstruct';
+import { array, bigint, boolean, integer, number, object, string, union } from 'superstruct';
 
 import { bcs } from '../bcs/index.js';
 import type { SharedObjectRef } from '../bcs/index.js';
-import { SuiObjectRef } from '../types/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
+
+export const SuiObjectRef = object({
+	/** Base64 string representing the object digest */
+	digest: string(),
+	/** Hex code as string representing the object id */
+	objectId: string(),
+	/** Object version */
+	version: union([number(), string(), bigint()]),
+});
+export type SuiObjectRef = Infer<typeof SuiObjectRef>;
 
 const ObjectArg = union([
 	object({ ImmOrOwned: SuiObjectRef }),
