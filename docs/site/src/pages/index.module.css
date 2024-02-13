@@ -125,7 +125,7 @@
   flex-direction: column;
   align-items: center;
   row-gap: 2.5rem;
-  margin: 5rem auto 4.5rem auto;
+  margin: 10rem auto 4.5rem auto;
   padding: 0 1rem;
 }
 
@@ -186,6 +186,9 @@
 
 
 @media screen and (max-width: 996px) {
+  .sectionHeader {
+    margin: 5rem auto 2.5rem auto;
+  }
   .why {
     grid-template-columns: 1fr;
     max-width: 382px;
