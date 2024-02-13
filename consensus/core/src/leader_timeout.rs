@@ -95,7 +95,7 @@ impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::{BTreeSet, HashSet};
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -128,7 +128,7 @@ mod tests {
         async fn add_blocks(
             &self,
             _blocks: Vec<VerifiedBlock>,
-        ) -> Result<Vec<BlockRef>, CoreError> {
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
             todo!()
         }
 
