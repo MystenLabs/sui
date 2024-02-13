@@ -80,8 +80,9 @@ impl SuinsIndexerWorker {
             }
 
             if !removals.is_empty() {
+                let field_ids: Vec<_> = removals.keys().map(|x| x.to_string()).collect();
                 diesel::delete(domains::table)
-                    .filter(domains::field_id.eq_any(removals.keys().map(|x| x.to_string())))
+                    .filter(domains::field_id.eq_any(field_ids))
                     .execute(tx)
                     .unwrap_or_else(|_| panic!("Failed to process deletions: {:?}", removals));
             }
