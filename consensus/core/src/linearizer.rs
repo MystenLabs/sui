@@ -224,6 +224,7 @@ impl Linearizer {
             committed_blocks.extend(sub_dag.blocks.clone());
             committed_sub_dags.push(sub_dag);
         }
+        // TODO: Revisit this after refactor of dag state
         self.dag_state
             .write()
             .write_commits(commits, committed_blocks);
