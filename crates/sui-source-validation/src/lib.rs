@@ -50,7 +50,8 @@ mod tests;
 const CURRENT_COMPILER_VERSION: &str = env!("CARGO_PKG_VERSION");
 const LEGACY_COMPILER_VERSION: &str = CURRENT_COMPILER_VERSION; // TODO: update this when Move 2024 is released
 const PRE_TOOLCHAIN_MOVE_LOCK_VERSION: u64 = 0; // Used to detect lockfiles pre-toolchain versioning support
-const CANONICAL_BINARY_NAME: &str = "sui";
+const CANONICAL_UNIX_BINARY_NAME: &str = "sui";
+const CANONICAL_WIN_BINARY_NAME: &str = "sui.exe";
 
 #[derive(Debug, Error)]
 pub enum SourceVerificationError {
@@ -610,12 +611,19 @@ fn download_and_compile(
 ) -> anyhow::Result<()> {
     let dest_dir = PathBuf::from_iter([&*MOVE_HOME, "binaries"]); // E.g., ~/.move/binaries
     let dest_version = dest_dir.join(compiler_version);
-    let mut dest_canonical_binary = dest_version.clone();
-    dest_canonical_binary.extend(["target", "release", CANONICAL_BINARY_NAME]);
+    let mut dest_canonical_path = dest_version.clone();
+    dest_canonical_path.extend(["target", "release"]);
+    let mut dest_canonical_binary = dest_canonical_path.clone();
+
+    let platform = detect_platform(&root, compiler_version, &dest_canonical_path)?;
+    if platform == "windows-x86_64" {
+        dest_canonical_binary.push(CANONICAL_WIN_BINARY_NAME);
+    } else {
+        dest_canonical_binary.push(CANONICAL_UNIX_BINARY_NAME);
+    }
 
     if !dest_canonical_binary.exists() {
         // Check the platform and proceed if we can download a binary. If not, the user should follow error instructions to sideload the binary.
-        let mut platform = detect_platform(&root, compiler_version, &dest_canonical_binary)?;
         // Download if binary does not exist.
         let mainnet_url = format!(
             "https://github.com/MystenLabs/sui/releases/download/mainnet-v{compiler_version}/sui-mainnet-v{compiler_version}-{platform}.tgz",
@@ -664,10 +672,12 @@ fn download_and_compile(
             .map_err(|e| anyhow!("failed to untar compiler binary: {e}"))?;
 
         let mut dest_binary = dest_version.clone();
+        dest_binary.extend(["target", "release"]);
         if platform == "windows-x86_64" {
-            platform = format!("{platform}.exe");
+            dest_binary.push(&format!("sui-{platform}.exe"));
+        } else {
+            dest_binary.push(&format!("sui-{platform}"));
         }
-        dest_binary.extend(["target", "release", &format!("sui-{platform}")]);
         let dest_binary_os = OsStr::new(dest_binary.as_path());
         set_executable_permission(dest_binary_os)?;
         std::fs::rename(dest_binary_os, dest_canonical_binary.clone())?;
@@ -717,15 +727,21 @@ fn detect_platform(
         ("macos", "x86_64") => "macos-x86_64",
         ("linux", "x86_64") => "ubuntu-x86_64",
         ("windows", "x86_64") => "windows-x86_64",
-        (os, arch) => bail!(
-            "The package {} needs to be built with sui compiler version {compiler_version} but there \
-             is no binary release available to download for your platform:\n\
-             Operating System: {os}\n\
-             Architecture: {arch}\n\
-             You can manually put a `sui` binary for your platform in {} and rerun your command to continue.",
-            package_path.display(),
-            dest_dir.display(),
-        ),
+        (os, arch) => {
+            let mut binary_name = CANONICAL_UNIX_BINARY_NAME;
+            if os == "windows" {
+                binary_name = CANONICAL_WIN_BINARY_NAME;
+            };
+            bail!(
+                "The package {} needs to be built with sui compiler version {compiler_version} but there \
+                 is no binary release available to download for your platform:\n\
+                 Operating System: {os}\n\
+                 Architecture: {arch}\n\
+                 You can manually put a {binary_name} binary for your platform in {} and rerun your command to continue.",
+                package_path.display(),
+                dest_dir.display(),
+            )
+        }
     };
     Ok(s.into())
 }
