@@ -143,3 +143,6 @@ pub const PRIVATE_TRANSFER_CALL_DIAG: DiagnosticInfo = custom(
     /* code */ 9,
     "invalid private transfer call",
 );
+
+// Bridge supported asset
+pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];
