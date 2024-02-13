@@ -80,6 +80,8 @@
 
 ## Function `token_id`
 
+Returns the token id for the given token type.
+Uses type reflection on a predefined set of token types.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_token_id">token_id</a>&lt;T&gt;(): u8

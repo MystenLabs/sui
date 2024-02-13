@@ -29,10 +29,10 @@
 -  [Function `message_type`](#0xb_message_message_type)
 -  [Function `seq_num`](#0xb_message_seq_num)
 -  [Function `source_chain`](#0xb_message_source_chain)
--  [Function `token_target_chain`](#0xb_message_token_target_chain)
--  [Function `token_target_address`](#0xb_message_token_target_address)
--  [Function `token_type`](#0xb_message_token_type)
--  [Function `token_amount`](#0xb_message_token_amount)
+-  [Function `target_chain`](#0xb_message_target_chain)
+-  [Function `target_address`](#0xb_message_target_address)
+-  [Function `type`](#0xb_message_type)
+-  [Function `amount`](#0xb_message_amount)
 -  [Function `emergency_op_type`](#0xb_message_emergency_op_type)
 -  [Function `reverse_bytes`](#0xb_message_reverse_bytes)
 -  [Function `peel_u64_be`](#0xb_message_peel_u64_be)
@@ -342,8 +342,19 @@
 
 
 
+<a name="0xb_message_EInvalidAddressInput"></a>
+
+Input address is too long (more than 255 bytes).
+
+
+<pre><code><b>const</b> <a href="message.md#0xb_message_EInvalidAddressInput">EInvalidAddressInput</a>: u64 = 2;
+</code></pre>
+
+
+
 <a name="0xb_message_EInvalidAddressLength"></a>
 
+Address length is invalid (not 20 bytes - <code><a href="message.md#0xb_message_ECDSA_ADDRESS_LENGTH">ECDSA_ADDRESS_LENGTH</a></code>).
 
 
 <pre><code><b>const</b> <a href="message.md#0xb_message_EInvalidAddressLength">EInvalidAddressLength</a>: u64 = 1;
@@ -353,6 +364,7 @@
 
 <a name="0xb_message_ETrailingBytes"></a>
 
+Payload contains more bytes than expected
 
 
 <pre><code><b>const</b> <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>: u64 = 0;
@@ -605,6 +617,9 @@ Token Transfer Message Format:
     token_type: u8,
     amount: u64
 ): <a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a> {
+    <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&sender_address) &lt;= 255, <a href="message.md#0xb_message_EInvalidAddressInput">EInvalidAddressInput</a>);
+    <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&target_address) &lt;= 255, <a href="message.md#0xb_message_EInvalidAddressInput">EInvalidAddressInput</a>);
+
     <b>let</b> payload = <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[];
     // sender <b>address</b> should be less than 255 bytes so can fit into u8
     <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> payload, (<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&sender_address) <b>as</b> u8));
@@ -932,13 +947,13 @@ Update asset price message
 
 </details>
 
-<a name="0xb_message_token_target_chain"></a>
+<a name="0xb_message_target_chain"></a>
 
-## Function `token_target_chain`
+## Function `target_chain`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_target_chain">token_target_chain</a>(self: &<a href="message.md#0xb_message_TokenPayload">message::TokenPayload</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_target_chain">target_chain</a>(self: &<a href="message.md#0xb_message_TokenPayload">message::TokenPayload</a>): u8
 </code></pre>
 
 
@@ -947,7 +962,7 @@ Update asset price message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_target_chain">token_target_chain</a>(self: &<a href="message.md#0xb_message_TokenPayload">TokenPayload</a>): u8 {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_target_chain">target_chain</a>(self: &<a href="message.md#0xb_message_TokenPayload">TokenPayload</a>): u8 {
     self.target_chain
 }
 </code></pre>
@@ -956,13 +971,13 @@ Update asset price message
 
 </details>
 
-<a name="0xb_message_token_target_address"></a>
+<a name="0xb_message_target_address"></a>
 
-## Function `token_target_address`
+## Function `target_address`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_target_address">token_target_address</a>(self: &<a href="message.md#0xb_message_TokenPayload">message::TokenPayload</a>): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_target_address">target_address</a>(self: &<a href="message.md#0xb_message_TokenPayload">message::TokenPayload</a>): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -971,7 +986,7 @@ Update asset price message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_target_address">token_target_address</a>(self: &<a href="message.md#0xb_message_TokenPayload">TokenPayload</a>): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_target_address">target_address</a>(self: &<a href="message.md#0xb_message_TokenPayload">TokenPayload</a>): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
     self.target_address
 }
 </code></pre>
@@ -980,13 +995,13 @@ Update asset price message
 
 </details>
 
-<a name="0xb_message_token_type"></a>
+<a name="0xb_message_type"></a>
 
-## Function `token_type`
+## Function `type`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_type">token_type</a>(self: &<a href="message.md#0xb_message_TokenPayload">message::TokenPayload</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_type">type</a>(self: &<a href="message.md#0xb_message_TokenPayload">message::TokenPayload</a>): u8
 </code></pre>
 
 
@@ -995,7 +1010,7 @@ Update asset price message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_type">token_type</a>(self: &<a href="message.md#0xb_message_TokenPayload">TokenPayload</a>): u8 {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_type">type</a>(self: &<a href="message.md#0xb_message_TokenPayload">TokenPayload</a>): u8 {
     self.token_type
 }
 </code></pre>
@@ -1004,13 +1019,13 @@ Update asset price message
 
 </details>
 
-<a name="0xb_message_token_amount"></a>
+<a name="0xb_message_amount"></a>
 
-## Function `token_amount`
+## Function `amount`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_amount">token_amount</a>(self: &<a href="message.md#0xb_message_TokenPayload">message::TokenPayload</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_amount">amount</a>(self: &<a href="message.md#0xb_message_TokenPayload">message::TokenPayload</a>): u64
 </code></pre>
 
 
@@ -1019,7 +1034,7 @@ Update asset price message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_amount">token_amount</a>(self: &<a href="message.md#0xb_message_TokenPayload">TokenPayload</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_amount">amount</a>(self: &<a href="message.md#0xb_message_TokenPayload">TokenPayload</a>): u64 {
     self.amount
 }
 </code></pre>

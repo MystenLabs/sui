@@ -399,6 +399,15 @@
 
 
 
+<a name="0xb_bridge_EInvalidAddress"></a>
+
+
+
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EInvalidAddress">EInvalidAddress</a>: u64 = 11;
+</code></pre>
+
+
+
 <a name="0xb_bridge_EInvalidBridgeRoute"></a>
 
 
@@ -601,6 +610,8 @@
 
     // retrieve pending <a href="message.md#0xb_message">message</a> <b>if</b> source chain is Sui, the initial <a href="message.md#0xb_message">message</a> must exist on chain.
     <b>if</b> (<a href="message.md#0xb_message_message_type">message::message_type</a>(&<a href="message.md#0xb_message">message</a>) == <a href="message_types.md#0xb_message_types_token">message_types::token</a>() && <a href="message.md#0xb_message_source_chain">message::source_chain</a>(&<a href="message.md#0xb_message">message</a>) == inner.chain_id) {
+        <b>assert</b>!(<a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(&inner.bridge_records, key), <a href="bridge.md#0xb_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>);
+
         <b>let</b> record = <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_borrow_mut">linked_table::borrow_mut</a>(&<b>mut</b> inner.bridge_records, key);
         <b>assert</b>!(record.<a href="message.md#0xb_message">message</a> == <a href="message.md#0xb_message">message</a>, <a href="bridge.md#0xb_bridge_EMalformedMessageError">EMalformedMessageError</a>);
         <b>assert</b>!(!record.claimed, <a href="bridge.md#0xb_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed">EInvariantSuiInitializedTokenTransferShouldNotBeClaimed</a>);
@@ -762,17 +773,17 @@
     <b>let</b> bridge_inner = <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
         bridge_version: <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>,
         chain_id,
-        sequence_nums: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>&lt;u8, u64&gt;(),
+        sequence_nums: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
         <a href="committee.md#0xb_committee">committee</a>: <a href="committee.md#0xb_committee_create">committee::create</a>(ctx),
         <a href="treasury.md#0xb_treasury">treasury</a>: <a href="treasury.md#0xb_treasury_create">treasury::create</a>(ctx),
-        bridge_records: <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_new">linked_table::new</a>&lt;BridgeMessageKey, <a href="bridge.md#0xb_bridge_BridgeRecord">BridgeRecord</a>&gt;(ctx),
+        bridge_records: <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_new">linked_table::new</a>(ctx),
         frozen: <b>false</b>,
     };
-    <b>let</b> <a href="bridge.md#0xb_bridge">bridge</a> = <a href="bridge.md#0xb_bridge_Bridge">Bridge</a> {
+
+    <a href="dependencies/sui-framework/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="bridge.md#0xb_bridge_Bridge">Bridge</a> {
         id,
         inner: <a href="dependencies/sui-framework/versioned.md#0x2_versioned_create">versioned::create</a>(<a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, bridge_inner, ctx)
-    };
-    <a href="dependencies/sui-framework/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="bridge.md#0xb_bridge">bridge</a>);
+    });
 }
 </code></pre>
 
@@ -893,9 +904,8 @@
 ): (Option&lt;Coin&lt;T&gt;&gt;, <b>address</b>) {
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
     <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(source_chain, <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), bridge_seq_num);
-    <b>if</b> (!<a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(&inner.bridge_records, key)) {
-        <b>abort</b> <a href="bridge.md#0xb_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>
-    };
+    <b>assert</b>!(<a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(&inner.bridge_records, key), <a href="bridge.md#0xb_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>);
+
     // retrieve approved <a href="bridge.md#0xb_bridge">bridge</a> <a href="message.md#0xb_message">message</a>
     <b>let</b> record = <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_borrow_mut">linked_table::borrow_mut</a>(&<b>mut</b> inner.bridge_records, key);
     // ensure this is a token <a href="bridge.md#0xb_bridge">bridge</a> <a href="message.md#0xb_message">message</a>
@@ -906,7 +916,9 @@
     // extract token <a href="message.md#0xb_message">message</a>
     <b>let</b> token_payload = <a href="message.md#0xb_message_extract_token_bridge_payload">message::extract_token_bridge_payload</a>(&record.<a href="message.md#0xb_message">message</a>);
     // get owner <b>address</b>
-    <b>let</b> owner = address::from_bytes(<a href="message.md#0xb_message_token_target_address">message::token_target_address</a>(&token_payload));
+    <b>let</b> addr_bytes = <a href="message.md#0xb_message_target_address">message::target_address</a>(&token_payload);
+    <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&addr_bytes) == 32, <a href="bridge.md#0xb_bridge_EInvalidAddress">EInvalidAddress</a>);
+    <b>let</b> owner = address::from_bytes(addr_bytes);
 
     // If already claimed, exit early
     <b>if</b> (record.claimed) {
@@ -914,7 +926,7 @@
         <b>return</b> (<a href="dependencies/move-stdlib/option.md#0x1_option_none">option::none</a>(), owner)
     };
 
-    <b>let</b> target_chain = <a href="message.md#0xb_message_token_target_chain">message::token_target_chain</a>(&token_payload);
+    <b>let</b> target_chain = <a href="message.md#0xb_message_target_chain">message::target_chain</a>(&token_payload);
     // ensure target chain matches self.chain_id
     <b>assert</b>!(target_chain == inner.chain_id, <a href="bridge.md#0xb_bridge_EUnexpectedChainID">EUnexpectedChainID</a>);
 
@@ -924,11 +936,14 @@
     <b>assert</b>!(<a href="chain_ids.md#0xb_chain_ids_is_valid_route">chain_ids::is_valid_route</a>(source_chain, target_chain), <a href="bridge.md#0xb_bridge_EInvalidBridgeRoute">EInvalidBridgeRoute</a>);
 
     // get owner <b>address</b>
-    <b>let</b> owner = address::from_bytes(<a href="message.md#0xb_message_token_target_address">message::token_target_address</a>(&token_payload));
+    <b>let</b> addr_bytes = <a href="message.md#0xb_message_target_address">message::target_address</a>(&token_payload);
+    <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&addr_bytes) == 32, <a href="bridge.md#0xb_bridge_EInvalidAddress">EInvalidAddress</a>);
+    <b>let</b> owner = address::from_bytes(addr_bytes);
+
     // check token type
-    <b>assert</b>!(<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;() == <a href="message.md#0xb_message_token_type">message::token_type</a>(&token_payload), <a href="bridge.md#0xb_bridge_EUnexpectedTokenType">EUnexpectedTokenType</a>);
+    <b>assert</b>!(<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;() == <a href="message.md#0xb_message_type">message::type</a>(&token_payload), <a href="bridge.md#0xb_bridge_EUnexpectedTokenType">EUnexpectedTokenType</a>);
     // claim from <a href="treasury.md#0xb_treasury">treasury</a>
-    <b>let</b> token = <a href="treasury.md#0xb_treasury_mint">treasury::mint</a>&lt;T&gt;(&<b>mut</b> inner.<a href="treasury.md#0xb_treasury">treasury</a>, <a href="message.md#0xb_message_token_amount">message::token_amount</a>(&token_payload), ctx);
+    <b>let</b> token = <a href="treasury.md#0xb_treasury_mint">treasury::mint</a>&lt;T&gt;(&<b>mut</b> inner.<a href="treasury.md#0xb_treasury">treasury</a>, <a href="message.md#0xb_message_amount">message::amount</a>(&token_payload), ctx);
     // Record changes
     record.claimed = <b>true</b>;
     emit(<a href="bridge.md#0xb_bridge_TokenTransferClaimed">TokenTransferClaimed</a> { message_key: key });
