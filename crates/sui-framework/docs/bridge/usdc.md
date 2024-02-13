@@ -63,6 +63,25 @@
 
 
 
+<a name="0xb_usdc_EDecimalMultiplierMismatch"></a>
+
+
+
+<pre><code><b>const</b> <a href="usdc.md#0xb_usdc_EDecimalMultiplierMismatch">EDecimalMultiplierMismatch</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0xb_usdc_MULTIPLIER"></a>
+
+Multiplier of the token, it must be 10^DECIMAL
+
+
+<pre><code><b>const</b> <a href="usdc.md#0xb_usdc_MULTIPLIER">MULTIPLIER</a>: u64 = 1000000;
+</code></pre>
+
+
+
 <a name="0xb_usdc_create"></a>
 
 ## Function `create`
@@ -79,6 +98,7 @@
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="usdc.md#0xb_usdc_create">create</a>(ctx: &<b>mut</b> TxContext): TreasuryCap&lt;<a href="usdc.md#0xb_usdc_USDC">USDC</a>&gt; {
+    <b>assert</b>!(<a href="usdc.md#0xb_usdc_MULTIPLIER">MULTIPLIER</a> == pow(10, <a href="usdc.md#0xb_usdc_DECIMAL">DECIMAL</a>), <a href="usdc.md#0xb_usdc_EDecimalMultiplierMismatch">EDecimalMultiplierMismatch</a>);
     <b>let</b> (treasury_cap, metadata) = <a href="dependencies/sui-framework/coin.md#0x2_coin_create_currency">coin::create_currency</a>(
         <a href="usdc.md#0xb_usdc_USDC">USDC</a> {},
         <a href="usdc.md#0xb_usdc_DECIMAL">DECIMAL</a>,
@@ -137,7 +157,7 @@
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="usdc.md#0xb_usdc_multiplier">multiplier</a>(): u64 {
-    pow(10, <a href="usdc.md#0xb_usdc_DECIMAL">DECIMAL</a>)
+    <a href="usdc.md#0xb_usdc_MULTIPLIER">MULTIPLIER</a>
 }
 </code></pre>
 
