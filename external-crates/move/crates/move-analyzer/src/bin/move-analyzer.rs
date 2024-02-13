@@ -138,7 +138,6 @@ fn main() {
                 // need to evaluate in a separate thread to allow for a larger stack size (needed on
                 // Windows)
                 thread::Builder::new()
-                    .stack_size(symbols::STACK_SIZE_BYTES)
                     .spawn(move || {
                         if let Ok((Some(new_symbols), _)) = symbols::get_symbols(p.as_path(), lint)
                         {
