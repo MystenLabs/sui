@@ -470,7 +470,7 @@ impl PTB {
         // Build the PTB
         let mut parser = PTBParser::new();
         for command in commands.clone() {
-            parser.parse(command.1);
+            parser.parse_command(command.1);
         }
 
         let parsed = match parser.finish() {

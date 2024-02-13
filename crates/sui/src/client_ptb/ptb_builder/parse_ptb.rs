@@ -23,6 +23,8 @@ use move_command_line_common::{
 use move_core_types::identifier::Identifier;
 use std::{error::Error, fmt::Debug, str::FromStr};
 
+type ParsingResult<T> = Result<T, ParsingErr>;
+
 /// A parsed PTB command consisting of the command and the parsed arguments to the command.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ParsedPTBCommand {
@@ -47,6 +49,25 @@ pub struct PTBParser {
     context: PTBContext,
 }
 
+/// A simple wrapper around a peekable-iterator-type interface that keeps track of the current
+/// location in the input string that is being parsed. This is used to keep track of the location
+/// for generation spans when parsing PTB arguments.
+pub struct Spanner<'a> {
+    current_location: usize,
+    arg_idx: usize,
+    tokens: Vec<(ArgumentToken, &'a str)>,
+    /// Some arguments may permit non-whitespace delimitation after them (e.g., move-calls). So after
+    /// parsng an arguments that permits no whitespace delimitation, we set this flag to true and
+    /// the next token is guaranteed to be whitespace (inserted if not present).
+    insert_non_whitespace_next_if_none: bool,
+}
+
+pub struct ParsingErr {
+    pub span: Span,
+    pub message: Box<dyn Error>,
+    pub help: Option<String>,
+}
+
 impl Default for PTBParser {
     fn default() -> Self {
         Self::new()
@@ -63,7 +84,7 @@ impl PTBParser {
         }
     }
 
-    /// Return the list of parsed commands along with any errors that were encountered during the
+    /// Return the list of parsed commands or any errors that were encountered during the
     /// parsing of the PTB command(s).
     pub fn finish(self) -> Result<Vec<ParsedPTBCommand>, Vec<PTBError>> {
         if self.errors.is_empty() {
@@ -75,7 +96,7 @@ impl PTBParser {
 
     /// Parse a single PTB command. If an error is encountered, it is added to the list of
     /// `errors`.
-    pub fn parse(&mut self, mut cmd: PTBCommand) {
+    pub fn parse_command(&mut self, mut cmd: PTBCommand) {
         let name = CommandToken::from_str(&cmd.name);
         let name_span = Span::cmd_span(cmd.name.len(), self.context.current_file_scope());
         if let Err(e) = name {
@@ -92,8 +113,26 @@ impl PTBParser {
         let name = span(name_span, name.unwrap());
 
         match &name.value {
+            CommandToken::FileStart => {
+                let fname = cmd
+                    .values
+                    .pop()
+                    .expect("Safe because interally added command");
+                self.context.push_file_scope(fname.clone());
+                self.parsed.push(ParsedPTBCommand {
+                    name,
+                    args: vec![span(
+                        Span::new(0, fname.len(), 0, self.context.current_file_scope()),
+                        Argument::String(fname),
+                    )],
+                });
+                return;
+            }
             CommandToken::FileEnd => {
-                let fname = cmd.values.pop().unwrap();
+                let fname = cmd
+                    .values
+                    .pop()
+                    .expect("Safe because interally added command");
                 if let Err(e) = self.context.pop_file_scope(&fname) {
                     self.errors.push(e);
                 }
@@ -106,25 +145,10 @@ impl PTBParser {
                 });
                 return;
             }
-            CommandToken::FileStart => {
-                let fname = cmd.values.pop().unwrap();
-                self.context.push_file_scope(fname.clone());
-                self.parsed.push(ParsedPTBCommand {
-                    name,
-                    args: vec![span(
-                        Span::new(0, fname.len(), 0, self.context.current_file_scope()),
-                        Argument::String(fname),
-                    )],
-                });
-                return;
-            }
             CommandToken::Publish => {
                 if cmd.values.len() != 1 {
                     self.errors.push(PTBError::WithSource {
-                        message: format!(
-                            "Invalid command expected 1 argument but got {}",
-                            cmd.values.len()
-                        ),
+                        message: format!("Expected 1 argument but got {}", cmd.values.len()),
                         span: name_span,
                         help: None,
                     });
@@ -166,7 +190,7 @@ impl PTBParser {
                 ) {
                     Err(e) => {
                         self.errors.push(PTBError::WithSource {
-                            message: format!("Failed to parse argument command. {}", e.message,),
+                            message: format!("{}", e.message,),
                             span: e.span,
                             help: e.help,
                         });
@@ -244,19 +268,6 @@ impl PTBParser {
         }
         Ok(res)
     }
-}
-
-/// A simple wrapper around a peekable-iterator-type interface that keeps track of the current
-/// location in the input string that is being parsed. This is used to keep track of the location
-/// for generation spans when parsing PTB arguments.
-pub struct Spanner<'a> {
-    current_location: usize,
-    arg_idx: usize,
-    tokens: Vec<(ArgumentToken, &'a str)>,
-    /// Some arguments may permit non-whitespace delimitation after them (e.g., move-calls). So after
-    /// parsng an arguments that permits no whitespace delimitation, we set this flag to true and
-    /// the next token is guaranteed to be whitespace (inserted if not present).
-    insert_non_whitespace_next_if_none: bool,
 }
 
 impl<'a> Spanner<'a> {
@@ -410,14 +421,6 @@ impl<'a> ValueParser<'a> {
         Ok(v)
     }
 }
-
-pub struct ParsingErr {
-    pub span: Span,
-    pub message: Box<dyn Error>,
-    pub help: Option<String>,
-}
-
-type ParsingResult<T> = Result<T, ParsingErr>;
 
 impl<'a> ValueParser<'a> {
     /// Parse a list of arguments separated by whitespace.

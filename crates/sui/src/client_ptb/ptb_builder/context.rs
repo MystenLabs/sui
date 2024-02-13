@@ -12,7 +12,8 @@ pub struct FileScope {
     pub file_command_index: usize,
     /// Intern names
     pub name: Symbol,
-    /// Since the same filename may appear twice this disambiguates between first, second, etc.
+    /// Since the same filename may appear multiple times this disambiguates between which usage of
+    /// the file we are in.
     pub name_index: usize,
 }
 

@@ -45,7 +45,7 @@ use std::fmt::{self, Display};
 pub enum ArgumentToken {
     // any whitespace
     Whitespace,
-    // alpha numeric
+    // alpha numeric + '-' + '_'
     Ident,
     // digits
     Number,
@@ -53,8 +53,6 @@ pub enum ArgumentToken {
     NumberTyped,
     // ::
     ColonColon,
-    // :
-    Colon,
     // ,
     Comma,
     // [
@@ -96,7 +94,6 @@ impl Display for ArgumentToken {
             ArgumentToken::Number => "[number]",
             ArgumentToken::NumberTyped => "[number_typed]",
             ArgumentToken::ColonColon => "::",
-            ArgumentToken::Colon => ":",
             ArgumentToken::Comma => ",",
             ArgumentToken::LBracket => "[",
             ArgumentToken::RBracket => "]",
@@ -122,8 +119,6 @@ impl Token for ArgumentToken {
     }
 
     fn next_token(s: &str) -> anyhow::Result<Option<(Self, usize)>> {
-        // parses a string where start matches end.
-        // performs simple matching for start/end pairs
         fn number_maybe_with_suffix(text: &str, num_text_len: usize) -> (ArgumentToken, usize) {
             let rest = &text[num_text_len..];
             if rest.starts_with("u8") {
@@ -179,7 +174,6 @@ impl Token for ArgumentToken {
             ']' => (Self::RBracket, 1),
             ',' => (Self::Comma, 1),
             ':' if matches!(chars.peek(), Some(':')) => (Self::ColonColon, 2),
-            ':' => (Self::Colon, 1),
             '"' => {
                 let end_quote_byte_offset = match s[1..].find('"') {
                     Some(o) => o,
@@ -188,7 +182,7 @@ impl Token for ArgumentToken {
                 let len = s[..1].len() + end_quote_byte_offset + 1;
                 if s[..len].chars().any(|c| c == '\\') {
                     bail!(
-                        "Escape characters not yet supported in utf8 string: {}",
+                        "Escape characters not yet supported in string: {}",
                         &s[..len]
                     )
                 }
@@ -294,7 +288,7 @@ mod tests {
             "vector[1,]",
         ];
         for s in &vecs {
-            assert!(dbg!(ArgumentToken::tokenize(s)).is_ok());
+            assert!(ArgumentToken::tokenize(s).is_ok());
         }
     }
 
@@ -302,7 +296,7 @@ mod tests {
     fn tokenize_array() {
         let vecs = vec!["[1,2,3]", "[1, 2, 3]", "[]", "[1]", "[1,]"];
         for s in &vecs {
-            assert!(dbg!(ArgumentToken::tokenize(s)).is_ok());
+            assert!(ArgumentToken::tokenize(s).is_ok());
         }
     }
 
@@ -323,7 +317,7 @@ mod tests {
             "0x1_u128",
         ];
         for s in &vecs {
-            assert!(dbg!(ArgumentToken::tokenize(s)).is_ok());
+            assert!(ArgumentToken::tokenize(s).is_ok());
         }
     }
 
@@ -338,7 +332,7 @@ mod tests {
             "@0x1_u128",
         ];
         for s in &vecs {
-            assert!(dbg!(ArgumentToken::tokenize(s)).is_ok());
+            assert!(ArgumentToken::tokenize(s).is_ok());
         }
     }
 
@@ -349,7 +343,7 @@ mod tests {
             "some(@0x1) none some(vector[1,2,3])",
         ];
         for s in &args {
-            assert!(dbg!(ArgumentToken::tokenize(s)).is_ok());
+            assert!(ArgumentToken::tokenize(s).is_ok());
         }
     }
 
@@ -357,7 +351,7 @@ mod tests {
     fn dotted_idents() {
         let args = vec!["a", "a.b", "a.b.c", "a.b.c.d", "a.b.c.d.e"];
         for s in &args {
-            assert!(dbg!(ArgumentToken::tokenize(s)).is_ok());
+            assert!(ArgumentToken::tokenize(s).is_ok());
         }
     }
 
@@ -365,7 +359,7 @@ mod tests {
     fn gas() {
         let args = vec!["gas"];
         for s in &args {
-            assert!(dbg!(ArgumentToken::tokenize(s)).is_ok());
+            assert!(ArgumentToken::tokenize(s).is_ok());
         }
     }
 }

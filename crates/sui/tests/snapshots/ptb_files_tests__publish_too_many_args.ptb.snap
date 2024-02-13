@@ -18,6 +18,6 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ publish too many args 
    · ───┬───
-   ·    ╰── Invalid command expected 1 argument but got 3
+   ·    ╰── Expected 1 argument but got 3
    ╰────
 

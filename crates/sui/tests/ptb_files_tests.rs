@@ -55,7 +55,7 @@ async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     // === PARSE COMMANDS ===
     let mut parser = PTBParser::new();
     for cmd in commands.values() {
-        parser.parse(cmd.clone());
+        parser.parse_command(cmd.clone());
     }
 
     let parsed = match parser.finish() {
