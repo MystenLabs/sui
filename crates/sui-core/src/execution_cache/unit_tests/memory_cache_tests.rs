@@ -189,7 +189,8 @@ impl Scenario {
     }
 
     fn with_mutated(&mut self, short_ids: &[u32]) {
-        // for every id in short_ids, create an object with that id if it doesn't exist
+        // for every id in short_ids, assert than an object with that id exists, and
+        // mutate it
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.get(id).cloned().expect("object not found");
@@ -206,6 +207,8 @@ impl Scenario {
     }
 
     fn with_deleted(&mut self, short_ids: &[u32]) {
+        // for every id in short_ids, assert than an object with that id exists, and
+        // delete it
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.remove(id).expect("object not found");
@@ -218,6 +221,8 @@ impl Scenario {
     }
 
     fn with_wrapped(&mut self, short_ids: &[u32]) {
+        // for every id in short_ids, assert than an object with that id exists, and
+        // wrap it
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.get(id).cloned().expect("object not found");
@@ -230,6 +235,9 @@ impl Scenario {
     }
 
     fn with_received(&mut self, short_ids: &[u32]) {
+        // for every id in short_ids, assert than an object with that id exists, that
+        // it has a new lock (which proves it was mutated) and then write a received
+        // marker for it
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.get(id).cloned().expect("object not found");
@@ -245,6 +253,8 @@ impl Scenario {
         }
     }
 
+    // Commit the current tx to the cache, return its digest, and reset the transaction
+    // outputs to a new empty one.
     async fn do_tx(&mut self) -> TransactionDigest {
         // Resets outputs, but not objects, so that subsequent runs must respect
         // the state so far.
@@ -264,6 +274,7 @@ impl Scenario {
         tx
     }
 
+    // commit a transaction to the database
     async fn commit(&mut self, tx: TransactionDigest) -> SuiResult {
         let res = self.cache().commit_transaction_outputs(1, &tx).await;
         self.count_action();
@@ -309,7 +320,7 @@ impl Scenario {
                 self.cache().get_object(&expected.id()).unwrap().unwrap(),
                 *expected
             );
-            // TODO
+            // TODO: enable after lock caching is implemented
             // assert!(!self
             //  .cache()
             //  .get_lock(expected.compute_object_reference(), 1)
@@ -350,6 +361,7 @@ impl Scenario {
 
 #[tokio::test]
 async fn test_uncommitted() {
+    telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
         s.with_created(&[1, 2]);
         s.do_tx().await;
@@ -363,6 +375,7 @@ async fn test_uncommitted() {
 
 #[tokio::test]
 async fn test_committed() {
+    telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
         s.with_created(&[1, 2]);
         let tx = s.do_tx().await;
