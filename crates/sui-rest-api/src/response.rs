@@ -8,7 +8,13 @@ use axum::{
 };
 use reqwest::StatusCode;
 
-use crate::{APPLICATION_BCS, TEXT_PLAIN_UTF_8};
+use crate::{
+    types::{
+        X_SUI_CHAIN_ID, X_SUI_CHECKPOINT_HEIGHT, X_SUI_EPOCH, X_SUI_OLDEST_CHECKPOINT_HEIGHT,
+        X_SUI_TIMESTAMP_MS,
+    },
+    RestService, APPLICATION_BCS, TEXT_PLAIN_UTF_8,
+};
 
 pub struct Bcs<T>(pub T);
 
@@ -55,4 +61,45 @@ where
             ResponseContent::Json(inner) => axum::Json(inner).into_response(),
         }
     }
+}
+
+pub async fn append_info_headers(
+    State(state): State<RestService>,
+    response: Response,
+) -> impl IntoResponse {
+    let latest_checkpoint = state.store.get_latest_checkpoint().unwrap();
+    let oldest_checkpoint = state.store.get_lowest_available_checkpoint().unwrap();
+
+    let mut headers = HeaderMap::new();
+
+    headers.insert(
+        X_SUI_CHAIN_ID,
+        state.chain_id().to_string().try_into().unwrap(),
+    );
+    headers.insert(
+        X_SUI_EPOCH,
+        latest_checkpoint.epoch().to_string().try_into().unwrap(),
+    );
+    headers.insert(
+        X_SUI_CHECKPOINT_HEIGHT,
+        latest_checkpoint
+            .sequence_number()
+            .to_string()
+            .try_into()
+            .unwrap(),
+    );
+    headers.insert(
+        X_SUI_TIMESTAMP_MS,
+        latest_checkpoint
+            .timestamp_ms
+            .to_string()
+            .try_into()
+            .unwrap(),
+    );
+    headers.insert(
+        X_SUI_OLDEST_CHECKPOINT_HEIGHT,
+        oldest_checkpoint.to_string().try_into().unwrap(),
+    );
+
+    (headers, response)
 }

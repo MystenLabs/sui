@@ -28,6 +28,10 @@ pub fn rest_router<S>(state: S) -> Router
 where
     S: ReadStore + Clone + Send + Sync + 'static,
 {
+    let service = RestService {
+        store: std::sync::Arc::new(state.clone()),
+    };
+
     Router::new()
         .route("/", get(health_check))
         .route(
@@ -47,6 +51,10 @@ where
             objects::GET_OBJECT_WITH_VERSION_PATH,
             get(objects::get_object_with_version::<S>),
         )
+        .layer(axum::middleware::map_response_with_state(
+            service,
+            response::append_info_headers,
+        ))
         .with_state(state)
 }
 
@@ -66,27 +74,18 @@ where
         .unwrap();
 }
 
-// Make our own error that wraps `anyhow::Error`.
-pub struct AppError(anyhow::Error);
-
-// Tell axum how to convert `AppError` into a response.
-impl axum::response::IntoResponse for AppError {
-    fn into_response(self) -> axum::response::Response {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Something went wrong: {}", self.0),
-        )
-            .into_response()
-    }
+#[derive(Clone)]
+struct RestService {
+    store: std::sync::Arc<dyn ReadStore + Send + Sync>,
+    //TODO
+    // add git revision
+    // node_type
+    // chain_id
 }
 
-// This enables using `?` on functions that return `Result<_, anyhow::Error>` to turn them into
-// `Result<_, AppError>`. That way you don't need to do that manually.
-impl<E> From<E> for AppError
-where
-    E: Into<anyhow::Error>,
-{
-    fn from(err: E) -> Self {
-        Self(err.into())
+impl RestService {
+    pub fn chain_id(&self) -> sui_types::digests::ChainIdentifier {
+        //TODO FIX THIS
+        sui_types::messages_checkpoint::CheckpointDigest::new([0;32]).into()
     }
 }
