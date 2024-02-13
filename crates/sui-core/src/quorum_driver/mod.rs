@@ -124,7 +124,6 @@ impl<A: Clone> QuorumDriver<A> {
 
     /// Enqueue the task again if it hasn't maxed out the total retry attempts.
     /// If it has, notify failure.
-    /// Enqueuing happens only after the `next_retry_after`, if not, wait until that instant
     async fn enqueue_again_maybe(
         &self,
         transaction: Transaction,
@@ -149,6 +148,7 @@ impl<A: Clone> QuorumDriver<A> {
             .await
     }
 
+    /// Performs exponential backoff and enqueue the `transaction` to the execution queue.
     async fn backoff_and_enqueue(
         &self,
         transaction: Transaction,
@@ -710,11 +710,11 @@ where
         } = task;
         let tx_digest = *transaction.digest();
         let is_single_writer_tx = !transaction.contains_shared_object();
+
         quorum_driver
             .metrics
             .transaction_retry_count
             .report(old_retry_times as u64 + 1);
-        println!("ZZZZZZZ retry count {:?}", old_retry_times + 1);
 
         let timer = Instant::now();
         let tx_cert = match tx_cert {
@@ -793,6 +793,8 @@ where
         let tx_digest = *transaction.digest();
         if let Some(qd_error) = err {
             match qd_error {
+                // Special case for SystemOverloadRetryAfter error. In this case, due to that objects are already
+                // locked inside validators, we need to perform continuous retry and ignore `max_retry_times`.
                 QuorumDriverError::SystemOverloadRetryAfter { .. } => {
                     debug!(?tx_digest, "Failed to {action} - Retrying");
                     spawn_monitored_task!(quorum_driver.backoff_and_enqueue(

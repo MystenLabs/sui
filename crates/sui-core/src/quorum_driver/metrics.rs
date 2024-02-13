@@ -104,7 +104,7 @@ impl QuorumDriverMetrics {
             .unwrap(),
             total_retryable_overload_errors: register_int_counter_with_registry!(
                 "quorum_driver_total_retryable_overload_errors",
-                "Total number of times the conflicting transaction is already finalized when retrying",
+                "Total number of transactions experiencing retryable overload error",
                 registry,
             )
             .unwrap(),

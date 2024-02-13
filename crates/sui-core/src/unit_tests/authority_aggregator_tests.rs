@@ -1939,6 +1939,8 @@ async fn test_handle_overload_response() {
     .await;
 }
 
+// Tests that authority aggregator can aggregate SuiError::ValidatorOverloadedRetryAfter into
+// AggregatorProcessTransactionError::SystemOverloadRetryAfter.
 #[tokio::test]
 async fn test_handle_overload_retry_response() {
     let mut authorities = BTreeMap::new();

@@ -306,6 +306,7 @@ struct ProcessTransactionState {
     object_or_package_not_found_stake: StakeUnit,
     // Validators that are overloaded with txns pending execution.
     overloaded_stake: StakeUnit,
+    // Validators that are overloaded and request client to retry.
     retryable_overloaded_stake: StakeUnit,
     // If there are conflicting transactions, we note them down and may attempt to retry
     conflicting_tx_digests:
@@ -1232,6 +1233,7 @@ where
 
         if state.tx_signatures.total_votes() + state.retryable_overloaded_stake >= quorum_threshold
         {
+            // TODO: make use of retry_after_secs, which is currently not used.
             return AggregatorProcessTransactionError::SystemOverloadRetryAfter {
                 overload_stake: state.retryable_overloaded_stake,
                 errors: group_errors(state.errors),
