@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
+use parking_lot::RwLock;
 use prometheus::Registry;
 use sui_protocol_config::ProtocolConfig;
 use tracing::info;
@@ -14,6 +15,7 @@ use crate::block_verifier::BlockVerifier;
 use crate::context::Context;
 use crate::core::{Core, CoreSignals};
 use crate::core_thread::CoreThreadDispatcher;
+use crate::dag_state::DagState;
 use crate::leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle};
 use crate::metrics::initialise_metrics;
 use crate::storage::rocksdb_store::RocksDBStore;
@@ -55,8 +57,9 @@ impl AuthorityNode {
 
         // Construct Core
         let (core_signals, signals_receivers) = CoreSignals::new();
-        let block_manager = BlockManager::new();
         let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let block_manager = BlockManager::new(context.clone(), dag_state);
         let core = Core::new(
             context.clone(),
             tx_consumer,
