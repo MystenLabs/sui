@@ -435,7 +435,9 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
         &self,
     ) -> sui_types::storage::error::Result<sui_types::messages_checkpoint::CheckpointSequenceNumber>
     {
-        todo!()
+        // TODO wire this up to the underlying sim store, for now this will work since we never
+        // prune the sim store
+        Ok(0)
     }
 
     fn get_checkpoint_by_digest(
