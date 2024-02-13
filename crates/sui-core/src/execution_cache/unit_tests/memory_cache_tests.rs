@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use rand::{rngs::StdRng, SeedableRng};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    future::Future,
+    sync::atomic::Ordering,
+    sync::{atomic::AtomicU32, Arc},
+};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
     base_types::{random_object_ref, SuiAddress},
@@ -58,10 +63,16 @@ struct Scenario {
     objects: BTreeMap<ObjectID, Object>,
     outputs: TransactionOutputs,
     transactions: BTreeSet<TransactionDigest>,
+
+    action_count: Arc<AtomicU32>,
+    do_after: Option<(u32, Box<dyn Fn(&mut Self)>)>,
 }
 
 impl Scenario {
-    async fn new() -> Self {
+    async fn new(
+        do_after: Option<(u32, Box<dyn Fn(&mut Self)>)>,
+        action_count: Arc<AtomicU32>,
+    ) -> Self {
         let store = init_authority_store().await;
         let cache = Box::new(MemoryCache::new_with_no_metrics(store.clone()));
         Self {
@@ -71,6 +82,43 @@ impl Scenario {
             objects: BTreeMap::new(),
             outputs: Self::new_outputs(),
             transactions: BTreeSet::new(),
+
+            action_count,
+            do_after,
+        }
+    }
+
+    fn count_action(&mut self) {
+        let prev = self.action_count.fetch_add(1, Ordering::Relaxed);
+        if let Some((count, f)) = &self.do_after.take() {
+            if prev == *count {
+                f(self);
+            }
+        }
+    }
+
+    async fn iterate<F, Fut>(f: F)
+    where
+        F: Fn(Scenario) -> Fut,
+        Fut: Future<Output = ()>,
+    {
+        // run once to get a baseline
+        println!("running baseline");
+        let num_steps = {
+            let count = Arc::new(AtomicU32::new(0));
+            let fut = f(Scenario::new(None, count.clone()).await);
+            fut.await;
+            count.load(Ordering::Relaxed)
+        };
+
+        for i in 0..num_steps {
+            println!("running with cache reset after step {}", i);
+            let count = Arc::new(AtomicU32::new(0));
+            let action = Box::new(|s: &mut Scenario| {
+                s.reset_cache();
+            });
+            let fut = f(Scenario::new(Some((i, action)), count.clone()).await);
+            fut.await;
         }
     }
 
@@ -169,11 +217,11 @@ impl Scenario {
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("object not found");
             let object = self.objects.get(id).cloned().expect("object not found");
-            let object_ref = object.compute_object_reference();
+            let mut object_ref = object.compute_object_reference();
             self.outputs.locks_to_delete.push(object_ref);
-            self.outputs
-                .wrapped
-                .push(object.compute_object_reference().into());
+            // in the authority this would be set to the lamport version of the tx
+            object_ref.1.increment();
+            self.outputs.wrapped.push(object_ref.into());
         }
     }
 
@@ -217,11 +265,15 @@ impl Scenario {
             .await
             .expect("write_transaction_outputs failed");
 
+        self.count_action();
+
         tx
     }
 
-    async fn commit(&self, tx: TransactionDigest) -> SuiResult {
-        self.cache.commit_transaction_outputs(1, &tx).await
+    async fn commit(&mut self, tx: TransactionDigest) -> SuiResult {
+        let res = self.cache.commit_transaction_outputs(1, &tx).await;
+        self.count_action();
+        res
     }
 
     fn reset_cache(&mut self) {
@@ -279,68 +331,92 @@ impl Scenario {
 
 #[tokio::test]
 async fn test_uncommitted() {
-    let mut b = Scenario::new().await;
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2]);
+        s.do_tx().await;
 
-    b.with_created(&[1, 2]);
-    b.do_tx().await;
-
-    b.assert_live(&[1, 2]);
-    b.reset_cache();
-    b.assert_not_exists(&[1, 2]);
+        s.assert_live(&[1, 2]);
+        s.reset_cache();
+        s.assert_not_exists(&[1, 2]);
+    })
+    .await;
 }
 
 #[tokio::test]
 async fn test_committed() {
-    let mut b = Scenario::new().await;
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2]);
+        let tx = s.do_tx().await;
 
-    b.with_created(&[1, 2]);
-    let tx = b.do_tx().await;
-
-    b.assert_live(&[1, 2]);
-    b.cache
-        .commit_transaction_outputs(1, &tx)
-        .await
-        .expect("commit failed");
-    b.reset_cache();
-    b.assert_live(&[1, 2]);
+        s.assert_live(&[1, 2]);
+        s.cache
+            .commit_transaction_outputs(1, &tx)
+            .await
+            .expect("commit failed");
+        s.reset_cache();
+        s.assert_live(&[1, 2]);
+    })
+    .await;
 }
 
 #[tokio::test]
 async fn test_mutated() {
     telemetry_subscribers::init_for_testing();
-    let mut b = Scenario::new().await;
-    b.with_created(&[1, 2]);
-    b.do_tx().await;
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2]);
+        s.do_tx().await;
 
-    b.with_mutated(&[1, 2]);
-    b.do_tx().await;
+        s.with_mutated(&[1, 2]);
+        s.do_tx().await;
 
-    b.assert_live(&[1, 2]);
+        s.assert_live(&[1, 2]);
+    })
+    .await;
 }
 
 #[tokio::test]
 async fn test_deleted() {
     telemetry_subscribers::init_for_testing();
-    let mut b = Scenario::new().await;
-    b.with_created(&[1, 2]);
-    b.do_tx().await;
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2]);
+        s.do_tx().await;
 
-    b.with_deleted(&[1]);
-    b.do_tx().await;
+        s.with_deleted(&[1]);
+        s.do_tx().await;
 
-    b.assert_live(&[2]);
-    b.assert_not_exists(&[1]);
+        s.assert_live(&[2]);
+        s.assert_not_exists(&[1]);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_wrapped() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2]);
+        s.do_tx().await;
+
+        s.with_wrapped(&[1]);
+        s.do_tx().await;
+
+        s.assert_live(&[2]);
+        s.assert_not_exists(&[1]);
+    })
+    .await;
 }
 
 #[tokio::test]
 async fn test_out_of_order_commit() {
     telemetry_subscribers::init_for_testing();
-    let mut b = Scenario::new().await;
-    b.with_created(&[1, 2]);
-    b.do_tx().await;
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1, 2]);
+        s.do_tx().await;
 
-    b.with_mutated(&[1, 2]);
-    let tx2 = b.do_tx().await;
+        s.with_mutated(&[1, 2]);
+        let tx2 = s.do_tx().await;
 
-    b.commit(tx2).await.unwrap_err();
+        s.commit(tx2).await.unwrap_err();
+    })
+    .await;
 }
