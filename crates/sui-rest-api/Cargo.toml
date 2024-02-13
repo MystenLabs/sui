@@ -8,13 +8,19 @@ publish = false
 [dependencies]
 mime = "0.3.17"
 anyhow.workspace = true
-serde.workspace = true
-bcs.workspace = true
-reqwest.workspace = true
 axum.workspace = true
+bcs.workspace = true
 rand.workspace = true
-sui-types.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+tap.workspace = true
+thiserror.workspace = true
 workspace-hack.workspace = true
+
+fastcrypto.workspace = true
+sui-types.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
