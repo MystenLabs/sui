@@ -5,14 +5,12 @@ use anyhow::Result;
 use async_trait::async_trait;
 use diesel::{dsl::sql, Connection, ExpressionMethods, RunQueryDsl};
 use prometheus::Registry;
-use std::{collections::HashMap, path::PathBuf};
+use std::path::PathBuf;
 use sui_data_ingestion_core::{
     DataIngestionMetrics, FileProgressStore, IndexerExecutor, Worker, WorkerPool,
 };
-use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
-    full_checkpoint_content::CheckpointData,
-};
+use sui_types::full_checkpoint_content::CheckpointData;
+
 use suins_indexer::{
     get_connection_pool,
     indexer::{format_update_field_query, format_update_subdomain_wrapper_query, SuinsIndexer},
@@ -40,11 +38,7 @@ impl SuinsIndexerWorker {
     /// - The second query is a bulk delete of all deletions.
     ///
     /// You can safely call this with empty updates/deletions as it will return Ok.
-    fn commit_to_db(
-        &self,
-        updates: &[VerifiedDomain],
-        removals: &HashMap<ObjectID, SequenceNumber>,
-    ) -> Result<()> {
+    fn commit_to_db(&self, updates: &[VerifiedDomain], removals: &[String]) -> Result<()> {
         if updates.is_empty() && removals.is_empty() {
             return Ok(());
         }
@@ -80,9 +74,8 @@ impl SuinsIndexerWorker {
             }
 
             if !removals.is_empty() {
-                let field_ids: Vec<_> = removals.keys().map(|x| x.to_string()).collect();
                 diesel::delete(domains::table)
-                    .filter(domains::field_id.eq_any(field_ids))
+                    .filter(domains::field_id.eq_any(removals))
                     .execute(tx)
                     .unwrap_or_else(|_| panic!("Failed to process deletions: {:?}", removals));
             }
