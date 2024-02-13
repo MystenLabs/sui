@@ -350,7 +350,8 @@ impl SignedBlock {
         &self.signature
     }
 
-    /// This method is only verifying the block's signature for now.
+    /// This method only verifies this block's signature. Verification of the full block
+    /// should be done via BlockVerifier.
     pub(crate) fn verify_signature(&self, context: &Context) -> ConsensusResult<()> {
         let block = &self.inner;
         let committee = &context.committee;

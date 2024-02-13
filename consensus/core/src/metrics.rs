@@ -106,6 +106,7 @@ impl NodeMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
+            // TODO: add a short status label.
             invalid_blocks: register_int_counter_vec_with_registry!(
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",

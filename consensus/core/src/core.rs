@@ -389,11 +389,11 @@ impl CoreSignalsReceivers {
 
 #[cfg(test)]
 mod test {
-    use parking_lot::RwLock;
     use std::collections::BTreeSet;
     use std::time::Duration;
 
     use consensus_config::{local_committee_and_keys, Stake};
+    use parking_lot::RwLock;
     use sui_protocol_config::ProtocolConfig;
 
     use super::*;
