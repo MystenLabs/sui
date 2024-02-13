@@ -169,6 +169,7 @@ mod test {
     use crate::block_manager::BlockManager;
     use crate::context::Context;
     use crate::core::CoreSignals;
+    use crate::storage::mem_store::MemStore;
     use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
     #[tokio::test]
@@ -179,12 +180,15 @@ mod test {
         let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
         let transactions_consumer = TransactionsConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
+        let store = Arc::new(MemStore::new());
+
         let core = Core::new(
             context.clone(),
             transactions_consumer,
             block_manager,
             signals,
             key_pairs.remove(context.own_index.value()).0,
+            store,
         );
 
         let (core_dispatcher, handle) = CoreThreadDispatcher::start(core, context);

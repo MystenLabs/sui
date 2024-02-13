@@ -147,7 +147,10 @@ mod tests {
         let (context, _signers) = Context::new_for_test(4);
         let dispatcher = MockCoreThreadDispatcher::default();
         let leader_timeout = Duration::from_millis(500);
-        let parameters = Parameters { leader_timeout };
+        let parameters = Parameters {
+            leader_timeout,
+            ..Default::default()
+        };
         let context = Arc::new(context.with_parameters(parameters));
         let now = Instant::now();
 
@@ -181,7 +184,10 @@ mod tests {
         let (context, _signers) = Context::new_for_test(4);
         let dispatcher = MockCoreThreadDispatcher::default();
         let leader_timeout = Duration::from_millis(500);
-        let parameters = Parameters { leader_timeout };
+        let parameters = Parameters {
+            leader_timeout,
+            ..Default::default()
+        };
         let context = Arc::new(context.with_parameters(parameters));
         let now = Instant::now();
 

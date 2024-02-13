@@ -16,6 +16,7 @@ use crate::core::{Core, CoreSignals};
 use crate::core_thread::CoreThreadDispatcher;
 use crate::leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle};
 use crate::metrics::initialise_metrics;
+use crate::storage::rocksdb_store::RocksDBStore;
 use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
 pub struct AuthorityNode {
@@ -55,12 +56,14 @@ impl AuthorityNode {
         // Construct Core
         let (core_signals, signals_receivers) = CoreSignals::new();
         let block_manager = BlockManager::new();
+        let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
         let core = Core::new(
             context.clone(),
             tx_consumer,
             block_manager,
             core_signals,
             block_signer,
+            store,
         );
 
         let (core_dispatcher, core_dispatcher_handle) =
@@ -104,6 +107,7 @@ mod tests {
     use fastcrypto::traits::ToFromBytes;
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
+    use tempfile::TempDir;
 
     use crate::authority_node::AuthorityNode;
     use crate::block_verifier::TestBlockVerifier;
@@ -112,7 +116,11 @@ mod tests {
     async fn start_and_stop() {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
         let registry = Registry::new();
-        let parameters = Parameters::default();
+        let temp_dir = TempDir::new().unwrap();
+        let parameters = Parameters {
+            db_path: Some(temp_dir.into_path()),
+            ..Default::default()
+        };
         let block_verifier = TestBlockVerifier {};
 
         let (own_index, _) = committee.authorities().last().unwrap();

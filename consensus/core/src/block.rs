@@ -71,10 +71,10 @@ pub enum Block {
 }
 
 impl Block {
-    /// Generate the genesis blocks for the latest Block version. The tuple contains (my_genesis_block, others_genesis_blocks).
+    /// Generate the genesis blocks for the latest Block version. The tuple contains (my_genesis_block, all_genesis_blocks).
     /// The blocks are returned in authority index order.
     pub(crate) fn genesis(context: Arc<Context>) -> (VerifiedBlock, Vec<VerifiedBlock>) {
-        let (my_block, others_block): (Vec<_>, Vec<_>) = context
+        let blocks = context
             .committee
             .authorities()
             .map(|(authority_index, _)| {
@@ -85,8 +85,15 @@ impl Block {
                 VerifiedBlock::new_verified_unserialized(signed)
                     .expect("Shouldn't fail when creating verified block for genesis")
             })
-            .partition(|block| block.author() == context.own_index);
-        (my_block[0].clone(), others_block)
+            .collect::<Vec<VerifiedBlock>>();
+        (
+            blocks
+                .iter()
+                .find(|b| b.author() == context.own_index)
+                .cloned()
+                .expect("We should have found our own genesis block"),
+            blocks,
+        )
     }
 }
 
