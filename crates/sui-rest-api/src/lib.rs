@@ -8,6 +8,7 @@ mod checkpoints;
 mod client;
 mod error;
 mod health;
+mod info;
 mod objects;
 mod response;
 pub mod types;
@@ -30,6 +31,11 @@ where
     };
 
     Router::new()
+        .merge(
+            Router::new()
+                .route("/", get(info::node_info))
+                .with_state(service.clone()),
+        )
         .route(health::HEALTH_PATH, get(health::health::<S>))
         .route(
             checkpoints::GET_FULL_CHECKPOINT_PATH,
@@ -83,6 +89,15 @@ struct RestService {
 impl RestService {
     pub fn chain_id(&self) -> sui_types::digests::ChainIdentifier {
         //TODO FIX THIS
-        sui_types::messages_checkpoint::CheckpointDigest::new([0;32]).into()
+        sui_types::messages_checkpoint::CheckpointDigest::new([0; 32]).into()
+    }
+    pub fn git_revision(&self) -> std::borrow::Cow<'static, str> {
+        //TODO populate this
+        "unknown git-rev".into()
+    }
+
+    pub fn node_type(&self) -> info::NodeType {
+        //TODO populate this
+        info::NodeType::Fullnode
     }
 }
