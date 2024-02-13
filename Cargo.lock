@@ -2624,6 +2624,7 @@ dependencies = [
  "consensus-config",
  "enum_dispatch",
  "fastcrypto",
+ "futures",
  "mockall",
  "mysten-metrics",
  "mysten-network",

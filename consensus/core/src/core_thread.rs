@@ -184,7 +184,6 @@ mod test {
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
-
         let core = Core::new(
             context.clone(),
             transaction_consumer,

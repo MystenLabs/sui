@@ -6,8 +6,10 @@ use std::{collections::HashSet, sync::Arc};
 
 use consensus_config::{AuthorityIndex, ProtocolKeyPair};
 use mysten_metrics::monitored_scope;
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
+use tracing::warn;
 
+use crate::error::{ConsensusError, ConsensusResult};
 use crate::{
     block::{
         timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
@@ -34,7 +36,7 @@ pub(crate) struct Core {
     /// The block manager which is responsible for keeping track of the DAG dependencies when processing new blocks
     /// and accept them or suspend if we are missing their causal history
     block_manager: BlockManager,
-    /// Signals that the component emits
+    /// Sender of outgoing signals from Core.
     signals: CoreSignals,
     /// The keypair to be used for block signing
     block_signer: ProtocolKeyPair,
@@ -109,8 +111,13 @@ impl Core {
         // Now process them, basically move the threshold clock and add them to pending list
         self.add_accepted_blocks(accepted_blocks, None);
 
-        // Attempt to create a new block
-        let _ = self.try_new_block(false);
+        // Attempt to create a new block and broadcast it.
+        if let Some(block) = self.try_new_block(false) {
+            if let Err(e) = self.signals.new_block(block.clone()) {
+                warn!("Failed to broadcast block {}: {:?}", block, e);
+                // TODO: propagate shutdown or ensure this will never return error?
+            }
+        }
 
         // TODO: we don't deal for now with missed references, will address later.
         vec![]
@@ -132,7 +139,8 @@ impl Core {
             .add_blocks(accepted_blocks.iter().map(|b| b.reference()).collect())
         {
             // notify that threshold clock advanced to new round
-            self.signals.new_round(new_round);
+            let _ = self.signals.new_round(new_round);
+            // TODO: propagate shutdown or ensure this will never return error?
         }
 
         // Report the threshold clock round
@@ -166,10 +174,15 @@ impl Core {
     pub(crate) fn force_new_block(&mut self, round: Round) -> Option<VerifiedBlock> {
         if self.last_proposed_round() < round {
             self.context.metrics.node_metrics.leader_timeout_total.inc();
-            self.try_new_block(true)
-        } else {
-            None
+            if let Some(block) = self.try_new_block(true) {
+                if let Err(e) = self.signals.new_block(block.clone()) {
+                    warn!("Failed to broadcast block {}: {:?}", block, e);
+                    // TODO: propagate shutdown or ensure this will never return error?
+                }
+                return Some(block);
+            }
         }
+        None
     }
 
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
@@ -238,7 +251,8 @@ impl Core {
             tracing::debug!("New block created {}", verified_block);
 
             //5. emit an event that a new block is ready
-            self.signals.new_block_ready(verified_block.reference());
+            let _ = self.signals.new_block_ready(verified_block.reference());
+            // TODO: propagate shutdown or ensure this will never return error?
 
             return Some(verified_block);
         }
@@ -332,25 +346,33 @@ impl Core {
     }
 }
 
-/// Signals support a series of signals that are sent from Core when various events happen (ex new block produced).
+/// Senders of signals from Core, for outputs and events (ex new block produced).
 #[allow(dead_code)]
 pub(crate) struct CoreSignals {
+    tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
     new_round_sender: watch::Sender<Round>,
     block_ready_sender: watch::Sender<Option<BlockRef>>,
 }
 
 impl CoreSignals {
+    // TODO: move to Parameters.
+    const BROADCAST_BACKLOG_CAPACITY: usize = 1000;
+
     #[allow(dead_code)]
     pub fn new() -> (Self, CoreSignalsReceivers) {
+        let (tx_block_broadcast, _rx_block_broadcast) =
+            broadcast::channel::<VerifiedBlock>(Self::BROADCAST_BACKLOG_CAPACITY);
         let (block_ready_sender, block_ready_receiver) = watch::channel(None);
         let (new_round_sender, new_round_receiver) = watch::channel(0);
 
         let me = Self {
+            tx_block_broadcast: tx_block_broadcast.clone(),
             block_ready_sender,
             new_round_sender,
         };
 
         let receivers = CoreSignalsReceivers {
+            tx_block_broadcast,
             block_ready_receiver,
             new_round_receiver,
         };
@@ -359,25 +381,45 @@ impl CoreSignals {
     }
 
     /// Sends a signal to all the waiters that a new block has been produced.
-    pub fn new_block_ready(&mut self, block: BlockRef) {
-        self.block_ready_sender.send(Some(block)).ok();
+    pub fn new_block(&self, block: VerifiedBlock) -> ConsensusResult<()> {
+        self.tx_block_broadcast
+            .send(block)
+            .map_err(|_| ConsensusError::Shutdown)?;
+        Ok(())
+    }
+
+    /// Sends a signal to all the waiters that a new block has been produced.
+    pub fn new_block_ready(&mut self, block: BlockRef) -> ConsensusResult<()> {
+        self.block_ready_sender
+            .send(Some(block))
+            .map_err(|_| ConsensusError::Shutdown)
     }
 
     /// Sends a signal that threshold clock has advanced to new round. The `round_number` is the round at which the
     /// threshold clock has advanced to.
-    pub fn new_round(&mut self, round_number: Round) {
-        self.new_round_sender.send(round_number).ok();
+    pub fn new_round(&mut self, round_number: Round) -> ConsensusResult<()> {
+        self.new_round_sender
+            .send(round_number)
+            .map_err(|_| ConsensusError::Shutdown)
     }
 }
 
-#[allow(dead_code)]
+/// Receivers of signals from Core.
+/// Intentially un-clonable. Comonents should only subscribe to channels they need.
 pub(crate) struct CoreSignalsReceivers {
+    tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
+    #[allow(dead_code)]
     block_ready_receiver: watch::Receiver<Option<BlockRef>>,
     new_round_receiver: watch::Receiver<Round>,
 }
 
-#[allow(dead_code)]
 impl CoreSignalsReceivers {
+    #[allow(dead_code)]
+    pub(crate) fn block_broadcast_receiver(&self) -> broadcast::Receiver<VerifiedBlock> {
+        self.tx_block_broadcast.subscribe()
+    }
+
+    #[allow(dead_code)]
     pub(crate) fn block_ready_receiver(&self) -> watch::Receiver<Option<BlockRef>> {
         self.block_ready_receiver.clone()
     }
@@ -415,7 +457,7 @@ mod test {
 
         // Create test blocks for all the authorities for 4 rounds and populate them in store
         let (_, mut last_round_blocks) = Block::genesis(context.clone());
-        let mut all_blocks = last_round_blocks.clone();
+        let mut all_blocks: Vec<VerifiedBlock> = last_round_blocks.clone();
         for round in 1..=4 {
             let mut this_round_blocks = Vec::new();
             for (index, _authority) in context.committee.authorities() {
@@ -549,7 +591,6 @@ mod test {
         let (transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
-
         let mut core = Core::new(
             context.clone(),
             transaction_consumer,
@@ -625,7 +666,6 @@ mod test {
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
-
         let mut core = Core::new(
             context.clone(),
             transaction_consumer,
@@ -835,7 +875,6 @@ mod test {
             let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
             let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
             let (signals, signal_receivers) = CoreSignals::new();
-
             let block_signer = signers.remove(index).1;
 
             let core = Core::new(

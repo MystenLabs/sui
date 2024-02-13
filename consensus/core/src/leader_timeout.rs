@@ -7,6 +7,7 @@ use crate::core_thread::CoreThreadDispatcher;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::oneshot::{Receiver, Sender};
+use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep_until, Instant};
 use tracing::{debug, warn};
@@ -25,7 +26,7 @@ impl LeaderTimeoutTaskHandle {
 
 pub(crate) struct LeaderTimeoutTask<D: CoreThreadDispatcher> {
     dispatcher: D,
-    signals_receivers: CoreSignalsReceivers,
+    new_round_receiver: watch::Receiver<Round>,
     leader_timeout: Duration,
     stop: Receiver<()>,
 }
@@ -33,14 +34,14 @@ pub(crate) struct LeaderTimeoutTask<D: CoreThreadDispatcher> {
 impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
     pub fn start(
         dispatcher: D,
-        signals_receivers: CoreSignalsReceivers,
+        signals_receivers: &CoreSignalsReceivers,
         context: Arc<Context>,
     ) -> LeaderTimeoutTaskHandle {
         let (stop_sender, stop) = tokio::sync::oneshot::channel();
         let mut me = Self {
             dispatcher,
             stop,
-            signals_receivers,
+            new_round_receiver: signals_receivers.new_round_receiver(),
             leader_timeout: context.parameters.leader_timeout,
         };
         let handle = tokio::spawn(async move { me.run().await });
@@ -52,7 +53,7 @@ impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
     }
 
     async fn run(&mut self) {
-        let mut new_round = self.signals_receivers.new_round_receiver();
+        let new_round = &mut self.new_round_receiver;
         let mut leader_round: Round = *new_round.borrow_and_update();
         let mut leader_round_timed_out = false;
         let timer_start = Instant::now();
@@ -159,10 +160,10 @@ mod tests {
         let (mut signals, signal_receivers) = CoreSignals::new();
 
         // spawn the task
-        let _handle = LeaderTimeoutTask::start(dispatcher.clone(), signal_receivers, context);
+        let _handle = LeaderTimeoutTask::start(dispatcher.clone(), &signal_receivers, context);
 
         // send a signal that a new round has been produced.
-        signals.new_round(10);
+        signals.new_round(10).unwrap();
 
         // wait enough until a force_new_block has been received
         sleep(2 * leader_timeout).await;
@@ -196,15 +197,15 @@ mod tests {
         let (mut signals, signal_receivers) = CoreSignals::new();
 
         // spawn the task
-        let _handle = LeaderTimeoutTask::start(dispatcher.clone(), signal_receivers, context);
+        let _handle = LeaderTimeoutTask::start(dispatcher.clone(), &signal_receivers, context);
 
         // now send some signals with some small delay between them, but not enough so every round
         // manages to timeout and call the force new block method.
-        signals.new_round(13);
+        signals.new_round(13).unwrap();
         sleep(leader_timeout / 2).await;
-        signals.new_round(14);
+        signals.new_round(14).unwrap();
         sleep(leader_timeout / 2).await;
-        signals.new_round(15);
+        signals.new_round(15).unwrap();
         sleep(2 * leader_timeout).await;
 
         // only the last one should be received

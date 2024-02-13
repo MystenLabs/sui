@@ -18,7 +18,8 @@ mod anemo_gen {
 pub(crate) mod anemo_network;
 
 /// Network client for communicating with peers.
-pub(crate) trait NetworkClient: Send + Sync {
+#[async_trait]
+pub(crate) trait NetworkClient: Send + Sync + 'static {
     /// Sends a serialized SignedBlock to a peer.
     async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()>;
 
