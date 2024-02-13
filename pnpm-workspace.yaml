@@ -7,7 +7,7 @@ packages:
   - '!sdk/create-dapp/templates'
   - '!sdk/typescript/*/**'
   - '!sdk/typescript/scripts'
-  - '!sdk/typescript/builder'
+  - '!sdk/typescript/transactions'
   - '!sdk/typescript/cryptography'
   - '!sdk/typescript/faucet'
   - '!sdk/typescript/transactions'

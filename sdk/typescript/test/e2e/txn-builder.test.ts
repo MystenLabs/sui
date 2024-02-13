@@ -15,10 +15,10 @@ import {
 	upgradePackage,
 } from './utils/setup';
 
-import '../../src/builder/TransactionBlockData';
+import '../../src/transactions/TransactionBlockData';
 
 import { bcs } from '../../src/bcs';
-import { TransactionBlock } from '../../src/builder';
+import { TransactionBlock } from '../../src/transactions';
 
 export const SUI_CLOCK_OBJECT_ID = normalizeSuiObjectId('0x6');
 

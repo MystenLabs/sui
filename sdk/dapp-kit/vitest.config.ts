@@ -27,7 +27,8 @@ export default defineConfig({
 			).pathname,
 			'@mysten/sui.js/client': new URL('../typescript/src/client', import.meta.url).pathname,
 			'@mysten/sui.js/utils': new URL('../typescript/src/utils', import.meta.url).pathname,
-			'@mysten/sui.js/transactions': new URL('../typescript/src/builder', import.meta.url).pathname,
+			'@mysten/sui.js/transactions': new URL('../typescript/src/transactions', import.meta.url)
+				.pathname,
 		},
 	},
 });

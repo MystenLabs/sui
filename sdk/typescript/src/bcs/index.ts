@@ -14,7 +14,7 @@ import {
 	toHEX,
 } from '@mysten/bcs';
 
-import type { MoveCallTransaction } from '../builder/Transactions.js';
+import type { MoveCallTransaction } from '../transactions/Transactions.js';
 import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
 import { TypeTagSerializer } from './type-tag-serializer.js';
 
