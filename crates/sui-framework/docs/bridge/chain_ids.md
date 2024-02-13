@@ -271,7 +271,7 @@
 
 <pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_is_valid_route">is_valid_route</a>(source: u8, destination: u8): bool {
     <b>let</b> route = <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source, destination };
-    <b>return</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&<a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(), &route)
+    <a href="dependencies/move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&<a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(), &route)
 }
 </code></pre>
 

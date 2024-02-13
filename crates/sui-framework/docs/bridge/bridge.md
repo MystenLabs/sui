@@ -14,16 +14,16 @@
 -  [Struct `TokenTransferAlreadyApproved`](#0xb_bridge_TokenTransferAlreadyApproved)
 -  [Struct `TokenTransferAlreadyClaimed`](#0xb_bridge_TokenTransferAlreadyClaimed)
 -  [Constants](#@Constants_0)
--  [Function `create`](#0xb_bridge_create)
--  [Function `load_inner_mut`](#0xb_bridge_load_inner_mut)
--  [Function `load_inner`](#0xb_bridge_load_inner)
 -  [Function `send_token`](#0xb_bridge_send_token)
 -  [Function `approve_bridge_message`](#0xb_bridge_approve_bridge_message)
--  [Function `claim_token_internal`](#0xb_bridge_claim_token_internal)
 -  [Function `claim_token`](#0xb_bridge_claim_token)
 -  [Function `claim_and_transfer_token`](#0xb_bridge_claim_and_transfer_token)
 -  [Function `execute_emergency_op`](#0xb_bridge_execute_emergency_op)
+-  [Function `create`](#0xb_bridge_create)
+-  [Function `load_inner_mut`](#0xb_bridge_load_inner_mut)
+-  [Function `load_inner`](#0xb_bridge_load_inner)
 -  [Function `next_seq_num`](#0xb_bridge_next_seq_num)
+-  [Function `claim_token_internal`](#0xb_bridge_claim_token_internal)
 
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
@@ -507,108 +507,6 @@
 
 
 
-<a name="0xb_bridge_create"></a>
-
-## Function `create`
-
-
-
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_create">create</a>(id: <a href="dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>, chain_id: u8, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_create">create</a>(id: UID, chain_id: u8, ctx: &<b>mut</b> TxContext) {
-    <b>assert</b>!(<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="bridge.md#0xb_bridge_ENotSystemAddress">ENotSystemAddress</a>);
-    <b>let</b> bridge_inner = <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
-        bridge_version: <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>,
-        chain_id,
-        sequence_nums: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>&lt;u8, u64&gt;(),
-        <a href="committee.md#0xb_committee">committee</a>: <a href="committee.md#0xb_committee_create">committee::create</a>(ctx),
-        <a href="treasury.md#0xb_treasury">treasury</a>: <a href="treasury.md#0xb_treasury_create">treasury::create</a>(ctx),
-        bridge_records: <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_new">linked_table::new</a>&lt;BridgeMessageKey, <a href="bridge.md#0xb_bridge_BridgeRecord">BridgeRecord</a>&gt;(ctx),
-        frozen: <b>false</b>,
-    };
-    <b>let</b> <a href="bridge.md#0xb_bridge">bridge</a> = <a href="bridge.md#0xb_bridge_Bridge">Bridge</a> {
-        id,
-        inner: <a href="dependencies/sui-framework/versioned.md#0x2_versioned_create">versioned::create</a>(<a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, bridge_inner, ctx)
-    };
-    <a href="dependencies/sui-framework/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="bridge.md#0xb_bridge">bridge</a>);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xb_bridge_load_inner_mut"></a>
-
-## Function `load_inner_mut`
-
-
-
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>): &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">bridge::BridgeInner</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(
-    self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
-): &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
-    <b>let</b> version = <a href="dependencies/sui-framework/versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner);
-
-    // TODO: Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="dependencies/sui-framework/object.md#0x2_object">object</a>.
-    <b>assert</b>!(version == <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
-    <b>let</b> inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> = <a href="dependencies/sui-framework/versioned.md#0x2_versioned_load_value_mut">versioned::load_value_mut</a>(&<b>mut</b> self.inner);
-    <b>assert</b>!(inner.bridge_version == version, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
-    inner
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xb_bridge_load_inner"></a>
-
-## Function `load_inner`
-
-
-
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner">load_inner</a>(self: &<a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>): &<a href="bridge.md#0xb_bridge_BridgeInner">bridge::BridgeInner</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner">load_inner</a>(
-    self: &<a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
-): &<a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
-    <b>let</b> version = <a href="dependencies/sui-framework/versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner);
-
-    // TODO: Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="dependencies/sui-framework/object.md#0x2_object">object</a>.
-    <b>assert</b>!(version == <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
-    <b>let</b> inner: &<a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> = <a href="dependencies/sui-framework/versioned.md#0x2_versioned_load_value">versioned::load_value</a>(&self.inner);
-    <b>assert</b>!(inner.bridge_version == version, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
-    inner
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0xb_bridge_send_token"></a>
 
 ## Function `send_token`
@@ -741,76 +639,6 @@
 
 </details>
 
-<a name="0xb_bridge_claim_token_internal"></a>
-
-## Function `claim_token_internal`
-
-
-
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;, <b>address</b>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(
-    self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
-    source_chain: u8,
-    bridge_seq_num: u64,
-    ctx: &<b>mut</b> TxContext
-): (Option&lt;Coin&lt;T&gt;&gt;, <b>address</b>) {
-    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
-    <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(source_chain, <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), bridge_seq_num);
-    <b>if</b> (!<a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(&inner.bridge_records, key)) {
-        <b>abort</b> <a href="bridge.md#0xb_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>
-    };
-    // retrieve approved <a href="bridge.md#0xb_bridge">bridge</a> <a href="message.md#0xb_message">message</a>
-    <b>let</b> record = <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_borrow_mut">linked_table::borrow_mut</a>(&<b>mut</b> inner.bridge_records, key);
-    // ensure this is a token <a href="bridge.md#0xb_bridge">bridge</a> <a href="message.md#0xb_message">message</a>
-    <b>assert</b>!(<a href="message.md#0xb_message_message_type">message::message_type</a>(&record.<a href="message.md#0xb_message">message</a>) == <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), <a href="bridge.md#0xb_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>);
-    // Ensure it's signed
-    <b>assert</b>!(<a href="dependencies/move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&record.verified_signatures), <a href="bridge.md#0xb_bridge_EUnauthorisedClaim">EUnauthorisedClaim</a>);
-
-    // extract token <a href="message.md#0xb_message">message</a>
-    <b>let</b> token_payload = <a href="message.md#0xb_message_extract_token_bridge_payload">message::extract_token_bridge_payload</a>(&record.<a href="message.md#0xb_message">message</a>);
-    // get owner <b>address</b>
-    <b>let</b> owner = address::from_bytes(<a href="message.md#0xb_message_token_target_address">message::token_target_address</a>(&token_payload));
-
-    // If already claimed, exit early
-    <b>if</b> (record.claimed) {
-        emit(<a href="bridge.md#0xb_bridge_TokenTransferAlreadyClaimed">TokenTransferAlreadyClaimed</a> { message_key: key });
-        <b>return</b> (<a href="dependencies/move-stdlib/option.md#0x1_option_none">option::none</a>(), owner)
-    };
-
-    <b>let</b> target_chain = <a href="message.md#0xb_message_token_target_chain">message::token_target_chain</a>(&token_payload);
-    // ensure target chain matches self.chain_id
-    <b>assert</b>!(target_chain == inner.chain_id, <a href="bridge.md#0xb_bridge_EUnexpectedChainID">EUnexpectedChainID</a>);
-
-    // TODO: why do we check validity of the route here? what <b>if</b> inconsistency?
-    // Ensure route is valid
-    // TODO: add unit tests
-    <b>assert</b>!(<a href="chain_ids.md#0xb_chain_ids_is_valid_route">chain_ids::is_valid_route</a>(source_chain, target_chain), <a href="bridge.md#0xb_bridge_EInvalidBridgeRoute">EInvalidBridgeRoute</a>);
-
-    // get owner <b>address</b>
-    <b>let</b> owner = address::from_bytes(<a href="message.md#0xb_message_token_target_address">message::token_target_address</a>(&token_payload));
-    // check token type
-    <b>assert</b>!(<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;() == <a href="message.md#0xb_message_token_type">message::token_type</a>(&token_payload), <a href="bridge.md#0xb_bridge_EUnexpectedTokenType">EUnexpectedTokenType</a>);
-    // claim from <a href="treasury.md#0xb_treasury">treasury</a>
-    <b>let</b> token = <a href="treasury.md#0xb_treasury_mint">treasury::mint</a>&lt;T&gt;(&<b>mut</b> inner.<a href="treasury.md#0xb_treasury">treasury</a>, <a href="message.md#0xb_message_token_amount">message::token_amount</a>(&token_payload), ctx);
-    // Record changes
-    record.claimed = <b>true</b>;
-    emit(<a href="bridge.md#0xb_bridge_TokenTransferClaimed">TokenTransferClaimed</a> { message_key: key });
-    (<a href="dependencies/move-stdlib/option.md#0x1_option_some">option::some</a>(token), owner)
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0xb_bridge_claim_token"></a>
 
 ## Function `claim_token`
@@ -914,6 +742,104 @@
 
 </details>
 
+<a name="0xb_bridge_create"></a>
+
+## Function `create`
+
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_create">create</a>(id: <a href="dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>, chain_id: u8, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_create">create</a>(id: UID, chain_id: u8, ctx: &<b>mut</b> TxContext) {
+    <b>assert</b>!(<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="bridge.md#0xb_bridge_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>let</b> bridge_inner = <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
+        bridge_version: <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>,
+        chain_id,
+        sequence_nums: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>&lt;u8, u64&gt;(),
+        <a href="committee.md#0xb_committee">committee</a>: <a href="committee.md#0xb_committee_create">committee::create</a>(ctx),
+        <a href="treasury.md#0xb_treasury">treasury</a>: <a href="treasury.md#0xb_treasury_create">treasury::create</a>(ctx),
+        bridge_records: <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_new">linked_table::new</a>&lt;BridgeMessageKey, <a href="bridge.md#0xb_bridge_BridgeRecord">BridgeRecord</a>&gt;(ctx),
+        frozen: <b>false</b>,
+    };
+    <b>let</b> <a href="bridge.md#0xb_bridge">bridge</a> = <a href="bridge.md#0xb_bridge_Bridge">Bridge</a> {
+        id,
+        inner: <a href="dependencies/sui-framework/versioned.md#0x2_versioned_create">versioned::create</a>(<a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, bridge_inner, ctx)
+    };
+    <a href="dependencies/sui-framework/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="bridge.md#0xb_bridge">bridge</a>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_load_inner_mut"></a>
+
+## Function `load_inner_mut`
+
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>): &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">bridge::BridgeInner</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>): &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
+    <b>let</b> version = <a href="dependencies/sui-framework/versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner);
+
+    // TODO: Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="dependencies/sui-framework/object.md#0x2_object">object</a>.
+    <b>assert</b>!(version == <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
+    <b>let</b> inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> = <a href="dependencies/sui-framework/versioned.md#0x2_versioned_load_value_mut">versioned::load_value_mut</a>(&<b>mut</b> self.inner);
+    <b>assert</b>!(inner.bridge_version == version, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
+    inner
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_load_inner"></a>
+
+## Function `load_inner`
+
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner">load_inner</a>(self: &<a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>): &<a href="bridge.md#0xb_bridge_BridgeInner">bridge::BridgeInner</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner">load_inner</a>(self: &<a href="bridge.md#0xb_bridge_Bridge">Bridge</a>): &<a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
+    <b>let</b> version = <a href="dependencies/sui-framework/versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner);
+
+    // TODO: Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="dependencies/sui-framework/object.md#0x2_object">object</a>.
+    <b>assert</b>!(version == <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
+    <b>let</b> inner: &<a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> = <a href="dependencies/sui-framework/versioned.md#0x2_versioned_load_value">versioned::load_value</a>(&self.inner);
+    <b>assert</b>!(inner.bridge_version == version, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
+    inner
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0xb_bridge_next_seq_num"></a>
 
 ## Function `next_seq_num`
@@ -937,6 +863,76 @@
     <b>let</b> (key, seq_num) = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_remove">vec_map::remove</a>(&<b>mut</b> self.sequence_nums, &msg_type);
     <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.sequence_nums, key, seq_num + 1);
     seq_num
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_claim_token_internal"></a>
+
+## Function `claim_token_internal`
+
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;, <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(
+    self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
+    source_chain: u8,
+    bridge_seq_num: u64,
+    ctx: &<b>mut</b> TxContext
+): (Option&lt;Coin&lt;T&gt;&gt;, <b>address</b>) {
+    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
+    <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(source_chain, <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), bridge_seq_num);
+    <b>if</b> (!<a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(&inner.bridge_records, key)) {
+        <b>abort</b> <a href="bridge.md#0xb_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>
+    };
+    // retrieve approved <a href="bridge.md#0xb_bridge">bridge</a> <a href="message.md#0xb_message">message</a>
+    <b>let</b> record = <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_borrow_mut">linked_table::borrow_mut</a>(&<b>mut</b> inner.bridge_records, key);
+    // ensure this is a token <a href="bridge.md#0xb_bridge">bridge</a> <a href="message.md#0xb_message">message</a>
+    <b>assert</b>!(<a href="message.md#0xb_message_message_type">message::message_type</a>(&record.<a href="message.md#0xb_message">message</a>) == <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), <a href="bridge.md#0xb_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>);
+    // Ensure it's signed
+    <b>assert</b>!(<a href="dependencies/move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&record.verified_signatures), <a href="bridge.md#0xb_bridge_EUnauthorisedClaim">EUnauthorisedClaim</a>);
+
+    // extract token <a href="message.md#0xb_message">message</a>
+    <b>let</b> token_payload = <a href="message.md#0xb_message_extract_token_bridge_payload">message::extract_token_bridge_payload</a>(&record.<a href="message.md#0xb_message">message</a>);
+    // get owner <b>address</b>
+    <b>let</b> owner = address::from_bytes(<a href="message.md#0xb_message_token_target_address">message::token_target_address</a>(&token_payload));
+
+    // If already claimed, exit early
+    <b>if</b> (record.claimed) {
+        emit(<a href="bridge.md#0xb_bridge_TokenTransferAlreadyClaimed">TokenTransferAlreadyClaimed</a> { message_key: key });
+        <b>return</b> (<a href="dependencies/move-stdlib/option.md#0x1_option_none">option::none</a>(), owner)
+    };
+
+    <b>let</b> target_chain = <a href="message.md#0xb_message_token_target_chain">message::token_target_chain</a>(&token_payload);
+    // ensure target chain matches self.chain_id
+    <b>assert</b>!(target_chain == inner.chain_id, <a href="bridge.md#0xb_bridge_EUnexpectedChainID">EUnexpectedChainID</a>);
+
+    // TODO: why do we check validity of the route here? what <b>if</b> inconsistency?
+    // Ensure route is valid
+    // TODO: add unit tests
+    <b>assert</b>!(<a href="chain_ids.md#0xb_chain_ids_is_valid_route">chain_ids::is_valid_route</a>(source_chain, target_chain), <a href="bridge.md#0xb_bridge_EInvalidBridgeRoute">EInvalidBridgeRoute</a>);
+
+    // get owner <b>address</b>
+    <b>let</b> owner = address::from_bytes(<a href="message.md#0xb_message_token_target_address">message::token_target_address</a>(&token_payload));
+    // check token type
+    <b>assert</b>!(<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;() == <a href="message.md#0xb_message_token_type">message::token_type</a>(&token_payload), <a href="bridge.md#0xb_bridge_EUnexpectedTokenType">EUnexpectedTokenType</a>);
+    // claim from <a href="treasury.md#0xb_treasury">treasury</a>
+    <b>let</b> token = <a href="treasury.md#0xb_treasury_mint">treasury::mint</a>&lt;T&gt;(&<b>mut</b> inner.<a href="treasury.md#0xb_treasury">treasury</a>, <a href="message.md#0xb_message_token_amount">message::token_amount</a>(&token_payload), ctx);
+    // Record changes
+    record.claimed = <b>true</b>;
+    emit(<a href="bridge.md#0xb_bridge_TokenTransferClaimed">TokenTransferClaimed</a> { message_key: key });
+    (<a href="dependencies/move-stdlib/option.md#0x1_option_some">option::some</a>(token), owner)
 }
 </code></pre>
 

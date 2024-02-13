@@ -50,6 +50,6 @@ module bridge::chain_ids {
 
     public fun is_valid_route(source: u8, destination: u8): bool {
         let route = BridgeRoute { source, destination };
-        return vector::contains(&valid_routes(), &route)
+        vector::contains(&valid_routes(), &route)
     }
 }

@@ -4,36 +4,25 @@
 module bridge::message {
     use std::vector;
 
-    use sui::bcs;
-    use sui::bcs::{BCS};
+    use sui::bcs::{Self, BCS};
     use bridge::treasury;
-
     use bridge::message_types;
 
     #[test_only]
-    use bridge::chain_ids;
+    use sui::{address, coin, hex, tx_context};
+
     #[test_only]
-    use bridge::usdc::USDC;
-    #[test_only]
-    use sui::address;
-    #[test_only]
-    use sui::balance;
-    #[test_only]
-    use sui::coin;
-    #[test_only]
-    use sui::hex;
-    #[test_only]
-    use sui::test_scenario;
-    #[test_only]
-    use bridge::eth::ETH;
-    #[test_only]
-    use bridge::treasury::token_id;
+    use bridge::{chain_ids, eth::ETH, treasury::token_id, usdc::USDC};
 
     const CURRENT_MESSAGE_VERSION: u8 = 1;
     const ECDSA_ADDRESS_LENGTH: u64 = 20;
 
+    /// Payload contains more bytes than expected
     const ETrailingBytes: u64 = 0;
+    /// Address length is invalid (not 20 bytes - `ECDSA_ADDRESS_LENGTH`).
     const EInvalidAddressLength: u64 = 1;
+    /// Input address is too long (more than 255 bytes).
+    const EInvalidAddressInput: u64 = 2;
 
     struct BridgeMessage has copy, drop, store {
         message_type: u8,
@@ -191,6 +180,9 @@ module bridge::message {
         token_type: u8,
         amount: u64
     ): BridgeMessage {
+        assert!(vector::length(&sender_address) <= 255, EInvalidAddressInput);
+        assert!(vector::length(&target_address) <= 255, EInvalidAddressInput);
+
         let payload = vector[];
         // sender address should be less than 255 bytes so can fit into u8
         vector::push_back(&mut payload, (vector::length(&sender_address) as u8));
@@ -335,19 +327,19 @@ module bridge::message {
         self.source_chain
     }
 
-    public fun token_target_chain(self: &TokenPayload): u8 {
+    public fun target_chain(self: &TokenPayload): u8 {
         self.target_chain
     }
 
-    public fun token_target_address(self: &TokenPayload): vector<u8> {
+    public fun target_address(self: &TokenPayload): vector<u8> {
         self.target_address
     }
 
-    public fun token_type(self: &TokenPayload): u8 {
+    public fun type(self: &TokenPayload): u8 {
         self.token_type
     }
 
-    public fun token_amount(self: &TokenPayload): u64 {
+    public fun amount(self: &TokenPayload): u64 {
         self.amount
     }
 
@@ -385,30 +377,28 @@ module bridge::message {
 
     #[test]
     fun test_message_serialization_sui_to_eth() {
-        let sender_address = address::from_u256(100);
-        let scenario = test_scenario::begin(sender_address);
-        let ctx = test_scenario::ctx(&mut scenario);
-
+        let alice = address::from_u256(100);
+        let ctx = &mut tx_context::new_from_hint(alice, 0, 0, 0, 0);
         let coin = coin::mint_for_testing<USDC>(12345, ctx);
 
         let token_bridge_message = create_token_bridge_message(
             chain_ids::sui_testnet(), // source chain
             10, // seq_num
-            address::to_bytes(sender_address), // sender address
+            address::to_bytes(alice), // sender address
             chain_ids::eth_sepolia(), // target_chain
             // Eth address is 20 bytes long
             hex::decode(b"00000000000000000000000000000000000000c8"), // target_address
             3u8, // token_type
-            balance::value(coin::balance(&coin)) // amount: u64
+            coin::value(&coin) // amount: u64
         );
 
         // Test payload extraction
         let token_payload = TokenPayload {
-            sender_address: address::to_bytes(sender_address),
+            sender_address: address::to_bytes(alice),
             target_chain: chain_ids::eth_sepolia(),
             target_address: hex::decode(b"00000000000000000000000000000000000000c8"),
             token_type: 3u8,
-            amount: balance::value(coin::balance(&coin))
+            amount: coin::value(&coin)
         };
         assert!(extract_token_bridge_payload(&token_bridge_message) == token_payload, 0);
 
@@ -422,15 +412,12 @@ module bridge::message {
         assert!(token_bridge_message == deserialize_message(message), 0);
 
         coin::burn_for_testing(coin);
-        test_scenario::end(scenario);
     }
 
     #[test]
     fun test_message_serialization_eth_to_sui() {
-        let address_1 = address::from_u256(100);
-        let scenario = test_scenario::begin(address_1);
-        let ctx = test_scenario::ctx(&mut scenario);
-
+        let alice = address::from_u256(100);
+        let ctx = &mut tx_context::new_from_hint(alice, 0, 0, 0, 0);
         let coin = coin::mint_for_testing<USDC>(12345, ctx);
 
         let token_bridge_message = create_token_bridge_message(
@@ -439,21 +426,21 @@ module bridge::message {
             // Eth address is 20 bytes long
             hex::decode(b"00000000000000000000000000000000000000c8"), // eth sender address
             chain_ids::sui_testnet(), // target_chain
-            address::to_bytes(address_1), // target address
+            address::to_bytes(alice), // target address
             3u8, // token_type
-            balance::value(coin::balance(&coin)) // amount: u64
+            coin::value(&coin) // amount: u64
         );
 
         // Test payload extraction
         let token_payload = TokenPayload {
             sender_address: hex::decode(b"00000000000000000000000000000000000000c8"),
             target_chain: chain_ids::sui_testnet(),
-            target_address: address::to_bytes(address_1),
+            target_address: address::to_bytes(alice),
             token_type: 3u8,
-            amount: balance::value(coin::balance(&coin))
+            amount: coin::value(&coin)
         };
-        assert!(extract_token_bridge_payload(&token_bridge_message) == token_payload, 0);
 
+        assert!(extract_token_bridge_payload(&token_bridge_message) == token_payload, 0);
 
         // Test message serialization
         let message = serialize_message(token_bridge_message);
@@ -464,7 +451,6 @@ module bridge::message {
         assert!(token_bridge_message == deserialize_message(message), 0);
 
         coin::burn_for_testing(coin);
-        test_scenario::end(scenario);
     }
 
     #[test]

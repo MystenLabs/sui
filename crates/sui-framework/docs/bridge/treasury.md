@@ -7,11 +7,11 @@
 
 -  [Struct `BridgeTreasury`](#0xb_treasury_BridgeTreasury)
 -  [Constants](#@Constants_0)
+-  [Function `token_id`](#0xb_treasury_token_id)
 -  [Function `create`](#0xb_treasury_create)
 -  [Function `burn`](#0xb_treasury_burn)
 -  [Function `mint`](#0xb_treasury_mint)
 -  [Function `create_treasury_if_not_exist`](#0xb_treasury_create_treasury_if_not_exist)
--  [Function `token_id`](#0xb_treasury_token_id)
 
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/type_name.md#0x1_type_name">0x1::type_name</a>;
@@ -75,6 +75,41 @@
 </code></pre>
 
 
+
+<a name="0xb_treasury_token_id"></a>
+
+## Function `token_id`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_token_id">token_id</a>&lt;T&gt;(): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_token_id">token_id</a>&lt;T&gt;(): u8 {
+    <b>let</b> coin_type = <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;();
+    <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;BTC&gt;()) {
+        1
+    } <b>else</b> <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;ETH&gt;()) {
+        2
+    } <b>else</b> <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;USDC&gt;()) {
+        3
+    } <b>else</b> <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;USDT&gt;()) {
+        4
+    } <b>else</b> {
+        <b>abort</b> <a href="treasury.md#0xb_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>
+    }
+}
+</code></pre>
+
+
+
+</details>
 
 <a name="0xb_treasury_create"></a>
 
@@ -186,41 +221,6 @@
             <b>abort</b> <a href="treasury.md#0xb_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>
         };
     };
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xb_treasury_token_id"></a>
-
-## Function `token_id`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_token_id">token_id</a>&lt;T&gt;(): u8
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_token_id">token_id</a>&lt;T&gt;(): u8 {
-    <b>let</b> coin_type = <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;();
-    <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;BTC&gt;()) {
-        1
-    } <b>else</b> <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;ETH&gt;()) {
-        2
-    } <b>else</b> <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;USDC&gt;()) {
-        3
-    } <b>else</b> <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;USDT&gt;()) {
-        4
-    } <b>else</b> {
-        <b>abort</b> <a href="treasury.md#0xb_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>
-    }
 }
 </code></pre>
 

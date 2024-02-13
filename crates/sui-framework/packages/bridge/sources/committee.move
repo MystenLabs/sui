@@ -80,7 +80,7 @@ module bridge::committee {
         signatures: vector<vector<u8>>,
     ) {
         let (i, signature_counts) = (0, vector::length(&signatures));
-        let seen_pub_key = vec_set::empty<vector<u8>>();
+        let seen_pub_key = vec_set::empty();
         let required_threshold = *vec_map::get(&self.thresholds, &message::message_type(&message));
 
         // add prefix to the message bytes
@@ -132,8 +132,7 @@ module bridge::committee {
         } = committee;
     }
 
-    #[test]
-    #[expected_failure(abort_code = EDuplicatedSignature)]
+    #[test, expected_failure(abort_code = EDuplicatedSignature)]
     fun test_verify_signatures_duplicated_sig() {
         let committee = setup_test();
         let msg = message::deserialize_message(hex::decode(TEST_MSG));
@@ -150,8 +149,7 @@ module bridge::committee {
         abort 0
     }
 
-    #[test]
-    #[expected_failure(abort_code = EInvalidSignature)]
+    #[test, expected_failure(abort_code = EInvalidSignature)]
     fun test_verify_signatures_invalid_signature() {
         let committee = setup_test();
         let msg = message::deserialize_message(hex::decode(TEST_MSG));
@@ -166,8 +164,7 @@ module bridge::committee {
         abort 0
     }
 
-    #[test]
-    #[expected_failure(abort_code = ESignatureBelowThreshold)]
+    #[test, expected_failure(abort_code = ESignatureBelowThreshold)]
     fun test_verify_signatures_below_threshold() {
         let committee = setup_test();
         let msg = message::deserialize_message(hex::decode(TEST_MSG));
@@ -184,7 +181,7 @@ module bridge::committee {
 
     #[test_only]
     fun setup_test(): BridgeCommittee {
-        let members = vec_map::empty<vector<u8>, CommitteeMember>();
+        let members = vec_map::empty();
 
         let bridge_pubkey_bytes = hex::decode(b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964");
         vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
@@ -207,10 +204,9 @@ module bridge::committee {
         let thresholds = vec_map::empty<u8, u64>();
         vec_map::insert(&mut thresholds, message_types::token(), 200);
 
-        let committee = BridgeCommittee {
+        BridgeCommittee {
             members,
             thresholds
-        };
-        committee
+        }
     }
 }

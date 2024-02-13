@@ -230,7 +230,7 @@
     signatures: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;,
 ) {
     <b>let</b> (i, signature_counts) = (0, <a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&signatures));
-    <b>let</b> seen_pub_key = <a href="dependencies/sui-framework/vec_set.md#0x2_vec_set_empty">vec_set::empty</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;();
+    <b>let</b> seen_pub_key = <a href="dependencies/sui-framework/vec_set.md#0x2_vec_set_empty">vec_set::empty</a>();
     <b>let</b> required_threshold = *<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get">vec_map::get</a>(&self.thresholds, &<a href="message.md#0xb_message_message_type">message::message_type</a>(&<a href="message.md#0xb_message">message</a>));
 
     // add prefix <b>to</b> the <a href="message.md#0xb_message">message</a> bytes

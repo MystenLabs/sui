@@ -5,11 +5,27 @@
 
 
 
+-  [Constants](#@Constants_0)
 -  [Function `ecdsa_pub_key_to_eth_address`](#0xb_crypto_ecdsa_pub_key_to_eth_address)
 
 
 <pre><code><b>use</b> <a href="dependencies/sui-framework/ecdsa_k1.md#0x2_ecdsa_k1">0x2::ecdsa_k1</a>;
 <b>use</b> <a href="dependencies/sui-framework/hash.md#0x2_hash">0x2::hash</a>;
+</code></pre>
+
+
+
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="0xb_crypto_EIncorrectPubKeyLength"></a>
+
+Error code for incorrect public key length.
+
+
+<pre><code><b>const</b> <a href="crypto.md#0xb_crypto_EIncorrectPubKeyLength">EIncorrectPubKeyLength</a>: u64 = 1;
 </code></pre>
 
 
@@ -30,6 +46,8 @@
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="crypto.md#0xb_crypto_ecdsa_pub_key_to_eth_address">ecdsa_pub_key_to_eth_address</a>(compressed_pub_key: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
+    <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&compressed_pub_key) == 33, <a href="crypto.md#0xb_crypto_EIncorrectPubKeyLength">EIncorrectPubKeyLength</a>);
+
     // Decompress pub key
     <b>let</b> decompressed = <a href="dependencies/sui-framework/ecdsa_k1.md#0x2_ecdsa_k1_decompress_pubkey">ecdsa_k1::decompress_pubkey</a>(&compressed_pub_key);
 
