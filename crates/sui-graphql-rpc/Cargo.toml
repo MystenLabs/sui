@@ -29,6 +29,7 @@ move-disassembler.workspace = true
 move-ir-types.workspace = true
 markdown-gen.workspace = true
 mysten-metrics.workspace = true
+mysten-network.workspace = true
 move-core-types.workspace = true
 once_cell.workspace = true
 prometheus.workspace = true

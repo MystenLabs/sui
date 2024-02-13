@@ -7431,6 +7431,7 @@ dependencies = [
  "futures",
  "http",
  "multiaddr",
+ "pin-project-lite",
  "serde",
  "snap",
  "tokio",
@@ -9038,9 +9039,9 @@ dependencies = [
 
 [[package]]
 name = "pin-project-lite"
-version = "0.2.9"
+version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0a7ae3ac2f1173085d398531c705756c94a4c56843785df85a60c1a0afac116"
+checksum = "8afb450f006bf6385ca15ef45d71d2288452bc3683ce2e2cacc0d18e4be60b58"
 
 [[package]]
 name = "pin-utils"
@@ -12414,6 +12415,7 @@ dependencies = [
  "move-disassembler",
  "move-ir-types",
  "mysten-metrics",
+ "mysten-network",
  "once_cell",
  "prometheus",
  "rand 0.8.5",
