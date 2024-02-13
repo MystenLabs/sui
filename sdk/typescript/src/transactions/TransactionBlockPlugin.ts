@@ -5,20 +5,20 @@ import { is, mask } from 'superstruct';
 
 import { bcs } from '../bcs/index.js';
 import type { SuiClient } from '../client/client.js';
-import type { SuiMoveNormalizedType } from '../types/normalized.js';
-import {
-	extractMutableReference,
-	extractReference,
-	extractStructTag,
-} from '../types/normalized.js';
-import type { SuiObjectResponse } from '../types/objects.js';
-import { getObjectReference, SuiObjectRef } from '../types/objects.js';
+import type { SuiMoveNormalizedType } from '../client/index.js';
 import { SUI_TYPE_ARG } from '../utils/index.js';
 import { normalizeSuiAddress, normalizeSuiObjectId } from '../utils/sui-types.js';
-import { BuilderCallArg, Inputs, isMutableSharedObjectInput, PureCallArg } from './Inputs.js';
+import {
+	BuilderCallArg,
+	Inputs,
+	isMutableSharedObjectInput,
+	PureCallArg,
+	SuiObjectRef,
+} from './Inputs.js';
 import { getPureSerializationType, isTxContext } from './serializer.js';
 import type { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 import type { MoveCallTransaction, TransactionBlockInput } from './Transactions.js';
+import { extractMutableReference, extractReference, extractStructTag } from './utils.js';
 
 export type MaybePromise<T> = T | Promise<T>;
 export interface TransactionBlockPlugin {
@@ -262,9 +262,9 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 						mutable,
 					});
 				} else if (normalizedType && isReceivingType(normalizedType)) {
-					input.value = Inputs.ReceivingRef(getObjectReference(object)!);
+					input.value = Inputs.ReceivingRef(object.data!);
 				} else {
-					input.value = Inputs.ObjectRef(getObjectReference(object as SuiObjectResponse)!);
+					input.value = Inputs.ObjectRef(object.data!);
 				}
 			});
 		}

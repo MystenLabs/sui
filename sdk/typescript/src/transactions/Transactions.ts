@@ -22,7 +22,6 @@ import {
 import type { TypeTag } from '../bcs/index.js';
 import { bcs } from '../bcs/index.js';
 import { TypeTagSerializer } from '../bcs/type-tag-serializer.js';
-import { SuiMoveNormalizedType } from '../types/normalized.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
 import { Inputs } from './Inputs.js';
 import { create } from './utils.js';
@@ -36,14 +35,14 @@ export const TransactionBlockInput = union([
 		index: integer(),
 		value: optional(any()),
 		type: optional(literal('object')),
-		normalizedType: optional(SuiMoveNormalizedType),
+		normalizedType: optional(any()),
 	}),
 	object({
 		kind: literal('Input'),
 		index: integer(),
 		value: optional(any()),
 		type: literal('pure'),
-		normalizedType: optional(SuiMoveNormalizedType),
+		normalizedType: optional(any()),
 	}),
 ]);
 export type TransactionBlockInput = Infer<typeof TransactionBlockInput>;

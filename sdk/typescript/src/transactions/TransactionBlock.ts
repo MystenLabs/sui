@@ -523,7 +523,6 @@ export class TransactionBlock {
 		await plugins.resolveObjectReferences(this.#blockData);
 
 		if (!options.onlyTransactionKind) {
-			// TODO: this was previously done in parallel with prepareTransactions, should we allow feature providers to execute in parallel?
 			await plugins.setGasPrice(this.#blockData);
 
 			await plugins.setGasBudget(this.#blockData, {
@@ -531,13 +530,11 @@ export class TransactionBlock {
 				maxTxSizeBytes: this.#getConfig('maxTxSizeBytes', options),
 			});
 
-			// TODO: this was previously done before budgeting, but it seems like it should be done after?
 			await plugins.setGasPayment(this.#blockData, {
 				maxGasObjects: this.#getConfig('maxGasObjects', options),
 			});
 		}
 
-		// Perform final validation on the transaction:
 		await plugins.validate(this.#blockData, {
 			maxPureArgumentSize: this.#getConfig('maxPureArgumentSize', options),
 		});
