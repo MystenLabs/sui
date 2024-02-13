@@ -82,7 +82,7 @@ Headers: {
     "vary": "access-control-request-method",
     "vary": "access-control-request-headers",
 }
-Service version: 2024.1.0
+Service version: 2024.2.0
 Response: {
   "data": {
     "checkpoint": {
