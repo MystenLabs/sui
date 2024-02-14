@@ -513,7 +513,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 									</div>
 
 									<div className="w-full">
-										{activeCoinType === SUI_TYPE_ARG && accountHasSui ? (
+										{activeCoinType === SUI_TYPE_ARG ? (
 											<TokenIconLink
 												disabled={!tokenBalance}
 												accountAddress={activeAccountAddress}
