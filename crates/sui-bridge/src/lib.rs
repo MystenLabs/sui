@@ -10,6 +10,7 @@ pub mod error;
 pub mod eth_client;
 pub mod eth_syncer;
 pub mod events;
+pub mod node;
 pub mod orchestrator;
 pub mod server;
 pub mod storage;
