@@ -80,6 +80,19 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_with_reconfig_and_correlated_crashes() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        register_fail_points(
+            &["correlated-crash-after-consensus-commit-boundary"],
+            || true,
+        );
+
+        let test_cluster = build_test_cluster(4, 1000).await;
+        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
+    }
+
+    #[sim_test(config = "test_config()")]
     async fn test_simulated_load_basic() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(7, 0).await;

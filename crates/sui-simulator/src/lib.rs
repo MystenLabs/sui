@@ -4,6 +4,9 @@
 #[cfg(msim)]
 pub use msim::*;
 
+#[cfg(msim)]
+use std::hash::{Hash, Hasher};
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 // Re-export things used by sui-macros
@@ -144,4 +147,25 @@ macro_rules! return_if_killed {
 #[cfg(msim)]
 pub fn current_simnode_id() -> msim::task::NodeId {
     msim::runtime::NodeHandle::current().id()
+}
+
+/// Given a value, produce a random probability using the value as a seed, with
+/// an additional seed that is constant only for the current test thread.
+#[cfg(msim)]
+pub fn deterministic_probabilty<T: Hash>(value: T) -> f32 {
+    use rand_crate::{rngs::SmallRng, Rng, SeedableRng, thread_rng};
+
+    thread_local! {
+        // a random seed that is shared by the whole test process, so that equal `value`
+        // inputs produce different outputs when the test seed changes
+        static SEED: u64 = thread_rng().gen();
+    }
+
+    SEED.with(|seed| {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        (*seed).hash(&mut hasher);
+        value.hash(&mut hasher);
+        let mut rng = SmallRng::seed_from_u64(hasher.finish());
+        rng.gen_range(0.0..1.0)
+    })
 }
