@@ -22,8 +22,8 @@ use super::transaction_block;
 use super::transaction_block::TransactionBlockFilter;
 use super::type_filter::{ExactTypeFilter, TypeFilter};
 use super::{owner::Owner, sui_address::SuiAddress, transaction_block::TransactionBlock};
-use crate::consistency::Checkpointed;
 use crate::consistency::{build_objects_query, consistent_range, View};
+use crate::consistency::{build_objects_query_v2, Checkpointed};
 use crate::context_data::package_cache::PackageCache;
 use crate::data::{self, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
@@ -1366,13 +1366,7 @@ where
 {
     // Require a consistent view of objects if the owner is specified, to filter out object versions
     // that satisfy the criteria, but have a later version in the same checkpoint.
-    let view = if filter.owner.is_some() {
-        View::Consistent
-    } else {
-        View::Historical
-    };
-
-    build_objects_query(view, lhs, rhs, &page, move |query| filter.apply(query))
+    build_objects_query_v2(lhs, rhs, &page, move |query| filter.apply(query))
 }
 
 #[cfg(test)]

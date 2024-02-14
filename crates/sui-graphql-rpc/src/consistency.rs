@@ -99,7 +99,7 @@ where
     // the most recent version of objects from `objects_snapshot` and `objects_history` that match
     // the filter criteria.
     let candidates = query!(
-        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ({})) o"#,
+        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ALL ({})) o"#,
         snapshot_objs,
         history_objs
     )
@@ -134,6 +134,66 @@ where
             query!("SELECT candidates.* FROM ({}) candidates", candidates)
         }
     }
+}
+
+pub(crate) fn build_objects_query_v2<F>(
+    lhs: i64,
+    rhs: i64,
+    page: &Page<Cursor>,
+    filter_fn: F,
+) -> RawQuery
+where
+    F: Fn(RawQuery) -> RawQuery,
+{
+    let mut newer = query!("SELECT object_id, object_version FROM objects_history");
+    newer = filter!(
+        newer,
+        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+    );
+
+    // Construct the filtered inner query - apply the same filtering criteria to both
+    // objects_snapshot and objects_history tables.
+    let mut snapshot_objs = query!(
+        r#"SELECT candidates.* FROM objects_snapshot as candidates
+    LEFT JOIN ({}) newer
+    ON (candidates.object_id = newer.object_id
+        AND candidates.object_version < newer.object_version)"#,
+        newer.clone()
+    );
+    snapshot_objs = filter!(snapshot_objs, "newer.object_version IS NULL");
+    snapshot_objs = filter_fn(snapshot_objs);
+    snapshot_objs = page.yeet::<StoredHistoryObject>(snapshot_objs);
+
+    // Additionally filter objects_history table for results between the available range, or
+    // checkpoint_viewed_at, if provided.
+    let mut initial_history_objs = query!("SELECT * FROM objects_history");
+    initial_history_objs = filter!(
+        initial_history_objs,
+        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+    );
+    let mut history_objs = query!(
+        r#"SELECT candidates.* FROM ({}) candidates
+        LEFT JOIN ({}) newer
+        ON (candidates.object_id = newer.object_id
+            AND candidates.object_version < newer.object_version)"#,
+        initial_history_objs,
+        newer
+    );
+    history_objs = filter_fn(history_objs);
+    history_objs = filter!(
+        history_objs,
+        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+    );
+    history_objs = page.yeet::<StoredHistoryObject>(history_objs);
+
+    // Combine the two queries, and select the most recent version of each object. The result set is
+    // the most recent version of objects from `objects_snapshot` and `objects_history` that match
+    // the filter criteria.
+    query!(
+        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ALL ({})) candidates"#,
+        snapshot_objs,
+        history_objs
+    )
 }
 
 /// Given a `checkpoint_viewed_at` representing the checkpoint sequence number when the query was
