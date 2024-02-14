@@ -16,6 +16,7 @@ module bridge::bridge {
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::versioned::{Self, Versioned};
+    use sui_system::sui_system::SuiSystemState;
     use bridge::limiter;
     use bridge::limiter::TransferLimiter;
 
@@ -141,6 +142,27 @@ module bridge::bridge {
             inner: versioned::create(CURRENT_VERSION, bridge_inner, ctx)
         };
         transfer::share_object(bridge);
+    }
+
+    #[allow(unused_function)]
+    fun init_bridge_committee(
+        self: &mut Bridge,
+        system_state: &SuiSystemState,
+        min_stake_participation_percentage: u8,
+        ctx: &TxContext
+    ) {
+        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        let inner = load_inner_mut(self);
+        committee::try_create_next_committee(&mut inner.committee, system_state, min_stake_participation_percentage)
+    }
+
+    public fun committee_registration(self: &mut Bridge,
+                                      system_state: &SuiSystemState,
+                                      bridge_pubkey_bytes: vector<u8>,
+                                      http_rest_url: vector<u8>,
+                                      ctx: &TxContext) {
+        let inner = load_inner_mut(self);
+        committee::register(&mut inner.committee, system_state, bridge_pubkey_bytes, http_rest_url, ctx)
     }
 
     // Create bridge request to send token to other chain, the request will be in pending state until approved

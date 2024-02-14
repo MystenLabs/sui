@@ -6,6 +6,12 @@ published-at = "0xb"
 [dependencies]
 MoveStdlib = { local = "../move-stdlib" }
 Sui = { local = "../sui-framework" }
+SuiSystem = { local = "../sui-system" }
 
 [addresses]
 bridge = "0xb"
+
+# addresses use in test
+validator1 = "0xA"
+validator2 = "0xC"
+validator3 = "0xD"

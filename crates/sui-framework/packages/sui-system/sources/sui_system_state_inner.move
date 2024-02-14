@@ -1073,7 +1073,6 @@ module sui_system::sui_system_state_inner {
         }
     }
 
-    #[test_only]
     /// Return the current validator set
     public(friend) fun validators(self: &SuiSystemStateInnerV2): &ValidatorSet {
         &self.validators

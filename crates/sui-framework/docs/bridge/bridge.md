@@ -16,6 +16,8 @@
 -  [Struct `TokenTransferAlreadyClaimed`](#0xb_bridge_TokenTransferAlreadyClaimed)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#0xb_bridge_create)
+-  [Function `init_bridge_committee`](#0xb_bridge_init_bridge_committee)
+-  [Function `committee_registration`](#0xb_bridge_committee_registration)
 -  [Function `send_token`](#0xb_bridge_send_token)
 -  [Function `approve_bridge_message`](#0xb_bridge_approve_bridge_message)
 -  [Function `claim_token`](#0xb_bridge_claim_token)
@@ -42,6 +44,7 @@
 <b>use</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map">0x2::vec_map</a>;
 <b>use</b> <a href="dependencies/sui-framework/versioned.md#0x2_versioned">0x2::versioned</a>;
+<b>use</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system">0x3::sui_system</a>;
 <b>use</b> <a href="chain_ids.md#0xb_chain_ids">0xb::chain_ids</a>;
 <b>use</b> <a href="committee.md#0xb_committee">0xb::committee</a>;
 <b>use</b> <a href="limiter.md#0xb_limiter">0xb::limiter</a>;
@@ -614,6 +617,66 @@
         inner: <a href="dependencies/sui-framework/versioned.md#0x2_versioned_create">versioned::create</a>(<a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, bridge_inner, ctx)
     };
     <a href="dependencies/sui-framework/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="bridge.md#0xb_bridge">bridge</a>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_init_bridge_committee"></a>
+
+## Function `init_bridge_committee`
+
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_init_bridge_committee">init_bridge_committee</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, system_state: &<a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, min_stake_participation_percentage: u8, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_init_bridge_committee">init_bridge_committee</a>(
+    self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
+    system_state: &SuiSystemState,
+    min_stake_participation_percentage: u8,
+    ctx: &TxContext
+) {
+    <b>assert</b>!(<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="bridge.md#0xb_bridge_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
+    <a href="committee.md#0xb_committee_try_create_next_committee">committee::try_create_next_committee</a>(&<b>mut</b> inner.<a href="committee.md#0xb_committee">committee</a>, system_state, min_stake_participation_percentage)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_committee_registration"></a>
+
+## Function `committee_registration`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_committee_registration">committee_registration</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, system_state: &<a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, bridge_pubkey_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, http_rest_url: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_committee_registration">committee_registration</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
+                                  system_state: &SuiSystemState,
+                                  bridge_pubkey_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+                                  http_rest_url: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+                                  ctx: &TxContext) {
+    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
+    <a href="committee.md#0xb_committee_register">committee::register</a>(&<b>mut</b> inner.<a href="committee.md#0xb_committee">committee</a>, system_state, bridge_pubkey_bytes, http_rest_url, ctx)
 }
 </code></pre>
 

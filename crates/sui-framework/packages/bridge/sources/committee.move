@@ -3,21 +3,39 @@
 
 #[allow(unused_use)]
 module bridge::committee {
+    use std::option;
+    use std::option::Option;
     use std::vector;
 
-    use sui::address;
     use sui::ecdsa_k1;
     use sui::event::emit;
-    use sui::hex;
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set;
     use bridge::crypto;
+    use sui_system::sui_system;
+    use sui_system::sui_system::SuiSystemState;
+    use sui_system::validator;
+    use sui_system::validator::Validator;
+    use sui_system::validator_set;
 
     use bridge::message::{Self, BridgeMessage, Blocklist};
     use bridge::message_types;
     #[test_only]
     use bridge::chain_ids;
+    #[test_only]
+    use sui::hex;
+    #[test_only]
+    use sui::test_scenario;
+    #[test_only]
+    use sui::test_utils;
+    #[test_only]
+    use sui::test_utils::assert_eq;
+
+    #[test_only]
+    use sui_system::governance_test_utils::{create_sui_system_state_for_testing, create_validator_for_testing,
+        advance_epoch_with_reward_amounts
+    };
 
     friend bridge::bridge;
 
@@ -26,6 +44,7 @@ module bridge::committee {
     const EInvalidSignature: u64 = 2;
     const ENotSystemAddress: u64 = 3;
     const EValidatorBlocklistContainsUnknownKey: u64 = 4;
+    const ESenderNotActiveValidator: u64 = 5;
 
     const SUI_MESSAGE_PREFIX: vector<u8> = b"SUI_BRIDGE_MESSAGE";
 
@@ -37,8 +56,12 @@ module bridge::committee {
     struct BridgeCommittee has store {
         // commitee pub key and weight
         members: VecMap<vector<u8>, CommitteeMember>,
-        // threshold for each message type
-        thresholds: VecMap<u8, u64>
+        // min stake threshold for each message type
+        stake_thresholds_percentage: VecMap<u8, u8>,
+        // Committee member registrations for the next committee creation.
+        member_registration: VecMap<address, CommitteeMemberRegistration>,
+        total_member_stake: u64,
+        update_epoch: u64
     }
 
     struct CommitteeMember has drop, store {
@@ -46,8 +69,8 @@ module bridge::committee {
         sui_address: address,
         /// The public key bytes of the bridge key
         bridge_pubkey_bytes: vector<u8>,
-        /// Voting power
-        voting_power: u64,
+        /// Voting power (stake amount)
+        stake_amount: u64,
         /// The HTTP REST URL the member's node listens to
         /// it looks like b'https://127.0.0.1:9191'
         http_rest_url: vector<u8>,
@@ -55,33 +78,32 @@ module bridge::committee {
         blocklisted: bool,
     }
 
+    struct CommitteeMemberRegistration has drop, store {
+        /// The Sui Address of the validator
+        sui_address: address,
+        /// The public key bytes of the bridge key
+        bridge_pubkey_bytes: vector<u8>,
+        /// The HTTP REST URL the member's node listens to
+        /// it looks like b'https://127.0.0.1:9191'
+        http_rest_url: vector<u8>,
+    }
+
     public(friend) fun create(ctx: &TxContext): BridgeCommittee {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
-        // Hardcoded genesis committee
-        // TODO: change this to real committe members
-        let members = vec_map::empty<vector<u8>, CommitteeMember>();
-
-        let bridge_pubkey_bytes = hex::decode(b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964");
-        vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
-            sui_address: address::from_u256(1),
-            bridge_pubkey_bytes,
-            voting_power: 10,
-            http_rest_url: b"https://127.0.0.1:9191",
-            blocklisted: false
-        });
-
-        let bridge_pubkey_bytes = hex::decode(b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a62");
-        vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
-            sui_address: address::from_u256(2),
-            bridge_pubkey_bytes,
-            voting_power: 10,
-            http_rest_url: b"https://127.0.0.1:9192",
-            blocklisted: false
-        });
-
+        // Default signature threshold
         let thresholds = vec_map::empty();
-        vec_map::insert(&mut thresholds, message_types::token(), 10);
-        BridgeCommittee { members, thresholds }
+        vec_map::insert(&mut thresholds, message_types::token(), 50);
+        vec_map::insert(&mut thresholds, message_types::committee_blocklist(), 50);
+        vec_map::insert(&mut thresholds, message_types::emergency_op(), 50);
+        vec_map::insert(&mut thresholds, message_types::update_asset_price(), 50);
+        vec_map::insert(&mut thresholds, message_types::update_bridge_limit(), 50);
+        BridgeCommittee {
+            members: vec_map::empty(),
+            stake_thresholds_percentage: thresholds,
+            member_registration: vec_map::empty(),
+            total_member_stake: 0,
+            update_epoch: 0,
+        }
     }
 
     public fun verify_signatures(
@@ -91,7 +113,11 @@ module bridge::committee {
     ) {
         let (i, signature_counts) = (0, vector::length(&signatures));
         let seen_pub_key = vec_set::empty<vector<u8>>();
-        let required_threshold = *vec_map::get(&self.thresholds, &message::message_type(&message));
+        let required_stake_percentage = (*vec_map::get(
+            &self.stake_thresholds_percentage,
+            &message::message_type(&message)
+        ) as u64);
+        let required_stake = required_stake_percentage * self.total_member_stake / 100;
 
         // add prefix to the message bytes
         let message_bytes = SUI_MESSAGE_PREFIX;
@@ -108,13 +134,111 @@ module bridge::committee {
             // get committee signature weight and check pubkey is part of the committee
             let member = vec_map::get(&self.members, &pubkey);
             if (!member.blocklisted) {
-                threshold = threshold + member.voting_power;
+                threshold = threshold + member.stake_amount;
             };
             i = i + 1;
             vec_set::insert(&mut seen_pub_key, pubkey);
         };
-        assert!(threshold >= required_threshold, ESignatureBelowThreshold);
+        assert!(threshold >= required_stake, ESignatureBelowThreshold);
     }
+
+    public(friend) fun register(
+        self: &mut BridgeCommittee,
+        system_state: &SuiSystemState,
+        bridge_pubkey_bytes: vector<u8>,
+        http_rest_url: vector<u8>,
+        ctx: &TxContext
+    ) {
+        // sender must be the same sender that created the validator object
+        let sender = tx_context::sender(ctx);
+        let validators = sui_system::validators(system_state);
+        let active_validators = validator_set::active_validators(validators);
+        let validator_index = find_validator(active_validators, sender);
+
+        assert!(option::is_some(&validator_index), ESenderNotActiveValidator);
+        // Sender is active validator, record the registration
+
+        // In case validator need to update the info
+        if (vec_map::contains(&self.member_registration, &sender)) {
+            let registration = vec_map::get_mut(&mut self.member_registration, &sender);
+            registration.http_rest_url = http_rest_url;
+            registration.bridge_pubkey_bytes = bridge_pubkey_bytes;
+        }else {
+            let registration = CommitteeMemberRegistration {
+                sui_address: sender,
+                bridge_pubkey_bytes,
+                http_rest_url,
+            };
+            vec_map::insert(&mut self.member_registration, sender, registration);
+        }
+    }
+
+    // This method will try to create the next committee using the registration and system state,
+    // if the total stake fails to meet the minimum required percentage, it will skip the update.
+    // This is to ensure we don't fail the end of epoch transaction.
+    public(friend) fun try_create_next_committee(
+        self: &mut BridgeCommittee,
+        system_state: &SuiSystemState,
+        min_stake_participation_percentage: u8,
+    ) {
+        let validators = sui_system::validators(system_state);
+        let active_validators = validator_set::active_validators(validators);
+        let total_member_stake = 0;
+        let i = 0;
+
+        let new_members = vec_map::empty();
+
+        while (i < vec_map::size(&self.member_registration)) {
+            // retrieve registration
+            let (_, registration) = vec_map::get_entry_by_idx(&self.member_registration, i);
+            // Find validator info from system state
+            let validator_index = find_validator(active_validators, registration.sui_address);
+            // Process registration if it's active validator
+            if (option::is_some(&validator_index)) {
+                let index = option::destroy_some(validator_index);
+                let validator = vector::borrow(active_validators, index);
+                let stake_amount = validator::stake_amount(validator);
+
+                total_member_stake = total_member_stake + stake_amount;
+                let member = CommitteeMember {
+                    sui_address: registration.sui_address,
+                    bridge_pubkey_bytes: registration.bridge_pubkey_bytes,
+                    stake_amount,
+                    http_rest_url: registration.http_rest_url,
+                    blocklisted: false,
+                };
+                vec_map::insert(&mut new_members, registration.bridge_pubkey_bytes, member)
+            };
+            i = i + 1;
+        };
+
+        // Make sure the new committee represent enough stakes
+        let stake_participation_percentage = ((total_member_stake * 100 / validator_set::total_stake(
+            validators
+        )) as u8);
+
+        // Store new committee info
+        if (stake_participation_percentage >= min_stake_participation_percentage) {
+            self.total_member_stake = total_member_stake;
+            // Clear registrations
+            self.member_registration = vec_map::empty();
+            self.members = new_members
+        }
+    }
+
+    fun find_validator(validators: &vector<Validator>, validator_address: address): Option<u64> {
+        let length = vector::length(validators);
+        let i = 0;
+        while (i < length) {
+            let v = vector::borrow(validators, i);
+            if (validator::sui_address(v) == validator_address) {
+                return option::some(i)
+            };
+            i = i + 1;
+        };
+        option::none()
+    }
+
 
     // This function applys the blocklist to the committee members, we won't need to run this very often so this is not gas optimised.
     // TODO: add tests for this function
@@ -153,6 +277,12 @@ module bridge::committee {
     const TEST_MSG: vector<u8> =
         b"00010a0000000000000000200000000000000000000000000000000000000000000000000000000000000064012000000000000000000000000000000000000000000000000000000000000000c8033930000000000000";
 
+    #[test_only]
+    const VALIDATOR1_PUBKEY: vector<u8> = b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964";
+    #[test_only]
+    const VALIDATOR2_PUBKEY: vector<u8> = b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a62";
+
+
     #[test]
     fun test_verify_signatures_good_path() {
         let committee = setup_test();
@@ -171,7 +301,10 @@ module bridge::committee {
         // Clean up
         let BridgeCommittee {
             members: _,
-            thresholds: _
+            stake_thresholds_percentage: _,
+            member_registration: _,
+            total_member_stake: _,
+            update_epoch: _
         } = committee;
     }
 
@@ -226,6 +359,104 @@ module bridge::committee {
     }
 
     #[test]
+    fun test_init_committee() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@validator1, 100, ctx),
+            create_validator_for_testing(@validator2, 100, ctx)
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        test_scenario::next_tx(&mut scenario, @0x0);
+
+        let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // validator registration
+        register(&mut committee, &system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@validator1, 0));
+        register(&mut committee, &system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@validator2, 0));
+
+        // Check committee before creation
+        assert!(vec_map::is_empty(&committee.members), 0);
+        assert_eq(0, committee.total_member_stake);
+
+        try_create_next_committee(&mut committee, &system_state, 60);
+
+        assert_eq(2, vec_map::size(&committee.members));
+        assert_eq(100 * 2 * 1_000_000_000, committee.total_member_stake);
+
+        test_utils::destroy(committee);
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ESenderNotActiveValidator)]
+    fun test_init_committee_not_validator() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@validator1, 100, ctx),
+            create_validator_for_testing(@validator2, 100, ctx)
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        test_scenario::next_tx(&mut scenario, @0x0);
+
+        let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // validator registration
+        register(&mut committee, &system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@validator3, 0));
+
+        test_utils::destroy(committee);
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_init_committee_not_enough_stake() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@validator1, 100, ctx),
+            create_validator_for_testing(@validator2, 100, ctx)
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        test_scenario::next_tx(&mut scenario, @0x0);
+
+        let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // validator registration
+        register(&mut committee, &system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@validator1, 0));
+
+        // Check committee before creation
+        assert!(vec_map::is_empty(&committee.members), 0);
+        assert_eq(0, committee.total_member_stake);
+
+        try_create_next_committee(&mut committee, &system_state, 60);
+
+        // committee should be empty because registration did not reach min stake threshold.
+        assert!(vec_map::is_empty(&committee.members), 0);
+        assert_eq(0, committee.total_member_stake);
+
+        test_utils::destroy(committee);
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario);
+    }
+
+    #[test_only]
+    fun tx(sender: address, hint: u64): TxContext {
+        tx_context::new_from_hint(sender, hint, 1, 0, 0)
+    }
+
+    #[test]
     #[expected_failure(abort_code = ESignatureBelowThreshold)]
     fun test_verify_signatures_with_blocked_committee_member() {
         let committee = setup_test();
@@ -269,10 +500,7 @@ module bridge::committee {
         );
 
         // Clean up
-        let BridgeCommittee {
-            members: _,
-            thresholds: _
-        } = committee;
+        test_utils::destroy(committee);
     }
 
     #[test]
@@ -300,10 +528,7 @@ module bridge::committee {
         execute_blocklist(&mut committee, blocklist);
 
         // Clean up
-        let BridgeCommittee {
-            members: _,
-            thresholds: _
-        } = committee;
+        test_utils::destroy(committee);
     }
 
     #[test]
@@ -354,40 +579,40 @@ module bridge::committee {
         assert!(!blocked_member.blocklisted, 0);
 
         // Clean up
-        let BridgeCommittee {
-            members: _,
-            thresholds: _
-        } = committee;
+        test_utils::destroy(committee);
     }
 
     #[test_only]
     fun setup_test(): BridgeCommittee {
         let members = vec_map::empty<vector<u8>, CommitteeMember>();
 
-        let bridge_pubkey_bytes = hex::decode(b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964");
+        let bridge_pubkey_bytes = hex::decode(VALIDATOR1_PUBKEY);
         vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
-            sui_address: address::from_u256(1),
+            sui_address: @validator1,
             bridge_pubkey_bytes,
-            voting_power: 100,
+            stake_amount: 100,
             http_rest_url: b"https://127.0.0.1:9191",
             blocklisted: false
         });
 
-        let bridge_pubkey_bytes = hex::decode(b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a62");
+        let bridge_pubkey_bytes = hex::decode(VALIDATOR2_PUBKEY);
         vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
-            sui_address: address::from_u256(2),
+            sui_address: @validator2,
             bridge_pubkey_bytes,
-            voting_power: 100,
+            stake_amount: 100,
             http_rest_url: b"https://127.0.0.1:9192",
             blocklisted: false
         });
 
-        let thresholds = vec_map::empty<u8, u64>();
-        vec_map::insert(&mut thresholds, message_types::token(), 200);
+        let thresholds = vec_map::empty<u8, u8>();
+        vec_map::insert(&mut thresholds, message_types::token(), 60);
 
         let committee = BridgeCommittee {
             members,
-            thresholds
+            stake_thresholds_percentage: thresholds,
+            member_registration: vec_map::empty(),
+            total_member_stake: 200,
+            update_epoch: 1
         };
         committee
     }

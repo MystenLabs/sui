@@ -84,6 +84,8 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `load_system_state`](#0x3_sui_system_load_system_state)
 -  [Function `load_system_state_mut`](#0x3_sui_system_load_system_state_mut)
 -  [Function `load_inner_maybe_upgrade`](#0x3_sui_system_load_inner_maybe_upgrade)
+-  [Function `load_inner`](#0x3_sui_system_load_inner)
+-  [Function `validators`](#0x3_sui_system_validators)
 
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
@@ -100,6 +102,7 @@ the SuiSystemStateInner version, or vice versa.
 <b>use</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner">0x3::sui_system_state_inner</a>;
 <b>use</b> <a href="validator.md#0x3_validator">0x3::validator</a>;
 <b>use</b> <a href="validator_cap.md#0x3_validator_cap">0x3::validator_cap</a>;
+<b>use</b> <a href="validator_set.md#0x3_validator_set">0x3::validator_set</a>;
 </code></pre>
 
 
@@ -1484,6 +1487,58 @@ gas coins.
     <b>let</b> inner = <a href="dependencies/sui-framework/dynamic_field.md#0x2_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.version);
     <b>assert</b>!(<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_system_state_version">sui_system_state_inner::system_state_version</a>(inner) == self.version, <a href="sui_system.md#0x3_sui_system_EWrongInnerVersion">EWrongInnerVersion</a>);
     inner
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_load_inner"></a>
+
+## Function `load_inner`
+
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_inner">load_inner</a>(self: &<a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_inner">load_inner</a>(self: &<a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &SuiSystemStateInnerV2 {
+    <b>let</b> inner = <a href="dependencies/sui-framework/dynamic_field.md#0x2_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, self.version);
+    <b>assert</b>!(<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_system_state_version">sui_system_state_inner::system_state_version</a>(inner) == self.version, <a href="sui_system.md#0x3_sui_system_EWrongInnerVersion">EWrongInnerVersion</a>);
+    inner
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_validators"></a>
+
+## Function `validators`
+
+Return the current validator set
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_validators">validators</a>(wrapper: &<a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x3_sui_system_validators">validators</a>(wrapper: &<a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &ValidatorSet {
+    <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_inner">load_inner</a>(wrapper);
+    <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_validators">sui_system_state_inner::validators</a>(self)
 }
 </code></pre>
 
