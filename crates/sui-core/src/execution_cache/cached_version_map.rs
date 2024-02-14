@@ -81,8 +81,14 @@ impl<V> CachedVersionMap<V> {
         None
     }
 
-    pub fn get_last(&self) -> Option<&(SequenceNumber, V)> {
+    /// returns the newest (highest) version in the map
+    pub fn get_highest(&self) -> Option<&(SequenceNumber, V)> {
         self.values.back()
+    }
+
+    /// returns the oldest (lowest) version in the map
+    pub fn get_least(&self) -> Option<&(SequenceNumber, V)> {
+        self.values.front()
     }
 
     // pop items from the front of the map until the first item is >= version
@@ -121,7 +127,7 @@ mod tests {
         map.insert(version1, "First");
         map.insert(version2, "Second");
 
-        let last = map.get_last().unwrap();
+        let last = map.get_highest().unwrap();
         assert_eq!(last, &(version2, "Second"));
     }
 
@@ -240,6 +246,6 @@ mod tests {
     #[test]
     fn get_last_on_empty_map() {
         let map: CachedVersionMap<&str> = CachedVersionMap::default();
-        assert!(map.get_last().is_none());
+        assert!(map.get_highest().is_none());
     }
 }
