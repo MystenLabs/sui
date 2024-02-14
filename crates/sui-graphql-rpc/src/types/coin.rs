@@ -381,7 +381,7 @@ fn coins_query(
     rhs: i64,
     page: &Page<object::Cursor>,
 ) -> RawQuery {
-    build_objects_query(View::Consistent, lhs, rhs, &page, move |query| {
+    build_objects_query(View::Consistent, lhs, rhs, page, move |query| {
         apply_filter(query, &coin_type, owner)
     })
 }

@@ -1371,7 +1371,7 @@ where
     };
     // Require a consistent view of objects if the owner is specified, to filter out object versions
     // that satisfy the criteria, but have a later version in the same checkpoint.
-    build_objects_query(view, lhs, rhs, &page, move |query| filter.apply(query))
+    build_objects_query(view, lhs, rhs, page, move |query| filter.apply(query))
 }
 
 #[cfg(test)]
