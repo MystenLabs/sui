@@ -19,13 +19,13 @@
 //! cache hits, we treat the two halves of the cache as FIFO queue. Newly written (dirty) versions are
 //! inserted to one end of the dirty queue. As versions are committed to disk, they are
 //! removed from the other end of the dirty queue and inserted into the cache queue. The cache queue
-//! is truncated if it exceeds its maximum size, by removing the oldest versions.
+//! is truncated if it exceeds its maximum size, by removing all but the N newest versions.
 //!
 //! This gives us the property that the sequence of versions in the dirty and cached queues are the
 //! most recent versions of the object, i.e. there can be no "gaps". This allows for the following:
 //!
-//!   - Negative cache hits: If the queried version is not in the cache, but is higher than the smallest
-//!     version in the queue, it does not exist in the db either.
+//!   - Negative cache hits: If the queried version is not in memory, but is higher than the smallest
+//!     version in the cached queue, it does not exist in the db either.
 //!   - Bounded reads: When reading the most recent version that is <= some version bound, we can
 //!     correctly satisfy this query from the cache, or determine that we must go to the db.
 //!
@@ -180,32 +180,21 @@ impl UncommittedData {
 }
 
 /// CachedData stores data that has been committed to the db, but is likely to be read soon.
-struct CachedData {
+struct CachedCommittedData {
     // See module level comment for an explanation of caching strategy.
     object_cache: MokaCache<ObjectID, Arc<Mutex<CachedVersionMap<ObjectEntry>>>>,
 
     // See module level comment for an explanation of caching strategy.
     marker_cache: MokaCache<MarkerKey, Arc<Mutex<CachedVersionMap<MarkerValue>>>>,
 
-    // Packages are cached separately from objects because they are immutable and can be used by any
-    // number of transactions. Additionally, many operations require loading large numbers of packages
-    // (due to dependencies), so we want to try to keep all packages in memory.
-    // Note that, like any other dirty object, all packages are also stored in `objects` until they are
-    // flushed to disk.
-    packages: MokaCache<ObjectID, PackageObject>,
-
     // Objects that were read at transaction signing time - allows us to access them again at
     // execution time with a single lock / hash lookup
     _transaction_objects: MokaCache<TransactionDigest, Vec<Object>>,
 }
 
-impl CachedData {
+impl CachedCommittedData {
     fn new() -> Self {
         let object_cache = MokaCache::builder()
-            .max_capacity(10000)
-            .initial_capacity(10000)
-            .build();
-        let packages = MokaCache::builder()
             .max_capacity(10000)
             .initial_capacity(10000)
             .build();
@@ -220,15 +209,26 @@ impl CachedData {
 
         Self {
             object_cache,
-            packages,
             marker_cache,
             _transaction_objects: transaction_objects,
         }
     }
 }
+
 pub struct WritebackCache {
     dirty: UncommittedData,
-    cached: CachedData,
+    cached: CachedCommittedData,
+
+    // The packages cache is treated separately from objects, because they are immutable and can be
+    // used by any number of transactions. Additionally, many operations require loading large
+    // numbers of packages (due to dependencies), so we want to try to keep all packages in memory.
+    //
+    // Also, this cache can contain packages that are dirty or committed, so it does not live in
+    // UncachedData or CachedCommittedData. The cache is populated in two ways:
+    // - when packages are written (in which case they will also be present in the dirty set)
+    // - after a cache miss. Because package IDs are unique (only one version exists for each ID)
+    //   we do not need to worry about the contiguous version property.
+    packages: MokaCache<ObjectID, PackageObject>,
 
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
     store: Arc<AuthorityStore>,
@@ -237,22 +237,25 @@ pub struct WritebackCache {
 
 impl WritebackCache {
     pub fn new(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
-        Self {
-            dirty: UncommittedData::new(),
-            cached: CachedData::new(),
-            executed_effects_digests_notify_read: NotifyRead::new(),
-            store,
-            metrics: Some(ExecutionCacheMetrics::new(registry)),
-        }
+        Self::new_impl(store, Some(ExecutionCacheMetrics::new(registry)))
     }
 
     pub fn new_with_no_metrics(store: Arc<AuthorityStore>) -> Self {
+        Self::new_impl(store, None)
+    }
+
+    fn new_impl(store: Arc<AuthorityStore>, metrics: Option<ExecutionCacheMetrics>) -> Self {
+        let packages = MokaCache::builder()
+            .max_capacity(10000)
+            .initial_capacity(10000)
+            .build();
         Self {
             dirty: UncommittedData::new(),
-            cached: CachedData::new(),
+            cached: CachedCommittedData::new(),
+            packages,
             executed_effects_digests_notify_read: NotifyRead::new(),
             store,
-            metrics: None,
+            metrics,
         }
     }
 
@@ -545,7 +548,7 @@ impl WritebackCache {
     #[cfg(test)]
     pub fn clear_caches(&self) {
         self.cached.object_cache.invalidate_all();
-        self.cached.packages.invalidate_all();
+        self.packages.invalidate_all();
         self.cached.marker_cache.invalidate_all();
         self.cached._transaction_objects.invalidate_all();
     }
@@ -565,9 +568,8 @@ impl ExecutionCacheCommit for WritebackCache {
 
 impl ExecutionCacheRead for WritebackCache {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
-        if let Some(p) = self.cached.packages.get(package_id) {
-            #[cfg(debug_assertions)]
-            {
+        if let Some(p) = self.packages.get(package_id) {
+            if cfg!(debug_assertions) {
                 if let Some(store_package) = self.store.get_object(package_id).unwrap() {
                     assert_eq!(
                         store_package.digest(),
@@ -586,7 +588,7 @@ impl ExecutionCacheRead for WritebackCache {
         if let Some(p) = ExecutionCacheRead::get_object(self, package_id)? {
             if p.is_package() {
                 let p = PackageObject::new(p);
-                self.cached.packages.insert(*package_id, p.clone());
+                self.packages.insert(*package_id, p.clone());
                 Ok(Some(p))
             } else {
                 Err(SuiError::UserInputError {
@@ -608,9 +610,7 @@ impl ExecutionCacheRead for WritebackCache {
                 .expect("Failed to update system packages")
             {
                 assert!(p.is_package());
-                self.cached
-                    .packages
-                    .insert(*package_id, PackageObject::new(p));
+                self.packages.insert(*package_id, PackageObject::new(p));
             }
             // It's possible that a package is not found if it's newly added system package ID
             // that hasn't got created yet. This should be very very rare though.
@@ -983,8 +983,7 @@ impl ExecutionCacheWrite for WritebackCache {
             if !object.is_child_object() {
                 self.write_object(object_id, object);
                 if object.is_package() {
-                    self.cached
-                        .packages
+                    self.packages
                         .insert(*object_id, PackageObject::new(object.clone()));
                 }
             }
