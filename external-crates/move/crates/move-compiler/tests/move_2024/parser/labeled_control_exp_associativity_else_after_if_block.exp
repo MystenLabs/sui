@@ -1,3 +1,27 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/parser/labeled_control_exp_associativity_else_after_if_block.move:7:11
+  │
+7 │     fun t(cond: bool, s1: S, s2: S) {
+  │           ^^^^ Unused parameter 'cond'. Consider removing or prefixing with an underscore: '_cond'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/parser/labeled_control_exp_associativity_else_after_if_block.move:7:23
+  │
+7 │     fun t(cond: bool, s1: S, s2: S) {
+  │                       ^^ Unused parameter 's1'. Consider removing or prefixing with an underscore: '_s1'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/parser/labeled_control_exp_associativity_else_after_if_block.move:7:30
+  │
+7 │     fun t(cond: bool, s1: S, s2: S) {
+  │                              ^^ Unused parameter 's2'. Consider removing or prefixing with an underscore: '_s2'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E01002]: unexpected token
    ┌─ tests/move_2024/parser/labeled_control_exp_associativity_else_after_if_block.move:13:32
    │
@@ -6,4 +30,13 @@ error[E01002]: unexpected token
    │                                │
    │                                Unexpected 'else'
    │                                Expected ';'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_else_after_if_block.move:13:32
+   │
+13 │         if (cond) 'a: { s1 }.f else s2.f
+   │                                ^^^^
+   │                                │
+   │                                Unexpected 'else'
+   │                                Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 

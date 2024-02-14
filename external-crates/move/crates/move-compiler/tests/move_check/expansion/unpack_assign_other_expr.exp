@@ -7,3 +7,12 @@ error[E01002]: unexpected token
   │           Unexpected 'f'
   │           Expected ';'
 
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:9:11
+  │
+9 │         S f = S { f: 0 };
+  │           ^
+  │           │
+  │           Unexpected 'f'
+  │           Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+

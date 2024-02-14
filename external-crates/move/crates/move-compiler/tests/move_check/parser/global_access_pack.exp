@@ -7,3 +7,12 @@ error[E01002]: unexpected token
   │         Unexpected '::'
   │         Expected an expression term
 
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/global_access_pack.move:3:9
+  │
+3 │         ::S { }
+  │         ^^
+  │         │
+  │         Unexpected '::'
+  │         Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+

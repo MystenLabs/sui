@@ -1,3 +1,11 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:4:20
+  │
+4 │     public fun foo(s: S) {
+  │                    ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:13
   │
@@ -6,4 +14,27 @@ error[E01002]: unexpected token
   │             │
   │             Unexpected 'mut'
   │             Expected an identifier
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:13
+  │
+6 │         S { mut f } = s1;
+  │             ^^^
+  │             │
+  │             Unexpected 'mut'
+  │             Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+
+error[E06001]: unused value without 'drop'
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:13
+  │
+2 │     public struct S { f: u64 }
+  │                   - To satisfy the constraint, the 'drop' ability would need to be added here
+3 │ 
+4 │     public fun foo(s: S) {
+  │                    -  - The type 'a::m::S' does not have the ability 'drop'
+  │                    │   
+  │                    The parameter 's' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+5 │         let f = 0;
+6 │         S { mut f } = s1;
+  │             ^^^ Invalid return
 

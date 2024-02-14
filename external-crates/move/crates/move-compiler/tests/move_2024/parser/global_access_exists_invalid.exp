@@ -12,6 +12,14 @@ error[E03011]: invalid use of reserved name
 9 │     fun freeze(): u64 { 0 }
   │         ^^^^^^ Invalid function name 'freeze'. 'freeze' is restricted and cannot be used to name a function
 
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/parser/global_access_exists_invalid.move:11:11
+   │
+11 │     fun t(account: &signer) acquires Self::R {
+   │           ^^^^^^^ Unused parameter 'account'. Consider removing or prefixing with an underscore: '_account'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E01002]: unexpected token
    ┌─ tests/move_2024/parser/global_access_exists_invalid.move:13:26
    │
@@ -20,4 +28,13 @@ error[E01002]: unexpected token
    │
    = Access chains that start with '::' must be one of the following forms: 
        '::<address>::<module>', '::<address>::<module>::<member>'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/global_access_exists_invalid.move:13:32
+   │
+13 │         let _ : bool = ::exists<Self::R>(0x0);
+   │                                ^
+   │                                │
+   │                                Unexpected '<'
+   │                                Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 

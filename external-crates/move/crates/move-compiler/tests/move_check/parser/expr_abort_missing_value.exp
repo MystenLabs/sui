@@ -1,3 +1,11 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_check/parser/expr_abort_missing_value.move:2:11
+  │
+2 │     fun f(v: u64) {
+  │           ^ Unused parameter 'v'. Consider removing or prefixing with an underscore: '_v'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/expr_abort_missing_value.move:5:5
   │
@@ -6,4 +14,10 @@ error[E01002]: unexpected token
   │     │
   │     Unexpected '}'
   │     Expected an expression term
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/expr_abort_missing_value.move:6:1
+  │
+6 │ }
+  │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'
 

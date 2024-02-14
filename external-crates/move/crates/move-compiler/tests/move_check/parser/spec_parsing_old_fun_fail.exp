@@ -16,6 +16,15 @@ error[E01002]: unexpected token
   │                             Unexpected '{'
   │                             Expected '('
 
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/spec_parsing_old_fun_fail.move:5:29
+  │
+5 │     spec fun with_aborts_if {
+  │                             ^
+  │                             │
+  │                             Unexpected '{'
+  │                             Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+
 error[E02001]: duplicate declaration, item, or annotation
   ┌─ tests/move_check/parser/spec_parsing_old_fun_fail.move:8:9
   │

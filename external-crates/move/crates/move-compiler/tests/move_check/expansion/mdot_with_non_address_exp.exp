@@ -8,6 +8,15 @@ error[E01002]: unexpected token
   │             Expected ';'
 
 error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:9:13
+  │
+9 │         01u8::X::bar()
+  │             ^^
+  │             │
+  │             Unexpected '::'
+  │             Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+
+error[E01002]: unexpected token
    ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:13:14
    │
 13 │         false::X::bar()
@@ -17,6 +26,15 @@ error[E01002]: unexpected token
    │              Expected ';'
 
 error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:13:14
+   │
+13 │         false::X::bar()
+   │              ^^
+   │              │
+   │              Unexpected '::'
+   │              Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+
+error[E01002]: unexpected token
    ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:17:22
    │
 17 │         foo().bar().X::bar()
@@ -24,4 +42,13 @@ error[E01002]: unexpected token
    │                      │
    │                      Unexpected '::'
    │                      Expected ';'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/mdot_with_non_address_exp.move:17:22
+   │
+17 │         foo().bar().X::bar()
+   │                      ^^
+   │                      │
+   │                      Unexpected '::'
+   │                      Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 

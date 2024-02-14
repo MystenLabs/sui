@@ -4,3 +4,21 @@ error[E01007]: invalid byte string
 3 │         b"Diem
   │         ^^^^^^ Missing closing quote (") after byte string
 
+error[E04007]: incompatible types
+  ┌─ tests/move_check/parser/byte_string_token_eof2.move:4:5
+  │
+2 │     public fun bad_value(): vector<u8> {
+  │                             ---------- Expected: 'vector<u8>'
+3 │         b"Diem
+4 │     }
+  │     ^
+  │     │
+  │     Invalid return expression
+  │     Given: '()'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/byte_string_token_eof2.move:5:1
+  │
+5 │ }
+  │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'
+

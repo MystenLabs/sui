@@ -7,3 +7,21 @@ error[E01002]: unexpected token
   = Access chains that start with '::' must be one of the following forms: 
       '::<address>::<module>', '::<address>::<module>::<member>'
 
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/parser/global_access_value_invalid.move:4:5
+  │
+2 │     fun foo(): u64 {
+  │                --- Expected: 'u64'
+3 │         1 + ::global_value
+4 │     }
+  │     ^
+  │     │
+  │     Invalid return expression
+  │     Given: '()'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/global_access_value_invalid.move:5:1
+  │
+5 │ }
+  │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'
+

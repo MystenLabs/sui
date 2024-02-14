@@ -1,3 +1,11 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_check/parser/named_blocks_invalid_3.move:3:12
+  │
+3 │     fun t0(cond: bool): u64 {
+  │            ^^^^ Unused parameter 'cond'. Consider removing or prefixing with an underscore: '_cond'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E13001]: feature is not supported in specified edition
   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:4:9
   │
@@ -6,11 +14,39 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/named_blocks_invalid_3.move:4:14
+  │
+4 │         'name: {
+  │              ^
+  │              │
+  │              Unexpected ':'
+  │              Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/parser/named_blocks_invalid_3.move:4:14
+  │
+3 │     fun t0(cond: bool): u64 {
+  │                         --- Expected: 'u64'
+4 │         'name: {
+  │              ^
+  │              │
+  │              Invalid return expression
+  │              Given: '()'
+
 error[E01001]: invalid character
   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:5:32
   │
 5 │             if (cond) { return 'name 10 };
   │                                ^^^^^ Unexpected character (')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:10:12
+   │
+10 │     fun t1(cond: bool): u64 {
+   │            ^^^^ Unused parameter 'cond'. Consider removing or prefixing with an underscore: '_cond'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:11:14
@@ -20,11 +56,39 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:11:19
+   │
+11 │         loop 'name: {
+   │                   ^
+   │                   │
+   │                   Unexpected ':'
+   │                   Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:11:19
+   │
+10 │     fun t1(cond: bool): u64 {
+   │                         --- Expected: 'u64'
+11 │         loop 'name: {
+   │                   ^
+   │                   │
+   │                   Invalid return expression
+   │                   Given: '()'
+
 error[E01001]: invalid character
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:12:31
    │
 12 │             if (cond) { break 'name 10 };
    │                               ^^^^^ Unexpected character (')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:16:12
+   │
+16 │     fun t2(cond: bool): u64 {
+   │            ^^^^ Unused parameter 'cond'. Consider removing or prefixing with an underscore: '_cond'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:17:14
@@ -33,6 +97,26 @@ error[E13001]: feature is not supported in specified edition
    │              ^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:17:20
+   │
+17 │         loop 'outer: {
+   │                    ^
+   │                    │
+   │                    Unexpected ':'
+   │                    Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:17:20
+   │
+16 │     fun t2(cond: bool): u64 {
+   │                         --- Expected: 'u64'
+17 │         loop 'outer: {
+   │                    ^
+   │                    │
+   │                    Invalid return expression
+   │                    Given: '()'
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:18:18
@@ -54,6 +138,14 @@ error[E01001]: invalid character
 20 │                 if (cond) { break 'inner 20 };
    │                                   ^^^^^^ Unexpected character (')
 
+warning[W09002]: unused variable
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:25:12
+   │
+25 │     fun t3(cond: bool) {
+   │            ^^^^ Unused parameter 'cond'. Consider removing or prefixing with an underscore: '_cond'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:26:22
    │
@@ -61,6 +153,15 @@ error[E13001]: feature is not supported in specified edition
    │                      ^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:26:28
+   │
+26 │         while (cond) 'outer: {
+   │                            ^
+   │                            │
+   │                            Unexpected ':'
+   │                            Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:27:26
@@ -82,6 +183,14 @@ error[E01001]: invalid character
 29 │                 if (cond) { break 'inner };
    │                                   ^^^^^^ Unexpected character (')
 
+warning[W09002]: unused variable
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:34:12
+   │
+34 │     fun t4(cond: bool) {
+   │            ^^^^ Unused parameter 'cond'. Consider removing or prefixing with an underscore: '_cond'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:35:22
    │
@@ -89,6 +198,15 @@ error[E13001]: feature is not supported in specified edition
    │                      ^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:35:28
+   │
+35 │         while (cond) 'outer: {
+   │                            ^
+   │                            │
+   │                            Unexpected ':'
+   │                            Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:36:22
@@ -117,6 +235,15 @@ error[E13001]: feature is not supported in specified edition
    │              ^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:45:16
+   │
+45 │         loop 'l: {
+   │                ^
+   │                │
+   │                Unexpected ':'
+   │                Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:46:18

@@ -1,3 +1,11 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_check/parser/expr_if_missing_parens.move:2:11
+  │
+2 │     fun f(v: u64) {
+  │           ^ Unused parameter 'v'. Consider removing or prefixing with an underscore: '_v'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/expr_if_missing_parens.move:4:12
   │
@@ -6,4 +14,13 @@ error[E01002]: unexpected token
   │            │
   │            Unexpected 'v'
   │            Expected '('
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/expr_if_missing_parens.move:4:12
+  │
+4 │         if v < 3 ()
+  │            ^
+  │            │
+  │            Unexpected 'v'
+  │            Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 

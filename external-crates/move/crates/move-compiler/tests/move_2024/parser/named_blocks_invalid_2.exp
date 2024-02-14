@@ -1,3 +1,11 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/parser/named_blocks_invalid_2.move:3:12
+  │
+3 │     fun t0(cond: bool): u64 {
+  │            ^^^^ Unused parameter 'cond'. Consider removing or prefixing with an underscore: '_cond'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/named_blocks_invalid_2.move:4:15
   │
@@ -6,4 +14,24 @@ error[E01002]: unexpected token
   │               │
   │               Unexpected '{'
   │               Expected ':'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/named_blocks_invalid_2.move:4:15
+  │
+4 │         'name {
+  │               ^
+  │               │
+  │               Unexpected '{'
+  │               Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/parser/named_blocks_invalid_2.move:4:15
+  │
+3 │     fun t0(cond: bool): u64 {
+  │                         --- Expected: 'u64'
+4 │         'name {
+  │               ^
+  │               │
+  │               Invalid return expression
+  │               Given: '()'
 

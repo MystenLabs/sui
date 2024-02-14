@@ -7,3 +7,12 @@ error[E01002]: unexpected token
   │          Unexpected '('
   │          Expected ';'
 
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/invalid_call_lhs_value.move:3:10
+  │
+3 │         5();
+  │          ^
+  │          │
+  │          Unexpected '('
+  │          Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+
