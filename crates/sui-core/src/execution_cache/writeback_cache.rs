@@ -61,6 +61,7 @@ use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use prometheus::Registry;
 use std::collections::BTreeSet;
+use std::hash::Hash;
 use std::sync::Arc;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_protocol_config::ProtocolVersion;
@@ -290,6 +291,32 @@ impl WritebackCache {
             .insert(version, ObjectEntry::Wrapped);
     }
 
+    // lock both the dirty and committed sides of the cache, and then pass the entries to
+    // the callback. Written with the `with` pattern because any other way of doing this
+    // creates lifetime hell.
+    fn with_locked_cache_entries<K, V, R>(
+        dirty_map: &DashMap<K, CachedVersionMap<V>>,
+        cached_map: &MokaCache<K, Arc<Mutex<CachedVersionMap<V>>>>,
+        key: &K,
+        cb: impl FnOnce(Option<&CachedVersionMap<V>>, Option<&CachedVersionMap<V>>) -> R,
+    ) -> R
+    where
+        K: Copy + Eq + Hash + Send + Sync + 'static,
+        V: Send + Sync + 'static,
+    {
+        let dirty_entry = dirty_map.entry(*key);
+        let dirty_entry = match &dirty_entry {
+            DashMapEntry::Occupied(occupied) => Some(occupied.get()),
+            DashMapEntry::Vacant(_) => None,
+        };
+
+        let cached_entry = cached_map.get(key);
+        let cached_lock = cached_entry.as_ref().map(|entry| entry.lock());
+        let cached_entry = cached_lock.as_deref();
+
+        cb(dirty_entry, cached_entry)
+    }
+
     // Attempt to get an object from the cache. The DB is not consulted.
     // Can return Hit, Miss, or NegativeHit (if the object is known to not exist).
     fn get_object_entry_by_key_cache_only(
@@ -299,30 +326,32 @@ impl WritebackCache {
     ) -> CacheResult<ObjectEntry> {
         macro_rules! check_cache_entry {
             ($objects: expr) => {
-                if let Some(entry) = $objects.get(&version) {
-                    return CacheResult::Hit(entry.clone());
-                }
+                if let Some(objects) = $objects {
+                    if let Some(entry) = objects.get(&version) {
+                        return CacheResult::Hit(entry.clone());
+                    }
 
-                if let Some(last_version) = $objects.get_last() {
-                    if last_version.0 < version {
-                        // If the version is greater than the last version in the cache, then we know
-                        // that the object does not exist anywhere
-                        return CacheResult::NegativeHit;
+                    if let Some(least_version) = objects.get_least() {
+                        if least_version.0 < version {
+                            // If the version is greater than the least version in the cache, then we know
+                            // that the object does not exist anywhere
+                            return CacheResult::NegativeHit;
+                        }
                     }
                 }
             };
         }
 
-        if let Some(objects) = self.dirty.objects.get(object_id) {
-            check_cache_entry!(objects);
-        }
-
-        if let Some(objects) = self.cached.object_cache.get(object_id) {
-            let objects = objects.lock();
-            check_cache_entry!(objects);
-        }
-
-        CacheResult::Miss
+        Self::with_locked_cache_entries(
+            &self.dirty.objects,
+            &self.cached.object_cache,
+            object_id,
+            |dirty_entry, cached_entry| {
+                check_cache_entry!(dirty_entry);
+                check_cache_entry!(cached_entry);
+                CacheResult::Miss
+            },
+        )
     }
 
     fn get_object_by_key_cache_only(
@@ -346,24 +375,27 @@ impl WritebackCache {
     ) -> CacheResult<(SequenceNumber, ObjectEntry)> {
         macro_rules! check_cache_entry {
             ($objects: expr) => {
-                if let Some((version, entry)) = $objects.get_last() {
-                    return CacheResult::Hit((*version, entry.clone()));
-                } else {
-                    return CacheResult::Miss;
+                if let Some(objects) = $objects {
+                    if let Some((version, entry)) = objects.get_highest() {
+                        return CacheResult::Hit((*version, entry.clone()));
+                    } else {
+                        panic!("empty CachedVersionMap should have been removed");
+                    }
                 }
             };
         }
 
-        if let Some(objects) = self.dirty.objects.get(object_id) {
-            check_cache_entry!(objects);
-        }
+        Self::with_locked_cache_entries(
+            &self.dirty.objects,
+            &self.cached.object_cache,
+            object_id,
+            |dirty_entry, cached_entry| {
+                check_cache_entry!(dirty_entry);
+                check_cache_entry!(cached_entry);
 
-        if let Some(objects) = self.cached.object_cache.get(object_id) {
-            let objects = objects.lock();
-            check_cache_entry!(objects);
-        }
-
-        CacheResult::Miss
+                CacheResult::Miss
+            },
+        )
     }
 
     fn get_object_by_id_cache_only(
@@ -378,6 +410,71 @@ impl WritebackCache {
             CacheResult::NegativeHit => CacheResult::NegativeHit,
             CacheResult::Miss => CacheResult::Miss,
         }
+    }
+
+    fn get_marker_value_cache_only(
+        &self,
+        object_id: &ObjectID,
+        version: &SequenceNumber,
+        epoch_id: EpochId,
+    ) -> CacheResult<MarkerValue> {
+        macro_rules! check_cache_entry {
+            ($markers: expr) => {
+                if let Some(markers) = $markers {
+                    if let Some(entry) = markers.get(version) {
+                        return CacheResult::Hit(entry.clone());
+                    }
+
+                    if let Some(least_version) = markers.get_least() {
+                        if least_version.0 < *version {
+                            // If the version is greater than the least version in the cache, then we know
+                            // that the object does not exist anywhere
+                            return CacheResult::NegativeHit;
+                        }
+                    }
+                }
+            };
+        }
+
+        Self::with_locked_cache_entries(
+            &self.dirty.markers,
+            &self.cached.marker_cache,
+            &(epoch_id, *object_id),
+            |dirty_entry, cached_entry| {
+                check_cache_entry!(dirty_entry);
+                check_cache_entry!(cached_entry);
+                CacheResult::Miss
+            },
+        )
+    }
+
+    fn get_latest_marker_value_cache_only(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> CacheResult<(SequenceNumber, MarkerValue)> {
+        macro_rules! check_cache_entry {
+            ($markers: expr) => {
+                if let Some(markers) = $markers {
+                    if let Some((version, entry)) = markers.get_highest() {
+                        return CacheResult::Hit((*version, entry.clone()));
+                    } else {
+                        panic!("empty CachedVersionMap should have been removed");
+                    }
+                }
+            };
+        }
+
+        Self::with_locked_cache_entries(
+            &self.dirty.markers,
+            &self.cached.marker_cache,
+            &(epoch_id, *object_id),
+            |dirty_entry, cached_entry| {
+                check_cache_entry!(dirty_entry);
+                check_cache_entry!(cached_entry);
+                CacheResult::Miss
+            },
+        )
     }
 
     // Commits dirty data for the given TransactionDigest to the db.
@@ -752,27 +849,29 @@ impl ExecutionCacheRead for WritebackCache {
     ) -> SuiResult<Option<Object>> {
         macro_rules! check_cache_entry {
             ($objects: expr) => {
-                if let Some((_, object)) = $objects.all_lt_or_eq_rev(&version).next() {
-                    if let ObjectEntry::Object(object) = object {
-                        return Ok(Some(object.clone()));
-                    } else {
-                        // if we find a tombstone, the object does not exist
-                        return Ok(None);
+                if let Some(objects) = $objects {
+                    if let Some((_, object)) = objects.all_lt_or_eq_rev(&version).next() {
+                        if let ObjectEntry::Object(object) = object {
+                            return Ok(Some(object.clone()));
+                        } else {
+                            // if we find a tombstone, the object does not exist
+                            return Ok(None);
+                        }
                     }
                 }
             };
         }
 
-        if let Some(objects) = self.dirty.objects.get(&object_id) {
-            check_cache_entry!(objects);
-        }
-
-        if let Some(objects) = self.cached.object_cache.get(&object_id) {
-            let objects = objects.lock();
-            check_cache_entry!(objects);
-        }
-
-        self.store.find_object_lt_or_eq_version(object_id, version)
+        Self::with_locked_cache_entries(
+            &self.dirty.objects,
+            &self.cached.object_cache,
+            &object_id,
+            |dirty_entry, cached_entry| {
+                check_cache_entry!(dirty_entry);
+                check_cache_entry!(cached_entry);
+                self.store.find_object_lt_or_eq_version(object_id, version)
+            },
+        )
     }
 
     fn multi_get_transaction_blocks(
@@ -882,21 +981,11 @@ impl ExecutionCacheRead for WritebackCache {
         version: &SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<MarkerValue>> {
-        if let Some(markers) = self.dirty.markers.get(&(epoch_id, *object_id)) {
-            if let Some(marker) = markers.get(version) {
-                return Ok(Some(*marker));
-            }
+        match self.get_marker_value_cache_only(object_id, version, epoch_id) {
+            CacheResult::Hit(marker) => Ok(Some(marker)),
+            CacheResult::NegativeHit => Ok(None),
+            CacheResult::Miss => self.store.get_marker_value(object_id, version, epoch_id),
         }
-
-        if let Some(markers) = self.cached.marker_cache.get(&(epoch_id, *object_id)) {
-            if let Some(marker) = markers.lock().get(version) {
-                return Ok(Some(*marker));
-            }
-        }
-
-        // NOTE: we cannot insert this marker into the cache without breaking the
-        // contiguous version property of the cache.
-        self.store.get_marker_value(object_id, version, epoch_id)
     }
 
     fn get_latest_marker(
@@ -904,21 +993,11 @@ impl ExecutionCacheRead for WritebackCache {
         object_id: &ObjectID,
         epoch_id: EpochId,
     ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
-        if let Some(markers) = self.dirty.markers.get(&(epoch_id, *object_id)) {
-            if let Some((k, v)) = markers.get_last() {
-                return Ok(Some((*k, *v)));
-            }
+        match self.get_latest_marker_value_cache_only(object_id, epoch_id) {
+            CacheResult::Hit((v, marker)) => Ok(Some((v, marker))),
+            CacheResult::NegativeHit => Ok(None),
+            CacheResult::Miss => self.store.get_latest_marker(object_id, epoch_id),
         }
-
-        if let Some(markers) = self.cached.marker_cache.get(&(epoch_id, *object_id)) {
-            let markers = markers.lock();
-            if let Some((k, v)) = markers.get_last() {
-                return Ok(Some((*k, *v)));
-            }
-        }
-
-        // TODO: we could safely insert this marker into the cache because it is the latest
-        self.store.get_latest_marker(object_id, epoch_id)
     }
 
     fn get_lock(&self, _obj_ref: ObjectRef, _epoch_id: EpochId) -> SuiLockResult {
