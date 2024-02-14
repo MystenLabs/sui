@@ -8,7 +8,7 @@ Move is a new programming language developed to provide a safe and programmable 
 
 ## Overview
 
-The Move language directory consists of three distinct parts: the Move bytecode language, the Move IR, and the Move source language.
+The Move language directory consists of three distinct parts: the Move bytecode language, the Move intermediate representation (IR), and the Move source language.
 
 - The Move bytecode language defines programs published to the blockchain. It has a static type system that guarantees the absence of certain critical errors, including the prevention of duplicating certain values. Relevant crates include:
   - [move-binary-format](crates/move-binary-format/) defines the binary format for Move bytecode.
