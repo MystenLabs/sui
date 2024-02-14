@@ -1444,7 +1444,9 @@ impl Move2024PathExpander {
                 if let Some(entry) = self.aliases.resolve_any_for_error(&name) {
                     let msg = match namespace {
                         NameSpace::ModuleMembers => "a type, function, or constant".to_string(),
-                        NameSpace::LeadingAccess => "an address, module, or type".to_string(),
+                        // we exclude types from this message since it would have been caught in
+                        // the other namespace
+                        NameSpace::LeadingAccess => "an address or module".to_string(),
                     };
                     let result = match entry {
                         AliasEntry::Address(_, address) => {
@@ -1750,10 +1752,10 @@ impl AccessChainResult {
 
     fn err_name(&self) -> String {
         match self {
-            AccessChainResult::ModuleAccess(_, _) => "module member".to_string(),
-            AccessChainResult::ModuleIdent(_, _) => "module".to_string(),
-            AccessChainResult::UnresolvedName(_, _) => "name".to_string(),
-            AccessChainResult::Address(_, _) => "address".to_string(),
+            AccessChainResult::ModuleAccess(_, _) => "a module member".to_string(),
+            AccessChainResult::ModuleIdent(_, _) => "a module".to_string(),
+            AccessChainResult::UnresolvedName(_, _) => "a name".to_string(),
+            AccessChainResult::Address(_, _) => "an address".to_string(),
             AccessChainResult::ResolutionFailure(inner, _) => inner.err_name(),
         }
     }
@@ -1792,7 +1794,7 @@ fn access_chain_resolution_error(result: AccessChainResult) -> Diagnostic {
         let loc = inner.loc();
         let msg = match reason {
             AccessChainFailure::InvalidKind(kind) => format!(
-                "Expected {} in this position, not a {}",
+                "Expected {} in this position, not {}",
                 kind,
                 inner.err_name()
             ),
