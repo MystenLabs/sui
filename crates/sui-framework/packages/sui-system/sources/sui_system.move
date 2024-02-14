@@ -56,9 +56,9 @@ module sui_system::sui_system {
     use sui_system::staking_pool::PoolTokenExchangeRate;
     use std::option;
     use sui::dynamic_field;
+    use sui_system::validator_set::ValidatorSet;
 
     #[test_only] use sui::balance;
-    #[test_only] use sui_system::validator_set::ValidatorSet;
     #[test_only] use sui_system::validator_set;
     #[test_only] use sui::vec_set::VecSet;
 
@@ -596,6 +596,13 @@ module sui_system::sui_system {
         inner
     }
 
+    // For read only operations
+    fun load_inner(self: &SuiSystemState): &SuiSystemStateInnerV2 {
+        let inner = dynamic_field::borrow(&self.id, self.version);
+        assert!(sui_system_state_inner::system_state_version(inner) == self.version, EWrongInnerVersion);
+        inner
+    }
+
     #[test_only]
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
     /// since epochs are ever-increasing and epoch changes are intended to happen every 24 hours.
@@ -641,10 +648,9 @@ module sui_system::sui_system {
         sui_system_state_inner::get_reporters_of(self, addr)
     }
 
-    #[test_only]
     /// Return the current validator set
-    public fun validators(wrapper: &mut SuiSystemState): &ValidatorSet {
-        let self = load_system_state(wrapper);
+    public fun validators(wrapper: &SuiSystemState): &ValidatorSet {
+        let self = load_inner(wrapper);
         sui_system_state_inner::validators(self)
     }
 

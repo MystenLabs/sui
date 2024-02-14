@@ -16,6 +16,7 @@ module bridge::bridge {
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::versioned::{Self, Versioned};
+    use sui_system::sui_system::SuiSystemState;
 
     use bridge::chain_ids;
     use bridge::committee::{Self, BridgeCommittee};
@@ -140,6 +141,27 @@ module bridge::bridge {
             inner: versioned::create(CURRENT_VERSION, bridge_inner, ctx)
         };
         transfer::share_object(bridge);
+    }
+
+    #[allow(unused_function)]
+    fun init_bridge_committee(
+        self: &mut Bridge,
+        system_state: &SuiSystemState,
+        min_stake_participation_percentage: u8,
+        ctx: &TxContext
+    ) {
+        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        let inner = load_inner_mut(self);
+        committee::try_create_next_committee(&mut inner.committee, system_state, min_stake_participation_percentage)
+    }
+
+    public fun committee_registration(self: &mut Bridge,
+                                      system_state: &SuiSystemState,
+                                      bridge_pubkey_bytes: vector<u8>,
+                                      http_rest_url: vector<u8>,
+                                      ctx: &TxContext) {
+        let inner = load_inner_mut(self);
+        committee::register(&mut inner.committee, system_state, bridge_pubkey_bytes, http_rest_url, ctx)
     }
 
     // Create bridge request to send token to other chain, the request will be in pending state until approved
@@ -344,7 +366,7 @@ module bridge::bridge {
         assert!(treasury::token_id<T>() == message::token_type(&token_payload), EUnexpectedTokenType);
         let amount = message::token_amount(&token_payload);
         // Make sure transfer is within limit.
-        if (!limiter::check_and_record_sending_transfer<T>(&mut inner.limiter, clock, route, amount)) {
+        if (!limiter::check_and_record_sending_transfer<T>(clock, &mut inner.limiter, route, amount)){
             return (option::none(), owner)
         };
         // claim from treasury

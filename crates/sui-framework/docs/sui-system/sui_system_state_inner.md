@@ -63,6 +63,7 @@
 -  [Function `pool_exchange_rates`](#0x3_sui_system_state_inner_pool_exchange_rates)
 -  [Function `active_validator_addresses`](#0x3_sui_system_state_inner_active_validator_addresses)
 -  [Function `extract_coin_balance`](#0x3_sui_system_state_inner_extract_coin_balance)
+-  [Function `validators`](#0x3_sui_system_state_inner_validators)
 
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
@@ -2600,6 +2601,31 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
     } <b>else</b> {
         total_balance
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_state_inner_validators"></a>
+
+## Function `validators`
+
+Return the current validator set
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_validators">validators</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>): &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_validators">validators</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): &ValidatorSet {
+    &self.validators
 }
 </code></pre>
 
