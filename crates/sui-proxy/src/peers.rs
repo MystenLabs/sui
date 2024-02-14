@@ -56,12 +56,14 @@ pub struct SuiPeer {
 #[derive(Debug, Clone)]
 pub struct SuiNodeProvider {
     nodes: SuiPeers,
+    static_nodes: SuiPeers,
     rpc_url: String,
     rpc_poll_interval: Duration,
 }
 
 impl Allower for SuiNodeProvider {
     fn allowed(&self, key: &Ed25519PublicKey) -> bool {
+        self.static_nodes.read().unwrap().contains_key(key) ||
         self.nodes.read().unwrap().contains_key(key)
     }
 }
@@ -69,13 +71,15 @@ impl Allower for SuiNodeProvider {
 impl SuiNodeProvider {
     pub fn new(rpc_url: String, rpc_poll_interval: Duration, static_peers: Vec<SuiPeer>) -> Self {
         // build our hashmap with the static pub keys. we only do this one time at binary startup.
-        let nodes: HashMap<Ed25519PublicKey, SuiPeer> = static_peers
+        let static_nodes: HashMap<Ed25519PublicKey, SuiPeer> = static_peers
             .into_iter()
             .map(|v| (v.public_key.clone(), v))
             .collect();
-        let nodes = Arc::new(RwLock::new(nodes));
+        let static_nodes = Arc::new(RwLock::new(static_nodes));
+        let nodes = Arc::new(RwLock::new(HashMap::new()));
         Self {
             nodes,
+            static_nodes,
             rpc_url,
             rpc_poll_interval,
         }
