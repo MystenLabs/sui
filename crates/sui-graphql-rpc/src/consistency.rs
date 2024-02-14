@@ -65,7 +65,8 @@ impl Checkpointed for JsonCursor<ConsistentNamedCursor> {
 /// `lhs` and `rhs`. If the `view` parameter is set to `Consistent`, the query additionally filters
 /// out objects that satisfy the provided filters, but are not the most recent version of the object
 /// within the checkpoint range. If the view parameter is set to `Historical`, this final filter is
-/// not applied.
+/// not applied. The query is a union of the results from `objects_snapshot` and `objects_history`
+/// to ensure that there are no gaps in the result set ordered by `object_id`.
 pub(crate) fn build_objects_query<F>(
     view: View,
     lhs: i64,
