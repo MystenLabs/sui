@@ -24,7 +24,7 @@ mod storage;
 mod threshold_clock;
 mod transaction;
 mod universal_committer;
-
+mod synchronizer;
 #[cfg(test)]
 mod test_dag;
 
