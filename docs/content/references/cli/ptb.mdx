@@ -36,13 +36,14 @@ Options:
   -V, --version                                 Print version
 ```
 
+
 ## Design philosophy and concepts
 
 The main philosophy behind the CLI PTB support is to enable a user to either build and execute a PTB from the command line or a file. To enable seamless construction and execution of PTBs, this command was designed to allow you to provide a PTB from the console, a file, or mixing both at the same time. Furthermore, bash scripts can be used to construct and execute the PTB just as you would do from the command line, providing great flexibility when it comes to automating different tasks. 
 
 Besides using existing [traditional PTB](/concepts/transactions/prog-txn-blocks/) related concepts, we introduce a few new and important concepts for this command. 
 
-:::info
+:::warning
 Note that all the following examples were tested using a `bash` shell environment, and your experience may vary depending on how your shell will interpret command line arguments and values (e.g., zsh requires to pass values in brackets by adding quotes around it: "[]"; bash accepts them without quotes).
 :::
 
@@ -69,7 +70,7 @@ sui client ptb \
 --gas-budget 50000000
 ```
 
-:::info
+:::tip
 `gas` is a reserved keyword and the tool will not allow you to name your variable gas.
 :::
 
@@ -98,8 +99,8 @@ sui client ptb \
 :::info
 Circular file inclusions (e.g., `split_coins.ptb` has a ``--file split_coins.ptb`) are not allowed and the tool will throw an error if this happens.
 :::
-:::info
-If you include multiple PTBs from files and want to check the order of your transactions, use the `--preview` flag to display a list of the transactions in the PTB instead of executing it.
+:::tip
+If you include multiple PTBs from files and want to check the order of your transactions, use the `--preview` flag to display the PTB transaction list instead of executing it.
 :::
 
 ### Pick Gas Budget
@@ -127,6 +128,13 @@ The `--pick-gas-budget` flag is used when we need to disambiguate which gas budg
 
 The following examples demonstrate how to use the `client ptb` command. Most of these examples can be copied to a file and executed using `sui client ptb --file to_filepath`.
 
+:::tip
+When a PTB is executed, the output contains all the relevant information (tx data, gas cost, effects, object changes, etc.). Use `--summary` to get a short summary when you do not need all the data. For complex PTBs, you can use `--preview` to display the PTB transaction list instead of executing it.
+:::
+
+### Move call
+
+
 ### Split, destroy, and merge coins
 
 The following example showcases how to split a gas coin into multiple coins, make a move call to destroy one or more of the new coins, and finally merge the coins that were not destroyed back into the gas coin. It also showcases how to use framework name resolution (e.g., `sui::coin` instead of `0x1::coin`) and how to refer to different values in an array using the `.` syntax.
@@ -147,7 +155,22 @@ The following example showcases how to split a gas coin into multiple coins, mak
 --gas-budget 10000000
 ```
 
-### 
+### Transfer objects
+
+This example creates three new coins from gas and transfers them to a different address.
+
+```bash
+# Split off from gas
+--split-coins gas [1,2,3]
+--assign s
+# Transfer the three new coins to a different address
+--transfer-objects @recipient_address [s.0, s.1, s.2]
+--gas-budget 10000000
+```
+
+:::info
+You can also pass an alias instead of an address.
+:::
 
 ## JSON output
 
