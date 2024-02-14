@@ -27,8 +27,8 @@ mod test {
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
     use sui_macros::{
-        clear_fail_point, nondeterministic, register_fail_point_async, register_fail_points,
-        sim_test,
+        clear_fail_point, nondeterministic, register_fail_point_async, register_fail_point_if,
+        register_fail_points, sim_test,
     };
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_simulator::tempfile::TempDir;
@@ -76,6 +76,18 @@ mod test {
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
+        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_with_reconfig_and_correlated_crashes() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        register_fail_point_if("correlated-crash-after-consensus-commit-boundary", || true);
+        // TODO: enable this - right now it causes rocksdb errors when re-opening DBs
+        //register_fail_point_if("correlated-crash-process-certificate", || true);
+
+        let test_cluster = build_test_cluster(4, 10000).await;
         test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
     }
 
