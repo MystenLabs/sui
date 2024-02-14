@@ -82,8 +82,8 @@ pub struct StaticPubKey {
     pub name: String,
     /// friendly ip address we may see in metrics
     pub p2p_address: String,
-    /// the peerid from a node config file (Ed25519 PublicKey)
-    pub peerid: String,
+    /// the peer_id from a node config file (Ed25519 PublicKey)
+    pub peer_id: String,
 }
 
 /// the default idle worker per host (reqwest to remote write url call)

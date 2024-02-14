@@ -212,8 +212,8 @@ fn load_static_peers(
         }
         Some(spk)
     }).map(|spk|{
-        let peerid = hex::decode(spk.peerid).unwrap();
-        let public_key = Ed25519PublicKey::from_bytes(peerid.as_ref()).unwrap();
+        let peer_id = hex::decode(spk.peer_id).unwrap();
+        let public_key = Ed25519PublicKey::from_bytes(peer_id.as_ref()).unwrap();
         let p2p_address: IpAddr = spk.p2p_address.parse().unwrap();
         let s = SuiPeer{
             name:spk.name.clone(),
