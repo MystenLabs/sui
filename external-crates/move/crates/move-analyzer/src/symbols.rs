@@ -1072,7 +1072,7 @@ pub fn get_symbols(
     let mut def_info = BTreeMap::new();
 
     for (pos, module_ident, module_def) in typed_modules {
-        let mod_ident_str = expansion_mod_ident_to_string(module_ident);
+        let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         let (defs, symbols) = get_mod_outer_defs(
             &pos,
             &sp(pos, *module_ident),
@@ -1130,7 +1130,7 @@ pub fn get_symbols(
     };
 
     for (pos, module_ident, module_def) in typed_modules {
-        let mod_ident_str = expansion_mod_ident_to_string(module_ident);
+        let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         typing_symbolicator.use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
         typing_symbolicator.alias_lengths = mod_to_alias_lengths.get(&mod_ident_str).unwrap();
         typing_symbolicator.mod_symbols(module_def);
@@ -1162,13 +1162,15 @@ pub fn get_symbols(
     Ok((Some(symbols), ide_diagnostics))
 }
 
-/// Produces module ident string of the form pkg_name::module_name
-fn parsing_mod_ident_to_string(mod_ident: &P::ModuleIdent_) -> String {
+/// Produces module ident string of the form pkg_name::module_name to be used as a map key.
+/// It's important that these are consistent between parsing AST and typed AST,
+fn parsing_mod_ident_to_map_key(mod_ident: &P::ModuleIdent_) -> String {
     format!("{}", mod_ident).to_string()
 }
 
-/// Produces module ident string of the form pkg_name::module_name
-fn expansion_mod_ident_to_string(mod_ident: &E::ModuleIdent_) -> String {
+/// Produces module ident string of the form pkg_name::module_name to be used as a map key
+/// It's important that these are consistent between parsing AST and typed AST,
+fn expansion_mod_ident_to_map_key(mod_ident: &E::ModuleIdent_) -> String {
     use E::Address as A;
     match mod_ident.address {
         A::Numerical {
@@ -1391,7 +1393,7 @@ fn get_mod_outer_defs(
     // insert use of the module name in the definition itself
     let mod_name = ident.module;
     if let Some(mod_name_start) = get_start_loc(&mod_name.loc(), files, file_id_mapping) {
-        let mod_ident_str = expansion_mod_ident_to_string(&ident);
+        let mod_ident_str = expansion_mod_ident_to_map_key(&ident);
         use_def_map.insert(
             mod_name_start.line,
             UseDef::new(
@@ -1639,7 +1641,7 @@ impl<'a> ParsingSymbolicator<'a> {
     fn use_decl_symbols(&mut self, use_decl: &P::UseDecl) {
         match &use_decl.use_ {
             P::Use::ModuleUse(mod_ident, mod_use) => {
-                let mod_ident_str = parsing_mod_ident_to_string(&mod_ident.value);
+                let mod_ident_str = parsing_mod_ident_to_map_key(&mod_ident.value);
                 let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
                     return;
                 };
@@ -2295,7 +2297,7 @@ impl<'a> TypingSymbolicator<'a> {
         let mod_ident = mod_call.module;
         let mod_def = self
             .mod_outer_defs
-            .get(&expansion_mod_ident_to_string(&mod_ident.value))
+            .get(&expansion_mod_ident_to_map_key(&mod_ident.value))
             .unwrap();
 
         if mod_def.functions.get(&mod_call.name.value()).is_none() {
@@ -2384,7 +2386,7 @@ impl<'a> TypingSymbolicator<'a> {
 
     /// Add use of a const identifier
     fn add_const_use_def(&mut self, module_ident: &ModuleIdent, use_name: &Symbol, use_pos: &Loc) {
-        let mod_ident_str = expansion_mod_ident_to_string(&module_ident.value);
+        let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
         };
@@ -2455,7 +2457,7 @@ impl<'a> TypingSymbolicator<'a> {
         use_name: &Symbol,
         use_pos: &Loc,
     ) {
-        let mod_ident_str = expansion_mod_ident_to_string(&module_ident.value);
+        let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
         };
@@ -2504,7 +2506,7 @@ impl<'a> TypingSymbolicator<'a> {
 
     /// Add use of a struct identifier
     fn add_struct_use_def(&mut self, module_ident: &ModuleIdent, use_name: &Symbol, use_pos: &Loc) {
-        let mod_ident_str = expansion_mod_ident_to_string(&module_ident.value);
+        let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
         };
@@ -2558,7 +2560,7 @@ impl<'a> TypingSymbolicator<'a> {
         use_name: &Symbol,
         use_pos: &Loc,
     ) {
-        let mod_ident_str = expansion_mod_ident_to_string(module_ident);
+        let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         let Some(name_start) = get_start_loc(use_pos, self.files, self.file_id_mapping) else {
             debug_assert!(false);
             return;
