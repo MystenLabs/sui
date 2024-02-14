@@ -88,6 +88,15 @@ impl SuiNodeProvider {
     /// get is used to retrieve peer info in our handlers
     pub fn get(&self, key: &Ed25519PublicKey) -> Option<SuiPeer> {
         debug!("look for {:?}", key);
+        // check static nodes first
+        if let Some(v) = self.static_nodes.read().unwrap().get(key) {
+            return Some(SuiPeer {
+                name: v.name.to_owned(),
+                p2p_address: v.p2p_address.to_owned(),
+                public_key: v.public_key.to_owned(),
+            });
+        }
+        // check dynamic nodes
         if let Some(v) = self.nodes.read().unwrap().get(key) {
             return Some(SuiPeer {
                 name: v.name.to_owned(),
