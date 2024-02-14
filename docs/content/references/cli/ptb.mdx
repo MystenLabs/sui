@@ -1,0 +1,111 @@
+---
+title: Sui Client PTB CLI
+description: The Sui Client PTB CLI enables a user to construct a PTB and execute it from the command line or a file.
+---
+
+The `client ptb` command allows users to specify the transactions to be executed in a Programmable Transaction Block directly from your CLI. For maximum flexibility, a file containing the transactions to be executed in a PTB can be passed as well, and the two can be mixed to create and run a complex PTB directly from your terminal.
+
+## Commands
+
+The following list itemizes all the available args for the `sui client ptb` command.
+
+```
+Usage: sui client ptb [OPTIONS]
+
+Options:
+      --file <FILE>                             The path to the file containing the PTBs
+      --assign [<ASSIGN>...]                    An input for the PTB, defined as the variable name and value, e.g: --input recipient 0x321
+      --gas <GAS>                               The object ID of the gas coin
+      --gas-budget <GAS_BUDGET>                 The gas budget to be used to execute this PTB
+      --make-move-vec <MAKE_MOVE_VEC>...        Given n-values of the same type, it constructs a vector. For non objects or an empty vector, the type tag must be specified. For example,
+                                                --make-move-vec "<u64>" "[]"
+      --merge-coins <MERGE_COINS>...            Merge N coins into the provided coin: --merge-coins into_coin "[coin1,coin2,coin3]"
+      --move-call <MOVE_CALL>...                Make a move call to a function
+      --split-coins <SPLIT_COINS>...            Split the coin into N coins as per the given amount. On zsh, the vector needs to be given in quotes: --split-coins coin_to_split
+                                                "[amount1,amount2]"
+      --transfer-objects <TRANSFER_OBJECTS>...  Transfer objects to the address. E.g., --transfer-objects to_address "[obj1, obj2]"
+      --publish <PUBLISH>...                    Publish the move package. It takes as input the folder where the package exists
+      --upgrade <UPGRADE>...                    Upgrade the move package. It takes as input the folder where the package exists
+      --preview                                 Preview the PTB instead of executing it
+      --warn-shadows                            Enable shadown warning when including other PTB files. Off by default
+      --pick-gas-budget <PICK_GAS_BUDGET>       Pick gas budget strategy if multiple gas-budgets are provided [possible values: max, sum]
+      --summary                                 Show only a short summary (digest, execution status, gas cost). Do not use this flag when you need all the transaction data and 
+                                                execution effects
+      --json                                    Return command outputs in json format
+  -h, --help                                    Print help
+  -V, --version                                 Print version
+```
+
+## Design philosophy and concepts
+
+The main philosophy behind the CLI PTB support is to enable a user to either build and execute a PTB from the command line or a file. To enable seamless construction and execution of PTBs, this command was designed to allow you to provide a PTB from the console, a file, or mixing both at the same time. Furthermore, bash scripts can be used to construct and execute the PTB just as you would do from the command line, providing great flexibility when it comes to automating different tasks. 
+
+Besides using existing [traditional PTB](/concepts/transactions/prog-txn-blocks/) related concepts, we introduce a few new and important concepts for this command.
+
+### Assign
+The `--assign` argument is used to bind values to variables. There are primarily two ways to use the `--assign` command:
+* assign a value to a variable
+* assign a variable to the result of the previous command
+
+Let's look at the first case where we assign a value to a variable. Let's say we want to check if some variable's value is none. We call the `0x1::option::is_none` function from the Sui framework, and pass in the variable name like this: 
+```bash
+sui client ptb \
+--assign my_variable none # bind value none to variable my_variable
+--move-call 0x1::option::is_none <u64> my_variable
+```
+
+In the second case, if a previous command outputs some result, it can be binded to a variable in order to be accessed later. Let's see an example where we want a new coin with 1000 MIST, which we can achieve by using the `split-coins` command. Once we do that, we want to transfer the new coin to another address. Without the `--assign` argument, we would not be able to instruct the CLI to transfer that new coin object as we would not have a way to refer to it.
+
+```bash
+sui client ptb \
+--split-coins gas [1000] \                    # split gas coin to get a new coin with 1000 MIST
+--assign coins \                              # bind the result of split-coins to coins
+--transfer-objects @recipient_address [coins] # transfer to @recipient_address
+--gas-budget 50000000
+```
+
+:::info
+`gas` is a reserved keyword and the tool will not allow you to name your variable gas.
+:::
+
+### File
+To enable higher flexibility and reusability, PTBs can be written in a file and passed to the CLI using the `--file` argument, which accepts the path to a file. Let's take the previous example and put it into the `split_coins.ptb` file:
+```bash
+--split-coins gas [1000] \                  # get a new coin with 1000 MIST
+--assign coins \                              # bind the result of split-coins to coins
+--transfer-objects @recipient_address [coins] # transfer to @recipient_address
+--gas-budget 50000000
+```
+
+This can be executed by running the following command:
+`sui client ptb --file split_coins.ptb`
+
+In addition to running files, one can mix commands from the CLI with passing in files. The order in which the files are passed is important, as the CLI will preserve the exact order in which commands are given. The following is a valid PTB and it will be executed:
+```bash
+sui client ptb \
+--file split_coins.ptb \
+--move-call 0x1::option::is_none <u64> 0
+```
+
+:::info
+Circular file inclusions (e.g., `split_coins.ptb` has a ``--file split_coins.ptb`) are not allowed and the tool will throw an error if this happens.
+:::
+:::info
+If you include multiple PTBs from files and want to check the order of your transactions, use the `--preview` flag to output a list of the transactions in the PTB instead of directly executing it.
+:::
+
+### Pick Gas Budget
+The `--pick-gas-budget` flag is used when we need to disambiguate which gas budget to use, in case multiple budgets are provided. For example, let's assume that a user has multiple PTB files each providing the gas budget such that each PTB can be run individually. If the user now tries to pass build a large PTB by reusing these files, the CLI will not know which `gas-budget` to use, and throw an error.
+
+
+
+
+## Examples
+
+The following examples demonstrate how to use the `client ptb` command.
+
+
+## JSON output
+
+Append the `--json` flag to commands to format responses in JSON instead of the more human-friendly default Sui CLI output. This can be useful for extremely large datasets, for example, as those results can have a troublesome display on smaller screens. In these cases, the `--json` flag is useful.
+
