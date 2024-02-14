@@ -14,8 +14,8 @@ module Test::M {
         assert!(string::length(&s) == 24, 0);
     }
 
-    public entry fun utf8_vec_arg(v: vector<string::String>, _: &mut TxContext) {
-        let concat = string::utf8(vector::empty());
+    public entry fun utf8_vec_arg(mut v: vector<string::String>, _: &mut TxContext) {
+        let mut concat = string::utf8(vector::empty());
         while (!vector::is_empty(&v)) {
             let s = vector::pop_back(&mut v);
             string::append(&mut concat, s);

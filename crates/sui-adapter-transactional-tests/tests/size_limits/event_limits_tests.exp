@@ -3,7 +3,7 @@ processed 10 tasks
 task 1 'publish'. lines 8-57:
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 7326400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 7311200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 58-60:
 events: 1
@@ -26,12 +26,12 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 6 'run'. lines 70-72:
 events: 1
 mutated: 1
-gas summary: computation_cost: 1413000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1393000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7 'run'. lines 73-75:
 events: 1
 mutated: 1
-gas summary: computation_cost: 1840000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1814000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8 'run'. lines 76-78:
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::event::emit (function index 0) at offset 0. Arithmetic error, stack overflow, max value depth, etc.

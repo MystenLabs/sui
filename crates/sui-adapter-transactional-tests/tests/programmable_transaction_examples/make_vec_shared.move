@@ -13,7 +13,7 @@ module t2::o2 {
     use sui::tx_context::TxContext;
     use std::vector;
 
-    struct Obj2 has key, store {
+    public struct Obj2 has key, store {
         id: UID,
     }
 
@@ -22,7 +22,7 @@ module t2::o2 {
         transfer::public_share_object(o)
     }
 
-    public entry fun consume(v: vector<Obj2>) {
+    public entry fun consume(mut v: vector<Obj2>) {
         while (!vector::is_empty(&v)) {
             let Obj2 { id } = vector::pop_back(&mut v);
             object::delete(id);

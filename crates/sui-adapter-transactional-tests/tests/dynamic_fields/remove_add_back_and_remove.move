@@ -15,12 +15,12 @@ module test::m1 {
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         wrapped: Option<Child>,
     }
 
-    struct Child has key, store {
+    public struct Child has key, store {
         id: UID,
     }
 
