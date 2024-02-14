@@ -1364,9 +1364,14 @@ pub(crate) async fn deserialize_move_struct(
 fn objects_query(filter: &ObjectFilter, lhs: i64, rhs: i64, page: &Page<Cursor>) -> RawQuery
 where
 {
+    let view = if filter.object_keys.is_some() {
+        View::Historical
+    } else {
+        View::Consistent
+    };
     // Require a consistent view of objects if the owner is specified, to filter out object versions
     // that satisfy the criteria, but have a later version in the same checkpoint.
-    build_objects_query_v2(lhs, rhs, &page, move |query| filter.apply(query))
+    build_objects_query_v2(view, lhs, rhs, &page, move |query| filter.apply(query))
 }
 
 #[cfg(test)]

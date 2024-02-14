@@ -380,13 +380,8 @@ fn coins_query(
 ) -> RawQuery {
     // Require a consistent view of objects if the owner is specified, to filter out object versions
     // that satisfy the criteria, but have a later version in the same checkpoint.
-    let view = if owner.is_some() {
-        View::Consistent
-    } else {
-        View::Historical
-    };
 
-    build_objects_query_v2(lhs, rhs, &page, move |query| {
+    build_objects_query_v2(View::Consistent, lhs, rhs, &page, move |query| {
         apply_filter(query, &coin_type, owner)
     })
 }
