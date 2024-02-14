@@ -1407,7 +1407,13 @@ impl AuthorityStore {
                 [(transaction_effects.digest(), transaction_effects)],
             )?;
 
-        // TODO-DNS decide if it's necessary here to write the secondary keys
+        // Update table for any secondary keys.
+        if let Some(key) = transaction.non_digest_key() {
+            write_batch.insert_batch(
+                &self.perpetual_tables.transaction_digests_by_key,
+                iter::once((key, transaction.digest())),
+            )?;
+        }
 
         write_batch.write()?;
         Ok(())
@@ -1428,9 +1434,15 @@ impl AuthorityStore {
                     &self.perpetual_tables.effects,
                     [(tx.effects.digest(), &tx.effects)],
                 )?;
-        }
 
-        // TODO-DNS decide if it's necessary here to write the secondary keys
+            // Update table for any secondary keys.
+            if let Some(key) = tx.transaction.non_digest_key() {
+                write_batch.insert_batch(
+                    &self.perpetual_tables.transaction_digests_by_key,
+                    iter::once((key, tx.transaction.digest())),
+                )?;
+            }
+        }
 
         write_batch.write()?;
         Ok(())

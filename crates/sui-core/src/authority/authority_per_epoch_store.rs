@@ -2518,8 +2518,6 @@ impl AuthorityPerEpochStore {
 
             // If we're generating randomness, update the randomness state object version.
             if generate_randomness {
-                // TODO-DNS does this work correctly if we assign a randomness round version here, and then
-                // end up receiving the RSU from a checkpoint?
                 let round = self
                     .randomness_manager
                     .get()

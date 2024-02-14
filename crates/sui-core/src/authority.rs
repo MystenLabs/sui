@@ -4718,7 +4718,6 @@ impl RandomnessRoundReceiver {
         };
         let effects = effects.pop().expect("should return effects");
         if *effects.status() != ExecutionStatus::Success {
-            // TODO-DNS should this be error or panic? Seems bad enough to panic?
             panic!("BUG: failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
         }
         debug!("sucessfully executed randomness state update transaction");
