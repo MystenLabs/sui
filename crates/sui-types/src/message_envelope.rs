@@ -645,11 +645,3 @@ impl<T: Message> VerifiedEnvelope<T, CertificateProof> {
         self.auth_signature.epoch()
     }
 }
-
-impl<T: Message> From<VerifiedEnvelope<T, AuthorityStrongQuorumSignInfo>>
-    for VerifiedEnvelope<T, CertificateProof>
-{
-    fn from(cert: VerifiedEnvelope<T, AuthorityStrongQuorumSignInfo>) -> Self {
-        Self::new_from_certificate(cert)
-    }
-}

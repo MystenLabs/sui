@@ -698,39 +698,6 @@ impl SuiNode {
             // This is only needed during cold start.
             components.consensus_adapter.submit_recovered(&epoch_store);
 
-            if let Ok(last_built_checkpoint) = epoch_store.last_built_checkpoint_commit_height() {
-                for (height, pending) in epoch_store
-                    .get_pending_checkpoints(last_built_checkpoint)
-                    .expect("unexpected epoch store error")
-                {
-                    info!(
-                        "Enqueueing all transactions in pending checkpoint at height {}",
-                        height
-                    );
-                    let txns = state
-                        .get_cache_reader()
-                        .multi_get_transaction_blocks(&pending.roots)
-                        .expect("failed to read transactions from cache");
-
-                    let txns = txns
-                        .into_iter()
-                        .zip(pending.roots.iter())
-                        .map(|(txn, digest)| {
-                            let Some(txn) = txn else {
-                                panic!(
-                                    "Transaction {:?} from pending checkpoint not found",
-                                    digest
-                                );
-                            };
-                            (*txn).clone()
-                        })
-                        .collect();
-
-                    state
-                        .enqueue_certificates_for_execution(txns, &epoch_store)
-                        .expect("failed to enqueue transactions");
-                }
-            }
             Some(components)
         } else {
             None

@@ -1061,7 +1061,7 @@ impl AuthorityState {
             // Shared object transactions need to be sequenced by Narwhal before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
             // For owned object transactions, they can be enqueued for execution immediately.
-            self.enqueue_certificates_for_execution(vec![certificate.clone().into()], epoch_store)?;
+            self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
         }
 
         let effects = self.notify_read_effects(certificate).await?;
@@ -2649,7 +2649,7 @@ impl AuthorityState {
     /// because only Narwhal output needs to be persisted.
     pub fn enqueue_certificates_for_execution(
         &self,
-        certs: Vec<VerifiedExecutableTransaction>,
+        certs: Vec<VerifiedCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
         self.transaction_manager
