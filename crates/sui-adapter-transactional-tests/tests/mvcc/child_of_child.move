@@ -13,7 +13,7 @@ module test::m {
     use sui::tx_context::TxContext;
     use sui::dynamic_object_field as ofield;
 
-    struct Obj has key, store {
+    public struct Obj has key, store {
         id: UID,
         value: u64,
     }
@@ -24,8 +24,8 @@ module test::m {
     // new
 
     public fun new(ctx: &mut TxContext): Obj {
-        let grand = Obj { id: object::new(ctx), value: 0 };
-        let parent = Obj { id: object::new(ctx), value: 0 };
+        let mut grand = Obj { id: object::new(ctx), value: 0 };
+        let mut parent = Obj { id: object::new(ctx), value: 0 };
         let child = Obj { id: object::new(ctx), value: 0 };
         ofield::add(&mut parent.id, KEY, child);
         ofield::add(&mut grand.id, KEY, parent);
@@ -72,38 +72,38 @@ module test::m {
 //> 0: test::m::new();
 //> TransferObjects([Result(0)], Input(0))
 
-//# view-object 2,2
+//# view-object 2,4
 
-//# programmable --sender A --inputs object(2,2) 1 2 3
+//# programmable --sender A --inputs object(2,4) 1 2 3
 //> test::m::set(Input(0), Input(1), Input(2), Input(3))
 
-//# view-object 2,2
+//# view-object 2,4
 
-//# programmable --sender A --inputs object(2,2)
+//# programmable --sender A --inputs object(2,4)
 //> test::m::remove(Input(0))
 
-//# view-object 2,2
+//# view-object 2,4
 
 
 // dev-inspect with 'check' and correct values
 
-//# programmable --sender A --inputs object(2,2)@2 0 0 vector[0] --dev-inspect
+//# programmable --sender A --inputs object(2,4)@2 0 0 vector[0] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,2)@3 1 2 vector[3] --dev-inspect
+//# programmable --sender A --inputs object(2,4)@3 1 2 vector[3] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,2)@4 1 2 vector[] --dev-inspect
+//# programmable --sender A --inputs object(2,4)@4 1 2 vector[] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
 
 
 // dev-inspect with 'check' and _incorrect_ values
 
-//# programmable --sender A --inputs object(2,2)@3 0 0 vector[0] --dev-inspect
+//# programmable --sender A --inputs object(2,4)@3 0 0 vector[0] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,2)@4 1 2 vector[3] --dev-inspect
+//# programmable --sender A --inputs object(2,4)@4 1 2 vector[3] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,2)@2 1 2 vector[] --dev-inspect
+//# programmable --sender A --inputs object(2,4)@2 1 2 vector[] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))

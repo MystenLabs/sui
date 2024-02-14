@@ -12,7 +12,7 @@ module test::m {
     use sui::tx_context::TxContext;
     use sui::dynamic_field as field;
 
-    struct Obj has key, store {
+    public struct Obj has key, store {
         id: UID,
         value: u64,
     }
@@ -23,8 +23,8 @@ module test::m {
     // new
 
     public fun new(ctx: &mut TxContext): Obj {
-        let grand = Obj { id: object::new(ctx), value: 0 };
-        let parent = Obj { id: object::new(ctx), value: 0 };
+        let mut grand = Obj { id: object::new(ctx), value: 0 };
+        let mut parent = Obj { id: object::new(ctx), value: 0 };
         let child = Obj { id: object::new(ctx), value: 0 };
         field::add(&mut parent.id, KEY, child);
         field::add(&mut grand.id, KEY, parent);

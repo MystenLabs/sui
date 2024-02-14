@@ -7,8 +7,8 @@
 
 //# publish
 module test::m1 {
-    struct A has copy, drop { value: u64 }
-    struct B has copy, drop { value: u256 }
+    public struct A has copy, drop { value: u64 }
+    public struct B has copy, drop { value: u256 }
 
     public fun t1(_: &mut u64): &mut u64 { abort 0}
     public fun t2(_: &mut u64): &u64 { abort 0}

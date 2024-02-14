@@ -7,7 +7,7 @@
 
 //# publish
 module test::m1 {
-    struct R has drop {}
+    public struct R has drop {}
     public fun copy_(_: u64) { abort 0 }
     public fun take(_: R) { abort 0 }
     public fun by_imm(_: &u64) { abort 0 }

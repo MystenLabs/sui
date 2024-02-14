@@ -12,7 +12,7 @@ module t2::o2 {
     use sui::transfer;
     use sui::tx_context::TxContext;
 
-    struct Obj2 has key, store {
+    public struct Obj2 has key, store {
         id: UID,
     }
 

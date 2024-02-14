@@ -14,8 +14,8 @@ module Test::M {
         assert!(ascii::length(&s) == 10, 0);
     }
 
-    public entry fun ascii_vec_arg(v: vector<ascii::String>, _: &mut TxContext) {
-        let l = 0;
+    public entry fun ascii_vec_arg(mut v: vector<ascii::String>, _: &mut TxContext) {
+        let mut l = 0;
         while (!vector::is_empty(&v)) {
             let s = vector::pop_back(&mut v);
             l = l + ascii::length(&s)

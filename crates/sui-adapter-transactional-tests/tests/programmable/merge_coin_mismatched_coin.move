@@ -12,7 +12,7 @@ module test::fake {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    struct FAKE has drop {}
+    public struct FAKE has drop {}
 
     fun init(witness: FAKE, ctx: &mut TxContext) {
         let (treasury_cap, metadata) = coin::create_currency(witness, 2, b"FAKE", b"", b"", option::none(), ctx);
