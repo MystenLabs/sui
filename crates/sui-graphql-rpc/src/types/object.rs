@@ -1357,9 +1357,9 @@ pub(crate) async fn deserialize_move_struct(
     Ok((struct_tag, move_struct))
 }
 
-/// Constructs a raw query to fetch objects from the database. If an `owner` is provided as a filter,  filters are provided, the page
-/// limit and cursor are used to "filter" the inner queries against `objects_snapshot` and
-/// `objects_history` to reduce the number of rows to be fetched.
+/// Constructs a raw query to fetch objects from the database. If an `owner` is provided as a
+/// filter,  filters are provided, the page limit and cursor are used to "filter" the inner queries
+/// against `objects_snapshot` and `objects_history` to reduce the number of rows to be fetched.
 fn objects_query(filter: &ObjectFilter, lhs: i64, rhs: i64, page: &Page<Cursor>) -> RawQuery
 where
 {

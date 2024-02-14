@@ -87,7 +87,7 @@ where
     let mut snapshot_objs_inner = query!("SELECT * FROM objects_snapshot");
     snapshot_objs_inner = filter_fn(snapshot_objs_inner);
 
-    let snapshot_objs = match view {
+    let mut snapshot_objs = match view {
         View::Consistent => {
             let mut snapshot_objs = query!(
                 r#"SELECT candidates.* FROM ({}) candidates
@@ -97,11 +97,17 @@ where
                 newer.clone()
             );
             snapshot_objs = filter!(snapshot_objs, "newer.object_version IS NULL");
-            snapshot_objs = page.apply::<StoredHistoryObject>(snapshot_objs);
             snapshot_objs
         }
-        View::Historical => snapshot_objs_inner,
+        View::Historical => query!(
+            "SELECT candidates.* FROM ({}) candidates",
+            snapshot_objs_inner
+        ),
     };
+
+    // Always apply pagination, to avoid a scenario where a user provides more `objectKeys` than
+    // allowed by the maximum page size.
+    snapshot_objs = page.apply::<StoredHistoryObject>(snapshot_objs);
 
     // Additionally filter objects_history table for results between the available range, or
     // checkpoint_viewed_at, if provided.
@@ -110,7 +116,7 @@ where
     // based on `object_id` or `object_id` and `object_version`
     history_objs_inner = filter_fn(history_objs_inner);
 
-    let history_objs = match view {
+    let mut history_objs = match view {
         View::Consistent => {
             history_objs_inner = filter!(
                 history_objs_inner,
@@ -125,11 +131,17 @@ where
                 newer
             );
             history_objs = filter!(history_objs, "newer.object_version IS NULL");
-            history_objs = page.apply::<StoredHistoryObject>(history_objs);
             history_objs
         }
-        View::Historical => history_objs_inner,
+        View::Historical => query!(
+            "SELECT candidates.* FROM ({}) candidates",
+            history_objs_inner
+        ),
     };
+
+    // Always apply pagination, to avoid a scenario where a user provides more `objectKeys` than
+    // allowed by the maximum page size.
+    history_objs = page.apply::<StoredHistoryObject>(history_objs);
 
     // Combine the two queries, and select the most recent version of each object. The result set is
     // the most recent version of objects from `objects_snapshot` and `objects_history` that match
