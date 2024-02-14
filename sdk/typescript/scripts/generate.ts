@@ -343,7 +343,7 @@ methodGenerator.imports.push(
 				),
 			]),
 		),
-		ts.factory.createStringLiteral('../../builder/index.js'),
+		ts.factory.createStringLiteral('../../transactions/index.js'),
 	),
 );
 

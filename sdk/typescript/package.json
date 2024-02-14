@@ -71,8 +71,8 @@
 			"require": "./dist/cjs/multisig/index.js"
 		},
 		"./transactions": {
-			"import": "./dist/esm/builder/export.js",
-			"require": "./dist/cjs/builder/export.js"
+			"import": "./dist/esm/transactions/export.js",
+			"require": "./dist/cjs/transactions/export.js"
 		},
 		"./utils": {
 			"import": "./dist/esm/utils/index.js",

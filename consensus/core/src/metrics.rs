@@ -37,12 +37,20 @@ pub(crate) fn test_metrics() -> Arc<Metrics> {
 pub(crate) struct NodeMetrics {
     pub uptime: Histogram,
     pub quorum_receive_latency: Histogram,
-    #[allow(unused)]
-    pub committed_leaders_total: IntCounterVec,
     pub core_lock_enqueued: IntCounter,
     pub core_lock_dequeued: IntCounter,
     pub leader_timeout_total: IntCounter,
     pub threshold_clock_round: IntGauge,
+    pub suspended_blocks: IntCounterVec,
+    pub unsuspended_blocks: IntCounterVec,
+    pub invalid_blocks: IntCounterVec,
+
+    // Commit Metrics
+    #[allow(unused)]
+    pub committed_leaders_total: IntCounterVec,
+    pub blocks_per_commit_count: Histogram,
+    pub sub_dags_per_commit_count: Histogram,
+    pub block_commit_latency: Histogram,
 }
 
 impl NodeMetrics {
@@ -59,13 +67,6 @@ impl NodeMetrics {
                 "quorum_receive_latency",
                 "The time it took to receive a new round quorum of blocks",
                 registry
-            )
-            .unwrap(),
-            committed_leaders_total: register_int_counter_vec_with_registry!(
-                "committed_leaders_total",
-                "Total number of (direct or indirect) committed leaders per authority",
-                &["authority", "commit_type"],
-                registry,
             )
             .unwrap(),
             core_lock_enqueued: register_int_counter_with_registry!(
@@ -91,14 +92,61 @@ impl NodeMetrics {
                 "The current threshold clock round. We only advance to a new round when a quorum of parents have been synced.",
                 registry,
             ).unwrap(),
+            suspended_blocks: register_int_counter_vec_with_registry!(
+                "suspended_blocks",
+                "The number of suspended blocks. The counter is reported uniquely, so if a block is sent for reprocessing while alreadly suspended then is not double counted",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            unsuspended_blocks: register_int_counter_vec_with_registry!(
+                "unsuspended_blocks",
+                "The number of unsuspended blocks",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            // TODO: add a short status label.
+            invalid_blocks: register_int_counter_vec_with_registry!(
+                "invalid_blocks",
+                "Number of invalid blocks per peer authority",
+                &["authority"],
+                registry,
+            )
+            .unwrap(),
+
+            // Commit Metrics
+            committed_leaders_total: register_int_counter_vec_with_registry!(
+                "committed_leaders_total",
+                "Total number of (direct or indirect) committed leaders per authority",
+                &["authority", "commit_type"],
+                registry,
+            )
+            .unwrap(),
+            block_commit_latency: register_histogram_with_registry!(
+                "block_commit_latency",
+                "The time taken between block creation and block commit.",
+                registry,
+            )
+            .unwrap(),
+            blocks_per_commit_count: register_histogram_with_registry!(
+                "blocks_per_commit_count",
+                "The number of blocks per commit.",
+                registry,
+            )
+            .unwrap(),
+            sub_dags_per_commit_count: register_histogram_with_registry!(
+                "sub_dags_per_commit_count",
+                "The number of subdags per commit.",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
 
 pub(crate) struct ChannelMetrics {
-    /// occupancy of the channel from TransactionsClient to TransactionsConsumer
+    /// occupancy of the channel from TransactionClient to TransactionConsumer
     pub tx_transactions_submit: IntGauge,
-    /// total received on channel from TransactionsClient to TransactionsConsumer
+    /// total received on channel from TransactionClient to TransactionConsumer
     pub tx_transactions_submit_total: IntCounter,
     /// occupancy of the CoreThread commands channel
     pub core_thread: IntGauge,
@@ -111,12 +159,12 @@ impl ChannelMetrics {
         Self {
             tx_transactions_submit: register_int_gauge_with_registry!(
                 "tx_transactions_submit",
-                "occupancy of the channel from the `TransactionsClient` to the `TransactionsConsumer`",
+                "occupancy of the channel from the `TransactionClient` to the `TransactionConsumer`",
                 registry
             ).unwrap(),
             tx_transactions_submit_total: register_int_counter_with_registry!(
                 "tx_transactions_submit_total",
-                "total received on channel from the `TransactionsClient` to the `TransactionsConsumer`",
+                "total received on channel from the `TransactionClient` to the `TransactionConsumer`",
                 registry
             ).unwrap(),
             core_thread: register_int_gauge_with_registry!(

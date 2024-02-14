@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { getKioskIdFromOwnerCap, hasDisplayData, useGetKioskContents } from '@mysten/core';
 import { type SuiObjectResponse } from '@mysten/sui.js/client';
-import { getObjectDisplay } from '@mysten/sui.js/types';
 import cl from 'clsx';
 
 import { useActiveAddress } from '../../hooks';
@@ -28,7 +27,7 @@ const cardStyles = [
 
 function getLabel(item?: SuiObjectResponse) {
 	if (!item) return;
-	const display = getObjectDisplay(item)?.data;
+	const display = item.data?.display?.data;
 	return display?.name ?? display?.description ?? item.data?.objectId;
 }
 

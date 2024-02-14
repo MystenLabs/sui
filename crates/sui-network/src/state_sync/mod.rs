@@ -1316,6 +1316,7 @@ where
         tokio::time::sleep(duration).await;
         return Err(checkpoint);
     };
+    debug!("completed checkpoint contents sync");
     Ok(checkpoint)
 }
 
@@ -1346,6 +1347,11 @@ where
     // Iterate through our selected peers trying each one in turn until we're able to
     // successfully get the target checkpoint
     for mut peer in peers {
+        debug!(
+            ?timeout,
+            "requesting checkpoint contents from {}",
+            peer.inner().peer_id(),
+        );
         let request = Request::new(digest).with_timeout(timeout);
         if let Some(contents) = peer
             .get_checkpoint_contents(request)

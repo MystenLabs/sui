@@ -14,7 +14,7 @@ use sui_core::checkpoints::CheckpointStore;
 use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
 use sui_types::digests::{CheckpointContentsDigest, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::messages_checkpoint::CheckpointDigest;
+use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber};
 use sui_types::storage::ObjectKey;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use typed_store::rocks::MetricConf;
@@ -43,6 +43,7 @@ pub enum DbToolCommand {
     Compact,
     PruneObjects,
     PruneCheckpoints,
+    SetCheckpointWatermark(SetCheckpointWatermarkOptions),
 }
 
 #[derive(Parser)]
@@ -160,6 +161,16 @@ pub struct RewindCheckpointExecutionOptions {
     checkpoint_sequence_number: u64,
 }
 
+#[derive(Parser)]
+#[command(rename_all = "kebab-case")]
+pub struct SetCheckpointWatermarkOptions {
+    #[arg(long)]
+    highest_verified: Option<CheckpointSequenceNumber>,
+
+    #[arg(long)]
+    highest_synced: Option<CheckpointSequenceNumber>,
+}
+
 pub async fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::Result<()> {
     match cmd {
         DbToolCommand::ListTables => print_db_all_tables(db_path),
@@ -216,6 +227,7 @@ pub async fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> an
             }
             Ok(())
         }
+        DbToolCommand::SetCheckpointWatermark(d) => set_checkpoint_watermark(&db_path, d),
     }
 }
 
@@ -532,6 +544,37 @@ pub fn print_all_entries(
 ) -> anyhow::Result<()> {
     for (k, v) in dump_table(store, epoch, path, table_name, page_size, page_number)? {
         println!("{:>100?}: {:?}", k, v);
+    }
+    Ok(())
+}
+
+/// Force sets state sync checkpoint watermarks.
+/// Run with (for example):
+/// cargo run --package sui-tool -- db-tool --db-path /opt/sui/db/authorities_db/live set_checkpoint_watermark --highest-synced 300000
+pub fn set_checkpoint_watermark(
+    path: &Path,
+    options: SetCheckpointWatermarkOptions,
+) -> anyhow::Result<()> {
+    let checkpoint_db = CheckpointStore::open_tables_read_write(
+        path.join("checkpoints"),
+        MetricConf::default(),
+        None,
+        None,
+    );
+
+    if let Some(highest_verified) = options.highest_verified {
+        let Some(checkpoint) = checkpoint_db.get_checkpoint_by_sequence_number(highest_verified)?
+        else {
+            bail!("Checkpoint {highest_verified} not found");
+        };
+        checkpoint_db.update_highest_verified_checkpoint(&checkpoint)?;
+    }
+    if let Some(highest_synced) = options.highest_synced {
+        let Some(checkpoint) = checkpoint_db.get_checkpoint_by_sequence_number(highest_synced)?
+        else {
+            bail!("Checkpoint {highest_synced} not found");
+        };
+        checkpoint_db.update_highest_synced_checkpoint(&checkpoint)?;
     }
     Ok(())
 }

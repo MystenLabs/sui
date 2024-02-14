@@ -6,6 +6,9 @@ use std::sync::Arc;
 use consensus_config::{AuthorityIndex, Committee, Parameters};
 use sui_protocol_config::ProtocolConfig;
 
+#[cfg(test)]
+use tempfile::TempDir;
+
 use crate::metrics::Metrics;
 
 #[cfg(test)]
@@ -56,11 +59,15 @@ impl Context {
         let (committee, keypairs) =
             consensus_config::local_committee_and_keys(0, vec![1; committee_size]);
         let metrics = test_metrics();
+        let temp_dir = TempDir::new().unwrap();
 
         let context = Context::new(
             AuthorityIndex::new_for_test(0),
             committee,
-            Parameters::default(),
+            Parameters {
+                db_path: Some(temp_dir.into_path()),
+                ..Default::default()
+            },
             ProtocolConfig::get_for_max_version_UNSAFE(),
             metrics,
         );

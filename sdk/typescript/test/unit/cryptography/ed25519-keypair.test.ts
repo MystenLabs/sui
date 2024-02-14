@@ -5,9 +5,9 @@ import { fromB64, toB58 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
 import { describe, expect, it } from 'vitest';
 
-import { TransactionBlock } from '../../../src/builder';
 import { decodeSuiPrivateKey } from '../../../src/cryptography/keypair';
 import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
+import { TransactionBlock } from '../../../src/transactions';
 import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
 
 const VALID_SECRET_KEY = 'mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCg=';

@@ -7,9 +7,10 @@ use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
 use crate::{
-    block::{Block, BlockRef, Round, TestBlock, VerifiedBlock},
+    block::{Block, BlockRef, BlockTimestampMs, Round, Slot, TestBlock, VerifiedBlock},
     context::Context,
     dag_state::DagState,
+    leader_schedule::LeaderSchedule,
 };
 
 /// Build a fully interconnected dag up to the specified round. This function
@@ -32,8 +33,7 @@ pub(crate) fn build_dag(
             start
         }
         None => {
-            let (my_genesis_block, mut genesis) = Block::genesis(context.clone());
-            genesis.insert(0, my_genesis_block);
+            let (_my_genesis_block, genesis) = Block::genesis(context.clone());
             let references = genesis.iter().map(|x| x.reference()).collect::<Vec<_>>();
             dag_state.write().accept_blocks(genesis);
 
@@ -48,8 +48,10 @@ pub(crate) fn build_dag(
             .authorities()
             .map(|authority| {
                 let author_idx = authority.0.value() as u32;
+                let base_ts = round as BlockTimestampMs * 1000;
                 let block = VerifiedBlock::new_for_test(
                     TestBlock::new(round, author_idx)
+                        .set_timestamp_ms(base_ts + (author_idx + round) as u64)
                         .set_ancestors(ancestors.clone())
                         .build(),
                 );
@@ -84,4 +86,26 @@ pub(crate) fn build_dag_layer(
         dag_state.write().accept_block(block);
     }
     references
+}
+
+// TODO: confirm pipelined & multi-leader cases work properly
+pub(crate) fn get_all_leader_blocks(
+    dag_state: Arc<RwLock<DagState>>,
+    leader_schedule: LeaderSchedule,
+    num_rounds: u32,
+    wave_length: u32,
+    pipelined: bool,
+    num_leaders: u32,
+) -> Vec<VerifiedBlock> {
+    let mut blocks = Vec::new();
+    for round in 1..=num_rounds {
+        for leader_offset in 0..num_leaders {
+            if pipelined || round % wave_length == 0 {
+                let slot = Slot::new(round, leader_schedule.elect_leader(round, leader_offset));
+                let uncommitted_blocks = dag_state.read().get_uncommitted_blocks_at_slot(slot);
+                blocks.extend(uncommitted_blocks);
+            }
+        }
+    }
+    blocks
 }

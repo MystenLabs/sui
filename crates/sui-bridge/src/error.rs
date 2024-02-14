@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crypto::BridgeAuthorityPublicKeyBytes;
+use crate::{crypto::BridgeAuthorityPublicKeyBytes, types::BridgeAction};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BridgeError {
@@ -41,14 +41,20 @@ pub enum BridgeError {
     InvalidBridgeAuthority(BridgeAuthorityPublicKeyBytes),
     // Authority's base_url is invalid
     InvalidAuthorityUrl(BridgeAuthorityPublicKeyBytes),
+    // Invalid Bridge Client request
+    InvalidBridgeClientRequest(String),
     // Message is signed by mismatched authority
     MismatchedAuthoritySigner,
     // Signature is over a mismatched action
     MismatchedAction,
+    // Action is not a governance action
+    ActionIsNotGovernanceAction(BridgeAction),
+    // Client requested an non-approved governace action
+    GovernanceActionIsNotApproved,
     // Authority has invalid url
     AuthoirtyUrlInvalid,
     // Action is not token transfer
-    NotTokenTransferAction,
+    ActionIsNotTokenTransferAction,
     // Sui transaction failure due to generic error
     SuiTxFailureGeneric(String),
     // Storage Error

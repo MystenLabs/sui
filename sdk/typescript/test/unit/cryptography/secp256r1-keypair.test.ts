@@ -6,12 +6,12 @@ import { secp256r1 } from '@noble/curves/p256';
 import { sha256 } from '@noble/hashes/sha256';
 import { describe, expect, it } from 'vitest';
 
-import { TransactionBlock } from '../../../src/builder';
 import { decodeSuiPrivateKey } from '../../../src/cryptography/keypair';
 import {
 	DEFAULT_SECP256R1_DERIVATION_PATH,
 	Secp256r1Keypair,
 } from '../../../src/keypairs/secp256r1';
+import { TransactionBlock } from '../../../src/transactions';
 import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
 
 const VALID_SECP256R1_SECRET_KEY = [

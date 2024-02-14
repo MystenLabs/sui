@@ -10,7 +10,7 @@
  * /crates/sui-open-rpc/spec/openrpc.json
  */
 
-import type { TransactionBlock } from '../../builder/index.js';
+import type { TransactionBlock } from '../../transactions/index.js';
 import type * as RpcTypes from './generated.js';
 
 /**

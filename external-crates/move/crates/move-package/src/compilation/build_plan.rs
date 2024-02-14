@@ -204,7 +204,11 @@ impl BuildPlan {
         for dir in std::fs::read_dir(build_root)? {
             let path = dir?.path();
             if !keep_paths.iter().any(|name| path.ends_with(name.as_str())) {
-                std::fs::remove_dir_all(&path)?;
+                if path.is_file() {
+                    std::fs::remove_file(&path)?;
+                } else {
+                    std::fs::remove_dir_all(&path)?;
+                }
             }
         }
         Ok(())

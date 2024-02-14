@@ -13,7 +13,6 @@ use std::{
     ops,
     path::{Path, PathBuf},
 };
-
 use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig, RunWithRange};
 use sui_config::NodeConfig;
 use sui_macros::nondeterministic;

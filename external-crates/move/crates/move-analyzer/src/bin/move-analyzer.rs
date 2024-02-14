@@ -15,7 +15,6 @@ use std::{
     collections::BTreeMap,
     path::PathBuf,
     sync::{Arc, Mutex},
-    thread,
 };
 
 use move_analyzer::{
@@ -135,20 +134,10 @@ fn main() {
         // to be available right after the client is initialized.
         if let Some(uri) = initialize_params.root_uri {
             if let Some(p) = symbols::SymbolicatorRunner::root_dir(&uri.to_file_path().unwrap()) {
-                // need to evaluate in a separate thread to allow for a larger stack size (needed on
-                // Windows)
-                thread::Builder::new()
-                    .stack_size(symbols::STACK_SIZE_BYTES)
-                    .spawn(move || {
-                        if let Ok((Some(new_symbols), _)) = symbols::get_symbols(p.as_path(), lint)
-                        {
-                            let mut old_symbols = symbols.lock().unwrap();
-                            (*old_symbols).merge(new_symbols);
-                        }
-                    })
-                    .unwrap()
-                    .join()
-                    .unwrap();
+                if let Ok((Some(new_symbols), _)) = symbols::get_symbols(p.as_path(), lint) {
+                    let mut old_symbols = symbols.lock().unwrap();
+                    (*old_symbols).merge(new_symbols);
+                }
             }
         }
     };

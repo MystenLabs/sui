@@ -3,7 +3,7 @@
 
 import { expect, test } from 'vitest';
 
-import { TransactionBlock } from '../../src/builder';
+import { TransactionBlock } from '../../src/transactions';
 import { setup } from './utils/setup';
 
 test('subscribeTransaction', async () => {

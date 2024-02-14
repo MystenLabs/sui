@@ -50,6 +50,8 @@ validator_configs:
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
@@ -171,6 +173,8 @@ validator_configs:
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
@@ -292,6 +296,8 @@ validator_configs:
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
@@ -413,6 +419,8 @@ validator_configs:
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
@@ -534,6 +542,8 @@ validator_configs:
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
@@ -655,6 +665,8 @@ validator_configs:
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
@@ -776,6 +788,8 @@ validator_configs:
     grpc-concurrency-limit: 20000000000
     p2p-config:
       listen-address: "0.0.0.0:1"
+      state-sync:
+        checkpoint-content-timeout-ms: 10000
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:

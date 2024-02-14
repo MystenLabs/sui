@@ -160,18 +160,18 @@ See the programmable transactions [example](https://github.com/MystenLabs/sui/bl
 ### Tic Tac Toe quick start
 
 1. Prepare the environment 
-   1. Install `sui` binary following the [Sui installation](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md##install-sui-binaries) docs.
-   1. [Connect to Sui Devnet](https://github.com/MystenLabs/sui/blob/main/doc/src/build/connect-sui-network.md).
-   1. [Make sure you have two addresses with gas](https://github.com/MystenLabs/sui/blob/main/doc/src/build/cli-client.md#add-existing-accounts-to-clientyaml) by using the `new-address` command to create new addresses:
+   1. Install `sui` binary following the [Sui installation](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/sui-install.mdx) docs.
+   1. [Connect to Sui Devnet](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/connect.mdx).
+   1. [Make sure you have two addresses with gas](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/get-address.mdx) by using the `new-address` command to create new addresses:
       ```shell
       sui client new-address ed25519
       ```
       You must specify the key scheme, one of `ed25519` or `secp256k1` or `secp256r1`.
       You can skip this step if you are going to play with a friend. :)
-   1. [Request Sui tokens](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md#sui-tokens) for all addresses that will be used to join the game.
+   1. [Request Sui tokens](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/get-coins.mdx) for all addresses that will be used to join the game.
 
 2. Publish the move contract
-   1. [Download the Sui source code](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md#source-code).
+   1. [Download the Sui source code](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/sui-install.mdx).
    1. Publish the [`games` package](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games) 
       using the Sui client:
       ```shell

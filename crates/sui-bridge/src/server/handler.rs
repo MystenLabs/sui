@@ -22,6 +22,8 @@ use tokio::sync::{oneshot, Mutex};
 use tracing::info;
 use tracing::instrument;
 
+use super::governance_verifier::GovernanceVerifier;
+
 #[async_trait]
 pub trait BridgeRequestHandlerTrait {
     /// Handles a request to sign a BridgeAction that bridges assets
@@ -40,10 +42,16 @@ pub trait BridgeRequestHandlerTrait {
         tx_digest_base58: String,
         event_idx: u16,
     ) -> Result<Json<SignedBridgeAction>, BridgeError>;
+
+    /// Handles a request to sign a governance action.
+    async fn handle_governance_action(
+        &self,
+        action: BridgeAction,
+    ) -> Result<Json<SignedBridgeAction>, BridgeError>;
 }
 
 #[async_trait::async_trait]
-trait ActionVerifier<K>: Send + Sync {
+pub trait ActionVerifier<K>: Send + Sync {
     async fn verify(&self, key: K) -> BridgeResult<BridgeAction>;
 }
 
@@ -157,7 +165,9 @@ where
             Err(e) => {
                 match e {
                     // Only cache non-transient errors
-                    BridgeError::BridgeEventInUnrecognizedSuiPackage
+                    BridgeError::GovernanceActionIsNotApproved { .. }
+                    | BridgeError::ActionIsNotGovernanceAction(..)
+                    | BridgeError::BridgeEventInUnrecognizedSuiPackage
                     | BridgeError::BridgeEventInUnrecognizedEthContract
                     | BridgeError::BridgeEventNotActionable
                     | BridgeError::NoBridgeEventsInTxPosition => {
@@ -189,6 +199,10 @@ pub struct BridgeRequestHandler {
         (TxHash, u16),
         oneshot::Sender<BridgeResult<SignedBridgeAction>>,
     )>,
+    governance_signer_tx: mysten_metrics::metered_channel::Sender<(
+        BridgeAction,
+        oneshot::Sender<BridgeResult<SignedBridgeAction>>,
+    )>,
 }
 
 impl BridgeRequestHandler {
@@ -199,6 +213,7 @@ impl BridgeRequestHandler {
         signer: BridgeAuthorityKeyPair,
         sui_client: Arc<SuiClient<SC>>,
         eth_client: Arc<EthClient<EP>>,
+        approved_governance_actions: Vec<BridgeAction>,
     ) -> Self {
         let (sui_signer_tx, sui_rx) = mysten_metrics::metered_channel::channel(
             1000,
@@ -214,14 +229,27 @@ impl BridgeRequestHandler {
                 .channels
                 .with_label_values(&["server_eth_action_signing_queue"]),
         );
+        let (governance_signer_tx, governance_rx) = mysten_metrics::metered_channel::channel(
+            1000,
+            &mysten_metrics::get_metrics()
+                .unwrap()
+                .channels
+                .with_label_values(&["server_governance_action_signing_queue"]),
+        );
         let signer = Arc::new(signer);
 
         SignerWithCache::new(signer.clone(), SuiActionVerifier { sui_client }).spawn(sui_rx);
         SignerWithCache::new(signer.clone(), EthActionVerifier { eth_client }).spawn(eth_rx);
+        SignerWithCache::new(
+            signer.clone(),
+            GovernanceVerifier::new(approved_governance_actions).unwrap(),
+        )
+        .spawn(governance_rx);
 
         Self {
             sui_signer_tx,
             eth_signer_tx,
+            governance_signer_tx,
         }
     }
 }
@@ -267,6 +295,25 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
             .unwrap_or_else(|_| panic!("Server signing task's oneshot channel is dropped"))?;
         Ok(Json(signed_action))
     }
+
+    async fn handle_governance_action(
+        &self,
+        action: BridgeAction,
+    ) -> Result<Json<SignedBridgeAction>, BridgeError> {
+        info!("Received handle governace action request");
+        if !action.is_governace_action() {
+            return Err(BridgeError::ActionIsNotGovernanceAction(action));
+        }
+        let (tx, rx) = oneshot::channel();
+        self.governance_signer_tx
+            .send((action, tx))
+            .await
+            .unwrap_or_else(|_| panic!("Server governance action signing channel is closed"));
+        let signed_action = rx.blocking_recv().unwrap_or_else(|_| {
+            panic!("Server governance action task's oneshot channel is dropped")
+        })?;
+        Ok(Json(signed_action))
+    }
 }
 
 #[cfg(test)]
@@ -281,7 +328,10 @@ mod tests {
         test_utils::{
             get_test_log_and_action, get_test_sui_to_eth_bridge_action, mock_last_finalized_block,
         },
-        types::{BridgeActionType, BridgeChainId, TokenId},
+        types::{
+            BridgeActionType, BridgeChainId, EmergencyAction, EmergencyActionType,
+            LimitUpdateAction, TokenId,
+        },
     };
     use ethers::types::{Address as EthAddress, TransactionReceipt};
     use sui_json_rpc_types::SuiEvent;
@@ -484,4 +534,81 @@ mod tests {
             .await;
         entry_.unwrap().lock().await.clone().unwrap().unwrap();
     }
+
+    #[tokio::test]
+    async fn test_signer_with_governace_verifier() {
+        let action_1 = BridgeAction::EmergencyAction(EmergencyAction {
+            chain_id: BridgeChainId::EthLocalTest,
+            nonce: 1,
+            action_type: EmergencyActionType::Pause,
+        });
+        let action_2 = BridgeAction::LimitUpdateAction(LimitUpdateAction {
+            chain_id: BridgeChainId::EthLocalTest,
+            sending_chain_id: BridgeChainId::SuiLocalTest,
+            nonce: 1,
+            new_usd_limit: 10000,
+        });
+
+        let verifier = GovernanceVerifier::new(vec![action_1.clone(), action_2.clone()]).unwrap();
+        assert_eq!(
+            verifier.verify(action_1.clone()).await.unwrap(),
+            action_1.clone()
+        );
+        assert_eq!(
+            verifier.verify(action_2.clone()).await.unwrap(),
+            action_2.clone()
+        );
+
+        let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
+        let signer = Arc::new(kp);
+        let mut signer_with_cache = SignerWithCache::new(signer.clone(), verifier);
+
+        // action_1 is signable
+        signer_with_cache.sign(action_1.clone()).await.unwrap();
+        // signed action is cached
+        let entry_ = signer_with_cache.get_testing_only(action_1.clone()).await;
+        assert_eq!(
+            entry_
+                .unwrap()
+                .lock()
+                .await
+                .clone()
+                .unwrap()
+                .unwrap()
+                .data(),
+            &action_1
+        );
+
+        // alter action_1 to action_3
+        let action_3 = BridgeAction::EmergencyAction(EmergencyAction {
+            chain_id: BridgeChainId::EthLocalTest,
+            nonce: 1,
+            action_type: EmergencyActionType::Unpause,
+        });
+        // action_3 is not signable
+        assert!(matches!(
+            signer_with_cache.sign(action_3.clone()).await.unwrap_err(),
+            BridgeError::GovernanceActionIsNotApproved { .. }
+        ));
+        // error is cached
+        let entry_ = signer_with_cache.get_testing_only(action_3.clone()).await;
+        assert!(matches!(
+            entry_.unwrap().lock().await.clone().unwrap().unwrap_err(),
+            BridgeError::GovernanceActionIsNotApproved { .. }
+        ));
+
+        // Non governace action is not signable
+        let action_4 = get_test_sui_to_eth_bridge_action(None, None, None, None);
+        assert!(matches!(
+            signer_with_cache.sign(action_4.clone()).await.unwrap_err(),
+            BridgeError::ActionIsNotGovernanceAction(..)
+        ));
+        // error is cached
+        let entry_ = signer_with_cache.get_testing_only(action_4.clone()).await;
+        assert!(matches!(
+            entry_.unwrap().lock().await.clone().unwrap().unwrap_err(),
+            BridgeError::ActionIsNotGovernanceAction { .. }
+        ));
+    }
+    // TODO: add tests for BridgeRequestHandler (need to hook up local eth node)
 }

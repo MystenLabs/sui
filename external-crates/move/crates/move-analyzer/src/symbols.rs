@@ -85,7 +85,7 @@ use url::Url;
 use move_command_line_common::files::FileHash;
 use move_compiler::{
     editions::Flavor,
-    expansion::ast::{Fields, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
+    expansion::ast::{self as E, Fields, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
     parser::ast::{self as P, StructName},
     shared::{Identifier, Name},
@@ -102,9 +102,6 @@ use move_symbol_pool::Symbol;
 /// Enabling/disabling the language server reporting readiness to support go-to-def and
 /// go-to-references to the IDE.
 pub const DEFS_AND_REFS_SUPPORT: bool = true;
-/// Building Move code requires a larger stack size on Windows (16M has been chosen somewhat
-/// arbitrarily)
-pub const STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Copy)]
 /// Location of a definition's identifier
@@ -664,7 +661,6 @@ impl SymbolicatorRunner {
         let runner = SymbolicatorRunner { mtx_cvar };
 
         thread::Builder::new()
-            .stack_size(STACK_SIZE_BYTES)
             .spawn(move || {
                 let (mtx, cvar) = &*thread_mtx_cvar;
                 // Locations opened in the IDE (files or directories) for which manifest file is missing
@@ -1076,7 +1072,7 @@ pub fn get_symbols(
     let mut def_info = BTreeMap::new();
 
     for (pos, module_ident, module_def) in typed_modules {
-        let mod_ident_str = format!("{}", module_ident);
+        let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         let (defs, symbols) = get_mod_outer_defs(
             &pos,
             &sp(pos, *module_ident),
@@ -1134,7 +1130,7 @@ pub fn get_symbols(
     };
 
     for (pos, module_ident, module_def) in typed_modules {
-        let mod_ident_str = format!("{}", module_ident);
+        let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         typing_symbolicator.use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
         typing_symbolicator.alias_lengths = mod_to_alias_lengths.get(&mod_ident_str).unwrap();
         typing_symbolicator.mod_symbols(module_def);
@@ -1164,6 +1160,26 @@ pub fn get_symbols(
     eprintln!("get_symbols load complete");
 
     Ok((Some(symbols), ide_diagnostics))
+}
+
+/// Produces module ident string of the form pkg_name::module_name to be used as a map key.
+/// It's important that these are consistent between parsing AST and typed AST,
+fn parsing_mod_ident_to_map_key(mod_ident: &P::ModuleIdent_) -> String {
+    format!("{}", mod_ident).to_string()
+}
+
+/// Produces module ident string of the form pkg_name::module_name to be used as a map key
+/// It's important that these are consistent between parsing AST and typed AST,
+fn expansion_mod_ident_to_map_key(mod_ident: &E::ModuleIdent_) -> String {
+    use E::Address as A;
+    match mod_ident.address {
+        A::Numerical {
+            name: None, value, ..
+        } => format!("{value}::{}", mod_ident.module).to_string(),
+        A::Numerical { name: Some(n), .. } | A::NamedUnassigned(n) => {
+            format!("{n}::{}", mod_ident.module).to_string()
+        }
+    }
 }
 
 /// Get empty symbols
@@ -1377,7 +1393,7 @@ fn get_mod_outer_defs(
     // insert use of the module name in the definition itself
     let mod_name = ident.module;
     if let Some(mod_name_start) = get_start_loc(&mod_name.loc(), files, file_id_mapping) {
-        let mod_ident_str = format!("{}", ident);
+        let mod_ident_str = expansion_mod_ident_to_map_key(&ident);
         use_def_map.insert(
             mod_name_start.line,
             UseDef::new(
@@ -1562,7 +1578,7 @@ impl<'a> ParsingSymbolicator<'a> {
                 self.exp_symbols(e2);
             }
             E::Loop(e) => self.exp_symbols(e),
-            E::Labled(_, e) => self.exp_symbols(e),
+            E::Labeled(_, e) => self.exp_symbols(e),
             E::Block(seq) => self.seq_symbols(seq),
             E::ExpList(l) => l.iter().for_each(|e| self.exp_symbols(e)),
             E::Assign(e1, e2) => {
@@ -1625,7 +1641,7 @@ impl<'a> ParsingSymbolicator<'a> {
     fn use_decl_symbols(&mut self, use_decl: &P::UseDecl) {
         match &use_decl.use_ {
             P::Use::ModuleUse(mod_ident, mod_use) => {
-                let mod_ident_str = format!("{}", mod_ident);
+                let mod_ident_str = parsing_mod_ident_to_map_key(&mod_ident.value);
                 let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
                     return;
                 };
@@ -2281,7 +2297,7 @@ impl<'a> TypingSymbolicator<'a> {
         let mod_ident = mod_call.module;
         let mod_def = self
             .mod_outer_defs
-            .get(&format!("{}", mod_ident.value))
+            .get(&expansion_mod_ident_to_map_key(&mod_ident.value))
             .unwrap();
 
         if mod_def.functions.get(&mod_call.name.value()).is_none() {
@@ -2370,7 +2386,7 @@ impl<'a> TypingSymbolicator<'a> {
 
     /// Add use of a const identifier
     fn add_const_use_def(&mut self, module_ident: &ModuleIdent, use_name: &Symbol, use_pos: &Loc) {
-        let mod_ident_str = format!("{}", module_ident.value);
+        let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
         };
@@ -2441,7 +2457,7 @@ impl<'a> TypingSymbolicator<'a> {
         use_name: &Symbol,
         use_pos: &Loc,
     ) {
-        let mod_ident_str = format!("{}", module_ident.value);
+        let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
         };
@@ -2490,7 +2506,7 @@ impl<'a> TypingSymbolicator<'a> {
 
     /// Add use of a struct identifier
     fn add_struct_use_def(&mut self, module_ident: &ModuleIdent, use_name: &Symbol, use_pos: &Loc) {
-        let mod_ident_str = format!("{}", module_ident);
+        let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
         };
@@ -2544,7 +2560,7 @@ impl<'a> TypingSymbolicator<'a> {
         use_name: &Symbol,
         use_pos: &Loc,
     ) {
-        let mod_ident_str = format!("{}", module_ident);
+        let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         let Some(name_start) = get_start_loc(use_pos, self.files, self.file_id_mapping) else {
             debug_assert!(false);
             return;
@@ -5937,4 +5953,23 @@ fn dot_call_test() {
         "let val: u64",
         None,
     );
+}
+
+#[test]
+/// Checks if module identifiers used during symbolication process at both parsing and typing are
+/// the same. They are used as a key to a map and if they look differently, it may lead to a crash
+/// due to keys used for insertion/ retrieval being different.
+fn mod_ident_uniform_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/mod-ident-uniform");
+
+    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M1.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    symbols.file_use_defs.get(&cpath).unwrap();
 }

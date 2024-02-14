@@ -615,7 +615,7 @@ fn download_and_compile(
 
     if !dest_canonical_binary.exists() {
         // Check the platform and proceed if we can download a binary. If not, the user should follow error instructions to sideload the binary.
-        let platform = detect_platform(&root, compiler_version, &dest_canonical_binary)?;
+        let mut platform = detect_platform(&root, compiler_version, &dest_canonical_binary)?;
         // Download if binary does not exist.
         let mainnet_url = format!(
             "https://github.com/MystenLabs/sui/releases/download/mainnet-v{compiler_version}/sui-mainnet-v{compiler_version}-{platform}.tgz",
@@ -628,22 +628,22 @@ fn download_and_compile(
         );
 
         let mut response = match ureq::get(&mainnet_url).call() {
-	    Ok(response) => response,
-	    Err(ureq::Error::Status(404, _)) => {
-		println!(
-		    "{} sui mainnet compiler {} not available, attempting to download testnet compiler release...",
-		    "WARNING".bold().yellow(),
-		    compiler_version.yellow()
-		);
-		println!(
-		    "{} testnet compiler @ {} (this may take a while)",
-		    "DOWNLOADING".bold().green(),
-		    compiler_version.yellow()
-		);
-		let testnet_url = format!("https://github.com/MystenLabs/sui/releases/download/testnet-v{compiler_version}/sui-testnet-v{compiler_version}-{platform}.tgz");
-		ureq::get(&testnet_url).call()?
-	    }
-	    Err(e) => return Err(e.into()),
+            Ok(response) => response,
+            Err(ureq::Error::Status(404, _)) => {
+                println!(
+                    "{} sui mainnet compiler {} not available, attempting to download testnet compiler release...",
+                    "WARNING".bold().yellow(),
+                    compiler_version.yellow()
+                );
+                println!(
+                    "{} testnet compiler @ {} (this may take a while)",
+                    "DOWNLOADING".bold().green(),
+                    compiler_version.yellow()
+                );
+                let testnet_url = format!("https://github.com/MystenLabs/sui/releases/download/testnet-v{compiler_version}/sui-testnet-v{compiler_version}-{platform}.tgz");
+                ureq::get(&testnet_url).call()?
+            }
+            Err(e) => return Err(e.into()),
         }.into_reader();
 
         let dest_tarball = dest_version.join(format!("{}.tgz", compiler_version));
@@ -664,6 +664,9 @@ fn download_and_compile(
             .map_err(|e| anyhow!("failed to untar compiler binary: {e}"))?;
 
         let mut dest_binary = dest_version.clone();
+        if platform == "windows-x86_64" {
+            platform = format!("{platform}.exe");
+        }
         dest_binary.extend(["target", "release", &format!("sui-{platform}")]);
         let dest_binary_os = OsStr::new(dest_binary.as_path());
         set_executable_permission(dest_binary_os)?;
@@ -715,14 +718,14 @@ fn detect_platform(
         ("linux", "x86_64") => "ubuntu-x86_64",
         ("windows", "x86_64") => "windows-x86_64",
         (os, arch) => bail!(
-	    "The package {} needs to be built with sui compiler version {compiler_version} but there \
-	     is no binary release available to download for your platform:\n\
-	     Operating System: {os}\n\
-	     Architecture: {arch}\n\
-	     You can manually put a `sui` binary for your platform in {} and rerun your command to continue.",
-	    package_path.display(),
-	    dest_dir.display(),
-	),
+            "The package {} needs to be built with sui compiler version {compiler_version} but there \
+             is no binary release available to download for your platform:\n\
+             Operating System: {os}\n\
+             Architecture: {arch}\n\
+             You can manually put a `sui` binary for your platform in {} and rerun your command to continue.",
+            package_path.display(),
+            dest_dir.display(),
+        ),
     };
     Ok(s.into())
 }

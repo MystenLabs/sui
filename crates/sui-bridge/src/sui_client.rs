@@ -313,7 +313,7 @@ impl SuiClientInner for SuiSdkClient {
     ) -> Result<BridgeActionStatus, BridgeError> {
         match &action {
             BridgeAction::SuiToEthBridgeAction(_) | BridgeAction::EthToSuiBridgeAction(_) => (),
-            _ => return Err(BridgeError::NotTokenTransferAction),
+            _ => return Err(BridgeError::ActionIsNotTokenTransferAction),
         };
         let package_id = *get_bridge_package_id();
         let key = serde_json::json!(

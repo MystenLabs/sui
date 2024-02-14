@@ -16,12 +16,12 @@ use sui_archival::{
     create_file_metadata_from_bytes, finalize_manifest, read_manifest_from_bytes, FileType,
     Manifest, CHECKPOINT_FILE_MAGIC, SUMMARY_FILE_MAGIC,
 };
-use sui_data_ingestion_core::Worker;
+use sui_data_ingestion_core::{Worker, MAX_CHECKPOINTS_IN_PROGRESS};
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::{compress, FileCompression, StorageFormat};
 use sui_types::base_types::{EpochId, ExecutionData};
 use sui_types::full_checkpoint_content::CheckpointData;
-use sui_types::messages_checkpoint::FullCheckpointContents;
+use sui_types::messages_checkpoint::{CheckpointSequenceNumber, FullCheckpointContents};
 use tokio::sync::Mutex;
 use url::Url;
 
@@ -164,30 +164,39 @@ impl Worker for ArchivalWorker {
         let contents_blob = Blob::encode(&full_checkpoint_contents, BlobEncoding::Bcs)?;
         let blob_size = contents_blob.size();
         let summary_blob = Blob::encode(&checkpoint.checkpoint_summary, BlobEncoding::Bcs)?;
-        state.buffer.extend(contents_blob.data);
-        state.summary_buffer.extend(summary_blob.data);
-        state.checkpoint_range.end += 1;
 
         if !state.buffer.is_empty()
             && (((state.buffer.len() + blob_size) > self.commit_file_size)
                 || state.epoch != epoch
+                || (state.checkpoint_range.end - state.checkpoint_range.start)
+                    > (MAX_CHECKPOINTS_IN_PROGRESS / 2).try_into()?
                 || state.last_commit_instant.elapsed() > self.commit_duration)
         {
             self.upload(&state).await?;
             state.epoch = epoch;
-            state.checkpoint_range = sequence_number + 1..sequence_number + 1;
+            state.checkpoint_range = sequence_number..sequence_number;
             state.buffer = vec![];
             state.summary_buffer = vec![];
             state.last_commit_instant = Instant::now();
             state.should_update_progress = true;
         }
+        contents_blob.write(&mut state.buffer)?;
+        summary_blob.write(&mut state.summary_buffer)?;
+        state.checkpoint_range.end += 1;
         Ok(())
     }
 
-    async fn save_progress(&self) -> bool {
+    async fn save_progress(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Option<CheckpointSequenceNumber> {
         let mut state = self.state.lock().await;
         let should_update_progress = state.should_update_progress;
         state.should_update_progress = false;
-        should_update_progress
+        if should_update_progress && sequence_number > 0 {
+            Some(sequence_number - 1)
+        } else {
+            None
+        }
     }
 }

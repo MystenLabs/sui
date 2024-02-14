@@ -33,6 +33,14 @@ pub(crate) trait Store: Send + Sync {
         start_round: Round,
     ) -> ConsensusResult<Vec<VerifiedBlock>>;
 
+    /// Reads an author's blocks from the last produced round up to `num_of_rounds` before (assuming such many rounds exist) in
+    /// round ascending order.
+    fn scan_last_blocks_by_author(
+        &self,
+        author: AuthorityIndex,
+        num_of_rounds: u64,
+    ) -> ConsensusResult<Vec<VerifiedBlock>>;
+
     /// Reads the last commit.
     fn read_last_commit(&self) -> ConsensusResult<Option<Commit>>;
 

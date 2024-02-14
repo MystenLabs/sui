@@ -1111,24 +1111,25 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
 
 // Parse an expression term:
 //      Term =
-//          "break" <Exp>?
-//          | "continue"
+//          "break" <BlockLabel>? <Exp>?
+//          | "break" <BlockLabel>? "{" <Exp> "}"
+//          | "continue" <BlockLabel>?
 //          | "vector" ('<' Comma<Type> ">")? "[" Comma<Exp> "]"
 //          | <Value>
 //          | "(" Comma<Exp> ")"
 //          | "(" <Exp> ":" <Type> ")"
 //          | "(" <Exp> "as" <Type> ")"
-//          | <Label> <Exp>
+//          | <BlockLabel> ":" <Exp>
 //          | "{" <Sequence>
-//          | "if" "(" <Exp> ")" <Exp> "else" "{" <Exp> "}"
-//          | "if" "(" <Exp> ")" "{" <Exp> "}"
+//          | "if" "(" <Exp> ")" <Exp> "else" (<BlockLabel> ":")? "{" <Exp> "}"
+//          | "if" "(" <Exp> ")" (<BlockLabel> ":")? "{" <Exp> "}"
 //          | "if" "(" <Exp> ")" <Exp> ("else" <Exp>)?
-//          | "while" "(" <Exp> ")" "{" <Exp> "}"
+//          | "while" "(" <Exp> ")" (<BlockLabel> ":")? "{" <Exp> "}"
 //          | "while" "(" <Exp> ")" <Exp> (SpecBlock)?
 //          | "loop" <Exp>
-//          | "loop" "{" <Exp> "}"
-//          | "return" "{" <Exp> "}"
-//          | "return" <Exp>?
+//          | "loop" (<BlockLabel> ":")? "{" <Exp> "}"
+//          | "return" <BlockLabel>? "{" <Exp> "}"
+//          | "return" <BlockLabel>? <Exp>?
 //          | "abort" "{" <Exp> "}"
 //          | "abort" <Exp>
 fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
@@ -1287,6 +1288,9 @@ fn is_control_exp(tok: Tok) -> bool {
     )
 }
 
+// An identifier with a leading ', used to label blocks and control flow
+//      BlockLabel = <BlockIdentifierValue>
+// roughly "'"<Identifier> but whitespace sensitive
 fn parse_block_label(context: &mut Context) -> Result<BlockLabel, Box<Diagnostic>> {
     let id: Symbol = match context.tokens.peek() {
         Tok::BlockLabel => {
@@ -1316,6 +1320,9 @@ fn parse_block_label(context: &mut Context) -> Result<BlockLabel, Box<Diagnostic
 // AND NOT,       if (cond) e1 else ({ e2 } + 1)
 // But otherwise, if (cond) e1 else e2 + 1
 // should be,     if (cond) e1 else (e2 + 1)
+// This also aplies to any named block
+// e.g.           if (cond) e1 else 'a: { e2 } + 1
+// should be,    (if (cond) e1 else 'a: { e2 }) + 1
 fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnostic>> {
     fn parse_exp_or_sequence(context: &mut Context) -> Result<(Exp, bool), Box<Diagnostic>> {
         match context.tokens.peek() {
@@ -1331,6 +1338,16 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
                     block_,
                 );
                 Ok((exp, true))
+            }
+            Tok::BlockLabel => {
+                let start_loc = context.tokens.start_loc();
+                let label = parse_block_label(context)?;
+                consume_token(context.tokens, Tok::Colon)?;
+                let (e, ends_in_block) = parse_exp_or_sequence(context)?;
+                let end_loc = context.tokens.previous_end_loc();
+                let labeled_ = Exp_::Labeled(label, Box::new(e));
+                let labeled = spanned(context.tokens.file_hash(), start_loc, end_loc, labeled_);
+                Ok((labeled, ends_in_block))
             }
             _ => Ok((parse_exp(context)?, false)),
         }
@@ -1438,8 +1455,12 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
         Tok::BlockLabel => {
             let name = parse_block_label(context)?;
             consume_token(context.tokens, Tok::Colon)?;
-            let (e, ends_in_block) = parse_exp_or_sequence(context)?;
-            (Exp_::Labled(name, Box::new(e)), ends_in_block)
+            let (e, ends_in_block) = if is_control_exp(context.tokens.peek()) {
+                parse_control_exp(context)?
+            } else {
+                parse_exp_or_sequence(context)?
+            };
+            (Exp_::Labeled(name, Box::new(e)), ends_in_block)
         }
         _ => unreachable!(),
     };
@@ -1596,12 +1617,26 @@ fn parse_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             let (ret_ty_opt, body) = if context.tokens.peek() == Tok::MinusGreater {
                 context.tokens.advance()?;
                 let ret_ty = parse_type(context)?;
+                let label_opt = if matches!(context.tokens.peek(), Tok::BlockLabel) {
+                    let start_loc = context.tokens.start_loc();
+                    let label = parse_block_label(context)?;
+                    consume_token(context.tokens, Tok::Colon)?;
+                    Some((start_loc, label))
+                } else {
+                    None
+                };
                 let start_loc = context.tokens.start_loc();
                 consume_token(context.tokens, Tok::LBrace)?;
                 let block_ = Exp_::Block(parse_sequence(context)?);
                 let end_loc = context.tokens.previous_end_loc();
                 let block = spanned(context.tokens.file_hash(), start_loc, end_loc, block_);
-                (Some(ret_ty), block)
+                let body = if let Some((lbl_start_loc, label)) = label_opt {
+                    let labeled_ = Exp_::Labeled(label, Box::new(block));
+                    spanned(context.tokens.file_hash(), lbl_start_loc, end_loc, labeled_)
+                } else {
+                    block
+                };
+                (Some(ret_ty), body)
             } else {
                 (None, parse_exp(context)?)
             };
