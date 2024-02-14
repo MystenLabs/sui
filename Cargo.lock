@@ -5755,6 +5755,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30e22bd8629359895450b59ea7a776c850561b96a3b1d31321c1949d9e6c9146"
 
 [[package]]
+name = "ipnetwork"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf466541e9d546596ee94f9f69590f89473455f88372423e0008fc1a7daf100e"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "iri-string"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13119,8 +13128,10 @@ dependencies = [
  "const-str",
  "fastcrypto",
  "git-version",
+ "hex",
  "http-body",
  "hyper",
+ "ipnetwork",
  "itertools 0.10.5",
  "mime",
  "multiaddr",
@@ -16328,6 +16339,7 @@ dependencies = [
  "internment",
  "io-lifetimes",
  "ipnet",
+ "ipnetwork",
  "iri-string",
  "is-terminal",
  "itertools 0.10.5",

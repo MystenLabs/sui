@@ -398,6 +398,7 @@ instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["arc"] }
 io-lifetimes = { version = "1" }
+ipnetwork = { version = "0.20" }
 iri-string = { version = "0.4" }
 is-terminal = { version = "0.4", default-features = false }
 itertools-93f6ce9d446188ac = { package = "itertools", version = "0.10" }
@@ -1285,6 +1286,7 @@ instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["arc"] }
 io-lifetimes = { version = "1" }
+ipnetwork = { version = "0.20" }
 iri-string = { version = "0.4" }
 is-terminal = { version = "0.4", default-features = false }
 itertools-93f6ce9d446188ac = { package = "itertools", version = "0.10" }

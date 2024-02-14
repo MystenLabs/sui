@@ -73,8 +73,15 @@ pub async fn expect_valid_public_key<B>(
     mut request: Request<B>,
     next: Next<B>,
 ) -> Result<Response, (StatusCode, &'static str)> {
-    let Some(peer) = allower.get(tls_connect_info.public_key().unwrap()) else {
-        error!("node with unknown pub key tried to connect");
+    let Some(public_key) = tls_connect_info.public_key() else {
+        error!("unable to obtain public key from connecting client");
+        MIDDLEWARE_OPS
+            .with_label_values(&["expect_valid_public_key", "missing-public-key"])
+            .inc();
+        return Err((StatusCode::FORBIDDEN, "unknown clients are not allowed"));
+    };
+    let Some(peer) = allower.get(public_key) else {
+        error!("node with unknown pub key tried to connect {}", public_key);
         MIDDLEWARE_OPS
             .with_label_values(&[
                 "expect_valid_public_key",

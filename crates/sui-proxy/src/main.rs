@@ -73,14 +73,16 @@ async fn main() -> Result<()> {
     let listener = std::net::TcpListener::bind(config.listen_address).unwrap();
 
     let (tls_config, allower) =
-        if config.json_rpc.certificate_file.is_none() || config.json_rpc.private_key.is_none() {
+        // we'll only use the dynamic peers in some cases - it makes little sense to run with the statics
+        // since this first mode allows all.
+        if config.dynamic_peers.certificate_file.is_none() || config.dynamic_peers.private_key.is_none() {
             (
-                create_server_cert_default_allow(config.json_rpc.hostname.unwrap())
+                create_server_cert_default_allow(config.dynamic_peers.hostname.unwrap())
                     .expect("unable to create self-signed server cert"),
                 None,
             )
         } else {
-            create_server_cert_enforce_peer(config.json_rpc)
+            create_server_cert_enforce_peer(config.dynamic_peers, config.static_peers)
                 .expect("unable to create tls server config")
         };
     let histogram_listener = std::net::TcpListener::bind(config.histogram_address).unwrap();
