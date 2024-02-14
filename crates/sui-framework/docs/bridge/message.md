@@ -566,9 +566,10 @@ Payload contains more bytes than expected
         payload
     } = <a href="message.md#0xb_message">message</a>;
 
-    <b>let</b> <a href="message.md#0xb_message">message</a> = <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[];
-    <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> <a href="message.md#0xb_message">message</a>, message_type);
-    <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> <a href="message.md#0xb_message">message</a>, message_version);
+    <b>let</b> <a href="message.md#0xb_message">message</a> = <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[
+        message_type,
+        message_version
+    ];
     // <a href="dependencies/move-stdlib/bcs.md#0x1_bcs">bcs</a> serializes u64 <b>as</b> 8 bytes
     <a href="dependencies/move-stdlib/vector.md#0x1_vector_append">vector::append</a>(&<b>mut</b> <a href="message.md#0xb_message">message</a>, <a href="message.md#0xb_message_reverse_bytes">reverse_bytes</a>(<a href="dependencies/move-stdlib/bcs.md#0x1_bcs_to_bytes">bcs::to_bytes</a>(&seq_num)));
     <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> <a href="message.md#0xb_message">message</a>, source_chain);

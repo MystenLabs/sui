@@ -25,7 +25,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x04b5262992abe8fe89fb5f3fda28ba2ec4c60c472eb25fd616a677eba5f64cf8",
+            "id": "0x24f9c1336fc48bd82e06444cd3d12d7574f4a0677c191823568d7c7a92e2ec62",
             "value": "0"
           }
         }
@@ -50,7 +50,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x04b5262992abe8fe89fb5f3fda28ba2ec4c60c472eb25fd616a677eba5f64cf8",
+            "id": "0x24f9c1336fc48bd82e06444cd3d12d7574f4a0677c191823568d7c7a92e2ec62",
             "value": "1"
           }
         }
@@ -62,7 +62,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x04b5262992abe8fe89fb5f3fda28ba2ec4c60c472eb25fd616a677eba5f64cf8",
+            "id": "0x24f9c1336fc48bd82e06444cd3d12d7574f4a0677c191823568d7c7a92e2ec62",
             "value": "0"
           }
         }
@@ -94,7 +94,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x04b5262992abe8fe89fb5f3fda28ba2ec4c60c472eb25fd616a677eba5f64cf8",
+            "id": "0x24f9c1336fc48bd82e06444cd3d12d7574f4a0677c191823568d7c7a92e2ec62",
             "value": "1"
           }
         }
@@ -121,7 +121,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x04b5262992abe8fe89fb5f3fda28ba2ec4c60c472eb25fd616a677eba5f64cf8",
+            "id": "0x24f9c1336fc48bd82e06444cd3d12d7574f4a0677c191823568d7c7a92e2ec62",
             "value": "1"
           }
         }
@@ -138,7 +138,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x04b5262992abe8fe89fb5f3fda28ba2ec4c60c472eb25fd616a677eba5f64cf8",
+            "id": "0x24f9c1336fc48bd82e06444cd3d12d7574f4a0677c191823568d7c7a92e2ec62",
             "value": "0"
           }
         }
@@ -186,7 +186,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0x04b5262992abe8fe89fb5f3fda28ba2ec4c60c472eb25fd616a677eba5f64cf8",
+            "id": "0x24f9c1336fc48bd82e06444cd3d12d7574f4a0677c191823568d7c7a92e2ec62",
             "value": "1"
           }
         }

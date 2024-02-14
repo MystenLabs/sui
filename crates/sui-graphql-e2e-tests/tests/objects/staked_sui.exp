@@ -9,7 +9,7 @@ Response: {
     "objects": {
       "edges": [
         {
-          "cursor": "IPmGJVSOxf/IMNQKQMHOZtU3mFiiv6pB+djahS7VECZYAAAAAAAAAAA=",
+          "cursor": "IPQsbLqy8dRIUoG5aKNLKXtf6tiEX5oFTykvh8fnfTCYAAAAAAAAAAA=",
           "node": {
             "asMoveObject": {
               "asStakedSui": {
@@ -34,7 +34,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3 'run'. lines 37-37:
-events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [153, 86, 168, 228, 180, 219, 214, 182, 104, 86, 149, 117, 26, 158, 186, 103, 51, 165, 123, 228, 107, 189, 33, 55, 193, 64, 109, 98, 6, 22, 188, 24, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [49, 192, 216, 171, 126, 244, 236, 123, 194, 97, 29, 100, 93, 55, 34, 18, 80, 252, 20, 37, 62, 66, 23, 86, 69, 255, 10, 193, 81, 77, 41, 97, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
 created: object(3,0), object(3,1)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0)
 deleted: object(_), object(2,0)
@@ -52,12 +52,12 @@ Response: {
     "objects": {
       "edges": [
         {
-          "cursor": "IF56HomvLpordYC7XCUxEPzcdiKa1mXYxnbOZMrFfaoPAgAAAAAAAAA=",
+          "cursor": "IH0WHkzIEcFSrcLMx5CIG8jXaPJ3twD05zs6dvvgrrrMAgAAAAAAAAA=",
           "node": {
             "asMoveObject": {
               "asStakedSui": {
                 "principal": "10000000000",
-                "poolId": "0x9956a8e4b4dbd6b6685695751a9eba6733a57be46bbd2137c1406d620616bc18"
+                "poolId": "0x31c0d8ab7ef4ec7bc2611d645d37221250fc14253e42175645ff0ac1514d2961"
               }
             }
           }
@@ -68,18 +68,18 @@ Response: {
             "asMoveObject": {
               "asStakedSui": {
                 "principal": "40000",
-                "poolId": "0x9956a8e4b4dbd6b6685695751a9eba6733a57be46bbd2137c1406d620616bc18"
+                "poolId": "0x31c0d8ab7ef4ec7bc2611d645d37221250fc14253e42175645ff0ac1514d2961"
               }
             }
           }
         },
         {
-          "cursor": "IPmGJVSOxf/IMNQKQMHOZtU3mFiiv6pB+djahS7VECZYAgAAAAAAAAA=",
+          "cursor": "IPQsbLqy8dRIUoG5aKNLKXtf6tiEX5oFTykvh8fnfTCYAgAAAAAAAAA=",
           "node": {
             "asMoveObject": {
               "asStakedSui": {
                 "principal": "20000000000000000",
-                "poolId": "0x9956a8e4b4dbd6b6685695751a9eba6733a57be46bbd2137c1406d620616bc18"
+                "poolId": "0x31c0d8ab7ef4ec7bc2611d645d37221250fc14253e42175645ff0ac1514d2961"
               }
             }
           }
@@ -90,7 +90,7 @@ Response: {
       "stakedSuis": {
         "edges": [
           {
-            "cursor": "IF56HomvLpordYC7XCUxEPzcdiKa1mXYxnbOZMrFfaoPAgAAAAAAAAA=",
+            "cursor": "IH0WHkzIEcFSrcLMx5CIG8jXaPJ3twD05zs6dvvgrrrMAgAAAAAAAAA=",
             "node": {
               "principal": "10000000000"
             }
