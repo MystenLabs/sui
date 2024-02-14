@@ -24,7 +24,7 @@
 /// require KYC.
 ///
 /// - KYC in this example is represented by an allowlist rule
-module examples::regulated_coin {
+module examples::regulated_token {
     use std::option;
     use sui::vec_map;
     use sui::transfer;
@@ -39,12 +39,12 @@ module examples::regulated_coin {
     use examples::limiter_rule::{Self as limiter, Limiter};
 
     /// OTW and the type for the Token.
-    struct REGULATED_COIN has drop {}
+    struct REGULATED_TOKEN has drop {}
 
     // Most of the magic happens in the initializer for the demonstration
     // purposes; however half of what's happening here could be implemented as
     // a single / set of PTBs.
-    fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
+    fun init(otw: REGULATED_TOKEN, ctx: &mut TxContext) {
         let treasury_cap = create_currency(otw, ctx);
         let (policy, cap) = token::new_policy(&treasury_cap, ctx);
 
@@ -109,21 +109,21 @@ module examples::regulated_coin {
         treasury_cap
     }
 
-    #[test_only] friend examples::regulated_coin_tests;
+    #[test_only] friend examples::regulated_token_tests;
 }
 
 #[test_only]
-/// Implements tests for most common scenarios for the regulated coin example.
+/// Implements tests for most common scenarios for the regulated token example.
 /// We don't test the currency itself but rather use the same set of regulations
 /// on a test currency.
-module examples::regulated_coin_tests {
+module examples::regulated_token_tests {
     use sui::coin;
     use sui::tx_context::TxContext;
 
     use sui::token::{Self, TokenPolicy, TokenPolicyCap};
     use sui::token_test_utils::{Self as test, TEST};
 
-    use examples::regulated_coin::set_rules;
+    use examples::regulated_token::set_rules;
 
     use examples::allowlist_rule as allowlist;
     use examples::denylist_rule as denylist;
