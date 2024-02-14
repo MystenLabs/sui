@@ -95,7 +95,6 @@ impl SuinsIndexer {
             checkpoint.parse_record_deletions(self, transaction);
         }
 
-        // let
         (
             // Convert our name_records & wrappers into a list of updates for the DB.
             checkpoint.prepare_db_updates(),
