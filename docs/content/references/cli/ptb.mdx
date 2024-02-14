@@ -43,11 +43,11 @@ The main philosophy behind the CLI PTB support is to enable a user to either bui
 Besides using existing [traditional PTB](/concepts/transactions/prog-txn-blocks/) related concepts, we introduce a few new and important concepts for this command. 
 
 :::info
-Note that all the following examples were tested using a `bash` shell environment, and your experience may vary depending on how your shell will interpret command line arguments and values (e.g., zsh requires to pass values in brackes by adding quotes "[]", though this is not required in bash).
+Note that all the following examples were tested using a `bash` shell environment, and your experience may vary depending on how your shell will interpret command line arguments and values (e.g., zsh requires to pass values in brackets by adding quotes around it: "[]"; bash accepts them without quotes).
 :::
 
 ### Assign
-The `--assign` argument is used to bind values to variables. There are primarily two ways to use the `--assign` command:
+The `--assign` argument is used to bind values to variables. There are two ways you can use it:
 * assign a value to a variable
 * assign a variable to the result of the previous command
 
@@ -55,7 +55,7 @@ Let's look at the first case where we assign a value to a variable. Let's say we
 ```bash
 sui client ptb \
 --assign my_variable none \
---move-call 0x1::option::is_none "<u64>" my_variable
+--move-call 0x1::option::is_none "<u64>" my_variable \
 --gas-budget 50000000
 ```
 
@@ -99,7 +99,7 @@ sui client ptb \
 Circular file inclusions (e.g., `split_coins.ptb` has a ``--file split_coins.ptb`) are not allowed and the tool will throw an error if this happens.
 :::
 :::info
-If you include multiple PTBs from files and want to check the order of your transactions, use the `--preview` flag to output a list of the transactions in the PTB instead of directly executing it.
+If you include multiple PTBs from files and want to check the order of your transactions, use the `--preview` flag to display a list of the transactions in the PTB instead of executing it.
 :::
 
 ### Pick Gas Budget
@@ -125,8 +125,29 @@ The `--pick-gas-budget` flag is used when we need to disambiguate which gas budg
 
 ## Examples
 
-The following examples demonstrate how to use the `client ptb` command.
+The following examples demonstrate how to use the `client ptb` command. Most of these examples can be copied to a file and executed using `sui client ptb --file to_filepath`.
 
+### Split, destroy, and merge coins
+
+The following example showcases how to split a gas coin into multiple coins, make a move call to destroy one or more of the new coins, and finally merge the coins that were not destroyed back into the gas coin. It also showcases how to use framework name resolution (e.g., `sui::coin` instead of `0x1::coin`) and how to refer to different values in an array using the `.` syntax.
+
+```bash
+# Split off from gas
+--split-coins gas [0,1,2,3]
+--assign coins
+--move-call sui::coin::destroy_zero<sui::sui::SUI> coins.0
+# Can further split a split coin (and through variable bindings/result accesses)
+--split-coins coins.1 [0,0]
+--assign zcoins
+# Destroy both new coins
+--move-call sui::coin::destroy_zero<sui::sui::SUI> zcoins.0
+--move-call sui::coin::destroy_zero<sui::sui::SUI> zcoins.1
+# Can merge the split coins back
+--merge-coins gas [coins.1, coins.2, coins.3]
+--gas-budget 10000000
+```
+
+### 
 
 ## JSON output
 
