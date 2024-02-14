@@ -357,6 +357,10 @@ impl Scenario {
             );
         }
     }
+
+    fn obj_id(&self, short_id: u32) -> ObjectID {
+        *self.id_map.get(&short_id).expect("no such id")
+    }
 }
 
 #[tokio::test]
@@ -466,6 +470,46 @@ async fn test_out_of_order_commit() {
         let tx2 = s.do_tx().await;
 
         s.commit(tx2).await.unwrap_err();
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_lt_or_eq() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        let check_all_versions = |s: &Scenario| {
+            for i in 1u64..=3 {
+                let v = SequenceNumber::from_u64(i);
+                assert_eq!(
+                    s.cache()
+                        .find_object_lt_or_eq_version(s.obj_id(1), v)
+                        .unwrap()
+                        .unwrap()
+                        .version(),
+                    v
+                );
+            }
+        };
+
+        // make 3 versions of the object
+        s.with_created(&[1]);
+        let tx1 = s.do_tx().await;
+        s.with_mutated(&[1]);
+        let tx2 = s.do_tx().await;
+        s.with_mutated(&[1]);
+        let tx3 = s.do_tx().await;
+
+        // make sure we find the correct version regardless of which
+        // txns are committed vs uncommitted. Scenario::iterate repeats
+        // the test with cache eviction at each possible point.
+        check_all_versions(&s);
+        s.commit(tx1).await.unwrap();
+        check_all_versions(&s);
+        s.commit(tx2).await.unwrap();
+        check_all_versions(&s);
+        s.commit(tx3).await.unwrap();
+        check_all_versions(&s);
     })
     .await;
 }

@@ -45,21 +45,14 @@ impl<V> CachedVersionMap<V> {
         self.values.push_back((version, value));
     }
 
-    pub fn all_lt_or_eq_rev<'a>(
+    pub fn all_versions_lt_or_eq_descending<'a>(
         &'a self,
         version: &'a SequenceNumber,
     ) -> impl Iterator<Item = &'a (SequenceNumber, V)> {
-        self.values
-            .iter()
-            .rev()
-            .take_while(move |(v, _)| v <= version)
+        self.values.iter().rev().filter(move |(v, _)| v <= version)
     }
 
     pub fn get(&self, version: &SequenceNumber) -> Option<&V> {
-        if self.values.is_empty() {
-            return None;
-        }
-
         for (v, value) in self.values.iter().rev() {
             match v.cmp(version) {
                 Ordering::Less => return None,
@@ -91,15 +84,14 @@ impl<V> CachedVersionMap<V> {
         self.values.front()
     }
 
-    // pop items from the front of the map until the first item is >= version
-    pub fn truncate(&mut self, limit: usize) {
+    // pop items from the front of the collection until the size is <= limit
+    pub fn truncate_to(&mut self, limit: usize) {
         while self.values.len() > limit {
             self.values.pop_front();
         }
     }
 
-    // remove the value if it is the first element in values. otherwise mark it
-    // for removal.
+    // remove the value if it is the first element in values.
     pub fn pop_oldest(&mut self, version: &SequenceNumber) -> Option<V> {
         let oldest = self.values.pop_front()?;
         // if this assert fails it indicates we are committing transaction data out
@@ -190,15 +182,20 @@ mod tests {
     }
 
     #[test]
-    fn all_lt_or_eq_rev_with_existing_version() {
+    fn all_versions_lt_or_eq_descending_with_existing_version() {
         let mut map = CachedVersionMap::default();
         map.insert(seq(1), "First");
         map.insert(seq(2), "Second");
         let two = seq(2);
-        let result: Vec<_> = map.all_lt_or_eq_rev(&two).collect();
+        let result: Vec<_> = map.all_versions_lt_or_eq_descending(&two).collect();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].0, seq(2));
         assert_eq!(result[1].0, seq(1));
+
+        let one = seq(1);
+        let result: Vec<_> = map.all_versions_lt_or_eq_descending(&one).collect();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].0, seq(1));
     }
 
     #[test]
@@ -238,7 +235,7 @@ mod tests {
         for i in 1..=5 {
             map.insert(seq(i), format!("Item {}", i));
         }
-        map.truncate(3);
+        map.truncate_to(3);
         assert_eq!(map.values.len(), 3);
         assert_eq!(map.values.front().unwrap().0, seq(3));
     }

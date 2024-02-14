@@ -167,7 +167,7 @@ impl ExecutionCacheRead for PassthroughCache {
         self.store.get_lock(obj_ref, epoch_id)
     }
 
-    fn get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
+    fn _get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
         self.store.get_latest_lock_for_object_id(object_id)
     }
 
@@ -240,10 +240,10 @@ impl ExecutionCacheRead for PassthroughCache {
     fn get_marker_value(
         &self,
         object_id: &ObjectID,
-        version: &SequenceNumber,
+        version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<MarkerValue>> {
-        self.store.get_marker_value(object_id, version, epoch_id)
+        self.store.get_marker_value(object_id, &version, epoch_id)
     }
 
     fn get_latest_marker(
