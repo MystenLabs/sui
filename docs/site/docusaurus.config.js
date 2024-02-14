@@ -157,7 +157,7 @@ const config = {
 
         //... other Algolia params
       },
-      image: "img/og.jpg",
+      image: "img/sui-doc-og.png",
       docs: {
         sidebar: {
           autoCollapseCategories: true,
