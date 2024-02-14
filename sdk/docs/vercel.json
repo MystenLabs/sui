@@ -1,0 +1,5 @@
+{
+    "redirects": [
+        { "source": "/wallet-kit/:path*", "destination": "/dapp-kit", "permanent": true }
+    ]
+}
