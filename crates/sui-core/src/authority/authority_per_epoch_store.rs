@@ -2329,7 +2329,10 @@ impl AuthorityPerEpochStore {
             checkpoint_service.notify_checkpoint(&pending_checkpoint)?;
 
             if let Some(randomness_round) = randomness_round {
-                randomness_roots.insert(TransactionKey::RandomnessRound(randomness_round));
+                randomness_roots.insert(TransactionKey::RandomnessRound(
+                    self.epoch(),
+                    randomness_round,
+                ));
 
                 let pending_checkpoint = PendingCheckpointV2 {
                     roots: randomness_roots.into_iter().collect(),
@@ -2531,7 +2534,7 @@ impl AuthorityPerEpochStore {
                 batch.insert_batch(
                     &self.tables()?.assigned_shared_object_versions_v2,
                     iter::once((
-                        TransactionKey::RandomnessRound(round),
+                        TransactionKey::RandomnessRound(self.epoch(), round),
                         vec![(SUI_RANDOMNESS_STATE_OBJECT_ID, *version)],
                     )),
                 )?;

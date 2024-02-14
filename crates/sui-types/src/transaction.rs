@@ -2363,7 +2363,7 @@ impl<S> Envelope<SenderSignedData, S> {
     pub fn key(&self) -> TransactionKey {
         match &self.data().intent_message().value.kind() {
             TransactionKind::RandomnessStateUpdate(rsu) => {
-                TransactionKey::RandomnessRound(rsu.randomness_round)
+                TransactionKey::RandomnessRound(rsu.epoch, rsu.randomness_round)
             }
             _ => TransactionKey::Digest(*self.digest()),
         }
@@ -2375,9 +2375,10 @@ impl<S> Envelope<SenderSignedData, S> {
     // the second return type could change to Vec<TransactionKey>.
     pub fn non_digest_key(&self) -> Option<TransactionKey> {
         match &self.data().intent_message().value.kind() {
-            TransactionKind::RandomnessStateUpdate(rsu) => {
-                Some(TransactionKey::RandomnessRound(rsu.randomness_round))
-            }
+            TransactionKind::RandomnessStateUpdate(rsu) => Some(TransactionKey::RandomnessRound(
+                rsu.epoch,
+                rsu.randomness_round,
+            )),
             _ => None,
         }
     }
@@ -3075,7 +3076,7 @@ impl Display for CertifiedTransaction {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum TransactionKey {
     Digest(TransactionDigest),
-    RandomnessRound(RandomnessRound),
+    RandomnessRound(EpochId, RandomnessRound),
 }
 
 impl TransactionKey {
