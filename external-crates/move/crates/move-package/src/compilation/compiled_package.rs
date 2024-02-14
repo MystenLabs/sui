@@ -533,7 +533,7 @@ impl CompiledPackage {
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        source_file_reader: Option<Box<dyn FileReader>>,
+        file_reader: Option<Box<dyn FileReader>>,
         compiler_driver: impl FnMut(Compiler) -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
     ) -> Result<CompiledPackage> {
         let BuildResult {
@@ -547,7 +547,7 @@ impl CompiledPackage {
             resolved_package.clone(),
             transitive_dependencies,
             resolution_graph,
-            source_file_reader,
+            file_reader,
             compiler_driver,
         )?;
         let (file_map, all_compiled_units) = result;
