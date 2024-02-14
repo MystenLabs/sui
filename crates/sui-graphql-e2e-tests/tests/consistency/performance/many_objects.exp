@@ -14,7 +14,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1315788000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3 'create-checkpoint'. lines 43-43:
-Checkpoint created: 1
+Checkpoint created: 2
 
 task 4 'run-graphql'. lines 45-86:
 Response: {
@@ -147,7 +147,7 @@ mutated: object(0,0), object(2,997)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
 task 8 'create-checkpoint'. lines 94-94:
-Checkpoint created: 2
+Checkpoint created: 3
 
 task 9 'run-graphql'. lines 96-138:
 Response: {

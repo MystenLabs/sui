@@ -40,7 +40,7 @@ module Test::M1 {
 
 //# run Test::M1::create_many --sender A --args @A
 
-//# create-checkpoint
+//# create-checkpoint 2
 
 //# run-graphql
 {
