@@ -68,7 +68,7 @@ type CheckpointExecutionBuffer = FuturesOrdered<JoinHandle<VerifiedCheckpoint>>;
 /// The interval to log checkpoint progress, in # of checkpoints processed.
 const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
 
-const SCHEDULING_EVENT_FUTURE_TIMEOUT_MS: u64 = 1200;
+const SCHEDULING_EVENT_FUTURE_TIMEOUT_MS: u64 = 2000;
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum StopReason {
@@ -244,10 +244,8 @@ impl CheckpointExecutor {
                 // Check for newly synced checkpoints from StateSync.
                 received = timeout(scheduling_timeout, self.mailbox.recv()) => match received {
                     Err(_elapsed) => {
-                        error!(
-                            "Received no new synced checkpoints for {:?}. Next checkpoint to be scheduled: {}",
-                            scheduling_timeout,
-                            next_to_schedule,
+                        warn!(
+                            "Received no new synced checkpoints for {scheduling_timeout:?}. Next checkpoint to be scheduled: {next_to_schedule}",
                         );
                         fail_point!("cp_exec_scheduling_timeout_reached");
                     },
