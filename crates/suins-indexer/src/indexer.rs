@@ -72,20 +72,71 @@ impl SuinsIndexer {
             .is_some_and(|owner| owner == self.registry_table_id)
     }
 
+    /// Processes a checkpoint and produces a list of `updates` and a list of `removals`
+    ///
+    /// We can then use these to execute our DB bulk insertions + bulk deletions.
+    ///
+    /// Returns
+    /// - `Vec<VerifiedDomain>`: A list of NameRecord updates for the database (including sequence number)
+    /// - `Vec<String>`: A list of IDs to be deleted from the database (`field_id` is the matching column)
+    pub fn process_checkpoint(&self, data: &CheckpointData) -> (Vec<VerifiedDomain>, Vec<String>) {
+        let mut checkpoint = SuinsIndexerCheckpoint::new(data.checkpoint_summary.sequence_number);
+
+        // loop through all the transactions in the checkpoint
+        // Since the transactions are sequenced inside the checkpoint, we can safely assume
+        // that we have the latest data for each name record in the end of the loop.
+        for transaction in &data.transactions {
+            // Add all name record changes to the name_records HashMap.
+            // Remove any removals that got re-created.
+            checkpoint.parse_record_changes(self, &transaction.output_objects);
+
+            // Gather all removals from the transaction,
+            // and delete any name records from the name_records if it got deleted.
+            checkpoint.parse_record_deletions(self, transaction);
+        }
+
+        // let
+        (
+            // Convert our name_records & wrappers into a list of updates for the DB.
+            checkpoint.prepare_db_updates(),
+            checkpoint
+                .removals
+                .into_iter()
+                .map(|id| id.to_string())
+                .collect(),
+        )
+    }
+}
+
+pub struct SuinsIndexerCheckpoint {
+    /// A list of name records that have been updated in the checkpoint.
+    name_records: HashMap<ObjectID, NameRecordChange>,
+    /// A list of subdomain wrappers that have been created in the checkpoint.
+    subdomain_wrappers: HashMap<String, String>,
+    /// A list of name records that have been deleted in the checkpoint.
+    removals: HashSet<ObjectID>,
+    /// The sequence number of the checkpoint.
+    checkpoint_sequence_number: u64,
+}
+
+impl SuinsIndexerCheckpoint {
+    pub fn new(checkpoint_sequence_number: u64) -> Self {
+        Self {
+            name_records: HashMap::new(),
+            subdomain_wrappers: HashMap::new(),
+            removals: HashSet::new(),
+            checkpoint_sequence_number,
+        }
+    }
+
     /// Parses the name record changes + subdomain wraps.
     /// and pushes them into the supplied vector + hashmap.
     ///
     /// It is implemented in a way to do just a single iteration over the objects.
-    pub fn parse_name_record_changes(
-        &self,
-        objects: &[Object],
-        name_records: &mut HashMap<ObjectID, NameRecordChange>,
-        subdomain_wrappers: &mut HashMap<String, String>,
-        removals: &mut HashSet<ObjectID>,
-    ) {
+    pub fn parse_record_changes(&mut self, config: &SuinsIndexer, objects: &[Object]) {
         for object in objects {
             // Parse all the changes to a `NameRecord`
-            if self.is_name_record(object) {
+            if config.is_name_record(object) {
                 let name_record: Field<Domain, NameRecord> = object
                     .to_rust()
                     .unwrap_or_else(|| panic!("Failed to parse name record for {:?}", object));
@@ -95,17 +146,17 @@ impl SuinsIndexer {
                 // Remove from the removals list if it's there.
                 // The reason it might have been there is that the same name record might have been
                 // deleted in a previous transaction in the same checkpoint, and now it got re-created.
-                removals.remove(&id);
+                self.removals.remove(&id);
 
-                name_records.insert(id, NameRecordChange(name_record));
+                self.name_records.insert(id, NameRecordChange(name_record));
             }
             // Parse subdomain wrappers and save them in our hashmap.
             // Later, we'll save the id of the wrapper in the name record.
             // NameRecords & their equivalent SubdomainWrappers are always created in the same PTB, so we can safely assume
             // that the wrapper will be created on the same checkpoint as the name record and vice versa.
-            if self.is_subdomain_wrapper(object) {
+            if config.is_subdomain_wrapper(object) {
                 let sub_domain: SubDomainRegistration = object.to_rust().unwrap();
-                subdomain_wrappers.insert(
+                self.subdomain_wrappers.insert(
                     sub_domain.nft.domain_name,
                     sub_domain.id.id.bytes.to_string(),
                 );
@@ -113,11 +164,12 @@ impl SuinsIndexer {
         }
     }
 
-    pub fn parse_transaction_record_deletions(
-        &self,
+    /// Parses a list of the deletions in the checkpoint and adds them to the removals list.
+    /// Also removes any name records from the updates, if they ended up being deleted in the same checkpoint.
+    pub fn parse_record_deletions(
+        &mut self,
+        config: &SuinsIndexer,
         transaction: &CheckpointTransaction,
-        name_records: &mut HashMap<ObjectID, NameRecordChange>,
-        removals: &mut HashSet<ObjectID>,
     ) {
         // a list of all the deleted objects in the transaction.
         let deleted_objects: HashSet<_> = transaction
@@ -128,63 +180,53 @@ impl SuinsIndexer {
             .collect();
 
         for input in transaction.input_objects.iter() {
-            if self.is_name_record(input) && deleted_objects.contains(&input.id()) {
+            if config.is_name_record(input) && deleted_objects.contains(&input.id()) {
                 // since this record was deleted, we need to remove it from the name_records hashmap.
                 // that catches a case where a name record was edited on a previous transaction in the checkpoint
                 // and deleted from a different tx later in the checkpoint.
-                name_records.remove(&input.id());
+                self.name_records.remove(&input.id());
 
                 // add it in the list of removals
-                removals.insert(input.id());
+                self.removals.insert(input.id());
             }
         }
     }
 
-    /// Processes a checkpoint and produces a list of `updates` and a list of `removals`
-    ///
-    /// We can then use these to execute our DB bulk insertions + bulk deletions.
-    ///
-    /// Returns
-    /// - `Vec<VerifiedDomain>`: A list of NameRecord updates for the database (including sequence number)
-    /// - `Vec<String>`: A list of IDs to be deleted from the database (`field_id` is the matching column)
-    pub fn process_checkpoint(
-        &self,
-        checkpoint: &CheckpointData,
-    ) -> (Vec<VerifiedDomain>, Vec<String>) {
-        // Gather a list of name records, subdomain wrappers and removals on that checkpoint.
-        let mut name_records: HashMap<ObjectID, NameRecordChange> = HashMap::new();
-        let mut subdomain_wrappers: HashMap<String, String> = HashMap::new();
-        let mut removals: HashSet<ObjectID> = HashSet::new();
+    /// Prepares a vector of `VerifiedDomain`s to be inserted into the DB, taking in account
+    /// the list of subdomain wrappers created as well as the checkpoint's sequence number.
+    pub fn prepare_db_updates(&self) -> Vec<VerifiedDomain> {
+        let mut updates: Vec<VerifiedDomain> = vec![];
 
-        // loop through all the transactions in the checkpoint
-        // Since the transactions are sequenced inside the checkpoint, we can safely assume
-        // that we have the latest data for each name record in the end of the loop.
-        for transaction in &checkpoint.transactions {
-            // Add all name record changes to the name_records HashMap.
-            // Remove any removals that got recreated.
-            self.parse_name_record_changes(
-                &transaction.output_objects,
-                &mut name_records,
-                &mut subdomain_wrappers,
-                &mut removals,
-            );
+        for (field_id, name_record_change) in self.name_records.iter() {
+            let name_record = &name_record_change.0;
 
-            // Gather all removals from the transaction,
-            // and delete any name records from the name_records if it got deleted.
-            self.parse_transaction_record_deletions(transaction, &mut name_records, &mut removals);
+            let parent = name_record.name.parent().to_string();
+            let nft_id = name_record.value.nft_id.bytes.to_string();
+
+            updates.push(VerifiedDomain {
+                field_id: field_id.to_string(),
+                name: name_record.name.to_string(),
+                parent,
+                expiration_timestamp_ms: name_record.value.expiration_timestamp_ms as i64,
+                nft_id,
+                target_address: if name_record.value.target_address.is_some() {
+                    Some(SuiAddress::to_string(
+                        &name_record.value.target_address.unwrap(),
+                    ))
+                } else {
+                    None
+                },
+                // unwrapping must be safe as `value.data` is an on-chain value with VecMap<String,String> type.
+                data: serde_json::to_value(&name_record.value.data).unwrap(),
+                last_checkpoint_updated: self.checkpoint_sequence_number as i64,
+                subdomain_wrapper_id: self
+                    .subdomain_wrappers
+                    .get(&name_record.name.to_string())
+                    .cloned(),
+            });
         }
 
-        // Convert our name_records & wrappers into a list of updates for the DB.
-        let updates = prepare_db_updates(
-            &name_records,
-            &subdomain_wrappers,
-            checkpoint.checkpoint_summary.sequence_number,
-        );
-
-        (
-            updates,
-            removals.into_iter().map(|id| id.to_string()).collect(),
-        )
+        updates
     }
 }
 
@@ -203,44 +245,4 @@ pub fn format_update_field_query(field: &str) -> String {
 /// Update the subdomain wrapper ID only if it is part of the checkpoint.
 pub fn format_update_subdomain_wrapper_query() -> String {
     "CASE WHEN excluded.subdomain_wrapper_id IS NOT NULL THEN excluded.subdomain_wrapper_id ELSE domains.subdomain_wrapper_id END".to_string()
-}
-
-/// Prepares a vector of `VerifiedDomain`s to be inserted into the DB, taking in account
-/// the list of subdomain wrappers created as well as the checkpoint's sequence number.
-pub fn prepare_db_updates(
-    name_record_changes: &HashMap<ObjectID, NameRecordChange>,
-    subdomain_wrappers: &HashMap<String, String>,
-    checkpoint_seq_num: u64,
-) -> Vec<VerifiedDomain> {
-    let mut updates: Vec<VerifiedDomain> = vec![];
-
-    for (field_id, name_record_change) in name_record_changes.iter() {
-        let name_record = &name_record_change.0;
-
-        let parent = name_record.name.parent().to_string();
-        let nft_id = name_record.value.nft_id.bytes.to_string();
-
-        updates.push(VerifiedDomain {
-            field_id: field_id.to_string(),
-            name: name_record.name.to_string(),
-            parent,
-            expiration_timestamp_ms: name_record.value.expiration_timestamp_ms as i64,
-            nft_id,
-            target_address: if name_record.value.target_address.is_some() {
-                Some(SuiAddress::to_string(
-                    &name_record.value.target_address.unwrap(),
-                ))
-            } else {
-                None
-            },
-            // unwrapping must be safe as `value.data` is an on-chain value with VecMap<String,String> type.
-            data: serde_json::to_value(&name_record.value.data).unwrap(),
-            last_checkpoint_updated: checkpoint_seq_num as i64,
-            subdomain_wrapper_id: subdomain_wrappers
-                .get(&name_record.name.to_string())
-                .cloned(),
-        });
-    }
-
-    updates
 }

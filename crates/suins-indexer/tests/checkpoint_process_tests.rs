@@ -100,6 +100,10 @@ fn process_22279944_checkpoint() {
         addition.subdomain_wrapper_id,
         Some("0x9ca93181d093598b55787e82f69296819e9f779f25f1cc5226d2cd4d07126790".to_string())
     );
+    assert_eq!(
+        addition.field_id,
+        "0x79b123c73d073ba73c9e6f0817e63270d716db3c7945ecde477b22df7d026e43".to_string()
+    )
 }
 
 #[test]
@@ -121,6 +125,11 @@ fn process_22280030_checkpoint() {
         addition.subdomain_wrapper_id,
         Some("0x48de1a7eef5956c4f3478849654abd94dcf5b206c631328c50518091b0eee9b0".to_string())
     );
+
+    assert_eq!(
+        addition.field_id,
+        "0x79b123c73d073ba73c9e6f0817e63270d716db3c7945ecde477b22df7d026e43".to_string()
+    )
 }
 
 /// Reads a checkpoint from a given file in the `/tests/data` directory.
