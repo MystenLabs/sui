@@ -368,13 +368,9 @@ impl TransactionManager {
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn enqueue_certificates(
         &self,
-        certs: Vec<VerifiedCertificate>,
+        executable_txns: Vec<VerifiedExecutableTransaction>,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<()> {
-        let executable_txns = certs
-            .into_iter()
-            .map(VerifiedExecutableTransaction::new_from_certificate)
-            .collect();
         self.enqueue(executable_txns, epoch_store)
     }
 

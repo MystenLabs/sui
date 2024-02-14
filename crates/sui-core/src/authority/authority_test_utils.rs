@@ -337,7 +337,10 @@ pub async fn enqueue_all_and_execute_all(
 ) -> Result<Vec<TransactionEffects>, SuiError> {
     authority
         .enqueue_certificates_for_execution(
-            certificates.clone(),
+            certificates
+                .iter()
+                .map(|cert| cert.clone().into())
+                .collect(),
             &authority.epoch_store_for_testing(),
         )
         .unwrap();
@@ -355,7 +358,9 @@ pub async fn execute_sequenced_certificate_to_effects(
 ) -> Result<(TransactionEffects, Option<ExecutionError>), SuiError> {
     authority
         .enqueue_certificates_for_execution(
-            vec![certificate.clone()],
+            vec![VerifiedExecutableTransaction::new_from_certificate(
+                certificate.clone(),
+            )],
             &authority.epoch_store_for_testing(),
         )
         .unwrap();

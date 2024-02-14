@@ -12,7 +12,6 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
-use sui_types::error::SuiResult;
 use sui_types::messages_grpc::{
     HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
     SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
@@ -28,6 +27,7 @@ use sui_types::{
     effects::{TransactionEffectsAPI, TransactionEvents},
     messages_checkpoint::{CheckpointRequestV2, CheckpointResponseV2},
 };
+use sui_types::{error::SuiResult, executable_transaction::VerifiedExecutableTransaction};
 
 #[derive(Clone, Copy, Default)]
 pub struct LocalAuthorityClientFaultConfig {
@@ -163,23 +163,24 @@ impl LocalAuthorityClient {
         // from previous epochs.
         let tx_digest = *certificate.digest();
         let epoch_store = state.epoch_store_for_testing();
-        let signed_effects = match state
-            .get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)
-        {
-            Ok(Some(effects)) => effects,
-            _ => {
-                let certificate = epoch_store
-                    .signature_verifier
-                    .verify_cert(certificate)
-                    .await?;
-                //let certificate = certificate.verify(epoch_store.committee())?;
-                state
-                    .enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store)?;
-                let effects = state.notify_read_effects(&certificate).await?;
-                state.sign_effects(effects, &epoch_store)?
+        let signed_effects =
+            match state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store) {
+                Ok(Some(effects)) => effects,
+                _ => {
+                    let certificate = epoch_store
+                        .signature_verifier
+                        .verify_cert(certificate)
+                        .await?;
+                    //let certificate = certificate.verify(epoch_store.committee())?;
+                    state.enqueue_certificates_for_execution(
+                        vec![certificate.clone().into()],
+                        &epoch_store,
+                    )?;
+                    let effects = state.notify_read_effects(&certificate).await?;
+                    state.sign_effects(effects, &epoch_store)?
+                }
             }
-        }
-        .into_inner();
+            .into_inner();
 
         let events = if let Some(digest) = signed_effects.events_digest() {
             state.get_transaction_events(digest)?

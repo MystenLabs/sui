@@ -16,7 +16,6 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::effects::TransactionEvents;
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::messages_grpc::{
     HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
@@ -25,6 +24,9 @@ use sui_types::messages_grpc::{
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{effects::TransactionEffectsAPI, message_envelope::Message};
+use sui_types::{
+    effects::TransactionEvents, executable_transaction::VerifiedExecutableTransaction,
+};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
@@ -485,8 +487,10 @@ impl ValidatorService {
             // It is useful to enqueue owned object transaction for execution locally,
             // even when we are not returning effects to user
             if !certificate.contains_shared_object() {
-                state
-                    .enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store)?;
+                state.enqueue_certificates_for_execution(
+                    vec![certificate.clone().into()],
+                    &epoch_store,
+                )?;
             }
             return Ok(None);
         }
