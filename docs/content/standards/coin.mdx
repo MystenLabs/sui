@@ -17,7 +17,7 @@ See the [coin module](https://github.com/MystenLabs/sui/blob/main/crates/sui-fra
 
 ## Fungible tokens
 
-In the Sui blockchain ecosystem, coins are defined as fungible tokens, meaning that within a specific type (referred to as `Coin`), each token is identical in nature to any other token of the same type. For instance, if you create a regulated coin and name it REGCOIN, then every REGCOIN you mint carries identical metadata and value to every other REGCOIN. This fungibility ensures that each unit of a given coin is interchangeable with another unit of the same coin, much like how traditional fiat currencies operate.
+In the Sui blockchain ecosystem, the `Coin<T>` type represents open-loop fungible tokens (see `Token<T>` for closed-loop tokens). Coins are denominated by their type parameter, `T`, which is also associated with metadata (like name, symbol, decimal precision, and so on) that applies to all instances of `Coin<T>`. The `sui::coin` module exposes an interface over `Coin<T>` that treats it as fungible, meaning that a unit of `T` held in one instance of `Coin<T>` is interchangeable with any other unit of `T`, much like how traditional fiat currencies operate.
 
 :::info
 
