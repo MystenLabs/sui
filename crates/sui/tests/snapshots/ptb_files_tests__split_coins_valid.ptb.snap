@@ -14,7 +14,7 @@ expression: "results.join(\"\\n\")"
 │ split_coins │ tests/ptb_files/split_coins/split_coins_valid.ptb │ coins.1 [0,0]                                   │
 │ assign      │ tests/ptb_files/split_coins/split_coins_valid.ptb │ zcoins                                          │
 │ move_call   │ tests/ptb_files/split_coins/split_coins_valid.ptb │ sui::coin::destroy_zero<sui::sui::SUI> zcoins.0 │
-│ move_call   │ tests/ptb_files/split_coins/split_coins_valid.ptb │ sui::coin::destroy_zero<sui::sui::SUI> zcoins.0 │
+│ move_call   │ tests/ptb_files/split_coins/split_coins_valid.ptb │ sui::coin::destroy_zero<sui::sui::SUI> zcoins.1 │
 │ merge_coins │ tests/ptb_files/split_coins/split_coins_valid.ptb │ gas [coins.1, coins.2, coins.3]                 │
 │ gas_budget  │ tests/ptb_files/split_coins/split_coins_valid.ptb │ 10000000                                        │
 │ preview     │ console                                           │ true                                            │
@@ -27,7 +27,7 @@ cmd: move_call, value: ["sui::coin::destroy_zero", "<0x2::sui::SUI>", "coins.0"]
 cmd: split_coins, value: ["coins.1", "[0u64, 0u64]"]
 cmd: assign, value: ["zcoins"]
 cmd: move_call, value: ["sui::coin::destroy_zero", "<0x2::sui::SUI>", "zcoins.0"]
-cmd: move_call, value: ["sui::coin::destroy_zero", "<0x2::sui::SUI>", "zcoins.0"]
+cmd: move_call, value: ["sui::coin::destroy_zero", "<0x2::sui::SUI>", "zcoins.1"]
 cmd: merge_coins, value: ["gas", "[coins.1, coins.2, coins.3]"]
 cmd: gas_budget, value: ["10000000u64"]
 cmd: preview, value: ["false"]
@@ -44,5 +44,5 @@ Command 0: SplitCoins(GasCoinInput(0),Input(1),Input(2),Input(3))
 Command 1: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000002::coin::destroy_zero<0x2::sui::SUI>(NestedResult(0,0)))
 Command 2: SplitCoins(NestedResult(0,1)Input(0),Input(0))
 Command 3: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000002::coin::destroy_zero<0x2::sui::SUI>(NestedResult(2,0)))
-Command 4: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000002::coin::destroy_zero<0x2::sui::SUI>(NestedResult(2,0)))
+Command 4: MoveCall(0x0000000000000000000000000000000000000000000000000000000000000002::coin::destroy_zero<0x2::sui::SUI>(NestedResult(2,1)))
 Command 5: MergeCoins(GasCoin,NestedResult(0,1),NestedResult(0,2),NestedResult(0,3))

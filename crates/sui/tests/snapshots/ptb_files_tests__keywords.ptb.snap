@@ -1,0 +1,32 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭─────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                     │
+├────────────┬──────────────────────────────────────┬─────────────┤
+│ command    │ from                                 │ value(s)    │
+├────────────┼──────────────────────────────────────┼─────────────┤
+│ assign     │ tests/ptb_files/parsing/keywords.ptb │ some @0x1   │
+│ assign     │ tests/ptb_files/parsing/keywords.ptb │ vector @0x1 │
+│ assign     │ tests/ptb_files/parsing/keywords.ptb │ none @0x1   │
+│ assign     │ tests/ptb_files/parsing/keywords.ptb │ gas @0x1    │
+│ gas_budget │ tests/ptb_files/parsing/keywords.ptb │ 11          │
+│ preview    │ console                              │ true        │
+╰────────────┴──────────────────────────────────────┴─────────────╯
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error at command 0 in PTB file 'tests/ptb_files/parsing/keywords.ptb'
+   ╭────
+ 1 │ assign some @0x1 
+   ·            ▲
+   ·            ╰── Failed to parse arguments for 'assign' command. unexpected end of tokens
+   ╰────
+
+  × Error at command 1 in PTB file 'tests/ptb_files/parsing/keywords.ptb'
+   ╭────
+ 1 │ assign vector @0x1 
+   ·              ▲
+   ·              ╰── Failed to parse arguments for 'assign' command. unexpected end of tokens
+   ╰────
+

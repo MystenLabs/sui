@@ -134,28 +134,36 @@ impl Token for ArgumentToken {
             }
         }
 
+        let non_alphabet_continuation_of = |prefix: &str| -> bool {
+            s.starts_with(prefix)
+                && s.chars()
+                    .nth(prefix.len())
+                    .map(|c| !identifier::is_valid_identifier_char(c) && c != '-')
+                    .unwrap_or(true)
+        };
+
         // type arguments get delegated to a different parser
         if s.starts_with('<') {
             let len = extract_sub_parser_token_string(s, "<", ">")?;
             return Ok(Some((Self::TypeArgString, len)));
         }
 
-        if s.starts_with("vector[") {
+        if non_alphabet_continuation_of("vector") {
             let len = "vector".len();
             return Ok(Some((Self::Vector, len)));
         }
 
-        if s.starts_with("some(") {
+        if non_alphabet_continuation_of("some") {
             let len = "some".len();
             return Ok(Some((Self::Some_, len)));
         }
 
-        if s.starts_with("none") {
+        if non_alphabet_continuation_of("none") {
             let len = "none".len();
             return Ok(Some((Self::None_, len)));
         }
 
-        if s.starts_with("gas") {
+        if non_alphabet_continuation_of("gas") {
             let len = "gas".len();
             return Ok(Some((Self::Gas, len)));
         }

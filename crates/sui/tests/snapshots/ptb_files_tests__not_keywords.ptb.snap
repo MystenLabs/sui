@@ -1,0 +1,38 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭───────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                           │
+├────────────┬──────────────────────────────────────────┬───────────────┤
+│ command    │ from                                     │ value(s)      │
+├────────────┼──────────────────────────────────────────┼───────────────┤
+│ assign     │ tests/ptb_files/parsing/not_keywords.ptb │ gasa @0x1     │
+│ assign     │ tests/ptb_files/parsing/not_keywords.ptb │ somea @0x1    │
+│ assign     │ tests/ptb_files/parsing/not_keywords.ptb │ nonea @0x1    │
+│ assign     │ tests/ptb_files/parsing/not_keywords.ptb │ vectora @0x1  │
+│ assign     │ tests/ptb_files/parsing/not_keywords.ptb │ gas-a @0x1    │
+│ assign     │ tests/ptb_files/parsing/not_keywords.ptb │ some-a @0x1   │
+│ assign     │ tests/ptb_files/parsing/not_keywords.ptb │ none-a @0x1   │
+│ assign     │ tests/ptb_files/parsing/not_keywords.ptb │ vector-a @0x1 │
+│ gas_budget │ tests/ptb_files/parsing/not_keywords.ptb │ 11            │
+│ preview    │ console                                  │ true          │
+╰────────────┴──────────────────────────────────────────┴───────────────╯
+ === PARSED INPUT COMMANDS === 
+cmd: file-include-start, value: ["\"tests/ptb_files/parsing/not_keywords.ptb\""]
+cmd: assign, value: ["gasa", "@0x1"]
+cmd: assign, value: ["somea", "@0x1"]
+cmd: assign, value: ["nonea", "@0x1"]
+cmd: assign, value: ["vectora", "@0x1"]
+cmd: assign, value: ["gas-a", "@0x1"]
+cmd: assign, value: ["some-a", "@0x1"]
+cmd: assign, value: ["none-a", "@0x1"]
+cmd: assign, value: ["vector-a", "@0x1"]
+cmd: gas_budget, value: ["11u64"]
+cmd: preview, value: ["false"]
+cmd: warn_shadows, value: ["false"]
+cmd: file-include-end, value: ["\"tests/ptb_files/parsing/not_keywords.ptb\""]
+cmd: preview, value: ["true"]
+cmd: warn_shadows, value: ["false"]
+ === BUILT PTB === 
