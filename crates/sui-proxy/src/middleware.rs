@@ -76,10 +76,7 @@ pub async fn expect_valid_public_key<B>(
     let Some(public_key) = tls_connect_info.public_key() else {
         error!("unable to obtain public key from connecting client");
         MIDDLEWARE_OPS
-            .with_label_values(&[
-                "expect_valid_public_key",
-                "missing-public-key",
-            ])
+            .with_label_values(&["expect_valid_public_key", "missing-public-key"])
             .inc();
         return Err((StatusCode::FORBIDDEN, "unknown clients are not allowed"));
     };

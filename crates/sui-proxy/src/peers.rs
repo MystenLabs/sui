@@ -63,8 +63,8 @@ pub struct SuiNodeProvider {
 
 impl Allower for SuiNodeProvider {
     fn allowed(&self, key: &Ed25519PublicKey) -> bool {
-        self.static_nodes.read().unwrap().contains_key(key) ||
-        self.nodes.read().unwrap().contains_key(key)
+        self.static_nodes.read().unwrap().contains_key(key)
+            || self.nodes.read().unwrap().contains_key(key)
     }
 }
 
