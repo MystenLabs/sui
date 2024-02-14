@@ -59,53 +59,59 @@ impl New {
         let mut w = std::fs::File::create(path.join(SourcePackageLayout::Manifest.path()))?;
         writeln!(
             w,
-            "[package]
-name = \"{name}\"
+            r#"[package]
+name = "{name}"
 
-# version = \"0.1.1\"  # semver \"maj.min.patch\"
-# license = \"\"       # e.g., \"MIT\", \"GPL\", \"Apache 2.0\"
-# authors = [\"...\"]  # e.g., [\"Joe Smith (joesmith@noemail.com)\", \"John Snow (johnsnow@noemail.com)\"]
+# edition = "2024.alpha" # To use the Move 2024 edition, currently in alpha
+# license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
+# authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 
-[dependencies]"
+[dependencies]"#
         )?;
         for (dep_name, dep_val) in deps {
             writeln!(w, "{dep_name} = {dep_val}")?;
         }
 
-        writeln!(w, "
-# For remote import, use the `{{ git = \"...\", subdir = \"...\", rev = \"...\" }}`.
+        writeln!(
+            w,
+            r#"
+# For remote import, use the `{{ git = "...", subdir = "...", rev = "..." }}`.
 # Revision can be a branch, a tag, and a commit hash.
-# MyRemotePackage = {{ git = \"https://some.remote/host.git\", subdir = \"remote/path\", rev = \"main\" }}
+# MyRemotePackage = {{ git = "https://some.remote/host.git", subdir = "remote/path", rev = "main" }}
 
 # For local dependencies use `local = path`. Path is relative to the package root
-# Local = {{ local = \"../path/to\" }}
+# Local = {{ local = "../path/to" }}
 
 # To resolve a version conflict and force a specific version for dependency
 # override use `override = true`
-# Override = {{ override = true, local = \"../conflicting/version\" }}
+# Override = {{ local = "../conflicting/version", override = true }}
 
-[addresses]")?;
+[addresses]"#
+        )?;
 
         // write named addresses
         for (addr_name, addr_val) in addrs {
             writeln!(w, "{addr_name} = \"{addr_val}\"")?;
         }
 
-        writeln!(w,"
+        writeln!(
+            w,
+            r#"
 # Named addresses will be accessible in Move as `@name`. They're also exported:
-# for example, `std = \"0x1\"` is exported by the Standard Library.
-# alice = \"0xA11CE\"
+# for example, `std = "0x1"` is exported by the Standard Library.
+# alice = "0xA11CE"
 
 [dev-dependencies]
 # The dev-dependencies section allows overriding dependencies for `--test` and
-# `--dev` modes. New dependencies cannot be introduced
-# Local = {{ local = \"../path/to/dev-build\" }}
+# `--dev` modes. You can introduce test-only dependencies here.
+# Local = {{ local = "../path/to/dev-build" }}
 
 [dev-addresses]
-# The dev-addresses section allows overloading named addresses for the `--test`
+# The dev-addresses section allows overwriting named addresses for the `--test`
 # and `--dev` modes.
-# alice = \"0xB0B\"
-")?;
+# alice = "0xB0B"
+"#
+        )?;
 
         // custom addition in the end
         if !custom.is_empty() {
