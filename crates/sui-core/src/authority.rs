@@ -4657,6 +4657,7 @@ impl RandomnessRoundReceiver {
         }
     }
 
+    #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
     async fn handle_new_randomness(&self, epoch: EpochId, round: RandomnessRound, bytes: Vec<u8>) {
         let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
         if epoch_store.epoch() != epoch {
@@ -4676,7 +4677,7 @@ impl RandomnessRoundReceiver {
                 .expect("randomness state obj must exist"),
         );
         debug!(
-            "created randomness state update transaction for epoch {epoch}, round {round}: {:?}",
+            "created randomness state update transaction with digest: {:?}",
             transaction.digest()
         );
         let transaction = VerifiedExecutableTransaction::new_system(transaction, epoch);
@@ -4685,14 +4686,14 @@ impl RandomnessRoundReceiver {
         // RandomnessStateUpdates are not sent through consensus, so we have to add the user
         // signatures here once the digest becomes known.
         let Ok(tables) = epoch_store.tables() else {
-            debug!("dropping randomness for epoch {epoch}, round {round}, because current epoch is ending");
+            debug!("dropping randomness because current epoch is ending");
             return;
         };
         let mut batch = tables.pending_execution.batch();
         if let Err(e) =
             epoch_store.finish_consensus_certificate_process_with_batch(&mut batch, &transaction)
         {
-            warn!("dropping randomness for epoch {epoch}, round {round}: {e:?}");
+            warn!("dropping randomness: {e:?}");
             return;
         }
         batch.write().expect("storage should not fail");
@@ -4705,6 +4706,7 @@ impl RandomnessRoundReceiver {
         {
             error!("BUG: failed to enqueue randomness state update transaction: {e:?}",);
         }
+
         let Ok(mut effects) = self
             .authority_state
             .execution_cache
@@ -4719,6 +4721,7 @@ impl RandomnessRoundReceiver {
             // TODO-DNS should this be error or panic? Seems bad enough to panic?
             panic!("BUG: failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
         }
+        debug!("sucessfully executed randomness state update transaction");
     }
 }
 

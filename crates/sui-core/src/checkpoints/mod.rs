@@ -800,7 +800,7 @@ impl CheckpointBuilder {
         info!("Shutting down CheckpointBuilder");
     }
 
-    #[instrument(level = "debug", skip_all)]
+    #[instrument(level = "debug", skip_all, fields(?height))]
     async fn make_checkpoint(
         &self,
         height: CheckpointCommitHeight,

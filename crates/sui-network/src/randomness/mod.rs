@@ -21,7 +21,7 @@ use sui_types::{
     crypto::{RandomnessPartialSignature, RandomnessRound},
 };
 use tokio::sync::mpsc;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 mod builder;
 mod generated {
@@ -189,6 +189,7 @@ impl RandomnessEventLoop {
         }
     }
 
+    #[instrument(level = "debug", skip_all, fields(?new_epoch))]
     async fn update_epoch(
         &mut self,
         new_epoch: EpochId,
@@ -198,7 +199,7 @@ impl RandomnessEventLoop {
     ) -> Result<()> {
         assert!(self.dkg_output.is_none() || new_epoch > self.epoch);
 
-        debug!("updating randomness network loop to epoch {new_epoch}");
+        debug!("updating randomness network loop to new epoch");
 
         self.peer_share_counts = Some(authority_info.iter().try_fold(
             HashMap::new(),
@@ -249,18 +250,17 @@ impl RandomnessEventLoop {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
     fn send_partial_signatures(&mut self, epoch: EpochId, round: RandomnessRound) {
         if epoch < self.epoch {
             info!(
-                    "skipping sending partial sigs for epoch {epoch} round {round}, we are already up to epoch {}",
-                    self.epoch
-                );
+                "skipping sending partial sigs, we are already up to epoch {}",
+                self.epoch
+            );
             return;
         }
         if self.completed_sigs.contains(&(epoch, round)) {
-            info!(
-                "skipping sending partial sigs for epoch {epoch} round {round}, we already have completed this sig"
-            );
+            info!("skipping sending partial sigs, we already have completed this sig");
             return;
         }
 
@@ -268,8 +268,9 @@ impl RandomnessEventLoop {
         self.maybe_start_pending_tasks();
     }
 
+    #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
     fn complete_round(&mut self, epoch: EpochId, round: RandomnessRound) {
-        debug!("completing randomness generation for epoch {epoch}, round {round}");
+        debug!("completing randomness generation");
         self.pending_tasks.remove(&(epoch, round));
         if let Some(task) = self.send_tasks.remove(&(epoch, round)) {
             task.abort();
@@ -279,6 +280,7 @@ impl RandomnessEventLoop {
         self.completed_sigs.insert((epoch, round));
     }
 
+    #[instrument(level = "debug", skip_all, fields(?peer_id, ?epoch, ?round))]
     async fn receive_partial_signatures(
         &mut self,
         peer_id: PeerId,
@@ -295,32 +297,28 @@ impl RandomnessEventLoop {
         };
         if epoch < self.epoch {
             debug!(
-                "skipping received partial sigs for epoch {epoch} round {round}, we are already up to epoch {}",
+                "skipping received partial sigs, we are already up to epoch {}",
                 self.epoch
             );
             return;
         }
         if epoch > self.epoch + 1 {
-            debug!(
-                "skipping received partial sigs for epoch {epoch}, we are still on epoch {epoch}"
-            );
+            debug!("skipping received partial sigs, we are still on epoch {epoch}");
             return;
         }
         if self.completed_sigs.contains(&(epoch, round)) {
-            debug!(
-                "skipping received partial sigs for epoch {epoch} round {round}, we already have completed this sig"
-            );
+            debug!("skipping received partial sigs, we already have completed this sig");
             return;
         }
         let expected_share_count = if let Some(count) = peer_share_counts.get(&peer_id) {
             count
         } else {
-            debug!("received partial sigs from unknown peer {peer_id}");
+            debug!("received partial sigs from unknown peer");
             return;
         };
         if sig_bytes.len() != *expected_share_count as usize {
             debug!(
-                "received partial sigs from {peer_id} with wrong share count: expected {expected_share_count}, got {}",
+                "received partial sigs with wrong share count: expected {expected_share_count}, got {}",
                 sig_bytes.len(),
             );
             return;
@@ -334,13 +332,13 @@ impl RandomnessEventLoop {
                         .saturating_add(MAX_PARTIAL_SIGS_ROUNDS_AHEAD)
             {
                 debug!(
-                    "skipping received partial sigs for epoch {epoch} round {round}, most recent round we completed was only {last_completed_round}",
+                    "skipping received partial sigs, most recent round we completed was only {last_completed_round}",
                 );
                 return;
             }
             if epoch > *last_completed_epoch && round.0 >= MAX_PARTIAL_SIGS_ROUNDS_AHEAD {
                 debug!(
-                    "skipping received partial sigs for epoch {epoch} round {round}, most recent epoch we completed was only {last_completed_epoch}",
+                    "skipping received partial sigs, most recent epoch we completed was only {last_completed_epoch}",
                 );
                 return;
             }
@@ -357,25 +355,22 @@ impl RandomnessEventLoop {
                 }) {
                 Ok(partial_sigs) => partial_sigs,
                 Err(e) => {
-                    debug!("failed to deserialize partial sigs from {peer_id}: {e:?}");
+                    debug!("failed to deserialize partial sigs: {e:?}");
                     return;
                 }
             };
-        debug!(
-            "recording partial signatures for epoch {epoch}, round {round}, received from {peer_id}"
-        );
+        debug!("recording received partial signatures");
         self.received_partial_sigs
             .insert((epoch, round, peer_id), partial_sigs);
 
         self.maybe_aggregate_partial_signatures(epoch, round).await;
     }
 
+    #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
     async fn maybe_aggregate_partial_signatures(&mut self, epoch: EpochId, round: RandomnessRound) {
         let vss_pk = {
             let Some(dkg_output) = &self.dkg_output else {
-                debug!(
-                    "random beacon: called maybe_aggregate_partial_signatures before DKG completed"
-                );
+                debug!("called maybe_aggregate_partial_signatures before DKG completed");
                 return;
             };
             &dkg_output.vss_pk
@@ -397,7 +392,7 @@ impl RandomnessEventLoop {
                 Ok(sig) => sig,
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => return, // wait for more input
                 Err(e) => {
-                    error!("Error while aggregating randomness partial signatures: {e:?}");
+                    error!("error while aggregating randomness partial signatures: {e:?}");
                     return;
                 }
             };
@@ -421,7 +416,7 @@ impl RandomnessEventLoop {
                     .is_err()
                     {
                         warn!(
-                            "Received invalid partial signatures from possibly-Byzantine peer {peer_id}"
+                            "received invalid partial signatures from possibly-Byzantine peer {peer_id}"
                         );
                         return false;
                     }
@@ -436,19 +431,19 @@ impl RandomnessEventLoop {
                 Ok(sig) => sig,
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => return, // wait for more input
                 Err(e) => {
-                    error!("Error while aggregating randomness partial signatures: {e:?}");
+                    error!("error while aggregating randomness partial signatures: {e:?}");
                     return;
                 }
             };
             if let Err(e) =
                 ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
             {
-                error!("Error while verifying randomness partial signatures after removing invalid partials: {e:?}");
+                error!("error while verifying randomness partial signatures after removing invalid partials: {e:?}");
                 return;
             }
         }
 
-        debug!("generated randomness full signature for epoch {epoch}, round {round}");
+        debug!("successfully generated randomness full signature");
         self.completed_sigs.insert((epoch, round));
 
         // TODO-DNS is there a way to do this by range, instead of saving all the keys and
