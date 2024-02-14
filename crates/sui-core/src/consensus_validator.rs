@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use consensus_core::{TransactionVerifier, ValidationError};
 use eyre::WrapErr;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
@@ -144,6 +145,27 @@ impl TransactionValidator for SuiTxValidator {
             .collect::<Result<Vec<_>, _>>()?;
 
         self.validate_transactions(txs)
+    }
+}
+
+impl TransactionVerifier for SuiTxValidator {
+    fn verify_batch(
+        &self,
+        _protocol_config: &ProtocolConfig,
+        batch: &[&[u8]],
+    ) -> Result<(), ValidationError> {
+        // TODO(mysticeti): ensure we are properly verifying transactions
+        let txs = batch
+            .iter()
+            .map(|tx| {
+                tx_from_bytes(tx)
+                    .map(|tx| tx.kind)
+                    .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        self.validate_transactions(txs)
+            .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))
     }
 }
 

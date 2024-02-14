@@ -20,7 +20,7 @@ use consensus_config::{NetworkKeyPair, ProtocolKeyPair};
 /// of this authority.
 #[allow(dead_code)]
 #[derive(Clone)]
-pub(crate) struct Context {
+pub struct Context {
     /// Index of this authority in the committee.
     pub own_index: AuthorityIndex,
     /// Committee of the current epoch.

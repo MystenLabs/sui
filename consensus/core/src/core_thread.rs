@@ -165,9 +165,11 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
 #[cfg(test)]
 mod test {
     use parking_lot::RwLock;
+    use tokio::sync::mpsc::unbounded_channel;
 
     use super::*;
     use crate::block_manager::BlockManager;
+    use crate::commit_observer::CommitObserver;
     use crate::context::Context;
     use crate::core::CoreSignals;
     use crate::dag_state::DagState;
@@ -180,14 +182,25 @@ mod test {
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(context.clone(), dag_state);
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
+
+        #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
+        let (sender, _receiver) = unbounded_channel();
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            sender.clone(),
+            0, // last_processed_index
+            dag_state.clone(),
+            store.clone(),
+        );
         let core = Core::new(
             context.clone(),
             transaction_consumer,
             block_manager,
+            commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,
             store,
