@@ -4,11 +4,12 @@
 
 use crate::{
     expansion::ast::{self as E, ModuleIdent},
+    expansion::translate::ModuleMemberKind,
     parser::ast::{self as P},
     shared::{unique_map::UniqueMap, unique_set::UniqueSet, *},
 };
 use move_ir_types::location::*;
-use std::fmt;
+use std::{collections::BTreeSet, fmt};
 
 #[derive(Clone, Debug)]
 pub struct AliasSet {
@@ -16,24 +17,52 @@ pub struct AliasSet {
     pub members: UniqueSet<Name>,
 }
 
+pub type MemberName = (ModuleIdent, Name, ModuleMemberKind);
+
 #[derive(Clone)]
 pub struct AliasMapBuilder {
     pub modules: UniqueMap<Name, (ModuleIdent, /* is_implicit */ bool)>,
-    pub members: UniqueMap<Name, ((ModuleIdent, Name), /* is_implicit */ bool)>,
+    pub members: UniqueMap<Name, (MemberName, /* is_implicit */ bool)>,
     pub addresses: UniqueMap<Name, (NumericalAddress, /* is_implicit */ bool)>,
     all_aliases_unique: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AliasEntry {
+    Address(Name, NumericalAddress),
+    Module(Name, ModuleIdent),
+    Member(Name, ModuleIdent, Name),
+    TypeParam(Name),
+}
+
+#[derive(Clone, Copy)]
+pub enum LeadingAccessEntry {
     Address(NumericalAddress),
     Module(ModuleIdent),
     Member(ModuleIdent, Name),
     TypeParam,
 }
 
+#[derive(Clone, Copy)]
+pub enum MemberEntry {
+    Member(ModuleIdent, Name),
+    TypeParam,
+}
+
+#[derive(Clone, Copy)]
+pub enum NameSpace {
+    LeadingAccess,
+    ModuleMembers,
+}
+
 pub struct AliasMap {
-    aliases: UniqueMap<Name, (AliasEntry, /* used */ bool)>,
+    unused: BTreeSet<AliasEntry>,
+    // the start of an access path, excludes functions
+    leading_access: UniqueMap<Name, LeadingAccessEntry>,
+    // a module member is expected, not a module
+    // For now, this excludes local variables because the only case where this can overlap is with
+    // macro lambdas, but those have to have a leading `$` and cannot conflict with module members
+    module_members: UniqueMap<Name, MemberEntry>,
     previous: Option<Box<AliasMap>>,
 }
 
@@ -166,10 +195,11 @@ impl AliasMapBuilder {
         alias: Name,
         ident: ModuleIdent,
         member: Name,
+        kind: ModuleMemberKind,
     ) -> Result<(), Loc> {
         let result = self.remove_member_alias(&alias);
         self.members
-            .add(alias, ((ident, member), /* is_implicit */ false))
+            .add(alias, ((ident, member, kind), /* is_implicit */ false))
             .unwrap();
         result
     }
@@ -205,48 +235,82 @@ impl AliasMapBuilder {
         alias: Name,
         ident: ModuleIdent,
         member: Name,
+        kind: ModuleMemberKind,
     ) -> Result<(), Loc> {
         let result = self.remove_member_alias_(&alias);
         self.members
-            .add(alias, ((ident, member), /* is_implicit */ true))
+            .add(alias, ((ident, member, kind), /* is_implicit */ true))
             .unwrap();
         result
     }
 }
 
+macro_rules! resolve_alias {
+    ($map:expr, .$namespace:ident, $name:expr) => {{
+        let mut current_scope = Some($map);
+        let name = $name;
+        loop {
+            let Some(scope) = current_scope else {
+                break None;
+            };
+            let Some(entry) = scope.$namespace.get(name).copied() else {
+                current_scope = scope.previous.as_mut().map(|x| &mut **x);
+                continue;
+            };
+            // Note, might have already been removed by a different `$namespace` resolution
+            scope.unused.remove(&(*name, entry).into());
+
+            let original_name = scope.$namespace.get_full_key(&name).unwrap();
+            break Some((original_name, entry));
+        }
+    }};
+}
+
 impl AliasMap {
     pub fn new() -> Self {
         Self {
-            aliases: UniqueMap::new(),
+            unused: BTreeSet::new(),
+            leading_access: UniqueMap::new(),
+            module_members: UniqueMap::new(),
             previous: None,
         }
     }
 
-    pub fn get(&mut self, name: &Name) -> Option<AliasEntry> {
-        if let Some((entry, used)) = self.aliases.get_mut(name) {
-            *used = true;
-            // Type parameters are never resolved. We track them to apply appropriate shadowing.
-            if matches!(entry, AliasEntry::TypeParam) {
-                return None;
-            } else {
-                return Some(entry.clone());
+    pub fn resolve_leading_access(&mut self, name: &Name) -> Option<(Name, LeadingAccessEntry)> {
+        let (name, entry) = resolve_alias!(self, .leading_access, name)?;
+        match &entry {
+            LeadingAccessEntry::Module(_)
+            | LeadingAccessEntry::Address(_)
+            | LeadingAccessEntry::Member(_, _) => Some((name, entry)),
+            // For legacy reasons, don't resolve type parameters
+            LeadingAccessEntry::TypeParam => None,
+        }
+    }
+
+    pub fn resolve_call(&mut self, name: &Name) -> Option<(Name, MemberEntry)> {
+        let (name, entry) = resolve_alias!(self, .module_members, name)?;
+        match &entry {
+            MemberEntry::Member(_, _) => Some((name, entry)),
+            // For legacy reasons, don't resolve type parameters
+            MemberEntry::TypeParam => None,
+        }
+    }
+
+    pub fn resolve(&mut self, namespace: NameSpace, name: &Name) -> Option<AliasEntry> {
+        match namespace {
+            NameSpace::LeadingAccess => self
+                .resolve_leading_access(name)
+                .map(|resolved| resolved.into()),
+            NameSpace::ModuleMembers => self.resolve_call(name).map(|resolved| resolved.into()),
+        }
+    }
+
+    pub fn resolve_any_for_error(&mut self, name: &Name) -> Option<AliasEntry> {
+        for namespace in [NameSpace::LeadingAccess, NameSpace::ModuleMembers] {
+            if let Some(entry) = self.resolve(namespace, name) {
+                return Some(entry);
             }
         }
-
-        let mut current_scope: Option<&mut Box<AliasMap>> = self.previous.as_mut();
-        while let Some(scope) = current_scope {
-            if let Some((entry, used)) = scope.aliases.get_mut(name) {
-                *used = true;
-                // Type parameters are never resolved. We track them to apply appropriate shadowing.
-                if matches!(entry, AliasEntry::TypeParam) {
-                    return None;
-                } else {
-                    return Some(entry.clone());
-                }
-            }
-            current_scope = scope.previous.as_mut();
-        }
-
         None
     }
 
@@ -254,29 +318,62 @@ impl AliasMap {
     /// Returns any name collisions that occur between addresses, members, and modules in the map
     /// builder.
     pub fn push_alias_scope(&mut self, new_aliases: AliasMapBuilder) {
-        let mut new_map = UniqueMap::new();
-        for (alias, ((mident, name), is_implicit)) in new_aliases.members {
-            new_map
-                .add(alias, (AliasEntry::Member(mident, name), is_implicit))
-                .unwrap();
+        let mut new_map = Self::new();
+        let AliasMapBuilder {
+            addresses,
+            modules,
+            members,
+            all_aliases_unique,
+        } = new_aliases;
+
+        // addresses
+        for (alias, (entry, is_implicit)) in addresses {
+            let entry = LeadingAccessEntry::Address(entry);
+            new_map.leading_access.add(alias, entry).unwrap();
+            if !is_implicit {
+                let alias_entry = (alias, entry).into();
+                new_map.unused.insert(alias_entry);
+            }
         }
-        for (alias, (entry, is_implicit)) in new_aliases.modules {
-            new_map
-                .add(alias, (AliasEntry::Module(entry), is_implicit))
-                .unwrap();
+
+        // leading access
+        for (alias, (entry, is_implicit)) in modules {
+            let entry = LeadingAccessEntry::Module(entry);
+            let prev = new_map.leading_access.add(alias, entry);
+            // all_aliases_unique ==> prev.is_ok()
+            assert!(!all_aliases_unique || prev.is_ok());
+            if !is_implicit {
+                let alias_entry = (alias, entry).into();
+                new_map.unused.insert(alias_entry);
+            }
         }
-        for (alias, (entry, is_implicit)) in new_aliases.addresses {
-            new_map
-                .add(alias, (AliasEntry::Address(entry), is_implicit))
-                .unwrap();
+        // Should we just exclude these and just include enums?
+        let member_leading_access = members
+            .key_cloned_iter()
+            .filter(|(_, ((_, _, kind), _))| matches!(kind, ModuleMemberKind::Struct));
+        for (alias, ((mident, name, _kind), is_implicit)) in member_leading_access {
+            let entry = LeadingAccessEntry::Member(*mident, *name);
+            let prev = new_map.leading_access.add(alias, entry);
+            // all_aliases_unique ==> prev.is_ok()
+            assert!(!all_aliases_unique || prev.is_ok());
+            if !is_implicit {
+                let alias_entry = (alias, entry).into();
+                new_map.unused.insert(alias_entry);
+            }
         }
-        let previous = std::mem::replace(
-            self,
-            Self {
-                aliases: new_map,
-                previous: None,
-            },
-        );
+
+        // module members
+        for (alias, ((mident, name, _kind), is_implicit)) in members {
+            let entry = MemberEntry::Member(mident, name);
+            new_map.module_members.add(alias, entry).unwrap();
+            if !is_implicit {
+                let alias_entry = (alias, entry).into();
+                new_map.unused.insert(alias_entry);
+            }
+        }
+
+        // set the previous scope
+        let previous = std::mem::replace(self, new_map);
         self.previous = Some(Box::new(previous));
     }
 
@@ -286,39 +383,66 @@ impl AliasMap {
     where
         I::IntoIter: ExactSizeIterator,
     {
-        let mut aliases = UniqueMap::new();
+        let mut new_map = Self::new();
         for tparam in tparams {
-            let _ = aliases.add(*tparam, (AliasEntry::TypeParam, true));
+            new_map
+                .leading_access
+                .add(*tparam, LeadingAccessEntry::TypeParam)
+                .unwrap();
+            new_map
+                .module_members
+                .add(*tparam, MemberEntry::TypeParam)
+                .unwrap();
         }
-        let previous = std::mem::replace(
-            self,
-            Self {
-                aliases,
-                previous: None,
-            },
-        );
+
+        // set the previous scope
+        let previous = std::mem::replace(self, new_map);
         self.previous = Some(Box::new(previous));
     }
 
     /// Resets the alias map to the previous scope, and returns the set of unused aliases
     pub fn pop_scope(&mut self) -> AliasSet {
+        let previous = self
+            .previous
+            .take()
+            .map(|prev| *prev)
+            .unwrap_or_else(Self::new);
+        let popped = std::mem::replace(self, previous);
         let mut result = AliasSet::new();
-        for (name, (entry, used)) in self.aliases.key_cloned_iter() {
-            if !used {
-                match entry {
-                    AliasEntry::Module(_) => result.modules.add(name).unwrap(),
-                    AliasEntry::Member(_, _) => result.members.add(name).unwrap(),
-                    AliasEntry::Address(_) | AliasEntry::TypeParam => (),
-                }
+        for alias_entry in popped.unused {
+            match alias_entry {
+                AliasEntry::Module(name, _) => result.modules.add(name).unwrap(),
+                AliasEntry::Member(name, _, _) => result.members.add(name).unwrap(),
+                AliasEntry::Address(_, _) | AliasEntry::TypeParam(_) => (),
             }
         }
-        if self.previous.is_some() {
-            let previous = std::mem::take(&mut self.previous).unwrap();
-            let _ = std::mem::replace(self, *previous);
-        } else {
-            self.aliases = UniqueMap::new();
-        }
         result
+    }
+}
+
+impl From<(Name, NumericalAddress)> for AliasEntry {
+    fn from((name, addr): (Name, NumericalAddress)) -> Self {
+        AliasEntry::Address(name, addr)
+    }
+}
+
+impl From<(Name, LeadingAccessEntry)> for AliasEntry {
+    fn from((name, entry): (Name, LeadingAccessEntry)) -> Self {
+        match entry {
+            LeadingAccessEntry::Address(addr) => AliasEntry::Address(name, addr),
+            LeadingAccessEntry::Module(mident) => AliasEntry::Module(name, mident),
+            LeadingAccessEntry::Member(mident, member) => AliasEntry::Member(name, mident, member),
+            LeadingAccessEntry::TypeParam => AliasEntry::TypeParam(name),
+        }
+    }
+}
+
+impl From<(Name, MemberEntry)> for AliasEntry {
+    fn from((name, entry): (Name, MemberEntry)) -> Self {
+        match entry {
+            MemberEntry::Member(mident, member) => AliasEntry::Member(name, mident, member),
+            MemberEntry::TypeParam => AliasEntry::TypeParam(name),
+        }
     }
 }
 
@@ -338,38 +462,82 @@ impl UseFunsBuilder {
 impl fmt::Debug for AliasEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         match self {
-            AliasEntry::Module(name) => write!(f, "m#{}", name),
-            AliasEntry::Address(addr) => write!(f, "@{}", addr),
-            AliasEntry::Member(mident, name) => write!(f, "{}::{}", mident, name),
-            AliasEntry::TypeParam => write!(f, "[tparam]"),
+            AliasEntry::Module(alias, mident) => write!(f, "({alias}, m#{mident})"),
+            AliasEntry::Address(alias, addr) => write!(f, "({alias}, @{addr})"),
+            AliasEntry::Member(alias, mident, name) => write!(f, "({alias},{mident}::{name})"),
+            AliasEntry::TypeParam(alias) => write!(f, "({alias},[tparam])"),
+        }
+    }
+}
+
+impl fmt::Debug for LeadingAccessEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        match self {
+            LeadingAccessEntry::Module(mident) => write!(f, "m#{mident}"),
+            LeadingAccessEntry::Address(addr) => write!(f, "@{addr}"),
+            LeadingAccessEntry::Member(mident, name) => write!(f, "{mident}::{name}"),
+            LeadingAccessEntry::TypeParam => write!(f, "[tparam]"),
+        }
+    }
+}
+
+impl fmt::Debug for MemberEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        match self {
+            MemberEntry::Member(mident, name) => write!(f, "{mident}::{name}"),
+            MemberEntry::TypeParam => write!(f, "[tparam]"),
         }
     }
 }
 
 impl fmt::Debug for AliasMapBuilder {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Map(members: [")?;
-        for (_, key, (target, is_implicit)) in &self.members {
-            write!(f, "{} => {:?} <{}>, ", key, target, is_implicit)?;
+        let Self {
+            modules,
+            members,
+            addresses,
+            all_aliases_unique,
+        } = self;
+        writeln!(
+            f,
+            "AliasMapBuilder(\n  all_aliases_unique: {all_aliases_unique},\n  members: ["
+        )?;
+        for (_, key, (target, is_implicit)) in members {
+            writeln!(f, "    {key} => {target:?} <{is_implicit}>,")?;
         }
-        write!(f, ", modules: [")?;
-        for (_, key, (target, is_implicit)) in &self.modules {
-            write!(f, "{} => {:?} <{}>, ", key, target, is_implicit)?;
+        writeln!(f, "],\n  modules: [")?;
+        for (_, key, (target, is_implicit)) in modules {
+            writeln!(f, "    {key} => {target:?} <{is_implicit}>,")?;
         }
-        write!(f, ", addresses: [")?;
-        for (_, key, (target, is_implicit)) in &self.addresses {
-            write!(f, "{} => {:?} <{}>, ", key, target, is_implicit)?;
+        writeln!(f, ",\n addresses: [")?;
+        for (_, key, (target, is_implicit)) in addresses {
+            writeln!(f, "    {key} => {target:?} <{is_implicit}>,")?;
         }
-        write!(f, "])")
+        writeln!(f, "])")
     }
 }
 
 impl fmt::Debug for AliasMap {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Map(aliases: [")?;
-        for (_, key, (_, value)) in &self.aliases {
-            write!(f, "{} => {:?}, ", key, value)?;
+        let Self {
+            unused,
+            leading_access,
+            module_members,
+            previous,
+        } = self;
+        writeln!(f, "AliasMap(\n  unused: [")?;
+        for entry in unused {
+            writeln!(f, "    {entry:?},")?;
         }
-        write!(f, "], prev: {:?} )", self.previous)
+        writeln!(f, "],\n  modules: [")?;
+        for (_, alias, entry) in leading_access {
+            writeln!(f, "    {alias} => {entry:?}")?;
+        }
+        writeln!(f, "],\n  members: [")?;
+        for (_, alias, entry) in module_members {
+            writeln!(f, "    {alias} => {entry:?}")?;
+        }
+        writeln!(f, "])")?;
+        writeln!(f, "--> PREVIOUS \n: {previous:?}")
     }
 }

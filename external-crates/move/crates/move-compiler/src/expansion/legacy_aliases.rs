@@ -103,13 +103,13 @@ impl AliasMap {
             self.modules.remove(&alias);
             self.modules.add(alias, (Some(next_depth), ident)).unwrap();
         }
-        for (alias, (ident_member, is_implicit)) in new_members {
+        for (alias, ((mident, name, _kind), is_implicit)) in new_members {
             if !is_implicit {
                 current_scope.members.add(alias).unwrap();
             }
             self.members.remove(&alias);
             self.members
-                .add(alias, (Some(next_depth), ident_member))
+                .add(alias, (Some(next_depth), (mident, name)))
                 .unwrap();
         }
         self.unused.push(current_scope);
