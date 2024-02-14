@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { normalizeStructTag, parseStructTag } from '../../utils/sui-types.js';
+import { normalizeStructTag, parseStructTag } from '../../../src/utils/sui-types.js';
 
 describe('parseStructTag', () => {
 	it('parses struct tags correctly', () => {

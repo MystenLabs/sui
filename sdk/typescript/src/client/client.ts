@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { fromB58, toB64, toHEX } from '@mysten/bcs';
 
-import type { TransactionBlock } from '../builder/index.js';
-import { isTransactionBlock } from '../builder/index.js';
 import type { Signer } from '../cryptography/index.js';
+import type { TransactionBlock } from '../transactions/index.js';
+import { isTransactionBlock } from '../transactions/index.js';
 import {
 	isValidSuiAddress,
 	isValidSuiObjectId,

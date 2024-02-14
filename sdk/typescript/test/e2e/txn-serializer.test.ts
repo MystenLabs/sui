@@ -4,9 +4,9 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { SharedObjectRef } from '../../src/bcs';
-import { BuilderCallArg, TransactionBlock } from '../../src/builder';
-import { TransactionBlockDataBuilder } from '../../src/builder/TransactionBlockData';
 import { SuiTransactionBlockResponse } from '../../src/client';
+import { BuilderCallArg, TransactionBlock } from '../../src/transactions';
+import { TransactionBlockDataBuilder } from '../../src/transactions/TransactionBlockData';
 import { SUI_SYSTEM_STATE_OBJECT_ID } from '../../src/utils';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 

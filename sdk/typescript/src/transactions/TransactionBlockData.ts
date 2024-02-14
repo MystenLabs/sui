@@ -18,10 +18,9 @@ import {
 } from 'superstruct';
 
 import { bcs } from '../bcs/index.js';
-import { SuiObjectRef } from '../types/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import { hashTypedData } from './hash.js';
-import { BuilderCallArg, PureCallArg } from './Inputs.js';
+import { BuilderCallArg, PureCallArg, SuiObjectRef } from './Inputs.js';
 import { TransactionBlockInput, TransactionType } from './Transactions.js';
 import { create } from './utils.js';
 

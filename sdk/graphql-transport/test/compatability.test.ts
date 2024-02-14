@@ -3,13 +3,13 @@
 
 import { beforeAll, describe, expect, test } from 'vitest';
 
-import { TransactionBlock } from '../../typescript/src/builder/index.js';
 import {
 	getFullnodeUrl,
 	SuiClient,
 	SuiObjectData,
 	SuiTransactionBlockResponse,
 } from '../../typescript/src/client/index.js';
+import { TransactionBlock } from '../../typescript/src/transactions/index.js';
 import { publishPackage, setup, TestToolbox } from '../../typescript/test/e2e/utils/setup';
 import { SuiClientGraphQLTransport } from '../src/transport';
 

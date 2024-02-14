@@ -3,8 +3,8 @@
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { TransactionBlock } from '../../src/builder';
 import { SuiTransactionBlockResponse } from '../../src/client';
+import { TransactionBlock } from '../../src/transactions';
 import { executePaySuiNTimes, setup, TestToolbox } from './utils/setup';
 
 describe('Transaction Reading API', () => {

@@ -14,8 +14,7 @@ import {
 	toHEX,
 } from '@mysten/bcs';
 
-import type { MoveCallTransaction } from '../builder/Transactions.js';
-import type { SuiObjectRef as SuiObjectRefType } from '../types/objects.js';
+import type { MoveCallTransaction } from '../transactions/Transactions.js';
 import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
 import { TypeTagSerializer } from './type-tag-serializer.js';
 
@@ -35,13 +34,22 @@ export type SharedObjectRef = {
 	mutable: boolean;
 };
 
+export type SuiObjectRef = {
+	/** Base64 string representing the object digest */
+	objectId: string;
+	/** Object version */
+	version: number | string | bigint;
+	/** Hex code as string representing the object id */
+	digest: string;
+};
+
 /**
  * An object argument.
  */
 export type ObjectArg =
-	| { ImmOrOwned: SuiObjectRefType }
+	| { ImmOrOwned: SuiObjectRef }
 	| { Shared: SharedObjectRef }
-	| { Receiving: SuiObjectRefType };
+	| { Receiving: SuiObjectRef };
 
 /**
  * A pure argument.
@@ -109,7 +117,7 @@ export type TypeTag =
  * The GasData to be used in the transaction.
  */
 export type GasData = {
-	payment: SuiObjectRefType[];
+	payment: SuiObjectRef[];
 	owner: string; // Gas Object's owner
 	price: number;
 	budget: number;
