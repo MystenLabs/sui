@@ -40,7 +40,11 @@ Options:
 
 The main philosophy behind the CLI PTB support is to enable a user to either build and execute a PTB from the command line or a file. To enable seamless construction and execution of PTBs, this command was designed to allow you to provide a PTB from the console, a file, or mixing both at the same time. Furthermore, bash scripts can be used to construct and execute the PTB just as you would do from the command line, providing great flexibility when it comes to automating different tasks. 
 
-Besides using existing [traditional PTB](/concepts/transactions/prog-txn-blocks/) related concepts, we introduce a few new and important concepts for this command.
+Besides using existing [traditional PTB](/concepts/transactions/prog-txn-blocks/) related concepts, we introduce a few new and important concepts for this command. 
+
+:::info
+Note that all the following examples were tested using a `bash` shell environment, and your experience may vary depending on how your shell will interpret command line arguments and values (e.g., zsh requires to pass values in brackes by adding quotes "[]", though this is not required in bash).
+:::
 
 ### Assign
 The `--assign` argument is used to bind values to variables. There are primarily two ways to use the `--assign` command:
@@ -50,17 +54,18 @@ The `--assign` argument is used to bind values to variables. There are primarily
 Let's look at the first case where we assign a value to a variable. Let's say we want to check if some variable's value is none. We call the `0x1::option::is_none` function from the Sui framework, and pass in the variable name like this: 
 ```bash
 sui client ptb \
---assign my_variable none # bind value none to variable my_variable
---move-call 0x1::option::is_none <u64> my_variable
+--assign my_variable none \
+--move-call 0x1::option::is_none "<u64>" my_variable
+--gas-budget 50000000
 ```
 
 In the second case, if a previous command outputs some result, it can be binded to a variable in order to be accessed later. Let's see an example where we want a new coin with 1000 MIST, which we can achieve by using the `split-coins` command. Once we do that, we want to transfer the new coin to another address. Without the `--assign` argument, we would not be able to instruct the CLI to transfer that new coin object as we would not have a way to refer to it.
 
 ```bash
 sui client ptb \
---split-coins gas [1000] \                    # split gas coin to get a new coin with 1000 MIST
---assign coins \                              # bind the result of split-coins to coins
---transfer-objects @recipient_address [coins] # transfer to @recipient_address
+--split-coins gas [1000] \
+--assign coins \
+--transfer-objects @recipient_address [coins] \
 --gas-budget 50000000
 ```
 
@@ -69,11 +74,14 @@ sui client ptb \
 :::
 
 ### File
-To enable higher flexibility and reusability, PTBs can be written in a file and passed to the CLI using the `--file` argument, which accepts the path to a file. Let's take the previous example and put it into the `split_coins.ptb` file:
+To enable higher flexibility and reusability, PTBs can be written in a file and passed to the CLI using the `--file` argument, which accepts the path to a file. Let's take the previous example and assume it exists in the `split_coins.ptb` file:
 ```bash
---split-coins gas [1000] \                  # get a new coin with 1000 MIST
---assign coins \                              # bind the result of split-coins to coins
---transfer-objects @recipient_address [coins] # transfer to @recipient_address
+# get a new coin with 1000 MIST
+--split-coins gas [1000]
+# bind the result of split-coins to coins
+--assign coins
+# transfer the new coin to @recipient_address
+--transfer-objects @recipient_address [coins]
 --gas-budget 50000000
 ```
 
@@ -95,9 +103,24 @@ If you include multiple PTBs from files and want to check the order of your tran
 :::
 
 ### Pick Gas Budget
-The `--pick-gas-budget` flag is used when we need to disambiguate which gas budget to use, in case multiple budgets are provided. For example, let's assume that a user has multiple PTB files each providing the gas budget such that each PTB can be run individually. If the user now tries to pass build a large PTB by reusing these files, the CLI will not know which `gas-budget` to use, and throw an error.
+The `--pick-gas-budget` flag is used when we need to disambiguate which gas budget to use, in case multiple budgets are provided. For example, let's assume that a user has multiple PTB files each providing the gas budget such that each PTB can be run individually. If the user now tries to build a large PTB by reusing these files, the CLI will not know which `gas-budget` to use, and will throw an error. For example, if in `split_coins.ptb` there is a `--gas-budget 5000000` and in `transfer.ptb` a `--gas-budget 1000000`, the error will be similar to this one:
+ 
+```bash
+  × Error at command 0 in PTB file 'split_coins.ptb'
+   ╭────
+ 1 │ gas_budget 5000000 
+   ·            ───┬───
+   ·               ╰── Multiple gas budgets set for transaction with no gas picker. Gas budget is set for the first time here.
+   ╰────
+  help: You should either remove all but one usage of setting the gas budget, or use the 'pick_gas_budget' command to handle multiple gas budgets
 
-
+  × Error at command 1 in PTB file 'transfer.ptb'
+   ╭────
+ 1 │ gas_budget 1000000 
+   ·            ───┬───
+   ·               ╰── Gas budget is set for the 2nd time here.
+   ╰────
+```
 
 
 ## Examples
