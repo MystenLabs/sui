@@ -1212,6 +1212,13 @@ impl ObjectFilter {
 
         query
     }
+
+    pub(crate) fn has_filters(&self) -> bool {
+        self.type_.is_some()
+            || self.owner.is_some()
+            || self.object_ids.is_some()
+            || self.object_keys.is_some()
+    }
 }
 
 impl HistoricalObjectCursor {
@@ -1364,7 +1371,7 @@ pub(crate) async fn deserialize_move_struct(
 fn objects_query(filter: &ObjectFilter, lhs: i64, rhs: i64, page: &Page<Cursor>) -> RawQuery
 where
 {
-    let view = if filter.object_keys.is_some() {
+    let view = if filter.object_keys.is_some() || !filter.has_filters() {
         View::Historical
     } else {
         View::Consistent
