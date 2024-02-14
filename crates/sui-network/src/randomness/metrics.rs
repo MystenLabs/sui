@@ -1,8 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
+use prometheus::{
+    register_histogram_with_registry, register_int_gauge_with_registry, Histogram, IntGauge,
+    Registry,
+};
 use std::sync::Arc;
+use sui_types::{committee::EpochId, crypto::RandomnessRound};
 use tap::Pipe;
 
 #[derive(Clone)]
@@ -23,32 +27,78 @@ impl Metrics {
         Metrics(None)
     }
 
-    // pub fn inc_num_peers_with_external_address(&self) {
-    //     if let Some(inner) = &self.0 {
-    //         inner.num_peers_with_external_address.inc();
-    //     }
-    // }
+    pub fn record_completed_round(&self, epoch: EpochId, round: RandomnessRound) {
+        if let Some(inner) = &self.0 {
+            inner
+                .highest_epoch_generated
+                .set(inner.highest_epoch_generated.get().max(epoch as i64));
+            inner
+                .highest_round_generated
+                .set(inner.highest_round_generated.get().max(round.0 as i64));
+        }
+    }
 
-    // pub fn dec_num_peers_with_external_address(&self) {
-    //     if let Some(inner) = &self.0 {
-    //         inner.num_peers_with_external_address.dec();
-    //     }
-    // }
+    pub fn set_num_rounds_pending(&self, num_rounds_pending: usize) {
+        if let Some(inner) = &self.0 {
+            inner.num_rounds_pending.set(num_rounds_pending as i64);
+        }
+    }
+
+    pub fn round_generation_latency_metric(&self) -> Option<&Histogram> {
+        self.0.as_ref().map(|inner| &inner.round_generation_latency)
+    }
+
+    pub fn round_observation_latency_metric(&self) -> Option<&Histogram> {
+        self.0
+            .as_ref()
+            .map(|inner| &inner.round_observation_latency)
+    }
 }
 
 struct Inner {
-    // num_peers_with_external_address: IntGauge,
+    highest_epoch_generated: IntGauge,
+    highest_round_generated: IntGauge,
+    num_rounds_pending: IntGauge,
+    round_generation_latency: Histogram,
+    round_observation_latency: Histogram,
 }
+
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4,
+    1.6, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.,
+    12.5, 15., 17.5, 20., 25., 30., 60., 90., 120., 180., 300.,
+];
 
 impl Inner {
     pub fn new(registry: &Registry) -> Arc<Self> {
         Self {
-            // num_peers_with_external_address: register_int_gauge_with_registry!(
-            //     "num_peers_with_external_address",
-            //     "Number of peers with an external address configured for discovery",
-            //     registry
-            // )
-            // .unwrap(),
+            highest_epoch_generated: register_int_gauge_with_registry!(
+                "randomness_highest_epoch_generated",
+                "The highest epoch for which randomness has been generated",
+                registry
+            ).unwrap(),
+            highest_round_generated: register_int_gauge_with_registry!(
+                "randomness_highest_round_generated",
+                "The highest round for which randomness has been generated",
+                registry
+            ).unwrap(),
+            num_rounds_pending: register_int_gauge_with_registry!(
+                "randomness_num_rounds_pending",
+                "The number of rounds of randomness that are pending generation/observation",
+                registry
+            ).unwrap(),
+            round_generation_latency: register_histogram_with_registry!(
+                "randomness_round_generation_latency",
+                "Time taken to generate a single round of randomness, from when the round is requested to when the full signature is aggregated",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            round_observation_latency: register_histogram_with_registry!(
+                "randomness_round_observation_latency",
+                "Time taken from when partial signatures are sent for a round of randomness to when the value is observed in an executed checkpoint",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
         }
         .pipe(Arc::new)
     }

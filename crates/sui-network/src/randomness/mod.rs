@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use self::metrics::Metrics;
 use anemo::PeerId;
 use anyhow::Result;
 use fastcrypto::groups::bls12381;
@@ -13,7 +14,7 @@ use std::{
     collections::{btree_map::BTreeMap, BTreeSet, HashMap},
     ops::Bound,
     sync::Arc,
-    time::Duration,
+    time::{self, Duration},
 };
 use sui_types::{
     base_types::AuthorityName,
@@ -128,6 +129,7 @@ enum RandomnessMessage {
 struct RandomnessEventLoop {
     mailbox: mpsc::Receiver<RandomnessMessage>,
     network: anemo::Network,
+    metrics: Metrics,
     randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
 
     epoch: EpochId,
@@ -137,6 +139,7 @@ struct RandomnessEventLoop {
     aggregation_threshold: u32,
     pending_tasks: BTreeSet<(EpochId, RandomnessRound)>,
     send_tasks: BTreeMap<(EpochId, RandomnessRound), tokio::task::JoinHandle<()>>,
+    round_request_time: BTreeMap<(EpochId, RandomnessRound), time::Instant>,
     received_partial_sigs:
         BTreeMap<(EpochId, RandomnessRound, PeerId), Vec<RandomnessPartialSignature>>,
     completed_sigs: BTreeSet<(EpochId, RandomnessRound)>,
@@ -217,7 +220,10 @@ impl RandomnessEventLoop {
             task.abort();
         }
 
-        // Throw away any signatures from old epochs.
+        // Throw away info from old epochs.
+        self.round_request_time = self
+            .round_request_time
+            .split_off(&(new_epoch, RandomnessRound(0)));
         self.received_partial_sigs =
             self.received_partial_sigs
                 .split_off(&(new_epoch, RandomnessRound(0), PeerId([0; 32])));
@@ -265,6 +271,8 @@ impl RandomnessEventLoop {
         }
 
         self.pending_tasks.insert((epoch, round));
+        self.round_request_time
+            .insert((epoch, round), time::Instant::now());
         self.maybe_start_pending_tasks();
     }
 
@@ -272,9 +280,12 @@ impl RandomnessEventLoop {
     fn complete_round(&mut self, epoch: EpochId, round: RandomnessRound) {
         debug!("completing randomness generation");
         self.pending_tasks.remove(&(epoch, round));
+        self.round_request_time.remove(&(epoch, round));
         if let Some(task) = self.send_tasks.remove(&(epoch, round)) {
             task.abort();
             self.maybe_start_pending_tasks();
+        } else {
+            self.update_rounds_pending_metric();
         }
         // Add to completed_sigs in case we are seeing it for the first time from a checkpoint.
         self.completed_sigs.insert((epoch, round));
@@ -445,6 +456,12 @@ impl RandomnessEventLoop {
 
         debug!("successfully generated randomness full signature");
         self.completed_sigs.insert((epoch, round));
+        self.metrics.record_completed_round(epoch, round);
+        if let Some(start_time) = self.round_request_time.get(&(epoch, round)) {
+            if let Some(metric) = self.metrics.round_generation_latency_metric() {
+                metric.observe(start_time.elapsed().as_secs_f64());
+            }
+        }
 
         // TODO-DNS is there a way to do this by range, instead of saving all the keys and
         // individually removing each one? From Googling I found some incomplete feature
@@ -501,6 +518,7 @@ impl RandomnessEventLoop {
 
             self.send_tasks.entry((*epoch, *round)).or_insert_with(|| {
                 let network = self.network.clone();
+                let metrics = self.metrics.clone();
                 let authority_info = self.authority_info.clone();
                 let epoch = *epoch;
                 let round = *round;
@@ -511,6 +529,7 @@ impl RandomnessEventLoop {
                 debug!("sending partial sigs for epoch {epoch}, round {round}");
                 spawn_monitored_task!(RandomnessEventLoop::send_partial_signatures_task(
                     network,
+                    metrics,
                     authority_info,
                     epoch,
                     round,
@@ -533,15 +552,21 @@ impl RandomnessEventLoop {
                 self.pending_tasks.clear();
             }
         }
+        self.update_rounds_pending_metric();
     }
 
     async fn send_partial_signatures_task(
         network: anemo::Network,
+        metrics: Metrics,
         authority_info: Arc<HashMap<AuthorityName, (PeerId, PartyId)>>,
         epoch: EpochId,
         round: RandomnessRound,
         sigs: Vec<RandomnessPartialSignature>,
     ) {
+        let _metrics_guard = metrics
+            .round_observation_latency_metric()
+            .map(|metric| metric.start_timer());
+
         let peers: HashMap<_, _> = authority_info
             .iter()
             .map(|(name, (peer_id, _party_id))| (name, network.waiting_peer(peer_id.clone())))
@@ -552,6 +577,7 @@ impl RandomnessEventLoop {
             .collect();
 
         loop {
+            // TODO-DNS figure out errors about peers not being found
             let mut requests = FuturesUnordered::new();
             for (name, peer) in &peers {
                 let mut client = RandomnessClient::new(peer.clone());
@@ -578,5 +604,10 @@ impl RandomnessEventLoop {
             const SEND_PARTIAL_SIGNATURES_RETRY_TIME: Duration = Duration::from_secs(5);
             tokio::time::sleep(SEND_PARTIAL_SIGNATURES_RETRY_TIME).await;
         }
+    }
+
+    fn update_rounds_pending_metric(&self) {
+        self.metrics
+            .set_num_rounds_pending(self.pending_tasks.len() + self.send_tasks.len());
     }
 }

@@ -68,7 +68,6 @@ impl Builder {
 
         (
             UnstartedRandomness {
-                config,
                 handle,
                 mailbox,
                 metrics,
@@ -81,7 +80,6 @@ impl Builder {
 
 /// Handle to an unstarted randomness network system
 pub struct UnstartedRandomness {
-    pub(super) config: RandomnessConfig,
     pub(super) handle: Handle,
     pub(super) mailbox: mpsc::Receiver<RandomnessMessage>,
     pub(super) metrics: Metrics,
@@ -91,7 +89,6 @@ pub struct UnstartedRandomness {
 impl UnstartedRandomness {
     pub(super) fn build(self, network: anemo::Network) -> (RandomnessEventLoop, Handle) {
         let Self {
-            config,
             handle,
             mailbox,
             metrics,
@@ -101,6 +98,7 @@ impl UnstartedRandomness {
             RandomnessEventLoop {
                 mailbox,
                 network,
+                metrics,
                 randomness_tx,
 
                 epoch: 0,
@@ -110,6 +108,7 @@ impl UnstartedRandomness {
                 aggregation_threshold: 0,
                 pending_tasks: BTreeSet::new(),
                 send_tasks: BTreeMap::new(),
+                round_request_time: BTreeMap::new(),
                 received_partial_sigs: BTreeMap::new(),
                 completed_sigs: BTreeSet::new(),
             },
