@@ -1,19 +1,18 @@
-# `WalletProvider`
+# WalletProvider
 
-The `WalletProvider` is used to setup the necessary context for you React application. It should be
-at the root of your application, so that you can use any of the Dapp Kit wallet components
-underneath it.
+Use `WalletProvider` to set up the necessary context for your React app. Use it at the root of your
+app, so that you can use any of the dApp Kit wallet components underneath it.
 
 ```tsx
 import { WalletProvider } from '@mysten/dapp-kit';
 
 function App() {
-  return (
-    <WalletProvider>
-      <YourApp />
-    <WalletProvider />
-  );
-};
+	return (
+		<WalletProvider>
+			<YourApp />
+		</WalletProvider>
+	);
+}
 ```
 
 The `WalletProvider` manages all wallet state for you, and makes the current wallet state available
@@ -23,17 +22,16 @@ to other dApp Kit hooks and components.
 
 All props are optional.
 
-- `preferredWallets` - A list of wallets that are sorted to the top of the wallet list, if they are
+- `preferredWallets` - A list of wallets that are sorted to the top of the wallet list.
 - `requiredFeatures` - A list of features that are required for the dApp to function. This filters
   the list of wallets presented to users when selecting a wallet to connect from, ensuring that only
-  wallets that meet the dApps requirements can connect.
-- `enableUnsafeBurner` - Enables the development-only unsafe burner wallet, which can be useful for
-  testing.
+  wallets that meet the dApp requirements can connect.
+- `enableUnsafeBurner` - Enables the development-only unsafe burner wallet, useful for testing.
 - `autoConnect` - Enables automatically reconnecting to the most recently used wallet account upon
-  mounting
-- `zkSend` - Enables and configures the zkSend wallet.
-  [Read more about how to use this integration.](./zksend.mdx)
-- `storage` - Configures how the most recently connected to wallet account is stored. Set to `null`
-  to disable persisting state entirely. Defaults to using localStorage if it is available.
+  mounting.
+- `zkSend` - Enables and configures the zkSend wallet. Read more about how to
+  [use the zkSend integration](./zksend.mdx).
+- `storage` - Configures how the most recently connected-to wallet account is stored. Set to `null`
+  to disable persisting state entirely. Defaults to using `localStorage` if it is available.
 - `storageKey` - The key to use to store the most recently connected wallet account.
 - `theme` - The theme to use for styling UI components. Defaults to using the light theme.

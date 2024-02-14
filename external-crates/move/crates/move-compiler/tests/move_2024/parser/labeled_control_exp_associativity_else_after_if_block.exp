@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_else_after_if_block.move:13:32
+   │
+13 │         if (cond) 'a: { s1 }.f else s2.f
+   │                                ^^^^
+   │                                │
+   │                                Unexpected 'else'
+   │                                Expected ';'
+

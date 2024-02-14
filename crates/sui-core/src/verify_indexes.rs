@@ -9,18 +9,18 @@ use sui_types::{base_types::ObjectInfo, object::Owner};
 use tracing::info;
 use typed_store::traits::Map;
 
-use crate::authority::{authority_store_tables::LiveObject, AuthorityStore};
+use crate::{authority::authority_store_tables::LiveObject, state_accumulator::AccumulatorStore};
 
 /// This is a very expensive function that verifies some of the secondary indexes. This is done by
 /// iterating through the live object set and recalculating these secodary indexes.
-pub fn verify_indexes(database: Arc<AuthorityStore>, indexes: Arc<IndexStore>) -> Result<()> {
+pub fn verify_indexes(store: &dyn AccumulatorStore, indexes: Arc<IndexStore>) -> Result<()> {
     info!("Begin running index verification checks");
 
     let mut owner_index = BTreeMap::new();
     let mut coin_index = BTreeMap::new();
 
     tracing::info!("Reading live objects set");
-    for object in database.iter_live_object_set(false) {
+    for object in store.iter_live_object_set(false) {
         let LiveObject::Normal(object) = object else {
             continue;
         };

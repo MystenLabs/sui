@@ -1,0 +1,6 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/macro_identifier_invalid_no_following_characters.move:2:19
+  │
+2 │     macro fun foo($
+  │                   ^ Expected an identifier following '$', e.g. '$x'
+

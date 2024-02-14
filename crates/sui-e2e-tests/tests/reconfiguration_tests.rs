@@ -257,6 +257,15 @@ async fn reconfig_with_revert_end_to_end_test() {
 // This test just starts up a cluster that reconfigures itself under 0 load.
 #[sim_test]
 async fn test_passive_reconfig() {
+    do_test_passive_reconfig().await;
+}
+
+#[sim_test(check_determinism)]
+async fn test_passive_reconfig_determinism() {
+    do_test_passive_reconfig().await;
+}
+
+async fn do_test_passive_reconfig() {
     telemetry_subscribers::init_for_testing();
     let _commit_root_state_digest = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_commit_root_state_digest_supported(true);
@@ -440,14 +449,14 @@ async fn test_validator_candidate_pool_read() {
             .unwrap();
         let system_state_summary = system_state.clone().into_sui_system_state_summary();
         let staking_pool_id = get_validator_from_table(
-            node.state().db().as_ref(),
+            node.state().get_object_store().as_ref(),
             system_state_summary.validator_candidates_id,
             &address,
         )
         .unwrap()
         .staking_pool_id;
         let validator = get_validator_by_pool_id(
-            node.state().db().as_ref(),
+            node.state().get_object_store().as_ref(),
             &system_state,
             &system_state_summary,
             staking_pool_id,
@@ -485,7 +494,7 @@ async fn test_inactive_validator_pool_read() {
         let system_state_summary = system_state.clone().into_sui_system_state_summary();
         // Validator is active. Check that we can find its summary by staking pool id.
         let validator = get_validator_by_pool_id(
-            node.state().db().as_ref(),
+            node.state().get_object_store().as_ref(),
             &system_state,
             &system_state_summary,
             staking_pool_id,
@@ -520,7 +529,7 @@ async fn test_inactive_validator_pool_read() {
         );
         let system_state_summary = system_state.clone().into_sui_system_state_summary();
         let validator = get_validator_by_pool_id(
-            node.state().db().as_ref(),
+            node.state().get_object_store().as_ref(),
             &system_state,
             &system_state_summary,
             staking_pool_id,
@@ -580,6 +589,15 @@ async fn test_reconfig_with_committee_change_basic() {
 
 #[sim_test]
 async fn test_reconfig_with_committee_change_stress() {
+    do_test_reconfig_with_committee_change_stress().await;
+}
+
+#[sim_test(check_determinism)]
+async fn test_reconfig_with_committee_change_stress_determinism() {
+    do_test_reconfig_with_committee_change_stress().await;
+}
+
+async fn do_test_reconfig_with_committee_change_stress() {
     let mut candidates = (0..6)
         .map(|_| ValidatorGenesisConfigBuilder::new().build(&mut OsRng))
         .collect::<Vec<_>>();
@@ -768,7 +786,7 @@ async fn execute_add_validator_transactions(
             .get_sui_system_state_object_for_testing()
             .unwrap();
         system_state
-            .get_pending_active_validators(node.state().db().as_ref())
+            .get_pending_active_validators(node.state().get_object_store().as_ref())
             .unwrap()
             .len()
     });
@@ -813,7 +831,7 @@ async fn execute_add_validator_transactions(
             .get_sui_system_state_object_for_testing()
             .unwrap();
         let pending_active_validators = system_state
-            .get_pending_active_validators(node.state().db().as_ref())
+            .get_pending_active_validators(node.state().get_object_store().as_ref())
             .unwrap();
         assert_eq!(pending_active_validators.len(), pending_active_count + 1);
         assert_eq!(

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::Worker;
 use anyhow::Result;
 use async_trait::async_trait;
 use aws_sdk_dynamodb::primitives::Blob;
@@ -15,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::iter::repeat;
+use sui_data_ingestion_core::Worker;
 use sui_storage::http_key_value_store::TaggedKey;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::storage::ObjectKey;

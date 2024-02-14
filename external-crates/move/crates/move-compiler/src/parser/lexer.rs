@@ -21,6 +21,7 @@ pub enum Tok {
     NumTypedValue,
     ByteStringValue,
     Identifier,
+    SyntaxIdentifier,
     Exclaim,
     ExclaimEqual,
     Percent,
@@ -89,6 +90,7 @@ pub enum Tok {
     Type,
     Match,
     BlockLabel,
+    MinusGreater,
 }
 
 impl fmt::Display for Tok {
@@ -100,6 +102,7 @@ impl fmt::Display for Tok {
             NumTypedValue => "[NumTyped]",
             ByteStringValue => "[ByteString]",
             Identifier => "[Identifier]",
+            SyntaxIdentifier => "[SyntaxIdentifier]",
             Exclaim => "!",
             ExclaimEqual => "!=",
             Percent => "%",
@@ -168,6 +171,7 @@ impl fmt::Display for Tok {
             Type => "type",
             Match => "match",
             BlockLabel => "'[Identifier]",
+            MinusGreater => "->",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -222,6 +226,10 @@ impl<'input> Lexer<'input> {
 
     pub fn current_token_loc(&self) -> Loc {
         make_loc(self.file_hash(), self.cur_start, self.cur_end)
+    }
+
+    pub fn edition(&self) -> Edition {
+        self.edition
     }
 
     /// Strips line and block comments from input source, and collects documentation comments,
@@ -667,6 +675,20 @@ fn find_token(
                 (Ok(get_name_token(edition, &text[..len])), len)
             }
         }
+        '$' => {
+            if text.len() > 1 && text[1..].starts_with(|c| matches!(c,'A'..='Z' | 'a'..='z' | '_'))
+            {
+                let len = get_name_len(&text[1..]);
+                (Ok(Tok::SyntaxIdentifier), len + 1)
+            } else {
+                let loc = make_loc(file_hash, start_offset, start_offset);
+                let diag = maybe_diag! { Box::new(diag!(
+                    Syntax::UnexpectedToken,
+                    (loc, "Expected an identifier following '$', e.g. '$x'"),
+                )) };
+                (Err(diag), 1)
+            }
+        }
         '&' => {
             if text.starts_with("&mut ") {
                 (Ok(Tok::AmpMut), 5)
@@ -726,6 +748,20 @@ fn find_token(
                 (Ok(Tok::Colon), 1)
             }
         }
+        '.' => {
+            if text.starts_with("..") {
+                (Ok(Tok::PeriodPeriod), 2)
+            } else {
+                (Ok(Tok::Period), 1)
+            }
+        }
+        '-' => {
+            if text.starts_with("->") {
+                (Ok(Tok::MinusGreater), 2)
+            } else {
+                (Ok(Tok::Minus), 1)
+            }
+        }
         '%' => (Ok(Tok::Percent), 1),
         '(' => (Ok(Tok::LParen), 1),
         ')' => (Ok(Tok::RParen), 1),
@@ -734,14 +770,6 @@ fn find_token(
         '*' => (Ok(Tok::Star), 1),
         '+' => (Ok(Tok::Plus), 1),
         ',' => (Ok(Tok::Comma), 1),
-        '-' => (Ok(Tok::Minus), 1),
-        '.' => {
-            if text.starts_with("..") {
-                (Ok(Tok::PeriodPeriod), 2)
-            } else {
-                (Ok(Tok::Period), 1)
-            }
-        }
         '/' => (Ok(Tok::Slash), 1),
         ';' => (Ok(Tok::Semicolon), 1),
         '^' => (Ok(Tok::Caret), 1),

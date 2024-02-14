@@ -37,17 +37,20 @@ use axum::middleware::{self};
 use axum::response::IntoResponse;
 use axum::routing::{post, MethodRouter, Route};
 use axum::{headers::Header, Router};
-use http::Request;
+use http::{HeaderValue, Method, Request};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
 use hyper::Server as HyperServer;
+use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
 use std::convert::Infallible;
 use std::net::TcpStream;
 use std::{any::Any, net::SocketAddr, time::Instant};
+use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -148,6 +151,9 @@ impl ServerBuilder {
                     self.state.metrics.clone(),
                     check_version_middleware,
                 ))
+                .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
+                    metrics: self.state.metrics.clone(),
+                }))
                 .layer(middleware::from_fn(set_version_middleware));
             self.router = Some(router);
         }
@@ -172,10 +178,42 @@ impl ServerBuilder {
         self
     }
 
+    fn cors() -> Result<CorsLayer, Error> {
+        let acl = match std::env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
+            Ok(value) => {
+                let allow_hosts = value
+                    .split(',')
+                    .map(HeaderValue::from_str)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| {
+                        Error::Internal(
+                            "Cannot resolve access control origin env variable".to_string(),
+                        )
+                    })?;
+                AllowOrigin::list(allow_hosts)
+            }
+            _ => AllowOrigin::any(),
+        };
+        info!("Access control allow origin set to: {acl:?}");
+
+        let cors = CorsLayer::new()
+            // Allow `POST` when accessing the resource
+            .allow_methods([Method::POST])
+            // Allow requests from any origin
+            .allow_origin(acl)
+            .allow_headers([
+                hyper::header::CONTENT_TYPE,
+                VERSION_HEADER.clone(),
+                LIMITS_HEADER.clone(),
+            ]);
+        Ok(cors)
+    }
+
     pub fn build(self) -> Result<Server, Error> {
         let (address, schema, router) = self.build_components();
-
-        let app = router.layer(axum::extract::Extension(schema));
+        let app = router
+            .layer(axum::extract::Extension(schema))
+            .layer(Self::cors()?);
 
         Ok(Server {
             server: axum::Server::bind(
@@ -220,6 +258,10 @@ impl ServerBuilder {
         let reader = PgManager::reader_with_config(
             config.connection.db_url.clone(),
             config.connection.db_pool_size,
+            // Bound each statement in a request with the overall request timeout, to bound DB
+            // utilisation (in the worst case we will use 2x the request timeout time in DB wall
+            // time).
+            config.service.limits.request_timeout_ms,
         )
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
 
@@ -297,15 +339,11 @@ pub fn export_schema() -> String {
 }
 
 async fn graphql_handler(
-    State(metrics): State<Metrics>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
     headers: HeaderMap,
     req: GraphQLRequest,
-) -> GraphQLResponse {
-    metrics.request_metrics.inflight_requests.inc();
-    metrics.inc_num_queries();
-    let instant = Instant::now();
+) -> (axum::http::Extensions, GraphQLResponse) {
     let mut req = req.into_inner();
     req.data.insert(Uuid::new_v4());
     if headers.contains_key(ShowUsage::name()) {
@@ -315,14 +353,65 @@ async fn graphql_handler(
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
     let result = schema.execute(req).await;
-    let elapsed = instant.elapsed().as_millis() as u64;
-    metrics.query_latency(elapsed);
+
+    // If there are errors, insert them as an extention so that the Metrics callback handler can
+    // pull it out later.
+    let mut extensions = axum::http::Extensions::new();
     if result.is_err() {
-        metrics.inc_errors(result.errors.clone());
-    }
-    metrics.request_metrics.inflight_requests.dec();
-    result.into()
+        extensions.insert(GraphqlErrors(std::sync::Arc::new(result.errors.clone())));
+    };
+    (extensions, result.into())
 }
+
+#[derive(Clone)]
+struct MetricsMakeCallbackHandler {
+    metrics: Metrics,
+}
+
+impl MakeCallbackHandler for MetricsMakeCallbackHandler {
+    type Handler = MetricsCallbackHandler;
+
+    fn make_handler(&self, _request: &http::request::Parts) -> Self::Handler {
+        let start = Instant::now();
+        let metrics = self.metrics.clone();
+
+        metrics.request_metrics.inflight_requests.inc();
+        metrics.inc_num_queries();
+
+        MetricsCallbackHandler { metrics, start }
+    }
+}
+
+struct MetricsCallbackHandler {
+    metrics: Metrics,
+    start: Instant,
+}
+
+impl ResponseHandler for MetricsCallbackHandler {
+    fn on_response(self, response: &http::response::Parts) {
+        if let Some(errors) = response.extensions.get::<GraphqlErrors>() {
+            self.metrics.inc_errors(&errors.0);
+        }
+    }
+
+    fn on_error<E>(self, _error: &E) {
+        // Do nothing if the whole service errored
+        //
+        // in Axum this isn't possible since all services are required to have an error type of
+        // Infallible
+    }
+}
+
+impl Drop for MetricsCallbackHandler {
+    fn drop(&mut self) {
+        let elapsed = self.start.elapsed().as_millis() as u64;
+        self.metrics.query_latency(elapsed);
+        self.metrics.request_metrics.inflight_requests.dec();
+    }
+}
+
+#[derive(Debug, Clone)]
+struct GraphqlErrors(std::sync::Arc<Vec<async_graphql::ServerError>>);
 
 /// Connect via a TCPStream to the DB to check if it is alive
 async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode {
@@ -484,7 +573,7 @@ pub mod tests {
     }
 
     pub async fn test_query_depth_limit_impl() {
-        let (connection_config, _cluster) = prep_cluster().await;
+        let (connection_config, cluster) = prep_cluster().await;
 
         async fn exec_query_depth_limit(
             depth: u32,
@@ -517,6 +606,9 @@ pub mod tests {
         }
 
         // Should complete successfully
+        cluster
+            .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
+            .await;
         let resp = exec_query_depth_limit(1, "{ chainIdentifier }", &connection_config).await;
         assert!(resp.is_ok());
         let resp = exec_query_depth_limit(

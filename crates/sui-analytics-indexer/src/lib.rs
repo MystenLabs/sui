@@ -24,11 +24,13 @@ use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_all_files_with_epoch_prefix,
 };
 use sui_types::base_types::EpochId;
+use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::analytics_metrics::AnalyticsMetrics;
 use crate::analytics_processor::AnalyticsProcessor;
 use crate::handlers::checkpoint_handler::CheckpointHandler;
+use crate::handlers::df_handler::DynamicFieldHandler;
 use crate::handlers::event_handler::EventHandler;
 use crate::handlers::move_call_handler::MoveCallHandler;
 use crate::handlers::object_handler::ObjectHandler;
@@ -37,8 +39,9 @@ use crate::handlers::transaction_handler::TransactionHandler;
 use crate::handlers::transaction_objects_handler::TransactionObjectsHandler;
 use crate::handlers::AnalyticsHandler;
 use crate::tables::{
-    CheckpointEntry, EventEntry, InputObjectKind, MoveCallEntry, MovePackageEntry, ObjectEntry,
-    ObjectStatus, OwnerType, TransactionEntry, TransactionObjectEntry,
+    CheckpointEntry, DynamicFieldEntry, EventEntry, InputObjectKind, MoveCallEntry,
+    MovePackageEntry, ObjectEntry, ObjectStatus, OwnerType, TransactionEntry,
+    TransactionObjectEntry,
 };
 use crate::writers::csv_writer::CSVWriter;
 use crate::writers::parquet_writer::ParquetWriter;
@@ -60,6 +63,7 @@ const EVENT_DIR_PREFIX: &str = "events";
 const TRANSACTION_OBJECT_DIR_PREFIX: &str = "transaction_objects";
 const MOVE_CALL_PREFIX: &str = "move_call";
 const MOVE_PACKAGE_PREFIX: &str = "move_package";
+const DYNAMIC_FIELD_PREFIX: &str = "dynamic_field";
 
 #[derive(Parser, Clone, Debug)]
 #[clap(
@@ -312,6 +316,7 @@ pub enum FileType {
     Event,
     MoveCall,
     MovePackage,
+    DynamicField,
 }
 
 impl FileType {
@@ -324,6 +329,7 @@ impl FileType {
             FileType::Event => Path::from(EVENT_DIR_PREFIX),
             FileType::MoveCall => Path::from(MOVE_CALL_PREFIX),
             FileType::MovePackage => Path::from(MOVE_PACKAGE_PREFIX),
+            FileType::DynamicField => Path::from(DYNAMIC_FIELD_PREFIX),
         }
     }
 
@@ -409,6 +415,18 @@ impl From<Option<ObjectStatus>> for ParquetValue {
 
 impl From<Option<InputObjectKind>> for ParquetValue {
     fn from(value: Option<InputObjectKind>) -> Self {
+        Self::OptionStr(value.map(|v| v.to_string()))
+    }
+}
+
+impl From<DynamicFieldType> for ParquetValue {
+    fn from(value: DynamicFieldType) -> Self {
+        Self::Str(value.to_string())
+    }
+}
+
+impl From<Option<DynamicFieldType>> for ParquetValue {
+    fn from(value: Option<DynamicFieldType>) -> Self {
         Self::OptionStr(value.map(|v| v.to_string()))
     }
 }
@@ -772,6 +790,33 @@ pub async fn make_move_call_processor(
     .await
 }
 
+pub async fn make_dynamic_field_processor(
+    config: AnalyticsIndexerConfig,
+    metrics: AnalyticsMetrics,
+) -> Result<Processor> {
+    let starting_checkpoint_seq_num =
+        get_starting_checkpoint_seq_num(config.clone(), FileType::DynamicField).await?;
+    let handler: Box<dyn AnalyticsHandler<DynamicFieldEntry>> = Box::new(DynamicFieldHandler::new(
+        &config.package_cache_path,
+        &config.rest_url,
+    ));
+    let writer = make_writer::<DynamicFieldEntry>(
+        config.clone(),
+        FileType::DynamicField,
+        starting_checkpoint_seq_num,
+    )?;
+    let max_checkpoint_reader = make_max_checkpoint_reader(&config).await?;
+    Processor::new::<DynamicFieldEntry>(
+        handler,
+        writer,
+        max_checkpoint_reader,
+        starting_checkpoint_seq_num,
+        metrics,
+        config,
+    )
+    .await
+}
+
 pub fn make_writer<S: Serialize + ParquetSchema>(
     config: AnalyticsIndexerConfig,
     file_type: FileType,
@@ -815,5 +860,6 @@ pub async fn make_analytics_processor(
         FileType::TransactionObjects => make_transaction_objects_processor(config, metrics).await,
         FileType::MoveCall => make_move_call_processor(config, metrics).await,
         FileType::MovePackage => make_move_package_processor(config, metrics).await,
+        FileType::DynamicField => make_dynamic_field_processor(config, metrics).await,
     }
 }

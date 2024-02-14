@@ -55,7 +55,7 @@ pub(crate) struct BaseCommitter {
     /// The consensus leader schedule to be used to resolve the leader for a
     /// given round.
     leader_schedule: LeaderSchedule,
-    /// Block store representing the Dag state
+    /// In memory block store representing the dag state
     dag_state: Arc<RwLock<DagState>>,
     /// The options used by this committer
     options: BaseCommitterOptions,
@@ -176,7 +176,7 @@ impl BaseCommitter {
 
     /// Return the wave in which the specified round belongs. This takes into
     /// account the round offset for when pipelining is enabled.
-    fn wave_number(&self, round: Round) -> WaveNumber {
+    pub(crate) fn wave_number(&self, round: Round) -> WaveNumber {
         round.saturating_sub(self.options.round_offset) / self.options.wave_length
     }
 

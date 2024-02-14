@@ -25,7 +25,7 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointSequenceNumber,
     FullCheckpointContents as CheckpointContents, VerifiedCheckpoint, VerifiedCheckpointContents,
 };
-use sui_types::storage::{ReadStore, WriteStore};
+use sui_types::storage::WriteStore;
 use tokio::sync::oneshot::Sender;
 use tokio::sync::{oneshot, Mutex};
 use tracing::info;
@@ -274,7 +274,6 @@ impl ArchiveReader {
     ) -> Result<()>
     where
         S: WriteStore + Clone,
-        <S as ReadStore>::Error: std::error::Error,
     {
         let (summary_files, start_index, end_index) =
             self.get_summary_files(checkpoint_range.clone()).await?;
@@ -372,7 +371,6 @@ impl ArchiveReader {
     ) -> Result<()>
     where
         S: WriteStore + Clone,
-        <S as ReadStore>::Error: std::error::Error,
     {
         let manifest = self.manifest.lock().await.clone();
 
@@ -518,7 +516,6 @@ impl ArchiveReader {
     ) -> Result<()>
     where
         S: WriteStore + Clone,
-        <S as ReadStore>::Error: std::error::Error,
     {
         store
             .insert_checkpoint(VerifiedCheckpoint::new_unchecked(certified_checkpoint).borrow())
@@ -533,7 +530,6 @@ impl ArchiveReader {
     ) -> Result<VerifiedCheckpoint>
     where
         S: WriteStore + Clone,
-        <S as ReadStore>::Error: std::error::Error,
     {
         store
             .get_checkpoint_by_sequence_number(certified_checkpoint.sequence_number)
@@ -554,7 +550,7 @@ impl ArchiveReader {
                             prev_checkpoint_seq_num
                         ))?;
 
-                    verify_checkpoint(&prev_checkpoint, &store, certified_checkpoint)
+                    verify_checkpoint(&prev_checkpoint, store, certified_checkpoint)
                         .map_err(|_| anyhow!("Checkpoint verification failed"))?
                 } else {
                     VerifiedCheckpoint::new_unchecked(certified_checkpoint)

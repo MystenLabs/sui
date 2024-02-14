@@ -12,7 +12,6 @@ use sui_types::{
     execution_status::{ExecutionFailureStatus, ExecutionStatus},
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    storage::ObjectStore,
     transaction::{
         CallArg, ObjectArg, ProgrammableTransaction, VerifiedCertificate,
         TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
@@ -148,7 +147,7 @@ impl TestRunner {
 
         if self.aggressive_pruning_enabled {
             self.authority_state
-                .database
+                .database_for_testing()
                 .prune_objects_immediately_for_testing(vec![effects.clone()])
                 .await
                 .unwrap();
@@ -183,7 +182,7 @@ impl TestRunner {
 
         if self.aggressive_pruning_enabled {
             self.authority_state
-                .database
+                .database_for_testing()
                 .prune_objects_immediately_for_testing(vec![effects.clone()])
                 .await
                 .unwrap();
@@ -245,7 +244,7 @@ impl TestRunner {
 
         if self.aggressive_pruning_enabled {
             self.authority_state
-                .database
+                .database_for_testing()
                 .prune_objects_immediately_for_testing(vec![effects.clone()])
                 .await
                 .unwrap();
@@ -1746,10 +1745,12 @@ async fn test_have_deleted_owned_object() {
 
         let (new_parent, new_child) = get_parent_and_child(effects.mutated());
 
-        assert!(runner.authority_state.database.get_object(&new_child.0.0).unwrap().is_some());
+        let cache = runner.authority_state.get_cache_reader().clone();
+
+        assert!(cache.get_object(&new_child.0.0).unwrap().is_some());
         // Should not show as deleted for either versions
-        assert!(!runner.authority_state.database.have_deleted_owned_object_at_version_or_after(&new_child.0.0, new_child.0.1, 0).unwrap());
-        assert!(!runner.authority_state.database.have_deleted_owned_object_at_version_or_after(&new_child.0.0, child.0.1, 0).unwrap());
+        assert!(!cache.have_deleted_owned_object_at_version_or_after(&new_child.0.0, new_child.0.1, 0).unwrap());
+        assert!(!cache.have_deleted_owned_object_at_version_or_after(&new_child.0.0, child.0.1, 0).unwrap());
 
         let effects = runner
             .run({
@@ -1765,14 +1766,14 @@ async fn test_have_deleted_owned_object() {
             .await;
 
         let deleted_child = effects.deleted().into_iter().find(|(id, _, _)| *id == new_child.0 .0).unwrap();
-        assert!(runner.authority_state.database.get_object(&deleted_child.0).unwrap().is_none());
-        assert!(runner.authority_state.database.have_deleted_owned_object_at_version_or_after(&deleted_child.0, deleted_child.1, 0).unwrap());
-        assert!(runner.authority_state.database.have_deleted_owned_object_at_version_or_after(&deleted_child.0, new_child.0.1, 0).unwrap());
-        assert!(runner.authority_state.database.have_deleted_owned_object_at_version_or_after(&deleted_child.0, child.0.1, 0).unwrap());
+        assert!(cache.get_object(&deleted_child.0).unwrap().is_none());
+        assert!(cache.have_deleted_owned_object_at_version_or_after(&deleted_child.0, deleted_child.1, 0).unwrap());
+        assert!(cache.have_deleted_owned_object_at_version_or_after(&deleted_child.0, new_child.0.1, 0).unwrap());
+        assert!(cache.have_deleted_owned_object_at_version_or_after(&deleted_child.0, child.0.1, 0).unwrap());
         // Should not show as deleted for versions after this though
-        assert!(!runner.authority_state.database.have_deleted_owned_object_at_version_or_after(&deleted_child.0, deleted_child.1.next(), 0).unwrap());
+        assert!(!cache.have_deleted_owned_object_at_version_or_after(&deleted_child.0, deleted_child.1.next(), 0).unwrap());
         // Should not show as deleted for other epochs outside of our current epoch too
-        assert!(!runner.authority_state.database.have_deleted_owned_object_at_version_or_after(&deleted_child.0, deleted_child.1, 1).unwrap());
+        assert!(!cache.have_deleted_owned_object_at_version_or_after(&deleted_child.0, deleted_child.1, 1).unwrap());
     }
     }
 }

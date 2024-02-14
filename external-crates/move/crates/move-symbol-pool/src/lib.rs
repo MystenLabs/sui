@@ -74,6 +74,8 @@ static_symbols!(
     "AuthenticatorState",
     "random",
     "Random",
+    "bridge",
+    "Bridge",
     "id",
     "transfer",
     "freeze_object",
@@ -85,7 +87,10 @@ static_symbols!(
     "loop",
     "deny_list",
     "DenyList",
+    "%implicit",
+    "%macro",
     "lint",
+    "migration",
 );
 
 /// The global, unique cache of strings.

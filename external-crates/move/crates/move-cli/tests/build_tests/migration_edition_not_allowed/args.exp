@@ -1,0 +1,5 @@
+Command `build`:
+Error: Error parsing '[package]' section of manifest
+
+Caused by:
+    Invalid 'edition'. Unsupported edition "2024.migration". Current supported editions include: "legacy", "2024.alpha"

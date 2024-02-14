@@ -16,6 +16,7 @@ use diesel::{
 };
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use sui_indexer::types_v2::OwnerType;
 use sui_types::{parse_sui_type_tag, TypeTag};
 
 /// The total balance for a particular coin type.
@@ -251,7 +252,11 @@ fn filter(mut query: RawQuery, owner: SuiAddress, coin_type: Option<TypeTag>) ->
 
     query = filter!(
         query,
-        format!("owner_id = '\\x{}'::bytea", hex::encode(owner.into_vec()))
+        format!(
+            "owner_id = '\\x{}'::bytea AND owner_type = {}",
+            hex::encode(owner.into_vec()),
+            OwnerType::Address as i16
+        )
     );
 
     if let Some(coin_type) = coin_type {

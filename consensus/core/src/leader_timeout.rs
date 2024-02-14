@@ -3,7 +3,7 @@
 use crate::block::Round;
 use crate::context::Context;
 use crate::core::CoreSignalsReceivers;
-use crate::core_thread::CoreThreadDispatcherInterface;
+use crate::core_thread::CoreThreadDispatcher;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::oneshot::{Receiver, Sender};
@@ -23,14 +23,14 @@ impl LeaderTimeoutTaskHandle {
     }
 }
 
-pub(crate) struct LeaderTimeoutTask<D> {
+pub(crate) struct LeaderTimeoutTask<D: CoreThreadDispatcher> {
     dispatcher: D,
     signals_receivers: CoreSignalsReceivers,
     leader_timeout: Duration,
     stop: Receiver<()>,
 }
 
-impl<D: CoreThreadDispatcherInterface> LeaderTimeoutTask<D> {
+impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
     pub fn start(
         dispatcher: D,
         signals_receivers: CoreSignalsReceivers,
@@ -95,18 +95,20 @@ impl<D: CoreThreadDispatcherInterface> LeaderTimeoutTask<D> {
 
 #[cfg(test)]
 mod tests {
-    use crate::block::{BlockRef, Round, VerifiedBlock};
-    use crate::context::Context;
-    use crate::core::CoreSignals;
-    use crate::core_thread::{CoreError, CoreThreadDispatcherInterface};
-    use crate::leader_timeout::LeaderTimeoutTask;
-    use async_trait::async_trait;
-    use consensus_config::Parameters;
-    use parking_lot::Mutex;
     use std::collections::HashSet;
     use std::sync::Arc;
     use std::time::Duration;
+
+    use async_trait::async_trait;
+    use consensus_config::Parameters;
+    use parking_lot::Mutex;
     use tokio::time::{sleep, Instant};
+
+    use crate::block::{BlockRef, Round, VerifiedBlock};
+    use crate::context::Context;
+    use crate::core::CoreSignals;
+    use crate::core_thread::{CoreError, CoreThreadDispatcher};
+    use crate::leader_timeout::LeaderTimeoutTask;
 
     #[derive(Clone, Default)]
     struct MockCoreThreadDispatcher {
@@ -122,7 +124,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl CoreThreadDispatcherInterface for MockCoreThreadDispatcher {
+    impl CoreThreadDispatcher for MockCoreThreadDispatcher {
         async fn add_blocks(
             &self,
             _blocks: Vec<VerifiedBlock>,
@@ -147,7 +149,10 @@ mod tests {
         let (context, _signers) = Context::new_for_test(4);
         let dispatcher = MockCoreThreadDispatcher::default();
         let leader_timeout = Duration::from_millis(500);
-        let parameters = Parameters { leader_timeout };
+        let parameters = Parameters {
+            leader_timeout,
+            ..Default::default()
+        };
         let context = Arc::new(context.with_parameters(parameters));
         let now = Instant::now();
 
@@ -181,7 +186,10 @@ mod tests {
         let (context, _signers) = Context::new_for_test(4);
         let dispatcher = MockCoreThreadDispatcher::default();
         let leader_timeout = Duration::from_millis(500);
-        let parameters = Parameters { leader_timeout };
+        let parameters = Parameters {
+            leader_timeout,
+            ..Default::default()
+        };
         let context = Arc::new(context.with_parameters(parameters));
         let now = Instant::now();
 

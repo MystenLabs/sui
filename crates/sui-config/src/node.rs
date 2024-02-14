@@ -685,37 +685,91 @@ pub struct TransactionKeyValueStoreWriteConfig {
 /// stop processing new transactions and/or certificates until the congestion
 /// resolves.
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct OverloadThresholdConfig {
+    #[serde(default = "default_max_txn_age_in_queue")]
     pub max_txn_age_in_queue: Duration,
 
     // The interval of checking overload signal.
+    #[serde(default = "default_overload_monitor_interval")]
     pub overload_monitor_interval: Duration,
 
     // The execution queueing latency when entering load shedding mode.
+    #[serde(default = "default_execution_queue_latency_soft_limit")]
     pub execution_queue_latency_soft_limit: Duration,
 
     // The execution queueing latency when entering aggressive load shedding mode.
+    #[serde(default = "default_execution_queue_latency_hard_limit")]
     pub execution_queue_latency_hard_limit: Duration,
 
     // The maximum percentage of transactions to shed in load shedding mode.
+    #[serde(default = "default_max_load_shedding_percentage")]
     pub max_load_shedding_percentage: u32,
 
     // When in aggressive load shedding mode, the the minimum percentage of
     // transactions to shed.
+    #[serde(default = "default_min_load_shedding_percentage_above_hard_limit")]
     pub min_load_shedding_percentage_above_hard_limit: u32,
+
+    // If transaction ready rate is below this rate, we consider the validator
+    // is well under used, and will not enter load shedding mode.
+    #[serde(default = "default_safe_transaction_ready_rate")]
+    pub safe_transaction_ready_rate: u32,
+
+    // When set to true, transaction signing may be rejected when the validator
+    // is overloaded.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub check_system_overload_at_signing: bool,
+
+    // When set to true, transaction execution may be rejected when the validator
+    // is overloaded.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub check_system_overload_at_execution: bool,
     // TODO: Move other thresholds here as well, including `MAX_TM_QUEUE_LENGTH`
     // and `MAX_PER_OBJECT_QUEUE_LENGTH`.
+}
+
+fn default_max_txn_age_in_queue() -> Duration {
+    Duration::from_secs(1)
+}
+
+fn default_overload_monitor_interval() -> Duration {
+    Duration::from_secs(10)
+}
+
+fn default_execution_queue_latency_soft_limit() -> Duration {
+    Duration::from_secs(1)
+}
+
+fn default_execution_queue_latency_hard_limit() -> Duration {
+    Duration::from_secs(10)
+}
+
+fn default_max_load_shedding_percentage() -> u32 {
+    95
+}
+
+fn default_min_load_shedding_percentage_above_hard_limit() -> u32 {
+    50
+}
+
+fn default_safe_transaction_ready_rate() -> u32 {
+    100
 }
 
 impl Default for OverloadThresholdConfig {
     fn default() -> Self {
         Self {
-            max_txn_age_in_queue: Duration::from_secs(1), // 1 second
-            overload_monitor_interval: Duration::from_secs(10),
-            execution_queue_latency_soft_limit: Duration::from_secs(1),
-            execution_queue_latency_hard_limit: Duration::from_secs(10),
-            max_load_shedding_percentage: 95,
-            min_load_shedding_percentage_above_hard_limit: 50,
+            max_txn_age_in_queue: default_max_txn_age_in_queue(),
+            overload_monitor_interval: default_overload_monitor_interval(),
+            execution_queue_latency_soft_limit: default_execution_queue_latency_soft_limit(),
+            execution_queue_latency_hard_limit: default_execution_queue_latency_hard_limit(),
+            max_load_shedding_percentage: default_max_load_shedding_percentage(),
+            min_load_shedding_percentage_above_hard_limit:
+                default_min_load_shedding_percentage_above_hard_limit(),
+            safe_transaction_ready_rate: default_safe_transaction_ready_rate(),
+            check_system_overload_at_signing: false,
+            check_system_overload_at_execution: false,
         }
     }
 }

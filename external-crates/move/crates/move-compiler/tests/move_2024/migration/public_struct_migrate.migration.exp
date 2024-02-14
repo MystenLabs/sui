@@ -1,0 +1,11 @@
+--- tests/move_2024/migration/public_struct_migrate.move
++++ tests/move_2024/migration/public_struct_migrate.move
+@@ -2,1 +2,1 @@
+-    struct S { f: u64 }
++    public struct S { f: u64 }
+@@ -4,1 +4,1 @@
+-    struct LongerName {
++    public struct LongerName {
+@@ -9,1 +9,1 @@
+-    struct Positional(u64, u64, u64)
++    public struct Positional(u64, u64, u64)

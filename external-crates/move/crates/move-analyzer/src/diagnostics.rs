@@ -7,7 +7,10 @@ use lsp_types::{Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Lo
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+};
 use url::Url;
 
 /// Converts diagnostics from the codespan format to the format understood by the language server.
@@ -21,8 +24,8 @@ pub fn lsp_diagnostics(
     )>,
     files: &SimpleFiles<Symbol, String>,
     file_id_mapping: &HashMap<FileHash, usize>,
-    file_name_mapping: &BTreeMap<FileHash, Symbol>,
-) -> BTreeMap<Symbol, Vec<Diagnostic>> {
+    file_name_mapping: &BTreeMap<FileHash, PathBuf>,
+) -> BTreeMap<PathBuf, Vec<Diagnostic>> {
     let mut lsp_diagnostics = BTreeMap::new();
     for (s, _, (loc, msg), labels, _) in diagnostics {
         let fpath = file_name_mapping.get(&loc.file_hash()).unwrap();
@@ -46,7 +49,7 @@ pub fn lsp_diagnostics(
                                     get_loc(&lloc.file_hash(), lloc.end(), files, file_id_mapping)?;
                                 let lpath = file_name_mapping.get(&lloc.file_hash()).unwrap();
                                 let lpos = Location::new(
-                                    Url::from_file_path(lpath.as_str()).unwrap(),
+                                    Url::from_file_path(lpath).unwrap(),
                                     Range::new(lstart, lend),
                                 );
                                 Some(DiagnosticRelatedInformation {
@@ -58,7 +61,7 @@ pub fn lsp_diagnostics(
                     )
                 };
                 lsp_diagnostics
-                    .entry(*fpath)
+                    .entry(fpath.to_path_buf())
                     .or_insert_with(Vec::new)
                     .push(Diagnostic::new(
                         range,
@@ -78,11 +81,11 @@ pub fn lsp_diagnostics(
 /// Produces empty diagnostics in the format understood by the language server for all files that
 /// the language server is aware of.
 pub fn lsp_empty_diagnostics(
-    file_name_mapping: &BTreeMap<FileHash, Symbol>,
-) -> BTreeMap<Symbol, Vec<Diagnostic>> {
+    file_name_mapping: &BTreeMap<FileHash, PathBuf>,
+) -> BTreeMap<PathBuf, Vec<Diagnostic>> {
     let mut lsp_diagnostics = BTreeMap::new();
     for n in file_name_mapping.values() {
-        lsp_diagnostics.insert(*n, vec![]);
+        lsp_diagnostics.insert(n.to_path_buf(), vec![]);
     }
     lsp_diagnostics
 }

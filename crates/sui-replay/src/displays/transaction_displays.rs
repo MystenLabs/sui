@@ -16,18 +16,17 @@ use tabled::{
 /// in these Structs when calling the CLI replay command with an additional provided flag.
 impl<'a> Display for Pretty<'a, ProgrammableTransaction> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut builder = TableBuilder::default();
-
         let Pretty(ptb) = self;
         let ProgrammableTransaction { inputs, commands } = ptb;
-
-        for (i, input) in inputs.iter().enumerate() {
-            match input {
-                Pure(v) => {
-                    if v.len() <= 16 {
-                        builder.push_record(vec![format!("{i:<3} Pure Arg          {:?}", v)]);
-                    } else {
-                        builder.push_record(vec![format!(
+        if !inputs.is_empty() {
+            let mut builder = TableBuilder::default();
+            for (i, input) in inputs.iter().enumerate() {
+                match input {
+                    Pure(v) => {
+                        if v.len() <= 16 {
+                            builder.push_record(vec![format!("{i:<3} Pure Arg          {:?}", v)]);
+                        } else {
+                            builder.push_record(vec![format!(
                             "{i:<3} Pure Arg          [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, ...]",
                             v[0],
                             v[1],
@@ -45,44 +44,50 @@ impl<'a> Display for Pretty<'a, ProgrammableTransaction> {
                             v[13],
                             v[14],
                         )]);
+                        }
                     }
-                }
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(o)) => {
-                    builder.push_record(vec![format!("{i:<3} Imm/Owned Object  ID: {}", o.0)]);
-                }
-                CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
-                    builder.push_record(vec![format!("{i:<3} Shared Object     ID: {}", id)]);
-                }
-                CallArg::Object(ObjectArg::Receiving(o)) => {
-                    builder.push_record(vec![format!("{i:<3} Receiving Object  ID: {}", o.0)]);
-                }
-            };
-        }
-
-        let mut table = builder.build();
-        table.with(TablePanel::header("Input Objects"));
-        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
-            1,
-            TableStyle::modern().get_horizontal(),
-        )]));
-        write!(f, "\n{}\n", table)?;
-
-        let mut builder = TableBuilder::default();
-
-        for (i, c) in commands.iter().enumerate() {
-            if i == commands.len() - 1 {
-                builder.push_record(vec![format!("{i:<2} {}", Pretty(c))]);
-            } else {
-                builder.push_record(vec![format!("{i:<2} {}\n", Pretty(c))]);
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(o)) => {
+                        builder.push_record(vec![format!("{i:<3} Imm/Owned Object  ID: {}", o.0)]);
+                    }
+                    CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
+                        builder.push_record(vec![format!("{i:<3} Shared Object     ID: {}", id)]);
+                    }
+                    CallArg::Object(ObjectArg::Receiving(o)) => {
+                        builder.push_record(vec![format!("{i:<3} Receiving Object  ID: {}", o.0)]);
+                    }
+                };
             }
+
+            let mut table = builder.build();
+            table.with(TablePanel::header("Input Objects"));
+            table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+                1,
+                TableStyle::modern().get_horizontal(),
+            )]));
+            write!(f, "\n{}\n", table)?;
+        } else {
+            write!(f, "\n  No input objects for this transaction")?;
         }
-        let mut table = builder.build();
-        table.with(TablePanel::header("Commands"));
-        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
-            1,
-            TableStyle::modern().get_horizontal(),
-        )]));
-        write!(f, "\n{}\n", table)
+
+        if !commands.is_empty() {
+            let mut builder = TableBuilder::default();
+            for (i, c) in commands.iter().enumerate() {
+                if i == commands.len() - 1 {
+                    builder.push_record(vec![format!("{i:<2} {}", Pretty(c))]);
+                } else {
+                    builder.push_record(vec![format!("{i:<2} {}\n", Pretty(c))]);
+                }
+            }
+            let mut table = builder.build();
+            table.with(TablePanel::header("Commands"));
+            table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+                1,
+                TableStyle::modern().get_horizontal(),
+            )]));
+            write!(f, "\n{}\n", table)
+        } else {
+            write!(f, "\n  No commands for this transaction")
+        }
     }
 }
 

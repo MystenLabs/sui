@@ -78,6 +78,14 @@ impl<K> Default for LinkedTable<K> {
     }
 }
 
+/// Rust version of the Move sui::linked_table::Node type.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct LinkedTableNode<K, V> {
+    pub prev: Option<K>,
+    pub next: Option<K>,
+    pub value: V,
+}
+
 /// Rust version of the Move sui::bag::Bag type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Bag {

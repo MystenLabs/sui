@@ -153,6 +153,7 @@ impl CheckpointStore {
         )
     }
 
+    #[instrument(level = "info", skip_all)]
     pub fn insert_genesis_checkpoint(
         &self,
         checkpoint: VerifiedCheckpoint,
@@ -831,7 +832,8 @@ impl CheckpointBuilder {
             debug!(
                 checkpoint_commit_height = height,
                 checkpoint_seq = summary.sequence_number,
-                "Created checkpoint",
+                contents_digest = ?contents.digest(),
+                "writing checkpoint",
             );
             self.output
                 .checkpoint_created(summary, contents, &self.epoch_store)
@@ -1912,7 +1914,7 @@ mod tests {
             }]);
         for i in 0..15 {
             state
-                .database
+                .database_for_testing()
                 .perpetual_tables
                 .transactions
                 .insert(&d(i), dummy_tx.serializable_ref())
@@ -1920,7 +1922,7 @@ mod tests {
         }
         for i in 15..20 {
             state
-                .database
+                .database_for_testing()
                 .perpetual_tables
                 .transactions
                 .insert(&d(i), dummy_tx_with_data.serializable_ref())
@@ -1990,7 +1992,7 @@ mod tests {
         let ckpt_dir = tempfile::tempdir().unwrap();
         let checkpoint_store = CheckpointStore::new(ckpt_dir.path());
 
-        let accumulator = StateAccumulator::new(state.database.clone());
+        let accumulator = StateAccumulator::new(state.get_accumulator_store().clone());
 
         let epoch_store = state.epoch_store_for_testing();
         let (checkpoint_service, _exit) = CheckpointService::spawn(

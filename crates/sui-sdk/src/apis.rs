@@ -11,6 +11,7 @@ use std::future;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_json_rpc_types::DevInspectArgs;
+use sui_json_rpc_types::SuiData;
 
 use crate::error::{Error, SuiRpcResult};
 use crate::RpcClient;
@@ -407,6 +408,24 @@ impl ReadApi {
             .http
             .multi_get_objects(object_ids, Some(options))
             .await?)
+    }
+
+    /// Return An object's bcs content [`Vec<u8>`] based on the provided [ObjectID], or an error upon failure.
+    pub async fn get_move_object_bcs(&self, object_id: ObjectID) -> SuiRpcResult<Vec<u8>> {
+        let resp = self
+            .get_object_with_options(object_id, SuiObjectDataOptions::default().with_bcs())
+            .await?
+            .into_object()
+            .map_err(|e| {
+                Error::DataError(format!("Can't get bcs of object {:?}: {:?}", object_id, e))
+            })?;
+        // unwrap: requested bcs data
+        let move_object = resp.bcs.unwrap();
+        let raw_move_obj = move_object.try_into_move().ok_or(Error::DataError(format!(
+            "Object {:?} is not a MoveObject",
+            object_id
+        )))?;
+        Ok(raw_move_obj.bcs_bytes)
     }
 
     /// Return the total number of transaction blocks known to server, or an error upon failure.

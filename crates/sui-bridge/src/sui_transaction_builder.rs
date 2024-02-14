@@ -91,6 +91,26 @@ pub fn build_transaction(
         BridgeAction::SuiToEthBridgeAction(_) => {
             build_token_bridge_approve_transaction(client_address, gas_object_ref, action, false)
         }
+        BridgeAction::BlocklistCommitteeAction(_) => {
+            // TODO: handle this case
+            unimplemented!()
+        }
+        BridgeAction::EmergencyAction(_) => {
+            // TODO: handle this case
+            unimplemented!()
+        }
+        BridgeAction::LimitUpdateAction(_) => {
+            // TODO: handle this case
+            unimplemented!()
+        }
+        BridgeAction::AssetPriceUpdateAction(_) => {
+            // TODO: handle this case
+            unimplemented!()
+        }
+        BridgeAction::EvmContractUpgradeAction(_) => {
+            // TODO: handle this case
+            unimplemented!()
+        }
     }
 }
 
@@ -130,6 +150,7 @@ fn build_token_bridge_approve_transaction(
                     bridge_event.amount,
                 )
             }
+            _ => unreachable!(),
         };
 
     let source_chain = builder.pure(source_chain as u8).unwrap();

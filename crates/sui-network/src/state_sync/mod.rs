@@ -64,7 +64,6 @@ use sui_types::{
         CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, EndOfEpochData,
         FullCheckpointContents, VerifiedCheckpoint, VerifiedCheckpointContents,
     },
-    storage::ReadStore,
     storage::WriteStore,
 };
 use tap::{Pipe, TapFallible, TapOptional};
@@ -375,7 +374,6 @@ struct StateSyncEventLoop<S> {
 impl<S> StateSyncEventLoop<S>
 where
     S: WriteStore + Clone + Send + Sync + 'static,
-    <S as ReadStore>::Error: std::error::Error,
 {
     // Note: A great deal of care is taken to ensure that all event handlers are non-asynchronous
     // and that the only "await" points are from the select macro picking which event to handle.
@@ -946,7 +944,6 @@ async fn sync_to_checkpoint<S>(
 ) -> Result<()>
 where
     S: WriteStore,
-    <S as ReadStore>::Error: std::error::Error,
 {
     metrics.set_highest_known_checkpoint(*checkpoint.sequence_number());
 
@@ -1103,7 +1100,6 @@ async fn sync_checkpoint_contents_from_archive<S>(
     peer_heights: Arc<RwLock<PeerHeights>>,
 ) where
     S: WriteStore + Clone + Send + Sync + 'static,
-    <S as ReadStore>::Error: std::error::Error,
 {
     loop {
         let peers: Vec<_> = peer_heights
@@ -1172,7 +1168,6 @@ async fn sync_checkpoint_contents<S>(
     mut target_sequence_channel: watch::Receiver<CheckpointSequenceNumber>,
 ) where
     S: WriteStore + Clone,
-    <S as ReadStore>::Error: std::error::Error,
 {
     let mut highest_synced = store
         .get_highest_synced_checkpoint()
@@ -1278,6 +1273,7 @@ async fn sync_checkpoint_contents<S>(
     }
 }
 
+#[instrument(level = "debug", skip_all, fields(sequence_number = ?checkpoint.sequence_number()))]
 async fn sync_one_checkpoint_contents<S>(
     network: anemo::Network,
     store: S,
@@ -1287,8 +1283,9 @@ async fn sync_one_checkpoint_contents<S>(
 ) -> Result<VerifiedCheckpoint, VerifiedCheckpoint>
 where
     S: WriteStore + Clone,
-    <S as ReadStore>::Error: std::error::Error,
 {
+    debug!("syncing checkpoint contents");
+
     // Check if we already have produced this checkpoint locally. If so, we don't need
     // to get it from peers anymore.
     if store
@@ -1297,7 +1294,7 @@ where
         .sequence_number()
         >= checkpoint.sequence_number()
     {
-        debug!(seq = ?checkpoint.sequence_number(), "checkpoint was already created via consensus output");
+        debug!("checkpoint was already created via consensus output");
         return Ok(checkpoint);
     }
 
@@ -1315,9 +1312,11 @@ where
             .read()
             .unwrap()
             .wait_interval_when_no_peer_to_sync_content();
+        info!("retrying checkpoint sync after {:?}", duration);
         tokio::time::sleep(duration).await;
         return Err(checkpoint);
     };
+    debug!("completed checkpoint contents sync");
     Ok(checkpoint)
 }
 
@@ -1330,7 +1329,6 @@ async fn get_full_checkpoint_contents<S>(
 ) -> Option<FullCheckpointContents>
 where
     S: WriteStore,
-    <S as ReadStore>::Error: std::error::Error,
 {
     let digest = checkpoint.content_digest;
     if let Some(contents) = store
@@ -1342,12 +1340,18 @@ where
                 .expect("store operation should not fail")
         })
     {
+        debug!("store already contains checkpoint contents");
         return Some(contents);
     }
 
     // Iterate through our selected peers trying each one in turn until we're able to
     // successfully get the target checkpoint
     for mut peer in peers {
+        debug!(
+            ?timeout,
+            "requesting checkpoint contents from {}",
+            peer.inner().peer_id(),
+        );
         let request = Request::new(digest).with_timeout(timeout);
         if let Some(contents) = peer
             .get_checkpoint_contents(request)
@@ -1366,6 +1370,7 @@ where
             }
         }
     }
+    debug!("no peers had checkpoint contents");
     None
 }
 
@@ -1376,7 +1381,6 @@ async fn update_checkpoint_watermark_metrics<S>(
 ) -> Result<()>
 where
     S: WriteStore + Clone + Send + Sync,
-    <S as ReadStore>::Error: std::error::Error,
 {
     let mut interval = tokio::time::interval(Duration::from_secs(5));
     loop {

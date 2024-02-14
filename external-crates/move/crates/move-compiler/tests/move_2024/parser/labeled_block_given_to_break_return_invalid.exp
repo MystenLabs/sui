@@ -1,0 +1,36 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/labeled_block_given_to_break_return_invalid.move:4:17
+  │
+4 │         break 'a: { 1 };
+  │                 ^
+  │                 │
+  │                 Unexpected ':'
+  │                 Expected ';'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/labeled_block_given_to_break_return_invalid.move:8:18
+  │
+8 │         return 'a: { 1 };
+  │                  ^
+  │                  │
+  │                  Unexpected ':'
+  │                  Expected ';'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/labeled_block_given_to_break_return_invalid.move:12:17
+   │
+12 │         break 'a: loop {};
+   │                 ^
+   │                 │
+   │                 Unexpected ':'
+   │                 Expected ';'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/labeled_block_given_to_break_return_invalid.move:16:18
+   │
+16 │         return 'a: while (cond) { 1 };
+   │                  ^
+   │                  │
+   │                  Unexpected ':'
+   │                  Expected ';'
+

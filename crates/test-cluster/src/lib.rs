@@ -241,7 +241,7 @@ impl TestCluster {
         self.fullnode_handle
             .sui_node
             .state()
-            .db()
+            .get_cache_reader()
             .get_latest_object_ref_or_tombstone(object_id)
             .unwrap()
             .unwrap()
@@ -283,7 +283,9 @@ impl TestCluster {
             unreachable!("Broken reconfig channel");
         })
         .await
-        .expect("Timed out waiting for cluster to target epoch")
+        .unwrap_or_else(|_| {
+            panic!("Timed out waiting for cluster to target epoch {target_epoch:?}")
+        })
     }
 
     pub async fn wait_for_run_with_range_shutdown_signal(&self) -> Option<RunWithRange> {
@@ -470,7 +472,7 @@ impl TestCluster {
                 while let Some(tx) = txns.next().await {
                     let digest = *tx.transaction_digest();
                     let tx = state
-                        .database
+                        .get_cache_reader()
                         .get_transaction_block(&digest)
                         .unwrap()
                         .unwrap();

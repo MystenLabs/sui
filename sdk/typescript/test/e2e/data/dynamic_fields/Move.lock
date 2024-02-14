@@ -20,3 +20,8 @@ source = { local = "../../../../../../crates/sui-framework/packages/sui-framewor
 dependencies = [
   { name = "MoveStdlib" },
 ]
+
+[move.toolchain-version]
+compiler-version = "1.18.0"
+edition = "legacy"
+flavor = "sui"

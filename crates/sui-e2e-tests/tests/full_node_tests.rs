@@ -12,6 +12,7 @@ use serde_json::json;
 use std::sync::Arc;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::node::RunWithRange;
+use sui_core::authority::EffectsNotifyRead;
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiExecutionStatus,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -1335,7 +1336,7 @@ async fn test_access_old_object_pruned() {
         state.prune_objects_and_compact_for_testing().await;
         // Make sure the old version of the object is already pruned.
         assert!(state
-            .db()
+            .get_object_store()
             .get_object_by_key(&gas_object.0, gas_object.1)
             .unwrap()
             .is_none());

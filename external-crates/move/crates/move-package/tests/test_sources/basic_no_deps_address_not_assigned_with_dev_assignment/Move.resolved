@@ -1,8 +1,8 @@
 ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/basic_no_deps_address_not_assigned_with_dev_assignment",
-        root_package: "test",
-        root_package_orig_name: "test",
+        root_package_id: "test",
+        root_package_name: "test",
         package_graph: {
             "test": [],
         },

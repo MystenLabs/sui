@@ -81,14 +81,19 @@ pub enum PackageSource {
 #[derive(Clone, Deserialize, Debug)]
 pub struct RepositorySource {
     pub repository: String,
-    pub branch: String,
-    pub packages: Vec<Package>,
     pub network: Option<Network>,
+    pub branches: Vec<Branch>,
+}
+
+#[derive(Clone, Deserialize, Debug)]
+pub struct Branch {
+    pub branch: String,
+    pub paths: Vec<Package>,
 }
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct DirectorySource {
-    pub packages: Vec<Package>,
+    pub paths: Vec<Package>,
     pub network: Option<Network>,
 }
 
@@ -226,10 +231,14 @@ pub struct CloneCommand {
 }
 
 impl CloneCommand {
-    pub fn new(p: &RepositorySource, dest: &Path) -> anyhow::Result<CloneCommand> {
+    pub fn new(p: &RepositorySource, b: &Branch, dest: &Path) -> anyhow::Result<CloneCommand> {
         let repo_name = repo_name_from_url(&p.repository)?;
         let network = p.network.clone().unwrap_or_default().to_string();
-        let dest = dest.join(network).join(repo_name).into_os_string();
+        let sanitized_branch = b.branch.replace('/', "__");
+        let dest = dest
+            .join(network)
+            .join(format!("{repo_name}__{sanitized_branch}"))
+            .into_os_string();
 
         macro_rules! ostr {
             ($arg:expr) => {
@@ -244,9 +253,9 @@ impl CloneCommand {
             ostr!("--no-checkout"),
             ostr!("--depth=1"), // implies --single-branch
             ostr!("--filter=tree:0"),
-            ostr!(format!("--branch={}", p.branch)),
+            ostr!(format!("--branch={}", b.branch)),
             ostr!(&p.repository),
-            dest.clone(),
+            ostr!(dest.clone()),
         ];
         args.push(cmd_args);
 
@@ -258,8 +267,8 @@ impl CloneCommand {
             ostr!("set"),
             ostr!("--no-cone"),
         ];
-        let path_args: Vec<OsString> = p
-            .packages
+        let path_args: Vec<OsString> = b
+            .paths
             .iter()
             .map(|p| OsString::from(p.path.clone()))
             .collect();
@@ -303,10 +312,17 @@ impl CloneCommand {
 pub async fn clone_repositories(repos: Vec<&RepositorySource>, dir: &Path) -> anyhow::Result<()> {
     let mut tasks = vec![];
     for p in &repos {
-        let command = CloneCommand::new(p, dir)?;
-        info!("cloning {} to {}", &p.repository, dir.display());
-        let t = tokio::spawn(async move { command.run().await });
-        tasks.push(t);
+        for b in &p.branches {
+            let command = CloneCommand::new(p, b, dir)?;
+            info!(
+                "cloning {}:{} to {}",
+                &p.repository,
+                &b.branch,
+                dir.display()
+            );
+            let t = tokio::spawn(async move { command.run().await });
+            tasks.push(t);
+        }
     }
 
     for t in tasks {
@@ -361,17 +377,25 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
             PackageSource::Repository(r) => {
                 let repo_name = repo_name_from_url(&r.repository)?;
                 let network_name = r.network.clone().unwrap_or_default().to_string();
-                let packages_dir = dir.join(network_name).join(repo_name);
-                for p in &r.packages {
-                    let package_path = packages_dir.join(p.path.clone()).clone();
-                    let network = r.network.clone().unwrap_or_default();
-                    let t =
-                        tokio::spawn(async move { verify_package(&network, package_path).await });
-                    tasks.push(t)
+                for b in &r.branches {
+                    for p in &b.paths {
+                        let sanitized_branch = b.branch.replace('/', "__");
+                        let package_path = dir
+                            .join(network_name.clone())
+                            .join(format!("{repo_name}__{sanitized_branch}"))
+                            .join(p.path.clone())
+                            .clone();
+                        let network = r.network.clone().unwrap_or_default();
+                        let t =
+                            tokio::spawn(
+                                async move { verify_package(&network, package_path).await },
+                            );
+                        tasks.push(t)
+                    }
                 }
             }
             PackageSource::Directory(packages_dir) => {
-                for p in &packages_dir.packages {
+                for p in &packages_dir.paths {
                     let package_path = PathBuf::from(p.path.clone());
                     let network = packages_dir.network.clone().unwrap_or_default();
                     let t =
@@ -417,14 +441,19 @@ pub async fn watch_for_upgrades(
     let mut watch_ids = ArrayParams::new();
     let mut num_packages = 0;
     for s in packages {
-        let packages = match s {
-            PackageSource::Repository(RepositorySource { packages, .. }) => packages,
-            PackageSource::Directory(DirectorySource { packages, .. }) => packages,
+        let branches = match s {
+            PackageSource::Repository(RepositorySource { branches, .. }) => branches,
+            PackageSource::Directory(DirectorySource { paths, .. }) => vec![Branch {
+                branch: "".into(), // Unused.
+                paths,
+            }],
         };
-        for p in packages {
-            if let Some(id) = p.watch {
-                num_packages += 1;
-                watch_ids.insert(TransactionFilter::ChangedObject(id))?
+        for b in branches {
+            for p in b.paths {
+                if let Some(id) = p.watch {
+                    num_packages += 1;
+                    watch_ids.insert(TransactionFilter::ChangedObject(id))?
+                }
             }
         }
     }
