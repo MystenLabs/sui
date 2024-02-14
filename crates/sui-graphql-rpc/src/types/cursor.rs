@@ -328,7 +328,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         T: Send + RawPaginated<C> + FromSqlRow<Untyped, DieselBackend> + 'static,
     {
         let new_query = move || {
-            let query = self.yeet::<T>(query.clone());
+            let query = self.apply::<T>(query.clone());
             query.into_boxed()
         };
 
@@ -435,7 +435,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         (prev, next, results)
     }
 
-    pub(crate) fn yeet<T>(&self, mut query: RawQuery) -> RawQuery
+    pub(crate) fn apply<T>(&self, mut query: RawQuery) -> RawQuery
     where
         T: RawPaginated<C>,
     {

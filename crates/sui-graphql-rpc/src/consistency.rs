@@ -15,10 +15,11 @@ use crate::{filter, query};
 #[derive(Copy, Clone)]
 pub(crate) enum View {
     /// Return objects that fulfill the filtering criteria, even if there are more recent versions
-    /// of the object within the checkpoint range. Typically for point lookups.
+    /// of the object within the checkpoint range. This is used for lookups such as by `object_id`
+    /// and `version`.
     Historical,
     /// Return objects that fulfill the filtering criteria and are the most recent version within
-    /// the checkpoint range. Typically for filtering objects within a range.
+    /// the checkpoint range.
     Consistent,
 }
 
@@ -75,77 +76,6 @@ pub(crate) fn build_objects_query<F>(
 where
     F: Fn(RawQuery) -> RawQuery,
 {
-    // Construct the filtered inner query - apply the same filtering criteria to both
-    // objects_snapshot and objects_history tables.
-    let mut snapshot_objs = query!(r#"SELECT * FROM objects_snapshot as candidates"#);
-    snapshot_objs = filter_fn(snapshot_objs);
-    if let View::Historical = view {
-        snapshot_objs = page.yeet::<StoredHistoryObject>(snapshot_objs);
-    }
-
-    // Additionally filter objects_history table for results between the available range, or
-    // checkpoint_viewed_at, if provided.
-    let mut history_objs = query!(r#"SELECT * FROM objects_history as candidates"#);
-    history_objs = filter_fn(history_objs);
-    history_objs = filter!(
-        history_objs,
-        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
-    );
-    if let View::Historical = view {
-        history_objs = page.yeet::<StoredHistoryObject>(history_objs);
-    }
-
-    // Combine the two queries, and select the most recent version of each object. The result set is
-    // the most recent version of objects from `objects_snapshot` and `objects_history` that match
-    // the filter criteria.
-    let candidates = query!(
-        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ALL ({})) o"#,
-        snapshot_objs,
-        history_objs
-    )
-    .order_by("object_id")
-    .order_by("object_version DESC");
-
-    // The following conditions ensure that the version of object matching our filters is the latest
-    // version at the checkpoint we are viewing at. If the filter includes version constraints (an
-    // `object_keys` field), then this extra check is not required (it will filter out correct
-    // results).
-    match view {
-        View::Consistent => {
-            let mut newer = query!("SELECT object_id, object_version FROM objects_history");
-            newer = filter!(
-                newer,
-                format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
-            );
-            let query = query!(
-                r#"SELECT candidates.*
-                FROM ({}) candidates
-                LEFT JOIN ({}) newer
-                ON (
-                    candidates.object_id = newer.object_id
-                    AND candidates.object_version < newer.object_version
-                )"#,
-                candidates,
-                newer
-            );
-            filter!(query, "newer.object_version IS NULL")
-        }
-        View::Historical => {
-            query!("SELECT candidates.* FROM ({}) candidates", candidates)
-        }
-    }
-}
-
-pub(crate) fn build_objects_query_v2<F>(
-    view: View,
-    lhs: i64,
-    rhs: i64,
-    page: &Page<Cursor>,
-    filter_fn: F,
-) -> RawQuery
-where
-    F: Fn(RawQuery) -> RawQuery,
-{
     let mut newer = query!("SELECT object_id, object_version FROM objects_history");
     newer = filter!(
         newer,
@@ -167,7 +97,7 @@ where
                 newer.clone()
             );
             snapshot_objs = filter!(snapshot_objs, "newer.object_version IS NULL");
-            snapshot_objs = page.yeet::<StoredHistoryObject>(snapshot_objs);
+            snapshot_objs = page.apply::<StoredHistoryObject>(snapshot_objs);
             snapshot_objs
         }
         View::Historical => snapshot_objs_inner,
@@ -189,14 +119,13 @@ where
 
             let mut history_objs = query!(
                 r#"SELECT candidates.* FROM ({}) candidates
-            LEFT JOIN ({}) newer
-            ON (candidates.object_id = newer.object_id
-                AND candidates.object_version < newer.object_version)"#,
+                    LEFT JOIN ({}) newer
+                    ON (candidates.object_id = newer.object_id AND candidates.object_version < newer.object_version)"#,
                 history_objs_inner,
                 newer
             );
             history_objs = filter!(history_objs, "newer.object_version IS NULL");
-            history_objs = page.yeet::<StoredHistoryObject>(history_objs);
+            history_objs = page.apply::<StoredHistoryObject>(history_objs);
             history_objs
         }
         View::Historical => history_objs_inner,

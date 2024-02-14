@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::consistency::{build_objects_query, build_objects_query_v2, consistent_range, View};
+use crate::consistency::{build_objects_query, consistent_range, View};
 use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
 use crate::filter;
@@ -381,7 +381,7 @@ fn coins_query(
     // Require a consistent view of objects if the owner is specified, to filter out object versions
     // that satisfy the criteria, but have a later version in the same checkpoint.
 
-    build_objects_query_v2(View::Consistent, lhs, rhs, &page, move |query| {
+    build_objects_query(View::Consistent, lhs, rhs, &page, move |query| {
         apply_filter(query, &coin_type, owner)
     })
 }
