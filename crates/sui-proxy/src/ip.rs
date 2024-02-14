@@ -32,7 +32,7 @@ fn is_private_v4(addr: Ipv4Addr) -> bool {
 }
 
 /// is_private_v6 and the funcs below are based on an unstable const fn in core. yoinked it.
-/// taken from https://doc.rust-lang.org/nightly/src/core/net/ip_addr.rs.html#1501-1531
+/// taken from https://github.com/rust-lang/rust/blob/340bb19fea20fd5f9357bbfac542fad84fc7ea2b/library/core/src/net/ip_addr.rs#L691-L783
 #[allow(clippy::manual_range_contains)]
 fn is_private_v6(addr: Ipv6Addr) -> bool {
     addr.is_unspecified()
