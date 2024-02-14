@@ -10,5 +10,5 @@ error[E03006]: unexpected name in this position
    ┌─ tests/move_2024/expansion/use_function_overlap_with_module.move:10:9
    │
 10 │         X::u()
-   │         ^ Expected a module or address in this position, not a module member
+   │         ^ Expected an address, module, or type in this position, not a module member
 
