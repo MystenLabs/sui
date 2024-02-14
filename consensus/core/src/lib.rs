@@ -23,5 +23,6 @@ mod transaction;
 mod universal_committer;
 
 mod leader_timeout;
+mod synchronizer;
 #[cfg(test)]
 mod test_dag;

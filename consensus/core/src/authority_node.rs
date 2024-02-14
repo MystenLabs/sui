@@ -11,7 +11,7 @@ use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, Pr
 use parking_lot::RwLock;
 use prometheus::Registry;
 use sui_protocol_config::ProtocolConfig;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock};
 use crate::block_manager::BlockManager;
@@ -25,6 +25,7 @@ use crate::leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle};
 use crate::metrics::initialise_metrics;
 use crate::network::{NetworkManager, NetworkService};
 use crate::storage::rocksdb_store::RocksDBStore;
+use crate::synchronizer::{Synchronizer, SynchronizerHandle};
 use crate::transaction::{TransactionClient, TransactionConsumer, TransactionVerifier};
 
 pub struct AuthorityNode<N>
@@ -39,6 +40,7 @@ where
     core_thread_handle: CoreThreadHandle,
     // Keeps network alive.
     network_manager: N,
+    synchronizer: Arc<SynchronizerHandle>,
 }
 
 impl<N> AuthorityNode<N>
@@ -72,10 +74,6 @@ where
         let (client, tx_receiver) = TransactionClient::new(context.clone());
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
-        // Create network manager and client.
-        let network_manager = N::new(context.clone());
-        let _client = network_manager.client();
-
         // Construct Core components.
         let (core_signals, signals_receivers) = CoreSignals::new();
         let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
@@ -90,6 +88,10 @@ where
             store,
         );
 
+        // Create network manager and client.
+        let network_manager = N::new(context.clone());
+        let network_client = network_manager.client();
+
         let (core_dispatcher, core_thread_handle) =
             ChannelCoreThreadDispatcher::start(core, context.clone());
         let leader_timeout_handle =
@@ -100,10 +102,12 @@ where
             context.clone(),
             transaction_verifier,
         ));
+        let synchronizer = Synchronizer::start(context.clone(), core_dispatcher.clone());
         let network_service = Arc::new(AuthorityService {
             context: context.clone(),
             block_verifier,
             core_dispatcher,
+            synchronizer: synchronizer.clone(),
         });
         network_manager.install_service(network_keypair, network_service);
 
@@ -114,6 +118,7 @@ where
             leader_timeout_handle,
             core_thread_handle,
             network_manager,
+            synchronizer,
         }
     }
 
@@ -127,6 +132,7 @@ where
         self.network_manager.stop().await;
         self.core_thread_handle.stop();
         self.leader_timeout_handle.stop().await;
+        self.synchronizer.stop().await;
 
         self.context
             .metrics
@@ -146,6 +152,7 @@ pub struct AuthorityService {
     context: Arc<Context>,
     block_verifier: Arc<dyn BlockVerifier>,
     core_dispatcher: ChannelCoreThreadDispatcher,
+    synchronizer: Arc<SynchronizerHandle>,
 }
 
 #[async_trait]
@@ -180,10 +187,23 @@ impl NetworkService for AuthorityService {
             return Err(e);
         }
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
-        self.core_dispatcher
+        let missing_ancestors = self
+            .core_dispatcher
             .add_blocks(vec![verified_block])
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
+
+        if !missing_ancestors.is_empty() {
+            // schedule the fetching of them from this peer
+            if let Err(err) = self
+                .synchronizer
+                .fetch_blocks(missing_ancestors, peer)
+                .await
+            {
+                warn!("Errored while trying to fetch missing ancestors via synchronizer: {err}");
+            }
+        }
+
         Ok(())
     }
 

@@ -310,7 +310,7 @@ mod tests {
 
         let mut block_manager = BlockManager::new(context.clone(), dag_state);
 
-        // create a DAG of 2 rounds
+        // create a DAG of 4 rounds
         let all_blocks = dag(context, 4);
 
         // Take the blocks from round 4 up to 2 (included). Only the first block of each round should return missing
