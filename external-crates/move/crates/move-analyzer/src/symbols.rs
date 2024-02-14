@@ -2010,6 +2010,7 @@ impl<'a> ParsingSymbolicator<'a> {
             }
             T::Multiple(v) => v.iter().for_each(|t| self.type_symbols(t)),
             T::Unit => (),
+            T::UnresolvedError => (),
         }
     }
 
@@ -6259,4 +6260,38 @@ fn mod_ident_uniform_test() {
     let cpath = dunce::canonicalize(&fpath).unwrap();
 
     symbols.file_use_defs.get(&cpath).unwrap();
+}
+
+#[test]
+/// Tests symbolication of partially defined function
+fn partial_function_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/partial-function");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M1.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    symbols.file_use_defs.get(&cpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        2,
+        8,
+        "M1.move",
+        2,
+        8,
+        "M1.move",
+        "fun PartialFunction::M1::just_name(): unknown type (unresolved)",
+        None,
+    );
 }

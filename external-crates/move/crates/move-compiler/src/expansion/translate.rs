@@ -2844,6 +2844,7 @@ fn type_(context: &mut Context, sp!(loc, pt_): P::Type) -> E::Type {
             let result = type_(context, *result);
             ET::Fun(args, Box::new(result))
         }
+        PT::UnresolvedError => ET::UnresolvedError,
     };
     sp(loc, t_)
 }

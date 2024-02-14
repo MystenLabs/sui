@@ -338,6 +338,7 @@ pub enum Type_ {
     // (t1, t2, ... , tn)
     // Used for return values and expression blocks
     Multiple(Vec<Type>),
+    UnresolvedError,
 }
 pub type Type = Spanned<Type_>;
 
@@ -1366,6 +1367,7 @@ impl AstDebug for Type_ {
                 w.write("):");
                 result.ast_debug(w);
             }
+            Type_::UnresolvedError => w.write("_|_"),
         }
     }
 }
