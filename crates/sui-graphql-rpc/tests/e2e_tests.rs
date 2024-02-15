@@ -537,6 +537,13 @@ mod tests {
         let tx_kind_bytes = tx_kind_bytes.encoded();
 
         let query = r#"{ dryRunTransactionBlock(txBytes: $tx, txMeta: {}) {
+                results {
+                    mutatedReferences {
+                        input {
+                            __typename
+                        }
+                    }
+                }
                 transaction {
                     digest
                     sender {
@@ -592,15 +599,14 @@ mod tests {
         let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
 
         let sender = addresses[0];
-        let coin = cluster
+        let coin = *cluster
             .validator_fullnode_handle
             .wallet
             .get_gas_objects_owned_by_address(sender, None)
             .await
             .unwrap()
             .get(1)
-            .unwrap()
-            .clone();
+            .unwrap();
         let tx = cluster
             .validator_fullnode_handle
             .test_transaction_builder()
