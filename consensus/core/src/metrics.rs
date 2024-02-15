@@ -3,8 +3,9 @@
 
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
-    IntCounterVec, IntGauge, Registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    Registry,
 };
 use std::sync::Arc;
 
@@ -44,7 +45,7 @@ pub(crate) struct NodeMetrics {
     pub suspended_blocks: IntCounterVec,
     pub unsuspended_blocks: IntCounterVec,
     pub invalid_blocks: IntCounterVec,
-
+    pub broadcaster_rtt_estimate_ms: IntGaugeVec,
     // Commit Metrics
     #[allow(unused)]
     pub committed_leaders_total: IntCounterVec,
@@ -109,6 +110,13 @@ impl NodeMetrics {
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",
                 &["authority"],
+                registry,
+            )
+            .unwrap(),
+            broadcaster_rtt_estimate_ms: register_int_gauge_vec_with_registry!(
+                "broadcaster_rtt_estimate_ms",
+                "Estimated RTT latency per peer authority, for block sending in Broadcaster",
+                &["peer"],
                 registry,
             )
             .unwrap(),

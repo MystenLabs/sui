@@ -109,6 +109,7 @@ impl AnemoClient {
     }
 }
 
+#[async_trait]
 impl NetworkClient for AnemoClient {
     async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()> {
         let mut client = self
@@ -142,9 +143,7 @@ impl NetworkClient for AnemoClient {
 }
 
 /// Proxies Anemo RPC handlers to AnemoService.
-#[allow(unused)]
 struct AnemoServiceProxy<S: NetworkService> {
-    context: Arc<Context>,
     peer_map: BTreeMap<PeerId, AuthorityIndex>,
     service: Arc<S>,
 }
@@ -159,11 +158,7 @@ impl<S: NetworkService> AnemoServiceProxy<S> {
                 (peer_id, index)
             })
             .collect();
-        Self {
-            context,
-            peer_map,
-            service,
-        }
+        Self { peer_map, service }
     }
 }
 

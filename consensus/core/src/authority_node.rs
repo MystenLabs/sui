@@ -16,6 +16,7 @@ use tracing::info;
 use crate::block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock};
 use crate::block_manager::BlockManager;
 use crate::block_verifier::{BlockVerifier, SignedBlockVerifier};
+use crate::broadcaster::Broadcaster;
 use crate::context::Context;
 use crate::core::{Core, CoreSignals};
 use crate::core_thread::{ChannelCoreThreadDispatcher, CoreThreadDispatcher, CoreThreadHandle};
@@ -35,9 +36,8 @@ where
     start_time: Instant,
     transaction_client: Arc<TransactionClient>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
-    // Keeps core thread running.
     core_thread_handle: CoreThreadHandle,
-    // Keeps network alive.
+    broadcaster: Broadcaster,
     network_manager: N,
 }
 
@@ -69,12 +69,8 @@ where
         let start_time = Instant::now();
 
         // Create the transactions client and the transactions consumer
-        let (client, tx_receiver) = TransactionClient::new(context.clone());
+        let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
-
-        // Create network manager and client.
-        let network_manager = N::new(context.clone());
-        let _client = network_manager.client();
 
         // Construct Core components.
         let (core_signals, signals_receivers) = CoreSignals::new();
@@ -93,7 +89,14 @@ where
         let (core_dispatcher, core_thread_handle) =
             ChannelCoreThreadDispatcher::start(core, context.clone());
         let leader_timeout_handle =
-            LeaderTimeoutTask::start(core_dispatcher.clone(), signals_receivers, context.clone());
+            LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
+
+        // Create network manager and client.
+        let network_manager = N::new(context.clone());
+        let network_client = network_manager.client();
+
+        // Create Broadcaster.
+        let broadcaster = Broadcaster::new(context.clone(), network_client, &signals_receivers);
 
         // Start network service.
         let block_verifier = Arc::new(SignedBlockVerifier::new(
@@ -110,21 +113,23 @@ where
         Self {
             context,
             start_time,
-            transaction_client: Arc::new(client),
+            transaction_client: Arc::new(tx_client),
             leader_timeout_handle,
             core_thread_handle,
+            broadcaster,
             network_manager,
         }
     }
 
     #[allow(unused)]
-    async fn stop(self) {
+    async fn stop(mut self) {
         info!(
             "Stopping authority. Total run time: {:?}",
             self.start_time.elapsed()
         );
 
         self.network_manager.stop().await;
+        self.broadcaster.stop();
         self.core_thread_handle.stop();
         self.leader_timeout_handle.stop().await;
 
