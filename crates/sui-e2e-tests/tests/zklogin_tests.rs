@@ -18,7 +18,6 @@ use sui_types::utils::{
 };
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use sui_types::SUI_AUTHENTICATOR_STATE_OBJECT_ID;
-use test_cluster::fund_address_and_return_gas;
 use test_cluster::{TestCluster, TestClusterBuilder};
 
 async fn do_zklogin_test(address: SuiAddress, legacy: bool) -> SuiResult {
@@ -88,7 +87,7 @@ async fn zklogin_end_to_end_test() {
     run_zklogin_end_to_end_test(TestClusterBuilder::new().with_default_jwks().build().await).await;
 
     // wait for current epoch to 11
-    let mut test_cluster = TestClusterBuilder::new()
+    let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(1000)
         .build()
         .await;
@@ -96,13 +95,14 @@ async fn zklogin_end_to_end_test() {
     let rgp = test_cluster.get_reference_gas_price().await;
 
     // zklogin sig tx fails to execute bc it has max_epoch set to 10.
-    let context = &mut test_cluster.wallet;
+    let context = &test_cluster.wallet;
 
     let (eph_kp, pk_zklogin, zklogin_inputs) =
         &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
     let zklogin_addr = (pk_zklogin).into();
-
-    let gas = fund_address_and_return_gas(context, rgp, zklogin_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), zklogin_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(zklogin_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -144,7 +144,7 @@ async fn zklogin_end_to_end_test_with_auth_state_creation() {
     run_zklogin_end_to_end_test(test_cluster).await;
 }
 
-async fn run_zklogin_end_to_end_test(mut test_cluster: TestCluster) {
+async fn run_zklogin_end_to_end_test(test_cluster: TestCluster) {
     // wait for JWKs to be fetched and sequenced.
     test_cluster.wait_for_authenticator_state_update().await;
     let test_vectors = load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json");
@@ -158,7 +158,7 @@ async fn run_zklogin_end_to_end_test(mut test_cluster: TestCluster) {
             .unwrap();
 
         let rgp = test_cluster.get_reference_gas_price().await;
-        let context = &mut test_cluster.wallet;
+        let context = &test_cluster.wallet;
 
         // first send some gas to the zklogin address.
         let transfer_to_zklogin = context.sign_transaction(

@@ -20,7 +20,7 @@ use sui_types::{
     utils::{keys, load_test_vectors, make_upgraded_multisig_tx},
     zk_login_authenticator::ZkLoginAuthenticator,
 };
-use test_cluster::{fund_address_and_return_gas, TestCluster, TestClusterBuilder};
+use test_cluster::{TestCluster, TestClusterBuilder};
 
 async fn do_upgraded_multisig_test() -> SuiResult {
     let test_cluster = TestClusterBuilder::new().build().await;
@@ -70,9 +70,9 @@ async fn test_upgraded_multisig_feature_allow() {
 
 #[sim_test]
 async fn test_multisig_e2e() {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let context = &test_cluster.wallet;
     let rgp = test_cluster.get_reference_gas_price().await;
-    let context = &mut test_cluster.wallet;
 
     let keys = keys();
     let pk0 = keys[0].public(); // ed25519
@@ -86,7 +86,9 @@ async fn test_multisig_e2e() {
     let multisig_addr = SuiAddress::from(&multisig_pk);
 
     // fund wallet and get a gas object to use later.
-    let gas = fund_address_and_return_gas(context, rgp, multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
 
     // 1. sign with key 0 and 1 executes successfully.
     let tx1 = TestTransactionBuilder::new(multisig_addr, gas, rgp)
@@ -96,7 +98,9 @@ async fn test_multisig_e2e() {
     assert!(res.status_ok().unwrap());
 
     // 2. sign with key 1 and 2 executes successfully.
-    let gas = fund_address_and_return_gas(context, rgp, multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
     let tx2 = TestTransactionBuilder::new(multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build_and_sign_multisig(multisig_pk.clone(), &[&keys[1], &keys[2]], 0b110);
@@ -104,7 +108,9 @@ async fn test_multisig_e2e() {
     assert!(res.status_ok().unwrap());
 
     // 3. signature 2 and 1 swapped fails to execute.
-    let gas = fund_address_and_return_gas(context, rgp, multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
     let tx3 = TestTransactionBuilder::new(multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build_and_sign_multisig(multisig_pk.clone(), &[&keys[2], &keys[1]], 0b110);
@@ -154,7 +160,9 @@ async fn test_multisig_e2e() {
     )
     .unwrap();
     let wrong_sender = SuiAddress::from(&wrong_multisig_pk);
-    let gas = fund_address_and_return_gas(context, rgp, wrong_sender).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), wrong_sender)
+        .await;
     let tx7 = TestTransactionBuilder::new(wrong_sender, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build_and_sign_multisig(wrong_multisig_pk.clone(), &[&keys[0], &keys[2]], 0b101);
@@ -167,10 +175,10 @@ async fn test_multisig_e2e() {
 
 #[sim_test]
 async fn test_multisig_with_zklogin_scenerios() {
-    let mut test_cluster = TestClusterBuilder::new().with_default_jwks().build().await;
+    let test_cluster = TestClusterBuilder::new().with_default_jwks().build().await;
     test_cluster.wait_for_authenticator_state_update().await;
     let rgp = test_cluster.get_reference_gas_price().await;
-    let context = &mut test_cluster.wallet;
+    let context = &test_cluster.wallet;
 
     let keys = keys();
     let pk0 = keys[0].public(); // ed25519
@@ -195,7 +203,9 @@ async fn test_multisig_with_zklogin_scenerios() {
 
     // fund the multisig address.
     let multisig_addr = SuiAddress::from(&multisig_pk);
-    let gas = fund_address_and_return_gas(context, rgp, multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -300,7 +310,9 @@ async fn test_multisig_with_zklogin_scenerios() {
         )
         .unwrap(),
     );
-    let gas = fund_address_and_return_gas(context, rgp, wrong_multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), wrong_multisig_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(wrong_multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -337,7 +349,9 @@ async fn test_multisig_with_zklogin_scenerios() {
 
     // assert positive case for all 4 participanting parties.
     // 1a. good ed25519 sig used in multisig executes successfully.
-    let gas = fund_address_and_return_gas(context, rgp, multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -349,7 +363,9 @@ async fn test_multisig_with_zklogin_scenerios() {
     let _ = context.execute_transaction_must_succeed(tx_8).await;
 
     // 2a. good secp256k1 sig used in multisig executes successfully.
-    let gas = fund_address_and_return_gas(context, rgp, multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -361,7 +377,9 @@ async fn test_multisig_with_zklogin_scenerios() {
     let _ = context.execute_transaction_must_succeed(tx_9).await;
 
     // 3a. good secp256r1 sig used in multisig executes successfully.
-    let gas = fund_address_and_return_gas(context, rgp, multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -373,7 +391,9 @@ async fn test_multisig_with_zklogin_scenerios() {
     let _ = context.execute_transaction_must_succeed(tx_9).await;
 
     // 4b. good zklogin sig used in multisig executes successfully.
-    let gas = fund_address_and_return_gas(context, rgp, multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -390,7 +410,9 @@ async fn test_multisig_with_zklogin_scenerios() {
     let _ = context.execute_transaction_must_succeed(tx_10).await;
 
     // 4c. good zklogin sig AND good ed25519 combined used in multisig executes successfully.
-    let gas = fund_address_and_return_gas(context, rgp, multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -409,7 +431,9 @@ async fn test_multisig_with_zklogin_scenerios() {
     let _ = context.execute_transaction_must_succeed(tx_11).await;
 
     // 9. wrong bitmap fails to execute.
-    let gas = fund_address_and_return_gas(context, rgp, multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -446,7 +470,9 @@ async fn test_multisig_with_zklogin_scenerios() {
         0,
     );
     let bad_multisig_addr = SuiAddress::from(&bad_multisig_pk);
-    let gas = fund_address_and_return_gas(context, rgp, bad_multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), bad_multisig_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(bad_multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -470,7 +496,9 @@ async fn test_multisig_with_zklogin_scenerios() {
         1,
     );
     let bad_multisig_addr_2 = SuiAddress::from(&bad_multisig_pk_2);
-    let gas = fund_address_and_return_gas(context, rgp, bad_multisig_addr_2).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), bad_multisig_addr_2)
+        .await;
     let tx_data = TestTransactionBuilder::new(bad_multisig_addr_2, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -490,7 +518,9 @@ async fn test_multisig_with_zklogin_scenerios() {
     // 13. pass in 2 sigs when only 1 pk in multisig_pk, fails to execute.
     let small_multisig_pk = MultiSigPublicKey::insecure_new(vec![(pk0.clone(), 1)], 1);
     let bad_multisig_addr_3 = SuiAddress::from(&small_multisig_pk);
-    let gas = fund_address_and_return_gas(context, rgp, bad_multisig_addr_3).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), bad_multisig_addr_3)
+        .await;
     let tx_data = TestTransactionBuilder::new(bad_multisig_addr_3, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -512,7 +542,9 @@ async fn test_multisig_with_zklogin_scenerios() {
     let multisig_pk_with_dup =
         MultiSigPublicKey::insecure_new(vec![(pk0.clone(), 1), (pk0.clone(), 1)], 1);
     let bad_multisig_addr_4 = SuiAddress::from(&multisig_pk_with_dup);
-    let gas = fund_address_and_return_gas(context, rgp, bad_multisig_addr_4).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), bad_multisig_addr_4)
+        .await;
     let tx_data = TestTransactionBuilder::new(bad_multisig_addr_4, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -533,7 +565,9 @@ async fn test_multisig_with_zklogin_scenerios() {
     // 15. a sig with 11 pks fails to execute.
     let multisig_pk_11 = MultiSigPublicKey::insecure_new(vec![(pk0.clone(), 1); 11], 1);
     let bad_multisig_addr_11 = SuiAddress::from(&multisig_pk_11);
-    let gas = fund_address_and_return_gas(context, rgp, bad_multisig_addr_11).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), bad_multisig_addr_11)
+        .await;
     let tx_data = TestTransactionBuilder::new(bad_multisig_addr_11, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -555,7 +589,9 @@ async fn test_multisig_with_zklogin_scenerios() {
     let multisig_pk_12 =
         MultiSigPublicKey::insecure_new(vec![(pk0.clone(), 1), (pk0.clone(), 1)], 3);
     let bad_multisig_addr = SuiAddress::from(&multisig_pk_12);
-    let gas = fund_address_and_return_gas(context, rgp, bad_multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), bad_multisig_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(bad_multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -576,7 +612,9 @@ async fn test_multisig_with_zklogin_scenerios() {
     // 17. multisig with empty pk map fails to execute.
     let bad_multisig_empty_pk = MultiSigPublicKey::insecure_new(vec![], 1);
     let bad_multisig_addr = SuiAddress::from(&bad_multisig_empty_pk);
-    let gas = fund_address_and_return_gas(context, rgp, bad_multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), bad_multisig_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(bad_multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -625,7 +663,9 @@ async fn test_random_zklogin_in_multisig() {
     let pks = test_vectors.iter().map(|(_, pk, _)| pk.clone()).collect();
     let multisig_pk = MultiSigPublicKey::new(pks, vec![1; 10], 10).unwrap();
     let multisig_addr = SuiAddress::from(&multisig_pk);
-    let gas = fund_address_and_return_gas(context, rgp, multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
@@ -658,7 +698,7 @@ async fn test_random_zklogin_in_multisig() {
 }
 #[sim_test]
 async fn test_multisig_legacy_works() {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
 
     let keys = keys();
@@ -679,8 +719,10 @@ async fn test_multisig_legacy_works() {
     )
     .unwrap();
     let multisig_addr = SuiAddress::from(&multisig_pk);
-    let context = &mut test_cluster.wallet;
-    let gas = fund_address_and_return_gas(context, rgp, multisig_addr).await;
+    let context = &test_cluster.wallet;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
     let transfer_from_multisig = TestTransactionBuilder::new(multisig_addr, gas, rgp)
         .transfer_sui(Some(1000000), SuiAddress::ZERO)
         .build_and_sign_multisig_legacy(multisig_pk_legacy, &[&keys[0], &keys[1]]);
@@ -709,7 +751,6 @@ async fn test_zklogin_inside_multisig_feature_deny() {
 }
 
 async fn construct_simple_zklogin_multisig_tx(test_cluster: &TestCluster) -> Transaction {
-    let context = &test_cluster.wallet;
     // construct a multisig address with 1 zklogin pk with threshold = 1.
     let (eph_kp, _eph_pk, zklogin_inputs) =
         &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
@@ -723,7 +764,9 @@ async fn construct_simple_zklogin_multisig_tx(test_cluster: &TestCluster) -> Tra
     let rgp = test_cluster.get_reference_gas_price().await;
 
     let multisig_addr = SuiAddress::from(&multisig_pk);
-    let gas = fund_address_and_return_gas(context, rgp, multisig_addr).await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
     let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
         .transfer_sui(None, SuiAddress::ZERO)
         .build();
