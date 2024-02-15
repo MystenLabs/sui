@@ -16,7 +16,7 @@ use diesel::{
 };
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use sui_indexer::types_v2::OwnerType;
+use sui_indexer::types::OwnerType;
 use sui_types::{parse_sui_type_tag, TypeTag};
 
 /// The total balance for a particular coin type.

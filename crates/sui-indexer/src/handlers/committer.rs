@@ -14,7 +14,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use crate::metrics::IndexerMetrics;
 
 use crate::store::IndexerStoreV2;
-use crate::types_v2::IndexerResult;
+use crate::types::IndexerResult;
 use crate::IndexerConfig;
 
 use super::{CheckpointDataToCommit, EpochToCommit};

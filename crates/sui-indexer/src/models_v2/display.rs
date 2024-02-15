@@ -4,7 +4,7 @@
 use diesel::prelude::*;
 use sui_types::display::DisplayVersionUpdatedEvent;
 
-use crate::schema_v2::display;
+use crate::schema::display;
 
 #[derive(Queryable, Insertable, Debug, Clone)]
 #[diesel(table_name = display)]

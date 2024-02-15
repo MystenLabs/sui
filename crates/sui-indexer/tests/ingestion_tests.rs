@@ -13,7 +13,7 @@ mod ingestion_tests {
     use sui_indexer::errors::IndexerError;
     use sui_indexer::get_pg_pool_connection;
     use sui_indexer::models_v2::transactions::StoredTransaction;
-    use sui_indexer::schema_v2::transactions;
+    use sui_indexer::schema::transactions;
     use sui_indexer::store::{indexer_store_v2::IndexerStoreV2, PgIndexerStoreV2};
     use sui_indexer::test_utils::{start_test_indexer_v2, ReaderWriterConfig};
     use sui_types::base_types::SuiAddress;

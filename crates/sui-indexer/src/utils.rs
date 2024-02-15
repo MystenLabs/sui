@@ -8,7 +8,7 @@ use diesel::{PgConnection, RunQueryDsl};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::info;
 
-const MIGRATIONS_V2: EmbeddedMigrations = embed_migrations!("migrations_v2");
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 /// Resets the database by reverting all migrations and reapplying them.
 ///
@@ -21,10 +21,10 @@ pub fn reset_database(conn: &mut PgPoolConnection, drop_all: bool) -> Result<(),
         drop_all_tables(conn)
             .map_err(|e| anyhow!("Encountering error when dropping all tables {e}"))?;
     } else {
-        conn.revert_all_migrations(MIGRATIONS_V2)
+        conn.revert_all_migrations(MIGRATIONS)
             .map_err(|e| anyhow!("Error reverting all migrations {e}"))?;
     }
-    conn.run_migrations(&MIGRATIONS_V2.migrations().unwrap())
+    conn.run_migrations(&MIGRATIONS.migrations().unwrap())
         .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
     info!("Reset database complete.");
     Ok(())

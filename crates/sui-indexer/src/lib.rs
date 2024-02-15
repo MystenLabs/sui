@@ -30,11 +30,10 @@ pub mod indexer_v2;
 pub mod metrics;
 pub mod models_v2;
 pub mod processors_v2;
-pub mod schema_v2;
+pub mod schema;
 pub mod store;
 pub mod test_utils;
 pub mod types;
-pub mod types_v2;
 pub mod utils;
 
 pub type PgConnectionPool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
