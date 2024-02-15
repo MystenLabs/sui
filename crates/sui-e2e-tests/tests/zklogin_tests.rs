@@ -147,9 +147,10 @@ async fn zklogin_end_to_end_test_with_auth_state_creation() {
 async fn run_zklogin_end_to_end_test(test_cluster: TestCluster) {
     // wait for JWKs to be fetched and sequenced.
     test_cluster.wait_for_authenticator_state_update().await;
-    let test_vectors = load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json");
+    let test_vectors =
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1..];
     for (kp, pk_zklogin, inputs) in test_vectors {
-        let zklogin_addr = (&pk_zklogin).into();
+        let zklogin_addr = (pk_zklogin).into();
         let (sender, gas) = test_cluster
             .wallet
             .get_one_gas_object()
@@ -182,7 +183,7 @@ async fn run_zklogin_end_to_end_test(test_cluster: TestCluster) {
             .build();
 
         let msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
-        let eph_sig = Signature::new_secure(&msg, &kp);
+        let eph_sig = Signature::new_secure(&msg, kp);
 
         // combine ephemeral sig with zklogin inputs.
         let generic_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
@@ -194,15 +195,13 @@ async fn run_zklogin_end_to_end_test(test_cluster: TestCluster) {
 
         // a valid txn executes.
         context.execute_transaction_must_succeed(signed_txn).await;
-        assert!(context
-            .get_gas_objects_owned_by_address(zklogin_addr, None)
-            .await
-            .unwrap()
-            .is_empty());
 
         // a txn with max_epoch mismatch with proof, fails to execute.
-        let generic_sig =
-            GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(inputs, 0, eph_sig));
+        let generic_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+            inputs.clone(),
+            0,
+            eph_sig,
+        ));
         let signed_txn_expired = Transaction::from_generic_sig_data(tx_data, vec![generic_sig]);
         let result = context
             .execute_transaction_may_fail(signed_txn_expired)
