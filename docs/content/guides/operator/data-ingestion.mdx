@@ -1,14 +1,17 @@
 ---
-title: Data Ingestion
+title: Custom Indexer
+description: You can build custom indexers using the Sui micro-data ingestion framework. To create an indexer, you subscribe to a checkpoint stream with full checkpoint content. Establishing a custom indexer helps improve latency, allows pruning the data of your Sui Full node, and provides efficient assemblage of checkpoint data.
 ---
 
-You can build custom indexers using the Sui micro-data ingestion framework. To create an indexer, you subscribe to a checkpoint stream with full checkpoint content.
+You can build custom indexers using the Sui micro-data ingestion framework. To create an indexer, you subscribe to a checkpoint stream with full checkpoint content. This stream can be one of the publicly available streams from Mysten Labs, one that you set up in your local environment, or a combination of the two.  
 
 ![Data ingestion flow](./images/data-ingestion.png)
 
+Establishing a custom indexer helps improve latency, allows pruning the data of your Sui Full node, and provides efficient assemblage of checkpoint data.
+
 ## Interface and data format
 
-To use the framework, implement a basic interface :
+To use the framework, implement a basic interface:
 
 ```rust
 #[async_trait]
@@ -22,7 +25,7 @@ In this example, the `CheckpointData` struct represents full checkpoint content.
 
 ## Checkpoint stream sources
 
-Data ingestion supports several checkpoint stream sources.
+Data ingestion for your indexer supports several checkpoint stream sources.
 
 ### Remote reader
 
@@ -82,16 +85,16 @@ async fn main() -> Result<()> {
 }
 ```
 
-Let's highlight a couple of code blocks:
+Let's highlight a couple lines of code:
 
 ```rust
 let worker_pool = WorkerPool::new(CustomWorker, "custom worker", 100);
 executor.register(worker_pool).await?;
 ```
 
-The data ingestion executor can run multiple workflows simultaneously. For each workflow, a separate worker pool needs to be created and registered in the executor. The `WorkerPool` requires an instance of the `Worker` trait, the name of the workflow (which is used for tracking the progress of the flow in the progress store and metrics), and concurrency.
+The data ingestion executor can run multiple workflows simultaneously. For each workflow, you need to create a separate worker pool and register it in the executor. The `WorkerPool` requires an instance of the `Worker` trait, the name of the workflow (which is used for tracking the progress of the flow in the progress store and metrics), and concurrency.
 
 The concurrency parameter specifies how many threads the workflow uses. Having a concurrency value greater than 1 is helpful when tasks are idempotent and can be processed in parallel and out of order. The executor only updates the progress/watermark to a certain checkpoint when all preceding checkpoints are processed.
 
-More examples of custom ingestion pipelines can be found in the [Sui repository](https://github.com/MystenLabs/sui/tree/main/crates/sui-data-ingestion/src/workers).
+Find more examples of custom ingestion pipelines in the [Sui repository](https://github.com/MystenLabs/sui/tree/main/crates/sui-data-ingestion/src/workers).
 
