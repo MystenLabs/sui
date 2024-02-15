@@ -36,7 +36,7 @@ pub type ConsensusAuthority = AuthorityNode<AnemoManager>;
 
 pub struct AuthorityNode<N>
 where
-    N: NetworkManager<AuthorityService>,
+    N: NetworkManager<AuthorityService<ChannelCoreThreadDispatcher>>,
 {
     context: Arc<Context>,
     start_time: Instant,
@@ -49,7 +49,7 @@ where
 
 impl<N> AuthorityNode<N>
 where
-    N: NetworkManager<AuthorityService>,
+    N: NetworkManager<AuthorityService<ChannelCoreThreadDispatcher>>,
 {
     pub async fn start(
         own_index: AuthorityIndex,
@@ -159,14 +159,14 @@ where
 }
 
 /// Authority's network interface.
-pub struct AuthorityService {
+pub struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
     block_verifier: Arc<dyn BlockVerifier>,
-    core_dispatcher: ChannelCoreThreadDispatcher,
+    core_dispatcher: C,
 }
 
 #[async_trait]
-impl NetworkService for AuthorityService {
+impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
     async fn handle_send_block(
         &self,
         peer: AuthorityIndex,
@@ -244,17 +244,60 @@ impl NetworkService for AuthorityService {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::sync::Arc;
 
+    use async_trait::async_trait;
     use consensus_config::{local_committee_and_keys, NetworkKeyPair, Parameters, ProtocolKeyPair};
     use fastcrypto::traits::ToFromBytes;
+    use parking_lot::Mutex;
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
     use tokio::sync::mpsc::unbounded_channel;
+    use tokio::time::sleep;
 
     use super::*;
+    use crate::authority_node::AuthorityService;
+    use crate::block::{timestamp_utc_ms, BlockRef, Round, TestBlock, VerifiedBlock};
+    use crate::block_verifier::NoopBlockVerifier;
+    use crate::context::Context;
+    use crate::core_thread::{CoreError, CoreThreadDispatcher};
+    use crate::network::NetworkService;
     use crate::transaction::NoopTransactionVerifier;
+
+    struct FakeCoreThreadDispatcher {
+        blocks: Mutex<Vec<VerifiedBlock>>,
+    }
+
+    impl FakeCoreThreadDispatcher {
+        fn new() -> Self {
+            Self {
+                blocks: Mutex::new(vec![]),
+            }
+        }
+
+        fn get_blocks(&self) -> Vec<VerifiedBlock> {
+            self.blocks.lock().clone()
+        }
+    }
+
+    #[async_trait]
+    impl CoreThreadDispatcher for Arc<FakeCoreThreadDispatcher> {
+        async fn add_blocks(&self, blocks: Vec<VerifiedBlock>) -> Result<Vec<BlockRef>, CoreError> {
+            let block_refs = blocks.iter().map(|b| b.reference()).collect();
+            self.blocks.lock().extend(blocks);
+            Ok(block_refs)
+        }
+
+        async fn force_new_block(&self, _round: Round) -> Result<(), CoreError> {
+            unimplemented!()
+        }
+
+        async fn get_missing_blocks(&self) -> Result<Vec<BTreeSet<BlockRef>>, CoreError> {
+            unimplemented!()
+        }
+    }
 
     #[tokio::test]
     async fn start_and_stop() {
@@ -295,5 +338,44 @@ mod tests {
         assert_eq!(authority.context.committee.size(), 1);
 
         authority.stop().await;
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_authority_service() {
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let block_verifier = NoopBlockVerifier {};
+        let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+        let authority_service = Arc::new(AuthorityService {
+            context: context.clone(),
+            block_verifier: Arc::new(block_verifier),
+            core_dispatcher: core_dispatcher.clone(),
+        });
+
+        // Test delaying blocks with time drift.
+        let now = timestamp_utc_ms();
+        let max_drift = context.parameters.max_forward_time_drift;
+        let input_block = VerifiedBlock::new_for_test(
+            TestBlock::new(9, 0)
+                .set_timestamp_ms(now + max_drift.as_millis() as u64)
+                .build(),
+        );
+
+        let service = authority_service.clone();
+        let serialized = input_block.serialized().clone();
+        tokio::spawn(async move {
+            service
+                .handle_send_block(context.committee.to_authority_index(0).unwrap(), serialized)
+                .await
+                .unwrap();
+        });
+
+        sleep(max_drift / 2).await;
+        assert!(core_dispatcher.get_blocks().is_empty());
+
+        sleep(max_drift).await;
+        let blocks = core_dispatcher.get_blocks();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0], input_block);
     }
 }

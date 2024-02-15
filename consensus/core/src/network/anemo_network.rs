@@ -237,7 +237,7 @@ pub struct AnemoManager {
 }
 
 impl AnemoManager {
-    pub fn new(context: Arc<Context>) -> Self {
+    pub(crate) fn new(context: Arc<Context>) -> Self {
         Self {
             context: context.clone(),
             client: Arc::new(AnemoClient::new(context)),
@@ -415,7 +415,7 @@ mod test {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_basics() {
         let (context, keys) = Context::new_for_test(4);
 
