@@ -8,6 +8,7 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_bytecode_utils::format_signature_token;
+use sui_types::randomness_state::is_mutable_random;
 use sui_types::{
     base_types::{TxContext, TxContextKind, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     clock::Clock,
@@ -229,6 +230,16 @@ fn verify_param_type(
     if Clock::is_mutable(view, param) {
         return Err(format!(
             "Invalid entry point parameter type. Clock must be passed by immutable reference. got: \
+             {}",
+            format_signature_token(view, param),
+        ));
+    }
+
+    // Only `sui::sui_system` is allowed to expose entry functions that accept a mutable Random
+    // parameter.
+    if is_mutable_random(view, param) {
+        return Err(format!(
+            "Invalid entry point parameter type. Random must be passed by immutable reference. got: \
              {}",
             format_signature_token(view, param),
         ));
