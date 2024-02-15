@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use consensus_config::{AuthorityIndex, Epoch, Stake};
 use fastcrypto::error::FastCryptoError;
 use thiserror::Error;
 use typed_store::TypedStoreError;
 
-use crate::block::Round;
+use crate::block::{BlockTimestampMs, Round};
 
 /// Errors that can occur when processing blocks, reading from storage, or encountering shutdown.
 #[allow(unused)]
@@ -50,6 +52,12 @@ pub enum ConsensusError {
 
     #[error("Invalid transaction: {0}")]
     InvalidTransaction(String),
+
+    #[error("Block at {block_timestamp}ms is too far in the future: {forward_time_drift:?}")]
+    BlockTooFarInFuture {
+        block_timestamp: BlockTimestampMs,
+        forward_time_drift: Duration,
+    },
 
     #[error("RocksDB failure: {0}")]
     RocksDBFailure(#[from] TypedStoreError),

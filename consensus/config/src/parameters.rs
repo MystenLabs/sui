@@ -18,6 +18,10 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_leader_timeout")]
     pub leader_timeout: Duration,
 
+    /// Maximum forward time drift (how far in future) allowed for received blocks.
+    #[serde(default = "Parameters::default_max_forward_time_drift")]
+    pub max_forward_time_drift: Duration,
+
     /// The database path. The path should be provided in order for the node to be able to boot
     pub db_path: Option<PathBuf>,
 }
@@ -25,6 +29,10 @@ pub struct Parameters {
 impl Parameters {
     pub fn default_leader_timeout() -> Duration {
         Duration::from_millis(250)
+    }
+
+    pub fn default_max_forward_time_drift() -> Duration {
+        Duration::from_millis(500)
     }
 
     pub fn db_path_str_unsafe(&self) -> String {
@@ -42,6 +50,7 @@ impl Default for Parameters {
     fn default() -> Self {
         Self {
             leader_timeout: Parameters::default_leader_timeout(),
+            max_forward_time_drift: Parameters::default_max_forward_time_drift(),
             db_path: None,
         }
     }

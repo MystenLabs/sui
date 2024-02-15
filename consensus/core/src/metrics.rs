@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, register_int_gauge_vec_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
     Registry,
 };
-use std::sync::Arc;
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4,
@@ -45,7 +46,9 @@ pub struct NodeMetrics {
     pub suspended_blocks: IntCounterVec,
     pub unsuspended_blocks: IntCounterVec,
     pub invalid_blocks: IntCounterVec,
+    pub block_timestamp_drift_wait_ms: IntCounterVec,
     pub broadcaster_rtt_estimate_ms: IntGaugeVec,
+
     // Commit Metrics
     #[allow(unused)]
     pub committed_leaders_total: IntCounterVec,
@@ -109,6 +112,13 @@ impl NodeMetrics {
             invalid_blocks: register_int_counter_vec_with_registry!(
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",
+                &["authority"],
+                registry,
+            )
+            .unwrap(),
+            block_timestamp_drift_wait_ms: register_int_counter_vec_with_registry!(
+                "block_timestamp_drift_wait_ms",
+                "Total time in ms spent waiting, when a received block has timestamp in future.",
                 &["authority"],
                 registry,
             )

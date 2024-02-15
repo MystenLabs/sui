@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Instant, vec};
+use std::{sync::Arc, time::Duration, time::Instant, vec};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -9,10 +9,11 @@ use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, Pr
 use parking_lot::RwLock;
 use prometheus::Registry;
 use sui_protocol_config::ProtocolConfig;
+use tokio::time::sleep;
 use tracing::info;
 
 use crate::{
-    block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
+    block::{timestamp_utc_ms, BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
     block_manager::BlockManager,
     block_verifier::{BlockVerifier, SignedBlockVerifier},
     broadcaster::Broadcaster,
@@ -174,6 +175,8 @@ impl NetworkService for AuthorityService {
         // TODO: dedup block verifications, here and with fetched blocks.
         let signed_block: SignedBlock =
             bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
+
+        // Reject blocks not produced by the peer.
         if peer != signed_block.author() {
             self.context
                 .metrics
@@ -185,6 +188,8 @@ impl NetworkService for AuthorityService {
             info!("Block with wrong authority from {}: {}", peer, e);
             return Err(e);
         }
+
+        // Reject blocks failing validations.
         if let Err(e) = self.block_verifier.verify(&signed_block) {
             self.context
                 .metrics
@@ -196,6 +201,31 @@ impl NetworkService for AuthorityService {
             return Err(e);
         }
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
+
+        // Reject block with timestamp too far in the future.
+        let forward_time_drift = Duration::from_millis(
+            verified_block
+                .timestamp_ms()
+                .saturating_sub(timestamp_utc_ms()),
+        );
+        if forward_time_drift > self.context.parameters.max_forward_time_drift {
+            return Err(ConsensusError::BlockTooFarInFuture {
+                block_timestamp: verified_block.timestamp_ms(),
+                forward_time_drift,
+            });
+        }
+
+        // Wait until the block's timestamp is current.
+        if forward_time_drift > Duration::ZERO {
+            self.context
+                .metrics
+                .node_metrics
+                .block_timestamp_drift_wait_ms
+                .with_label_values(&[&peer.to_string()])
+                .inc_by(forward_time_drift.as_millis() as u64);
+            sleep(forward_time_drift).await;
+        }
+
         self.core_dispatcher
             .add_blocks(vec![verified_block])
             .await
