@@ -39,7 +39,7 @@ use crate::{
     package_lock::PackageLock,
 };
 
-#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+#[allow(clippy::non_canonical_partial_ord_impl)]
 #[derive(Derivative, Parser, Serialize, Deserialize, Default)]
 #[derivative(Debug, Eq, PartialEq, PartialOrd, Clone)]
 #[clap(about)]

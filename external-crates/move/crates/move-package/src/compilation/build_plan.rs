@@ -121,7 +121,7 @@ impl BuildPlan {
         })
     }
 
-    fn compute_dependencies<'a>(&'a mut self) -> (CompilationDependencies, &'a mut BuildConfig) {
+    fn compute_dependencies(&mut self) -> (CompilationDependencies, &mut BuildConfig) {
         let root_package = &self.resolution_graph.package_table[&self.root];
         let project_root = match &self.resolution_graph.build_options.install_dir {
             Some(under_path) => under_path.clone(),
