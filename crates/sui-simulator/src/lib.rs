@@ -169,7 +169,7 @@ pub mod random {
         }
 
         chance
-            >= SEED.with(|seed| {
+            > SEED.with(|seed| {
                 let mut hasher = std::collections::hash_map::DefaultHasher::new();
                 seed.hash(&mut hasher);
                 value.hash(&mut hasher);
