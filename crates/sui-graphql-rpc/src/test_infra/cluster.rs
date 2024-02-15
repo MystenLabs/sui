@@ -106,7 +106,16 @@ pub async fn serve_executor(
         .unwrap();
 
     let executor_server_handle = tokio::spawn(async move {
-        sui_rest_api::start_service(executor_server_url, executor, Some("/rest".to_owned())).await;
+        let chain_id = (*executor
+            .get_checkpoint_by_sequence_number(0)
+            .unwrap()
+            .unwrap()
+            .digest())
+        .into();
+
+        sui_rest_api::RestService::new_without_version(executor, chain_id)
+            .start_service(executor_server_url, Some("/rest".to_owned()))
+            .await;
     });
 
     let (pg_store, pg_handle) = start_test_indexer_v2_impl(
