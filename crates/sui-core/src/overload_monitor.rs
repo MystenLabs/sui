@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Weak;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
-use sui_config::node::OverloadThresholdConfig;
+use sui_config::node::AuthorityOverloadConfig;
 use sui_types::digests::TransactionDigest;
 use sui_types::error::SuiError;
 use sui_types::error::SuiResult;
@@ -47,7 +47,7 @@ const ADDITIONAL_LOAD_SHEDDING: f64 = 0.1;
 // when the signals indicates overload.
 pub async fn overload_monitor(
     authority_state: Weak<AuthorityState>,
-    config: OverloadThresholdConfig,
+    config: AuthorityOverloadConfig,
 ) {
     info!("Starting system overload monitor.");
 
@@ -67,7 +67,7 @@ pub async fn overload_monitor(
 // Returns whether the authority state exists.
 fn check_authority_overload(
     authority_state: &Weak<AuthorityState>,
-    config: &OverloadThresholdConfig,
+    config: &AuthorityOverloadConfig,
 ) -> bool {
     let authority_arc = authority_state.upgrade();
     if authority_arc.is_none() {
@@ -153,7 +153,7 @@ fn calculate_load_shedding_percentage(txn_ready_rate: f64, execution_rate: f64) 
 // When txn_ready_rate is less than execution_rate, we gradually reduce load shedding percentage until
 // the queueing latency is back to normal.
 fn check_overload_signals(
-    config: &OverloadThresholdConfig,
+    config: &AuthorityOverloadConfig,
     current_load_shedding_percentage: u32,
     queueing_latency: Duration,
     txn_ready_rate: f64,
@@ -323,7 +323,7 @@ mod tests {
 
     #[test]
     pub fn test_check_overload_signals() {
-        let config = OverloadThresholdConfig {
+        let config = AuthorityOverloadConfig {
             execution_queue_latency_hard_limit: Duration::from_secs(10),
             execution_queue_latency_soft_limit: Duration::from_secs(1),
             max_load_shedding_percentage: 90,
@@ -400,12 +400,12 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     pub async fn test_check_authority_overload() {
-        let config = OverloadThresholdConfig {
+        let config = AuthorityOverloadConfig {
             safe_transaction_ready_rate: 0,
             ..Default::default()
         };
         let state = TestAuthorityBuilder::new()
-            .with_overload_threshold_config(config.clone())
+            .with_authority_overload_config(config.clone())
             .build()
             .await;
 

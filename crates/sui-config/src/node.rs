@@ -162,8 +162,8 @@ pub struct NodeConfig {
     #[serde(default = "default_zklogin_oauth_providers")]
     pub zklogin_oauth_providers: BTreeMap<Chain, BTreeSet<String>>,
 
-    #[serde(default = "default_overload_threshold_config")]
-    pub overload_threshold_config: OverloadThresholdConfig,
+    #[serde(default = "default_authority_overload_config")]
+    pub authority_overload_config: AuthorityOverloadConfig,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_with_range: Option<RunWithRange>,
@@ -686,7 +686,7 @@ pub struct TransactionKeyValueStoreWriteConfig {
 /// resolves.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct OverloadThresholdConfig {
+pub struct AuthorityOverloadConfig {
     #[serde(default = "default_max_txn_age_in_queue")]
     pub max_txn_age_in_queue: Duration,
 
@@ -757,7 +757,7 @@ fn default_safe_transaction_ready_rate() -> u32 {
     100
 }
 
-impl Default for OverloadThresholdConfig {
+impl Default for AuthorityOverloadConfig {
     fn default() -> Self {
         Self {
             max_txn_age_in_queue: default_max_txn_age_in_queue(),
@@ -774,8 +774,8 @@ impl Default for OverloadThresholdConfig {
     }
 }
 
-fn default_overload_threshold_config() -> OverloadThresholdConfig {
-    OverloadThresholdConfig::default()
+fn default_authority_overload_config() -> AuthorityOverloadConfig {
+    AuthorityOverloadConfig::default()
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]
