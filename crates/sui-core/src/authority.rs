@@ -1207,6 +1207,13 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let digest = *certificate.digest();
+
+        fail_point_if!("correlated-crash-process-certificate", || {
+            if sui_simulator::random::deterministic_probabilty_once(&digest, 0.01) {
+                sui_simulator::task::kill_current_node(None);
+            }
+        });
+
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
         if let Some(effects) = self.execution_cache.get_executed_effects(&digest)? {

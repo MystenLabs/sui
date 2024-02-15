@@ -465,7 +465,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .add_transactions(timestamp, transactions_to_schedule.len() as u64);
 
         fail_point_if!("correlated-crash-after-consensus-commit-boundary", || {
-            if sui_simulator::deterministic_probabilty(round) < 0.01 {
+            let key = [round, self.epoch_store.epoch()];
+            if sui_simulator::random::deterministic_probabilty(&key, 0.01) {
                 sui_simulator::task::kill_current_node(None);
             }
         });
