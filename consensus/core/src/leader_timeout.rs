@@ -25,7 +25,7 @@ impl LeaderTimeoutTaskHandle {
 }
 
 pub(crate) struct LeaderTimeoutTask<D: CoreThreadDispatcher> {
-    dispatcher: D,
+    dispatcher: Arc<D>,
     new_round_receiver: watch::Receiver<Round>,
     leader_timeout: Duration,
     stop: Receiver<()>,
@@ -33,7 +33,7 @@ pub(crate) struct LeaderTimeoutTask<D: CoreThreadDispatcher> {
 
 impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
     pub fn start(
-        dispatcher: D,
+        dispatcher: Arc<D>,
         signals_receivers: &CoreSignalsReceivers,
         context: Arc<Context>,
     ) -> LeaderTimeoutTaskHandle {
@@ -148,7 +148,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn basic_leader_timeout() {
         let (context, _signers) = Context::new_for_test(4);
-        let dispatcher = MockCoreThreadDispatcher::default();
+        let dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let leader_timeout = Duration::from_millis(500);
         let parameters = Parameters {
             leader_timeout,
@@ -190,7 +190,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn multiple_leader_timeouts() {
         let (context, _signers) = Context::new_for_test(4);
-        let dispatcher = MockCoreThreadDispatcher::default();
+        let dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let leader_timeout = Duration::from_millis(500);
         let parameters = Parameters {
             leader_timeout,

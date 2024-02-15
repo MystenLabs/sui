@@ -141,12 +141,9 @@ where
             store,
         );
 
-        // Create network manager and client.
-        let network_manager = N::new(context.clone());
-        let network_client = network_manager.client();
-
         let (core_dispatcher, core_thread_handle) =
             ChannelCoreThreadDispatcher::start(core, context.clone());
+        let core_dispatcher = Arc::new(core_dispatcher);
         let leader_timeout_handle =
             LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
 
@@ -155,14 +152,19 @@ where
         let network_client = network_manager.client();
 
         // Create Broadcaster.
-        let broadcaster = Broadcaster::new(context.clone(), network_client, &signals_receivers);
+        let broadcaster = Broadcaster::new(context.clone(), network_client.clone(), &signals_receivers);
 
         // Start network service.
         let block_verifier = Arc::new(SignedBlockVerifier::new(
             context.clone(),
             transaction_verifier,
         ));
-        let synchronizer = Synchronizer::start(context.clone(), core_dispatcher.clone());
+        let synchronizer = Synchronizer::start(
+            network_client,
+            context.clone(),
+            core_dispatcher.clone(),
+            block_verifier.clone(),
+        );
         let network_service = Arc::new(AuthorityService {
             context: context.clone(),
             block_verifier,
@@ -409,7 +411,9 @@ mod tests {
         let context = Arc::new(context);
         let block_verifier = NoopBlockVerifier {};
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
-        let synchronizer = Synchronizer::start(context.clone(), core_dispatcher.clone());
+        let network_manager = AnemoManager::new(context.clone());
+        let network_client = network_manager.client();
+        let synchronizer = Synchronizer::start(network_client, context.clone(), core_dispatcher.clone());
         let authority_service = Arc::new(AuthorityService {
             context: context.clone(),
             block_verifier: Arc::new(block_verifier),
