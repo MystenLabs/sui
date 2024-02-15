@@ -41,13 +41,13 @@ COPY sui-execution sui-execution
 COPY narwhal narwhal
 COPY external-crates external-crates
 RUN cargo build --release \
-    --bin sui-oracle 
-    # --bin suins-indexer
+    --bin sui-oracle \
+    --bin suins-indexer
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
 WORKDIR sui
-COPY --from=builder /sui/target/release/sui-oracle /usr/local/bin
+COPY --from=builder /sui/target/release/* /usr/local/bin
 RUN apt update && apt install -y libpq5 ca-certificates libpq-dev postgresql
 
 ARG BUILD_DATE
