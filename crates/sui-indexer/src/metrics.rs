@@ -38,6 +38,7 @@ pub struct IndexerMetrics {
     pub latest_network_metrics_cp_seq: IntGauge,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
+    pub checkpoint_download_bytes_size: IntGauge,
     pub fullnode_checkpoint_data_download_latency: Histogram,
     pub fullnode_checkpoint_wait_and_download_latency: Histogram,
     pub fullnode_transaction_download_latency: Histogram,
@@ -197,6 +198,11 @@ impl IndexerMetrics {
             latest_network_metrics_cp_seq: register_int_gauge_with_registry!(
                 "latest_network_metrics_cp_seq",
                 "Latest network metrics cp seq",
+                registry,
+            ).unwrap(),
+            checkpoint_download_bytes_size: register_int_gauge_with_registry!(
+                "checkpoint_download_bytes_size",
+                "Size of the downloaded checkpoint in bytes",
                 registry,
             ).unwrap(),
             fullnode_checkpoint_data_download_latency: register_histogram_with_registry!(

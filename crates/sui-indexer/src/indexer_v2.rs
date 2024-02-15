@@ -57,9 +57,13 @@ impl IndexerV2 {
             .get_latest_tx_checkpoint_sequence_number()
             .await
             .expect("Failed to get latest tx checkpoint sequence number from DB");
+        let download_queue_size = env::var("DOWNLOAD_QUEUE_SIZE")
+            .unwrap_or_else(|_| DOWNLOAD_QUEUE_SIZE.to_string())
+            .parse::<usize>()
+            .expect("Invalid DOWNLOAD_QUEUE_SIZE");
         let (downloaded_checkpoint_data_sender, downloaded_checkpoint_data_receiver) =
             mysten_metrics::metered_channel::channel(
-                DOWNLOAD_QUEUE_SIZE,
+                download_queue_size,
                 &mysten_metrics::get_metrics()
                     .unwrap()
                     .channels
@@ -81,11 +85,9 @@ impl IndexerV2 {
             metrics.clone(),
             snapshot_config,
         );
-
         spawn_monitored_task!(objects_snapshot_processor.start());
 
         let checkpoint_handler = new_handlers(store, metrics, config).await?;
-
         crate::framework::runner::run(
             mysten_metrics::metered_channel::ReceiverStream::new(
                 downloaded_checkpoint_data_receiver,
