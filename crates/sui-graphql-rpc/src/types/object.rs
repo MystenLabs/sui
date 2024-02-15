@@ -1364,10 +1364,9 @@ pub(crate) async fn deserialize_move_struct(
     Ok((struct_tag, move_struct))
 }
 
-/// Constructs a raw query to fetch objects from the database. The `page`'s limit and cursor are
-/// applied to reduce the number of rows to be fetched. Objects are filtered out if they satisfy the
-/// criteria but have a later version in the same checkpoint. If object keys are provided, then this
-/// filter is not applied.
+/// Constructs a raw query to fetch objects from the database. Objects are filtered out if they
+/// satisfy the criteria but have a later version in the same checkpoint. If object keys are
+/// provided, or no filters are specified at all, then this final condition is not applied.
 fn objects_query(filter: &ObjectFilter, lhs: i64, rhs: i64, page: &Page<Cursor>) -> RawQuery
 where
 {
@@ -1376,8 +1375,7 @@ where
     } else {
         View::Consistent
     };
-    // Require a consistent view of objects if the owner is specified, to filter out object versions
-    // that satisfy the criteria, but have a later version in the same checkpoint.
+
     build_objects_query(view, lhs, rhs, page, move |query| filter.apply(query))
 }
 

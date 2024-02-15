@@ -371,9 +371,9 @@ impl TryFrom<&MoveObject> for Coin {
     }
 }
 
-/// Constructs a raw query to fetch objects from the database. The `page`'s limit and cursor are
-/// applied to reduce the number of rows to be fetched. Objects are filtered out if they satisfy the
-/// criteria but have a later version in the same checkpoint.
+/// Constructs a raw query to fetch objects from the database. Since there are no point lookups for
+/// the coin query, objects are filtered out if they satisfy the criteria but have a later version
+/// in the same checkpoint.
 fn coins_query(
     coin_type: TypeTag,
     owner: Option<SuiAddress>,

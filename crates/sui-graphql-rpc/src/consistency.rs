@@ -62,11 +62,25 @@ impl Checkpointed for JsonCursor<ConsistentNamedCursor> {
 
 /// Constructs a `RawQuery` against the `objects_snapshot` and `objects_history` table to fetch
 /// objects that satisfy some filtering criteria `filter_fn` within the provided checkpoint range
-/// `lhs` and `rhs`. If the `view` parameter is set to `Consistent`, the query additionally filters
-/// out objects that satisfy the provided filters, but are not the most recent version of the object
-/// within the checkpoint range. If the view parameter is set to `Historical`, this final filter is
-/// not applied. The query is a union of the results from `objects_snapshot` and `objects_history`
-/// to ensure that there are no gaps in the result set ordered by `object_id`.
+/// `lhs` and `rhs`. The `objects_snapshot` table contains the latest versions of objects up to the
+/// latest checkpoint sequence number on the table, and `objects_history` captures changes after
+/// that, so a query to both tables is necessary to capture objects in these scenarios:
+/// 1) In snapshot, not in history - occurs when an object gets snapshotted and then has not been
+///    modified since
+/// 2) In history, not in snapshot - occurs when a new object is created
+/// 3) In snapshot and in history - occurs when an object is snapshotted and further modified
+///
+/// One approach is to issue two queries and merge in the application, but this can also be achieved
+/// directly in the database with `UNION ALL` and `SELECT DISTINCT ON (object_id)`.
+///
+/// The query also applies the `page`'s cursor and limit to each inner query to ensure that the page
+/// of results are in step based on `object_id`.
+///
+/// Additionally, even among the objects that satisfy the filtering criteria, it is possible that
+/// there is a yet more recent version of the object within the checkpoint range. The `view`
+/// parameter controls whether to filter out such objects. If the `view` parameter is set to
+/// `Consistent`, this filter is applied, otherwise if the `view` parameter is set to `Historical`,
+/// this filter is not applied.
 pub(crate) fn build_objects_query<F>(
     view: View,
     lhs: i64,
@@ -90,6 +104,8 @@ where
 
     let mut snapshot_objs = match view {
         View::Consistent => {
+            // The LEFT JOIN filters out objects that have a more recent version within the
+            // checkpoint range
             let mut snapshot_objs = query!(
                 r#"SELECT candidates.* FROM ({}) candidates
                     LEFT JOIN ({}) newer
@@ -106,19 +122,20 @@ where
         ),
     };
 
-    // Always apply pagination, to avoid a scenario where a user provides more `objectKeys` than
-    // allowed by the maximum page size.
+    // Always apply cursor pagination and limit so that each part of the query is in step, and to
+    // avoid a scenario where a user provides more `objectKeys` than allowed by the maximum page
+    // size.
     snapshot_objs = page.apply::<StoredHistoryObject>(snapshot_objs);
 
-    // Additionally filter objects_history table for results between the available range, or
-    // checkpoint_viewed_at, if provided.
+    // Similar to the snapshot query, construct the filtered inner query for the history table.
     let mut history_objs_inner = query!("SELECT * FROM objects_history");
     // filter_fn must go before filtering on checkpoint_sequence_number - namely for multi-gets
-    // based on `object_id` or `object_id` and `object_version`
+    // based on `object_id` and `object_version`
     history_objs_inner = filter_fn(history_objs_inner);
 
     let mut history_objs = match view {
         View::Consistent => {
+            // Bound the inner `objects_history` query by the checkpoint range
             history_objs_inner = filter!(
                 history_objs_inner,
                 format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
@@ -140,14 +157,15 @@ where
         ),
     };
 
-    // Always apply pagination, to avoid a scenario where a user provides more `objectKeys` than
-    // allowed by the maximum page size.
+    // Always apply cursor pagination and limit so that each part of the query is in step, and to
+    // avoid a scenario where a user provides more `objectKeys` than allowed by the maximum page
+    // size.
     history_objs = page.apply::<StoredHistoryObject>(history_objs);
 
     // Combine the two queries, and select the most recent version of each object. The result set is
     // the most recent version of objects from `objects_snapshot` and `objects_history` that match
     // the filter criteria.
-    let almost = query!(
+    let query = query!(
         r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ALL ({})) candidates"#,
         snapshot_objs,
         history_objs
@@ -155,7 +173,7 @@ where
     .order_by("object_id")
     .order_by("object_version DESC");
 
-    query!("SELECT * FROM ({}) candidates", almost)
+    query!("SELECT * FROM ({}) candidates", query)
 }
 
 /// Given a `checkpoint_viewed_at` representing the checkpoint sequence number when the query was
