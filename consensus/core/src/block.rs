@@ -324,7 +324,7 @@ impl fmt::Debug for Slot {
 /// will affect the values of `BlockDigest` and `BlockRef`.
 #[allow(unused)]
 #[derive(Deserialize, Serialize)]
-pub(crate) struct SignedBlock {
+pub struct SignedBlock {
     inner: Block,
     signature: Bytes,
 }
@@ -437,7 +437,7 @@ impl Deref for SignedBlock {
 /// VerifiedBlock allows full access to its content.
 /// It should be relatively cheap to copy.
 #[derive(Clone)]
-pub(crate) struct VerifiedBlock {
+pub struct VerifiedBlock {
     block: Arc<SignedBlock>,
 
     // Cached Block digest and serialized SignedBlock, to avoid re-computing these values.

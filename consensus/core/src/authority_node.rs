@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-use std::time::Instant;
-use std::vec;
+use std::{sync::Arc, time::Instant, vec};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -13,20 +11,27 @@ use prometheus::Registry;
 use sui_protocol_config::ProtocolConfig;
 use tracing::info;
 
-use crate::block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock};
-use crate::block_manager::BlockManager;
-use crate::block_verifier::{BlockVerifier, SignedBlockVerifier};
-use crate::broadcaster::Broadcaster;
-use crate::context::Context;
-use crate::core::{Core, CoreSignals};
-use crate::core_thread::{ChannelCoreThreadDispatcher, CoreThreadDispatcher, CoreThreadHandle};
-use crate::dag_state::DagState;
-use crate::error::{ConsensusError, ConsensusResult};
-use crate::leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle};
-use crate::metrics::initialise_metrics;
-use crate::network::{NetworkManager, NetworkService};
-use crate::storage::rocksdb_store::RocksDBStore;
-use crate::transaction::{TransactionClient, TransactionConsumer, TransactionVerifier};
+use crate::{
+    block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
+    block_manager::BlockManager,
+    block_verifier::{BlockVerifier, SignedBlockVerifier},
+    broadcaster::Broadcaster,
+    commit_observer::CommitObserver,
+    context::Context,
+    core::{Core, CoreSignals},
+    core_thread::{ChannelCoreThreadDispatcher, CoreThreadDispatcher, CoreThreadHandle},
+    dag_state::DagState,
+    error::{ConsensusError, ConsensusResult},
+    leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
+    metrics::initialise_metrics,
+    network::{anemo_network::AnemoManager, NetworkManager, NetworkService},
+    storage::rocksdb_store::RocksDBStore,
+    transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
+    CommitConsumer,
+};
+
+// This type is used by Sui as part of starting consensus via  MysticetiManager.
+pub type ConsensusAuthority = AuthorityNode<AnemoManager>;
 
 pub struct AuthorityNode<N>
 where
@@ -45,8 +50,7 @@ impl<N> AuthorityNode<N>
 where
     N: NetworkManager<AuthorityService>,
 {
-    #[allow(unused)]
-    async fn start(
+    pub async fn start(
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
@@ -56,6 +60,7 @@ where
         protocol_keypair: ProtocolKeyPair,
         network_keypair: NetworkKeyPair,
         transaction_verifier: Arc<dyn TransactionVerifier>,
+        commit_consumer: CommitConsumer,
         registry: Registry,
     ) -> Self {
         info!("Starting authority with index {}", own_index);
@@ -76,11 +81,19 @@ where
         let (core_signals, signals_receivers) = CoreSignals::new();
         let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(context.clone(), dag_state);
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            commit_consumer.sender,
+            commit_consumer.last_processed_index,
+            dag_state,
+            store.clone(),
+        );
         let core = Core::new(
             context.clone(),
             tx_consumer,
             block_manager,
+            commit_observer,
             core_signals,
             protocol_keypair,
             store,
@@ -121,8 +134,7 @@ where
         }
     }
 
-    #[allow(unused)]
-    async fn stop(mut self) {
+    pub async fn stop(mut self) {
         info!(
             "Stopping authority. Total run time: {:?}",
             self.start_time.elapsed()
@@ -140,7 +152,6 @@ where
             .observe(self.start_time.elapsed().as_secs_f64());
     }
 
-    #[allow(unused)]
     pub fn transaction_client(&self) -> Arc<TransactionClient> {
         self.transaction_client.clone()
     }
@@ -210,9 +221,9 @@ mod tests {
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
+    use tokio::sync::mpsc::unbounded_channel;
 
-    use crate::authority_node::AuthorityNode;
-    use crate::network::anemo_network::AnemoManager;
+    use super::*;
     use crate::transaction::NoopTransactionVerifier;
 
     #[tokio::test]
@@ -231,7 +242,12 @@ mod tests {
         let protocol_keypair = ProtocolKeyPair::from_bytes(keypairs[0].1.as_bytes()).unwrap();
         let network_keypair = NetworkKeyPair::from_bytes(keypairs[0].0.as_bytes()).unwrap();
 
-        let authority = AuthorityNode::<AnemoManager>::start(
+        let (sender, _receiver) = unbounded_channel();
+        let commit_consumer = CommitConsumer::new(
+            sender, 0, // last_processed_index
+        );
+
+        let authority = ConsensusAuthority::start(
             own_index,
             committee,
             parameters,
@@ -239,6 +255,7 @@ mod tests {
             protocol_keypair,
             network_keypair,
             Arc::new(txn_verifier),
+            commit_consumer,
             registry,
         )
         .await;

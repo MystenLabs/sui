@@ -98,7 +98,6 @@ pub struct ConsensusManagerMetrics {
     shutdown_latency: IntGauge,
     start_primary_retries: IntGauge,
     start_worker_retries: IntGauge,
-    start_mysticeti_retries: IntGauge,
 }
 
 impl ConsensusManagerMetrics {
@@ -125,12 +124,6 @@ impl ConsensusManagerMetrics {
             start_worker_retries: register_int_gauge_with_registry!(
                 "narwhal_manager_start_worker_retries",
                 "The number of retries took to start narwhal worker node",
-                registry
-            )
-            .unwrap(),
-            start_mysticeti_retries: register_int_gauge_with_registry!(
-                "mysticeti_manager_start_retries",
-                "The number of retries took to start Mysticeti node",
                 registry
             )
             .unwrap(),

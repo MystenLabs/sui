@@ -1,115 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::HashSet,
-    fmt::{self, Display, Formatter},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use parking_lot::RwLock;
 
 use crate::{
-    block::{BlockAPI, BlockRef, BlockTimestampMs, Round, VerifiedBlock},
-    commit::{Commit, CommitIndex},
+    block::{BlockAPI, Round, VerifiedBlock},
+    commit::{Commit, CommitIndex, CommittedSubDag},
     dag_state::DagState,
-    storage::Store,
 };
-
-/// The output of consensus is an ordered list of [`CommittedSubDag`]. The application
-/// can arbitrarily sort the blocks within each sub-dag (but using a deterministic algorithm).
-#[derive(Clone, PartialEq)]
-pub struct CommittedSubDag {
-    /// A reference to the leader of the sub-dag
-    pub leader: BlockRef,
-    /// All the committed blocks that are part of this sub-dag
-    pub blocks: Vec<VerifiedBlock>,
-    /// The timestamp of the commit, obtained from the timestamp of the leader block.
-    pub timestamp_ms: BlockTimestampMs,
-    /// Index of the commit.
-    /// First commit after genesis has a index of 1, then every next commit has a
-    /// index incremented by 1.
-    pub commit_index: CommitIndex,
-}
-
-#[allow(unused)]
-impl CommittedSubDag {
-    /// Create new (empty) sub-dag.
-    pub fn new(
-        leader: BlockRef,
-        blocks: Vec<VerifiedBlock>,
-        timestamp_ms: u64,
-        commit_index: CommitIndex,
-    ) -> Self {
-        Self {
-            leader,
-            blocks,
-            timestamp_ms,
-            commit_index,
-        }
-    }
-
-    // Used for recovery, which is why we need to get the data from block store.
-    pub fn new_from_commit_data(commit_data: Commit, block_store: Arc<dyn Store>) -> Self {
-        let mut leader_block_idx = None;
-        let commit_blocks = block_store
-            .read_blocks(&commit_data.blocks)
-            .expect("We should have the block referenced in the commit data");
-        let blocks = commit_blocks
-            .into_iter()
-            .enumerate()
-            .map(|(idx, commit_block_opt)| {
-                let commit_block = commit_block_opt
-                    .expect("We should have the block referenced in the commit data");
-                if commit_block.reference() == commit_data.leader {
-                    leader_block_idx = Some(idx);
-                }
-                commit_block
-            })
-            .collect::<Vec<_>>();
-        let leader_block_idx = leader_block_idx.expect("Leader block must be in the sub-dag");
-        let leader_block_ref = blocks[leader_block_idx].reference();
-        let timestamp_ms = blocks[leader_block_idx].timestamp_ms();
-        CommittedSubDag::new(leader_block_ref, blocks, timestamp_ms, commit_data.index)
-    }
-
-    /// Sort the blocks of the sub-dag by round number then authority index. Any
-    /// deterministic & stable algorithm works.
-    pub fn sort(&mut self) {
-        self.blocks.sort_by(|a, b| {
-            a.round()
-                .cmp(&b.round())
-                .then_with(|| a.author().cmp(&b.author()))
-        });
-    }
-}
-
-impl Display for CommittedSubDag {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "CommittedSubDag(leader={}, index={}, blocks=[",
-            self.leader, self.commit_index
-        )?;
-        for (idx, block) in self.blocks.iter().enumerate() {
-            if idx > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}", block.digest())?;
-        }
-        write!(f, "])")
-    }
-}
-
-impl fmt::Debug for CommittedSubDag {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{} (", self.leader, self.commit_index)?;
-        for block in &self.blocks {
-            write!(f, "{}, ", block.reference())?;
-        }
-        write!(f, ")")
-    }
-}
 
 /// Expand a committed sequence of leader into a sequence of sub-dags.
 #[allow(unused)]
@@ -237,7 +137,6 @@ mod tests {
     use super::*;
 
     use crate::{
-        block::{BlockTimestampMs, TestBlock},
         commit::DEFAULT_WAVE_LENGTH,
         context::Context,
         leader_schedule::LeaderSchedule,
@@ -429,75 +328,5 @@ mod tests {
         for block in subdag.blocks.iter() {
             assert!(block.round() <= expected_second_commit_data.leader.round);
         }
-    }
-
-    #[test]
-    fn test_new_subdag_from_commit_data() {
-        let store = Arc::new(MemStore::new());
-        let context = Arc::new(Context::new_for_test(4).0);
-        let wave_length = DEFAULT_WAVE_LENGTH;
-
-        // Populate fully connected test blocks for round 0 ~ 3, authorities 0 ~ 3.
-        let first_wave_rounds: u32 = wave_length;
-        let num_authorities: u32 = 4;
-
-        let mut blocks = Vec::new();
-        let (genesis_references, genesis): (Vec<_>, Vec<_>) = context
-            .committee
-            .authorities()
-            .map(|index| {
-                let author_idx = index.0.value() as u32;
-                let block = TestBlock::new(0, author_idx).build();
-                VerifiedBlock::new_for_test(block)
-            })
-            .map(|block| (block.reference(), block))
-            .unzip();
-        store.write(genesis, vec![]).unwrap();
-        blocks.append(&mut genesis_references.clone());
-
-        let mut ancestors = genesis_references;
-        let mut leader = None;
-        for round in 1..=first_wave_rounds {
-            let mut new_ancestors = vec![];
-            for author in 0..num_authorities {
-                let base_ts = round as BlockTimestampMs * 1000;
-                let block = VerifiedBlock::new_for_test(
-                    TestBlock::new(round, author)
-                        .set_timestamp_ms(base_ts + (author + round) as u64)
-                        .set_ancestors(ancestors.clone())
-                        .build(),
-                );
-                store.write(vec![block.clone()], vec![]).unwrap();
-                new_ancestors.push(block.reference());
-                blocks.push(block.reference());
-
-                // only write one block for the final round, which is the leader
-                // of the committed subdag.
-                if round == first_wave_rounds {
-                    leader = Some(block.clone());
-                    break;
-                }
-            }
-            ancestors = new_ancestors;
-        }
-
-        let leader_block = leader.unwrap();
-        let leader_ref = leader_block.reference();
-        let commit_index = 1;
-        let commit_data = Commit {
-            index: commit_index,
-            leader: leader_ref,
-            blocks: blocks.clone(),
-            last_committed_rounds: vec![],
-        };
-
-        let subdag = CommittedSubDag::new_from_commit_data(commit_data, store.clone());
-        assert_eq!(subdag.leader, leader_ref);
-        assert_eq!(subdag.timestamp_ms, leader_block.timestamp_ms());
-        assert_eq!(
-            subdag.blocks.len(),
-            (num_authorities * wave_length) as usize + 1
-        );
-        assert_eq!(subdag.commit_index, commit_index);
     }
 }

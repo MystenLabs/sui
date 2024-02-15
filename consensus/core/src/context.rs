@@ -4,23 +4,21 @@
 use std::sync::Arc;
 
 use consensus_config::{AuthorityIndex, Committee, Parameters};
+#[cfg(test)]
+use consensus_config::{NetworkKeyPair, ProtocolKeyPair};
 use sui_protocol_config::ProtocolConfig;
-
 #[cfg(test)]
 use tempfile::TempDir;
 
-use crate::metrics::Metrics;
-
 #[cfg(test)]
 use crate::metrics::test_metrics;
-#[cfg(test)]
-use consensus_config::{NetworkKeyPair, ProtocolKeyPair};
+use crate::metrics::Metrics;
 
 /// Context contains per-epoch configuration and metrics shared by all components
 /// of this authority.
 #[allow(dead_code)]
 #[derive(Clone)]
-pub(crate) struct Context {
+pub struct Context {
     /// Index of this authority in the committee.
     pub own_index: AuthorityIndex,
     /// Committee of the current epoch.

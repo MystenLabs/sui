@@ -27,3 +27,8 @@ mod universal_committer;
 
 #[cfg(test)]
 mod test_dag;
+
+pub use authority_node::ConsensusAuthority;
+pub use block::BlockAPI;
+pub use commit::{CommitConsumer, CommittedSubDag};
+pub use transaction::{TransactionClient, TransactionVerifier, ValidationError};
