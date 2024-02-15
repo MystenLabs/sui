@@ -20,7 +20,6 @@ use url::Url;
 use errors::IndexerError;
 use mysten_metrics::RegistryService;
 use sui_json_rpc_api::CLIENT_SDK_TYPE_HEADER;
-use sui_sdk::{SuiClient, SuiClientBuilder};
 
 pub mod apis;
 pub mod errors;
@@ -161,22 +160,6 @@ impl Default for IndexerConfig {
             use_v2: false,
         }
     }
-}
-
-// TODO(gegaowp): this is only used in validation now, will remove in a separate PR
-// together with the validation codes.
-pub async fn new_rpc_client(http_url: &str) -> Result<SuiClient, IndexerError> {
-    info!("Getting new RPC client...");
-    SuiClientBuilder::default()
-        .build(http_url)
-        .await
-        .map_err(|e| {
-            warn!("Failed to get new RPC client with error: {:?}", e);
-            IndexerError::HttpClientInitError(format!(
-                "Failed to initialize fullnode RPC client with error: {:?}",
-                e
-            ))
-        })
 }
 
 fn get_http_client(rpc_client_url: &str) -> Result<HttpClient, IndexerError> {
