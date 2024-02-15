@@ -1941,6 +1941,7 @@ pub fn give_tparams_all_abilities(sp!(_, ty_): &mut Type) {
 pub enum TypingError {
     SubtypeError(Box<Type>, Box<Type>),
     Incompatible(Box<Type>, Box<Type>),
+    InvariantError(Box<Type>, Box<Type>),
     ArityMismatch(usize, Box<Type>, usize, Box<Type>),
     FunArityMismatch(usize, Box<Type>, usize, Box<Type>),
     RecursiveType(Loc),
@@ -1949,6 +1950,7 @@ pub enum TypingError {
 #[derive(Clone, Copy, Debug)]
 enum TypingCase {
     Join,
+    Invariant,
     Subtype,
 }
 
@@ -1958,6 +1960,10 @@ pub fn subtype(subst: Subst, lhs: &Type, rhs: &Type) -> Result<(Subst, Type), Ty
 
 pub fn join(subst: Subst, lhs: &Type, rhs: &Type) -> Result<(Subst, Type), TypingError> {
     join_impl(subst, TypingCase::Join, lhs, rhs)
+}
+
+pub fn invariant(subst: Subst, lhs: &Type, rhs: &Type) -> Result<(Subst, Type), TypingError> {
+    join_impl(subst, TypingCase::Invariant, lhs, rhs)
 }
 
 fn join_impl(
@@ -1980,6 +1986,12 @@ fn join_impl(
                     // if 1 is imm and 2 is mut, use loc1. Else, loc2
                     let loc = if !*mut1 && *mut2 { *loc1 } else { *loc2 };
                     (loc, *mut1 && *mut2)
+                }
+                (Invariant, mut1, mut2) if mut1 == mut2 => {
+                    (*loc1, *mut1)
+                }
+                (Invariant, _mut1, _mut2) => {
+                    return Err(TypingError::InvariantError(Box::new(lhs.clone()), Box::new(rhs.clone())))
                 }
                 // imm <: imm
                 // mut <: imm
@@ -2036,7 +2048,7 @@ fn join_impl(
             // TODO this is going to likely lead to some strange error locations/messages
             // since the RHS in subtyping is currently assumed to be an annotation
             let (subst, args) = match case {
-                Join => join_impl_types(subst, case, a1, a2)?,
+                Join | Invariant => join_impl_types(subst, case, a1, a2)?,
                 Subtype => join_impl_types(subst, case, a2, a1)?,
             };
             let (subst, result) = join_impl(subst, case, r1, r2)?;

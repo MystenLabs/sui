@@ -97,3 +97,47 @@ module a::invalid6 {
     }
 
 }
+
+module a::invalid7 {
+
+    public struct S<T> has drop { t: vector<T> }
+
+    #[allow(unused_variable)]
+    #[syntax(index)]
+    public fun lookup_t<T>(s: &S<T>, i: &u64, j: T): &T { abort 0 }
+
+    #[allow(unused_variable)]
+    #[syntax(index)]
+    public fun lookup_mut<T>(s: &mut S<T>, i: &mut u64, j: T): &mut T { abort 0 }
+
+}
+
+module a::invalid8 {
+
+    public struct S<T> has drop { t: vector<T> }
+
+    #[allow(unused_variable)]
+    #[syntax(index)]
+    public fun lookup_t<T>(s: &S<T>, i: &u64, j: &T): &T { abort 0 }
+
+    #[allow(unused_variable)]
+    #[syntax(index)]
+    public fun lookup_mut<T>(s: &mut S<T>, i: &u64, j: &mut T): &mut T { abort 0 }
+
+}
+
+module a::invalid9 {
+
+    public struct S<T> has drop { t: vector<T> }
+
+    #[allow(unused_variable)]
+    #[syntax(index)]
+    public fun lookup_t<T>(s: &S<T>, i: &u64, j: &mut T): &T { abort 0 }
+
+    #[allow(unused_variable)]
+    #[syntax(index)]
+    public fun lookup_mut<T>(s: &mut S<T>, i: &u64, j: &T): &mut T { abort 0 }
+
+}
+
+

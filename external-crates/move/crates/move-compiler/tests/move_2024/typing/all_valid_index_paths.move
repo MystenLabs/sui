@@ -8,7 +8,6 @@ module std::vector {
 }
 
 module a::m {
-    use std::vector;
 
     fun id_w(w: W): W { w }
     fun id(x: X): X { x }
@@ -41,8 +40,6 @@ module a::m {
         f: u64
     }
 
-    const VEC: vector<X> = vector[];
-
     fun all_index_copy(t: T, n: u64, m: u64) {
         copy t;
         copy t.u;
@@ -58,32 +55,6 @@ module a::m {
         copy t.u.vs[n].w.xs[m+1];
         copy t.u.vs[n].w.xs[m+1].y;
         copy t.u.vs[n].w.xs[m+1].y.z;
-        copy t.u.vs[n].w.xs[m+1].deref();
-        copy t.u.vs[n].w.xs[m+1].deref().id();
-        copy VEC[n+1];
-        copy VEC[n+1].id_u64();
-    }
-
-    fun all_index_move(t: T, t2: T, n: u64, m: u64) {
-        move t;
-        (move t).u.vs[2];
-        (move t).u.vs[n].w;
-        (copy (move t).u.vs[n]).w;
-        (copy (move t).u.vs[n]).w.xs[m+1];
-        (copy (move t).u.vs[n]).w.xs[m+1].y;
-        (copy (move t).u.vs[n]).w.xs[m+1].y.z;
-        (move t2).u;
-        (move t2).u.vs[2];
-        (move t2).u.vs[2].w;
-        (move t2).u.vs[2].w.xs[m+1];
-        (move t2).u.vs[2].w.xs[m+1].y;
-        (move t2).u.vs[2].w.xs[m+1].y.z;
-        move t2.u;
-        (move t2.u).vs[2];
-        (move t2.u).vs[2].w;
-        (move t2.u).vs[2].w.xs[m+1];
-        (move t2.u).vs[2].w.xs[m+1].y;
-        (move t2.u).vs[2].w.xs[m+1].y.z;
     }
 
     fun all_index_borrow(t: T, t2: T, n: u64, m: u64) {
@@ -97,12 +68,9 @@ module a::m {
         &t2.u.vs[2];
         &t2.u.vs[2].w;
         &t2.u.vs[2].w.xs[m+1];
-        &t2.u.vs[2].w.xs[m+1].ref_unused(); // invalid -- trying to borrow `()`
         &t2.u.vs[2].w.xs[m+1].deref();
         &(t2.u.vs[2].w.xs[m+1]).deref();
         &(&t2.u.vs[2].w.xs[m+1]).deref();
-        &VEC[n+1];
-        &VEC[n+1].id();
     }
 
     fun all_index_borrow_mut(mut t: T, mut t2: T, n: u64, m: u64) {
@@ -116,12 +84,9 @@ module a::m {
         &mut t2.u.vs[2];
         &mut t2.u.vs[2].w;
         &mut t2.u.vs[2].w.xs[m+1];
-        &mut t2.u.vs[2].w.xs[m+1].ref_unused(); // invalid -- trying to borrow `()`
         &mut t2.u.vs[2].w.xs[m+1].deref();
         (&mut t2.u.vs[2].w.xs[m+1]).deref();
         (&mut t2.u.vs[2].w).xs[m+1].deref();
-        &mut VEC[n+1];
-        &mut VEC[n+1].id();
     }
 
     fun all_index_use(t: T, t2: T, n: u64, m: u64) {
@@ -136,7 +101,52 @@ module a::m {
         t2.u.vs[2].w;
         t2.u.vs[2].w.xs[m+1];
         t2.u.vs[2].w.xs[m+1].id();
-        VEC[n+1];
-        VEC[n+1].id();
     }
+
+    fun all_index_move_00(t: T, t2: T) {
+        move t;
+        (move t2).u;
+    }
+
+
+    fun all_index_move_01(t: T, t2: T) {
+        (move t).u.vs[2];
+        (move t2).u.vs[2];
+    }
+
+
+    fun all_index_move_02(t: T, t2: T, n: u64) {
+        (move t).u.vs[n].w;
+        (move t2).u.vs[2];
+    }
+
+
+    fun all_index_move_03(t: T, t2: T, n: u64) {
+        (move t).u.vs[n].w;
+        (move t2).u.vs[2].w;
+    }
+
+
+    fun all_index_move_04(t: T, t2: T, n: u64, m: u64) {
+        ((move t).u.vs[n]).w.xs[m+1];
+        (move t2).u.vs[2].w.xs[m+1];
+    }
+
+    fun all_index_move_05(t: T, t2: T, n: u64, m: u64) {
+        ((move t).u.vs[n]).w.xs[m+1].id();
+        (move t2).u.vs[2].w.xs[m+1].id();
+    }
+
+
+    fun all_index_move_06(t: T, t2: T, n: u64, m: u64) {
+        ((move t).u.vs[n]).w.xs[m+1].y;
+        (move t2).u.vs[2].w.xs[m+1].y;
+    }
+
+
+    fun all_index_move_07(t: T, t2: T, n: u64, m: u64) {
+        ((move t).u.vs[n]).w.xs[m+1].y.z;
+        (move t2).u.vs[2].w.xs[m+1].y.z;
+    }
+
 }

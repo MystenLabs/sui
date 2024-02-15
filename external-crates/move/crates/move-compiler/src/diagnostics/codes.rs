@@ -272,6 +272,7 @@ codes!(
         UnexpectedFunctionType: { msg: "invalid usage of lambda type", severity: BlockingError },
         UnexpectedLambda: { msg: "invalid usage of lambda", severity: BlockingError },
         CannotExpandMacro: { msg: "unable to expand macro function", severity: BlockingError },
+        InvariantError: { msg: "types are not equal", severity: BlockingError },
         IncompatibleSyntaxMethods: { msg: "syntax method types differ", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate

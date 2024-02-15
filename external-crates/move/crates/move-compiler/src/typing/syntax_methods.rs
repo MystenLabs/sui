@@ -196,7 +196,7 @@ fn validate_index_syntax_methods(
         .zip(index_mut_ty.params[1..].iter())
         .enumerate()
     {
-        if let Ok((subst_, _)) = core::join(subst.clone(), index_param, index_mut_param) {
+        if let Ok((subst_, _)) = core::invariant(subst.clone(), index_param, index_mut_param) {
             subst = subst_;
         } else {
             let (_, _, index_type) = &index_finfo.signature.parameters[ndx + 1];
@@ -212,7 +212,7 @@ fn validate_index_syntax_methods(
                 (mut_type.loc, mut_msg)
             );
             diag.add_note(
-                "Index operations must agree on all types but the subject type and return type",
+                "Index operation non-subject parameter types must match exactly",
             );
             context.env.add_diag(diag);
             valid = false;

@@ -874,7 +874,7 @@ fn has_unresolved_error_type(ty: &Type) -> bool {
 // Types
 //**************************************************************************************************
 
-fn typing_error<T: ToString, F: FnOnce() -> T>(
+pub fn typing_error<T: ToString, F: FnOnce() -> T>(
     context: &mut Context,
     from_subtype: bool,
     loc: Loc,
@@ -979,6 +979,24 @@ fn typing_error<T: ToString, F: FnOnce() -> T>(
                 )
             };
             diag!(TypeSafety::JoinError, (loc, msg), (loc1, m1), (loc2, m2))
+        }
+        InvariantError(t1, t2) => {
+            let loc1 = core::best_loc(subst, &t1);
+            let loc2 = core::best_loc(subst, &t2);
+            let t1_str = core::error_format(&t1, subst);
+            let t2_str = core::error_format(&t2, subst);
+            let m1 =
+                format!(
+                    "Given: {}",
+                    t1_str
+                );
+            let m2 =                 format!(
+                    "Found: {}. This is not the same type.",
+                    t2_str
+                );
+            let mut diag = diag!(TypeSafety::InvariantError, (loc, msg), (loc1, m1), (loc2, m2));
+            diag.add_note("These types must match exactly");
+            diag
         }
         RecursiveType(rloc) => diag!(
             TypeSafety::RecursiveType,
@@ -1088,6 +1106,44 @@ fn join<T: ToString, F: FnOnce() -> T>(
         Some(ty) => ty,
     }
 }
+
+fn invariant_impl<T: ToString, F: FnOnce() -> T>(
+    context: &mut Context,
+    loc: Loc,
+    msg: F,
+    pre_lhs: Type,
+    pre_rhs: Type,
+) -> Result<Type, Type> {
+    let subst = std::mem::replace(&mut context.subst, Subst::empty());
+    let lhs = core::ready_tvars(&subst, pre_lhs);
+    let rhs = core::ready_tvars(&subst, pre_rhs);
+    match core::invariant(subst.clone(), &lhs, &rhs) {
+        Err(e) => {
+            context.subst = subst;
+            let diag = typing_error(context, /* from_subtype */ false, loc, msg, e);
+            context.env.add_diag(diag);
+            Err(rhs)
+        }
+        Ok((next_subst, ty)) => {
+            context.subst = next_subst;
+            Ok(ty)
+        }
+    }
+}
+
+fn invariant<T: ToString, F: FnOnce() -> T>(
+    context: &mut Context,
+    loc: Loc,
+    msg: F,
+    pre_t1: Type,
+    pre_t2: Type,
+) -> Type {
+    match invariant_impl(context, loc, msg, pre_t1, pre_t2) {
+        Err(_rhs) => context.error_type(loc),
+        Ok(t) => t,
+    }
+}
+
 
 //**************************************************************************************************
 // Expressions
@@ -2449,7 +2505,7 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
                 index_loc,
                 syntax_methods,
                 args,
-                base_type,
+                base_type: index_base_type,
             } => {
                 let Some(index_methods) = syntax_methods else {
                     assert!(context.env.has_errors());
@@ -2481,42 +2537,20 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
                 };
                 let sp!(argloc, mut args_) = args;
                 args_.insert(0, *exp);
+                let mut_type = sp(index_loc, Type_::Ref(mut_, Box::new(index_base_type)));
                 let (ret_ty, e_) = module_call(context, loc, m, f, None, argloc, args_);
-                // This is a bit like a join, but we make sure both mutability and underling type
-                // agree. Join would instead promote the ref mutability.
-                let ret_ty = core::ready_tvars(&context.subst, ret_ty);
-                let base_type = core::ready_tvars(&context.subst, base_type);
-                match &ret_ty.value {
-                    Type_::Ref(ref_mut, inner) if ref_mut == &mut_ && &**inner == &base_type => {
-                        exp = Box::new(T::exp(ret_ty, sp(index_loc, e_)));
-                    }
-                    Type_::Ref(ref_mut, _) if ref_mut != &mut_ => {
-                        let msg =
-                            format!("Index syntax method '{m}::{f}' had the wrong mutability: {ref_mut} vs expected {mut_}");
-                        context.env.add_diag(ice!((index_loc, msg)));
-                        exp = make_error_exp(context, index_loc);
-                        break;
-                    }
-                    Type_::Ref(_, inner) if &**inner != &base_type => {
-                        let inner_str = core::error_format(&**inner, &context.subst);
-                        let base_ty_str = core::error_format(&base_type, &context.subst);
-                        let msg =
-                            format!("Index syntax method '{m}::{f}' had the wrong base type: {} vs expected {}", inner_str, base_ty_str);
-                        context.env.add_diag(ice!((index_loc, msg)));
-                        exp = make_error_exp(context, index_loc);
-                        break;
-                    }
-                    ty_ => {
-                        println!("ty: {:?}", ty_);
-                        let ty_str = core::error_format_(ty_, &context.subst);
-                        let msg = format!(
-                            "Index syntax method '{m}::{f}' had the wrong return type {}",
-                            ty_str
-                        );
-                        context.env.add_diag(ice!((index_loc, msg)));
-                        exp = make_error_exp(context, index_loc);
-                        break;
-                    }
+                let ret_ty = invariant(
+                    context,
+                    loc,
+                    || format!("Index syntax method '{m}::{f}' has the wrong return type"),
+                    mut_type,
+                    ret_ty,
+                );
+                if matches!(ret_ty.value, Type_::UnresolvedError) {
+                    exp = make_error_exp(context, index_loc);
+                    break;
+                } else {
+                    exp = Box::new(T::exp(ret_ty, sp(index_loc, e_)));
                 }
             }
         }
@@ -2851,16 +2885,17 @@ fn syntax_call_return_ty(
         make_arg_types(context, loc, msg, arity, argloc, tys)
     };
     assert!(arg_tys.len() == parameters.len());
+    let mut valid = true;
     for (arg_ty, (param, param_ty)) in arg_tys.into_iter().zip(parameters.clone()) {
-        let msg = || {
-            format!(
-                "Invalid call of '{}::{}'. Invalid argument for parameter '{}'",
-                &m, &f, &param.value.name
-            )
-        };
-        subtype(context, loc, msg, arg_ty, param_ty);
+        if let Err(failure) = subtype_no_report(context, arg_ty, param_ty) {
+            valid = false;
+        }
     }
-    return_
+    if !valid {
+        context.error_type(return_.loc)
+    } else {
+        return_
+    }
 }
 
 fn vector_pack(

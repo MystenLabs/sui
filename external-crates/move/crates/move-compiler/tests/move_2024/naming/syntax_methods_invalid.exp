@@ -1,0 +1,522 @@
+error[E03008]: too few type arguments
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:37:32
+   │
+37 │     public fun lookup_t<T>(s: &S, i: u64): &T {
+   │                                ^ Invalid instantiation of 'a::valid1::S'. Expected 1 type argument(s) but got 0
+
+error[E04033]: syntax method return types differ
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:37:38
+   │
+37 │     public fun lookup_t<T>(s: &S, i: u64): &T {
+   │                                      ^^^ This index function expects type 'u64'
+   ·
+42 │     public fun lookup_mut<T>(s: &mut S, i: u32): &mut u64 {
+   │                                            --- This mutable index function expects type 'u32'
+   │
+   = Index operations must agree on all types but the subject type and return type
+
+error[E04033]: syntax method return types differ
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:37:44
+   │
+37 │     public fun lookup_t<T>(s: &S, i: u64): &T {
+   │                                            ^^ This index function returns type '&T'
+   ·
+42 │     public fun lookup_mut<T>(s: &mut S, i: u32): &mut u64 {
+   │                                                  -------- This mutable index function returns type '&mut u64'
+   │
+   = These functions must return the same type, differing only by mutability.
+
+error[E03008]: too few type arguments
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:42:38
+   │
+42 │     public fun lookup_mut<T>(s: &mut S, i: u32): &mut u64 {
+   │                                      ^ Invalid instantiation of 'a::valid1::S'. Expected 1 type argument(s) but got 0
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:43:9
+   │
+10 │     native public fun borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
+   │                                                                       --- Expected: 'u64'
+   ·
+42 │     public fun lookup_mut<T>(s: &mut S, i: u32): &mut u64 {
+   │                                            --- Given: 'u32'
+43 │         vector::borrow_mut(&mut s.t, i)
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid call of 'std::vector::borrow_mut'. Invalid argument for parameter 'i'
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:52:28
+   │
+52 │     public fun lookup_t<T>(s: &S<T>, i: T): &T { abort 0 }
+   │                            ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:52:38
+   │
+52 │     public fun lookup_t<T>(s: &S<T>, i: T): &T { abort 0 }
+   │                                      ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04033]: syntax method return types differ
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:52:45
+   │
+52 │     public fun lookup_t<T>(s: &S<T>, i: T): &T { abort 0 }
+   │                                             ^^ This index function returns type '&T'
+   ·
+55 │     public fun lookup_mut<T>(s: &mut S, i: T): &mut u64 { abort 0 }
+   │                                                -------- This mutable index function returns type '&mut u64'
+   │
+   = These functions must return the same type, differing only by mutability.
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:55:30
+   │
+55 │     public fun lookup_mut<T>(s: &mut S, i: T): &mut u64 { abort 0 }
+   │                              ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03008]: too few type arguments
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:55:38
+   │
+55 │     public fun lookup_mut<T>(s: &mut S, i: T): &mut u64 { abort 0 }
+   │                                      ^ Invalid instantiation of 'a::valid2::S'. Expected 1 type argument(s) but got 0
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:55:41
+   │
+55 │     public fun lookup_mut<T>(s: &mut S, i: T): &mut u64 { abort 0 }
+   │                                         ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:63:30
+   │
+63 │     public fun lookup_t<S,T>(s: &S<T>, i: T): &T { abort 0 }
+   │                              ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:63:34
+   │
+63 │     public fun lookup_t<S,T>(s: &S<T>, i: T): &T { abort 0 }
+   │                                  ^^^^ Generic type parameters cannot take type arguments
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:63:40
+   │
+63 │     public fun lookup_t<S,T>(s: &S<T>, i: T): &T { abort 0 }
+   │                                        ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E02019]: invalid syntax method type
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:65:7
+   │
+65 │     #[syntax(index)]
+   │       ^^^^^^^^^^^^^ Invalid syntax annotation. Cannot associate a syntax method with a type parameter
+66 │     public fun lookup_mut<S,U>(s: &mut S, i: U): &mut u64 { abort 0 }
+   │                                        - But 'S' was declared as a type parameter here
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:66:32
+   │
+66 │     public fun lookup_mut<S,U>(s: &mut S, i: U): &mut u64 { abort 0 }
+   │                                ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:66:43
+   │
+66 │     public fun lookup_mut<S,U>(s: &mut S, i: U): &mut u64 { abort 0 }
+   │                                           ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:74:30
+   │
+74 │     public fun lookup_t<T,Q>(s: &S<T>, i: Q): &T { abort 0 }
+   │                              ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:74:40
+   │
+74 │     public fun lookup_t<T,Q>(s: &S<T>, i: Q): &T { abort 0 }
+   │                                        ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:77:32
+   │
+77 │     public fun lookup_mut<T,R>(s: &mut S<T>, i: R): &mut T { abort 0 }
+   │                                ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:77:46
+   │
+77 │     public fun lookup_mut<T,R>(s: &mut S<T>, i: R): &mut T { abort 0 }
+   │                                              ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:85:30
+   │
+85 │     public fun lookup_t<T,Q>(s: &S<T>, i: Q): &T { abort 0 }
+   │                              ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:85:40
+   │
+85 │     public fun lookup_t<T,Q>(s: &S<T>, i: Q): &T { abort 0 }
+   │                                        ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:88:32
+   │
+88 │     public fun lookup_mut<A,B>(s: &mut S<A>, i: B): &mut A { abort 0 }
+   │                                ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:88:46
+   │
+88 │     public fun lookup_mut<A,B>(s: &mut S<A>, i: B): &mut A { abort 0 }
+   │                                              ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:92:14
+   │
+92 │     use std::vector;
+   │              ^^^^^^ Unused 'use' of alias 'vector'. Consider removing it
+   │
+   = This alias does not shadow the built-in type 'vector' in type annotations.
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:96:32
+   │
+96 │     public fun lookup_t<T,U,V>(s: &S<T>, i: U, j: V): &u64 { abort 0 }
+   │                                ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:96:42
+   │
+96 │     public fun lookup_t<T,U,V>(s: &S<T>, i: U, j: V): &u64 { abort 0 }
+   │                                          ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:96:48
+   │
+96 │     public fun lookup_t<T,U,V>(s: &S<T>, i: U, j: V): &u64 { abort 0 }
+   │                                                ^ Unused parameter 'j'. Consider removing or prefixing with an underscore: '_j'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:99:34
+   │
+99 │     public fun lookup_mut<Q,R,S>(s: &mut S<Q>, i: R, j: S): &mut u64 { abort 0 }
+   │                                  ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:99:42
+   │
+99 │     public fun lookup_mut<Q,R,S>(s: &mut S<Q>, i: R, j: S): &mut u64 { abort 0 }
+   │                                          ^^^^ Generic type parameters cannot take type arguments
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:99:48
+   │
+99 │     public fun lookup_mut<Q,R,S>(s: &mut S<Q>, i: R, j: S): &mut u64 { abort 0 }
+   │                                                ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/syntax_methods_invalid.move:99:54
+   │
+99 │     public fun lookup_mut<Q,R,S>(s: &mut S<Q>, i: R, j: S): &mut u64 { abort 0 }
+   │                                                      ^ Unused parameter 'j'. Consider removing or prefixing with an underscore: '_j'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E02019]: invalid syntax method type
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:112:14
+    │
+112 │     #[syntax(index)]
+    │              ^^^^^ Invalid syntax annotation
+113 │     public fun lookup_t(s: &S, i: u64): &mut u64 {
+    │                                         -------- This syntax method must return an immutable reference to match its subject type
+
+error[E04006]: invalid subtype
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:114:9
+    │
+  7 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+    │                                                                     -------- Given: '&u64'
+    ·
+113 │     public fun lookup_t(s: &S, i: u64): &mut u64 {
+    │                                         -------- Expected: '&mut u64'
+114 │         vector::borrow(&s.t, i)
+    │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid return expression
+
+error[E02019]: invalid syntax method type
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:134:14
+    │
+134 │     #[syntax(index)]
+    │              ^^^^^ Invalid syntax annotation
+135 │     public fun lookup_t_mut(s: &mut S, i: u64): &u64 {
+    │                                                 ---- This syntax method must return a mutable reference to match its subject type
+
+error[E04033]: syntax method return types differ
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:146:41
+    │
+146 │     public fun lookup_t(s: &S, i: u64): &u64 {
+    │                                         ^^^^ This index function returns type '&u64'
+    ·
+151 │     public fun lookup_q_mut(s: &mut S, i: u64): &mut u32 {
+    │                                                 -------- This mutable index function returns type '&mut u32'
+    │
+    = These functions must return the same type, differing only by mutability.
+
+error[E02019]: invalid syntax method type
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:158:7
+    │
+158 │     #[syntax(index)]
+    │       ^^^^^^^^^^^^^ Invalid syntax annotation. Cannot associate a syntax method with a type parameter
+159 │     public fun lookup_t<S>(s: &S, i: u64): &u64 { abort 0 }
+    │                                - But 'S' was declared as a type parameter here
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:159:28
+    │
+159 │     public fun lookup_t<S>(s: &S, i: u64): &u64 { abort 0 }
+    │                            ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:159:35
+    │
+159 │     public fun lookup_t<S>(s: &S, i: u64): &u64 { abort 0 }
+    │                                   ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E02019]: invalid syntax method type
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:161:7
+    │
+161 │     #[syntax(index)]
+    │       ^^^^^^^^^^^^^ Invalid syntax annotation. Cannot associate a syntax method with a type parameter
+162 │     public fun lookup_mut<S>(s: &mut S, i: u64): &mut u64 { abort 0 }
+    │                                      - But 'S' was declared as a type parameter here
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:162:30
+    │
+162 │     public fun lookup_mut<S>(s: &mut S, i: u64): &mut u64 { abort 0 }
+    │                              ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:162:41
+    │
+162 │     public fun lookup_mut<S>(s: &mut S, i: u64): &mut u64 { abort 0 }
+    │                                         ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:168:30
+    │
+168 │     public fun lookup_t<S,T>(s: &S<T>, i: u64): &u64 { abort 0 }
+    │                              ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03006]: unexpected name in this position
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:168:34
+    │
+168 │     public fun lookup_t<S,T>(s: &S<T>, i: u64): &u64 { abort 0 }
+    │                                  ^^^^ Generic type parameters cannot take type arguments
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:168:40
+    │
+168 │     public fun lookup_t<S,T>(s: &S<T>, i: u64): &u64 { abort 0 }
+    │                                        ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:171:32
+    │
+171 │     public fun lookup_mut<S,T>(s: &mut S<T>, i: u64): &mut u64 { abort 0 }
+    │                                ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03006]: unexpected name in this position
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:171:40
+    │
+171 │     public fun lookup_mut<S,T>(s: &mut S<T>, i: u64): &mut u64 { abort 0 }
+    │                                        ^^^^ Generic type parameters cannot take type arguments
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:171:46
+    │
+171 │     public fun lookup_mut<S,T>(s: &mut S<T>, i: u64): &mut u64 { abort 0 }
+    │                                              ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:175:14
+    │
+175 │     use std::vector;
+    │              ^^^^^^ Unused 'use' of alias 'vector'. Consider removing it
+    │
+    = This alias does not shadow the built-in type 'vector' in type annotations.
+    = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:179:32
+    │
+179 │     public fun lookup_t<T,U,V>(s: &S<T>, i: U, j: V): &u64 { abort 0 }
+    │                                ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:179:42
+    │
+179 │     public fun lookup_t<T,U,V>(s: &S<T>, i: U, j: V): &u64 { abort 0 }
+    │                                          ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:179:48
+    │
+179 │     public fun lookup_t<T,U,V>(s: &S<T>, i: U, j: V): &u64 { abort 0 }
+    │                                                ^ Unused parameter 'j'. Consider removing or prefixing with an underscore: '_j'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:182:34
+    │
+182 │     public fun lookup_mut<Q,R,S>(s: &mut S<Q>, i: R, j: S): &mut u64 { abort 0 }
+    │                                  ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03006]: unexpected name in this position
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:182:42
+    │
+182 │     public fun lookup_mut<Q,R,S>(s: &mut S<Q>, i: R, j: S): &mut u64 { abort 0 }
+    │                                          ^^^^ Generic type parameters cannot take type arguments
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:182:48
+    │
+182 │     public fun lookup_mut<Q,R,S>(s: &mut S<Q>, i: R, j: S): &mut u64 { abort 0 }
+    │                                                ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:182:54
+    │
+182 │     public fun lookup_mut<Q,R,S>(s: &mut S<Q>, i: R, j: S): &mut u64 { abort 0 }
+    │                                                      ^ Unused parameter 'j'. Consider removing or prefixing with an underscore: '_j'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E02001]: duplicate declaration, item, or annotation
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:186:11
+    │
+165 │ module a::invalid4 {
+    │           -------- Module previously defined here, with 'a::invalid4'
+    ·
+186 │ module a::invalid4 {
+    │           ^^^^^^^^ Duplicate definition for module 'a::invalid4'
+
+error[E02001]: duplicate declaration, item, or annotation
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:197:11
+    │
+174 │ module a::invalid5 {
+    │           -------- Module previously defined here, with 'a::invalid5'
+    ·
+197 │ module a::invalid5 {
+    │           ^^^^^^^^ Duplicate definition for module 'a::invalid5'
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:209:32
+    │
+209 │     public fun lookup_t<S,T,Q>(s: &S<T>, i: Q): &T { abort 0 }
+    │                                ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03006]: unexpected name in this position
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:209:36
+    │
+209 │     public fun lookup_t<S,T,Q>(s: &S<T>, i: Q): &T { abort 0 }
+    │                                    ^^^^ Generic type parameters cannot take type arguments
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:209:42
+    │
+209 │     public fun lookup_t<S,T,Q>(s: &S<T>, i: Q): &T { abort 0 }
+    │                                          ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:212:32
+    │
+212 │     public fun lookup_mut<S,T>(s: &mut S<T>, i: T): &mut T { abort 0 }
+    │                                ^ Unused parameter 's'. Consider removing or prefixing with an underscore: '_s'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03006]: unexpected name in this position
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:212:40
+    │
+212 │     public fun lookup_mut<S,T>(s: &mut S<T>, i: T): &mut T { abort 0 }
+    │                                        ^^^^ Generic type parameters cannot take type arguments
+
+warning[W09002]: unused variable
+    ┌─ tests/move_2024/naming/syntax_methods_invalid.move:212:46
+    │
+212 │     public fun lookup_mut<S,T>(s: &mut S<T>, i: T): &mut T { abort 0 }
+    │                                              ^ Unused parameter 'i'. Consider removing or prefixing with an underscore: '_i'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

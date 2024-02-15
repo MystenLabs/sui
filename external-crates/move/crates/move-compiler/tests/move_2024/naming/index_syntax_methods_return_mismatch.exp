@@ -25,7 +25,7 @@ error[E02019]: invalid syntax method type
 45 │     public fun lookup_t_mut(s: &mut S, i: u64): &u64 {
    │                                                 ---- This syntax method must return a mutable reference to match its subject type
 
-error[E04033]: syntax method types differ
+error[E04034]: syntax method types differ
    ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:57:41
    │
 57 │     public fun lookup_t(s: &S, i: u64): &u64 {

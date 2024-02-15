@@ -68,11 +68,23 @@ pub(in crate::naming) fn resolve_syntax_attributes(
         return None;
     }
 
+    // For loops may need to change this, but for now we disallow this.
+    if let Some(macro_loc) = function.macro_ {
+        let msg = "Syntax attributes may not appear on macro definitions";
+        let fn_msg = "This function is a macro";
+        context.env.add_diag(diag!(
+            Declarations::InvalidSyntaxMethod,
+            (attr_loc, msg),
+            (macro_loc, fn_msg)
+        ));
+        return None;
+    }
+
     let public_visibility = match function.visibility {
         E::Visibility::Public(loc) => loc,
         E::Visibility::Friend(_) | E::Visibility::Package(_) | E::Visibility::Internal => {
-            let msg = "Syntax attributes may only appear on public functions.";
-            let fn_msg = "This function is not public.";
+            let msg = "Syntax attributes may only appear on public functions";
+            let fn_msg = "This function is not public";
             context.env.add_diag(diag!(
                 Declarations::InvalidVisibilityModifier,
                 (attr_loc, msg),

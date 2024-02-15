@@ -1,15 +1,3 @@
-#[defines_primitive(vector)]
-module std::vector {
-    #[bytecode_instruction]
-    native public fun empty<Element>(): vector<Element>;
-
-    #[bytecode_instruction]
-    native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
-
-    #[bytecode_instruction]
-    native public fun borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element;
-}
-
 // Correct usage
 
 

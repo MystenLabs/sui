@@ -1,4 +1,4 @@
-error[E04033]: syntax method return types differ
+error[E04034]: syntax method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:7:41
    │
  7 │     public fun lookup_t<T>(s: &S<T>, i: u64): &u64 { abort 0 }
@@ -7,9 +7,9 @@ error[E04033]: syntax method return types differ
 11 │     public fun lookup_mut<T>(s: &mut S<T>, i: T): &mut u64 { abort 0 }
    │                                               - This mutable index function expects type 'T'
    │
-   = Index operations must agree on all types but the subject type and return type
+   = Index operation non-subject parameter types must match exactly
 
-error[E04033]: syntax method return types differ
+error[E04034]: syntax method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:20:16
    │
 20 │     public fun lookup_t<T,U,V>(s: &S<T>, i: U, j: V): &u64 { abort 0 }
@@ -20,7 +20,7 @@ error[E04033]: syntax method return types differ
    │
    = Index operations on the same type must take the name number of type arguments
 
-error[E04033]: syntax method return types differ
+error[E04034]: syntax method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:34:41
    │
 34 │     public fun lookup_t<T>(s: &S<T>, i: u64, j: T): &T { abort 0 }
@@ -29,9 +29,9 @@ error[E04033]: syntax method return types differ
 38 │     public fun lookup_mut<T>(s: &mut S<T>, i: u32, j: T): &mut T { abort 0 }
    │                                               --- This mutable index function expects type 'u32'
    │
-   = Index operations must agree on all types but the subject type and return type
+   = Index operation non-subject parameter types must match exactly
 
-error[E04033]: syntax method return types differ
+error[E04034]: syntax method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:48:16
    │
 48 │     public fun lookup_t<T,Q>(s: &S<T>, i: u64, j: Q): &T { abort 0 }
@@ -42,7 +42,7 @@ error[E04033]: syntax method return types differ
    │
    = Index operations on the same type must take the name number of type arguments
 
-error[E04033]: syntax method return types differ
+error[E04034]: syntax method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:62:43
    │
 62 │     public fun lookup_t<T,Q>(s: &S<T>, i: u64, j: Q): &T { abort 0 }
@@ -51,9 +51,9 @@ error[E04033]: syntax method return types differ
 66 │     public fun lookup_mut<T,Q>(s: &mut S<T>, i: u32, j: T): &mut T { abort 0 }
    │                                                 --- This mutable index function expects type 'u32'
    │
-   = Index operations must agree on all types but the subject type and return type
+   = Index operation non-subject parameter types must match exactly
 
-error[E04033]: syntax method return types differ
+error[E04034]: syntax method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:62:51
    │
 62 │     public fun lookup_t<T,Q>(s: &S<T>, i: u64, j: Q): &T { abort 0 }
@@ -62,9 +62,9 @@ error[E04033]: syntax method return types differ
 66 │     public fun lookup_mut<T,Q>(s: &mut S<T>, i: u32, j: T): &mut T { abort 0 }
    │                                                         - This mutable index function expects type 'T'
    │
-   = Index operations must agree on all types but the subject type and return type
+   = Index operation non-subject parameter types must match exactly
 
-error[E04033]: syntax method return types differ
+error[E04034]: syntax method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:76:43
    │
 76 │     public fun lookup_t<T,R>(s: &S<T>, i: R, j: T): &T { abort 0 }
@@ -73,9 +73,9 @@ error[E04033]: syntax method return types differ
 80 │     public fun lookup_mut<T,R>(s: &mut S<T>, i: T, j: T): &mut T { abort 0 }
    │                                                 - This mutable index function expects type 'T'
    │
-   = Index operations must agree on all types but the subject type and return type
+   = Index operation non-subject parameter types must match exactly
 
-error[E04033]: syntax method return types differ
+error[E04034]: syntax method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:90:41
    │
 90 │     public fun lookup_t<T>(s: &S<T>, i: u64): &T {
@@ -84,5 +84,38 @@ error[E04033]: syntax method return types differ
 95 │     public fun lookup_mut<T>(s: &mut S<T>, i: u32): &mut T {
    │                                               --- This mutable index function expects type 'u32'
    │
-   = Index operations must agree on all types but the subject type and return type
+   = Index operation non-subject parameter types must match exactly
+
+error[E04034]: syntax method types differ
+    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:107:41
+    │
+107 │     public fun lookup_t<T>(s: &S<T>, i: &u64, j: T): &T { abort 0 }
+    │                                         ^^^^ This index function expects type '&u64'
+    ·
+111 │     public fun lookup_mut<T>(s: &mut S<T>, i: &mut u64, j: T): &mut T { abort 0 }
+    │                                               -------- This mutable index function expects type '&mut u64'
+    │
+    = Index operation non-subject parameter types must match exactly
+
+error[E04034]: syntax method types differ
+    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:121:50
+    │
+121 │     public fun lookup_t<T>(s: &S<T>, i: &u64, j: &T): &T { abort 0 }
+    │                                                  ^^ This index function expects type '&T'
+    ·
+125 │     public fun lookup_mut<T>(s: &mut S<T>, i: &u64, j: &mut T): &mut T { abort 0 }
+    │                                                        ------ This mutable index function expects type '&mut T'
+    │
+    = Index operation non-subject parameter types must match exactly
+
+error[E04034]: syntax method types differ
+    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:135:50
+    │
+135 │     public fun lookup_t<T>(s: &S<T>, i: &u64, j: &mut T): &T { abort 0 }
+    │                                                  ^^^^^^ This index function expects type '&mut T'
+    ·
+139 │     public fun lookup_mut<T>(s: &mut S<T>, i: &u64, j: &T): &mut T { abort 0 }
+    │                                                        -- This mutable index function expects type '&T'
+    │
+    = Index operation non-subject parameter types must match exactly
 
