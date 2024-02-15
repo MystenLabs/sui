@@ -84,8 +84,7 @@ impl CoreThread {
                     sender.send(()).ok();
                 }
                 CoreThreadCommand::GetMissing(sender) => {
-                    // TODO: implement the logic to fetch the missing blocks.
-                    sender.send(BTreeSet::new()).ok();
+                    sender.send(self.core.get_missing_blocks()).ok();
                 }
             }
         }

@@ -317,6 +317,10 @@ impl Core {
         self.commit_observer.handle_commit(committed_leaders);
     }
 
+    pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
+        self.block_manager.missing_blocks()
+    }
+
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round. Also the `block_timestamp` is provided
     /// to sanity check that everything that goes into the proposal is ensured to have a timestamp < block_timestamp
     fn ancestors_to_propose(
