@@ -5,9 +5,9 @@ use clap::Parser;
 use move_cli::base::new;
 use move_package::source_package::layout::SourcePackageLayout;
 use std::{
-    io::Write,
     fs::create_dir_all,
-    path::{Path, PathBuf}
+    io::Write,
+    path::{Path, PathBuf},
 };
 
 const SUI_PKG_NAME: &str = "Sui";
@@ -30,20 +30,36 @@ impl New {
             None => Path::new(&name),
         };
 
-        self.new
-            .execute(path.clone(), [(SUI_PKG_NAME, SUI_PKG_PATH)], [(name, "0x0")], "")?;
+        self.new.execute(
+            path.clone(),
+            [(SUI_PKG_NAME, SUI_PKG_PATH)],
+            [(name, "0x0")],
+            "",
+        )?;
 
-        let mut w = std::fs::File::create(p.join(SourcePackageLayout::Sources.path()).join(format!("{name}.move")))?;
-        writeln!(w, r#"/*
+        let mut w = std::fs::File::create(
+            p.join(SourcePackageLayout::Sources.path())
+                .join(format!("{name}.move")),
+        )?;
+        writeln!(
+            w,
+            r#"/*
 /// Module: {name}
 module {name}::{name} {{
 
 }}
-*/"#, name = name)?;
+*/"#,
+            name = name
+        )?;
 
         create_dir_all(p.join(SourcePackageLayout::Tests.path()))?;
-        let mut w = std::fs::File::create(p.join(SourcePackageLayout::Tests.path()).join(format!("{name}_tests.move")))?;
-        writeln!(w, r#"/*
+        let mut w = std::fs::File::create(
+            p.join(SourcePackageLayout::Tests.path())
+                .join(format!("{name}_tests.move")),
+        )?;
+        writeln!(
+            w,
+            r#"/*
 #[test_only]
 module {name}::{name}_tests {{
     // uncomment this line to import the module
@@ -61,7 +77,9 @@ module {name}::{name}_tests {{
         abort ENotImplemented
     }}
 }}
-*/"#, name = name)?;
+*/"#,
+            name = name
+        )?;
 
         Ok(())
     }
