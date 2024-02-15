@@ -1,10 +1,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module verifies the usage of the "fake native" functions. These functions are declared
-//! as 'native`, but do not appear in the compiled module. For developer sanity, they must be marked
-//! with the `FAKE_NATIVE_ATTR`
-
 use std::collections::BTreeSet;
 
 use crate::{
