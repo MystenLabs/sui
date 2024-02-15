@@ -27,6 +27,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
+use sui_macros::{fail_point_async, fail_point_if};
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::digests::ConsensusCommitDigest;
@@ -256,12 +257,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             timestamp
         };
 
-        info!(
-            "Received consensus output {} at epoch {}",
-            consensus_output,
-            self.epoch_store.epoch(),
-        );
-
         let prologue_transaction = match self
             .epoch_store
             .protocol_config()
@@ -274,6 +269,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             ),
             false => self.consensus_commit_prologue_transaction(round, timestamp),
         };
+
+        info!(
+            %consensus_output,
+            epoch = ?self.epoch_store.epoch(),
+            prologue_transaction_digest = ?prologue_transaction.digest(),
+            "Received consensus output"
+        );
+
         let empty_bytes = vec![];
         transactions.push((
             empty_bytes.as_slice(),
@@ -462,6 +465,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // update the calculated throughput
         self.throughput_calculator
             .add_transactions(timestamp, transactions_to_schedule.len() as u64);
+
+        fail_point_if!("correlated-crash-after-consensus-commit-boundary", || {
+            let key = [commit_sub_dag_index, self.epoch_store.epoch()];
+            if sui_simulator::random::deterministic_probabilty(&key, 0.01) {
+                sui_simulator::task::kill_current_node(None);
+            }
+        });
+
+        fail_point_async!("crash"); // for tests that produce random crashes
 
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
