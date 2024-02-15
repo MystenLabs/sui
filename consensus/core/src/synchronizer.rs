@@ -450,7 +450,8 @@ mod tests {
         let peer = AuthorityIndex::new_for_test(1);
         let mut iter = expected_blocks.iter().peekable();
         while let Some(block) = iter.next() {
-            // stub the fetch_blocks request from peer 1
+            // stub the fetch_blocks request from peer 1 and give some high response latency so requests
+            // can start blocking the peer task.
             network_client
                 .stub_fetch_blocks(
                     vec![block.clone()],
