@@ -109,6 +109,7 @@ impl AnemoClient {
     }
 }
 
+#[async_trait]
 impl NetworkClient for AnemoClient {
     async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()> {
         let mut client = self

@@ -94,6 +94,7 @@ where
 
         let (core_dispatcher, core_thread_handle) =
             ChannelCoreThreadDispatcher::start(core, context.clone());
+        let core_dispatcher = Arc::new(core_dispatcher);
         let leader_timeout_handle =
             LeaderTimeoutTask::start(core_dispatcher.clone(), signals_receivers, context.clone());
 
@@ -102,7 +103,12 @@ where
             context.clone(),
             transaction_verifier,
         ));
-        let synchronizer = Synchronizer::start(context.clone(), core_dispatcher.clone());
+        let synchronizer = Synchronizer::start(
+            network_client,
+            context.clone(),
+            core_dispatcher.clone(),
+            block_verifier.clone(),
+        );
         let network_service = Arc::new(AuthorityService {
             context: context.clone(),
             block_verifier,
@@ -151,7 +157,7 @@ where
 pub struct AuthorityService {
     context: Arc<Context>,
     block_verifier: Arc<dyn BlockVerifier>,
-    core_dispatcher: ChannelCoreThreadDispatcher,
+    core_dispatcher: Arc<dyn CoreThreadDispatcher>,
     synchronizer: Arc<SynchronizerHandle>,
 }
 
