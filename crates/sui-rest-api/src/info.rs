@@ -19,11 +19,10 @@ pub async fn node_info(
     let response = NodeInfo {
         checkpoint_height: latest_checkpoint.sequence_number,
         oldest_checkpoint_height: oldest_checkpoint,
-        timestampe_ms: latest_checkpoint.timestamp_ms,
+        timestamp_ms: latest_checkpoint.timestamp_ms,
         epoch: latest_checkpoint.epoch(),
         chain_id: state.chain_id(),
-        node_type: state.node_type(),
-        git_revision: state.git_revision(),
+        software_version: state.software_version().into(),
     };
 
     match accept {
@@ -38,14 +37,8 @@ pub struct NodeInfo {
     pub chain_id: ChainIdentifier,
     pub epoch: u64,
     pub checkpoint_height: u64,
-    pub timestampe_ms: u64,
+    pub timestamp_ms: u64,
     pub oldest_checkpoint_height: u64,
-    pub node_type: NodeType,
-    pub git_revision: Cow<'static, str>,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum NodeType {
-    Validator,
-    Fullnode,
+    pub software_version: Cow<'static, str>,
+    //TODO include current protocol version
 }

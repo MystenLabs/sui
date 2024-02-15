@@ -18,6 +18,7 @@ mod ingestion_tests {
     use sui_indexer::test_utils::{start_test_indexer_v2, ReaderWriterConfig};
     use sui_types::base_types::SuiAddress;
     use sui_types::effects::TransactionEffectsAPI;
+    use sui_types::storage::ReadStore;
     use tokio::task::JoinHandle;
 
     macro_rules! read_only_blocking {
@@ -47,7 +48,16 @@ mod ingestion_tests {
             .unwrap();
 
         let server_handle = tokio::spawn(async move {
-            sui_rest_api::start_service(server_url, sim, Some("/rest".to_owned())).await;
+            let chain_id = (*sim
+                .get_checkpoint_by_sequence_number(0)
+                .unwrap()
+                .unwrap()
+                .digest())
+            .into();
+
+            sui_rest_api::RestService::new_without_version(sim, chain_id)
+                .start_service(server_url, Some("/rest".to_owned()))
+                .await;
         });
         // Starts indexer
         let (pg_store, pg_handle) = start_test_indexer_v2(
