@@ -46,7 +46,8 @@ module {name}::{name} {{
         writeln!(w, r#"/*
 #[test_only]
 module {name}::{name}_tests {{
-    use {name}::{name};
+    // uncomment this line to import the module
+    // use {name}::{name};
 
     const ENotImplemented: u64 = 0;
 
