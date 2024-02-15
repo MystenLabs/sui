@@ -118,6 +118,7 @@ const guides = [
 					},*/
 					'guides/developer/advanced/asset-tokenization',
 					'guides/developer/advanced/graphql-migration',
+					'guides/operator/data-ingestion',
 					//'guides/developer/advanced/custom-indexers',
 				],
 			},
@@ -168,7 +169,6 @@ const guides = [
 			'guides/operator/sui-full-node',
 			'guides/operator/validator-config',
 			'guides/operator/data-management',
-			'guides/operator/data-ingestion',
 			'guides/operator/snapshots',
 			'guides/operator/archives',
 			'guides/operator/genesis',
