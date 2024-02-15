@@ -17,7 +17,7 @@ mod query;
 pub(crate) mod diesel_macro {
     macro_rules! read_only_blocking {
         ($pool:expr, $query:expr) => {{
-            let mut pg_pool_conn = crate::get_pg_pool_connection($pool)?;
+            let mut pg_pool_conn = crate::db::get_pg_pool_connection($pool)?;
             pg_pool_conn
                 .build_transaction()
                 .read_only()
@@ -32,7 +32,7 @@ pub(crate) mod diesel_macro {
             backoff.max_elapsed_time = Some($max_elapsed);
 
             let result = match backoff::retry(backoff, || {
-                let mut pg_pool_conn = crate::get_pg_pool_connection($pool).map_err(|e| {
+                let mut pg_pool_conn = crate::db::get_pg_pool_connection($pool).map_err(|e| {
                     backoff::Error::Transient {
                         err: IndexerError::PostgresWriteError(e.to_string()),
                         retry_after: None,

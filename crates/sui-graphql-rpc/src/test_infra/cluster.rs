@@ -15,8 +15,8 @@ pub use sui_indexer::processors_v2::objects_snapshot_processor::SnapshotLagConfi
 use sui_indexer::store::indexer_store_v2::IndexerStoreV2;
 use sui_indexer::store::PgIndexerStoreV2;
 use sui_indexer::test_utils::force_delete_database;
-use sui_indexer::test_utils::start_test_indexer_v2;
-use sui_indexer::test_utils::start_test_indexer_v2_impl;
+use sui_indexer::test_utils::start_test_indexer;
+use sui_indexer::test_utils::start_test_indexer_impl;
 use sui_indexer::test_utils::ReaderWriterConfig;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_types::storage::ReadStore;
@@ -60,10 +60,9 @@ pub async fn start_cluster(
     let val_fn = start_validator_with_fullnode(internal_data_source_rpc_port).await;
 
     // Starts indexer
-    let (pg_store, pg_handle) = start_test_indexer_v2(
+    let (pg_store, pg_handle) = start_test_indexer(
         Some(db_url),
         val_fn.rpc_url().to_string(),
-        true,
         ReaderWriterConfig::writer_mode(None),
     )
     .await;
@@ -118,10 +117,9 @@ pub async fn serve_executor(
             .await;
     });
 
-    let (pg_store, pg_handle) = start_test_indexer_v2_impl(
+    let (pg_store, pg_handle) = start_test_indexer_impl(
         Some(db_url),
         format!("http://{}", executor_server_url),
-        true,
         ReaderWriterConfig::writer_mode(snapshot_config.clone()),
         Some(graphql_connection_config.db_name()),
     )

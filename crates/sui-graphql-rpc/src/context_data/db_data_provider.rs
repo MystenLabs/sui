@@ -7,9 +7,8 @@ use crate::{
     types::{address::Address, sui_address::SuiAddress, validator::Validator},
 };
 use std::{collections::BTreeMap, time::Duration};
-use sui_indexer::{
-    apis::GovernanceReadApiV2, indexer_reader::IndexerReader, PgConnectionPoolConfig,
-};
+use sui_indexer::db::PgConnectionPoolConfig;
+use sui_indexer::{apis::GovernanceReadApiV2, indexer_reader::IndexerReader};
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,

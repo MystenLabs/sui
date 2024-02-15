@@ -16,8 +16,8 @@ use sui_types::object::MoveObject;
 
 use self::models::*;
 use std::env;
+use sui_indexer::db::new_pg_connection_pool;
 use sui_indexer::errors::IndexerError;
-use sui_indexer::new_pg_connection_pool;
 use sui_indexer::store::module_resolver_v2::IndexerStorePackageModuleResolver;
 
 use move_core_types::language_storage::ModuleId;
