@@ -17,7 +17,7 @@ use sui_types::parse_sui_struct_tag;
 
 use crate::errors::IndexerError;
 use crate::schema::events;
-use crate::types_v2::IndexedEvent;
+use crate::types::IndexedEvent;
 
 #[derive(Queryable, QueryableByName, Insertable, Debug, Clone)]
 #[diesel(table_name = events)]

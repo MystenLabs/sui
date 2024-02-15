@@ -3,7 +3,7 @@
 
 use crate::{
     schema::{tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders},
-    types_v2::TxIndex,
+    types::TxIndex,
 };
 use diesel::prelude::*;
 

@@ -29,7 +29,7 @@ use crate::schema::{
     move_calls, transactions, tx_count_metrics,
 };
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
-use crate::types_v2::IndexerResult;
+use crate::types::IndexerResult;
 use crate::PgConnectionPool;
 
 use super::IndexerAnalyticalStore;

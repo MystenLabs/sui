@@ -20,7 +20,7 @@ use crate::{
         address_metrics, checkpoints, display, epochs, events, move_call_metrics, objects,
         objects_snapshot, packages, transactions,
     },
-    types_v2::{IndexerResult, OwnerType},
+    types::{IndexerResult, OwnerType},
     PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
 };
 use anyhow::{anyhow, Result};

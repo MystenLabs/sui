@@ -6,7 +6,7 @@ use tracing::{error, info};
 
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerAnalyticalStore;
-use crate::types_v2::IndexerResult;
+use crate::types::IndexerResult;
 
 const MOVE_CALL_PROCESSOR_BATCH_SIZE: usize = 80000;
 const PARALLELISM: usize = 10;

@@ -5,7 +5,7 @@ use diesel::{Insertable, Queryable, Selectable};
 
 use crate::errors::IndexerError;
 use crate::schema::epochs;
-use crate::types_v2::IndexedEpochInfo;
+use crate::types::IndexedEpochInfo;
 use sui_json_rpc_types::{EndOfEpochInfo, EpochInfo};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 

@@ -3,7 +3,7 @@ CREATE TABLE objects (
     object_version              bigint        NOT NULL,
     object_digest               bytea         NOT NULL,
     checkpoint_sequence_number  bigint        NOT NULL,
-    -- Immutable/Address/Object/Shared, see types_v2.rs
+    -- Immutable/Address/Object/Shared, see types.rs
     owner_type                  smallint      NOT NULL,
     -- bytes of SuiAddress/ObjectID of the owner ID.
     -- Non-null for objects with an owner: Addresso or Objects
@@ -17,7 +17,7 @@ CREATE TABLE objects (
     coin_type                   text,
     -- Non-null when the object is a coin.
     coin_balance                bigint,
-    -- DynamicField/DynamicObject, see types_v2.rs
+    -- DynamicField/DynamicObject, see types.rs
     -- Non-null when the object is a dynamic field
     df_kind                     smallint,
     -- bcs serialized DynamicFieldName
@@ -29,7 +29,7 @@ CREATE TABLE objects (
     df_object_id                bytea
 );
 
--- OwnerType: 1: Address, 2: Object, see types_v2.rs
+-- OwnerType: 1: Address, 2: Object, see types.rs
 CREATE INDEX objects_owner ON objects (owner_type, owner_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
 CREATE INDEX objects_coin ON objects (owner_id, coin_type) WHERE coin_type IS NOT NULL AND owner_type = 1;
 CREATE INDEX objects_checkpoint_sequence_number ON objects (checkpoint_sequence_number);

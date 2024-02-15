@@ -10,7 +10,7 @@ use sui_types::gas::GasCostSummary;
 
 use crate::errors::IndexerError;
 use crate::schema::checkpoints;
-use crate::types_v2::IndexedCheckpoint;
+use crate::types::IndexedCheckpoint;
 
 #[derive(Queryable, Insertable, Debug, Clone, Default)]
 #[diesel(table_name = checkpoints)]

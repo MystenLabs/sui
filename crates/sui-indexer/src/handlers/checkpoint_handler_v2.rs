@@ -44,11 +44,11 @@ use crate::metrics::IndexerMetrics;
 
 use crate::store::module_resolver_v2::{IndexerStorePackageModuleResolver, InterimPackageResolver};
 use crate::store::{IndexerStoreV2, PgIndexerStoreV2};
-use crate::types_v2::IndexedEpochInfo;
-use crate::types_v2::{
+use crate::types::IndexedEpochInfo;
+use crate::types::{
     IndexedCheckpoint, IndexedEvent, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
 };
-use crate::types_v2::{IndexedDeletedObject, IndexedObject, IndexedPackage};
+use crate::types::{IndexedDeletedObject, IndexedObject, IndexedPackage};
 use crate::{IndexerConfig, PgConnectionPool};
 
 use super::tx_processor::EpochEndIndexingObjectStore;

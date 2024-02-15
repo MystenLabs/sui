@@ -44,9 +44,7 @@ use crate::schema::{
 };
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
 use crate::store::module_resolver_v2::IndexerStorePackageModuleResolver;
-use crate::types_v2::{
-    IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
-};
+use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::PgConnectionPool;
 
 use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};

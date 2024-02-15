@@ -41,8 +41,8 @@ use sui_indexer::models_v2::objects::{
     StoredDeletedHistoryObject, StoredHistoryObject, StoredObject,
 };
 use sui_indexer::schema::{objects, objects_history, objects_snapshot};
-use sui_indexer::types_v2::ObjectStatus as NativeObjectStatus;
-use sui_indexer::types_v2::OwnerType;
+use sui_indexer::types::ObjectStatus as NativeObjectStatus;
+use sui_indexer::types::OwnerType;
 use sui_package_resolver::Resolver;
 use sui_types::object::{
     MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
