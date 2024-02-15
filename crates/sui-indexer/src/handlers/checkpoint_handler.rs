@@ -3,7 +3,7 @@
 
 use crate::handlers::committer::start_tx_checkpoint_commit_task;
 use crate::handlers::tx_processor::IndexingPackageBuffer;
-use crate::models_v2::display::StoredDisplay;
+use crate::models::display::StoredDisplay;
 use async_trait::async_trait;
 use itertools::Itertools;
 use move_core_types::annotated_value::MoveTypeLayout;
@@ -43,8 +43,8 @@ use crate::framework::interface::Handler;
 use crate::metrics::IndexerMetrics;
 
 use crate::db::PgConnectionPool;
-use crate::store::module_resolver_v2::{IndexerStorePackageModuleResolver, InterimPackageResolver};
-use crate::store::{IndexerStoreV2, PgIndexerStoreV2};
+use crate::store::module_resolver::{IndexerStorePackageModuleResolver, InterimPackageResolver};
+use crate::store::{IndexerStore, PgIndexerStore};
 use crate::types::{
     IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
     IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
@@ -63,7 +63,7 @@ pub async fn new_handlers<S>(
     metrics: IndexerMetrics,
 ) -> Result<CheckpointHandler<S>, IndexerError>
 where
-    S: IndexerStoreV2 + Clone + Sync + Send + 'static,
+    S: IndexerStore + Clone + Sync + Send + 'static,
 {
     let checkpoint_queue_size = std::env::var("CHECKPOINT_QUEUE_SIZE")
         .unwrap_or(CHECKPOINT_QUEUE_SIZE.to_string())
@@ -110,7 +110,7 @@ pub struct CheckpointHandler<S> {
 #[async_trait]
 impl<S> Handler for CheckpointHandler<S>
 where
-    S: IndexerStoreV2 + Clone + Sync + Send + 'static,
+    S: IndexerStore + Clone + Sync + Send + 'static,
 {
     fn name(&self) -> &str {
         "checkpoint-handler"
@@ -218,7 +218,7 @@ where
 
 impl<S> CheckpointHandler<S>
 where
-    S: IndexerStoreV2 + Clone + Sync + Send + 'static,
+    S: IndexerStore + Clone + Sync + Send + 'static,
 {
     async fn index_epoch(
         state: Arc<S>,
@@ -752,11 +752,11 @@ where
 
     fn pg_blocking_cp(&self) -> Result<PgConnectionPool, IndexerError> {
         let state_as_any = self.state.as_any();
-        if let Some(pg_state) = state_as_any.downcast_ref::<PgIndexerStoreV2>() {
+        if let Some(pg_state) = state_as_any.downcast_ref::<PgIndexerStore>() {
             return Ok(pg_state.blocking_cp());
         }
         Err(IndexerError::UncategorizedError(anyhow::anyhow!(
-            "Failed to downcast state to PgIndexerStoreV2"
+            "Failed to downcast state to PgIndexerStore"
         )))
     }
 }

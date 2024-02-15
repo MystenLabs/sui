@@ -4,7 +4,7 @@
 mod builder;
 pub mod interface;
 
-// TODO remove the pub(crater) once indexer_v2.rs is renamed to lib.rs
+// TODO remove the pub(crater) once indexer.rs is renamed to lib.rs
 pub(crate) mod fetcher;
 pub(crate) mod runner;
 

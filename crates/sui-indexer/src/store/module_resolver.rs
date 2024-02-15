@@ -19,7 +19,7 @@ use crate::db::PgConnectionPool;
 use crate::errors::{Context, IndexerError};
 use crate::handlers::tx_processor::IndexingPackageBuffer;
 use crate::metrics::IndexerMetrics;
-use crate::models_v2::packages::StoredPackage;
+use crate::models::packages::StoredPackage;
 use crate::schema::{objects, packages};
 use crate::store::diesel_macro::read_only_blocking;
 use crate::types::IndexedPackage;

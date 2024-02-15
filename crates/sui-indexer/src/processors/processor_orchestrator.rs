@@ -11,12 +11,12 @@ use super::address_metrics_processor::AddressMetricsProcessor;
 use super::move_call_metrics_processor::MoveCallMetricsProcessor;
 use super::network_metrics_processor::NetworkMetricsProcessor;
 
-pub struct ProcessorOrchestratorV2<S> {
+pub struct ProcessorOrchestrator<S> {
     store: S,
     metrics: IndexerMetrics,
 }
 
-impl<S> ProcessorOrchestratorV2<S>
+impl<S> ProcessorOrchestrator<S>
 where
     S: IndexerAnalyticalStore + Clone + Send + Sync + 'static,
 {

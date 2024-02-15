@@ -4,7 +4,7 @@
 use crate::{
     db::{PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection},
     errors::IndexerError,
-    models_v2::{
+    models::{
         address_metrics::StoredAddressMetrics,
         checkpoints::StoredCheckpoint,
         display::StoredDisplay,
