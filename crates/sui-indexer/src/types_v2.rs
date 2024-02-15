@@ -5,7 +5,9 @@ use crate::errors::IndexerError;
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use sui_json_rpc_types::ObjectChange;
+use sui_json_rpc_types::{
+    ObjectChange, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+};
 use sui_types::base_types::{ObjectDigest, SequenceNumber};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::AggregateAuthoritySignature;
@@ -585,6 +587,45 @@ impl From<IndexedObjectChange> for ObjectChange {
                 version,
                 digest,
             },
+        }
+    }
+}
+
+// SuiTransactionBlockResponseWithOptions is only used on the reading path
+pub struct SuiTransactionBlockResponseWithOptions {
+    pub response: SuiTransactionBlockResponse,
+    pub options: SuiTransactionBlockResponseOptions,
+}
+
+impl From<SuiTransactionBlockResponseWithOptions> for SuiTransactionBlockResponse {
+    fn from(value: SuiTransactionBlockResponseWithOptions) -> Self {
+        let SuiTransactionBlockResponseWithOptions { response, options } = value;
+
+        SuiTransactionBlockResponse {
+            digest: response.digest,
+            transaction: options.show_input.then_some(response.transaction).flatten(),
+            raw_transaction: options
+                .show_raw_input
+                .then_some(response.raw_transaction)
+                .unwrap_or_default(),
+            effects: options.show_effects.then_some(response.effects).flatten(),
+            events: options.show_events.then_some(response.events).flatten(),
+            object_changes: options
+                .show_object_changes
+                .then_some(response.object_changes)
+                .flatten(),
+            balance_changes: options
+                .show_balance_changes
+                .then_some(response.balance_changes)
+                .flatten(),
+            timestamp_ms: response.timestamp_ms,
+            confirmed_local_execution: response.confirmed_local_execution,
+            checkpoint: response.checkpoint,
+            errors: vec![],
+            raw_effects: options
+                .show_raw_effects
+                .then_some(response.raw_effects)
+                .unwrap_or_default(),
         }
     }
 }

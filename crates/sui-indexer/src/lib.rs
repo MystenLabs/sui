@@ -33,7 +33,6 @@ pub mod processors_v2;
 pub mod schema;
 pub mod store;
 pub mod test_utils;
-pub mod types;
 pub mod types_v2;
 pub mod utils;
 

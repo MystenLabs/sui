@@ -19,7 +19,7 @@ use diesel::{
 };
 use std::str::FromStr;
 use sui_indexer::{
-    schema_v2::{display, objects},
+    schema::{display, objects},
     types_v2::OwnerType,
 };
 use sui_types::parse_sui_struct_tag;

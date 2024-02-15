@@ -18,7 +18,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_serde::BigInt;
 
-use crate::types::SuiTransactionBlockResponseWithOptions;
+use crate::types_v2::SuiTransactionBlockResponseWithOptions;
 
 pub(crate) struct WriteApi {
     fullnode: HttpClient,

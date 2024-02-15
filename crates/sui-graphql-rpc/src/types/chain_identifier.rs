@@ -7,7 +7,7 @@ use crate::{
 };
 use async_graphql::*;
 use diesel::{ExpressionMethods, QueryDsl};
-use sui_indexer::schema_v2::checkpoints;
+use sui_indexer::schema::checkpoints;
 use sui_types::{
     digests::ChainIdentifier as NativeChainIdentifier, messages_checkpoint::CheckpointDigest,
 };

@@ -40,7 +40,7 @@ use serde::{Deserialize, Serialize};
 use sui_indexer::models_v2::objects::{
     StoredDeletedHistoryObject, StoredHistoryObject, StoredObject,
 };
-use sui_indexer::schema_v2::{objects, objects_history, objects_snapshot};
+use sui_indexer::schema::{objects, objects_history, objects_snapshot};
 use sui_indexer::types_v2::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types_v2::OwnerType;
 use sui_package_resolver::Resolver;
