@@ -18,11 +18,11 @@ module a::invalid0 {
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun lookup_t<T>(s: &S<T>, i: u64, j: T): &mut T { abort 0 }
+    public fun borrow_t<T>(s: &S<T>, i: u64, j: T): &mut T { abort 0 }
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun lookup_mut<T>(s: &mut S<T>, i: u64, j: T): &mut T { abort 0 }
+    public fun borrow_mut<T>(s: &mut S<T>, i: u64, j: T): &mut T { abort 0 }
 
 }
 
@@ -32,11 +32,11 @@ module a::invalid1 {
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun lookup_t<T>(s: &S<T>, i: u64, j: T): &T { abort 0 }
+    public fun borrow_t<T>(s: &S<T>, i: u64, j: T): &T { abort 0 }
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun lookup_mut<T>(s: &mut S<T>, i: u64, j: T): &T { abort 0 }
+    public fun borrow_mut<T>(s: &mut S<T>, i: u64, j: T): &T { abort 0 }
 
 }
 
@@ -46,7 +46,7 @@ module a::invalid2 {
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun lookup_t<T>(s: &S<T>, i: u64, j: T): &mut T { abort 0 }
+    public fun borrow_t<T>(s: &S<T>, i: u64, j: T): &mut T { abort 0 }
 
 }
 
@@ -56,7 +56,7 @@ module a::invalid3 {
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun lookup_t<T>(s: &S<T>, i: u64, j: T): &mut T { abort 0 }
+    public fun borrow_t<T>(s: &S<T>, i: u64, j: T): &mut T { abort 0 }
 
 }
 

@@ -3,7 +3,7 @@ error[E02019]: invalid syntax method type
   │
 6 │     #[syntax(index)]
   │       ^^^^^^^^^^^^^ Syntax attributes may not appear on macro definitions
-7 │     public macro fun lookup_t<$T>($s: &S<$T>, $i: u64): &mut u64 { abort 0 }
+7 │     public macro fun borrow<$T>($s: &S<$T>, $i: u64): &mut u64 { abort 0 }
   │            ----- This function is a macro
 
 error[E02019]: invalid syntax method type
@@ -11,7 +11,7 @@ error[E02019]: invalid syntax method type
    │
 16 │     #[syntax(index)]
    │       ^^^^^^^^^^^^^ Syntax attributes may not appear on macro definitions
-17 │     public macro fun lookup_t<$T>($s: &mut S<$T>, $i: u64): &u64 { abort 0 }
+17 │     public macro fun borrow<$T>($s: &mut S<$T>, $i: u64): &u64 { abort 0 }
    │            ----- This function is a macro
 
 error[E02019]: invalid syntax method type
@@ -19,7 +19,7 @@ error[E02019]: invalid syntax method type
    │
 26 │     #[syntax(index)]
    │       ^^^^^^^^^^^^^ Syntax attributes may not appear on macro definitions
-27 │     public macro fun lookup_t<$T>($s: &mut S<$T>, $i: u64): &u64 { abort 0 }
+27 │     public macro fun borrow<$T>($s: &mut S<$T>, $i: u64): &u64 { abort 0 }
    │            ----- This function is a macro
 
 error[E02019]: invalid syntax method type
@@ -27,6 +27,6 @@ error[E02019]: invalid syntax method type
    │
 30 │     #[syntax(index)]
    │       ^^^^^^^^^^^^^ Syntax attributes may not appear on macro definitions
-31 │     public macro fun lookup_mut_t<$T>($s: &mut S<$T>, $i: u64): &u64 { abort 0 }
+31 │     public macro fun borrow_mut<$T>($s: &mut S<$T>, $i: u64): &u64 { abort 0 }
    │            ----- This function is a macro
 

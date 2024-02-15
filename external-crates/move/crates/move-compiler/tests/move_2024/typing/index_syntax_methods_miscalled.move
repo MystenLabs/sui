@@ -17,12 +17,12 @@ module a::s {
     public struct S has drop { t: vector<u64> }
 
     #[syntax(index)]
-    public fun lookup_t(s: &S, i: u64): &u64 {
+    public fun borrow_s(s: &S, i: u64): &u64 {
         &s.t[i]
     }
 
     #[syntax(index)]
-    public fun lookup_t_mut(s: &mut S, i: u64): &mut u64 {
+    public fun borrow_s_mut(s: &mut S, i: u64): &mut u64 {
         &mut s.t[i]
     }
 
@@ -71,10 +71,10 @@ module a::mirror {
     public struct Q has drop {}
 
     #[syntax(index)]
-    public fun lookup_mirror_mut(_q: &mut Q, i: &mut u64): &mut u64 { i }
+    public fun borrow_mirror_mut(_q: &mut Q, i: &mut u64): &mut u64 { i }
 
     #[syntax(index)]
-    public fun lookup_mirror(_q: &Q, i: &mut u64): &u64 { i }
+    public fun borrow_mirror(_q: &Q, i: &mut u64): &u64 { i }
 
     fun miscall0(q: &Q, i: u32): &u64 {
         &q[i]
@@ -139,12 +139,12 @@ module a::too_few_args {
     public struct S has drop { t: vector<u64> }
 
     #[syntax(index)]
-    public fun lookup_t(s: &S, i: u64, j: u64): &u64 {
+    public fun borrow_s(s: &S, i: u64, j: u64): &u64 {
         &s.t[i + j]
     }
 
     #[syntax(index)]
-    public fun lookup_t_mut(s: &mut S, i: u64, j: u64): &mut u64 {
+    public fun borrow_s_mut(s: &mut S, i: u64, j: u64): &mut u64 {
         &mut s.t[i + j]
     }
 

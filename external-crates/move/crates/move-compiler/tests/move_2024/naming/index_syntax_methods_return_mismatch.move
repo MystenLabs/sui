@@ -19,12 +19,12 @@ module a::invalid0 {
     public struct S has drop { t: vector<u64> }
 
     #[syntax(index)]
-    public fun lookup_t(s: &S, i: u64): &mut u64 {
+    public fun borrow_t(s: &S, i: u64): &mut u64 {
         vector::borrow(&s.t, i)
     }
 
     #[syntax(index)]
-    public fun lookup_t_mut(s: &mut S, i: u64): &mut u64 {
+    public fun borrow_t_mut(s: &mut S, i: u64): &mut u64 {
         vector::borrow_mut(&mut s.t, i)
     }
 
@@ -37,12 +37,12 @@ module a::invalid1 {
     public struct S has drop { t: vector<u64> }
 
     #[syntax(index)]
-    public fun lookup_t(s: &S, i: u64): &u64 {
+    public fun borrow_t(s: &S, i: u64): &u64 {
         vector::borrow(&s.t, i)
     }
 
     #[syntax(index)]
-    public fun lookup_t_mut(s: &mut S, i: u64): &u64 {
+    public fun borrow_t_mut(s: &mut S, i: u64): &u64 {
         vector::borrow_mut(&mut s.t, i)
     }
 
@@ -54,12 +54,12 @@ module a::invalid2 {
     public struct S has drop { t: vector<u64> , q: vector<u32> }
 
     #[syntax(index)]
-    public fun lookup_t(s: &S, i: u64): &u64 {
+    public fun borrow_t(s: &S, i: u64): &u64 {
         vector::borrow(&s.t, i)
     }
 
     #[syntax(index)]
-    public fun lookup_q_mut(s: &mut S, i: u64): &mut u32 {
+    public fun borrow_q_mut(s: &mut S, i: u64): &mut u32 {
         vector::borrow_mut(&mut s.q, i)
     }
 
@@ -71,12 +71,12 @@ module a::invalid3 {
     public struct S has drop { t: vector<u64> }
 
     #[syntax(index)]
-    public fun lookup_t(s: &S, i: u64): &u64 {
+    public fun borrow_t(s: &S, i: u64): &u64 {
         vector::borrow(&s.t, i)
     }
 
     #[syntax(index)]
-    public fun lookup_q_mut(s: &mut S, i: u64): u64 {
+    public fun borrow_q_mut(s: &mut S, i: u64): u64 {
         *vector::borrow_mut(&mut s.t, i)
     }
 
@@ -89,12 +89,12 @@ module a::invalid4 {
     public struct S has drop { t: vector<u64> }
 
     #[syntax(index)]
-    public fun lookup_t(s: &S, i: u64): u64 {
+    public fun borrow_t(s: &S, i: u64): u64 {
         *vector::borrow(&s.t, i)
     }
 
     #[syntax(index)]
-    public fun lookup_t_mut(s: &mut S, i: u64): &mut u64 {
+    public fun borrow_t_mut(s: &mut S, i: u64): &mut u64 {
         vector::borrow_mut(&mut s.t, i)
     }
 

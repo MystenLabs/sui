@@ -2195,6 +2195,10 @@ fn resolve_index_funs_and_type(
 // Dotted Expressions
 //--------------------------------------------------------------------------------------------------
 
+// An ExpDotted is a base expression with some number of field and index accessors attached:
+//
+//   E := base | E . field | E [ args ]
+
 #[derive(Debug)]
 enum ExpDottedAccess {
     Field(Field, /* base type */ Type),
@@ -2342,6 +2346,34 @@ fn exp_dotted_expression(
     resolve_exp_dotted(context, usage, eloc, edotted)
 }
 
+
+// This comment servees to document the function below. Depending on the shape of the dotted
+// expression and the usage requested, we might do significantly different things with the base
+// expression.
+//
+// | USAGE  | BASE     | ACCESSORS | RESULT          | Diagnostic
+// |--------|----------+-----------+-----------------+----------------------------------------------
+// | MOVE   | Use(x)   | NO        |  Move(x)        |
+// | MOVE   | Const    | NO        |  Error Val      | "can't move const"
+// | MOVE   | Error    | NO        |  Error Val      |
+// | MOVE   | <Any>    | NO        |  Error Val      | "invalid move path"
+// | MOVE   | <Any>    | YES       |  Error Val      | if Move20204 "can't move with a path"
+// |--------+----------+-----------+-----------------+----------------------------------------------
+// | COPY   | Use(x)   | NO        |  Copy(x)        | Copy ability constraint
+// | COPY   | Const    | NO        |  Const()        | Copy ability constraint
+// | COPY   | Error    | NO        |  Error Val      |
+// | COPY   | <Any>    | NO        |  Error Val      | "invalid copy path"
+// | COPY   | <Any>    | YES       |  Val ~> Owned   | Copy ability constraint
+// |--------+----------+-----------+-----------------+----------------------------------------------
+// | USE    | <Any>    | NO        |  <Any>          | Warns if base is a constant
+// | USE    | <Any>    | YES       |  Val ~> Owned   | Warns if base is a constant
+// |--------+----------+-----------+-----------------+----------------------------------------------
+// | BORROW | <Any>    | <Any>     | Val ~> Borrow   | Ensures agreeable mutability
+// |--------+----------+-----------+-----------------+----------------------------------------------
+//
+// See `borrow_exp_dotted` and `exp_dotted_to_owned` for more details on how those translations
+// proceed.
+
 fn resolve_exp_dotted(
     context: &mut Context,
     usage: DottedUsage,
@@ -2459,6 +2491,33 @@ fn resolve_exp_dotted(
     }
 }
 
+//   Borrowing proceeds based on mutability and if the base expression was originally a
+//   reference:
+//
+//        if base is not a ref        if base is a var, check mut
+//     -----------------------------------------------------------[base-borrow]
+//      mut |- base : t ~> borrow(base, mut) : Ref(mut, t)
+//
+//        if base is a ref
+//     ------------------------------------------------[base-reborrow]
+//      mut |- base : Ref(_, t)  ~> base : Ref(mut, t)
+//
+//     Note that if `E` was a borrow expression (like `&x`), we constraint the base type to a
+//     single, non-reference type, producing a constraint error if we try to reborrow via
+//     [base-reborrow].
+//
+//        mut |- E ~> e : Ref(mut_e, _t)     check(mut == mut_e) or error
+//     -------------------------------------------------------------------[field-borrow]
+//      mut |- E . (field, t) ~> Borrow(mut, e, field) : Ref(mut, t)
+//
+//        mut |- E ~> e : Ref(mut_e, _t)
+//        check(mut == mut_e) or error
+//        index_fun(methods, mut) ~> f or error
+//        check(Ref(mut, t) == f.return_type)
+//     -------------------------------------------------------------------[index-borrow]
+//      mut |- E . (index, methods, args, t) ~> f(e, args ...) : Ref(mut, t)
+//
+
 fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T::Exp> {
     fn check_mut(context: &mut Context, loc: Loc, cur_type: Type, expected_mut: bool) {
         let sp!(tyloc, cur_exp_type) = core::unfold_type(&context.subst, cur_type);
@@ -2558,6 +2617,22 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
     exp
 }
 
+//   Ownership is more-precarious, as we only call into it when a few things are true:
+//   1) The expression has some number of accessors
+//   2) The usage is `use` or `copy` (not `borrow`, which only calls borrow above, or `move`, which
+//      will not work with dotted paths).
+//
+//   We double-check that these things are the case with compiler panics if they are not, and then
+//   we proceed by rewriting the E as:
+//
+//
+//      false |- E ~> e : t  (borrow above)
+//      copiable(T)
+//   -----------------------------------------
+//        E => Dereference(e)
+//
+
+
 fn exp_dotted_to_owned(context: &mut Context, usage: DottedUsage, ed: ExpDotted) -> Box<T::Exp> {
     use T::UnannotatedExp_ as TE;
     let (access_msg, access_type) = if let Some(accessor) = ed.accessors.last() {
@@ -2656,7 +2731,8 @@ fn exp_to_borrow(
 fn warn_on_constant_borrow(context: &mut Context, loc: Loc, e: &T::Exp) {
     use T::UnannotatedExp_ as TE;
     if matches!(&e.exp.value, TE::Constant(_, _)) {
-        let msg = "This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit";
+        let msg = "This access will make a new copy of the constant. \
+                   Consider binding the value to a variable first to make this copy explicit";
         context
             .env
             .add_diag(diag!(TypeSafety::ImplicitConstantCopy, (loc, msg)))
@@ -2886,8 +2962,8 @@ fn syntax_call_return_ty(
     };
     assert!(arg_tys.len() == parameters.len());
     let mut valid = true;
-    for (arg_ty, (param, param_ty)) in arg_tys.into_iter().zip(parameters.clone()) {
-        if let Err(failure) = subtype_no_report(context, arg_ty, param_ty) {
+    for (arg_ty, (_, param_ty)) in arg_tys.into_iter().zip(parameters.clone()) {
+        if let Err(_failure) = subtype_no_report(context, arg_ty, param_ty) {
             valid = false;
         }
     }

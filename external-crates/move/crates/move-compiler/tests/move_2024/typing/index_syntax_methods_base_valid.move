@@ -18,12 +18,12 @@ module a::valid0 {
     public struct S has drop { t: vector<u64> }
 
     #[syntax(index)]
-    public fun lookup_t(s: &S, i: u64): &u64 {
+    public fun borrow(s: &S, i: u64): &u64 {
         vector::borrow(&s.t, i)
     }
 
     #[syntax(index)]
-    public fun lookup_t_mut(s: &mut S, i: u64): &mut u64 {
+    public fun borrow_mut(s: &mut S, i: u64): &mut u64 {
         vector::borrow_mut(&mut s.t, i)
     }
 
@@ -35,12 +35,12 @@ module a::valid1 {
     public struct S<T> has drop { t: vector<T> }
 
     #[syntax(index)]
-    public fun lookup_t<T>(s: &S<T>, i: u64): &T {
+    public fun borrow<T>(s: &S<T>, i: u64): &T {
         vector::borrow(&s.t, i)
     }
 
     #[syntax(index)]
-    public fun lookup_mut<T>(s: &mut S<T>, i: u64): &mut T {
+    public fun borrow_mut<T>(s: &mut S<T>, i: u64): &mut T {
         vector::borrow_mut(&mut s.t, i)
     }
 
@@ -52,10 +52,10 @@ module a::valid2 {
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun lookup_t<T>(s: &S<T>, i: u64, j: u64): &T { abort 0 }
+    public fun borrow<T>(s: &S<T>, i: u64, j: u64): &T { abort 0 }
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun lookup_mut<T>(s: &mut S<T>, i: u64, j: u64): &mut T { abort 0 }
+    public fun borrow_mut<T>(s: &mut S<T>, i: u64, j: u64): &mut T { abort 0 }
 
 }

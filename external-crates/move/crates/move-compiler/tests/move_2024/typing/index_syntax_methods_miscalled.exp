@@ -45,90 +45,90 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:52:9
    │
-20 │     public fun lookup_t(s: &S, i: u64): &u64 {
+20 │     public fun borrow_s(s: &S, i: u64): &u64 {
    │                                   --- Expected: 'u64'
    ·
 51 │     fun miscall0(s: &s::S, i: u32): &u64 {
    │                               --- Given: 'u32'
 52 │         &s[i]
-   │         ^^^^^ Invalid call of 'a::s::lookup_t'. Invalid argument for parameter 'i'
+   │         ^^^^^ Invalid call of 'a::s::borrow_s'. Invalid argument for parameter 'i'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:56:9
    │
-25 │     public fun lookup_t_mut(s: &mut S, i: u64): &mut u64 {
+25 │     public fun borrow_s_mut(s: &mut S, i: u64): &mut u64 {
    │                                           --- Expected: 'u64'
    ·
 55 │     fun miscall1(s: &mut s::S, i: u32): &mut u64 {
    │                                   --- Given: 'u32'
 56 │         &mut s[i]
-   │         ^^^^^^^^^ Invalid call of 'a::s::lookup_t_mut'. Invalid argument for parameter 'i'
+   │         ^^^^^^^^^ Invalid call of 'a::s::borrow_s_mut'. Invalid argument for parameter 'i'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:60:9
    │
-20 │     public fun lookup_t(s: &S, i: u64): &u64 {
+20 │     public fun borrow_s(s: &S, i: u64): &u64 {
    │                                   --- Expected: 'u64'
    ·
 59 │     fun miscall2<T>(s: &s::S, i: T): &u64 {
    │                                  - Given: 'T'
 60 │         &s[i]
-   │         ^^^^^ Invalid call of 'a::s::lookup_t'. Invalid argument for parameter 'i'
+   │         ^^^^^ Invalid call of 'a::s::borrow_s'. Invalid argument for parameter 'i'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:64:9
    │
-25 │     public fun lookup_t_mut(s: &mut S, i: u64): &mut u64 {
+25 │     public fun borrow_s_mut(s: &mut S, i: u64): &mut u64 {
    │                                           --- Expected: 'u64'
    ·
 63 │     fun miscall3<T>(s: &mut s::S, i: T): &mut u64 {
    │                                      - Given: 'T'
 64 │         &mut s[i]
-   │         ^^^^^^^^^ Invalid call of 'a::s::lookup_t_mut'. Invalid argument for parameter 'i'
+   │         ^^^^^^^^^ Invalid call of 'a::s::borrow_s_mut'. Invalid argument for parameter 'i'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:80:9
    │
-77 │     public fun lookup_mirror(_q: &Q, i: &mut u64): &u64 { i }
+77 │     public fun borrow_mirror(_q: &Q, i: &mut u64): &u64 { i }
    │                                         -------- Expected: '&mut u64'
 78 │ 
 79 │     fun miscall0(q: &Q, i: u32): &u64 {
    │                            --- Given: 'u32'
 80 │         &q[i]
-   │         ^^^^^ Invalid call of 'a::mirror::lookup_mirror'. Invalid argument for parameter 'i'
+   │         ^^^^^ Invalid call of 'a::mirror::borrow_mirror'. Invalid argument for parameter 'i'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:84:9
    │
-74 │     public fun lookup_mirror_mut(_q: &mut Q, i: &mut u64): &mut u64 { i }
+74 │     public fun borrow_mirror_mut(_q: &mut Q, i: &mut u64): &mut u64 { i }
    │                                                 -------- Expected: '&mut u64'
    ·
 83 │     fun miscall1(q: &mut Q, i: u32): &mut u64 {
    │                                --- Given: 'u32'
 84 │         &mut q[i]
-   │         ^^^^^^^^^ Invalid call of 'a::mirror::lookup_mirror_mut'. Invalid argument for parameter 'i'
+   │         ^^^^^^^^^ Invalid call of 'a::mirror::borrow_mirror_mut'. Invalid argument for parameter 'i'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:88:9
    │
-77 │     public fun lookup_mirror(_q: &Q, i: &mut u64): &u64 { i }
+77 │     public fun borrow_mirror(_q: &Q, i: &mut u64): &u64 { i }
    │                                         -------- Expected: '&mut u64'
    ·
 87 │     fun miscall2<T>(q: &Q, i: T): &u64 {
    │                               - Given: 'T'
 88 │         &q[i]
-   │         ^^^^^ Invalid call of 'a::mirror::lookup_mirror'. Invalid argument for parameter 'i'
+   │         ^^^^^ Invalid call of 'a::mirror::borrow_mirror'. Invalid argument for parameter 'i'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:92:9
    │
-74 │     public fun lookup_mirror_mut(_q: &mut Q, i: &mut u64): &mut u64 { i }
+74 │     public fun borrow_mirror_mut(_q: &mut Q, i: &mut u64): &mut u64 { i }
    │                                                 -------- Expected: '&mut u64'
    ·
 91 │     fun miscall3<T>(q: &mut Q, i: T): &mut u64 {
    │                                   - Given: 'T'
 92 │         &mut q[i]
-   │         ^^^^^^^^^ Invalid call of 'a::mirror::lookup_mirror_mut'. Invalid argument for parameter 'i'
+   │         ^^^^^^^^^ Invalid call of 'a::mirror::borrow_mirror_mut'. Invalid argument for parameter 'i'
 
 error[E04007]: incompatible types
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:100:9
@@ -281,7 +281,7 @@ error[E04016]: too few arguments
     │         ^^^^^
     │         │ │
     │         │ Found 2 argument(s) here
-    │         Invalid call of 'a::too_few_args::lookup_t'. The call expected 3 argument(s) but got 2
+    │         Invalid call of 'a::too_few_args::borrow_s'. The call expected 3 argument(s) but got 2
 
 error[E04016]: too few arguments
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:152:10
@@ -290,7 +290,7 @@ error[E04016]: too few arguments
     │          ^^^^
     │          ││
     │          │Found 2 argument(s) here
-    │          Invalid call of 'a::too_few_args::lookup_t'. The call expected 3 argument(s) but got 2
+    │          Invalid call of 'a::too_few_args::borrow_s'. The call expected 3 argument(s) but got 2
 
 error[E04016]: too few arguments
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:156:9
@@ -299,7 +299,7 @@ error[E04016]: too few arguments
     │         ^^^^^^^^^
     │         │     │
     │         │     Found 2 argument(s) here
-    │         Invalid call of 'a::too_few_args::lookup_t_mut'. The call expected 3 argument(s) but got 2
+    │         Invalid call of 'a::too_few_args::borrow_s_mut'. The call expected 3 argument(s) but got 2
 
 error[E04016]: too few arguments
     ┌─ tests/move_2024/typing/index_syntax_methods_miscalled.move:156:14
@@ -308,5 +308,5 @@ error[E04016]: too few arguments
     │              ^^^^
     │              ││
     │              │Found 2 argument(s) here
-    │              Invalid call of 'a::too_few_args::lookup_t'. The call expected 3 argument(s) but got 2
+    │              Invalid call of 'a::too_few_args::borrow_s'. The call expected 3 argument(s) but got 2
 

@@ -184,7 +184,13 @@ fn resolve_syntax_method_prekind(
                                     (prev_kind.loc, prev)
                                 ));
                             }
-                        }
+                        } else {
+                        let msg = format!(
+                            "Invalid syntax method identifier '{}'",
+                            name
+                        );
+                        env.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+                    }
                     }
                     Attribute_::Assigned(n, _) => {
                         let msg = format!(
@@ -248,7 +254,7 @@ fn determine_valid_kind(
         //     None => SK::ForVal,
         // },
         SyntaxMethodPrekind_::Assign => {
-            let msg = "'for' syntax attributes are not currently supported";
+            let msg = "'assign' syntax attributes are not currently supported";
             context
                 .env
                 .add_diag(diag!(Declarations::InvalidAttribute, (sloc, msg),));
