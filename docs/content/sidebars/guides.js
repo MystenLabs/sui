@@ -30,7 +30,6 @@ const guides = [
 					'guides/developer/getting-started/get-address',
 					'guides/developer/getting-started/get-coins',
 					'guides/developer/getting-started/graphql-rpc',
-					'guides/developer/getting-started/data-ingestion',
 				],
 			},
 			{
@@ -169,6 +168,7 @@ const guides = [
 			'guides/operator/sui-full-node',
 			'guides/operator/validator-config',
 			'guides/operator/data-management',
+			'guides/operator/data-ingestion',
 			'guides/operator/snapshots',
 			'guides/operator/archives',
 			'guides/operator/genesis',
