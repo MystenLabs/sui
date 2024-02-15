@@ -38,7 +38,7 @@ The most straightforward stream source is to subscribe to a remote store of chec
 
 Colocate the data ingestion daemon with a Full node and enable checkpoint dumping on the latter to set up a local stream source. After enabling, the Full node starts dumping executed checkpoints as files to a local directory, and the data ingestion daemon subscribes to changes in the directory through an inotify-like mechanism. This approach allows minimizing ingestion latency (checkpoint are processed immediately after a checkpoint executor on a Full node) and getting rid of dependency on an externally managed bucket.
 
-To enable, add the following to your [Full node configuration](./sui-full-node.mdx) file:
+To enable, add the following to your [Full node configuration](../../operator/sui-full-node.mdx) file:
 
 ```yaml
 checkpoint-executor-config:
