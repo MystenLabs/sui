@@ -134,12 +134,13 @@ pub enum SuiClientCommands {
         #[clap(long, short = 's')]
         sort_by_alias: bool,
     },
+    /// List the coin balance of an address
     #[clap(name = "balance")]
     Balance {
         /// Address (or its alias)
         #[arg(value_parser)]
         address: Option<KeyIdentity>,
-        /// Show coins' object IDs
+        /// Show coins' object IDs, balance, and symbol
         #[clap(long, required = false)]
         with_coins: bool,
     },
