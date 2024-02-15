@@ -101,11 +101,15 @@ impl<'env, 'map> Context<'env, 'map> {
     }
 
     pub fn new_alias_map_builder(&mut self) -> AliasMapBuilder {
-        AliasMapBuilder::new(
-            self.defn_context
-                .env
-                .supports_feature(self.current_package, FeatureGate::Move2024Paths),
-        )
+        let new_paths = self
+            .defn_context
+            .env
+            .supports_feature(self.current_package, FeatureGate::Move2024Paths);
+        if new_paths {
+            AliasMapBuilder::namespaced()
+        } else {
+            AliasMapBuilder::legacy()
+        }
     }
 
     /// Pushes a new alias map onto the alias information in the pash expander.
@@ -1215,9 +1219,7 @@ impl PathExpander for LegacyPathExpander {
                 Some((mident, mem)) => EN::ModuleAccess(mident, mem),
                 None => EN::Name(n),
             },
-            (Access::Term, PN::One(n))
-                if is_valid_struct_constant_or_schema_name(n.value.as_str()) =>
-            {
+            (Access::Term, PN::One(n)) if is_valid_struct_or_constant_name(n.value.as_str()) => {
                 match self.aliases.member_alias_get(&n) {
                     Some((mident, mem)) => EN::ModuleAccess(mident, mem),
                     None => EN::Name(n),
@@ -1660,7 +1662,7 @@ impl PathExpander for Move2024PathExpander {
                 }
             }
             Access::Term => match chain.value {
-                PN::One(name) if !is_valid_struct_constant_or_schema_name(&name.to_string()) => {
+                PN::One(name) if !is_valid_struct_or_constant_name(&name.to_string()) => {
                     EN::Name(name)
                 }
                 _ => {
@@ -3592,7 +3594,7 @@ fn check_valid_module_member_name_impl(
             }
         }
         M::Constant | M::Struct | M::Schema => {
-            if !is_valid_struct_constant_or_schema_name(&n.value) {
+            if !is_valid_struct_or_constant_name(&n.value) {
                 let msg = format!(
                     "Invalid {} name '{}'. {} names must start with 'A'..'Z'",
                     case.name(),
@@ -3687,7 +3689,7 @@ fn check_valid_type_parameter_name(
     check_restricted_name_all_cases(&mut context.defn_context, NameCase::TypeParameter, n)
 }
 
-pub fn is_valid_struct_constant_or_schema_name(s: &str) -> bool {
+pub fn is_valid_struct_or_constant_name(s: &str) -> bool {
     s.starts_with(|c: char| c.is_ascii_uppercase())
 }
 

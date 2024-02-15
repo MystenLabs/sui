@@ -88,11 +88,14 @@ impl AliasMap {
         }
 
         let outer_scope = OldAliasMap(Some(self.clone()));
-        let AliasMapBuilder {
+        let AliasMapBuilder::Legacy {
             modules: new_modules,
             members: new_members,
             ..
-        } = shadowing;
+        } = shadowing
+        else {
+            panic!("ICE alias map builder should be legacy for legacy")
+        };
 
         let next_depth = self.current_depth();
         let mut current_scope = AliasSet::new();
