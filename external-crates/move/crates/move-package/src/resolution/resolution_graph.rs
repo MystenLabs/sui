@@ -12,7 +12,6 @@ use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs,
     io::Write,
     path::{Path, PathBuf},
 };
@@ -309,7 +308,7 @@ impl ResolvedGraph {
             .into_iter()
     }
 
-    pub fn file_sources(&self) -> BTreeMap<FileHash, (FileName, String)> {
+    pub fn file_sources(&mut self) -> BTreeMap<FileHash, (FileName, String)> {
         self.package_table
             .iter()
             .flat_map(|(_, rpkg)| {
@@ -317,7 +316,10 @@ impl ResolvedGraph {
                     .unwrap()
                     .iter()
                     .map(|fname| {
-                        let contents = fs::read_to_string(fname.as_str()).unwrap();
+                        let mut contents = String::new();
+                        self.build_options
+                            .read_to_string(&PathBuf::from(fname.as_str()), &mut contents)
+                            .unwrap();
                         let fhash = FileHash::new(&contents);
                         (fhash, (*fname, contents))
                     })

@@ -1954,6 +1954,7 @@ dependencies = [
  "clap 4.4.1",
  "colored",
  "datatest-stable",
+ "derivative",
  "expect-test",
  "itertools",
  "move-binary-format",

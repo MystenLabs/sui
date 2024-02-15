@@ -28,6 +28,7 @@ fn test_additonal_addresses() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempdir().unwrap().path().to_path_buf(),
+        /* file reader */ None,
     );
     let (dg, _) = dep_graph_builder
         .get_graph(
@@ -84,6 +85,7 @@ fn test_additonal_addresses_already_assigned_same_value() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempdir().unwrap().path().to_path_buf(),
+        /* file reader */ None,
     );
     let (dg, _) = dep_graph_builder
         .get_graph(
@@ -129,6 +131,7 @@ fn test_additonal_addresses_already_assigned_different_value() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempdir().unwrap().path().to_path_buf(),
+        /* file reader */ None,
     );
     let (dg, _) = dep_graph_builder
         .get_graph(

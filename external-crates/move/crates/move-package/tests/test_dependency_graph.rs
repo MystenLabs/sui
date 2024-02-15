@@ -38,6 +38,7 @@ fn no_dep_graph() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
+        /* file reader */ None,
     );
     let (graph, _) = dep_graph_builder
         .get_graph(
@@ -154,6 +155,7 @@ fn always_deps() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
+        /* file reader */ None,
     );
     let (graph, _) = dep_graph_builder
         .get_graph(
@@ -563,6 +565,7 @@ fn immediate_dependencies() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
+        /* file reader */ None,
     );
     let (graph, _) = dep_graph_builder
         .get_graph(

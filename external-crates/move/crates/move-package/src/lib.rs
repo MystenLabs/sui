@@ -13,9 +13,11 @@ pub mod source_package;
 
 use anyhow::Result;
 use clap::*;
+use derivative::*;
 use lock_file::LockFile;
 use move_compiler::{
     editions::{Edition, Flavor},
+    shared::{FileReader, FileSystemFileReader},
     Flags,
 };
 use move_core_types::account_address::AccountAddress;
@@ -37,7 +39,9 @@ use crate::{
     package_lock::PackageLock,
 };
 
-#[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
+#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+#[derive(Derivative, Parser, Serialize, Deserialize, Default)]
+#[derivative(Debug, Eq, PartialEq, PartialOrd, Clone)]
 #[clap(about)]
 pub struct BuildConfig {
     /// Compile in 'dev' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used if
@@ -103,6 +107,21 @@ pub struct BuildConfig {
     /// If `true`, disable linters
     #[clap(long, global = true)]
     pub no_lint: bool,
+
+    /// Optional source file reader
+    #[clap(skip)]
+    #[serde(skip_deserializing, skip_serializing)]
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(PartialOrd = "ignore")]
+    #[derivative(Debug = "ignore")]
+    #[derivative(Clone(clone_with = "clone_file_reader"))]
+    pub file_reader: Option<Box<dyn FileReader>>,
+}
+
+/// Does not really do cloning - it's implemented to make Serde happy but the field itself
+/// will be either way ignored during cloning.
+fn clone_file_reader(_: &Option<Box<dyn FileReader>>) -> Option<Box<dyn FileReader>> {
+    None
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
@@ -134,7 +153,7 @@ impl BuildConfig {
     ) -> Result<CompiledPackage> {
         let resolved_graph = self.resolution_graph_for_package(path, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
-        let build_plan = BuildPlan::create(resolved_graph)?;
+        let mut build_plan = BuildPlan::create(resolved_graph)?;
         // TODO: When we are ready to release and enable automatic migration, uncomment this.
         // if !build_plan.root_crate_edition_defined() {
         //     Err(anyhow::format_err!(NEEDS_MIGRATION))
@@ -188,11 +207,22 @@ impl BuildConfig {
         ModelBuilder::create(resolved_graph, model_config).build_model()
     }
 
-    pub fn download_deps_for_package<W: Write>(&self, path: &Path, writer: &mut W) -> Result<()> {
+    pub fn download_deps_for_package<W: Write>(
+        &mut self,
+        path: &Path,
+        writer: &mut W,
+    ) -> Result<()> {
         let path = SourcePackageLayout::try_find_root(path)?;
-        let manifest_string =
-            std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path()))?;
-        let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
+        let mut manifest_string = String::new();
+        self.read_to_string(
+            &path.join(SourcePackageLayout::Manifest.path()),
+            &mut manifest_string,
+        )?;
+        let mut buf = String::new();
+        let lock_string = self
+            .read_to_string(&path.join(SourcePackageLayout::Lock.path()), &mut buf)
+            .ok()
+            .map(|_| buf);
         let _mutx = PackageLock::lock(); // held until function returns
 
         resolution::download_dependency_repos(manifest_string, lock_string, self, &path, writer)?;
@@ -208,18 +238,27 @@ impl BuildConfig {
             self.dev_mode = true;
         }
         let path = SourcePackageLayout::try_find_root(path)?;
-        let manifest_string =
-            std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path()))?;
-        let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
+        let mut manifest_string = String::new();
+        self.read_to_string(
+            &path.join(SourcePackageLayout::Manifest.path()),
+            &mut manifest_string,
+        )?;
+        let mut buf = String::new();
+        let lock_string = self
+            .read_to_string(&path.join(SourcePackageLayout::Lock.path()), &mut buf)
+            .ok()
+            .map(|_| buf);
         let _mutx = PackageLock::lock(); // held until function returns
 
         let install_dir_set = self.install_dir.is_some();
         let install_dir = self.install_dir.as_ref().unwrap_or(&path).to_owned();
 
+        let file_reader = std::mem::take(&mut self.file_reader);
         let mut dep_graph_builder = DependencyGraphBuilder::new(
             self.skip_fetch_latest_git_deps,
             writer,
             install_dir.clone(),
+            file_reader,
         );
         let (dependency_graph, modified) = dep_graph_builder.get_graph(
             &DependencyKind::default(),
@@ -227,7 +266,7 @@ impl BuildConfig {
             manifest_string,
             lock_string,
         )?;
-
+        self.file_reader = std::mem::take(&mut dep_graph_builder.file_reader);
         if modified || install_dir_set {
             // (1) Write the Move.lock file if the existing one is `modified`, or
             // (2) `install_dir` is set explicitly, which may be a different directory, and where a Move.lock does not exist yet.
@@ -282,5 +321,12 @@ impl BuildConfig {
         let _mutx = PackageLock::lock();
         lock.commit(lock_file)?;
         Ok(())
+    }
+
+    pub fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
+        match self.file_reader.as_mut() {
+            Some(reader) => reader.read_to_string(fpath, buf),
+            None => FileSystemFileReader.read_to_string(fpath, buf),
+        }
     }
 }

@@ -3,12 +3,12 @@
 
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
+use move_compiler::shared::{FileReader, FileSystemFileReader};
 use move_symbol_pool::Symbol;
 use petgraph::{algo, prelude::DiGraphMap, Direction};
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet, VecDeque},
     fmt,
-    fs::File,
     io::{BufWriter, Read, Write},
     path::{Path, PathBuf},
     process::Command,
@@ -196,6 +196,8 @@ pub struct DependencyGraphBuilder<Progress: Write> {
     visited_dependencies: VecDeque<(PackageIdentifier, PM::InternalDependency)>,
     /// Installation directory for compiled artifacts (from BuildConfig).
     install_dir: PathBuf,
+    /// Optional file reader
+    pub file_reader: Option<Box<dyn FileReader>>,
 }
 
 impl<Progress: Write> DependencyGraphBuilder<Progress> {
@@ -203,12 +205,14 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         skip_fetch_latest_git_deps: bool,
         progress_output: Progress,
         install_dir: PathBuf,
+        file_reader: Option<Box<dyn FileReader>>,
     ) -> Self {
         DependencyGraphBuilder {
             dependency_cache: DependencyCache::new(skip_fetch_latest_git_deps),
             progress_output,
             visited_dependencies: VecDeque::new(),
             install_dir,
+            file_reader,
         }
     }
 
@@ -228,13 +232,13 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         // compute digests eagerly as even if we can't reuse existing lock file, they need to become
         // part of the newly computed dependency graph
         let new_manifest_digest = digest_str(manifest_string.into_bytes().as_slice());
-        let lock_path = root_path.join(SourcePackageLayout::Lock.path());
-        let lock_file = File::open(lock_path);
-        let digest_and_lock_contents = lock_file
-            .map(|mut lock_file| match schema::Header::read(&mut lock_file) {
-                Ok(header) => Some((header.manifest_digest, header.deps_digest, lock_string_opt)),
-                Err(_) => None, // malformed header - regenerate lock file
-            })
+        let digest_and_lock_contents = lock_string_opt
+            .map(
+                |lock_string| match schema::Header::read(&mut lock_string.as_bytes()) {
+                    Ok(header) => Some((header.manifest_digest, header.deps_digest, lock_string)),
+                    Err(_) => None, // malformed header - regenerate lock file
+                },
+            )
             .unwrap_or(None);
 
         // collect sub-graphs for "regular" and "dev" dependencies
@@ -274,7 +278,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             .collect::<Result<Vec<LockFile>>>()?;
         let new_deps_digest = self.dependency_digest(dep_lock_files, dev_dep_lock_files)?;
         let (manifest_digest, deps_digest) = match digest_and_lock_contents {
-            Some((old_manifest_digest, old_deps_digest, Some(lock_string)))
+            Some((old_manifest_digest, old_deps_digest, lock_string))
                 if old_manifest_digest == new_manifest_digest
                     && old_deps_digest == new_deps_digest =>
             {
@@ -440,11 +444,17 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                     .download_and_update_if_remote(dep_pkg_name, &d.kind, &mut self.progress_output)
                     .with_context(|| format!("Fetching '{}'", dep_pkg_name))?;
                 let pkg_path = dep_pkg_path.join(local_path(&d.kind));
-                let manifest_string =
-                    std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Manifest.path()))
-                        .with_context(|| format!("Parsing manifest for '{}'", dep_pkg_name))?;
-                let lock_string =
-                    std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Lock.path())).ok();
+                let mut manifest_string = String::new();
+                self.read_to_string(
+                    &pkg_path.join(SourcePackageLayout::Manifest.path()),
+                    &mut manifest_string,
+                )
+                .with_context(|| format!("Parsing manifest for '{}'", dep_pkg_name))?;
+                let mut buf = String::new();
+                let lock_string = self
+                    .read_to_string(&pkg_path.join(SourcePackageLayout::Lock.path()), &mut buf)
+                    .ok()
+                    .map(|_| buf);
 
                 // resolve name and version
                 let manifest =
@@ -538,6 +548,13 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         } else {
             dep_hashes.extend(dev_dep_hashes);
             Ok(hashed_files_digest(dep_hashes))
+        }
+    }
+
+    pub fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
+        match self.file_reader.as_mut() {
+            Some(reader) => reader.read_to_string(fpath, buf),
+            None => FileSystemFileReader.read_to_string(fpath, buf),
         }
     }
 }

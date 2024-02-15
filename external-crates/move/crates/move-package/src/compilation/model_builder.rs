@@ -32,7 +32,7 @@ impl ModelBuilder {
     // across all packages and build the Move model from that.
     // TODO: In the future we will need a better way to do this to support renaming in packages
     // where we want to support building a Move model.
-    pub fn build_model(&self) -> Result<GlobalEnv> {
+    pub fn build_model(&mut self) -> Result<GlobalEnv> {
         // Make sure no renamings have been performed
         if let Some(pkg_name) = self.resolution_graph.contains_renaming() {
             anyhow::bail!(
@@ -83,7 +83,7 @@ impl ModelBuilder {
             .collect::<Result<Vec<_>>>()?;
 
         let (target, deps) = make_source_and_deps_for_compiler(
-            &self.resolution_graph,
+            &mut self.resolution_graph.build_options,
             &root_package,
             deps_source_info,
         )?;

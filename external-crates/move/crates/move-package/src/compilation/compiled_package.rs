@@ -436,7 +436,8 @@ impl CompiledPackage {
         w: &mut W,
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
-        resolution_graph: &ResolvedGraph,
+        build_options: &mut BuildConfig,
+        contains_renaming: Option<PackageName>,
         source_file_reader: Option<Box<dyn FileReader>>,
         mut compiler_driver: impl FnMut(Compiler) -> Result<T>,
     ) -> Result<BuildResult<T>> {
@@ -453,11 +454,11 @@ impl CompiledPackage {
 
         // gather source/dep files with their address mappings
         let (sources_package_paths, deps_package_paths) = make_source_and_deps_for_compiler(
-            resolution_graph,
+            build_options,
             &resolved_package,
             transitive_dependencies,
         )?;
-        let flags = resolution_graph.build_options.compiler_flags();
+        let flags = build_options.compiler_flags();
         // Partition deps_package according whether src is available
         let (src_deps, bytecode_deps): (Vec<_>, Vec<_>) = deps_package_paths
             .clone()
@@ -468,7 +469,7 @@ impl CompiledPackage {
             });
         // If bytecode dependency is not empty, do not allow renaming
         if !bytecode_deps.is_empty() {
-            if let Some(pkg_name) = resolution_graph.contains_renaming() {
+            if let Some(pkg_name) = contains_renaming {
                 anyhow::bail!(
                     "Found address renaming in package '{}' when \
                     building with bytecode dependencies -- this is currently not supported",
@@ -481,9 +482,8 @@ impl CompiledPackage {
         let mut paths = src_deps;
         paths.push(sources_package_paths.clone());
 
-        let lint = !resolution_graph.build_options.no_lint;
-        let sui_mode = resolution_graph
-            .build_options
+        let lint = !build_options.no_lint;
+        let sui_mode = build_options
             .default_flavor
             .map_or(false, |f| f == Flavor::Sui);
 
@@ -513,14 +513,16 @@ impl CompiledPackage {
         w: &mut W,
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
-        resolution_graph: &ResolvedGraph,
+        build_options: &mut BuildConfig,
+        contains_renaming: Option<PackageName>,
         compiler_driver: impl FnMut(Compiler) -> Result<T>,
     ) -> Result<T> {
         let build_result = Self::build_for_driver(
             w,
             resolved_package,
             transitive_dependencies,
-            resolution_graph,
+            build_options,
+            contains_renaming,
             None,
             compiler_driver,
         )?;
@@ -532,7 +534,8 @@ impl CompiledPackage {
         project_root: &Path,
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
-        resolution_graph: &ResolvedGraph,
+        build_options: &mut BuildConfig,
+        contains_renaming: Option<PackageName>,
         file_reader: Option<Box<dyn FileReader>>,
         compiler_driver: impl FnMut(Compiler) -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
     ) -> Result<CompiledPackage> {
@@ -546,7 +549,8 @@ impl CompiledPackage {
             w,
             resolved_package.clone(),
             transitive_dependencies,
-            resolution_graph,
+            build_options,
+            contains_renaming,
             file_reader,
             compiler_driver,
         )?;
@@ -568,7 +572,7 @@ impl CompiledPackage {
         }
 
         let mut compiled_docs = None;
-        if resolution_graph.build_options.generate_docs {
+        if build_options.generate_docs {
             let model = run_model_builder_with_options(
                 vec![sources_package_paths],
                 deps_package_paths.into_iter().map(|(p, _)| p).collect_vec(),
@@ -576,13 +580,13 @@ impl CompiledPackage {
                 None,
             )?;
 
-            if resolution_graph.build_options.generate_docs {
+            if build_options.generate_docs {
                 compiled_docs = Some(Self::build_docs(
                     resolved_package.source_package.package.name,
                     &model,
                     &resolved_package.package_path,
                     &immediate_dependencies,
-                    &resolution_graph.build_options.install_dir,
+                    &build_options.install_dir,
                 ));
             }
         };
@@ -592,7 +596,7 @@ impl CompiledPackage {
                 package_name: resolved_package.source_package.package.name,
                 address_alias_instantiation: resolved_package.resolved_table,
                 source_digest: Some(resolved_package.source_digest),
-                build_flags: resolution_graph.build_options.clone(),
+                build_flags: build_options.clone(),
             },
             root_compiled_units,
             deps_compiled_units,
@@ -799,7 +803,7 @@ pub(crate) fn apply_named_address_renaming(
 }
 
 pub(crate) fn make_source_and_deps_for_compiler(
-    resolution_graph: &ResolvedGraph,
+    build_options: &mut BuildConfig,
     root: &Package,
     deps: Vec<DependencyInfo>,
 ) -> Result<(
@@ -831,14 +835,11 @@ pub(crate) fn make_source_and_deps_for_compiler(
         named_address_mapping_for_compiler(&root.resolved_table),
         &root.renaming,
     );
-    let sources = root.get_sources(&resolution_graph.build_options)?;
+    let sources = root.get_sources(build_options)?;
     let source_package_paths = PackagePaths {
         name: Some((
             root.source_package.package.name,
-            root.compiler_config(
-                /* is_dependency */ false,
-                &resolution_graph.build_options,
-            ),
+            root.compiler_config(/* is_dependency */ false, build_options),
         )),
         paths: sources,
         named_address_map: root_named_addrs,

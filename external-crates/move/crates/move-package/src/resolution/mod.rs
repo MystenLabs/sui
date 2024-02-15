@@ -25,7 +25,7 @@ pub mod resolving_table;
 pub fn download_dependency_repos<Progress: Write>(
     manifest_string: String,
     lock_string: Option<String>,
-    build_options: &BuildConfig,
+    build_options: &mut BuildConfig,
     root_path: &Path,
     progress_output: &mut Progress,
 ) -> Result<()> {
@@ -34,10 +34,12 @@ pub fn download_dependency_repos<Progress: Write>(
         .as_ref()
         .unwrap_or(&root_path.to_path_buf())
         .to_owned();
+    let file_reader = std::mem::take(&mut build_options.file_reader);
     let mut dep_graph_builder = DependencyGraphBuilder::new(
         build_options.skip_fetch_latest_git_deps,
         progress_output,
         install_dir,
+        file_reader,
     );
     let (graph, _) = dep_graph_builder.get_graph(
         &DependencyKind::default(),
@@ -45,6 +47,7 @@ pub fn download_dependency_repos<Progress: Write>(
         manifest_string,
         lock_string,
     )?;
+    build_options.file_reader = std::mem::take(&mut dep_graph_builder.file_reader);
 
     for pkg_id in graph.topological_order() {
         if pkg_id == graph.root_package_id {

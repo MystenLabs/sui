@@ -192,6 +192,7 @@ fn main() {
                         }
                     },
                     Err(error) => {
+                        assert!(false);
                         eprintln!("symbolicator message error: {:?}", error);
                     },
                 }

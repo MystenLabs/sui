@@ -28,11 +28,6 @@ pub fn lsp_diagnostics(
 ) -> BTreeMap<PathBuf, Vec<Diagnostic>> {
     let mut lsp_diagnostics = BTreeMap::new();
     for (s, _, (loc, msg), labels, _) in diagnostics {
-        if file_name_mapping.get(&loc.file_hash()).is_none() {
-            eprintln!("HASH: {}", loc.file_hash());
-            eprintln!("FILES: {:#?}", file_id_mapping);
-            eprintln!("MSG {}", msg);
-        }
         let fpath = file_name_mapping.get(&loc.file_hash()).unwrap();
         if let Some(start) = get_loc(&loc.file_hash(), loc.start(), files, file_id_mapping) {
             if let Some(end) = get_loc(&loc.file_hash(), loc.end(), files, file_id_mapping) {

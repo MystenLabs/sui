@@ -878,7 +878,7 @@ pub(crate) use process_binops;
 // Source file reader
 //**************************************************************************************************
 
-pub trait FileReader {
+pub trait FileReader: 'static {
     fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize>;
 }
 

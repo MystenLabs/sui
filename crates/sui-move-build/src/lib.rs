@@ -127,7 +127,7 @@ impl BuildConfig {
     ) -> anyhow::Result<(MoveCompiledPackage, FnInfoMap)> {
         let build_plan = BuildPlan::create(resolution_graph)?;
         let mut fn_info = None;
-        let compiled_pkg = build_plan.compile_with_driver(None, writer, |compiler| {
+        let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
             let (files, units_res) = compiler.build()?;
             match units_res {
                 Ok((units, warning_diags)) => {
