@@ -46,6 +46,8 @@ pub(crate) struct NodeMetrics {
     pub suspended_blocks: IntCounterVec,
     pub unsuspended_blocks: IntCounterVec,
     pub invalid_blocks: IntCounterVec,
+    pub fetched_blocks: IntCounterVec,
+    pub fetch_blocks_scheduler_inflight: IntGauge,
 }
 
 impl NodeMetrics {
@@ -114,6 +116,17 @@ impl NodeMetrics {
                 registry,
             )
             .unwrap(),
+            fetched_blocks: register_int_counter_vec_with_registry!(
+                "fetched_blocks",
+                "Number of fetched blocks per peer authority via the synchronizer.",
+                &["authority", "type"],
+                registry,
+            ).unwrap(),
+            fetch_blocks_scheduler_inflight: register_int_gauge_with_registry!(
+                "fetch_blocks_scheduler_inflight",
+                "Designates whether the synchronizer scheduler task to fetch blocks is currently running",
+                registry,
+            ).unwrap()
         }
     }
 }

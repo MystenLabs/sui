@@ -1,12 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeSet, HashSet},
-    fmt::Debug,
-    sync::Arc,
-    thread,
-};
+use std::{collections::BTreeSet, fmt::Debug, sync::Arc, thread};
 
 use async_trait::async_trait;
 use mysten_metrics::{metered_channel, monitored_scope};
@@ -30,7 +25,7 @@ enum CoreThreadCommand {
     /// Called when a leader timeout occurs and a block should be produced
     ForceNewBlock(Round, oneshot::Sender<()>),
     /// Request missing blocks that need to be synced.
-    GetMissing(oneshot::Sender<Vec<HashSet<BlockRef>>>),
+    GetMissing(oneshot::Sender<BTreeSet<BlockRef>>),
 }
 
 #[derive(Error, Debug)]
@@ -47,7 +42,7 @@ pub(crate) trait CoreThreadDispatcher: Sync + Send + 'static {
 
     async fn force_new_block(&self, round: Round) -> Result<(), CoreError>;
 
-    async fn get_missing_blocks(&self) -> Result<Vec<HashSet<BlockRef>>, CoreError>;
+    async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError>;
 }
 
 #[allow(unused)]
@@ -89,8 +84,7 @@ impl CoreThread {
                     sender.send(()).ok();
                 }
                 CoreThreadCommand::GetMissing(sender) => {
-                    // TODO: implement the logic to fetch the missing blocks.
-                    sender.send(vec![]).ok();
+                    sender.send(self.core.get_missing_blocks()).ok();
                 }
             }
         }
@@ -164,7 +158,7 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         receiver.await.map_err(Shutdown)
     }
 
-    async fn get_missing_blocks(&self) -> Result<Vec<HashSet<BlockRef>>, CoreError> {
+    async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
         let (sender, receiver) = oneshot::channel();
         self.send(CoreThreadCommand::GetMissing(sender)).await;
         receiver.await.map_err(Shutdown)
