@@ -136,7 +136,7 @@ impl Broadcaster {
                     };
                 }
             };
-            // Limit RTT estimate to be between 5ms and 10s.
+            // Limit RTT estimate to be between 5ms and 5s.
             rtt_estimate = min(rtt_estimate, Duration::from_secs(5));
             rtt_estimate = max(rtt_estimate, Duration::from_millis(5));
             context
