@@ -2,76 +2,45 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB58 } from '@mysten/bcs';
-import type { Infer } from 'superstruct';
-import {
-	array,
-	assert,
-	define,
-	integer,
-	is,
-	literal,
-	nullable,
-	object,
-	optional,
-	string,
-	union,
-} from 'superstruct';
 
 import { bcs } from '../bcs/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import type { SerializedTransactionDataBuilderV1 } from './blockData/TransactionBlockJsonV1.js';
+import type { SerializedTransactionDataBuilderV1 } from './blockData/v1.js';
+import type {
+	GasData,
+	SuiCallArg,
+	SuiTransaction,
+	TransactionBlockState,
+	TransactionExpiration,
+} from './blockData/v2.js';
 import { hashTypedData } from './hash.js';
-import { BuilderCallArg, PureCallArg, SuiObjectRef } from './Inputs.js';
-import { TransactionBlockInput, TransactionType } from './Transactions.js';
+import { BuilderCallArg, PureCallArg } from './Inputs.js';
+import { TransactionBlockInput } from './Transactions.js';
 import { create } from './utils.js';
-
-export const TransactionExpiration = optional(
-	nullable(
-		union([object({ Epoch: integer() }), object({ None: union([literal(true), literal(null)]) })]),
-	),
-);
-export type TransactionExpiration = Infer<typeof TransactionExpiration>;
-
-const StringEncodedBigint = define<string | number | bigint>('StringEncodedBigint', (val) => {
-	if (!['string', 'number', 'bigint'].includes(typeof val)) return false;
-
-	try {
-		BigInt(val as string);
-		return true;
-	} catch {
-		return false;
-	}
-});
-
-const GasConfig = object({
-	budget: optional(StringEncodedBigint),
-	price: optional(StringEncodedBigint),
-	payment: optional(array(SuiObjectRef)),
-	owner: optional(string()),
-});
-type GasConfig = Infer<typeof GasConfig>;
-
-export const SerializedTransactionDataBuilder = object({
-	version: literal(1),
-	sender: optional(string()),
-	expiration: TransactionExpiration,
-	gasConfig: GasConfig,
-	inputs: array(TransactionBlockInput),
-	transactions: array(TransactionType),
-});
-export type SerializedTransactionDataBuilder = Infer<typeof SerializedTransactionDataBuilder>;
 
 function prepareSuiAddress(address: string) {
 	return normalizeSuiAddress(address).replace('0x', '');
 }
 
-export class TransactionBlockDataBuilder {
+export class TransactionBlockDataBuilder implements TransactionBlockState {
 	static fromKindBytes(bytes: Uint8Array) {
 		const kind = bcs.TransactionKind.parse(bytes);
 		const programmableTx = 'ProgrammableTransaction' in kind ? kind.ProgrammableTransaction : null;
 		if (!programmableTx) {
 			throw new Error('Unable to deserialize from bytes.');
 		}
+
+		TransactionBlockDataBuilder.restore({
+			version: 2,
+			gasData: {
+				budget: null,
+				owner: null,
+				payment: null,
+				price: null,
+			},
+			inputs: programmableTx.inputs,
+			transactions: programmableTx.transactions,
+		});
 
 		const serialized = create(
 			{
@@ -130,15 +99,13 @@ export class TransactionBlockDataBuilder {
 		return TransactionBlockDataBuilder.restore(serialized);
 	}
 
-	static restore(data: SerializedTransactionDataBuilder) {
-		assert(data, SerializedTransactionDataBuilder);
-		const transactionData = new TransactionBlockDataBuilder();
-		Object.assign(transactionData, data);
-		return transactionData;
-	}
-
-	static restoreFromV1(data: SerializedTransactionDataBuilderV1) {
-		return this.restore(data);
+	static restore(data: TransactionBlockState | SerializedTransactionDataBuilderV1) {
+		if (data.version === 2) {
+			// TODO run validator
+			return new TransactionBlockDataBuilder(data);
+		} else {
+			throw new Error('Todo implement transform');
+		}
 	}
 
 	/**
@@ -152,19 +119,26 @@ export class TransactionBlockDataBuilder {
 		return toB58(hash);
 	}
 
-	version = 1 as const;
-	sender?: string;
-	expiration?: TransactionExpiration;
-	gasConfig: GasConfig;
-	inputs: TransactionBlockInput[];
-	transactions: TransactionType[];
+	features: string[];
+	version = 2 as const;
+	sender: string | null;
+	expiration: TransactionExpiration | null;
+	gasData: GasData;
+	inputs: SuiCallArg[];
+	transactions: SuiTransaction[];
 
-	constructor(clone?: SerializedTransactionDataBuilder) {
-		this.sender = clone?.sender;
-		this.expiration = clone?.expiration;
-		this.gasConfig = clone?.gasConfig ?? {};
+	constructor(clone?: TransactionBlockState) {
+		this.features = clone?.features ?? [];
+		this.sender = clone?.sender ?? null;
+		this.expiration = clone?.expiration ?? null;
 		this.inputs = clone?.inputs ?? [];
 		this.transactions = clone?.transactions ?? [];
+		this.gasData = clone?.gasData ?? {
+			budget: null,
+			price: null,
+			owner: null,
+			payment: null,
+		};
 	}
 
 	build({

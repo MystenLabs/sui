@@ -58,12 +58,13 @@ const SuiArgument = union([
 ]);
 
 // https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-json-rpc-types/src/sui_transaction.rs#L1143-L1153
-const GasData = object({
+export const GasData = object({
 	budget: nullable(JsonU64),
 	price: nullable(JsonU64),
 	owner: nullable(SuiAddress),
 	payment: nullable(array(ObjectRef)),
 });
+export type GasData = Output<typeof GasData>;
 
 // https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-json-rpc-types/src/sui_transaction.rs#L1719-L1732
 const SuiProgrammableMoveCall = object({
@@ -89,6 +90,7 @@ const SuiTransaction = union([
 		]),
 	}),
 ]);
+export type SuiTransaction = Output<typeof SuiTransaction>;
 
 // https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/external-crates/move/crates/move-core-types/src/language_storage.rs#L33-L59
 export const TypeTag: BaseSchema<TypeTagType> = union([
@@ -123,10 +125,15 @@ const SuiObjectArg = union([
 ]);
 
 // https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-json-rpc-types/src/sui_transaction.rs#L1975-L1980
-const SuiPureValue = object({
-	valueType: union([object({ None: nullable(literal(true)) }), object({ Some: TypeTag })]),
-	value: BCSBytes,
-});
+const SuiPureValue = union([
+	object({
+		valueType: union([object({ None: nullable(literal(true)) }), object({ Some: TypeTag })]),
+		value: BCSBytes,
+	}),
+	object({
+		value: BCSBytes,
+	}),
+]);
 
 // https://github.com/MystenLabs/sui/blob/f2601e580e5ec26012669de04fb888ece12bbc06/crates/sui-graphql-rpc/src/types/open_move_type.rs#L86-L105
 type OpenMoveTypeSignatureBody =
@@ -195,12 +202,14 @@ const SuiCallArg = union([
 		}),
 	}),
 ]);
+export type SuiCallArg = Output<typeof SuiCallArg>;
 
 // https://github.com/MystenLabs/sui/blob/f2601e580e5ec26012669de04fb888ece12bbc06/crates/sui-types/src/transaction.rs#L1395-L1401
 const TransactionExpiration = union([
 	object({ None: nullable(literal(true)) }),
 	object({ Epoch: JsonU64 }),
 ]);
+export type TransactionExpiration = Output<typeof TransactionExpiration>;
 
 export const TransactionBlockState = object({
 	version: literal(2),
@@ -211,5 +220,4 @@ export const TransactionBlockState = object({
 	inputs: array(SuiCallArg),
 	transactions: array(SuiTransaction),
 });
-
 export type TransactionBlockState = Output<typeof TransactionBlockState>;
