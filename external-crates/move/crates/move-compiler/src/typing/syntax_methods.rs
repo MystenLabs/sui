@@ -46,7 +46,6 @@ fn validate_index_syntax_methods(
     index: &SyntaxMethod,
     index_mut: &SyntaxMethod,
 ) -> bool {
-    println!("checking defns valid");
 
     let index_ann_loc = index.kind.loc;
     let (index_module, index_fn) = &index.target_function;
@@ -231,8 +230,6 @@ fn validate_index_syntax_methods(
     }
 
     let _ = std::mem::replace(&mut context.constraints, prev_constraints);
-
-    println!("defns valid: {valid}");
 
     valid
 }

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    debug_display, diag,
+    diag,
     diagnostics::{codes::*, Diagnostic},
     editions::{Edition, FeatureGate, Flavor},
     expansion::ast::{
@@ -18,7 +18,6 @@ use crate::{
         Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_,
     },
     shared::{
-        ast_debug::AstDebug,
         known_attributes::{SyntaxAttribute, TestingAttribute},
         process_binops,
         program_info::TypingProgramInfo,
@@ -189,9 +188,6 @@ fn module(
     context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
     context.add_use_funs_scope(use_funs);
-    if is_source_module {
-        println!("syntax methods:\n{}", debug_display!(syntax_methods));
-    }
     structs
         .iter_mut()
         .for_each(|(_, _, s)| struct_def(context, s));
@@ -238,7 +234,6 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         mut signature,
         body: n_body,
     } = f;
-    println!("-- Processing {name} -----------------------------");
     context.env.add_warning_filter_scope(warning_filter.clone());
     assert!(context.constraints.is_empty());
     context.reset_for_module_item();
@@ -305,10 +300,7 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
     let mut b_ = match nb_ {
         N::FunctionBody_::Native => T::FunctionBody_::Native,
         N::FunctionBody_::Defined(es) => {
-            es.print_verbose();
             let seq = sequence(context, es);
-            println!("---------");
-            seq.print();
             let ety = sequence_type(&seq);
             let ret_ty = context.return_type.clone().unwrap();
             let (_, seq_items) = &seq;
@@ -2166,7 +2158,6 @@ fn resolve_index_funs_and_type(
         )
     };
     let readied = core::ready_tvars(&context.subst, ty);
-    println!("readied: {:?}", readied);
     let Some(index) = find_index_funs(context, loc, &readied) else {
         return (None, context.error_type(loc));
     };
@@ -2314,7 +2305,6 @@ fn exp_dotted_usage(
     eloc: Loc,
     ndotted: N::ExpDotted,
 ) -> Box<T::Exp> {
-    println!("{:#?}", ndotted);
     let constraint_verb = match &ndotted.value {
         N::ExpDotted_::Exp(_) => None,
         _ if matches!(usage, DottedUsage::Borrow(_)) => Some("borrow"),
@@ -2335,7 +2325,6 @@ fn exp_dotted_expression(
     eloc: Loc,
     ndotted: N::ExpDotted,
 ) -> Box<T::Exp> {
-    println!("{:#?}", ndotted);
     let edotted = process_exp_dotted(context, constraint_verb, ndotted);
     if matches!(usage, DottedUsage::Borrow(_)) && edotted.accessors.is_empty() {
         context.add_base_type_constraint(eloc, "Invalid borrow", edotted.base.ty.clone());
@@ -2377,8 +2366,6 @@ fn resolve_exp_dotted(
     mut edotted: ExpDotted,
 ) -> Box<T::Exp> {
     use T::UnannotatedExp_ as TE;
-    // println!("usage: {:#?}", usage);
-    // println!("{:#?}", edotted);
 
     let make_exp = |ty, exp_| Box::new(T::exp(ty, sp(eloc, exp_)));
     let make_error = |context: &mut Context| make_error_exp(context, eloc);

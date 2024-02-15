@@ -394,7 +394,6 @@ fn valid_return_type(
 
         SyntaxMethodKind_::IndexMut if valid_mut_ref(ty) => {
             let ret_ty = valid_index_return_type(context, loc, ty);
-            println!("valid ret type: {ret_ty}");
             ret_ty
         }
         SyntaxMethodKind_::IndexMut if valid_imm_ref(ty) => {
