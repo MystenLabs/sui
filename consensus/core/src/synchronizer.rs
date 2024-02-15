@@ -130,6 +130,68 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         })
     }
 
+    // The main loop to listen for the submitted commands.
+    async fn run(&mut self) {
+        // We want the synchronizer to run periodically every 500ms to fetch any still missing blocks.
+        const SYNCHRONIZER_TIMEOUT: Duration = Duration::from_millis(500);
+        let scheduler_timeout = sleep_until(Instant::now() + SYNCHRONIZER_TIMEOUT);
+
+        tokio::pin!(scheduler_timeout);
+
+        loop {
+            tokio::select! {
+                Some(command) = self.commands_receiver.recv() => {
+                    match command {
+                        Command::FetchBlocks{ missing_block_refs, peer_index, result } => {
+                            assert_ne!(peer_index, self.context.own_index, "We should never attempt to fetch blocks from our own node");
+
+                            if missing_block_refs.is_empty() {
+                                result.send(Ok(())).ok();
+                                continue;
+                            }
+
+                            // We don't block if the corresponding peer task is saturated - but we rather drop the request. That's ok as the periodic
+                            // synchronization task will handle any still missing blocks in next run.
+                            let r = self.fetch_block_senders.get(&peer_index).expect("Fatal error, sender should be present").try_send(missing_block_refs).map_err(|err| {
+                                match err {
+                                    TrySendError::Full(_) => ConsensusError::SynchronizerSaturated(peer_index),
+                                    TrySendError::Closed(_) => ConsensusError::Shutdown
+                                }
+                            });
+                            result.send(r).ok();
+                        }
+                    }
+                },
+                Some(result) = self.fetch_blocks_scheduler_task.join_next(), if !self.fetch_blocks_scheduler_task.is_empty() => {
+                    match result {
+                        Ok(()) => {},
+                        Err(e) => {
+                            if e.is_cancelled() {
+                            } else if e.is_panic() {
+                                std::panic::resume_unwind(e.into_panic());
+                            } else {
+                                panic!("fetch blocks scheduler task failed: {e}");
+                            }
+                        },
+                    };
+                },
+                () = &mut scheduler_timeout => {
+                    // we want to start a new task only if the previous one has already finished.
+                    if self.fetch_blocks_scheduler_task.is_empty() {
+                        if let Err(err) = self.start_fetch_missing_blocks_task().await {
+                            debug!("Core is shutting down, synchronizer is shutting down: {err:?}");
+                            return;
+                        };
+                    }
+
+                    scheduler_timeout
+                    .as_mut()
+                    .reset(Instant::now() + SYNCHRONIZER_TIMEOUT);
+                }
+            }
+        }
+    }
+
     async fn fetch_blocks_from_authority(
         peer_index: AuthorityIndex,
         network_client: Arc<C>,
@@ -258,67 +320,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         (resp, block_refs, retries, peer)
     }
 
-    // The main loop to listen for the submitted commands.
-    async fn run(&mut self) {
-        // We want the synchronizer to run periodically every 500ms to fetch any still missing blocks.
-        const SYNCHRONIZER_TIMEOUT: Duration = Duration::from_millis(500);
-        let scheduler_timeout = sleep_until(Instant::now() + SYNCHRONIZER_TIMEOUT);
-
-        tokio::pin!(scheduler_timeout);
-
-        loop {
-            tokio::select! {
-                Some(command) = self.commands_receiver.recv() => {
-                    match command {
-                        Command::FetchBlocks{ missing_block_refs, peer_index, result } => {
-                            assert_ne!(peer_index, self.context.own_index, "We should never attempt to fetch blocks from our own node");
-
-                            if missing_block_refs.is_empty() {
-                                result.send(Ok(())).ok();
-                                continue;
-                            }
-
-                            // We don't block if the corresponding peer task is saturated - but we rather drop the request. That's ok as the periodic
-                            // synchronization task will handle any still missing blocks in next run.
-                            let r = self.fetch_block_senders.get(&peer_index).expect("Fatal error, sender should be present").try_send(missing_block_refs).map_err(|err| {
-                                match err {
-                                    TrySendError::Full(_) => ConsensusError::SynchronizerSaturated(peer_index),
-                                    TrySendError::Closed(_) => ConsensusError::Shutdown
-                                }
-                            });
-                            result.send(r).ok();
-                        }
-                    }
-                },
-                Some(result) = self.fetch_blocks_scheduler_task.join_next(), if !self.fetch_blocks_scheduler_task.is_empty() => {
-                    match result {
-                        Ok(()) => {},
-                        Err(e) => {
-                            if e.is_cancelled() {
-                            } else if e.is_panic() {
-                                std::panic::resume_unwind(e.into_panic());
-                            } else {
-                                panic!("fetch blocks scheduler task failed: {e}");
-                            }
-                        },
-                    };
-                },
-                () = &mut scheduler_timeout => {
-                    // we want to start a new task only if the previous one has already finished.
-                    if self.fetch_blocks_scheduler_task.is_empty() {
-                        if let Err(err) = self.start_fetch_missing_blocks_task().await {
-                            debug!("Core is shutting down, synchronizer is shutting down: {err:?}");
-                        };
-                    }
-
-                    scheduler_timeout
-                    .as_mut()
-                    .reset(Instant::now() + SYNCHRONIZER_TIMEOUT);
-                }
-            }
-        }
-    }
-
     async fn start_fetch_missing_blocks_task(&mut self) -> ConsensusResult<()> {
         let missing_blocks = self
             .core_dispatcher
@@ -392,7 +393,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         let mut peers = context
             .committee
             .authorities()
-            .map(|(peer_index, _)| peer_index)
+            .filter_map(|(peer_index, _)| (peer_index != context.own_index).then_some(peer_index))
             .collect::<Vec<_>>();
         peers.shuffle(&mut ThreadRng::default());
         let mut peers = peers.into_iter();
