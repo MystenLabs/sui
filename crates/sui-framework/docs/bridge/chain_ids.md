@@ -14,6 +14,8 @@
 -  [Function `eth_mainnet`](#0xb_chain_ids_eth_mainnet)
 -  [Function `eth_sepolia`](#0xb_chain_ids_eth_sepolia)
 -  [Function `eth_local_test`](#0xb_chain_ids_eth_local_test)
+-  [Function `route_source`](#0xb_chain_ids_route_source)
+-  [Function `route_destination`](#0xb_chain_ids_route_destination)
 -  [Function `assert_valid_chain_id`](#0xb_chain_ids_assert_valid_chain_id)
 -  [Function `valid_routes`](#0xb_chain_ids_valid_routes)
 -  [Function `is_valid_route`](#0xb_chain_ids_is_valid_route)
@@ -296,6 +298,54 @@
 
 <pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_eth_local_test">eth_local_test</a>(): u8 {
     <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_chain_ids_route_source"></a>
+
+## Function `route_source`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_route_source">route_source</a>(route: &<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>): &u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_route_source">route_source</a>(route: &<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a>): &u8 {
+    &route.source
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_chain_ids_route_destination"></a>
+
+## Function `route_destination`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_route_destination">route_destination</a>(route: &<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>): &u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_route_destination">route_destination</a>(route: &<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a>): &u8 {
+    &route.destination
 }
 </code></pre>
 
