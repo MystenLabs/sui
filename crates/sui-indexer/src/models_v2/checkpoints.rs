@@ -9,7 +9,7 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::gas::GasCostSummary;
 
 use crate::errors::IndexerError;
-use crate::schema_v2::checkpoints;
+use crate::schema::checkpoints;
 use crate::types_v2::IndexedCheckpoint;
 
 #[derive(Queryable, Insertable, Debug, Clone, Default)]

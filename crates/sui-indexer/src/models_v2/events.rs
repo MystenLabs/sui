@@ -16,7 +16,7 @@ use sui_types::object::MoveObject;
 use sui_types::parse_sui_struct_tag;
 
 use crate::errors::IndexerError;
-use crate::schema_v2::events;
+use crate::schema::events;
 use crate::types_v2::IndexedEvent;
 
 #[derive(Queryable, QueryableByName, Insertable, Debug, Clone)]

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    schema_v2::{tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders},
+    schema::{tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders},
     types_v2::TxIndex,
 };
 use diesel::prelude::*;

@@ -24,7 +24,7 @@ use crate::models_v2::transactions::{
     StoredTransactionTimestamp, TxSeq,
 };
 use crate::models_v2::tx_count_metrics::StoredTxCountMetrics;
-use crate::schema_v2::{
+use crate::schema::{
     active_addresses, address_metrics, addresses, checkpoints, epoch_peak_tps, move_call_metrics,
     move_calls, transactions, tx_count_metrics,
 };

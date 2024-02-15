@@ -16,7 +16,7 @@ use crate::{
         transactions::StoredTransaction,
         tx_indices::TxSequenceNumber,
     },
-    schema_v2::{
+    schema::{
         address_metrics, checkpoints, display, epochs, events, move_call_metrics, objects,
         objects_snapshot, packages, transactions,
     },

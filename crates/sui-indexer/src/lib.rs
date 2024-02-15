@@ -30,7 +30,7 @@ pub mod indexer_v2;
 pub mod metrics;
 pub mod models_v2;
 pub mod processors_v2;
-pub mod schema_v2;
+pub mod schema;
 pub mod store;
 pub mod test_utils;
 pub mod types;
