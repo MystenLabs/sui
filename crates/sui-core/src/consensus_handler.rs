@@ -257,12 +257,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             timestamp
         };
 
-        info!(
-            "Received consensus output {} at epoch {}",
-            consensus_output,
-            self.epoch_store.epoch(),
-        );
-
         let prologue_transaction = match self
             .epoch_store
             .protocol_config()
@@ -275,6 +269,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             ),
             false => self.consensus_commit_prologue_transaction(round, timestamp),
         };
+
+        info!(
+            %consensus_output,
+            epoch = ?self.epoch_store.epoch(),
+            prologue_transaction_digest = ?prologue_transaction.digest(),
+            "Received consensus output"
+        );
+
         let empty_bytes = vec![];
         transactions.push((
             empty_bytes.as_slice(),
