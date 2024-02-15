@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Transfer 1000 objects to A. The first graphql query fetches the last 4 objects owned by A. Then
+// Transfer 500 objects to A. The first graphql query fetches the last 4 objects owned by A. Then
 // transfer the last 3 objects from A to B. Make a graphql query for the `last: 1` - this is to test
 // that we return the next valid result even if the first `limit` rows that match the filtering
 // criteria are then invalidated by a newer version of the matched object. We set `last: 1` but
@@ -27,7 +27,7 @@ module Test::M1 {
 
     public entry fun create_many(recipient: address, ctx: &mut TxContext) {
         let i = 0;
-        while (i < 1000) {
+        while (i < 500) {
             transfer::public_transfer(
 
                 Object { id: object::new(ctx), value: i },
@@ -85,11 +85,15 @@ module Test::M1 {
   }
 }
 
-//# transfer-object 2,999 --sender A --recipient B
+//# transfer-object 2,499 --sender A --recipient B
 
-//# transfer-object 2,998 --sender A --recipient B
+//# transfer-object 2,498 --sender A --recipient B
 
-//# transfer-object 2,997 --sender A --recipient B
+//# transfer-object 2,497 --sender A --recipient B
+
+//# view-object 2,498
+
+//# view-object 2,497
 
 //# create-checkpoint
 
@@ -141,7 +145,7 @@ module Test::M1 {
 # Test that we correctly return the object at version, both for the `object` and `objects`
 # resolvers.
 {
-  a: object(address: "@{obj_2_999}", version: 2) {
+  a: object(address: "@{obj_2_499}", version: 2) {
     asMoveObject {
       owner {
         ... on AddressOwner {
@@ -158,7 +162,7 @@ module Test::M1 {
       }
     }
   }
-  b: object(address: "@{obj_2_999}", version: 3) {
+  b: object(address: "@{obj_2_499}", version: 3) {
     asMoveObject {
       owner {
         ... on AddressOwner {
@@ -175,7 +179,11 @@ module Test::M1 {
       }
     }
   }
-  objects_a: objects(filter: {objectKeys: {objectId: "@{obj_2_999}", version: 2}}) {
+  objects_a: objects(filter: {objectKeys: [
+    {objectId: "@{obj_2_499}", version: 2},
+    {objectId: "@{obj_2_498}", version: 2},
+    {objectId: "@{obj_2_497}", version: 2},
+    ]}) {
     nodes {
       asMoveObject {
         owner {
@@ -194,9 +202,33 @@ module Test::M1 {
       }
     }
   }
-  objects_b: objects(filter: {objectKeys: {objectId: "@{obj_2_999}", version: 3}}) {
+  objects_b: objects(filter: {objectKeys: [
+    {objectId: "@{obj_2_499}", version: 3},
+    {objectId: "@{obj_2_498}", version: 4},
+    {objectId: "@{obj_2_497}", version: 5},
+    ]}) {
     nodes {
       asMoveObject {
+        owner {
+          ... on AddressOwner {
+            owner {
+              address
+            }
+          }
+        }
+        contents {
+          json
+          type {
+            repr
+          }
+        }
+      }
+    }
+  }
+  owned_by_b: address(address: "@{B}") {
+    objects {
+      nodes {
+        version
         owner {
           ... on AddressOwner {
             owner {

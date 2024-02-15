@@ -1,4 +1,4 @@
-processed 11 tasks
+processed 13 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -9,9 +9,9 @@ mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 6118000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 41-41:
-created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9), object(2,10), object(2,11), object(2,12), object(2,13), object(2,14), object(2,15), object(2,16), object(2,17), object(2,18), object(2,19), object(2,20), object(2,21), object(2,22), object(2,23), object(2,24), object(2,25), object(2,26), object(2,27), object(2,28), object(2,29), object(2,30), object(2,31), object(2,32), object(2,33), object(2,34), object(2,35), object(2,36), object(2,37), object(2,38), object(2,39), object(2,40), object(2,41), object(2,42), object(2,43), object(2,44), object(2,45), object(2,46), object(2,47), object(2,48), object(2,49), object(2,50), object(2,51), object(2,52), object(2,53), object(2,54), object(2,55), object(2,56), object(2,57), object(2,58), object(2,59), object(2,60), object(2,61), object(2,62), object(2,63), object(2,64), object(2,65), object(2,66), object(2,67), object(2,68), object(2,69), object(2,70), object(2,71), object(2,72), object(2,73), object(2,74), object(2,75), object(2,76), object(2,77), object(2,78), object(2,79), object(2,80), object(2,81), object(2,82), object(2,83), object(2,84), object(2,85), object(2,86), object(2,87), object(2,88), object(2,89), object(2,90), object(2,91), object(2,92), object(2,93), object(2,94), object(2,95), object(2,96), object(2,97), object(2,98), object(2,99), object(2,100), object(2,101), object(2,102), object(2,103), object(2,104), object(2,105), object(2,106), object(2,107), object(2,108), object(2,109), object(2,110), object(2,111), object(2,112), object(2,113), object(2,114), object(2,115), object(2,116), object(2,117), object(2,118), object(2,119), object(2,120), object(2,121), object(2,122), object(2,123), object(2,124), object(2,125), object(2,126), object(2,127), object(2,128), object(2,129), object(2,130), object(2,131), object(2,132), object(2,133), object(2,134), object(2,135), object(2,136), object(2,137), object(2,138), object(2,139), object(2,140), object(2,141), object(2,142), object(2,143), object(2,144), object(2,145), object(2,146), object(2,147), object(2,148), object(2,149), object(2,150), object(2,151), object(2,152), object(2,153), object(2,154), object(2,155), object(2,156), object(2,157), object(2,158), object(2,159), object(2,160), object(2,161), object(2,162), object(2,163), object(2,164), object(2,165), object(2,166), object(2,167), object(2,168), object(2,169), object(2,170), object(2,171), object(2,172), object(2,173), object(2,174), object(2,175), object(2,176), object(2,177), object(2,178), object(2,179), object(2,180), object(2,181), object(2,182), object(2,183), object(2,184), object(2,185), object(2,186), object(2,187), object(2,188), object(2,189), object(2,190), object(2,191), object(2,192), object(2,193), object(2,194), object(2,195), object(2,196), object(2,197), object(2,198), object(2,199), object(2,200), object(2,201), object(2,202), object(2,203), object(2,204), object(2,205), object(2,206), object(2,207), object(2,208), object(2,209), object(2,210), object(2,211), object(2,212), object(2,213), object(2,214), object(2,215), object(2,216), object(2,217), object(2,218), object(2,219), object(2,220), object(2,221), object(2,222), object(2,223), object(2,224), object(2,225), object(2,226), object(2,227), object(2,228), object(2,229), object(2,230), object(2,231), object(2,232), object(2,233), object(2,234), object(2,235), object(2,236), object(2,237), object(2,238), object(2,239), object(2,240), object(2,241), object(2,242), object(2,243), object(2,244), object(2,245), object(2,246), object(2,247), object(2,248), object(2,249), object(2,250), object(2,251), object(2,252), object(2,253), object(2,254), object(2,255), object(2,256), object(2,257), object(2,258), object(2,259), object(2,260), object(2,261), object(2,262), object(2,263), object(2,264), object(2,265), object(2,266), object(2,267), object(2,268), object(2,269), object(2,270), object(2,271), object(2,272), object(2,273), object(2,274), object(2,275), object(2,276), object(2,277), object(2,278), object(2,279), object(2,280), object(2,281), object(2,282), object(2,283), object(2,284), object(2,285), object(2,286), object(2,287), object(2,288), object(2,289), object(2,290), object(2,291), object(2,292), object(2,293), object(2,294), object(2,295), object(2,296), object(2,297), object(2,298), object(2,299), object(2,300), object(2,301), object(2,302), object(2,303), object(2,304), object(2,305), object(2,306), object(2,307), object(2,308), object(2,309), object(2,310), object(2,311), object(2,312), object(2,313), object(2,314), object(2,315), object(2,316), object(2,317), object(2,318), object(2,319), object(2,320), object(2,321), object(2,322), object(2,323), object(2,324), object(2,325), object(2,326), object(2,327), object(2,328), object(2,329), object(2,330), object(2,331), object(2,332), object(2,333), object(2,334), object(2,335), object(2,336), object(2,337), object(2,338), object(2,339), object(2,340), object(2,341), object(2,342), object(2,343), object(2,344), object(2,345), object(2,346), object(2,347), object(2,348), object(2,349), object(2,350), object(2,351), object(2,352), object(2,353), object(2,354), object(2,355), object(2,356), object(2,357), object(2,358), object(2,359), object(2,360), object(2,361), object(2,362), object(2,363), object(2,364), object(2,365), object(2,366), object(2,367), object(2,368), object(2,369), object(2,370), object(2,371), object(2,372), object(2,373), object(2,374), object(2,375), object(2,376), object(2,377), object(2,378), object(2,379), object(2,380), object(2,381), object(2,382), object(2,383), object(2,384), object(2,385), object(2,386), object(2,387), object(2,388), object(2,389), object(2,390), object(2,391), object(2,392), object(2,393), object(2,394), object(2,395), object(2,396), object(2,397), object(2,398), object(2,399), object(2,400), object(2,401), object(2,402), object(2,403), object(2,404), object(2,405), object(2,406), object(2,407), object(2,408), object(2,409), object(2,410), object(2,411), object(2,412), object(2,413), object(2,414), object(2,415), object(2,416), object(2,417), object(2,418), object(2,419), object(2,420), object(2,421), object(2,422), object(2,423), object(2,424), object(2,425), object(2,426), object(2,427), object(2,428), object(2,429), object(2,430), object(2,431), object(2,432), object(2,433), object(2,434), object(2,435), object(2,436), object(2,437), object(2,438), object(2,439), object(2,440), object(2,441), object(2,442), object(2,443), object(2,444), object(2,445), object(2,446), object(2,447), object(2,448), object(2,449), object(2,450), object(2,451), object(2,452), object(2,453), object(2,454), object(2,455), object(2,456), object(2,457), object(2,458), object(2,459), object(2,460), object(2,461), object(2,462), object(2,463), object(2,464), object(2,465), object(2,466), object(2,467), object(2,468), object(2,469), object(2,470), object(2,471), object(2,472), object(2,473), object(2,474), object(2,475), object(2,476), object(2,477), object(2,478), object(2,479), object(2,480), object(2,481), object(2,482), object(2,483), object(2,484), object(2,485), object(2,486), object(2,487), object(2,488), object(2,489), object(2,490), object(2,491), object(2,492), object(2,493), object(2,494), object(2,495), object(2,496), object(2,497), object(2,498), object(2,499), object(2,500), object(2,501), object(2,502), object(2,503), object(2,504), object(2,505), object(2,506), object(2,507), object(2,508), object(2,509), object(2,510), object(2,511), object(2,512), object(2,513), object(2,514), object(2,515), object(2,516), object(2,517), object(2,518), object(2,519), object(2,520), object(2,521), object(2,522), object(2,523), object(2,524), object(2,525), object(2,526), object(2,527), object(2,528), object(2,529), object(2,530), object(2,531), object(2,532), object(2,533), object(2,534), object(2,535), object(2,536), object(2,537), object(2,538), object(2,539), object(2,540), object(2,541), object(2,542), object(2,543), object(2,544), object(2,545), object(2,546), object(2,547), object(2,548), object(2,549), object(2,550), object(2,551), object(2,552), object(2,553), object(2,554), object(2,555), object(2,556), object(2,557), object(2,558), object(2,559), object(2,560), object(2,561), object(2,562), object(2,563), object(2,564), object(2,565), object(2,566), object(2,567), object(2,568), object(2,569), object(2,570), object(2,571), object(2,572), object(2,573), object(2,574), object(2,575), object(2,576), object(2,577), object(2,578), object(2,579), object(2,580), object(2,581), object(2,582), object(2,583), object(2,584), object(2,585), object(2,586), object(2,587), object(2,588), object(2,589), object(2,590), object(2,591), object(2,592), object(2,593), object(2,594), object(2,595), object(2,596), object(2,597), object(2,598), object(2,599), object(2,600), object(2,601), object(2,602), object(2,603), object(2,604), object(2,605), object(2,606), object(2,607), object(2,608), object(2,609), object(2,610), object(2,611), object(2,612), object(2,613), object(2,614), object(2,615), object(2,616), object(2,617), object(2,618), object(2,619), object(2,620), object(2,621), object(2,622), object(2,623), object(2,624), object(2,625), object(2,626), object(2,627), object(2,628), object(2,629), object(2,630), object(2,631), object(2,632), object(2,633), object(2,634), object(2,635), object(2,636), object(2,637), object(2,638), object(2,639), object(2,640), object(2,641), object(2,642), object(2,643), object(2,644), object(2,645), object(2,646), object(2,647), object(2,648), object(2,649), object(2,650), object(2,651), object(2,652), object(2,653), object(2,654), object(2,655), object(2,656), object(2,657), object(2,658), object(2,659), object(2,660), object(2,661), object(2,662), object(2,663), object(2,664), object(2,665), object(2,666), object(2,667), object(2,668), object(2,669), object(2,670), object(2,671), object(2,672), object(2,673), object(2,674), object(2,675), object(2,676), object(2,677), object(2,678), object(2,679), object(2,680), object(2,681), object(2,682), object(2,683), object(2,684), object(2,685), object(2,686), object(2,687), object(2,688), object(2,689), object(2,690), object(2,691), object(2,692), object(2,693), object(2,694), object(2,695), object(2,696), object(2,697), object(2,698), object(2,699), object(2,700), object(2,701), object(2,702), object(2,703), object(2,704), object(2,705), object(2,706), object(2,707), object(2,708), object(2,709), object(2,710), object(2,711), object(2,712), object(2,713), object(2,714), object(2,715), object(2,716), object(2,717), object(2,718), object(2,719), object(2,720), object(2,721), object(2,722), object(2,723), object(2,724), object(2,725), object(2,726), object(2,727), object(2,728), object(2,729), object(2,730), object(2,731), object(2,732), object(2,733), object(2,734), object(2,735), object(2,736), object(2,737), object(2,738), object(2,739), object(2,740), object(2,741), object(2,742), object(2,743), object(2,744), object(2,745), object(2,746), object(2,747), object(2,748), object(2,749), object(2,750), object(2,751), object(2,752), object(2,753), object(2,754), object(2,755), object(2,756), object(2,757), object(2,758), object(2,759), object(2,760), object(2,761), object(2,762), object(2,763), object(2,764), object(2,765), object(2,766), object(2,767), object(2,768), object(2,769), object(2,770), object(2,771), object(2,772), object(2,773), object(2,774), object(2,775), object(2,776), object(2,777), object(2,778), object(2,779), object(2,780), object(2,781), object(2,782), object(2,783), object(2,784), object(2,785), object(2,786), object(2,787), object(2,788), object(2,789), object(2,790), object(2,791), object(2,792), object(2,793), object(2,794), object(2,795), object(2,796), object(2,797), object(2,798), object(2,799), object(2,800), object(2,801), object(2,802), object(2,803), object(2,804), object(2,805), object(2,806), object(2,807), object(2,808), object(2,809), object(2,810), object(2,811), object(2,812), object(2,813), object(2,814), object(2,815), object(2,816), object(2,817), object(2,818), object(2,819), object(2,820), object(2,821), object(2,822), object(2,823), object(2,824), object(2,825), object(2,826), object(2,827), object(2,828), object(2,829), object(2,830), object(2,831), object(2,832), object(2,833), object(2,834), object(2,835), object(2,836), object(2,837), object(2,838), object(2,839), object(2,840), object(2,841), object(2,842), object(2,843), object(2,844), object(2,845), object(2,846), object(2,847), object(2,848), object(2,849), object(2,850), object(2,851), object(2,852), object(2,853), object(2,854), object(2,855), object(2,856), object(2,857), object(2,858), object(2,859), object(2,860), object(2,861), object(2,862), object(2,863), object(2,864), object(2,865), object(2,866), object(2,867), object(2,868), object(2,869), object(2,870), object(2,871), object(2,872), object(2,873), object(2,874), object(2,875), object(2,876), object(2,877), object(2,878), object(2,879), object(2,880), object(2,881), object(2,882), object(2,883), object(2,884), object(2,885), object(2,886), object(2,887), object(2,888), object(2,889), object(2,890), object(2,891), object(2,892), object(2,893), object(2,894), object(2,895), object(2,896), object(2,897), object(2,898), object(2,899), object(2,900), object(2,901), object(2,902), object(2,903), object(2,904), object(2,905), object(2,906), object(2,907), object(2,908), object(2,909), object(2,910), object(2,911), object(2,912), object(2,913), object(2,914), object(2,915), object(2,916), object(2,917), object(2,918), object(2,919), object(2,920), object(2,921), object(2,922), object(2,923), object(2,924), object(2,925), object(2,926), object(2,927), object(2,928), object(2,929), object(2,930), object(2,931), object(2,932), object(2,933), object(2,934), object(2,935), object(2,936), object(2,937), object(2,938), object(2,939), object(2,940), object(2,941), object(2,942), object(2,943), object(2,944), object(2,945), object(2,946), object(2,947), object(2,948), object(2,949), object(2,950), object(2,951), object(2,952), object(2,953), object(2,954), object(2,955), object(2,956), object(2,957), object(2,958), object(2,959), object(2,960), object(2,961), object(2,962), object(2,963), object(2,964), object(2,965), object(2,966), object(2,967), object(2,968), object(2,969), object(2,970), object(2,971), object(2,972), object(2,973), object(2,974), object(2,975), object(2,976), object(2,977), object(2,978), object(2,979), object(2,980), object(2,981), object(2,982), object(2,983), object(2,984), object(2,985), object(2,986), object(2,987), object(2,988), object(2,989), object(2,990), object(2,991), object(2,992), object(2,993), object(2,994), object(2,995), object(2,996), object(2,997), object(2,998), object(2,999)
+created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9), object(2,10), object(2,11), object(2,12), object(2,13), object(2,14), object(2,15), object(2,16), object(2,17), object(2,18), object(2,19), object(2,20), object(2,21), object(2,22), object(2,23), object(2,24), object(2,25), object(2,26), object(2,27), object(2,28), object(2,29), object(2,30), object(2,31), object(2,32), object(2,33), object(2,34), object(2,35), object(2,36), object(2,37), object(2,38), object(2,39), object(2,40), object(2,41), object(2,42), object(2,43), object(2,44), object(2,45), object(2,46), object(2,47), object(2,48), object(2,49), object(2,50), object(2,51), object(2,52), object(2,53), object(2,54), object(2,55), object(2,56), object(2,57), object(2,58), object(2,59), object(2,60), object(2,61), object(2,62), object(2,63), object(2,64), object(2,65), object(2,66), object(2,67), object(2,68), object(2,69), object(2,70), object(2,71), object(2,72), object(2,73), object(2,74), object(2,75), object(2,76), object(2,77), object(2,78), object(2,79), object(2,80), object(2,81), object(2,82), object(2,83), object(2,84), object(2,85), object(2,86), object(2,87), object(2,88), object(2,89), object(2,90), object(2,91), object(2,92), object(2,93), object(2,94), object(2,95), object(2,96), object(2,97), object(2,98), object(2,99), object(2,100), object(2,101), object(2,102), object(2,103), object(2,104), object(2,105), object(2,106), object(2,107), object(2,108), object(2,109), object(2,110), object(2,111), object(2,112), object(2,113), object(2,114), object(2,115), object(2,116), object(2,117), object(2,118), object(2,119), object(2,120), object(2,121), object(2,122), object(2,123), object(2,124), object(2,125), object(2,126), object(2,127), object(2,128), object(2,129), object(2,130), object(2,131), object(2,132), object(2,133), object(2,134), object(2,135), object(2,136), object(2,137), object(2,138), object(2,139), object(2,140), object(2,141), object(2,142), object(2,143), object(2,144), object(2,145), object(2,146), object(2,147), object(2,148), object(2,149), object(2,150), object(2,151), object(2,152), object(2,153), object(2,154), object(2,155), object(2,156), object(2,157), object(2,158), object(2,159), object(2,160), object(2,161), object(2,162), object(2,163), object(2,164), object(2,165), object(2,166), object(2,167), object(2,168), object(2,169), object(2,170), object(2,171), object(2,172), object(2,173), object(2,174), object(2,175), object(2,176), object(2,177), object(2,178), object(2,179), object(2,180), object(2,181), object(2,182), object(2,183), object(2,184), object(2,185), object(2,186), object(2,187), object(2,188), object(2,189), object(2,190), object(2,191), object(2,192), object(2,193), object(2,194), object(2,195), object(2,196), object(2,197), object(2,198), object(2,199), object(2,200), object(2,201), object(2,202), object(2,203), object(2,204), object(2,205), object(2,206), object(2,207), object(2,208), object(2,209), object(2,210), object(2,211), object(2,212), object(2,213), object(2,214), object(2,215), object(2,216), object(2,217), object(2,218), object(2,219), object(2,220), object(2,221), object(2,222), object(2,223), object(2,224), object(2,225), object(2,226), object(2,227), object(2,228), object(2,229), object(2,230), object(2,231), object(2,232), object(2,233), object(2,234), object(2,235), object(2,236), object(2,237), object(2,238), object(2,239), object(2,240), object(2,241), object(2,242), object(2,243), object(2,244), object(2,245), object(2,246), object(2,247), object(2,248), object(2,249), object(2,250), object(2,251), object(2,252), object(2,253), object(2,254), object(2,255), object(2,256), object(2,257), object(2,258), object(2,259), object(2,260), object(2,261), object(2,262), object(2,263), object(2,264), object(2,265), object(2,266), object(2,267), object(2,268), object(2,269), object(2,270), object(2,271), object(2,272), object(2,273), object(2,274), object(2,275), object(2,276), object(2,277), object(2,278), object(2,279), object(2,280), object(2,281), object(2,282), object(2,283), object(2,284), object(2,285), object(2,286), object(2,287), object(2,288), object(2,289), object(2,290), object(2,291), object(2,292), object(2,293), object(2,294), object(2,295), object(2,296), object(2,297), object(2,298), object(2,299), object(2,300), object(2,301), object(2,302), object(2,303), object(2,304), object(2,305), object(2,306), object(2,307), object(2,308), object(2,309), object(2,310), object(2,311), object(2,312), object(2,313), object(2,314), object(2,315), object(2,316), object(2,317), object(2,318), object(2,319), object(2,320), object(2,321), object(2,322), object(2,323), object(2,324), object(2,325), object(2,326), object(2,327), object(2,328), object(2,329), object(2,330), object(2,331), object(2,332), object(2,333), object(2,334), object(2,335), object(2,336), object(2,337), object(2,338), object(2,339), object(2,340), object(2,341), object(2,342), object(2,343), object(2,344), object(2,345), object(2,346), object(2,347), object(2,348), object(2,349), object(2,350), object(2,351), object(2,352), object(2,353), object(2,354), object(2,355), object(2,356), object(2,357), object(2,358), object(2,359), object(2,360), object(2,361), object(2,362), object(2,363), object(2,364), object(2,365), object(2,366), object(2,367), object(2,368), object(2,369), object(2,370), object(2,371), object(2,372), object(2,373), object(2,374), object(2,375), object(2,376), object(2,377), object(2,378), object(2,379), object(2,380), object(2,381), object(2,382), object(2,383), object(2,384), object(2,385), object(2,386), object(2,387), object(2,388), object(2,389), object(2,390), object(2,391), object(2,392), object(2,393), object(2,394), object(2,395), object(2,396), object(2,397), object(2,398), object(2,399), object(2,400), object(2,401), object(2,402), object(2,403), object(2,404), object(2,405), object(2,406), object(2,407), object(2,408), object(2,409), object(2,410), object(2,411), object(2,412), object(2,413), object(2,414), object(2,415), object(2,416), object(2,417), object(2,418), object(2,419), object(2,420), object(2,421), object(2,422), object(2,423), object(2,424), object(2,425), object(2,426), object(2,427), object(2,428), object(2,429), object(2,430), object(2,431), object(2,432), object(2,433), object(2,434), object(2,435), object(2,436), object(2,437), object(2,438), object(2,439), object(2,440), object(2,441), object(2,442), object(2,443), object(2,444), object(2,445), object(2,446), object(2,447), object(2,448), object(2,449), object(2,450), object(2,451), object(2,452), object(2,453), object(2,454), object(2,455), object(2,456), object(2,457), object(2,458), object(2,459), object(2,460), object(2,461), object(2,462), object(2,463), object(2,464), object(2,465), object(2,466), object(2,467), object(2,468), object(2,469), object(2,470), object(2,471), object(2,472), object(2,473), object(2,474), object(2,475), object(2,476), object(2,477), object(2,478), object(2,479), object(2,480), object(2,481), object(2,482), object(2,483), object(2,484), object(2,485), object(2,486), object(2,487), object(2,488), object(2,489), object(2,490), object(2,491), object(2,492), object(2,493), object(2,494), object(2,495), object(2,496), object(2,497), object(2,498), object(2,499)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 1315788000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 658388000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3 'create-checkpoint'. lines 43-43:
 Checkpoint created: 2
@@ -31,11 +31,11 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0xff28e9e797521614a2501970adec06b34c01981efe48249385f049afa102fbb9",
-                "value": "505"
+                "id": "0xffb8fcef6b804e51b3ac9d1d3f789472ed397e764e74c1132ca271e4ac14b4b6",
+                "value": "245"
               },
               "type": {
-                "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
               }
             }
           }
@@ -50,11 +50,11 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0xff92c4be9b1943d5a4d957ea956b2073437e82959747da5ff802881b887910ca",
-                "value": "539"
+                "id": "0xffe237fc32ab9a718a6c50c761074cbbde5fb691394e147c466de8b0592849df",
+                "value": "83"
               },
               "type": {
-                "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
               }
             }
           }
@@ -72,11 +72,11 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0xfd6cfc20d0c25df4ce2fc5f7c7c40a5b926a3a5ffac5e6bb071c7cd5f740d5b0",
-                "value": "211"
+                "id": "0xfe634b417989c12e4e72daf427d78a361863e9940a3d9c5e138f4fcefb9d7ce5",
+                "value": "231"
               },
               "type": {
-                "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
               }
             }
           },
@@ -88,11 +88,11 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0xff040fb82d647fef4c3075f05bbb14cab1e9771b88eb0b3afff94734ff00d1d9",
-                "value": "926"
+                "id": "0xfe965a0c18f5cb4b1dbe5a982a12ac7ce17fbae1a9b3b7ee474232fd464d2a04",
+                "value": "438"
               },
               "type": {
-                "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
               }
             }
           },
@@ -104,11 +104,11 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0xff28e9e797521614a2501970adec06b34c01981efe48249385f049afa102fbb9",
-                "value": "505"
+                "id": "0xffb8fcef6b804e51b3ac9d1d3f789472ed397e764e74c1132ca271e4ac14b4b6",
+                "value": "245"
               },
               "type": {
-                "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
               }
             }
           },
@@ -120,11 +120,11 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0xff92c4be9b1943d5a4d957ea956b2073437e82959747da5ff802881b887910ca",
-                "value": "539"
+                "id": "0xffe237fc32ab9a718a6c50c761074cbbde5fb691394e147c466de8b0592849df",
+                "value": "83"
               },
               "type": {
-                "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
               }
             }
           }
@@ -135,21 +135,31 @@ Response: {
 }
 
 task 5 'transfer-object'. lines 88-88:
-mutated: object(0,0), object(2,999)
+mutated: object(0,0), object(2,499)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
 task 6 'transfer-object'. lines 90-90:
-mutated: object(0,0), object(2,998)
+mutated: object(0,0), object(2,498)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
 task 7 'transfer-object'. lines 92-92:
-mutated: object(0,0), object(2,997)
+mutated: object(0,0), object(2,497)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 8 'create-checkpoint'. lines 94-94:
+task 8 'view-object'. lines 94-94:
+Owner: Account Address ( B )
+Version: 4
+Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,498)}}, value: 245u64}
+
+task 9 'view-object'. lines 96-96:
+Owner: Account Address ( B )
+Version: 5
+Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,497)}}, value: 438u64}
+
+task 10 'create-checkpoint'. lines 98-98:
 Checkpoint created: 3
 
-task 9 'run-graphql'. lines 96-138:
+task 11 'run-graphql'. lines 100-142:
 Response: {
   "data": {
     "last_3": {
@@ -164,11 +174,11 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0xff040fb82d647fef4c3075f05bbb14cab1e9771b88eb0b3afff94734ff00d1d9",
-                "value": "926"
+                "id": "0xfe965a0c18f5cb4b1dbe5a982a12ac7ce17fbae1a9b3b7ee474232fd464d2a04",
+                "value": "438"
               },
               "type": {
-                "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
               }
             }
           }
@@ -183,11 +193,11 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0xff28e9e797521614a2501970adec06b34c01981efe48249385f049afa102fbb9",
-                "value": "505"
+                "id": "0xffb8fcef6b804e51b3ac9d1d3f789472ed397e764e74c1132ca271e4ac14b4b6",
+                "value": "245"
               },
               "type": {
-                "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
               }
             }
           }
@@ -202,11 +212,11 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0xff92c4be9b1943d5a4d957ea956b2073437e82959747da5ff802881b887910ca",
-                "value": "539"
+                "id": "0xffe237fc32ab9a718a6c50c761074cbbde5fb691394e147c466de8b0592849df",
+                "value": "83"
               },
               "type": {
-                "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
               }
             }
           }
@@ -225,11 +235,11 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0xfd6cfc20d0c25df4ce2fc5f7c7c40a5b926a3a5ffac5e6bb071c7cd5f740d5b0",
-                "value": "211"
+                "id": "0xfe634b417989c12e4e72daf427d78a361863e9940a3d9c5e138f4fcefb9d7ce5",
+                "value": "231"
               },
               "type": {
-                "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
               }
             }
           }
@@ -239,7 +249,7 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 140-216:
+task 12 'run-graphql'. lines 144-248:
 Response: {
   "data": {
     "a": {
@@ -251,11 +261,11 @@ Response: {
         },
         "contents": {
           "json": {
-            "id": "0xff92c4be9b1943d5a4d957ea956b2073437e82959747da5ff802881b887910ca",
-            "value": "539"
+            "id": "0xffe237fc32ab9a718a6c50c761074cbbde5fb691394e147c466de8b0592849df",
+            "value": "83"
           },
           "type": {
-            "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+            "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
           }
         }
       }
@@ -269,11 +279,11 @@ Response: {
         },
         "contents": {
           "json": {
-            "id": "0xff92c4be9b1943d5a4d957ea956b2073437e82959747da5ff802881b887910ca",
-            "value": "539"
+            "id": "0xffe237fc32ab9a718a6c50c761074cbbde5fb691394e147c466de8b0592849df",
+            "value": "83"
           },
           "type": {
-            "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+            "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
           }
         }
       }
@@ -289,11 +299,47 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0xff92c4be9b1943d5a4d957ea956b2073437e82959747da5ff802881b887910ca",
-                "value": "539"
+                "id": "0xfe965a0c18f5cb4b1dbe5a982a12ac7ce17fbae1a9b3b7ee474232fd464d2a04",
+                "value": "438"
               },
               "type": {
-                "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
+              }
+            }
+          }
+        },
+        {
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xffb8fcef6b804e51b3ac9d1d3f789472ed397e764e74c1132ca271e4ac14b4b6",
+                "value": "245"
+              },
+              "type": {
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
+              }
+            }
+          }
+        },
+        {
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xffe237fc32ab9a718a6c50c761074cbbde5fb691394e147c466de8b0592849df",
+                "value": "83"
+              },
+              "type": {
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
               }
             }
           }
@@ -311,16 +357,128 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0xff92c4be9b1943d5a4d957ea956b2073437e82959747da5ff802881b887910ca",
-                "value": "539"
+                "id": "0xfe965a0c18f5cb4b1dbe5a982a12ac7ce17fbae1a9b3b7ee474232fd464d2a04",
+                "value": "438"
               },
               "type": {
-                "repr": "0x50ef24c509a74f2c42fa3de58b2d3b1d41518fefe286e0f734c9841b827ac0a7::M1::Object"
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
+              }
+            }
+          }
+        },
+        {
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xffb8fcef6b804e51b3ac9d1d3f789472ed397e764e74c1132ca271e4ac14b4b6",
+                "value": "245"
+              },
+              "type": {
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
+              }
+            }
+          }
+        },
+        {
+          "asMoveObject": {
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xffe237fc32ab9a718a6c50c761074cbbde5fb691394e147c466de8b0592849df",
+                "value": "83"
+              },
+              "type": {
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
               }
             }
           }
         }
       ]
+    },
+    "owned_by_b": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 1,
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xd41dc489aa9cb88f0fd03b478e2185585acdc62e452b533cbb9733dc6e9c9389",
+                "balance": {
+                  "value": "300000000000000"
+                }
+              },
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+              }
+            }
+          },
+          {
+            "version": 5,
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xfe965a0c18f5cb4b1dbe5a982a12ac7ce17fbae1a9b3b7ee474232fd464d2a04",
+                "value": "438"
+              },
+              "type": {
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
+              }
+            }
+          },
+          {
+            "version": 4,
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xffb8fcef6b804e51b3ac9d1d3f789472ed397e764e74c1132ca271e4ac14b4b6",
+                "value": "245"
+              },
+              "type": {
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
+              }
+            }
+          },
+          {
+            "version": 3,
+            "owner": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            },
+            "contents": {
+              "json": {
+                "id": "0xffe237fc32ab9a718a6c50c761074cbbde5fb691394e147c466de8b0592849df",
+                "value": "83"
+              },
+              "type": {
+                "repr": "0xbb23730728f32620f18fca1a0b54b8c3dcbad08bee7008e9715a4a321500204f::M1::Object"
+              }
+            }
+          }
+        ]
+      }
     }
   }
 }
