@@ -35,7 +35,7 @@ use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::apis::ReadApi;
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{ObjectID, TxContext, TxContextKind},
     move_package::MovePackage,
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -640,6 +640,13 @@ impl<'a> PTBBuilder<'a> {
         let function_signature = module.function_handle_at(fdef.function);
         let parameters = &module.signature_at(function_signature.parameters).0;
         let view = BinaryIndexedView::Module(&module);
+        let parameters: Vec<_> = module
+            .signature_at(function_signature.parameters)
+            .0
+            .clone()
+            .into_iter()
+            .filter(|tok| matches!(TxContext::kind(&view, tok), TxContextKind::None))
+            .collect();
 
         if parameters.len() != args.len() {
             let loc = if args.is_empty() {
