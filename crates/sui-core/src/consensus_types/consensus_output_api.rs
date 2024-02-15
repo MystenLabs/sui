@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use std::fmt::Display;
+
 use consensus_core::BlockAPI;
 use fastcrypto::hash::Hash;
 use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutputDigest, HeaderAPI, SystemMessage};
-use std::fmt::Display;
-use sui_types::digests::ConsensusCommitDigest;
-use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
+use sui_types::{
+    digests::ConsensusCommitDigest,
+    messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
+};
 
 use crate::consensus_types::AuthorityIndex;
 
@@ -42,7 +45,7 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
                 .reputation_score
                 .authorities_by_score_desc()
                 .into_iter()
-                .map(|(id, score)| (id.0, score))
+                .map(|(id, score)| (id.0 as AuthorityIndex, score))
                 .collect(),
         )
     }
@@ -52,7 +55,7 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
     }
 
     fn leader_author_index(&self) -> AuthorityIndex {
-        self.sub_dag.leader.origin().0
+        self.sub_dag.leader.origin().0 as AuthorityIndex
     }
 
     fn commit_timestamp_ms(&self) -> u64 {
@@ -101,7 +104,7 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
                         (serialized_transaction.as_ref(), transaction)
                     })
                 })).collect();
-                (cert.origin().0, transactions)
+                (cert.origin().0 as AuthorityIndex, transactions)
             }).collect()
     }
 
@@ -124,7 +127,7 @@ impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
     }
 
     fn leader_author_index(&self) -> AuthorityIndex {
-        self.leader.author.value() as u16
+        self.leader.author.value() as AuthorityIndex
     }
 
     fn commit_timestamp_ms(&self) -> u64 {
@@ -141,7 +144,7 @@ impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
             .iter()
             .map(|block| {
                 let round = block.round();
-                let author = block.author().value() as u16;
+                let author = block.author().value() as AuthorityIndex;
                 let transactions: Vec<_> = block
                     .transactions()
                     .iter()

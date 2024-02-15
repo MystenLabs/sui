@@ -157,11 +157,10 @@ impl CommitObserver {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use parking_lot::RwLock;
     use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
+    use super::*;
     use crate::{
         block::BlockRef,
         commit::DEFAULT_WAVE_LENGTH,
@@ -184,7 +183,6 @@ mod tests {
         )));
         let leader_schedule = LeaderSchedule::new(context.clone());
         let last_processed_index = 0;
-        #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
         let (sender, mut receiver) = unbounded_channel();
 
         let mut observer = CommitObserver::new(
@@ -271,7 +269,6 @@ mod tests {
         )));
         let leader_schedule = LeaderSchedule::new(context.clone());
         let last_processed_index = 0;
-        #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
         let (sender, mut receiver) = unbounded_channel();
 
         let mut observer = CommitObserver::new(
@@ -396,7 +393,6 @@ mod tests {
         )));
         let leader_schedule = LeaderSchedule::new(context.clone());
         let last_processed_index = 0;
-        #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
         let (sender, mut receiver) = unbounded_channel();
 
         let mut observer = CommitObserver::new(

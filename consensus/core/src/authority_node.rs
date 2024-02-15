@@ -30,6 +30,7 @@ use crate::{
     CommitConsumer,
 };
 
+// This type is used by Sui as part of starting consensus via  MysticetiManager.
 pub type ConsensusAuthority = AuthorityNode<AnemoManager>;
 
 pub struct AuthorityNode<N>
@@ -213,8 +214,6 @@ impl NetworkService for AuthorityService {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use std::sync::Arc;
 
     use consensus_config::{local_committee_and_keys, NetworkKeyPair, Parameters, ProtocolKeyPair};
@@ -224,6 +223,7 @@ mod tests {
     use tempfile::TempDir;
     use tokio::sync::mpsc::unbounded_channel;
 
+    use super::*;
     use crate::transaction::NoopTransactionVerifier;
 
     #[tokio::test]
@@ -242,7 +242,6 @@ mod tests {
         let protocol_keypair = ProtocolKeyPair::from_bytes(keypairs[0].1.as_bytes()).unwrap();
         let network_keypair = NetworkKeyPair::from_bytes(keypairs[0].0.as_bytes()).unwrap();
 
-        #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
         let (sender, _receiver) = unbounded_channel();
         let commit_consumer = CommitConsumer::new(
             sender, 0, // last_processed_index

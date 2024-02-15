@@ -6,8 +6,7 @@ use std::{collections::HashSet, fmt::Debug, sync::Arc, thread};
 use async_trait::async_trait;
 use mysten_metrics::{metered_channel, monitored_scope};
 use thiserror::Error;
-use tokio::sync::oneshot;
-use tokio::sync::oneshot::error::RecvError;
+use tokio::sync::{oneshot, oneshot::error::RecvError};
 use tracing::warn;
 
 use crate::{
@@ -168,13 +167,15 @@ mod test {
     use tokio::sync::mpsc::unbounded_channel;
 
     use super::*;
-    use crate::block_manager::BlockManager;
-    use crate::commit_observer::CommitObserver;
-    use crate::context::Context;
-    use crate::core::CoreSignals;
-    use crate::dag_state::DagState;
-    use crate::storage::mem_store::MemStore;
-    use crate::transaction::{TransactionClient, TransactionConsumer};
+    use crate::{
+        block_manager::BlockManager,
+        commit_observer::CommitObserver,
+        context::Context,
+        core::CoreSignals,
+        dag_state::DagState,
+        storage::mem_store::MemStore,
+        transaction::{TransactionClient, TransactionConsumer},
+    };
 
     #[tokio::test]
     async fn test_core_thread() {
@@ -187,7 +188,6 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
 
-        #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
             context.clone(),

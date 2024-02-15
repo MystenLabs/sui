@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::Arc,
+};
 
 use consensus_config::{AuthorityIndex, ProtocolKeyPair};
 use mysten_metrics::monitored_scope;
@@ -437,8 +439,7 @@ impl CoreSignalsReceivers {
 
 #[cfg(test)]
 mod test {
-    use std::collections::BTreeSet;
-    use std::time::Duration;
+    use std::{collections::BTreeSet, time::Duration};
 
     use consensus_config::{local_committee_and_keys, Stake};
     use parking_lot::RwLock;
@@ -446,10 +447,10 @@ mod test {
     use tokio::sync::mpsc::unbounded_channel;
 
     use super::*;
-    use crate::block::TestBlock;
-    use crate::dag_state::DagState;
-    use crate::storage::mem_store::MemStore;
-    use crate::transaction::TransactionClient;
+    use crate::{
+        block::TestBlock, dag_state::DagState, storage::mem_store::MemStore,
+        transaction::TransactionClient,
+    };
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
     #[tokio::test]
@@ -462,7 +463,6 @@ mod test {
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
-        #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
             context.clone(),
@@ -533,7 +533,6 @@ mod test {
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
-        #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
             context.clone(),
@@ -621,7 +620,6 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
 
-        #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
             context.clone(),
@@ -707,7 +705,6 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
 
-        #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
             context.clone(),
@@ -927,7 +924,6 @@ mod test {
             let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
             let (signals, signal_receivers) = CoreSignals::new();
 
-            #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
             let (sender, _receiver) = unbounded_channel();
             let commit_observer = CommitObserver::new(
                 context.clone(),

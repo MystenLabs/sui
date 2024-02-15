@@ -1,19 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{sync::Arc, time::Duration};
+
 use arc_swap::{ArcSwapOption, Guard};
 use consensus_core::TransactionClient;
-use std::sync::Arc;
-use std::time::Duration;
-
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::{
+    error::{SuiError, SuiResult},
+    messages_consensus::ConsensusTransaction,
+};
 use tap::prelude::*;
 use tokio::time::{sleep, timeout};
-
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::consensus_adapter::SubmitToConsensus;
-use sui_types::messages_consensus::ConsensusTransaction;
 use tracing::warn;
+
+use crate::{
+    authority::authority_per_epoch_store::AuthorityPerEpochStore,
+    consensus_adapter::SubmitToConsensus,
+};
 
 /// Basically a wrapper struct that reads from the LOCAL_MYSTICETI_CLIENT variable where the latest
 /// MysticetiClient is stored in order to communicate with Mysticeti. The LazyMysticetiClient is considered
@@ -79,7 +82,6 @@ impl SubmitToConsensus for LazyMysticetiClient {
         // Mysticeti shuts down, so there should be no correctness issue.
         let client = self.get().await;
         let tx_bytes = bcs::to_bytes(&transaction).expect("Serialization should not fail.");
-        // TODO(mysticeti): convert consensus::ClientError -> SuiError properly
         client
             .as_ref()
             .expect("Client should always be returned")

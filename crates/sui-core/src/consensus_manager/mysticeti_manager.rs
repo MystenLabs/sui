@@ -102,6 +102,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             return;
         };
 
+        // TODO(mysticeti): Fill in the other fields
         let parameters = Parameters {
             db_path: Some(self.get_store_path(epoch)),
             ..Default::default()
