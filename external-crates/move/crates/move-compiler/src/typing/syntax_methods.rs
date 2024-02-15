@@ -30,7 +30,7 @@ pub fn validate_syntax_methods(
         if let Some(index) = &mut entry.index {
             let IndexSyntaxMethods { index, index_mut } = &mut **index;
             if let (Some(index_defn), Some(index_mut_defn)) = (index.as_ref(), index_mut.as_ref()) {
-                if !validate_index_syntax_methods(context, &index_defn, &index_mut_defn) {
+                if !validate_index_syntax_methods(context, index_defn, index_mut_defn) {
                     // If we didn't validate they wre comptaible, we remove the mut one to avoid more
                     // typing issues later.
                     assert!(context.env.has_errors());
@@ -108,14 +108,9 @@ fn validate_index_syntax_methods(
 
     let mut subst = core::Subst::empty();
 
-    let index_ty = core::make_function_type(context, index_ann_loc, &index_module, &index_fn, None);
-    let index_mut_ty = core::make_function_type(
-        context,
-        index_ann_loc,
-        &index_mut_module,
-        &index_mut_fn,
-        None,
-    );
+    let index_ty = core::make_function_type(context, index_ann_loc, index_module, index_fn, None);
+    let index_mut_ty =
+        core::make_function_type(context, index_ann_loc, index_mut_module, index_mut_fn, None);
 
     for (ndx, (index_tyarg, index_mut_tyarg)) in index_ty
         .ty_args
@@ -211,9 +206,7 @@ fn validate_index_syntax_methods(
                 (index_type.loc, index_msg),
                 (mut_type.loc, mut_msg)
             );
-            diag.add_note(
-                "Index operation non-subject parameter types must match exactly",
-            );
+            diag.add_note("Index operation non-subject parameter types must match exactly");
             context.env.add_diag(diag);
             valid = false;
         }

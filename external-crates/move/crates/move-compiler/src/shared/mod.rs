@@ -170,6 +170,12 @@ pub struct NamedAddressMapIndex(usize);
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NamedAddressMaps(Vec<NamedAddressMap>);
 
+impl Default for NamedAddressMaps {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NamedAddressMaps {
     pub fn new() -> Self {
         Self(vec![])

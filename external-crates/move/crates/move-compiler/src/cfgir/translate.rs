@@ -449,7 +449,7 @@ fn constant_(
     let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
     context.clear_block_state();
 
-    let binfo = block_info.iter().map(|(lbl, info)| (lbl, info));
+    let binfo = block_info.iter().map(destructure_tuple);
     let (mut cfg, infinite_loop_starts, errors) = MutForwardCFG::new(start, &mut blocks, binfo);
     assert!(infinite_loop_starts.is_empty(), "{}", ICE_MSG);
     assert!(errors.is_empty(), "{}", ICE_MSG);
@@ -611,7 +611,7 @@ fn function_body(
             let blocks = block(context, body);
             let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
             context.clear_block_state();
-            let binfo = block_info.iter().map(|(lbl, info)| (lbl, info));
+            let binfo = block_info.iter().map(destructure_tuple);
 
             let (mut cfg, infinite_loop_starts, diags) =
                 MutForwardCFG::new(start, &mut blocks, binfo);
@@ -894,6 +894,11 @@ fn with_last(mut block: H::Block, sp!(loc, cmd): H::Command) -> H::Block {
 
 fn make_jump(loc: Loc, target: Label, from_user: bool) -> H::Command {
     sp(loc, H::Command_::Jump { target, from_user })
+}
+
+// Added to dodge a clippy complaint
+fn destructure_tuple<T, U>((fst, snd): &(T, U)) -> (&T, &U) {
+    (fst, snd)
 }
 
 //**************************************************************************************************

@@ -122,7 +122,7 @@ pub struct IndexSyntaxMethods {
     pub index: Option<Box<SyntaxMethod>>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct SyntaxMethodEntry {
     pub index: Option<Box<IndexSyntaxMethods>>,
 }
@@ -497,11 +497,11 @@ impl IndexSyntaxMethods {
         // We prefer `index` over `index_mut` because its type is subject and return type are higher
         // in the subtyping lattice.
         if let Some(index) = &self.index {
-            Some(index.target_function.clone())
-        } else if let Some(index_mut) = &self.index_mut {
-            Some(index_mut.target_function.clone())
+            Some(index.target_function)
         } else {
-            None
+            self.index_mut
+                .as_ref()
+                .map(|index_mut| index_mut.target_function)
         }
     }
 }
@@ -517,7 +517,7 @@ impl SyntaxMethodEntry {
         }
     }
 
-    fn index_entry<'entry>(&'entry mut self) -> &'entry mut IndexSyntaxMethods {
+    fn index_entry(&mut self) -> &mut IndexSyntaxMethods {
         if self.index.is_none() {
             let new_index_syntax_method = IndexSyntaxMethods {
                 index: None,
@@ -526,12 +526,6 @@ impl SyntaxMethodEntry {
             self.index = Some(Box::new(new_index_syntax_method));
         }
         self.index.as_mut().unwrap()
-    }
-}
-
-impl Default for SyntaxMethodEntry {
-    fn default() -> Self {
-        SyntaxMethodEntry { index: None }
     }
 }
 
@@ -1071,8 +1065,12 @@ impl AstDebug for (&TypeName, &SyntaxMethodEntry) {
         let SyntaxMethodEntry { index } = methods;
         if let Some(index) = &index {
             let IndexSyntaxMethods { index_mut, index } = &**index;
-            index.as_ref().map(|index| index.ast_debug(w));
-            index_mut.as_ref().map(|index_mut| index_mut.ast_debug(w));
+            if let Some(index) = index.as_ref() {
+                index.ast_debug(w)
+            }
+            if let Some(index_mut) = index_mut.as_ref() {
+                index_mut.ast_debug(w)
+            }
         }
     }
 }

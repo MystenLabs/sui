@@ -2903,7 +2903,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         },
 
         pdotted_ @ PE::Index(_, _) => {
-            let cur_pkg = context.current_package.clone();
+            let cur_pkg = context.current_package;
             let supports_paths = context
                 .env()
                 .supports_feature(cur_pkg, FeatureGate::Move2024Paths);
@@ -3068,7 +3068,7 @@ fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpD
             EE::Dot(lhs, field)
         }
         PE::Index(plhs, sp!(argloc, args)) => {
-            let cur_pkg = context.current_package.clone();
+            let cur_pkg = context.current_package;
             context
                 .env()
                 .check_feature(cur_pkg, FeatureGate::Move2024Paths, loc);

@@ -985,16 +985,14 @@ pub fn typing_error<T: ToString, F: FnOnce() -> T>(
             let loc2 = core::best_loc(subst, &t2);
             let t1_str = core::error_format(&t1, subst);
             let t2_str = core::error_format(&t2, subst);
-            let m1 =
-                format!(
-                    "Given: {}",
-                    t1_str
-                );
-            let m2 =                 format!(
-                    "Found: {}. This is not the same type.",
-                    t2_str
-                );
-            let mut diag = diag!(TypeSafety::InvariantError, (loc, msg), (loc1, m1), (loc2, m2));
+            let m1 = format!("Given: {}", t1_str);
+            let m2 = format!("Found: {}. This is not the same type.", t2_str);
+            let mut diag = diag!(
+                TypeSafety::InvariantError,
+                (loc, msg),
+                (loc1, m1),
+                (loc2, m2)
+            );
             diag.add_note("These types must match exactly");
             diag
         }
@@ -1143,7 +1141,6 @@ fn invariant<T: ToString, F: FnOnce() -> T>(
         Ok(t) => t,
     }
 }
-
 
 //**************************************************************************************************
 // Expressions
@@ -2092,7 +2089,7 @@ fn find_index_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<IndexSy
     use Type_ as T;
     const UNINFERRED_MSG: &str =
         "Could not infer the type before index access. Try annotating here";
-    let ty_str = core::error_format(&ty, &context.subst);
+    let ty_str = core::error_format(ty, &context.subst);
     let msg = || {
         format!(
             "No valid '{}({})' method found for {}",
@@ -2140,7 +2137,7 @@ fn find_index_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<IndexSy
         t => {
             let smsg = format!(
                 "Expected a struct or builtin type but got: {}",
-                core::error_format(&t, &context.subst)
+                core::error_format(t, &context.subst)
             );
             context.env.add_diag(diag!(
                 TypeSafety::ExpectedSpecificType,
@@ -2263,13 +2260,13 @@ fn process_exp_dotted(
                 }
             }
             let accessors = vec![];
-            return ExpDotted {
+            ExpDotted {
                 loc: dloc,
                 base,
                 base_kind,
                 base_type,
                 accessors,
-            };
+            }
         }
         N::ExpDotted_::Dot(ndot, field) => {
             let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
@@ -2345,7 +2342,6 @@ fn exp_dotted_expression(
     }
     resolve_exp_dotted(context, usage, eloc, edotted)
 }
-
 
 // This comment servees to document the function below. Depending on the shape of the dotted
 // expression and the usage requested, we might do significantly different things with the base
@@ -2460,7 +2456,7 @@ fn resolve_exp_dotted(
                     }
                 }
             } else {
-                exp_dotted_to_owned(context, usage.clone(), edotted)
+                exp_dotted_to_owned(context, usage, edotted)
             };
             if !matches!(copy_exp.exp.value, TE::UnresolvedError) {
                 context.add_ability_constraint(
@@ -2582,17 +2578,15 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
                         exp = make_error_exp(context, index_loc);
                         break;
                     }
+                } else if let Some(index) = index_methods.index {
+                    index.target_function
                 } else {
-                    if let Some(index) = index_methods.index {
-                        index.target_function
-                    } else {
-                        let msg = "Could not find an immutable index 'syntax' method";
-                        context
-                            .env
-                            .add_diag(diag!(Declarations::MissingSyntaxMethod, (index_loc, msg),));
-                        exp = make_error_exp(context, index_loc);
-                        break;
-                    }
+                    let msg = "Could not find an immutable index 'syntax' method";
+                    context
+                        .env
+                        .add_diag(diag!(Declarations::MissingSyntaxMethod, (index_loc, msg),));
+                    exp = make_error_exp(context, index_loc);
+                    break;
                 };
                 let sp!(argloc, mut args_) = args;
                 args_.insert(0, *exp);
@@ -2631,7 +2625,6 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
 //   -----------------------------------------
 //        E => Dereference(e)
 //
-
 
 fn exp_dotted_to_owned(context: &mut Context, usage: DottedUsage, ed: ExpDotted) -> Box<T::Exp> {
     use T::UnannotatedExp_ as TE;

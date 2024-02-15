@@ -46,7 +46,7 @@ pub(in crate::naming) fn resolve_syntax_attributes(
     let attr = function.attributes.get_(&SyntaxAttribute::Syntax.into())?;
     let attr_loc = attr.loc;
 
-    let syntax_method_prekinds = resolve_syntax_method_prekind(context.env, &attr)?;
+    let syntax_method_prekinds = resolve_syntax_method_prekind(context.env, attr)?;
 
     if !context.env.check_feature(
         context.current_package,
@@ -57,7 +57,7 @@ pub(in crate::naming) fn resolve_syntax_attributes(
     }
 
     let param_ty = get_first_type(context, &attr_loc, &function.signature)?;
-    let Some(type_name) = determine_subject_type_name(context, &module_name, &attr_loc, &param_ty)
+    let Some(type_name) = determine_subject_type_name(context, module_name, &attr_loc, &param_ty)
     else {
         assert!(context.env.has_errors());
         return None;
@@ -114,7 +114,7 @@ pub(in crate::naming) fn resolve_syntax_attributes(
         };
         let kind_loc: &mut Option<Box<SyntaxMethod>> = method_entry.lookup_kind_entry(&kind);
         if let Some(previous) = kind_loc {
-            prev_syntax_defn_error(context, &previous, kind, &type_name)
+            prev_syntax_defn_error(context, previous, kind, &type_name)
         } else {
             *kind_loc = Some(Box::new(new_syntax_method));
         }
@@ -176,8 +176,8 @@ fn resolve_syntax_method_prekind(
                     Attribute_::Name(name) => {
                         if let Some(kind) = attr_param_from_str(*argloc, name.value.as_str()) {
                             if let Some(prev_kind) = kinds.replace(kind) {
-                                let msg = format!("Repeated syntax method identifier");
-                                let prev = format!("Initially defined here");
+                                let msg = "Repeated syntax method identifier".to_string();
+                                let prev = "Initially defined here".to_string();
                                 env.add_diag(diag!(
                                     Declarations::InvalidAttribute,
                                     (loc, msg),
@@ -185,12 +185,9 @@ fn resolve_syntax_method_prekind(
                                 ));
                             }
                         } else {
-                        let msg = format!(
-                            "Invalid syntax method identifier '{}'",
-                            name
-                        );
-                        env.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
-                    }
+                            let msg = format!("Invalid syntax method identifier '{}'", name);
+                            env.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+                        }
                     }
                     Attribute_::Assigned(n, _) => {
                         let msg = format!(
@@ -373,7 +370,7 @@ fn valid_return_type(
     ty: &N::Type,
 ) -> bool {
     match kind_ {
-        SyntaxMethodKind_::Index if valid_imm_ref(ty) => valid_index_return_type(context, &loc, ty),
+        SyntaxMethodKind_::Index if valid_imm_ref(ty) => valid_index_return_type(context, loc, ty),
         SyntaxMethodKind_::Index if valid_mut_ref(ty) => {
             let msg = format!("Invalid {} annotation", SyntaxAttribute::SYNTAX);
             let tmsg =
@@ -400,7 +397,7 @@ fn valid_return_type(
         }
 
         SyntaxMethodKind_::IndexMut if valid_mut_ref(ty) => {
-            let ret_ty = valid_index_return_type(context, &loc, ty);
+            let ret_ty = valid_index_return_type(context, loc, ty);
             println!("valid ret type: {ret_ty}");
             ret_ty
         }
@@ -508,7 +505,7 @@ fn get_first_type(
     attr_loc: &Loc,
     fn_signature: &N::FunctionSignature,
 ) -> Option<N::Type> {
-    if let Some((_, _, ty)) = fn_signature.parameters.get(0) {
+    if let Some((_, _, ty)) = fn_signature.parameters.first() {
         Some(ty.clone())
     } else {
         let msg = format!(

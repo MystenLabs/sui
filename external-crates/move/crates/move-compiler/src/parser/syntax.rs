@@ -1940,8 +1940,8 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
             }
             Tok::LBracket => {
                 let index_args = parse_index_args(context)?;
-                let exp = Exp_::Index(Box::new(lhs), index_args);
-                exp
+
+                Exp_::Index(Box::new(lhs), index_args)
             }
             _ => break,
         };

@@ -1987,11 +1987,12 @@ fn join_impl(
                     let loc = if !*mut1 && *mut2 { *loc1 } else { *loc2 };
                     (loc, *mut1 && *mut2)
                 }
-                (Invariant, mut1, mut2) if mut1 == mut2 => {
-                    (*loc1, *mut1)
-                }
+                (Invariant, mut1, mut2) if mut1 == mut2 => (*loc1, *mut1),
                 (Invariant, _mut1, _mut2) => {
-                    return Err(TypingError::InvariantError(Box::new(lhs.clone()), Box::new(rhs.clone())))
+                    return Err(TypingError::InvariantError(
+                        Box::new(lhs.clone()),
+                        Box::new(rhs.clone()),
+                    ))
                 }
                 // imm <: imm
                 // mut <: imm
