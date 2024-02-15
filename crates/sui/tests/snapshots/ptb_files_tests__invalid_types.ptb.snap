@@ -33,70 +33,70 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ assign a 0xfffu8 
    ·          ───┬───
-   ·             ╰── Failed to parse arguments for 'assign' command. number too large to fit in target type
+   ·             ╰── number too large to fit in target type
    ╰────
 
   × Error at command 1 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
    ╭────
  1 │ assign b 0xffffffffu16 
    ·          ──────┬──────
-   ·                ╰── Failed to parse arguments for 'assign' command. number too large to fit in target type
+   ·                ╰── number too large to fit in target type
    ╰────
 
   × Error at command 2 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
    ╭────
  1 │ assign c 0xfffffffffffffu32 
    ·          ─────────┬────────
-   ·                   ╰── Failed to parse arguments for 'assign' command. number too large to fit in target type
+   ·                   ╰── number too large to fit in target type
    ╰────
 
   × Error at command 3 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
    ╭────
  1 │ assign d 0xffffffffffffffffffffffffffffffu64 
    ·          ─────────────────┬─────────────────
-   ·                           ╰── Failed to parse arguments for 'assign' command. number too large to fit in target type
+   ·                           ╰── number too large to fit in target type
    ╰────
 
   × Error at command 4 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
    ╭────
  1 │ assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 
    ·          ────────────────────────────────┬───────────────────────────────
-   ·                                          ╰── Failed to parse arguments for 'assign' command. number too large to fit in target type
+   ·                                          ╰── number too large to fit in target type
    ╰────
 
   × Error at command 5 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
    ╭────
  1 │ assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 
    ·          ───────────────────────────────────────────┬──────────────────────────────────────────
-   ·                                                     ╰── Failed to parse arguments for 'assign' command. Invalid string length
+   ·                                                     ╰── Invalid string length
    ╰────
 
   × Error at command 6 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
    ╭────
  1 │ make_move_vec <string> ['foo'] 
    ·               ────┬───
-   ·                   ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ·                   ╰── expected token ::, got >
    ╰────
 
   × Error at command 7 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
    ╭────
  1 │ make_move_vec <String> ['foo'] 
    ·               ────┬───
-   ·                   ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ·                   ╰── expected token ::, got >
    ╰────
 
   × Error at command 8 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
    ╭────
  1 │ make_move_vec <Bool> [true, false] 
    ·               ───┬──
-   ·                  ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ·                  ╰── expected token ::, got >
    ╰────
 
   × Error at command 9 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
    ╭────
  1 │ make_move_vec <i8> [0] 
    ·               ──┬─
-   ·                 ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ·                 ╰── expected token ::, got >
    ╰────
 
   × Error at command 10 in PTB file 'tests/ptb_files/parsing/
@@ -104,7 +104,7 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ make_move_vec <i16> [0] 
    ·               ──┬──
-   ·                 ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ·                 ╰── expected token ::, got >
    ╰────
 
   × Error at command 11 in PTB file 'tests/ptb_files/parsing/
@@ -112,7 +112,7 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ make_move_vec <i32> [0] 
    ·               ──┬──
-   ·                 ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ·                 ╰── expected token ::, got >
    ╰────
 
   × Error at command 12 in PTB file 'tests/ptb_files/parsing/
@@ -120,7 +120,7 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ make_move_vec <i64> [0] 
    ·               ──┬──
-   ·                 ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ·                 ╰── expected token ::, got >
    ╰────
 
   × Error at command 13 in PTB file 'tests/ptb_files/parsing/
@@ -128,7 +128,7 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ make_move_vec <i128> [0] 
    ·               ───┬──
-   ·                  ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ·                  ╰── expected token ::, got >
    ╰────
 
   × Error at command 14 in PTB file 'tests/ptb_files/parsing/
@@ -136,7 +136,7 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ make_move_vec <i256> [0] 
    ·               ───┬──
-   ·                  ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ·                  ╰── expected token ::, got >
    ╰────
 
   × Error at command 15 in PTB file 'tests/ptb_files/parsing/
@@ -144,7 +144,7 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ make_move_vec <Vector<u8>> [vector[0]] 
    ·               ──────┬─────
-   ·                     ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got <
+   ·                     ╰── expected token ::, got <
    ╰────
 
   × Error at command 16 in PTB file 'tests/ptb_files/parsing/
@@ -152,7 +152,7 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ make_move_vec <vector<U256>> [vector[0]] 
    ·               ───────┬──────
-   ·                      ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ·                      ╰── expected token ::, got >
    ╰────
 
   × Error at command 17 in PTB file 'tests/ptb_files/parsing/
@@ -160,6 +160,6 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ make_move_vec <vector<i256>> [vector[0]] 
    ·               ───────┬──────
-   ·                      ╰── Failed to parse arguments for 'make_move_vec' command. expected token ::, got >
+   ·                      ╰── expected token ::, got >
    ╰────
 

@@ -17,27 +17,13 @@ expression: "results.join(\"\\n\")"
 │ make_move_vec │ tests/ptb_files/make_move_vec/make_move_vec_invalid_args.ptb │ <u64> 10       │
 │ preview       │ console                                                      │ true           │
 ╰───────────────┴──────────────────────────────────────────────────────────────┴────────────────╯
- === PARSED INPUT COMMANDS === 
-cmd: file-include-start, value: ["\"tests/ptb_files/make_move_vec/make_move_vec_invalid_args.ptb\""]
-cmd: gas_budget, value: ["10000000u64"]
-cmd: make_move_vec, value: ["[100u64]"]
-cmd: make_move_vec, value: ["<>", "[100u64]"]
-cmd: make_move_vec, value: ["<u64>"]
-cmd: make_move_vec, value: ["<u64, bool>", "[]"]
-cmd: make_move_vec, value: ["u64", "[]"]
-cmd: make_move_vec, value: ["<u64>", "10u64"]
-cmd: preview, value: ["false"]
-cmd: warn_shadows, value: ["false"]
-cmd: file-include-end, value: ["\"tests/ptb_files/make_move_vec/make_move_vec_invalid_args.ptb\""]
-cmd: preview, value: ["true"]
-cmd: warn_shadows, value: ["false"]
- === BUILDING PTB ERRORS === 
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error at command 1 in PTB file 'tests/ptb_files/make_move_vec/
   │ make_move_vec_invalid_args.ptb'
    ╭────
  1 │ make_move_vec [100] 
    · ──────┬──────
-   ·       ╰── Expected 2 arguments but got 1
+   ·       ╰── Invalid number of arguments: 'make_move_vec' expected 2 arguments but got 1
    ╰────
 
   × Error at command 2 in PTB file 'tests/ptb_files/make_move_vec/
@@ -45,7 +31,7 @@ cmd: warn_shadows, value: ["false"]
    ╭────
  1 │ make_move_vec <> [100] 
    ·               ─┬
-   ·                ╰── Expected 1 type argument but got 0
+   ·                ╰── Expected a single type argument
    ╰────
 
   × Error at command 3 in PTB file 'tests/ptb_files/make_move_vec/
@@ -53,7 +39,7 @@ cmd: warn_shadows, value: ["false"]
    ╭────
  1 │ make_move_vec <u64> 
    · ──────┬──────
-   ·       ╰── Expected 2 arguments but got 1
+   ·       ╰── Invalid number of arguments: 'make_move_vec' expected 2 arguments but got 1
    ╰────
 
   × Error at command 4 in PTB file 'tests/ptb_files/make_move_vec/
@@ -61,7 +47,7 @@ cmd: warn_shadows, value: ["false"]
    ╭────
  1 │ make_move_vec <u64, bool> [] 
    ·               ─────┬─────
-   ·                    ╰── Expected 1 type argument but got 2
+   ·                    ╰── Expected a single type argument
    ╰────
 
   × Error at command 5 in PTB file 'tests/ptb_files/make_move_vec/
@@ -69,7 +55,7 @@ cmd: warn_shadows, value: ["false"]
    ╭────
  1 │ make_move_vec u64 [] 
    ·               ─┬─
-   ·                ╰── Expected type argument
+   ·                ╰── expected token '<...>', but got '[ident]'
    ╰────
 
   × Error at command 6 in PTB file 'tests/ptb_files/make_move_vec/
@@ -77,6 +63,6 @@ cmd: warn_shadows, value: ["false"]
    ╭────
  1 │ make_move_vec <u64> 10 
    ·                     ─┬
-   ·                      ╰── Expected an array
+   ·                      ╰── expected token '[', but got '[number]'
    ╰────
 

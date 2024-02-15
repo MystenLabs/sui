@@ -20,13 +20,27 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ assign some @0x1 
    ·            ▲
-   ·            ╰── Failed to parse arguments for 'assign' command. unexpected end of tokens
+   ·            ╰── unexpected end of tokens
    ╰────
 
   × Error at command 1 in PTB file 'tests/ptb_files/parsing/keywords.ptb'
    ╭────
  1 │ assign vector @0x1 
    ·              ▲
-   ·              ╰── Failed to parse arguments for 'assign' command. unexpected end of tokens
+   ·              ╰── unexpected end of tokens
+   ╰────
+
+  × Error at command 2 in PTB file 'tests/ptb_files/parsing/keywords.ptb'
+   ╭────
+ 1 │ assign none @0x1 
+   ·        ──┬─
+   ·          ╰── Expected variable binding
+   ╰────
+
+  × Error at command 3 in PTB file 'tests/ptb_files/parsing/keywords.ptb'
+   ╭────
+ 1 │ assign gas @0x1 
+   ·        ─┬─
+   ·         ╰── Expected variable binding
    ╰────
 

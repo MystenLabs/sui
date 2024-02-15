@@ -100,6 +100,16 @@ pub struct Spanned<T: Debug + Clone + PartialEq + Eq> {
     pub value: T,
 }
 
+impl<T: Debug + Clone + PartialEq + Eq> Spanned<T> {
+    pub fn map<U: Debug + Clone + PartialEq + Eq, F: FnOnce(T) -> U>(self, f: F) -> Spanned<U> {
+        let Spanned { span, value } = self;
+        Spanned {
+            span,
+            value: f(value),
+        }
+    }
+}
+
 impl PTBError {
     /// Add a help message to an error.
     pub fn with_help(self, help: String) -> Self {

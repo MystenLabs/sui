@@ -73,13 +73,8 @@ async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 
     results.push(" === PARSED INPUT COMMANDS === ".to_string());
 
-    for c in &parsed {
-        let values = c
-            .args
-            .iter()
-            .map(|x| x.value.to_string())
-            .collect::<Vec<_>>();
-        results.push(format!("cmd: {}, value: {:?}", c.name.value, values));
+    for (_, c) in &parsed {
+        results.push(format!("cmd: {:?}", c));
     }
 
     // === BUILD PTB ===

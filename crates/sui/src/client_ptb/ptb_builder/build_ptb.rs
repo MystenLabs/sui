@@ -6,11 +6,9 @@ use crate::{
     client_commands::{compile_package, upgrade_package},
     client_ptb::ptb_builder::{
         argument::Argument as PTBArg,
-        command_token::{
-            CommandToken, ASSIGN, GAS_BUDGET, MOVE_CALL, PICK_GAS_BUDGET, PUBLISH, UPGRADE,
-        },
+        command::{GasPicker, ModuleAccess as PTBModuleAccess, ParsedPTBCommand},
+        command_token::{ASSIGN, GAS_BUDGET, PICK_GAS_BUDGET},
         errors::{span, PTBError, PTBResult, Span, Spanned},
-        parse_ptb::ParsedPTBCommand,
         utils::{display_did_you_mean, find_did_you_means, to_ordinal_contraction},
     },
     err, error, sp,
@@ -50,13 +48,6 @@ use sui_types::{
 struct GasBudget {
     gas_budgets: Vec<Spanned<u64>>,
     picker: Vec<Spanned<GasPicker>>,
-}
-
-/// Types of gas pickers that can be used to pick a gas budget from a list of gas budgets.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum GasPicker {
-    Max,
-    Sum,
 }
 
 /// The type of error that can occur when dealing with gas budgets.
@@ -130,6 +121,7 @@ impl ToObject {
             is_receiving,
             // TODO: Make mutability decision be passed in from calling context.
             // For now we assume all uses of shared objects are mutable.
+            // TODO(tzakian): Actually fix this
             is_mut: true,
         }
     }
@@ -429,8 +421,8 @@ impl<'a> PTBBuilder<'a> {
 
     /// Add a single PTB command to the PTB that we are building up.
     /// Errors are added to the `errors` field of the PTBBuilder.
-    pub async fn handle_command(&mut self, command: ParsedPTBCommand) {
-        if let Err(e) = self.handle_command_(command).await {
+    pub async fn handle_command(&mut self, (span, command): (Span, ParsedPTBCommand)) {
+        if let Err(e) = self.handle_command_(span, command).await {
             self.errors.push(e);
         }
     }
@@ -638,7 +630,6 @@ impl<'a> PTBBuilder<'a> {
                 }
             })?;
         let function_signature = module.function_handle_at(fdef.function);
-        let parameters = &module.signature_at(function_signature.parameters).0;
         let view = BinaryIndexedView::Module(&module);
         let parameters: Vec<_> = module
             .signature_at(function_signature.parameters)
@@ -831,36 +822,6 @@ impl<'a> PTBBuilder<'a> {
                 }
                 None => error!(arg_loc, "Unresolved identifier: '{}'", i),
             },
-            // We should never hit these arguments in resolution -- they should be resolved
-            // higher-up. If we do encounter them here, then we error and provide a helpful message.
-            PTBArg::Array(arr) => {
-                let combined = arg_loc.union_with(arr.iter().map(|x| x.span));
-                error!(
-                    combined => help: {
-                        "This is invalid and most likely means that you nested an array inside \
-                        a value (e.g., inside an array, vector, or option)."
-                    },
-                    "Tried to resolve an array to a value."
-                );
-            }
-            PTBArg::ModuleAccess { .. } => {
-                error!(
-                    arg_loc => help: {
-                        "This is invalid and most likely means that you nested a function call inside \
-                        a value (e.g., inside an array, vector, or option)."
-                    },
-                    "Tried to resolve a module access to a value.",
-                );
-            }
-            PTBArg::TyArgs(..) => {
-                error!(
-                    arg_loc => help: {
-                        "This is invalid and most likely means that you have \
-                        your arguments to the command in an incorrect order."
-                    },
-                    "Tried to resolve a type arguments to a value."
-                );
-            }
         }
     }
 
@@ -895,25 +856,17 @@ impl<'a> PTBBuilder<'a> {
 
     /// Add a single PTB command to the PTB that we are building up. This is the workhorse of it
     /// all.
-    async fn handle_command_(&mut self, mut command: ParsedPTBCommand) -> PTBResult<()> {
-        let sp!(cmd_span, tok) = &command.name;
-        match tok {
-            CommandToken::TransferObjects => {
-                if command.args.len() != 2 {
-                    let sp = cmd_span.union_with(command.args.iter().map(|x| x.span));
-                    error!(sp, "Expected 2 arguments but got {}", command.args.len());
-                }
-                bind!(
-                    _,
-                    PTBArg::Array(obj_args) = command.args.pop().unwrap(),
-                    |loc| {
-                        error!(loc, "Expected array of objects");
-                    }
-                );
-                let to_address = command.args.pop().unwrap();
+    async fn handle_command_(
+        &mut self,
+        cmd_span: Span,
+        command: ParsedPTBCommand,
+    ) -> PTBResult<()> {
+        // let sp!(cmd_span, tok) = &command.name;
+        match command {
+            ParsedPTBCommand::TransferObjects(to_address, obj_args) => {
                 let to_arg = self.resolve(to_address, ToPure).await?;
                 let mut transfer_args = vec![];
-                for o in obj_args.into_iter() {
+                for o in obj_args.value.into_iter() {
                     let arg = self.resolve(o, ToObject::default()).await?;
                     transfer_args.push(arg);
                 }
@@ -922,14 +875,7 @@ impl<'a> PTBBuilder<'a> {
                         .command(Tx::Command::TransferObjects(transfer_args, to_arg)),
                 );
             }
-            CommandToken::Assign if command.args.len() == 1 => {
-                bind!(
-                    ident_loc,
-                    PTBArg::Identifier(i) = command.args.pop().unwrap(),
-                    |loc| {
-                        error!(loc, "expected identifier");
-                    }
-                );
+            ParsedPTBCommand::Assign(sp!(ident_loc, i), None) => {
                 let Some(prev_ptb_arg) = self.last_command.take() else {
                     error!(
                         ident_loc => help: {
@@ -943,54 +889,17 @@ impl<'a> PTBBuilder<'a> {
                 self.declare_identifier(i.clone(), ident_loc);
                 self.resolved_arguments.insert(i, prev_ptb_arg);
             }
-            CommandToken::Assign if command.args.len() == 2 => {
-                let arg_w_loc = command.args.pop().unwrap();
-                bind!(
-                    ident_loc,
-                    PTBArg::Identifier(i) = command.args.pop().unwrap(),
-                    |loc| {
-                        error!(loc, "Expected identifier");
-                    }
-                );
+            ParsedPTBCommand::Assign(sp!(ident_loc, i), Some(arg_w_loc)) => {
                 self.declare_identifier(i.clone(), ident_loc);
                 self.declare_possible_address_binding(i.clone(), &arg_w_loc);
                 self.arguments_to_resolve.insert(i, arg_w_loc);
             }
-            CommandToken::Assign => {
-                error!(*cmd_span, "Expected 1 or 2 arguments for assignment")
-            }
-            CommandToken::MakeMoveVec => {
-                if command.args.len() != 2 {
-                    let sp = cmd_span.union_with(command.args.iter().map(|x| x.span));
-                    error!(sp, "Expected 2 arguments but got {}", command.args.len());
-                }
-                bind!(
-                    _,
-                    PTBArg::Array(args) = command.args.pop().unwrap(),
-                    |loc| {
-                        error!(loc, "Expected an array");
-                    }
-                );
-                bind!(
-                    ty_locs,
-                    PTBArg::TyArgs(ty_args) = command.args.pop().unwrap(),
-                    |loc| {
-                        error!(loc, "Expected type argument");
-                    }
-                );
-                if ty_args.len() != 1 {
-                    error!(
-                        ty_locs,
-                        "Expected 1 type argument but got {}",
-                        ty_args.len()
-                    );
-                }
-                let ty_arg = ty_args[0]
-                    .clone()
+            ParsedPTBCommand::MakeMoveVec(sp!(ty_loc, ty_arg), sp!(_, args)) => {
+                let ty_arg = ty_arg
                     .into_type_tag(&resolve_address)
-                    .map_err(|e| err!(ty_locs, "{e}"))?;
+                    .map_err(|e| err!(ty_loc, "{e}"))?;
                 let mut vec_args: Vec<Tx::Argument> = vec![];
-                if is_pure(&ty_arg).map_err(|e| err!(ty_locs, "{e}"))? {
+                if is_pure(&ty_arg).map_err(|e| err!(ty_loc, "{e}"))? {
                     for arg in args.into_iter() {
                         let arg = self.resolve(arg, ToPure).await?;
                         vec_args.push(arg);
@@ -1006,22 +915,7 @@ impl<'a> PTBBuilder<'a> {
                     .command(Tx::Command::MakeMoveVec(Some(ty_arg), vec_args));
                 self.last_command = Some(res);
             }
-            CommandToken::SplitCoins => {
-                if command.args.len() != 2 {
-                    let sp = cmd_span.union_with(command.args.iter().map(|x| x.span));
-                    error!(sp, "Expected 2 arguments but got {}", command.args.len());
-                }
-
-                bind!(
-                    _,
-                    PTBArg::Array(amounts) = command.args.pop().unwrap(),
-                    |loc| {
-                        error!(loc, "Expected array of amounts");
-                    }
-                );
-
-                let pre_coin = command.args.pop().unwrap();
-
+            ParsedPTBCommand::SplitCoins(pre_coin, sp!(_, amounts)) => {
                 let coin = self.resolve(pre_coin, ToObject::default()).await?;
                 let mut args = vec![];
                 for arg in amounts.into_iter() {
@@ -1031,22 +925,7 @@ impl<'a> PTBBuilder<'a> {
                 let res = self.ptb.command(Tx::Command::SplitCoins(coin, args));
                 self.last_command = Some(res);
             }
-            CommandToken::MergeCoins => {
-                if command.args.len() != 2 {
-                    let sp = cmd_span.union_with(command.args.iter().map(|x| x.span));
-                    error!(sp, "Expected 2 arguments but got {}", command.args.len());
-                }
-
-                bind!(
-                    _,
-                    PTBArg::Array(coins) = command.args.pop().unwrap(),
-                    |loc| {
-                        error!(loc, "Expected array of coins");
-                    }
-                );
-
-                let pre_coin = command.args.pop().unwrap();
-
+            ParsedPTBCommand::MergeCoins(pre_coin, sp!(_, coins)) => {
                 let coin = self.resolve(pre_coin, ToObject::default()).await?;
                 let mut args = vec![];
                 for arg in coins.into_iter() {
@@ -1056,87 +935,35 @@ impl<'a> PTBBuilder<'a> {
                 let res = self.ptb.command(Tx::Command::MergeCoins(coin, args));
                 self.last_command = Some(res);
             }
-            CommandToken::PickGasBudget => {
-                bind!(
-                    ident_loc,
-                    PTBArg::Identifier(i) = command.args.pop().unwrap(),
-                    |loc| {
-                        error!(loc, "Expected identifier");
-                    }
-                );
-                let picker = match i.to_string().as_str() {
-                    "max" => GasPicker::Max,
-                    "sum" => GasPicker::Sum,
-                    x => error!(ident_loc, "Invalid gas picker: {}", x),
-                };
-                self.gas_budget.set_gas_picker(picker, ident_loc);
+            ParsedPTBCommand::PickGasBudget(sp!(loc, picker)) => {
+                self.gas_budget.set_gas_picker(picker, loc);
             }
-            CommandToken::GasBudget => {
-                bind!(
-                    budget_loc,
-                    PTBArg::U64(budget) = command.args.pop().unwrap(),
-                    |loc| {
-                        error!(loc, "Expected an integer as the gas budget");
-                    }
-                );
+            ParsedPTBCommand::GasBudget(sp!(budget_loc, budget)) => {
                 self.gas_budget.add_gas_budget(budget, budget_loc);
             }
-            CommandToken::File => {
-                error!(*cmd_span, "File commands should be removed at this point");
-            }
-            CommandToken::FileStart => {
-                assert!(command.args.len() == 1);
-                bind!(
-                    _fname_loc,
-                    PTBArg::String(_) = command.args.pop().unwrap(),
-                    |loc| {
-                        error!(loc, "Expected file name");
-                    }
-                );
-            }
-            CommandToken::FileEnd => {
-                assert!(command.args.len() == 1);
-                bind!(
-                    _fname_loc,
-                    PTBArg::String(_) = command.args.pop().unwrap(),
-                    |loc| {
-                        error!(loc, "Expected file name");
-                    }
-                );
-            }
-            CommandToken::MoveCall => {
-                if command.args.is_empty() {
-                    error!(*cmd_span, "Function not provided to {MOVE_CALL} command",);
-                }
-                let mut args = vec![];
-                let mut ty_args = vec![];
-                bind!(
+            ParsedPTBCommand::MoveCall(
+                sp!(
                     mod_access_loc,
-                    PTBArg::ModuleAccess {
+                    PTBModuleAccess {
                         address,
                         module_name,
                         function_name,
-                    } = command.args.remove(0),
-                    |loc| {
-                        error!(
-                            loc,
-                            "Expected module access/function for '{MOVE_CALL}' command here"
-                        );
                     }
-                );
+                ),
+                in_ty_args,
+                args,
+            ) => {
+                let mut ty_args = vec![];
 
-                for sp!(arg_loc, arg) in command.args.into_iter() {
-                    if let PTBArg::TyArgs(targs) = arg {
-                        for t in targs.into_iter() {
-                            ty_args.push(
-                                t.into_type_tag(&resolve_address)
-                                    .map_err(|e| err!(arg_loc, "{e}"))?,
-                            )
-                        }
-                    } else {
-                        args.push(span(arg_loc, arg));
+                if let Some(sp!(ty_loc, in_ty_args)) = in_ty_args {
+                    for t in in_ty_args.into_iter() {
+                        ty_args.push(
+                            t.into_type_tag(&resolve_address)
+                                .map_err(|e| err!(ty_loc, "{e}"))?,
+                        )
                     }
                 }
+
                 let resolved_address = address.value.clone().into_account_address(&|s| {
                     self.addresses.get(s).cloned().or_else(|| resolve_address(s))
                 }).map_err(|e| {
@@ -1149,6 +976,7 @@ impl<'a> PTBBuilder<'a> {
                         e
                     }
                 })?;
+
                 let package_id = ObjectID::from_address(resolved_address);
                 let package = self.resolve_to_package(package_id, address.span).await?;
                 let args = self
@@ -1171,23 +999,7 @@ impl<'a> PTBBuilder<'a> {
                 let res = self.ptb.command(Tx::Command::MoveCall(Box::new(move_call)));
                 self.last_command = Some(res);
             }
-            CommandToken::Publish => {
-                if command.args.len() != 1 {
-                    let span =
-                        Span::union_spans(command.args.iter().map(|x| x.span)).unwrap_or(*cmd_span);
-                    error!(
-                        span,
-                        "Expected one argument for '{PUBLISH}' but got {}",
-                        command.args.len()
-                    );
-                }
-                bind!(
-                    pkg_loc,
-                    PTBArg::String(package_path) = command.args.pop().unwrap(),
-                    |loc| {
-                        error!(loc, "Expected filepath argument here");
-                    }
-                );
+            ParsedPTBCommand::Publish(sp!(pkg_loc, package_path)) => {
                 let qual_package_path = cmd_span.file_scope.qualify_path(&package_path);
                 let (dependencies, compiled_modules, _, _) = compile_package(
                     self.reader,
@@ -1206,17 +1018,7 @@ impl<'a> PTBBuilder<'a> {
                 self.last_command = Some(res);
             }
             // Update this command to not do as many things. It should result in a single command.
-            CommandToken::Upgrade => {
-                if command.args.len() != 2 {
-                    let span =
-                        Span::union_spans(command.args.iter().map(|x| x.span)).unwrap_or(*cmd_span);
-                    error!(
-                        span,
-                        "Expected 2 arguments for '{UPGRADE}' but got {}",
-                        command.args.len()
-                    );
-                }
-                let mut arg = command.args.pop().unwrap();
+            ParsedPTBCommand::Upgrade(sp!(path_loc, package_path), mut arg) => {
                 if let sp!(loc, PTBArg::Identifier(id)) = arg {
                     arg = self
                         .arguments_to_resolve
@@ -1227,13 +1029,6 @@ impl<'a> PTBBuilder<'a> {
                 bind!(cap_loc, PTBArg::Address(upgrade_cap_id) = arg, |loc| {
                     error!(loc, "Expected upgrade capability object ID");
                 });
-                bind!(
-                    path_loc,
-                    PTBArg::String(package_path) = command.args.pop().unwrap(),
-                    |loc| {
-                        error!(loc, "Expected filepath argument");
-                    }
-                );
                 let qual_package_path = cmd_span.file_scope.qualify_path(&package_path);
 
                 let upgrade_cap_arg = self
@@ -1258,11 +1053,11 @@ impl<'a> PTBBuilder<'a> {
                 let upgrade_arg = self
                     .ptb
                     .pure(upgrade_policy)
-                    .map_err(|e| err!(*cmd_span, "{e}"))?;
+                    .map_err(|e| err!(cmd_span, "{e}"))?;
                 let digest_arg = self
                     .ptb
                     .pure(package_digest)
-                    .map_err(|e| err!(*cmd_span, "{e}"))?;
+                    .map_err(|e| err!(cmd_span, "{e}"))?;
                 let upgrade_ticket =
                     self.ptb
                         .command(Tx::Command::MoveCall(Box::new(Tx::ProgrammableMoveCall {
@@ -1289,23 +1084,11 @@ impl<'a> PTBBuilder<'a> {
                         })));
                 self.last_command = Some(res);
             }
-            CommandToken::WarnShadows => {
-                if command.args.len() == 1 {
-                    self.warn_on_shadowing = command.args[0].value == PTBArg::Bool(true);
-                } else {
-                    let span =
-                        Span::union_spans(command.args.iter().map(|x| x.span)).unwrap_or(*cmd_span);
-                    error!(span, "Expected no arguments for warn shadows");
-                }
+            ParsedPTBCommand::WarnShadows(arg) => {
+                self.warn_on_shadowing = arg.value == PTBArg::Bool(true);
             }
-            CommandToken::Preview => {
-                if command.args.len() == 1 {
-                    self.preview_set = command.args[0].value == PTBArg::Bool(true);
-                } else {
-                    let span =
-                        Span::union_spans(command.args.iter().map(|x| x.span)).unwrap_or(*cmd_span);
-                    error!(span, "Expected no arguments for preview");
-                }
+            ParsedPTBCommand::Preview(arg) => {
+                self.preview_set = arg.value == PTBArg::Bool(true);
             }
         }
         Ok(())

@@ -24,20 +24,34 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ gas_budget @aa 
    ·            ─┬─
-   ·             ╰── Failed to parse arguments for 'gas_budget' command. Expected a numerical address at this position but got a named address aa
+   ·             ╰── Expected a numerical address at this position but got a named address aa
    ╰────
 
   × Error at command 1 in PTB file 'tests/ptb_files/bad_ptb.ptb'
    ╭────
  1 │ split_coins @0x1 [0xfffffffffu8] 
    ·                   ──────┬──────
-   ·                         ╰── Failed to parse arguments for 'split_coins' command. number too large to fit in target type
+   ·                         ╰── number too large to fit in target type
    ╰────
 
   × Error at command 2 in PTB file 'tests/ptb_files/bad_ptb.ptb'
    ╭────
  1 │ split_coins 2x2 [1000] 
    ·              ─┬
-   ·               ╰── Failed to parse arguments for 'split_coins' command. expected token '[whitespace]', but got '[ident]'
+   ·               ╰── Unexpected token '[ident]'
+   ╰────
+
+  × Error at command 5 in PTB file 'tests/ptb_files/bad_ptb.ptb'
+   ╭────
+ 1 │ make_move_vec <vector<address>> [[@0x1],[@0x2]] 
+   ·                                  ┬
+   ·                                  ╰── unexpected token '['
+   ╰────
+
+  × Error at command 6 in PTB file 'tests/ptb_files/bad_ptb.ptb'
+   ╭────
+ 1 │ transfer_objects @0x1 s 
+   ·                       ┬
+   ·                       ╰── expected token '[', but got '[ident]'
    ╰────
 

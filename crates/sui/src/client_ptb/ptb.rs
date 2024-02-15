@@ -1,10 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::ptb_builder::{errors::PTBError, parse_ptb::ParsedPTBCommand};
+use super::ptb_builder::errors::{PTBError, Span};
 use crate::client_ptb::{
     displays::Pretty,
-    ptb_builder::{build_ptb::PTBBuilder, errors::render_errors, parse_ptb::PTBParser},
+    ptb_builder::{
+        build_ptb::PTBBuilder, command::ParsedPTBCommand, errors::render_errors,
+        parse_ptb::PTBParser,
+    },
 };
 
 use anyhow::{anyhow, Error};
@@ -344,7 +347,7 @@ impl PTB {
 
     pub async fn parse_and_build_ptb(
         &self,
-        parsed: Vec<ParsedPTBCommand>,
+        parsed: Vec<(Span, ParsedPTBCommand)>,
         context: &WalletContext,
         client: SuiClient,
     ) -> Result<(ProgrammableTransaction, u64, bool), Vec<PTBError>> {

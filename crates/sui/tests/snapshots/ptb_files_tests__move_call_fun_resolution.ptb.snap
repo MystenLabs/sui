@@ -9,7 +9,6 @@ expression: "results.join(\"\\n\")"
 │ command    │ from                                                   │ value(s)                               │
 ├────────────┼────────────────────────────────────────────────────────┼────────────────────────────────────────┤
 │ gas_budget │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ 1000                                   │
-│ move_call  │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ invalid_access                         │
 │ move_call  │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ zero_x_zero::option::is_none<u64> none │
 │ assign     │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ a none                                 │
 │ assign     │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │ zero_x_zero @0x0                       │
@@ -23,34 +22,23 @@ expression: "results.join(\"\\n\")"
 │ preview    │ console                                                │ true                                   │
 ╰────────────┴────────────────────────────────────────────────────────┴────────────────────────────────────────╯
  === PARSED INPUT COMMANDS === 
-cmd: file-include-start, value: ["\"tests/ptb_files/move_call/move_call_fun_resolution.ptb\""]
-cmd: gas_budget, value: ["1000u64"]
-cmd: move_call, value: ["invalid_access"]
-cmd: move_call, value: ["zero_x_zero::option::is_none", "<u64>", "none"]
-cmd: assign, value: ["a", "none"]
-cmd: assign, value: ["zero_x_zero", "@0x0"]
-cmd: move_call, value: ["zero_x_zero::option::is_none", "<u64>", "a"]
-cmd: move_call, value: ["std::Option::is_none", "<u64>", "a"]
-cmd: move_call, value: ["std::option::isnone", "<u64>", "a"]
-cmd: move_call, value: ["std::option::is_none", "<u64>"]
-cmd: move_call, value: ["std::option::is_none", "<u64>", "a", "b"]
-cmd: move_call, value: ["sui::coin::destroy_zero", "@0x1"]
-cmd: move_call, value: ["std::option::is_none", "<u64, bool>", "a"]
-cmd: preview, value: ["false"]
-cmd: warn_shadows, value: ["false"]
-cmd: file-include-end, value: ["\"tests/ptb_files/move_call/move_call_fun_resolution.ptb\""]
-cmd: preview, value: ["true"]
-cmd: warn_shadows, value: ["false"]
+cmd: GasBudget(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: 1000 })
+cmd: MoveCall(Spanned { span: Span { start: 0, end: 28, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: ModuleAccess { address: Spanned { span: Span { start: 0, end: 11, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Named("zero_x_zero") }, module_name: Spanned { span: Span { start: 13, end: 19, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("option") }, function_name: Spanned { span: Span { start: 21, end: 28, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("is_none") } } }, Some(Spanned { span: Span { start: 28, end: 33, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: [U64] }), [Spanned { span: Span { start: 0, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Option(Spanned { span: Span { start: 0, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: None }) }])
+cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: "a" }, Some(Spanned { span: Span { start: 0, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Option(Spanned { span: Span { start: 0, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: None }) }))
+cmd: Assign(Spanned { span: Span { start: 0, end: 11, arg_idx: 0, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: "zero_x_zero" }, Some(Spanned { span: Span { start: 1, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Address(0x0) }))
+cmd: MoveCall(Spanned { span: Span { start: 0, end: 28, arg_idx: 0, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: ModuleAccess { address: Spanned { span: Span { start: 0, end: 11, arg_idx: 0, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Named("zero_x_zero") }, module_name: Spanned { span: Span { start: 13, end: 19, arg_idx: 0, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("option") }, function_name: Spanned { span: Span { start: 21, end: 28, arg_idx: 0, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("is_none") } } }, Some(Spanned { span: Span { start: 28, end: 33, arg_idx: 0, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: [U64] }), [Spanned { span: Span { start: 0, end: 1, arg_idx: 1, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("a") }])
+cmd: MoveCall(Spanned { span: Span { start: 0, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: ModuleAccess { address: Spanned { span: Span { start: 0, end: 3, arg_idx: 0, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Named("std") }, module_name: Spanned { span: Span { start: 5, end: 11, arg_idx: 0, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("Option") }, function_name: Spanned { span: Span { start: 13, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("is_none") } } }, Some(Spanned { span: Span { start: 20, end: 25, arg_idx: 0, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: [U64] }), [Spanned { span: Span { start: 0, end: 1, arg_idx: 1, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("a") }])
+cmd: MoveCall(Spanned { span: Span { start: 0, end: 19, arg_idx: 0, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: ModuleAccess { address: Spanned { span: Span { start: 0, end: 3, arg_idx: 0, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Named("std") }, module_name: Spanned { span: Span { start: 5, end: 11, arg_idx: 0, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("option") }, function_name: Spanned { span: Span { start: 13, end: 19, arg_idx: 0, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("isnone") } } }, Some(Spanned { span: Span { start: 19, end: 24, arg_idx: 0, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: [U64] }), [Spanned { span: Span { start: 0, end: 1, arg_idx: 1, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("a") }])
+cmd: MoveCall(Spanned { span: Span { start: 0, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: ModuleAccess { address: Spanned { span: Span { start: 0, end: 3, arg_idx: 0, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Named("std") }, module_name: Spanned { span: Span { start: 5, end: 11, arg_idx: 0, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("option") }, function_name: Spanned { span: Span { start: 13, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("is_none") } } }, Some(Spanned { span: Span { start: 20, end: 25, arg_idx: 0, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: [U64] }), [])
+cmd: MoveCall(Spanned { span: Span { start: 0, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 8, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: ModuleAccess { address: Spanned { span: Span { start: 0, end: 3, arg_idx: 0, file_scope: FileScope { file_command_index: 8, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Named("std") }, module_name: Spanned { span: Span { start: 5, end: 11, arg_idx: 0, file_scope: FileScope { file_command_index: 8, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("option") }, function_name: Spanned { span: Span { start: 13, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 8, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("is_none") } } }, Some(Spanned { span: Span { start: 20, end: 25, arg_idx: 0, file_scope: FileScope { file_command_index: 8, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: [U64] }), [Spanned { span: Span { start: 0, end: 1, arg_idx: 1, file_scope: FileScope { file_command_index: 8, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("a") }, Spanned { span: Span { start: 2, end: 3, arg_idx: 1, file_scope: FileScope { file_command_index: 8, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("b") }])
+cmd: MoveCall(Spanned { span: Span { start: 0, end: 23, arg_idx: 0, file_scope: FileScope { file_command_index: 9, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: ModuleAccess { address: Spanned { span: Span { start: 0, end: 3, arg_idx: 0, file_scope: FileScope { file_command_index: 9, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Named("sui") }, module_name: Spanned { span: Span { start: 5, end: 9, arg_idx: 0, file_scope: FileScope { file_command_index: 9, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("coin") }, function_name: Spanned { span: Span { start: 11, end: 23, arg_idx: 0, file_scope: FileScope { file_command_index: 9, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("destroy_zero") } } }, None, [Spanned { span: Span { start: 1, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 9, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Address(0x1) }])
+cmd: MoveCall(Spanned { span: Span { start: 0, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 10, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: ModuleAccess { address: Spanned { span: Span { start: 0, end: 3, arg_idx: 0, file_scope: FileScope { file_command_index: 10, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Named("std") }, module_name: Spanned { span: Span { start: 5, end: 11, arg_idx: 0, file_scope: FileScope { file_command_index: 10, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("option") }, function_name: Spanned { span: Span { start: 13, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 10, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("is_none") } } }, Some(Spanned { span: Span { start: 20, end: 31, arg_idx: 0, file_scope: FileScope { file_command_index: 10, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: [U64, Bool] }), [Spanned { span: Span { start: 0, end: 1, arg_idx: 1, file_scope: FileScope { file_command_index: 10, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Identifier("a") }])
+cmd: Preview(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 11, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Bool(false) })
+cmd: WarnShadows(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 12, name: "tests/ptb_files/move_call/move_call_fun_resolution.ptb", name_index: 0 } }, value: Bool(false) })
+cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
+cmd: WarnShadows(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 2, name: "console", name_index: 0 } }, value: Bool(false) })
  === BUILDING PTB ERRORS === 
   × Error at command 1 in PTB file 'tests/ptb_files/move_call/
-  │ move_call_fun_resolution.ptb'
-   ╭────
- 1 │ move_call invalid_access 
-   ·           ───────┬──────
-   ·                  ╰── Expected module access/function for 'move_call' command here
-   ╰────
-
-  × Error at command 2 in PTB file 'tests/ptb_files/move_call/
   │ move_call_fun_resolution.ptb'
    ╭────
  1 │ move_call zero_x_zero::option::is_none<u64> none 
@@ -61,7 +49,7 @@ cmd: warn_shadows, value: ["false"]
         in scope. You can either bind a variable to the address that you
         want to use or use the address in the command.
 
-  × Error at command 5 in PTB file 'tests/ptb_files/move_call/
+  × Error at command 4 in PTB file 'tests/ptb_files/move_call/
   │ move_call_fun_resolution.ptb'
    ╭────
  1 │ move_call zero_x_zero::option::is_none<u64> a 
@@ -69,7 +57,7 @@ cmd: warn_shadows, value: ["false"]
    ·                ╰── Object 0x0000000000000000000000000000000000000000000000000000000000000000 does not exist.
    ╰────
 
-  × Error at command 6 in PTB file 'tests/ptb_files/move_call/
+  × Error at command 5 in PTB file 'tests/ptb_files/move_call/
   │ move_call_fun_resolution.ptb'
    ╭────
  1 │ move_call std::Option::is_none<u64> a 
@@ -78,7 +66,7 @@ cmd: warn_shadows, value: ["false"]
    ╰────
   help: Did you mean 'option'?
 
-  × Error at command 7 in PTB file 'tests/ptb_files/move_call/
+  × Error at command 6 in PTB file 'tests/ptb_files/move_call/
   │ move_call_fun_resolution.ptb'
    ╭────
  1 │ move_call std::option::isnone<u64> a 
@@ -87,7 +75,7 @@ cmd: warn_shadows, value: ["false"]
    ╰────
   help: Did you mean 'is_none'?
 
-  × Error at command 8 in PTB file 'tests/ptb_files/move_call/
+  × Error at command 7 in PTB file 'tests/ptb_files/move_call/
   │ move_call_fun_resolution.ptb'
    ╭────
  1 │ move_call std::option::is_none<u64> 
@@ -95,7 +83,7 @@ cmd: warn_shadows, value: ["false"]
    ·                     ╰── Expected 1 arguments, but got 0
    ╰────
 
-  × Error at command 9 in PTB file 'tests/ptb_files/move_call/
+  × Error at command 8 in PTB file 'tests/ptb_files/move_call/
   │ move_call_fun_resolution.ptb'
    ╭────
  1 │ move_call std::option::is_none<u64> a b 
@@ -103,7 +91,7 @@ cmd: warn_shadows, value: ["false"]
    ·                                      ╰── Expected 1 arguments, but got 2
    ╰────
 
-  × Error at command 10 in PTB file 'tests/ptb_files/move_call/
+  × Error at command 9 in PTB file 'tests/ptb_files/move_call/
   │ move_call_fun_resolution.ptb'
    ╭────
  1 │ move_call sui::coin::destroy_zero @0x1 

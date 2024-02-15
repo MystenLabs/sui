@@ -6,12 +6,8 @@ use crate::{
     error, sp,
 };
 use core::fmt::{self, Debug};
-use move_command_line_common::{
-    address::{NumericalAddress, ParsedAddress},
-    types::ParsedType,
-};
+use move_command_line_common::address::NumericalAddress;
 use move_core_types::annotated_value::MoveValue;
-use sui_types::{resolve_address, Identifier};
 
 /// An enum representing the parsed arguments of a PTB command.
 #[derive(Eq, PartialEq, Debug, Clone)]
@@ -29,14 +25,7 @@ pub enum Argument {
     Address(NumericalAddress),
     String(String),
     Vector(Vec<Spanned<Argument>>),
-    Array(Vec<Spanned<Argument>>),
     Option(Spanned<Option<Box<Argument>>>),
-    ModuleAccess {
-        address: Spanned<ParsedAddress>,
-        module_name: Spanned<Identifier>,
-        function_name: Spanned<Identifier>,
-    },
-    TyArgs(Vec<ParsedType>),
 }
 
 impl Argument {
@@ -80,11 +69,8 @@ impl Argument {
                 }
             }
             Argument::Identifier(_)
-            | Argument::Array(_)
-            | Argument::ModuleAccess { .. }
             | Argument::VariableAccess(_, _)
-            | Argument::Gas
-            | Argument::TyArgs(_) => error!(loc, "Was unable to convert '{self}' to primitive value (i.e., non-object value)"),
+            | Argument::Gas => error!(loc, "Was unable to convert '{self}' to primitive value (i.e., non-object value)"),
         })
     }
 }
@@ -120,45 +106,10 @@ impl fmt::Display for Argument {
                 }
                 write!(f, "]")
             }
-            Argument::Array(a) => {
-                write!(f, "[")?;
-                for (i, sp!(_, arg)) in a.iter().enumerate() {
-                    write!(f, "{}", arg)?;
-                    if i != a.len() - 1 {
-                        write!(f, ", ")?;
-                    }
-                }
-                write!(f, "]")
-            }
             Argument::Option(sp!(_, o)) => match o {
                 Some(v) => write!(f, "some({})", v),
                 None => write!(f, "none"),
             },
-            Argument::ModuleAccess {
-                address,
-                module_name,
-                function_name,
-            } => {
-                let addr_string = match &address.value {
-                    ParsedAddress::Named(name) => name.to_string(),
-                    ParsedAddress::Numerical(addr) => addr.to_string(),
-                };
-                write!(
-                    f,
-                    "{}::{}::{}",
-                    addr_string, module_name.value, function_name.value
-                )
-            }
-            Argument::TyArgs(ts) => {
-                write!(f, "<")?;
-                for (i, t) in ts.iter().enumerate() {
-                    write!(f, "{}", t.clone().into_type_tag(&resolve_address).unwrap())?;
-                    if i != ts.len() - 1 {
-                        write!(f, ", ")?;
-                    }
-                }
-                write!(f, ">")
-            }
         }
     }
 }

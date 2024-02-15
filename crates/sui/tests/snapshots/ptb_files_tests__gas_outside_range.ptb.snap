@@ -16,6 +16,6 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ gas_budget 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF 
    ·            ─────────────────────────────────────┬────────────────────────────────────
-   ·                                                 ╰── Failed to parse arguments for 'gas_budget' command. Invalid number
+   ·                                                 ╰── number too large to fit in target type
    ╰────
 

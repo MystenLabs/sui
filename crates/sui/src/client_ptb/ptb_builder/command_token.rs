@@ -7,6 +7,21 @@ use std::{
     str::FromStr,
 };
 
+pub const TRANSFER_OBJECTS: &str = "transfer_objects";
+pub const SPLIT_COINS: &str = "split_coins";
+pub const MERGE_COINS: &str = "merge_coins";
+pub const MAKE_MOVE_VEC: &str = "make_move_vec";
+pub const MOVE_CALL: &str = "move_call";
+pub const PUBLISH: &str = "publish";
+pub const UPGRADE: &str = "upgrade";
+pub const ASSIGN: &str = "assign";
+pub const PREVIEW: &str = "preview";
+pub const WARN_SHADOWS: &str = "warn_shadows";
+pub const PICK_GAS_BUDGET: &str = "pick_gas_budget";
+pub const GAS_BUDGET: &str = "gas_budget";
+pub const FILE_START: &str = "file-include-start";
+pub const FILE_END: &str = "file-include-end";
+
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
 pub enum CommandToken {
     TransferObjects,
@@ -17,7 +32,6 @@ pub enum CommandToken {
     Publish,
     Upgrade,
     Assign,
-    File,
     WarnShadows,
     Preview,
     PickGasBudget,
@@ -25,22 +39,6 @@ pub enum CommandToken {
     FileStart,
     FileEnd,
 }
-
-pub const TRANSFER_OBJECTS: &str = "transfer_objects";
-pub const SPLIT_COINS: &str = "split_coins";
-pub const MERGE_COINS: &str = "merge_coins";
-pub const MAKE_MOVE_VEC: &str = "make_move_vec";
-pub const MOVE_CALL: &str = "move_call";
-pub const PUBLISH: &str = "publish";
-pub const UPGRADE: &str = "upgrade";
-pub const ASSIGN: &str = "assign";
-pub const FILE: &str = "file";
-pub const PREVIEW: &str = "preview";
-pub const WARN_SHADOWS: &str = "warn_shadows";
-pub const PICK_GAS_BUDGET: &str = "pick_gas_budget";
-pub const GAS_BUDGET: &str = "gas_budget";
-pub const FILE_START: &str = "file-include-start";
-pub const FILE_END: &str = "file-include-end";
 
 impl Display for CommandToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -53,7 +51,6 @@ impl Display for CommandToken {
             CommandToken::Publish => PUBLISH,
             CommandToken::Upgrade => UPGRADE,
             CommandToken::Assign => ASSIGN,
-            CommandToken::File => FILE,
             CommandToken::Preview => PREVIEW,
             CommandToken::WarnShadows => WARN_SHADOWS,
             CommandToken::PickGasBudget => PICK_GAS_BUDGET,
@@ -78,7 +75,6 @@ impl FromStr for CommandToken {
             PUBLISH => Ok(CommandToken::Publish),
             UPGRADE => Ok(CommandToken::Upgrade),
             ASSIGN => Ok(CommandToken::Assign),
-            FILE => Ok(CommandToken::File),
             PREVIEW => Ok(CommandToken::Preview),
             WARN_SHADOWS => Ok(CommandToken::WarnShadows),
             PICK_GAS_BUDGET => Ok(CommandToken::PickGasBudget),
@@ -99,7 +95,6 @@ pub const ALL_PUBLIC_COMMAND_TOKENS: &[&str] = &[
     PUBLISH,
     UPGRADE,
     ASSIGN,
-    FILE,
     PREVIEW,
     WARN_SHADOWS,
     PICK_GAS_BUDGET,
@@ -121,7 +116,6 @@ mod tests {
             PUBLISH,
             UPGRADE,
             ASSIGN,
-            FILE,
             PREVIEW,
             WARN_SHADOWS,
             PICK_GAS_BUDGET,

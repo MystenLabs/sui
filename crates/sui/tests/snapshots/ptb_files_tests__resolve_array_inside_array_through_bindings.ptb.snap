@@ -15,16 +15,14 @@ expression: "results.join(\"\\n\")"
 │ preview       │ console                                                                       │ true                     │
 ╰───────────────┴───────────────────────────────────────────────────────────────────────────────┴──────────────────────────╯
  === PARSED INPUT COMMANDS === 
-cmd: file-include-start, value: ["\"tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb\""]
-cmd: gas_budget, value: ["1000000000u64"]
-cmd: make_move_vec, value: ["<address>", "[@0x1]"]
-cmd: assign, value: ["a"]
-cmd: make_move_vec, value: ["<vector<address>>", "[a, a]"]
-cmd: preview, value: ["false"]
-cmd: warn_shadows, value: ["false"]
-cmd: file-include-end, value: ["\"tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb\""]
-cmd: preview, value: ["true"]
-cmd: warn_shadows, value: ["false"]
+cmd: GasBudget(Spanned { span: Span { start: 0, end: 10, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: 1000000000 })
+cmd: MakeMoveVec(Spanned { span: Span { start: 0, end: 9, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: Address }, Spanned { span: Span { start: 0, end: 6, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: [Spanned { span: Span { start: 2, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: Address(0x1) }] })
+cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: "a" }, None)
+cmd: MakeMoveVec(Spanned { span: Span { start: 0, end: 17, arg_idx: 0, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: Vector(Address) }, Spanned { span: Span { start: 0, end: 6, arg_idx: 1, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: [Spanned { span: Span { start: 1, end: 2, arg_idx: 1, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: Identifier("a") }, Spanned { span: Span { start: 4, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: Identifier("a") }] })
+cmd: Preview(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: Bool(false) })
+cmd: WarnShadows(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: Bool(false) })
+cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
+cmd: WarnShadows(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 2, name: "console", name_index: 0 } }, value: Bool(false) })
  === BUILT PTB === 
 Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
 Command 0: MakeMoveVec(Someaddress,[Input(0)])

@@ -12,11 +12,9 @@ expression: "results.join(\"\\n\")"
 │ preview    │ console                           │ true     │
 ╰────────────┴───────────────────────────────────┴──────────╯
  === PARSED INPUT COMMANDS === 
-cmd: file-include-start, value: ["\"tests/ptb_files/gas/valid_gas.ptb\""]
-cmd: gas_budget, value: ["110000u64"]
-cmd: preview, value: ["false"]
-cmd: warn_shadows, value: ["false"]
-cmd: file-include-end, value: ["\"tests/ptb_files/gas/valid_gas.ptb\""]
-cmd: preview, value: ["true"]
-cmd: warn_shadows, value: ["false"]
+cmd: GasBudget(Spanned { span: Span { start: 0, end: 6, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/gas/valid_gas.ptb", name_index: 0 } }, value: 110000 })
+cmd: Preview(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/gas/valid_gas.ptb", name_index: 0 } }, value: Bool(false) })
+cmd: WarnShadows(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/gas/valid_gas.ptb", name_index: 0 } }, value: Bool(false) })
+cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
+cmd: WarnShadows(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 2, name: "console", name_index: 0 } }, value: Bool(false) })
  === BUILT PTB === 

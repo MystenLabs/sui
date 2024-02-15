@@ -1,6 +1,4 @@
 --gas-budget 1000 
-# Invalid module access
---move-call invalid_access
 # Try to use identifier/address that is not in scope
 --move-call zero_x_zero::option::is_none<u64> none
 --assign a none 
