@@ -14,7 +14,6 @@ import {
 } from './sui-types.js';
 
 export { fromB64, toB64, fromHEX, toHEX } from '@mysten/bcs';
-export { is, assert } from 'superstruct';
 
 export {
 	formatAddress,

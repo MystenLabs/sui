@@ -19,6 +19,7 @@ import {
 
 import { bcs } from '../bcs/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
+import type { SerializedTransactionDataBuilderV1 } from './blockData/TransactionBlockJsonV1.js';
 import { hashTypedData } from './hash.js';
 import { BuilderCallArg, PureCallArg, SuiObjectRef } from './Inputs.js';
 import { TransactionBlockInput, TransactionType } from './Transactions.js';
@@ -134,6 +135,10 @@ export class TransactionBlockDataBuilder {
 		const transactionData = new TransactionBlockDataBuilder();
 		Object.assign(transactionData, data);
 		return transactionData;
+	}
+
+	static restoreFromV1(data: SerializedTransactionDataBuilderV1) {
+		return this.restore(data);
 	}
 
 	/**
