@@ -19,20 +19,18 @@ impl Display for PTBPreview {
         let mut builder = TableBuilder::default();
         let columns = vec!["command", "from", "value(s)"];
         builder.set_header(columns);
-        let mut from = "console";
+        let mut from = vec!["console"];
         for cmd in &self.cmds {
             if cmd.name == "file-include-start" {
-                from = cmd.values.first().unwrap();
+                from.push(cmd.values.first().unwrap());
                 continue;
             } else if cmd.name == "file-include-end" {
-                from = "console";
-                continue;
-            } else if cmd.is_preview_false() || cmd.is_warn_shadows_false() {
+                from.pop();
                 continue;
             }
             builder.push_record([
                 cmd.name.to_string(),
-                from.to_string(),
+                from.iter().peekable().last().unwrap_or(&"").to_string(),
                 cmd.values.join(" ").to_string(),
             ]);
         }

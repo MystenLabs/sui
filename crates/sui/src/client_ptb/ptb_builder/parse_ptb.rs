@@ -196,6 +196,10 @@ impl PTBParser {
                 check_args!(1..=1, cmd);
                 handle_error!(self.parse_preview(name, cmd.values));
             }
+            CommandToken::Summary => {
+                check_args!(1..=1, cmd);
+                handle_error!(self.parse_summary(name, cmd.values));
+            }
             CommandToken::PickGasBudget => {
                 check_args!(1..=1, cmd);
                 handle_error!(self.parse_pick_gas_budget(name, cmd.values));
@@ -412,7 +416,18 @@ impl PTBParser {
         ));
         Ok(())
     }
-
+    fn parse_summary(
+        &mut self,
+        _name: Spanned<CommandToken>,
+        values: Vec<String>,
+    ) -> PTBResult<()> {
+        bind!(
+            _loc,
+            Argument::Bool(_) = self.value_parser(&values, 0)?.parse_single_argument()?,
+            |loc| { error!(loc, "Expected a boolean value") }
+        );
+        Ok(())
+    }
     fn parse_pick_gas_budget(
         &mut self,
         name: Spanned<CommandToken>,
@@ -420,7 +435,7 @@ impl PTBParser {
     ) -> PTBResult<()> {
         bind!(
             loc,
-            Argument::String(s) = self.value_parser(&values, 0)?.parse_single_argument()?,
+            Argument::Identifier(s) = self.value_parser(&values, 0)?.parse_single_argument()?,
             |loc| { error!(loc, "Expected a string value") }
         );
         let picker = match s.as_str() {

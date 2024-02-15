@@ -21,6 +21,7 @@ pub const PICK_GAS_BUDGET: &str = "pick_gas_budget";
 pub const GAS_BUDGET: &str = "gas_budget";
 pub const FILE_START: &str = "file-include-start";
 pub const FILE_END: &str = "file-include-end";
+pub const SUMMARY: &str = "summary";
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
 pub enum CommandToken {
@@ -34,6 +35,7 @@ pub enum CommandToken {
     Assign,
     WarnShadows,
     Preview,
+    Summary,
     PickGasBudget,
     GasBudget,
     FileStart,
@@ -57,6 +59,7 @@ impl Display for CommandToken {
             CommandToken::GasBudget => GAS_BUDGET,
             CommandToken::FileStart => FILE_START,
             CommandToken::FileEnd => FILE_END,
+            CommandToken::Summary => SUMMARY,
         };
         fmt::Display::fmt(s, f)
     }
@@ -81,6 +84,7 @@ impl FromStr for CommandToken {
             GAS_BUDGET => Ok(CommandToken::GasBudget),
             FILE_START => Ok(CommandToken::FileStart),
             FILE_END => Ok(CommandToken::FileEnd),
+            SUMMARY => Ok(CommandToken::Summary),
             _ => bail!("Invalid command token: {}", s),
         }
     }
@@ -99,6 +103,7 @@ pub const ALL_PUBLIC_COMMAND_TOKENS: &[&str] = &[
     WARN_SHADOWS,
     PICK_GAS_BUDGET,
     GAS_BUDGET,
+    SUMMARY,
 ];
 
 #[cfg(test)]
@@ -122,6 +127,7 @@ mod tests {
             GAS_BUDGET,
             FILE_START,
             FILE_END,
+            SUMMARY,
         ];
 
         for s in &command_strs {

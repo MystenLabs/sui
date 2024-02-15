@@ -1504,9 +1504,12 @@ impl SuiClientCommands {
 
                 SuiClientCommandResult::VerifySource
             }
-            SuiClientCommands::PTB(_) => anyhow::bail!(
-                "Internal error: the PTB should have been handled in its own execute function."
-            ),
+            SuiClientCommands::PTB(ptb) => {
+                let args = ptb.clone().args;
+                ptb.execute(args, context).await?;
+
+                SuiClientCommandResult::NoOutput
+            }
         });
         ret
     }

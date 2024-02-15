@@ -131,13 +131,13 @@ struct FileIndexedErrors(pub BTreeMap<(String, usize), Vec<PTBCommand>>);
 
 impl FileIndexedErrors {
     /// Take a set of commands and index them by file scope.
-    pub fn new(commands: &BTreeMap<usize, PTBCommand>) -> Self {
+    pub fn new(commands: &Vec<PTBCommand>) -> Self {
         let mut file_indexed_commands = BTreeMap::new();
         let mut name_collision_count: BTreeMap<_, _> =
             [("console".to_owned(), 0)].into_iter().collect();
         let mut scope_stack = vec![];
         let mut current_scope = ("console".to_string(), 0);
-        for command in commands.values() {
+        for command in commands {
             if command.name == FILE_START {
                 // Push a dummy command to keep indices in line with the usage of the `--file`
                 // command.
@@ -345,10 +345,7 @@ impl DisplayableError {
     }
 }
 
-pub fn render_errors(
-    commands: BTreeMap<usize, PTBCommand>,
-    errors: Vec<PTBError>,
-) -> Vec<miette::Report> {
+pub fn render_errors(commands: Vec<PTBCommand>, errors: Vec<PTBError>) -> Vec<miette::Report> {
     let file_indexed_commands = FileIndexedErrors::new(&commands);
     let mut rendered = vec![];
     for error in errors {

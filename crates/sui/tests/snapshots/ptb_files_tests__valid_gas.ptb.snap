@@ -13,8 +13,5 @@ expression: "results.join(\"\\n\")"
 ╰────────────┴───────────────────────────────────┴──────────╯
  === PARSED INPUT COMMANDS === 
 cmd: GasBudget(Spanned { span: Span { start: 0, end: 6, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/gas/valid_gas.ptb", name_index: 0 } }, value: 110000 })
-cmd: Preview(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/gas/valid_gas.ptb", name_index: 0 } }, value: Bool(false) })
-cmd: WarnShadows(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/gas/valid_gas.ptb", name_index: 0 } }, value: Bool(false) })
 cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
-cmd: WarnShadows(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 2, name: "console", name_index: 0 } }, value: Bool(false) })
  === BUILT PTB === 

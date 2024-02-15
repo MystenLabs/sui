@@ -11,14 +11,13 @@ use crate::client_ptb::{
 };
 
 use anyhow::{anyhow, Error};
-use clap::{parser::ValuesRef, ArgMatches, CommandFactory, Parser};
+use clap::{arg, Args};
 use move_core_types::account_address::AccountAddress;
 use petgraph::prelude::DiGraphMap;
 use serde::Serialize;
 use shared_crypto::intent::Intent;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fmt::Display,
     path::{Path, PathBuf},
 };
 use sui_json_rpc_types::{
@@ -34,62 +33,25 @@ use sui_types::{
     transaction::{ProgrammableTransaction, Transaction, TransactionData},
 };
 
-const SKIP_ARGS: [&str; 3] = ["json", "gas", "summary"];
-
-/// The ProgrammableTransactionBlock structure used in the CLI ptb command
-#[derive(Parser, Debug, Default)]
+#[derive(Clone, Debug, Args)]
 pub struct PTB {
-    /// The path to the file containing the PTBs
-    #[clap(long, num_args(1), required = false)]
-    file: Vec<String>,
-    /// An input for the PTB, defined as the variable name and value, e.g: --input recipient 0x321
-    #[clap(long, num_args(0..))]
-    assign: Vec<String>,
-    /// The object ID of the gas coin
-    #[clap(long, required = false)]
-    gas: String,
-    /// The gas budget to be used to execute this PTB
-    #[clap(long)]
-    gas_budget: Option<String>,
-    /// Given n-values of the same type, it constructs a vector.
-    /// For non objects or an empty vector, the type tag must be specified.
-    /// For example, --make-move-vec "<u64>" "[]"
-    #[clap(long, num_args(1..))]
-    make_move_vec: Vec<String>,
-    /// Merge N coins into the provided coin: --merge-coins into_coin "[coin1,coin2,coin3]"
-    #[clap(long, num_args(1..))]
-    merge_coins: Vec<String>,
-    /// Make a move call to a function
-    #[clap(long, num_args(1..))]
-    move_call: Vec<String>,
-    /// Split the coin into N coins as per the given amount.
-    /// On zsh, the vector needs to be given in quotes: --split-coins coin_to_split "[amount1,amount2]"
-    #[clap(long, num_args(1..))]
-    split_coins: Vec<String>,
-    /// Transfer objects to the address. E.g., --transfer-objects to_address "[obj1, obj2]"
-    #[clap(long, num_args(1..))]
-    transfer_objects: Vec<String>,
-    /// Publish the move package. It takes as input the folder where the package exists.
-    #[clap(long, num_args(1..))]
-    publish: Vec<String>,
-    /// Upgrade the move package. It takes as input the folder where the package exists.
-    #[clap(long, num_args(1..))]
-    upgrade: Vec<String>,
-    /// Preview the PTB instead of executing it
-    #[clap(long)]
-    preview: bool,
-    /// Enable shadown warning when including other PTB files.
-    /// Off by default.
-    #[clap(long)]
-    warn_shadows: bool,
-    /// Pick gas budget strategy if multiple gas-budgets are provided.
-    #[clap(long)]
-    pick_gas_budget: Option<PTBGas>,
-    /// Show only a short summary (digest, execution status, gas cost).
-    /// Do not use this flag when you need all the transaction data and the execution effects.
-    #[clap(long)]
-    summary: bool,
+    #[clap(trailing_var_arg = true, allow_hyphen_values = true)]
+    pub args: Vec<String>,
 }
+
+// /// The ProgrammableTransactionBlock structure used in the CLI ptb command
+// #[derive(Parser, Debug, Default)]
+// pub struct PTB {
+//     /// The path to the file containing the PTBs
+//     #[clap(long, num_args(1), required = false)]
+//     file: Vec<String>,
+//     /// An input for the PTB, defined as the variable name and value, e.g: --input recipient 0x321
+//     #[clap(long, num_args(0..))]
+//     assign: Vec<String>,
+//     /// The object ID of the gas coin
+//     #[clap(long, required = false)]
+//     gas: String,
+// }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct PTBCommand {
@@ -115,121 +77,82 @@ pub struct Summary {
     pub gas_cost: GasCostSummary,
 }
 
-impl PTBCommand {
-    pub fn is_preview_false(&self) -> bool {
-        self.name == "preview" && self.values == ["false".to_string()]
-    }
-    pub fn is_warn_shadows_false(&self) -> bool {
-        self.name == "warn_shadows" && self.values == ["false".to_string()]
-    }
-}
-
 impl PTB {
-    /// Get the passed arguments for this PTB and construct
-    /// a map where the key is the command index,
-    /// and the value is the name of the command and the values passed
-    /// This is ordered as per how these args are given at the command line
-    pub fn from_matches(
+    pub fn parse_args(
         &self,
         cwd: PathBuf,
-        matches: &ArgMatches,
+        args: Vec<String>,
         included_files: &mut BTreeMap<PathBuf, Vec<PathBuf>>,
-    ) -> Result<BTreeMap<usize, PTBCommand>, Error> {
-        let mut order = BTreeMap::<usize, PTBCommand>::new();
-        for arg_name in matches.ids() {
-            if matches.try_get_many::<clap::Id>(arg_name.as_str()).is_ok() {
+        output: &mut Vec<PTBCommand>,
+    ) -> Result<(), Error> {
+        let args = group_args_by_command(args);
+        for arg in args.iter() {
+            // skip empty arguments, e.g., spaces or json, summary, or gas
+            if arg.is_empty() {
                 continue;
             }
+            // first is the command name, and then any values for that command
+            // thus we slpit them at the first whitespace
+            // if this is None, means we have a command without values (e.g., preview, summary, json, etc)
+            match arg.split_once(' ') {
+                None => {
+                    output.push(PTBCommand {
+                        name: arg.clone(),
+                        values: vec!["true".to_string()],
+                    });
+                }
+                Some((prefix, suffix)) => {
+                    // we expect the values to become arguments, so we split into args
+                    let args = Self::split_into_args(suffix.to_string())
+                        .into_iter()
+                        .map(|x| x.replace('\"', ""))
+                        .filter(|x| !x.is_empty())
+                        .collect::<Vec<_>>();
+                    // handle the case of file inclusion first
+                    if prefix == "file" {
+                        // Things get complicated if multiple files are included at once, so
+                        // let's restrict to one file at a time
+                        if args.len() != 1 {
+                            anyhow::bail!("Can only include one file at a time");
+                        }
+                        let current_file: PathBuf =
+                            [cwd.clone(), Path::new(args.first().unwrap()).to_path_buf()]
+                                .iter()
+                                .collect();
+                        output.push(PTBCommand {
+                            name: "file-include-start".to_string(),
+                            values: args.clone(),
+                        });
+                        self.resolve_file(
+                            cwd.clone(),
+                            args.clone(),
+                            included_files,
+                            current_file.clone(),
+                            output,
+                        )?;
 
-            // we need to skip some args as these are handled in the execute fn
-            if SKIP_ARGS.contains(&arg_name.as_str()) {
-                continue;
-            }
-
-            if arg_name.as_str() == "pick_gas_budget" {
-                insert_value::<PTBGas>(arg_name, matches, &mut order)?;
-            } else if arg_name.as_str() == "preview" || arg_name.as_str() == "warn_shadows" {
-                insert_value::<bool>(arg_name, matches, &mut order)?;
-            } else {
-                insert_value::<String>(arg_name, matches, &mut order)?;
-            }
-        }
-        self.build_ptb_for_parsing(cwd, order, included_files)
-    }
-
-    /// Builds a sequential list of ptb commands that should be fed into the parser
-    pub fn build_ptb_for_parsing(
-        &self,
-        cwd: PathBuf,
-        ptb: BTreeMap<usize, PTBCommand>,
-        included_files: &mut BTreeMap<PathBuf, Vec<PathBuf>>,
-    ) -> Result<BTreeMap<usize, PTBCommand>, Error> {
-        // the ptb input is a list of commands  and values, where the key is the index
-        // of that value / command as it appearead in the args list on the CLI.
-        // A command can have multiple values, and these values will appear sequential
-        // with their indexes being consecutive (for that same command),
-        // so we need to build the list of values for that specific command.
-        // e.g., 1 [vals], 2 [vals], 4 [vals], 6 [vals], 1 + 2's value are
-        // for the same command, 4 and 6 are different commands
-        let mut output = BTreeMap::<usize, PTBCommand>::new();
-        let mut curr_idx = 0;
-        let mut cmd_idx = 0;
-
-        for (idx, val) in ptb.iter() {
-            // these bool commands do not take any values
-            // so handle them separately
-            if val.name == "preview" || val.name == "warn-shadows" {
-                cmd_idx += 1;
-                output.insert(cmd_idx, val.clone());
-                continue;
-            }
-
-            // the current value is for the current command we're building
-            // so add it to the output's value at key cmd_idx
-            if idx == &(curr_idx + 1) {
-                output
-                    .get_mut(&cmd_idx)
-                    .unwrap()
-                    .values
-                    .extend(val.values.clone());
-                curr_idx += 1;
-            } else {
-                // we have a new command, so insert the value and increment curr_idx
-                cmd_idx += 1;
-                curr_idx = *idx;
-                // check if the command is a file inclusion, as we need to sequentially
-                // insert that in the array of PTBCommands
-                if val.name == "file" {
-                    let current_file: PathBuf = [
-                        cwd.clone(),
-                        Path::new(val.values.first().unwrap()).to_path_buf(),
-                    ]
-                    .iter()
-                    .collect();
-                    let new_index = self.resolve_file(
-                        cwd.clone(),
-                        val.values.clone(),
-                        included_files,
-                        current_file,
-                        cmd_idx,
-                        &mut output,
-                    )?;
-                    cmd_idx = new_index;
-                } else {
-                    output.insert(cmd_idx, val.clone());
+                        // end of file inclusion
+                        output.push(PTBCommand {
+                            name: "file-include-end".to_string(),
+                            values: args,
+                        });
+                    } else {
+                        output.push(PTBCommand {
+                            name: prefix.to_string(),
+                            values: args,
+                        })
+                    }
                 }
             }
         }
-        Ok(output)
+        Ok(())
     }
 
-    pub fn preview(&self, commands: &BTreeMap<usize, PTBCommand>) -> Option<PTBPreview> {
+    pub fn preview(&self, commands: &[PTBCommand]) -> Option<PTBPreview> {
         // Preview the PTB instead of executing if preview flag is set
-        let preview = commands
-            .values()
-            .any(|x| x.name == "preview" && x.values.iter().any(|f| f == "true"));
+        let preview = commands.iter().any(|x| x.name == "preview");
         preview.then_some(PTBPreview {
-            cmds: commands.clone().into_values().collect::<Vec<_>>(),
+            cmds: commands.to_owned(),
         })
     }
 
@@ -243,9 +166,8 @@ impl PTB {
         filename: Vec<String>,
         included_files: &mut BTreeMap<PathBuf, Vec<PathBuf>>,
         current_file: PathBuf,
-        start_index: usize,
-        output: &mut BTreeMap<usize, PTBCommand>,
-    ) -> Result<usize, Error> {
+        output: &mut Vec<PTBCommand>,
+    ) -> Result<(), Error> {
         if filename.len() != 1 {
             return Err(anyhow!("The --file options should only pass one filename"));
         }
@@ -314,35 +236,8 @@ impl PTB {
             .filter(|x| !x.is_empty())
             .collect::<Vec<_>>();
 
-        // in a file the first arg will not be the binary's name, so exclude it
-        let input = PTB::command().no_binary_name(true);
-        let args = input.get_matches_from(splits);
-        let ptb_commands = self.from_matches(parent_folder, &args, included_files)?;
-        let len_cmds = ptb_commands.len();
-
-        // add a pseudo command to tag where does the file include start and end
-        // this helps with returning errors as we need to point in which file, this occurs
-        output.insert(
-            start_index,
-            PTBCommand {
-                name: "file-include-start".to_string(),
-                values: vec![filename.to_string()],
-            },
-        );
-        for (k, v) in ptb_commands.into_iter() {
-            output.insert(start_index + k, v);
-        }
-
-        // end of file inclusion
-        output.insert(
-            start_index + len_cmds + 1,
-            PTBCommand {
-                name: "file-include-end".to_string(),
-                values: vec![filename.to_string()],
-            },
-        );
-
-        Ok(start_index + len_cmds + 1)
+        self.parse_args(parent_folder, splits, included_files, output)?;
+        Ok(())
     }
 
     pub async fn parse_and_build_ptb(
@@ -435,48 +330,53 @@ impl PTB {
         res
     }
 
+    pub fn parse_ptb_commands(
+        &self,
+        commands: Vec<PTBCommand>,
+    ) -> Result<Vec<(Span, ParsedPTBCommand)>, Vec<PTBError>> {
+        // Build the PTB
+        let mut parser = PTBParser::new();
+        for command in commands {
+            parser.parse_command(command);
+        }
+        parser.finish()
+    }
+
     /// Parses and executes the PTB with the sender as the current active address
     pub async fn execute(
         self,
-        matches: ArgMatches,
-        context: Option<WalletContext>,
+        args: Vec<String>,
+        context: &mut WalletContext,
     ) -> Result<(), Error> {
-        let ptb_args_matches = matches
-            .subcommand_matches("client")
-            .ok_or_else(|| anyhow!("Expected the client command but got a different command"))?
-            .subcommand_matches("ptb")
-            .ok_or_else(|| anyhow!("Expected the ptb subcommand but got a different command"))?;
-        let json = ptb_args_matches.get_flag("json");
-        let summary_flag = ptb_args_matches.get_flag("summary");
-        let gas_coin = ptb_args_matches.get_one::<String>("gas");
+        // we handle these flags separately
+        let mut json = false;
+        let mut summary_flag = false;
+        let mut gas_coin = false;
+        for a in args.iter() {
+            if a.as_str() == "--json" {
+                json = true;
+            }
+            if a.as_str() == "--gas-coin" {
+                gas_coin = true;
+            }
+            if a.as_str() == "--summary" {
+                summary_flag = true;
+            }
+        }
         let cwd =
             std::env::current_dir().map_err(|_| anyhow!("Cannot get the working directory."))?;
-        let commands = self.from_matches(cwd, ptb_args_matches, &mut BTreeMap::new())?;
+        let mut commands = Vec::new();
+        self.parse_args(cwd, args, &mut BTreeMap::new(), &mut commands)?;
+        let gas_coin = gas_coin
+            .then_some({
+                commands
+                    .iter()
+                    .find(|x| x.name == "gas")
+                    .and_then(|x| x.values.first())
+            })
+            .flatten();
 
-        // If there are only 2 commands, they are likely the default
-        // --preview and --warn-shadows set to false by clap,
-        // so we can return early because there's no input
-        if commands.len() == 2 {
-            if let (Some(a), Some(b)) = (commands.get(&1), commands.get(&2)) {
-                if a.name == "preview" && b.name == "warn_shadows" {
-                    println!("No PTB to process. See the help menu for more information.");
-                    return Ok(());
-                }
-            };
-        }
-
-        if let Some(ptb_preview) = &self.preview(&commands) {
-            println!("{}", ptb_preview);
-            return Ok(());
-        }
-
-        // Build the PTB
-        let mut parser = PTBParser::new();
-        for command in commands.clone() {
-            parser.parse_command(command.1);
-        }
-
-        let parsed = match parser.finish() {
+        let parsed_ptb_commands = match self.parse_ptb_commands(commands.clone()) {
             Err(errors) => {
                 let suffix = if errors.len() > 1 { "s" } else { "" };
                 let rendered = render_errors(commands, errors);
@@ -489,16 +389,16 @@ impl PTB {
             Ok(parsed) => parsed,
         };
 
-        // We need to resolve object IDs, so we need a fullnode to access
-        let context = if let Some(context) = context {
-            context
-        } else {
-            let config_path = sui_config::sui_config_dir()?.join(sui_config::SUI_CLIENT_CONFIG);
-            WalletContext::new(&config_path, None, None).await?
-        };
+        if let Some(ptb_preview) = self.preview(&commands) {
+            println!("{}", ptb_preview);
+            return Ok(());
+        }
 
+        // We need to resolve object IDs, so we need a fullnode to access
         let client = context.get_client().await?;
-        let (ptb, budget, _preview) = match self.parse_and_build_ptb(parsed, &context, client).await
+        let (ptb, budget, _preview) = match self
+            .parse_and_build_ptb(parsed_ptb_commands, context, client)
+            .await
         {
             Err(errors) => {
                 let suffix = if errors.len() > 1 { "s" } else { "" };
@@ -602,33 +502,6 @@ impl PTB {
     }
 }
 
-fn insert_value<T>(
-    arg_name: &clap::Id,
-    matches: &ArgMatches,
-    order: &mut BTreeMap<usize, PTBCommand>,
-) -> Result<(), Error>
-where
-    T: Clone + Display + Send + Sync + 'static,
-{
-    let values: ValuesRef<'_, T> = matches
-        .get_many(arg_name.as_str())
-        .ok_or_else(|| anyhow!("Cannot parse the args for the PTB"))?;
-    for (value, index) in values.zip(
-        matches
-            .indices_of(arg_name.as_str())
-            .expect("id came from matches"),
-    ) {
-        order.insert(
-            index,
-            PTBCommand {
-                name: arg_name.to_string(),
-                values: vec![value.to_string()],
-            },
-        );
-    }
-    Ok(())
-}
-
 /// Check for circular file inclusion.
 /// It uses toposort algorithm and returns an error on finding a cycle,
 /// describing which file includes a file that was already included.
@@ -649,6 +522,92 @@ fn check_for_cyclic_file_inclusions(
         )
     })?;
     Ok(())
+}
+
+/// Clap will just give us a list of args and the values passed split by whitespace
+/// This function groups them into command + values per string.
+/// E.g. "--assign", "X", "5" becomes "--assign X 5"
+/// We need to perform a special split of values' arguments based on specific logic,
+/// thus this grouping is needed.
+fn group_args_by_command(args: Vec<String>) -> Vec<String> {
+    let mut new_args = vec![];
+    let mut curr_string = vec![];
+    for arg in args {
+        if arg.starts_with("--") {
+            new_args.push(curr_string.join(" "));
+            curr_string.clear();
+            // remove the -- prefix, and replace - with _ as clap would do
+            curr_string.push(arg.replace("--", "").replace('-', "_"));
+        } else {
+            curr_string.push(arg);
+        }
+    }
+    if !curr_string.is_empty() {
+        new_args.push(curr_string.join(" "));
+    }
+    new_args
+}
+
+fn _ptb_description() -> clap::Command {
+    clap::Command::new("ptb")
+        .about("Build, preview, and execute programmable transaction blocks.")
+        .arg(arg!(
+            --file <FILE>
+                "Path to a file containing transactions to include in this PTB."
+        ))
+        .arg(arg!(
+            --assign <ASSIGN>...
+                "Assign a value to use later in the PTB. If only a name is supplied, the result of \
+                 the last transaction is binded to that name. If a name and value are \
+                 supplied, then the name is binded to that value."
+        ))
+        .arg(arg!(
+            --gas <ID> ...
+                "The object ID of the gas coin to use."
+        ))
+        .arg(arg!(
+            --"gas-budget" <MIST>
+                "The gas budget for the transaction, in MIST."
+        ))
+        .arg(arg!(
+            --"make-move-vec" <MAKE_MOVE_VEC> 
+            r#"Given n-values of the same type, it constructs a vector. For non objects or an empty vector, the type tag must be specified: --make-move-vec "<u64>" "[1]" "#
+        ))
+    //     #[clap(long, num_args(1..))]
+    //     make_move_vec: Vec<String>,
+    //     /// Merge N coins into the provided coin: --merge-coins into_coin "[coin1,coin2,coin3]"
+    //     #[clap(long, num_args(1..))]
+    //     merge_coins: Vec<String>,
+    //     /// Make a move call to a function
+    //     #[clap(long, num_args(1..))]
+    //     move_call: Vec<String>,
+    //     /// Split the coin into N coins as per the given amount.
+    //     /// On zsh, the vector needs to be given in quotes: --split-coins coin_to_split "[amount1,amount2]"
+    //     #[clap(long, num_args(1..))]
+    //     split_coins: Vec<String>,
+    //     /// Transfer objects to the address. E.g., --transfer-objects to_address "[obj1, obj2]"
+    //     #[clap(long, num_args(1..))]
+    //     transfer_objects: Vec<String>,
+    //     /// Publish the move package. It takes as input the folder where the package exists.
+    //     #[clap(long, num_args(1..))]
+    //     publish: Vec<String>,
+    //     /// Upgrade the move package. It takes as input the folder where the package exists.
+    //     #[clap(long, num_args(1..))]
+    //     upgrade: Vec<String>,
+    //     /// Preview the PTB instead of executing it
+    //     #[clap(long)]
+    //     preview: bool,
+    //     /// Enable shadown warning when including other PTB files.
+    //     /// Off by default.
+    //     #[clap(long)]
+    //     warn_shadows: bool,
+    //     /// Pick gas budget strategy if multiple gas-budgets are provided.
+    //     #[clap(long)]
+    //     pick_gas_budget: Option<PTBGas>,
+    //     /// Show only a short summary (digest, execution status, gas cost).
+    //     /// Do not use this flag when you need all the transaction data and the execution effects.
+    //     #[clap(long)]
+    //     summary: bool,
 }
 
 #[cfg(test)]
