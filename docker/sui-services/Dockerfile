@@ -43,12 +43,15 @@ COPY external-crates external-crates
 RUN cargo build --release \
     --bin sui-oracle \
     --bin suins-indexer
+RUN mkdir /sui/bin/
+RUN find /sui/target/release/ -maxdepth 1 -type f -executable -print 
+RUN find /sui/target/release/ -maxdepth 1 -type f -executable -print | xargs cp -t /sui/bin/
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
 WORKDIR sui
-COPY --from=builder /sui/target/release/* /usr/local/bin
-RUN apt update && apt install -y libpq5 ca-certificates libpq-dev postgresql
+COPY --from=builder /sui/bin/* /usr/local/bin
+RUN apt update && apt install -y libpq5 libpq-dev postgresql
 
 ARG BUILD_DATE
 ARG GIT_REVISION
