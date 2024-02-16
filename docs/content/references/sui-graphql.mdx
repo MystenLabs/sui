@@ -9,9 +9,10 @@ To get started with the GraphQL RPC, check out the [Getting Started](/guides/dev
 
 ## Key Types
 
-All GraphQL API elements are accessible via the left sidebar, the following are good starting pointsto explore from.
+All GraphQL API elements are accessible via the left sidebar, the following are good starting points to explore from.
 
-- "Queries" lists all top-level queries for reading the chain state from reading details about addresses and objects to [dryRunTransactionBlock](/references/sui-graphql/reference/queries/dry-run-transaction-block), which has an execution-like interface but does not modify the chain.
+- "Queries" lists all top-level queries for reading the chain state, from reading details about addresses and objects to [dryRunTransactionBlock](/references/sui-graphql/reference/queries/dry-run-transaction-block), which has an execution-like interface but does not modify the chain.
 - "Mutations" lists operations that can modify chain state, like [executeTransactionBlock](/references/sui-graphql/reference/mutations/execute-transaction-block).
 - [Object](/references/sui-graphql/reference/objects/object) is the type representing all on-chain objects (Move values and packages)
 - [Address](/references/sui-graphql/reference/objects/address) corresponds to account addresses (derived from the public keys of signatures that sign transactions) and can be used to query the objects owned by these accounts and the transactions they have signed or been affected by.
+- [Owner](/references/sui-graphql/reference/objects/owner) represents any entity that can own a [MoveObject](/references/sui-graphql/reference/objects/move-object) to handle cases where it is not known whether the owner is an [Object](/references/sui-graphql/reference/objects/object) or an [Address](/references/sui-graphql/reference/objects/address) (for example, from the perspective of a Move object looking at its owner).
