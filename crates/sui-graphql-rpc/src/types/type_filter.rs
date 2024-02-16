@@ -130,7 +130,7 @@ impl TypeFilter {
                 let generic_pattern =
                     format!("{}<%", tag.to_canonical_display(/* with_prefix */ true));
 
-                let statement = field.to_string() + " = {} OR " + field + " LIKE {}";
+                let statement = format!("({field} = {{}} OR {field} LIKE {{}})");
 
                 query = filter!(query, statement, exact_pattern, generic_pattern);
             }

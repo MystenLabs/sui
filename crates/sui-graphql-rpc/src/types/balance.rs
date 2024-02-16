@@ -211,7 +211,7 @@ fn balance_query(address: SuiAddress, coin_type: Option<TypeTag>, lhs: i64, rhs:
 
     // Combine the two queries, and select the most recent version of each object.
     let candidates = query!(
-        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ({})) o"#,
+        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ALL ({})) o"#,
         snapshot_objs,
         history_objs
     )
