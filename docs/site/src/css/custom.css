@@ -253,6 +253,11 @@ h4 {
   line-height: 1.125rem;
   letter-spacing: -0.02em;
 }
+@media screen and (min-width: 767px) {
+  .navbar__items.navbar__items--right {
+    min-width: 325px;
+  }
+}
 
 /** navbar search field **/
 .DocSearch-Button-Container {
