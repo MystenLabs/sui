@@ -1965,7 +1965,9 @@ async fn test_handle_overload_retry_response() {
         666, // this is a dummy value which does not matter
     );
 
-    let overload_error = SuiError::ValidatorOverloadedRetryAfter { retry_after_sec: 0 };
+    let overload_error = SuiError::ValidatorOverloadedRetryAfter {
+        retry_after_secs: 0,
+    };
     let rpc_error = SuiError::RpcError("RPC".into(), "Error".into());
 
     // Have 2f + 1 validators return the overload error and we should get the `SystemOverload` error.

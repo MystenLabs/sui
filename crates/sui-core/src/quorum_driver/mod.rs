@@ -791,31 +791,33 @@ where
         action: &'static str,
     ) {
         let tx_digest = *transaction.digest();
-        if let Some(qd_error) = err {
-            match qd_error {
+        match err {
+            None => {
+                debug!(?tx_digest, "Failed to {action} - Retrying");
+                spawn_monitored_task!(quorum_driver.enqueue_again_maybe(
+                    transaction.clone(),
+                    tx_cert,
+                    old_retry_times
+                ));
+            }
+            Some(QuorumDriverError::SystemOverloadRetryAfter { .. }) => {
                 // Special case for SystemOverloadRetryAfter error. In this case, due to that objects are already
                 // locked inside validators, we need to perform continuous retry and ignore `max_retry_times`.
-                QuorumDriverError::SystemOverloadRetryAfter { .. } => {
-                    debug!(?tx_digest, "Failed to {action} - Retrying");
-                    spawn_monitored_task!(quorum_driver.backoff_and_enqueue(
-                        transaction.clone(),
-                        tx_cert,
-                        old_retry_times
-                    ));
-                }
-                _ => {
-                    debug!(?tx_digest, "Failed to {action}: {}", qd_error);
-                    // non-retryable failure, this task reaches terminal state for now, notify waiter.
-                    quorum_driver.notify(&transaction, &Err(qd_error), old_retry_times + 1);
-                }
+                // TODO: the txn can potentially be retried unlimited times, therefore, we need to bound the number
+                // of on going transactions in a quorum driver. When the limit is reached, the quorum driver should
+                // reject any new transaction requests.
+                debug!(?tx_digest, "Failed to {action} - Retrying");
+                spawn_monitored_task!(quorum_driver.backoff_and_enqueue(
+                    transaction.clone(),
+                    tx_cert,
+                    old_retry_times
+                ));
             }
-        } else {
-            debug!(?tx_digest, "Failed to {action} - Retrying");
-            spawn_monitored_task!(quorum_driver.enqueue_again_maybe(
-                transaction.clone(),
-                tx_cert,
-                old_retry_times
-            ));
+            Some(qd_error) => {
+                debug!(?tx_digest, "Failed to {action}: {}", qd_error);
+                // non-retryable failure, this task reaches terminal state for now, notify waiter.
+                quorum_driver.notify(&transaction, &Err(qd_error), old_retry_times + 1);
+            }
         }
     }
 

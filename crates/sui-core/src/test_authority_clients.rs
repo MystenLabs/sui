@@ -72,7 +72,9 @@ impl AuthorityAPI for LocalAuthorityClient {
             });
         }
         if self.fault_config.overload_retry_after_handle_transaction {
-            return Err(SuiError::ValidatorOverloadedRetryAfter { retry_after_sec: 0 });
+            return Err(SuiError::ValidatorOverloadedRetryAfter {
+                retry_after_secs: 0,
+            });
         }
         result
     }
