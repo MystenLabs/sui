@@ -2342,69 +2342,6 @@ fn pretty_print_balance(
     builder: &mut TableBuilder,
     with_coins: bool,
 ) {
-    fn print(
-        builder: &mut TableBuilder,
-        coins: Vec<&(Option<SuiCoinMetadata>, Vec<Coin>)>,
-        with_coins: bool,
-    ) {
-        let mut table_builder = TableBuilder::default();
-        for (metadata, coins) in coins {
-            let (name, symbol, decimals) = if let Some(metadata) = metadata {
-                (
-                    metadata.name.clone(),
-                    metadata.symbol.clone(),
-                    metadata.decimals,
-                )
-            } else {
-                ("unknown".to_string(), "unknown symbol".to_string(), 10u8)
-            };
-
-            if with_coins {
-                let coin_numbers = if coins.len() != 1 { "coins" } else { "coin" };
-                builder.push_record(vec![format!(
-                    "{}: {} {coin_numbers}, Balance: {:<2.2} {}\n ┌",
-                    name,
-                    coins.len(),
-                    coins.iter().map(|x| x.balance).sum::<u64>() as f64
-                        / 10u64.pow(decimals as u32) as f64,
-                    symbol
-                )]);
-
-                let mut table_builder = TableBuilder::default();
-                for c in coins {
-                    table_builder.push_record(vec![
-                        "│".to_string(),
-                        c.coin_object_id.to_string(),
-                        format!(
-                            "{:<2.2}",
-                            c.balance as f64 / 10u64.pow(decimals as u32) as f64
-                        ),
-                        symbol.clone(),
-                    ]);
-                }
-                builder.push_record(vec![table_builder
-                    .build()
-                    .with(TableStyle::empty())
-                    .to_string()]);
-                builder.push_record(vec![format!(" └")]);
-            } else {
-                table_builder.push_record(vec![
-                    name,
-                    format!(
-                        "{:<2.2}",
-                        coins.iter().map(|x| x.balance).sum::<u64>() as f64
-                            / 10u64.pow(decimals as u32) as f64
-                    ),
-                    symbol.clone(),
-                ]);
-            }
-        }
-        builder.push_record(vec![table_builder
-            .build()
-            .with(TableStyle::blank())
-            .to_string()]);
-    }
-
     let mut ordered_coins_sui_first = coins
         .iter()
         .filter(|x| x.0 == "0x2::sui::SUI")
@@ -2417,5 +2354,63 @@ fn pretty_print_balance(
         .collect::<Vec<_>>();
 
     ordered_coins_sui_first.extend(other_coins);
-    print(builder, ordered_coins_sui_first, with_coins);
+
+    let mut table_builder = TableBuilder::default();
+    for (metadata, coins) in ordered_coins_sui_first {
+        let (name, symbol, decimals) = if let Some(metadata) = metadata {
+            (
+                metadata.name.as_str(),
+                metadata.symbol.as_str(),
+                metadata.decimals,
+            )
+        } else {
+            ("unknown", "unknown symbol", 10u8)
+        };
+
+        if with_coins {
+            let coin_numbers = if coins.len() != 1 { "coins" } else { "coin" };
+            builder.push_record(vec![format!(
+                "{}: {} {coin_numbers}, Balance: {:<2.2} {}\n ┌",
+                name,
+                coins.len(),
+                coins.iter().map(|x| x.balance).sum::<u64>() as f64
+                    / 10u64.pow(decimals as u32) as f64,
+                symbol
+            )]);
+
+            let mut table_builder = TableBuilder::default();
+            for c in coins {
+                table_builder.push_record(vec![
+                    "│",
+                    c.coin_object_id.to_string().as_str(),
+                    format!(
+                        "{:<2.2}",
+                        c.balance as f64 / 10u64.pow(decimals as u32) as f64
+                    )
+                    .as_str(),
+                    symbol,
+                ]);
+            }
+            builder.push_record(vec![table_builder
+                .build()
+                .with(TableStyle::empty())
+                .to_string()]);
+            builder.push_record(vec![format!(" └")]);
+        } else {
+            table_builder.push_record(vec![
+                name,
+                format!(
+                    "{:<2.2}",
+                    coins.iter().map(|x| x.balance).sum::<u64>() as f64
+                        / 10u64.pow(decimals as u32) as f64
+                )
+                .as_str(),
+                symbol,
+            ]);
+        }
+    }
+    builder.push_record(vec![table_builder
+        .build()
+        .with(TableStyle::blank())
+        .to_string()]);
 }
