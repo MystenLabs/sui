@@ -3,7 +3,7 @@
 
 #[cfg(feature = "pg_integration")]
 mod tests {
-    use fastcrypto::encoding::Base64;
+    use fastcrypto::encoding::{Base64, Encoding};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use serde_json::json;
@@ -439,8 +439,7 @@ mod tests {
             .await
             .transfer_sui(Some(1_000), recipient)
             .build();
-        let tx_bytes = Base64::from_bytes(&bcs::to_bytes(&tx).unwrap());
-        let tx_bytes = tx_bytes.encoded();
+        let tx_bytes = Base64::encode(bcs::to_bytes(&tx).unwrap());
 
         let query = r#"{ dryRunTransactionBlock(txBytes: $tx) {
                 transaction {
@@ -533,8 +532,7 @@ mod tests {
             .await
             .transfer_sui(Some(1_000), recipient)
             .build();
-        let tx_kind_bytes = Base64::from_bytes(&bcs::to_bytes(&tx.into_kind()).unwrap());
-        let tx_kind_bytes = tx_kind_bytes.encoded();
+        let tx_kind_bytes = Base64::encode(bcs::to_bytes(&tx.into_kind()).unwrap());
 
         let query = r#"{ dryRunTransactionBlock(txBytes: $tx, txMeta: {}) {
                 results {
@@ -623,8 +621,7 @@ mod tests {
             )
             .with_type_args(vec![GAS::type_tag()])
             .build();
-        let tx_bytes = Base64::from_bytes(&bcs::to_bytes(&tx).unwrap());
-        let tx_bytes = tx_bytes.encoded();
+        let tx_bytes = Base64::encode(bcs::to_bytes(&tx).unwrap());
 
         let query = r#"{ dryRunTransactionBlock(txBytes: $tx) {
                 results {
