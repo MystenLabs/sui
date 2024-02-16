@@ -124,7 +124,15 @@ const guides = [
 				items: [
 					'guides/developer/app-examples/e2e-counter',
 					'guides/developer/app-examples/auction',
-					'guides/developer/app-examples/escrow',
+					{
+						type: 'category',
+						label: 'Escrow',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/app-examples/escrow',
+						},
+						items: ['guides/developer/app-examples/escrow-indexer-api'],
+					},
 					'guides/developer/app-examples/trusted-swap',
 					'guides/developer/app-examples/tic-tac-toe',
 					'guides/developer/app-examples/recaptcha',
