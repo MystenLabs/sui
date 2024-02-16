@@ -246,7 +246,6 @@ module bridge::bridge {
         assert!(!inner.frozen, EBridgeUnavailable);
 
         let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
-
         assert!(linked_table::contains(&inner.bridge_records, key), EMessageNotFoundInRecords);
 
         // retrieve approved bridge message
