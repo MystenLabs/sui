@@ -8,6 +8,7 @@ use std::{
 
 use consensus_config::{AuthorityIndex, ProtocolKeyPair};
 use mysten_metrics::monitored_scope;
+use parking_lot::RwLock;
 use tokio::sync::{broadcast, watch};
 use tracing::warn;
 
@@ -19,12 +20,18 @@ use crate::{
     block_manager::BlockManager,
     commit_observer::CommitObserver,
     context::Context,
+    dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     storage::Store,
     threshold_clock::ThresholdClock,
     transaction::TransactionConsumer,
-    universal_committer::UniversalCommitter,
+    universal_committer::{
+        universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
+    },
 };
+
+// TODO: Move to protocol config once initial value is finalized.
+const NUM_LEADERS_PER_ROUND: usize = 1;
 
 #[allow(dead_code)]
 pub(crate) struct Core {
@@ -43,7 +50,7 @@ pub(crate) struct Core {
     /// Used to make commit decisions for leader blocks in the dag.
     committer: UniversalCommitter,
     /// The last decided leader returned from the universal committer. Important to note
-    /// that this does not signify that the leader has been committed yet as it still has
+    /// that this does not signify that the leader has been persisted yet as it still has
     /// to go through CommitObserver and persist the commit in store. On recovery/restart
     /// the last_decided_leader will be set to the last_commit leader in dag state.
     last_decided_leader: Slot,
@@ -64,14 +71,19 @@ impl Core {
         context: Arc<Context>,
         transaction_consumer: TransactionConsumer,
         block_manager: BlockManager,
-        committer: UniversalCommitter,
-        last_decided_leader: Slot,
         commit_observer: CommitObserver,
         signals: CoreSignals,
         block_signer: ProtocolKeyPair,
+        dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
         let (my_genesis_block, all_genesis_blocks) = Block::genesis(context.clone());
+        let last_decided_leader = dag_state.read().last_commit_leader();
+
+        let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone())
+            .with_number_of_leaders(NUM_LEADERS_PER_ROUND)
+            .with_pipeline(true)
+            .build();
 
         Self {
             context: context.clone(),
@@ -130,6 +142,9 @@ impl Core {
 
         // Now process them, basically move the threshold clock and add them to pending list
         self.add_accepted_blocks(accepted_blocks, None);
+
+        // TODO: Add optimization for added blocks that do not achieve quorum for a round.
+        self.try_commit();
 
         // Attempt to create a new block and broadcast it.
         if let Some(block) = self.try_new_block(false) {
@@ -285,7 +300,7 @@ impl Core {
         let sequenced_leaders = self.committer.try_commit(self.last_decided_leader);
 
         if let Some(last) = sequenced_leaders.last() {
-            self.last_decided_leader = last.clone().into_decided_slot();
+            self.last_decided_leader = last.clone().get_decided_slot();
             self.context
                 .metrics
                 .node_metrics
@@ -295,7 +310,7 @@ impl Core {
 
         let committed_leaders = sequenced_leaders
             .into_iter()
-            .filter_map(|leader| leader.into_committed_block())
+            .filter_map(|leader| leader.get_committed_block())
             .collect::<Vec<_>>();
 
         self.commit_observer.handle_commit(committed_leaders);
@@ -471,16 +486,11 @@ mod test {
     use std::{collections::BTreeSet, time::Duration};
 
     use consensus_config::{local_committee_and_keys, Stake};
-    use parking_lot::RwLock;
     use sui_protocol_config::ProtocolConfig;
     use tokio::sync::mpsc::unbounded_channel;
 
     use super::*;
-    use crate::{
-        block::TestBlock, dag_state::DagState, storage::mem_store::MemStore,
-        transaction::TransactionClient,
-        universal_committer::universal_committer_builder::UniversalCommitterBuilder,
-    };
+    use crate::{block::TestBlock, storage::mem_store::MemStore, transaction::TransactionClient};
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
     #[tokio::test]
@@ -525,23 +535,16 @@ mod test {
             store.clone(),
         );
 
-        let last_decided_leader = dag_state.read().last_commit_leader();
-        let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone())
-            .with_number_of_leaders(context.parameters.number_of_leaders)
-            .with_pipeline(context.parameters.enable_pipelining)
-            .build();
-
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new();
         let mut core = Core::new(
             context.clone(),
             transaction_consumer,
             block_manager,
-            committer,
-            last_decided_leader,
             commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
             store.clone(),
         );
 
@@ -633,23 +636,16 @@ mod test {
             store.clone(),
         );
 
-        let last_decided_leader = dag_state.read().last_commit_leader();
-        let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone())
-            .with_number_of_leaders(context.parameters.number_of_leaders)
-            .with_pipeline(context.parameters.enable_pipelining)
-            .build();
-
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new();
         let mut core = Core::new(
             context.clone(),
             transaction_consumer,
             block_manager,
-            committer,
-            last_decided_leader,
             commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
             store.clone(),
         );
 
@@ -720,21 +716,14 @@ mod test {
             store.clone(),
         );
 
-        let last_decided_leader = dag_state.read().last_commit_leader();
-        let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone())
-            .with_number_of_leaders(context.parameters.number_of_leaders)
-            .with_pipeline(context.parameters.enable_pipelining)
-            .build();
-
         let mut core = Core::new(
             context.clone(),
             transaction_consumer,
             block_manager,
-            committer,
-            last_decided_leader,
             commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
             store.clone(),
         );
 
@@ -820,21 +809,14 @@ mod test {
             store.clone(),
         );
 
-        let last_decided_leader = dag_state.read().last_commit_leader();
-        let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone())
-            .with_number_of_leaders(context.parameters.number_of_leaders)
-            .with_pipeline(context.parameters.enable_pipelining)
-            .build();
-
         let mut core = Core::new(
             context.clone(),
             transaction_consumer,
             block_manager,
-            committer,
-            last_decided_leader,
             commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,
+            dag_state.clone(),
             store.clone(),
         );
 
@@ -990,9 +972,8 @@ mod test {
                 .unwrap()
                 .expect("last commit should be set");
             // There are 8 leader rounds with rounds completed up to and including
-            // round 10
-            // TODO: debug why only 7 leaders are committed even though all the
-            // blocks for round 10 are eventually accepted.
+            // round 9. Round 10 blocks will only include their own blocks, so the
+            // 8th leader will not be committed.
             assert_eq!(last_commit.index, 7);
             let all_stored_commits = core.store.scan_commits(0).unwrap();
             assert_eq!(all_stored_commits.len(), 7);
@@ -1097,23 +1078,16 @@ mod test {
                 store.clone(),
             );
 
-            let last_decided_leader = dag_state.read().last_commit_leader();
-            let committer = UniversalCommitterBuilder::new(context.clone(), dag_state)
-                .with_number_of_leaders(context.parameters.number_of_leaders)
-                .with_pipeline(context.parameters.enable_pipelining)
-                .build();
-
             let block_signer = signers.remove(index).1;
 
             let core = Core::new(
                 context,
                 transaction_consumer,
                 block_manager,
-                committer,
-                last_decided_leader,
                 commit_observer,
                 signals,
                 block_signer,
+                dag_state,
                 store,
             );
 

@@ -205,7 +205,7 @@ impl LeaderStatus {
         }
     }
 
-    pub fn into_decided_slot(self) -> Slot {
+    pub fn get_decided_slot(self) -> Slot {
         match self {
             Self::Commit(block) => block.reference().into(),
             Self::Skip(leader) => leader,
@@ -213,7 +213,7 @@ impl LeaderStatus {
         }
     }
 
-    pub fn into_committed_block(self) -> Option<VerifiedBlock> {
+    pub fn get_committed_block(self) -> Option<VerifiedBlock> {
         match self {
             Self::Commit(block) => Some(block),
             Self::Skip(leader) => None,

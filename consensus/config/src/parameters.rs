@@ -23,14 +23,6 @@ pub struct Parameters {
 
     /// The database path. The path should be provided in order for the node to be able to boot
     pub db_path: Option<PathBuf>,
-
-    // Enables pipelining within the universal commit rule.
-    #[serde(default = "Parameters::default_enable_pipelining")]
-    pub enable_pipelining: bool,
-
-    // Enables multi-leader per round within the universal commit rule.
-    #[serde(default = "Parameters::default_number_of_leaders")]
-    pub number_of_leaders: usize,
 }
 
 impl Parameters {

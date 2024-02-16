@@ -176,7 +176,6 @@ mod test {
         dag_state::DagState,
         storage::mem_store::MemStore,
         transaction::{TransactionClient, TransactionConsumer},
-        universal_committer::universal_committer_builder::UniversalCommitterBuilder,
     };
 
     #[tokio::test]
@@ -199,22 +198,14 @@ mod test {
             dag_state.clone(),
             store.clone(),
         );
-
-        let last_decided_leader = dag_state.read().last_commit_leader();
-        let committer = UniversalCommitterBuilder::new(context.clone(), dag_state)
-            .with_number_of_leaders(context.parameters.number_of_leaders)
-            .with_pipeline(context.parameters.enable_pipelining)
-            .build();
-
         let core = Core::new(
             context.clone(),
             transaction_consumer,
             block_manager,
-            committer,
-            last_decided_leader,
             commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,
+            dag_state,
             store,
         );
 
