@@ -9,13 +9,14 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use mysten_metrics::{monitored_future, monitored_scope};
 use parking_lot::Mutex;
+#[cfg(not(test))]
 use rand::{rngs::ThreadRng, seq::SliceRandom};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::{error::Elapsed, sleep, sleep_until, timeout, Instant};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 use crate::block::{BlockRef, SignedBlock, VerifiedBlock};
 use crate::block_verifier::BlockVerifier;
@@ -23,13 +24,14 @@ use crate::context::Context;
 use crate::core_thread::CoreThreadDispatcher;
 use crate::error::{ConsensusError, ConsensusResult};
 use crate::network::NetworkClient;
-
 use consensus_config::AuthorityIndex;
 
 /// The number of concurrent fetch blocks requests per authority
 const FETCH_BLOCKS_CONCURRENCY: usize = 5;
 
 const FETCH_REQUEST_TIMEOUT: Duration = Duration::from_millis(500);
+
+const MAX_FETCH_BLOCKS_PER_REQUEST: usize = 200;
 
 enum Command {
     FetchBlocks {
@@ -132,7 +134,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
     // The main loop to listen for the submitted commands.
     async fn run(&mut self) {
-        // We want the synchronizer to run periodically every 500ms to fetch any still missing blocks.
+        // We want the synchronizer to run periodically every 500ms to fetch any missing blocks.
         const SYNCHRONIZER_TIMEOUT: Duration = Duration::from_millis(500);
         let scheduler_timeout = sleep_until(Instant::now() + SYNCHRONIZER_TIMEOUT);
 
@@ -251,6 +253,11 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         context: Arc<Context>,
     ) -> ConsensusResult<()> {
         let mut verified_blocks = Vec::new();
+
+        if serialized_blocks.len() > requested_block_refs.len() {
+            return Err(ConsensusError::TooManyFetchedBlocksReturned(peer_index));
+        }
+
         for serialized_block in serialized_blocks {
             let signed_block: SignedBlock =
                 bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
@@ -265,7 +272,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     .invalid_blocks
                     .with_label_values(&[&peer_index.to_string(), "synchronizer"])
                     .inc();
-                info!("Invalid block from {}: {}", peer_index, e);
+                error!("Invalid block received from {}: {}", peer_index, e);
                 return Err(e);
             }
             let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
@@ -346,7 +353,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 let total_requested = missing_blocks.len();
 
                 // Fetch blocks from peers
-                let results = Self::fetch_blocks_from_peers(context.clone(), network_client, missing_blocks).await;
+                let results = Self::fetch_blocks_from_authorities(context.clone(), network_client, missing_blocks).await;
 
                 if results.is_empty() {
                     warn!("No results returned while requesting missing blocks");
@@ -374,34 +381,41 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
     /// Fetches the `missing_blocks` from available peers. The method will attempt to split the load amongst multiple (random) peers.
     /// The method returns a vector with the fetched blocks from each peer that successfully responded. Each element of the vector
     /// is a tuple which contains the requested missing block refs, the returned blocks and the peer authority index.
-    async fn fetch_blocks_from_peers(
+    async fn fetch_blocks_from_authorities(
         context: Arc<Context>,
         network_client: Arc<C>,
         missing_blocks: BTreeSet<BlockRef>,
     ) -> Vec<(BTreeSet<BlockRef>, Vec<Bytes>, AuthorityIndex)> {
         const FETCH_FROM_PEERS_TIMEOUT: Duration = Duration::from_millis(2_000);
-        const MAX_BLOCKS_PER_PEER: usize = 200;
         const MAX_PEERS: usize = 3;
 
         // Attempt to fetch only up to a max of blocks
         let missing_blocks = missing_blocks
             .into_iter()
-            .take(MAX_PEERS * MAX_BLOCKS_PER_PEER)
+            .take(MAX_PEERS * MAX_FETCH_BLOCKS_PER_REQUEST)
             .collect::<Vec<_>>();
 
-        // Shuffle the peers
+        #[allow(unused_mut)]
         let mut peers = context
             .committee
             .authorities()
             .filter_map(|(peer_index, _)| (peer_index != context.own_index).then_some(peer_index))
             .collect::<Vec<_>>();
-        peers.shuffle(&mut ThreadRng::default());
+
+        // TODO: probably inject the RNG to allow unit testing - this is a work around for now.
+        cfg_if::cfg_if! {
+            if #[cfg(not(test))] {
+                // Shuffle the peers
+                peers.shuffle(&mut ThreadRng::default());
+            }
+        }
+
         let mut peers = peers.into_iter();
 
         let mut request_futures = FuturesUnordered::new();
 
-        // Send the requests
-        for blocks in missing_blocks.chunks(MAX_BLOCKS_PER_PEER) {
+        // Send the initial requests
+        for blocks in missing_blocks.chunks(MAX_FETCH_BLOCKS_PER_REQUEST) {
             let peer = peers
                 .next()
                 .expect("Possible misconfiguration as a peer should be found");
@@ -423,10 +437,15 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
         loop {
             tokio::select! {
-                Some((response, requested_block_refs, _retries, peer_index)) = request_futures.next() => {
+                Some((response, requested_block_refs, _retries, peer_index)) = request_futures.next() =>
                     match response {
                         Ok(Ok(fetched_blocks)) => {
                             results.push((requested_block_refs, fetched_blocks, peer_index));
+
+                            // no more pending requests are left, just break the loop
+                            if request_futures.is_empty() {
+                                break;
+                            }
                         },
                         Ok(Err(_)) | Err(Elapsed {..}) => {
                             // try again if there is any peer left
@@ -442,8 +461,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 debug!("No more peers left to fetch blocks");
                             }
                         }
-                    }
-                }
+                    },
                 _ = &mut fetcher_timeout => {
                     debug!("Timed out while fetching all the blocks");
                     break;
@@ -463,7 +481,7 @@ mod tests {
     use crate::core_thread::{CoreError, CoreThreadDispatcher};
     use crate::error::{ConsensusError, ConsensusResult};
     use crate::network::NetworkClient;
-    use crate::synchronizer::{Synchronizer, FETCH_BLOCKS_CONCURRENCY};
+    use crate::synchronizer::{Synchronizer, FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT};
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
@@ -476,12 +494,18 @@ mod tests {
     #[derive(Default)]
     struct MockCoreThreadDispatcher {
         add_blocks: tokio::sync::Mutex<Vec<VerifiedBlock>>,
+        missing_blocks: tokio::sync::Mutex<BTreeSet<BlockRef>>,
     }
 
     impl MockCoreThreadDispatcher {
         async fn get_add_blocks(&self) -> Vec<VerifiedBlock> {
             let lock = self.add_blocks.lock().await;
             lock.to_vec()
+        }
+
+        async fn stub_missing_blocks(&self, block_refs: BTreeSet<BlockRef>) {
+            let mut lock = self.missing_blocks.lock().await;
+            lock.extend(block_refs);
         }
     }
 
@@ -501,7 +525,10 @@ mod tests {
         }
 
         async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
-            todo!()
+            let mut lock = self.missing_blocks.lock().await;
+            let result = lock.clone();
+            lock.clear();
+            Ok(result)
         }
     }
 
@@ -658,5 +685,68 @@ mod tests {
                 assert!(handle.fetch_blocks(missing_blocks, peer).await.is_ok());
             }
         }
+    }
+
+    #[tokio::test]
+    async fn synchronizer_periodic_task_fetch_blocks() {
+        // GIVEN
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let block_verifier = Arc::new(NoopBlockVerifier {});
+        let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let network_client = Arc::new(MockNetworkClient::default());
+
+        // Create some test blocks
+        let expected_blocks = (0..10)
+            .map(|round| VerifiedBlock::new_for_test(TestBlock::new(round, 0).build()))
+            .collect::<Vec<_>>();
+        let missing_blocks = expected_blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<BTreeSet<_>>();
+
+        // AND stub the missing blocks
+        core_dispatcher
+            .stub_missing_blocks(missing_blocks.clone())
+            .await;
+
+        // AND stub the requests for authority 1 & 2
+        // Make the first authority timeout, so the second will be called. "We" are authority = 0, so
+        // we are skipped anyways.
+        network_client
+            .stub_fetch_blocks(
+                expected_blocks.clone(),
+                AuthorityIndex::new_for_test(1),
+                Some(2 * FETCH_REQUEST_TIMEOUT),
+            )
+            .await;
+        network_client
+            .stub_fetch_blocks(
+                expected_blocks.clone(),
+                AuthorityIndex::new_for_test(2),
+                None,
+            )
+            .await;
+
+        // WHEN start the synchronizer and wait for a couple of seconds
+        let _handle = Synchronizer::start(
+            network_client.clone(),
+            context,
+            core_dispatcher.clone(),
+            block_verifier,
+        );
+
+        sleep(Duration::from_secs(2)).await;
+
+        // THEN the missing blocks should now be fetched and added to core
+        let added_blocks = core_dispatcher.get_add_blocks().await;
+        assert_eq!(added_blocks, expected_blocks);
+
+        // AND missing blocks should have been consumed by the stub
+        assert!(core_dispatcher
+            .get_missing_blocks()
+            .await
+            .unwrap()
+            .is_empty());
     }
 }
