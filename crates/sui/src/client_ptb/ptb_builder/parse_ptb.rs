@@ -81,6 +81,7 @@ impl PTBParser {
     /// Return the list of parsed commands or any errors that were encountered during the
     /// parsing of the PTB command(s).
     pub fn finish(self) -> Result<Vec<(Span, ParsedPTBCommand)>, Vec<PTBError>> {
+        println!("parsed: {:#?}", self.parsed);
         if self.errors.is_empty() {
             Ok(self.parsed)
         } else {
@@ -91,6 +92,7 @@ impl PTBParser {
     /// Parse a single PTB command. If an error is encountered, it is added to the list of
     /// `errors`.
     pub fn parse_command(&mut self, cmd: PTBCommand) {
+        println!("cmd: {:#?}", cmd);
         let name = CommandToken::from_str(&cmd.name);
         let name_span = Span::cmd_span(cmd.name.len(), self.context.current_file_scope());
         if let Err(e) = name {
@@ -105,6 +107,8 @@ impl PTBParser {
             return;
         };
         let name = span(name_span, name.unwrap());
+
+        let values_string = cmd.values.join(" ");
 
         macro_rules! check_args {
             ($expected:expr, $cmd:expr) => {
@@ -145,28 +149,28 @@ impl PTBParser {
 
         match &name.value {
             CommandToken::FileStart => {
-                handle_error!(self.parse_file_start(cmd.values));
+                handle_error!(self.parse_file_start(values_string));
                 // Don't inrement the command index for file-start command since we've just entered
                 // the file so early-return.
                 return;
             }
             CommandToken::FileEnd => {
                 check_args!(1..=1, cmd);
-                handle_error!(self.parse_file_end(cmd.values));
+                handle_error!(self.parse_file_end(values_string));
                 // Don't inrement the command index for file-end commands so early-return.
                 return;
             }
             CommandToken::Publish => {
                 check_args!(1..=1, cmd);
-                handle_error!(self.parse_publish(name, cmd.values));
+                handle_error!(self.parse_publish(name, values_string));
             }
             CommandToken::Upgrade => {
                 check_args!(2..=2, cmd);
-                handle_error!(self.parse_upgrade(name, cmd.values));
+                handle_error!(self.parse_upgrade(name, values_string));
             }
             CommandToken::TransferObjects => {
                 check_args!(2..=2, cmd);
-                handle_error!(self.parse_transfer_objects(name, cmd.values));
+                handle_error!(self.parse_transfer_objects(name, values_string));
             }
             CommandToken::SplitCoins => {
                 check_args!(2..=2, cmd);
@@ -181,7 +185,7 @@ impl PTBParser {
                 handle_error!(self.parse_make_move_vec(name, cmd.values));
             }
             CommandToken::MoveCall => {
-                check_args!(1..=3, cmd);
+                check_args!(1..=1024, cmd);
                 handle_error!(self.parse_move_call(name, cmd.values));
             }
             CommandToken::Assign => {
@@ -225,21 +229,31 @@ impl PTBParser {
         Ok(ValueParser::new(stokens, fscope))
     }
 
-    fn parse_file_start(&mut self, mut values: Vec<String>) -> PTBResult<()> {
-        let fname = values.pop().expect("Safe because interally added command");
-        self.context.push_file_scope(fname.clone());
+    fn value_parser2<'a>(&self, s: &'a String) -> PTBResult<ValueParser<'a>> {
+        let fscope = self.context.current_file_scope();
+        let tokens: Vec<_> = ArgumentToken::tokenize(s).map_err(|e| PTBError::WithSource {
+            // TODO: Can remove arg IDX from spans
+            span: Span::new(0, s.len(), 0, fscope),
+            message: e.to_string(),
+            help: None,
+        })?;
+        let stokens = Spanner::new(tokens, 0);
+        Ok(ValueParser::new(stokens, fscope))
+    }
+
+    fn parse_file_start(&mut self, value: String) -> PTBResult<()> {
+        self.context.push_file_scope(value);
         Ok(())
     }
 
-    fn parse_file_end(&mut self, mut values: Vec<String>) -> PTBResult<()> {
-        let fname = values.pop().expect("Safe because interally added command");
-        self.context.pop_file_scope(&fname)
+    fn parse_file_end(&mut self, value: String) -> PTBResult<()> {
+        self.context.pop_file_scope(&value)
     }
 
-    fn parse_publish(&mut self, name: Spanned<CommandToken>, values: Vec<String>) -> PTBResult<()> {
+    fn parse_publish(&mut self, name: Spanned<CommandToken>, value: String) -> PTBResult<()> {
         let sp = Span {
             start: 0,
-            end: values[0].len(),
+            end: value.len(),
             arg_idx: 0,
             file_scope: self.context.current_file_scope(),
         };
@@ -247,30 +261,25 @@ impl PTBParser {
             name.span,
             ParsedPTBCommand::Publish(Spanned {
                 span: sp,
-                value: values[0].clone(),
+                value: value.clone(),
             }),
         ));
         Ok(())
     }
 
-    fn parse_upgrade(&mut self, name: Spanned<CommandToken>, values: Vec<String>) -> PTBResult<()> {
-        let cap_obj = self
-            .value_parser(&values, 0)
-            .and_then(|mut p| p.parse_single_argument())?;
+    fn parse_upgrade(&mut self, name: Spanned<CommandToken>, values: String) -> PTBResult<()> {
+        let mut parser = self.value_parser2(&values)?;
+        bind!(
+            path_loc,
+            Argument::String(s) | Argument::Identifier(s) = parser.parse_argument()?,
+            |loc| { error!(loc, "Expected a string value for package path") }
+        );
+        parser.parse_whitespace()?;
+        let cap_obj = parser.parse_argument()?;
+        parser.end()?;
         self.parsed.push((
             name.span,
-            ParsedPTBCommand::Upgrade(
-                Spanned {
-                    span: Span {
-                        start: 0,
-                        end: values[1].len(),
-                        arg_idx: 1,
-                        file_scope: self.context.current_file_scope(),
-                    },
-                    value: values[1].clone(),
-                },
-                cap_obj,
-            ),
+            ParsedPTBCommand::Upgrade(span(path_loc, s), cap_obj),
         ));
         Ok(())
     }
@@ -278,10 +287,13 @@ impl PTBParser {
     fn parse_transfer_objects(
         &mut self,
         name: Spanned<CommandToken>,
-        values: Vec<String>,
+        values: String,
     ) -> PTBResult<()> {
-        let transfer_to = self.value_parser(&values, 0)?.parse_single_argument()?;
-        let transfer_froms = self.value_parser(&values, 1)?.parse_array()?;
+        let mut parser = self.value_parser2(&values)?;
+        let transfer_to = parser.parse_argument()?;
+        parser.parse_whitespace()?;
+        let transfer_froms = parser.parse_array()?;
+        parser.end()?;
         self.parsed.push((
             name.span,
             ParsedPTBCommand::TransferObjects(transfer_to, transfer_froms),
@@ -346,13 +358,14 @@ impl PTBParser {
                 let tys = parser.parse_type_args()?;
                 if let Some(other_tys) = tys_opt {
                     error!(
-                        other_tys.span,
+                        tys.span,
                         "Type arguments already specified in function call but also supplied here"
                     )
                 }
                 tys_opt = Some(tys);
             } else {
-                args = Some(parser.parse_list(
+                let inner_args = args.get_or_insert_with(Vec::new);
+                inner_args.append(&mut parser.parse_list(
                     |p| p.parse_argument(),
                     ArgumentToken::Whitespace,
                     /* not checked */ ArgumentToken::Void,
@@ -659,6 +672,16 @@ impl<'a> ValueParser<'a> {
         Ok(arg)
     }
 
+    fn end(mut self) -> PTBResult<()> {
+        while self.peek_tok() == Some(ArgumentToken::Whitespace) {
+            self.spanned(|p| p.advance(ArgumentToken::Whitespace))?;
+        }
+        if let Ok(sp!(s, (tok, _))) = self.spanned(|p| p.advance_any()) {
+            error!(s, "Unexpected token '{}'", tok);
+        }
+        Ok(())
+    }
+
     // Parse a single PTB argument and allow trailing characters possibly.
     fn parse_argument(&mut self) -> PTBResult<Spanned<Argument>> {
         use super::argument_token::ArgumentToken as Tok;
@@ -851,6 +874,15 @@ impl<'a> ValueParser<'a> {
             None
         };
         Ok((module_access, ty_args_opt))
+    }
+
+    // Consume at least one whitespace token, and then consume any additional whitespace tokens.
+    fn parse_whitespace(&mut self) -> PTBResult<()> {
+        self.spanned(|p| p.advance(ArgumentToken::Whitespace))?;
+        while self.peek_tok() == Some(ArgumentToken::Whitespace) {
+            self.spanned(|p| p.advance(ArgumentToken::Whitespace))?;
+        }
+        Ok(())
     }
 }
 

@@ -6,7 +6,7 @@ use crate::client_ptb::{
     displays::Pretty,
     ptb_builder::{
         build_ptb::PTBBuilder, command::ParsedPTBCommand, errors::render_errors,
-        parse_ptb::PTBParser,
+        parse_ptb::PTBParser, parser::ProgramParser,
     },
 };
 
@@ -349,6 +349,11 @@ impl PTB {
         context: &mut WalletContext,
     ) -> Result<(), Error> {
         // we handle these flags separately
+        let s = self.args.join(" ");
+        println!("{}", s);
+        let x = ProgramParser::new(s).unwrap().parse();
+        println!("{:#?}", x);
+        todo!();
         let mut json = false;
         let mut summary_flag = false;
         let mut gas_coin = false;

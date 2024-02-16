@@ -647,8 +647,9 @@ impl<'a> PTBBuilder<'a> {
             };
             error!(
                 loc,
-                "Expected {} arguments, but got {}",
+                "Expected {} argument{}, but got {}",
                 parameters.len(),
+                if parameters.len() == 1 { "" } else { "s" },
                 args.len()
             );
         }
