@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 45;
+const MAX_PROTOCOL_VERSION: u64 = 46;
 
 // Record history of protocol version allocations here:
 //
@@ -122,6 +122,9 @@ const MAX_PROTOCOL_VERSION: u64 = 45;
 // Version 44: Enable consensus fork detection on mainnet.
 //             Switch between Narwhal and Mysticeti consensus in tests, devnet and testnet.
 // Version 45: Use tonic networking for Mysticeti consensus.
+
+// Version 46: Add native bridge.
+//             Enable native bridge in devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -345,6 +348,10 @@ struct FeatureFlags {
     // Enable random beacon protocol
     #[serde(skip_serializing_if = "is_false")]
     random_beacon: bool,
+
+    // Enable bridge protocol
+    #[serde(skip_serializing_if = "is_false")]
+    bridge: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     enable_effects_v2: bool,
@@ -1214,6 +1221,15 @@ impl ProtocolConfig {
 
     pub fn random_beacon(&self) -> bool {
         self.feature_flags.random_beacon
+    }
+
+    pub fn enable_bridge(&self) -> bool {
+        let ret = self.feature_flags.bridge;
+        if ret {
+            // bridge required end-of-epoch transactions
+            assert!(self.feature_flags.end_of_epoch_transaction_supported);
+        }
+        ret
     }
 
     pub fn enable_effects_v2(&self) -> bool {
@@ -2135,6 +2151,12 @@ impl ProtocolConfig {
                         cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
                     }
                     // Also bumps framework snapshot to fix binop issue.
+                }
+                46 => {
+                    // enable bridge in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.bridge = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
