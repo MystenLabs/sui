@@ -102,7 +102,7 @@ impl ValidatorConfigBuilder {
             max_pending_transactions: None,
             max_submit_position: None,
             submit_delay_step_override_millis: None,
-            protocol: ConsensusProtocol::Narwhal,
+            protocol: ConsensusProtocol::Mysticeti,
             narwhal_config: narwhal_config::Parameters {
                 network_admin_server: NetworkAdminServerParameters {
                     primary_network_admin_server_port: local_ip_utils::get_available_port(
