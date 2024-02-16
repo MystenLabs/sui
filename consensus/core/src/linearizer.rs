@@ -128,9 +128,11 @@ impl Linearizer {
             committed_sub_dags.push(sub_dag);
         }
         // TODO: Revisit this after refactor of dag state
-        self.dag_state
-            .write()
-            .write_commits(commits, committed_blocks);
+        if !commits.is_empty() {
+            self.dag_state
+                .write()
+                .write_commits(commits, committed_blocks);
+        }
         committed_sub_dags
     }
 }
@@ -138,7 +140,6 @@ impl Linearizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use crate::{
         commit::DEFAULT_WAVE_LENGTH,
         context::Context,

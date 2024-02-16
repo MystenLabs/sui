@@ -180,6 +180,7 @@ mod test {
 
     #[tokio::test]
     async fn test_core_thread() {
+        telemetry_subscribers::init_for_testing();
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -204,6 +205,7 @@ mod test {
             commit_observer,
             signals,
             key_pairs.remove(context.own_index.value()).1,
+            dag_state,
             store,
         );
 

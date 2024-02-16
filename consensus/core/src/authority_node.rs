@@ -124,9 +124,10 @@ where
             context.clone(),
             commit_consumer.sender,
             commit_consumer.last_processed_index,
-            dag_state,
+            dag_state.clone(),
             store.clone(),
         );
+
         let core = Core::new(
             context.clone(),
             tx_consumer,
@@ -134,6 +135,7 @@ where
             commit_observer,
             core_signals,
             protocol_keypair,
+            dag_state,
             store,
         );
 

@@ -50,8 +50,9 @@ pub(crate) struct NodeMetrics {
     pub broadcaster_rtt_estimate_ms: IntGaugeVec,
 
     // Commit Metrics
-    #[allow(unused)]
-    pub committed_leaders_total: IntCounterVec,
+    pub last_decided_leader_round: IntGauge,
+    pub last_committed_leader_round: IntGauge,
+    pub decided_leaders_total: IntCounterVec,
     pub blocks_per_commit_count: Histogram,
     pub sub_dags_per_commit_count: Histogram,
     pub block_commit_latency: Histogram,
@@ -132,7 +133,17 @@ impl NodeMetrics {
             .unwrap(),
 
             // Commit Metrics
-            committed_leaders_total: register_int_counter_vec_with_registry!(
+            last_decided_leader_round: register_int_gauge_with_registry!(
+                "last_decided_leader_round",
+                "The last round where a commit decision was made.",
+                registry,
+            ).unwrap(),
+            last_committed_leader_round: register_int_gauge_with_registry!(
+                "last_committed_leader_round",
+                "The last round where a leader was committed to store and sent to commit consumer.",
+                registry,
+            ).unwrap(),
+            decided_leaders_total: register_int_counter_vec_with_registry!(
                 "committed_leaders_total",
                 "Total number of (direct or indirect) committed leaders per authority",
                 &["authority", "commit_type"],
