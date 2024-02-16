@@ -438,7 +438,7 @@ This function handles all events emitted by the `lock` module. It takes an array
 
 ## API Service
 
-As we mentioned earlier, we should expose the indexed data for external consumption through an API Service. Particulary, we will use [Express]([express-link]) to build a Node.js HTTP API.
+As we mentioned earlier, we should expose the indexed data for external consumption through an API Service. Particularly, we will use [Express]([express-link]) to build a Node.js HTTP API.
 
 ## API Design
 
@@ -548,7 +548,7 @@ All the endpoints are defined in `server.ts`, particularly, we have 2 endpoints:
 - `/locked` to query `Locked` objects.
 - `/escrows` to query `Escrow` objects.
 
-The implementation for both endpoints is pretty straightforward. We will define a list of valid query keys, such as `deleted`, `creator`, `keyId`, `objectId` for `Locked` data and `cancelled`, `swapped`, `recipient`, `sender` for `Escrow` data, and pass the URL query string into our pre-defined utilties which will output the correct parameters that we can use with Prisma.
+The implementation for both endpoints is pretty straightforward. We will define a list of valid query keys, such as `deleted`, `creator`, `keyId`, `objectId` for `Locked` data and `cancelled`, `swapped`, `recipient`, `sender` for `Escrow` data, and pass the URL query string into our pre-defined utilities which will output the correct parameters that we can use with Prisma.
 
 
 ```ts title='server.ts'
