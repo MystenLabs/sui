@@ -630,7 +630,7 @@
 
 
 
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_init_bridge_committee">init_bridge_committee</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, system_state: &<a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, min_stake_participation_percentage: u8, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_init_bridge_committee">init_bridge_committee</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, system_state: &<b>mut</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, min_stake_participation_percentage: u8, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -641,7 +641,7 @@
 
 <pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_init_bridge_committee">init_bridge_committee</a>(
     self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
-    system_state: &SuiSystemState,
+    system_state: &<b>mut</b> SuiSystemState,
     min_stake_participation_percentage: u8,
     ctx: &TxContext
 ) {
@@ -661,7 +661,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_committee_registration">committee_registration</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, system_state: &<a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, bridge_pubkey_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, http_rest_url: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_committee_registration">committee_registration</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, system_state: &<b>mut</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, bridge_pubkey_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, http_rest_url: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -671,7 +671,7 @@
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_committee_registration">committee_registration</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
-                                  system_state: &SuiSystemState,
+                                  system_state: &<b>mut</b> SuiSystemState,
                                   bridge_pubkey_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
                                   http_rest_url: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
                                   ctx: &TxContext) {

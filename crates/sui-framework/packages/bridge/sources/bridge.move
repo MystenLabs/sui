@@ -146,7 +146,7 @@ module bridge::bridge {
     #[allow(unused_function)]
     fun init_bridge_committee(
         self: &mut Bridge,
-        system_state: &SuiSystemState,
+        system_state: &mut SuiSystemState,
         min_stake_participation_percentage: u8,
         ctx: &TxContext
     ) {
@@ -156,7 +156,7 @@ module bridge::bridge {
     }
 
     public fun committee_registration(self: &mut Bridge,
-                                      system_state: &SuiSystemState,
+                                      system_state: &mut SuiSystemState,
                                       bridge_pubkey_bytes: vector<u8>,
                                       http_rest_url: vector<u8>,
                                       ctx: &TxContext) {

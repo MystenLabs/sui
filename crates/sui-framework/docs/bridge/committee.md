@@ -14,20 +14,16 @@
 -  [Function `verify_signatures`](#0xb_committee_verify_signatures)
 -  [Function `register`](#0xb_committee_register)
 -  [Function `try_create_next_committee`](#0xb_committee_try_create_next_committee)
--  [Function `find_validator`](#0xb_committee_find_validator)
 -  [Function `execute_blocklist`](#0xb_committee_execute_blocklist)
 
 
-<pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
-<b>use</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
+<pre><code><b>use</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
 <b>use</b> <a href="dependencies/sui-framework/ecdsa_k1.md#0x2_ecdsa_k1">0x2::ecdsa_k1</a>;
 <b>use</b> <a href="dependencies/sui-framework/event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map">0x2::vec_map</a>;
 <b>use</b> <a href="dependencies/sui-framework/vec_set.md#0x2_vec_set">0x2::vec_set</a>;
 <b>use</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system">0x3::sui_system</a>;
-<b>use</b> <a href="dependencies/sui-system/validator.md#0x3_validator">0x3::validator</a>;
-<b>use</b> <a href="dependencies/sui-system/validator_set.md#0x3_validator_set">0x3::validator_set</a>;
 <b>use</b> <a href="crypto.md#0xb_crypto">0xb::crypto</a>;
 <b>use</b> <a href="message.md#0xb_message">0xb::message</a>;
 <b>use</b> <a href="message_types.md#0xb_message_types">0xb::message_types</a>;
@@ -379,7 +375,7 @@
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_register">register</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, system_state: &<a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, bridge_pubkey_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, http_rest_url: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_register">register</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, system_state: &<b>mut</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, bridge_pubkey_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, http_rest_url: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -390,18 +386,16 @@
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_register">register</a>(
     self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>,
-    system_state: &SuiSystemState,
+    system_state: &<b>mut</b> SuiSystemState,
     bridge_pubkey_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     http_rest_url: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     ctx: &TxContext
 ) {
     // sender must be the same sender that created the <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a> <a href="dependencies/sui-framework/object.md#0x2_object">object</a>
     <b>let</b> sender = <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
-    <b>let</b> validators = <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_validators">sui_system::validators</a>(system_state);
-    <b>let</b> active_validators = <a href="dependencies/sui-system/validator_set.md#0x3_validator_set_active_validators">validator_set::active_validators</a>(validators);
-    <b>let</b> validator_index = <a href="committee.md#0xb_committee_find_validator">find_validator</a>(active_validators, sender);
+    <b>let</b> validators = <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_active_validator_addresses">sui_system::active_validator_addresses</a>(system_state);
 
-    <b>assert</b>!(<a href="dependencies/move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&validator_index), <a href="committee.md#0xb_committee_ESenderNotActiveValidator">ESenderNotActiveValidator</a>);
+    <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&validators, &sender), <a href="committee.md#0xb_committee_ESenderNotActiveValidator">ESenderNotActiveValidator</a>);
     // Sender is active <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a>, record the registration
 
     // In case <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a> need <b>to</b> <b>update</b> the info
@@ -430,7 +424,7 @@
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, system_state: &<a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, min_stake_participation_percentage: u8)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, system_state: &<b>mut</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, min_stake_participation_percentage: u8)
 </code></pre>
 
 
@@ -441,11 +435,10 @@
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(
     self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>,
-    system_state: &SuiSystemState,
+    system_state: &<b>mut</b> SuiSystemState,
     min_stake_participation_percentage: u8,
 ) {
-    <b>let</b> validators = <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_validators">sui_system::validators</a>(system_state);
-    <b>let</b> active_validators = <a href="dependencies/sui-system/validator_set.md#0x3_validator_set_active_validators">validator_set::active_validators</a>(validators);
+    <b>let</b> validators = <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_active_validator_addresses">sui_system::active_validator_addresses</a>(system_state);
     <b>let</b> total_member_stake = 0;
     <b>let</b> i = 0;
 
@@ -454,14 +447,11 @@
     <b>while</b> (i &lt; <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_size">vec_map::size</a>(&self.member_registration)) {
         // retrieve registration
         <b>let</b> (_, registration) = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx">vec_map::get_entry_by_idx</a>(&self.member_registration, i);
-        // Find <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a> info from system state
-        <b>let</b> validator_index = <a href="committee.md#0xb_committee_find_validator">find_validator</a>(active_validators, registration.sui_address);
-        // Process registration <b>if</b> it's active <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a>
-        <b>if</b> (<a href="dependencies/move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&validator_index)) {
-            <b>let</b> index = <a href="dependencies/move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(validator_index);
-            <b>let</b> <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a> = <a href="dependencies/move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(active_validators, index);
-            <b>let</b> stake_amount = <a href="dependencies/sui-system/validator.md#0x3_validator_stake_amount">validator::stake_amount</a>(<a href="dependencies/sui-system/validator.md#0x3_validator">validator</a>);
+        // Find <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a> stake amount from system state
 
+        // Process registration <b>if</b> it's active <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a>
+        <b>if</b> (<a href="dependencies/move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&validators, &registration.sui_address)) {
+            <b>let</b> stake_amount = <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_validator_stake_amount">sui_system::validator_stake_amount</a>(system_state, registration.sui_address);
             total_member_stake = total_member_stake + stake_amount;
             <b>let</b> member = <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a> {
                 sui_address: registration.sui_address,
@@ -476,8 +466,8 @@
     };
 
     // Make sure the new <a href="committee.md#0xb_committee">committee</a> represent enough stakes
-    <b>let</b> stake_participation_percentage = ((total_member_stake * 100 / <a href="dependencies/sui-system/validator_set.md#0x3_validator_set_total_stake">validator_set::total_stake</a>(
-        validators
+    <b>let</b> stake_participation_percentage = ((total_member_stake * 100 / <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_total_stake_amount">sui_system::total_stake_amount</a>(
+        system_state
     )) <b>as</b> u8);
 
     // Store new <a href="committee.md#0xb_committee">committee</a> info
@@ -487,39 +477,6 @@
         self.member_registration = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
         self.members = new_members
     }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xb_committee_find_validator"></a>
-
-## Function `find_validator`
-
-
-
-<pre><code><b>fun</b> <a href="committee.md#0xb_committee_find_validator">find_validator</a>(validators: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="dependencies/sui-system/validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, validator_address: <b>address</b>): <a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="committee.md#0xb_committee_find_validator">find_validator</a>(validators: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;, validator_address: <b>address</b>): Option&lt;u64&gt; {
-    <b>let</b> length = <a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(validators);
-    <b>let</b> i = 0;
-    <b>while</b> (i &lt; length) {
-        <b>let</b> v = <a href="dependencies/move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(validators, i);
-        <b>if</b> (<a href="dependencies/sui-system/validator.md#0x3_validator_sui_address">validator::sui_address</a>(v) == validator_address) {
-            <b>return</b> <a href="dependencies/move-stdlib/option.md#0x1_option_some">option::some</a>(i)
-        };
-        i = i + 1;
-    };
-    <a href="dependencies/move-stdlib/option.md#0x1_option_none">option::none</a>()
 }
 </code></pre>
 
