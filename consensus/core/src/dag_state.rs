@@ -11,12 +11,11 @@ use std::{
 
 use consensus_config::AuthorityIndex;
 
-use crate::block::Block;
-use crate::error::ConsensusResult;
 use crate::{
-    block::{BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
+    block::{Block, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
     commit::{Commit, CommitIndex},
     context::Context,
+    error::ConsensusResult,
     storage::Store,
 };
 
@@ -272,6 +271,20 @@ impl DagState {
         match &self.last_commit {
             Some(commit) => commit.index,
             None => 0,
+        }
+    }
+
+    /// Leader slot of the last commit.
+    pub(crate) fn last_commit_leader(&self) -> Slot {
+        match &self.last_commit {
+            Some(commit) => commit.leader.into(),
+            None => self
+                .genesis
+                .iter()
+                .next()
+                .map(|(genesis_ref, _)| *genesis_ref)
+                .expect("Genesis blocks should always be available.")
+                .into(),
         }
     }
 
