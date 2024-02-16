@@ -9,10 +9,12 @@
 -  [Constants](#@Constants_0)
 -  [Function `create`](#0xb_btc_create)
 -  [Function `decimal`](#0xb_btc_decimal)
+-  [Function `multiplier`](#0xb_btc_multiplier)
 
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="dependencies/sui-framework/coin.md#0x2_coin">0x2::coin</a>;
+<b>use</b> <a href="dependencies/sui-framework/math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="dependencies/sui-framework/transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="dependencies/sui-framework/url.md#0x2_url">0x2::url</a>;
@@ -112,6 +114,30 @@
 
 <pre><code><b>public</b> <b>fun</b> <a href="btc.md#0xb_btc_decimal">decimal</a>(): u8 {
     <a href="btc.md#0xb_btc_DECIMAL">DECIMAL</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_btc_multiplier"></a>
+
+## Function `multiplier`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="btc.md#0xb_btc_multiplier">multiplier</a>(): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="btc.md#0xb_btc_multiplier">multiplier</a>(): u64 {
+    pow(10, <a href="btc.md#0xb_btc_DECIMAL">DECIMAL</a>)
 }
 </code></pre>
 

@@ -10,10 +10,10 @@
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0xb_limiter_new)
 -  [Function `current_hour_since_epoch`](#0xb_limiter_current_hour_since_epoch)
--  [Function `check_and_record_transfer`](#0xb_limiter_check_and_record_transfer)
--  [Function `append_new_empty_hours`](#0xb_limiter_append_new_empty_hours)
--  [Function `remove_stale_hour_maybe`](#0xb_limiter_remove_stale_hour_maybe)
--  [Function `transfer_limits`](#0xb_limiter_transfer_limits)
+-  [Function `check_and_record_sending_transfer`](#0xb_limiter_check_and_record_sending_transfer)
+-  [Function `adjust_transfer_records`](#0xb_limiter_adjust_transfer_records)
+-  [Function `initial_transfer_limits`](#0xb_limiter_initial_transfer_limits)
+-  [Function `initial_notional_values`](#0xb_limiter_initial_notional_values)
 
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
@@ -22,8 +22,12 @@
 <b>use</b> <a href="dependencies/sui-framework/clock.md#0x2_clock">0x2::clock</a>;
 <b>use</b> <a href="dependencies/sui-framework/math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map">0x2::vec_map</a>;
+<b>use</b> <a href="btc.md#0xb_btc">0xb::btc</a>;
 <b>use</b> <a href="chain_ids.md#0xb_chain_ids">0xb::chain_ids</a>;
+<b>use</b> <a href="eth.md#0xb_eth">0xb::eth</a>;
 <b>use</b> <a href="treasury.md#0xb_treasury">0xb::treasury</a>;
+<b>use</b> <a href="usdc.md#0xb_usdc">0xb::usdc</a>;
+<b>use</b> <a href="usdt.md#0xb_usdt">0xb::usdt</a>;
 </code></pre>
 
 
@@ -162,8 +166,8 @@
 <pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_new">new</a>(): <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a> {
     // hardcoded limit for <a href="bridge.md#0xb_bridge">bridge</a> genesis
     <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a> {
-        transfer_limits: <a href="limiter.md#0xb_limiter_transfer_limits">transfer_limits</a>(),
-        notional_values: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
+        transfer_limits: <a href="limiter.md#0xb_limiter_initial_transfer_limits">initial_transfer_limits</a>(),
+        notional_values: <a href="limiter.md#0xb_limiter_initial_notional_values">initial_notional_values</a>(),
         transfer_records: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>()
     }
 }
@@ -197,13 +201,13 @@
 
 </details>
 
-<a name="0xb_limiter_check_and_record_transfer"></a>
+<a name="0xb_limiter_check_and_record_sending_transfer"></a>
 
-## Function `check_and_record_transfer`
+## Function `check_and_record_sending_transfer`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_check_and_record_transfer">check_and_record_transfer</a>&lt;T&gt;(<a href="dependencies/sui-framework/clock.md#0x2_clock">clock</a>: &<a href="dependencies/sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, route: <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, amount: u64): bool
+<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">check_and_record_sending_transfer</a>&lt;T&gt;(<a href="dependencies/sui-framework/clock.md#0x2_clock">clock</a>: &<a href="dependencies/sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, route: <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, amount: u64): bool
 </code></pre>
 
 
@@ -212,7 +216,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_check_and_record_transfer">check_and_record_transfer</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">check_and_record_sending_transfer</a>&lt;T&gt;(
     <a href="dependencies/sui-framework/clock.md#0x2_clock">clock</a>: & Clock,
     self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>,
     route: BridgeRoute,
@@ -230,28 +234,30 @@
     <b>let</b> record = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.transfer_records, &route);
     <b>let</b> current_hour_since_epoch = <a href="limiter.md#0xb_limiter_current_hour_since_epoch">current_hour_since_epoch</a>(<a href="dependencies/sui-framework/clock.md#0x2_clock">clock</a>);
 
-    // First clean up <b>old</b> <a href="dependencies/sui-framework/transfer.md#0x2_transfer">transfer</a> histories
-    <a href="limiter.md#0xb_limiter_remove_stale_hour_maybe">remove_stale_hour_maybe</a>(record, current_hour_since_epoch);
-    // Backfill missing hours
-    <a href="limiter.md#0xb_limiter_append_new_empty_hours">append_new_empty_hours</a>(record, current_hour_since_epoch);
+    <a href="limiter.md#0xb_limiter_adjust_transfer_records">adjust_transfer_records</a>(record, current_hour_since_epoch);
 
     // Get limit for the route
     <b>let</b> route_limit = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_try_get">vec_map::try_get</a>(&self.transfer_limits, &route);
     <b>assert</b>!(<a href="dependencies/move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&route_limit), <a href="limiter.md#0xb_limiter_ERR_LIMIT_NOT_FOUND_FOR_ROUTE">ERR_LIMIT_NOT_FOUND_FOR_ROUTE</a>);
     <b>let</b> route_limit = <a href="dependencies/move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(route_limit);
+    <b>let</b> route_limit_adjsuted = (route_limit <b>as</b> u128) * (pow(10, <a href="treasury.md#0xb_treasury_token_decimals">treasury::token_decimals</a>&lt;T&gt;()) <b>as</b> u128);
 
     // Compute notional amount
     <b>let</b> coin_type = <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;();
-    // Upcast <b>to</b> u128 <b>to</b> prevent overflow
-    <b>let</b> notional_amount = (*<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get">vec_map::get</a>(&self.notional_values, &coin_type) <b>as</b> u128) * (amount <b>as</b> u128);
-    <b>let</b> notional_amount = notional_amount / (pow(10, <a href="treasury.md#0xb_treasury_token_decimals">treasury::token_decimals</a>&lt;T&gt;()) <b>as</b> u128);
-    // Should be safe <b>to</b> downcast <b>to</b> u64 after dividing by the decimals
-    <b>let</b> notional_amount = (notional_amount <b>as</b> u64);
+    // Upcast <b>to</b> u128 <b>to</b> prevent overflow, <b>to</b> not miss out on small amounts.
+    <b>let</b> notional_amount_with_token_multiplier = (*<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get">vec_map::get</a>(&self.notional_values, &coin_type) <b>as</b> u128) * (amount <b>as</b> u128);
 
     // Check <b>if</b> <a href="dependencies/sui-framework/transfer.md#0x2_transfer">transfer</a> amount exceed limit
-    <b>if</b> (record.total_amount + notional_amount &gt; route_limit) {
+    // Upscale them <b>to</b> the token's decimal.
+    <b>if</b> ((record.total_amount * pow(10, <a href="treasury.md#0xb_treasury_token_decimals">treasury::token_decimals</a>&lt;T&gt;()) <b>as</b> u128) + notional_amount_with_token_multiplier &gt; route_limit_adjsuted) {
         <b>return</b> <b>false</b>
     };
+
+    // TODO: add `treasury::token_multiplier`
+    // Now scale down <b>to</b> notional value
+    <b>let</b> notional_amount = notional_amount_with_token_multiplier / (pow(10, <a href="treasury.md#0xb_treasury_token_decimals">treasury::token_decimals</a>&lt;T&gt;()) <b>as</b> u128);
+    // Should be safe <b>to</b> downcast <b>to</b> u64 after dividing by the decimals
+    <b>let</b> notional_amount = (notional_amount <b>as</b> u64);
 
     // Record <a href="dependencies/sui-framework/transfer.md#0x2_transfer">transfer</a> value
     <b>let</b> new_amount = <a href="dependencies/move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> record.per_hour_amounts) + notional_amount;
@@ -265,13 +271,13 @@
 
 </details>
 
-<a name="0xb_limiter_append_new_empty_hours"></a>
+<a name="0xb_limiter_adjust_transfer_records"></a>
 
-## Function `append_new_empty_hours`
+## Function `adjust_transfer_records`
 
 
 
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_append_new_empty_hours">append_new_empty_hours</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferRecord">limiter::TransferRecord</a>, current_hour_since_epoch: u64)
+<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_adjust_transfer_records">adjust_transfer_records</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferRecord">limiter::TransferRecord</a>, current_hour_since_epoch: u64)
 </code></pre>
 
 
@@ -280,23 +286,32 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_append_new_empty_hours">append_new_empty_hours</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferRecord">TransferRecord</a>, current_hour_since_epoch: u64) {
+<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_adjust_transfer_records">adjust_transfer_records</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferRecord">TransferRecord</a>, current_hour_since_epoch: u64) {
     <b>if</b> (self.hour_head == current_hour_since_epoch) {
         <b>return</b> // nothing <b>to</b> backfill
     };
 
-    // If tail is even older than 24 hours ago, advance it <b>to</b> that.
-    <b>let</b> target_tail = current_hour_since_epoch - 24;
-    <b>if</b> (self.hour_tail &lt; target_tail) {
-        self.hour_tail = target_tail;
-    };
+    <b>let</b> target_tail = current_hour_since_epoch - 23;
 
-    // If <b>old</b> head is even older than target tail, advance it <b>to</b> that.
+    // If `hour_head` is even older than 24 hours ago, it means all items in
+    // `per_hour_amounts` are <b>to</b> be evicted.
     <b>if</b> (self.hour_head &lt; target_tail) {
+        self.per_hour_amounts = <a href="dependencies/move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
+        self.total_amount = 0;
+        self.hour_tail = target_tail;
         self.hour_head = target_tail;
+        // Don't forget <b>to</b> insert this hour's record
+        <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> self.per_hour_amounts, 0);
+    } <b>else</b> {
+        // self.hour_head is within 24 hour range.
+        // some items in `per_hour_amounts` are still valid, we remove stale hours.
+        <b>while</b> (self.hour_tail &lt; target_tail) {
+            self.total_amount = self.total_amount - <a href="dependencies/move-stdlib/vector.md#0x1_vector_remove">vector::remove</a>(&<b>mut</b> self.per_hour_amounts, 0);
+            self.hour_tail = self.hour_tail + 1;
+        }
     };
 
-    // Backfill from head <b>to</b> current hour
+    // Backfill from hour_head <b>to</b> current hour
     <b>while</b> (self.hour_head &lt; current_hour_since_epoch) {
         self.hour_head = self.hour_head + 1;
         <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> self.per_hour_amounts, 0);
@@ -308,13 +323,13 @@
 
 </details>
 
-<a name="0xb_limiter_remove_stale_hour_maybe"></a>
+<a name="0xb_limiter_initial_transfer_limits"></a>
 
-## Function `remove_stale_hour_maybe`
+## Function `initial_transfer_limits`
 
 
 
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_remove_stale_hour_maybe">remove_stale_hour_maybe</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferRecord">limiter::TransferRecord</a>, current_hour_since_epoch: u64)
+<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_initial_transfer_limits">initial_transfer_limits</a>(): <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, u64&gt;
 </code></pre>
 
 
@@ -323,12 +338,47 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_remove_stale_hour_maybe">remove_stale_hour_maybe</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferRecord">TransferRecord</a>, current_hour_since_epoch: u64) {
-    // remove tails until it's within 24 hours range
-    <b>while</b> (self.hour_tail + 24 &lt; current_hour_since_epoch && self.hour_tail &lt; self.hour_head) {
-        self.total_amount = self.total_amount - <a href="dependencies/move-stdlib/vector.md#0x1_vector_remove">vector::remove</a>(&<b>mut</b> self.per_hour_amounts, 0);
-        self.hour_tail = self.hour_tail + 1;
-    }
+<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_initial_transfer_limits">initial_transfer_limits</a>(): VecMap&lt;BridgeRoute, u64&gt; {
+    <b>let</b> transfer_limits = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
+    // 5M limit on Sui -&gt; Ethereum mainnet
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
+        &<b>mut</b> transfer_limits,
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_mainnet">chain_ids::sui_mainnet</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_mainnet">chain_ids::eth_mainnet</a>()),
+        5_000_000 * <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>
+    );
+
+    // MAX limit for testnet and devnet
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
+        &<b>mut</b> transfer_limits,
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_testnet">chain_ids::sui_testnet</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>()),
+        <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
+    );
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
+        &<b>mut</b> transfer_limits,
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_devnet">chain_ids::sui_devnet</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>()),
+        <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
+    );
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
+        &<b>mut</b> transfer_limits,
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_local_test">chain_ids::sui_local_test</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>()),
+        <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
+    );
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
+        &<b>mut</b> transfer_limits,
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_testnet">chain_ids::sui_testnet</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_local_test">chain_ids::eth_local_test</a>()),
+        <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
+    );
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
+        &<b>mut</b> transfer_limits,
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_devnet">chain_ids::sui_devnet</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_local_test">chain_ids::eth_local_test</a>()),
+        <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
+    );
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
+        &<b>mut</b> transfer_limits,
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_local_test">chain_ids::sui_local_test</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_local_test">chain_ids::eth_local_test</a>()),
+        <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
+    );
+    transfer_limits
 }
 </code></pre>
 
@@ -336,13 +386,13 @@
 
 </details>
 
-<a name="0xb_limiter_transfer_limits"></a>
+<a name="0xb_limiter_initial_notional_values"></a>
 
-## Function `transfer_limits`
+## Function `initial_notional_values`
 
 
 
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_transfer_limits">transfer_limits</a>(): <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, u64&gt;
+<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_initial_notional_values">initial_notional_values</a>(): <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="dependencies/move-stdlib/type_name.md#0x1_type_name_TypeName">type_name::TypeName</a>, u64&gt;
 </code></pre>
 
 
@@ -351,47 +401,13 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_transfer_limits">transfer_limits</a>(): VecMap&lt;BridgeRoute, u64&gt; {
-    <b>let</b> transfer_limits = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
-    // 5M limit on Sui -&gt; Ethereum mainnet
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
-        &<b>mut</b> transfer_limits,
-        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_mainnet">chain_ids::eth_mainnet</a>(), <a href="chain_ids.md#0xb_chain_ids_sui_mainnet">chain_ids::sui_mainnet</a>()),
-        5_000_000 * <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>
-    );
-
-    // MAX limit for testnet and devnet
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
-        &<b>mut</b> transfer_limits,
-        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>(), <a href="chain_ids.md#0xb_chain_ids_sui_testnet">chain_ids::sui_testnet</a>()),
-        <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
-    );
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
-        &<b>mut</b> transfer_limits,
-        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>(), <a href="chain_ids.md#0xb_chain_ids_sui_devnet">chain_ids::sui_devnet</a>()),
-        <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
-    );
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
-        &<b>mut</b> transfer_limits,
-        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>()),
-        <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
-    );
-    // <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
-    //     &<b>mut</b> transfer_limits,
-    //     <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_local_test">chain_ids::eth_local_test</a>(), <a href="chain_ids.md#0xb_chain_ids_sui_testnet">chain_ids::sui_testnet</a>()),
-    //     <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
-    // );
-    // <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
-    //     &<b>mut</b> transfer_limits,
-    //     <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_local_test">chain_ids::eth_local_test</a>(), <a href="chain_ids.md#0xb_chain_ids_sui_devnet">chain_ids::sui_devnet</a>()),
-    //     <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
-    // );
-    // <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
-    //     &<b>mut</b> transfer_limits,
-    //     <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_local_test">chain_ids::eth_local_test</a>(), <a href="chain_ids.md#0xb_chain_ids_sui_local_test">chain_ids::sui_local_test</a>()),
-    //     <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
-    // );
-    transfer_limits
+<pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_initial_notional_values">initial_notional_values</a>(): VecMap&lt;TypeName, u64&gt; {
+    <b>let</b> notional_values = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> notional_values, <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;BTC&gt;(), 50_000 * <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>);
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> notional_values, <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;ETH&gt;(), 3_000 * <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>);
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> notional_values, <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;USDC&gt;(), 1 * <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>);
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> notional_values, <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;USDT&gt;(), 1 * <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>);
+    notional_values
 }
 </code></pre>
 

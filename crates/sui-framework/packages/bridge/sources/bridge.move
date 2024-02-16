@@ -75,10 +75,9 @@ module bridge::bridge {
     const EWrongInnerVersion: u64 = 7;
     const EBridgeUnavailable: u64 = 8;
     const EUnexpectedOperation: u64 = 9;
-    const EInvalidBridgeRoute: u64 = 10;
-    const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 11;
-    const EMessageNotFoundInRecords: u64 = 12;
-    const ETokenAlreadyClaimed: u64 = 13;
+    const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 10;
+    const EMessageNotFoundInRecords: u64 = 11;
+    const ETokenAlreadyClaimed: u64 = 12;
 
     const CURRENT_VERSION: u64 = 1;
 
