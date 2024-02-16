@@ -121,7 +121,7 @@ impl UniversalCommitter {
         self.context
             .metrics
             .node_metrics
-            .committed_leaders_total
+            .decided_leaders_total
             .with_label_values(&[&authority, &status])
             .inc();
     }
@@ -130,9 +130,8 @@ impl UniversalCommitter {
 /// A builder for a universal committer. By default, the builder creates a single
 /// base committer, that is, a single leader and no pipeline.
 #[allow(unused)]
-mod universal_committer_builder {
+pub(crate) mod universal_committer_builder {
     use super::*;
-
     use crate::{
         base_committer::BaseCommitterOptions, commit::DEFAULT_WAVE_LENGTH,
         leader_schedule::LeaderSchedule,

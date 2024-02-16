@@ -28,6 +28,7 @@ use crate::{
     network::{anemo_network::AnemoManager, NetworkManager, NetworkService},
     storage::rocksdb_store::RocksDBStore,
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
+    universal_committer::universal_committer_builder::UniversalCommitterBuilder,
     CommitConsumer,
 };
 
@@ -124,13 +125,23 @@ where
             context.clone(),
             commit_consumer.sender,
             commit_consumer.last_processed_index,
-            dag_state,
+            dag_state.clone(),
             store.clone(),
         );
+
+        // TODO: Move this into core new when dag state is the interface for all store reads/writes
+        let last_decided_leader = dag_state.read().last_commit_leader();
+        let committer = UniversalCommitterBuilder::new(context.clone(), dag_state)
+            .with_number_of_leaders(context.parameters.number_of_leaders)
+            .with_pipeline(context.parameters.enable_pipelining)
+            .build();
+
         let core = Core::new(
             context.clone(),
             tx_consumer,
             block_manager,
+            committer,
+            last_decided_leader,
             commit_observer,
             core_signals,
             protocol_keypair,

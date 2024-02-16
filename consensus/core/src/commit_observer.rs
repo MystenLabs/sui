@@ -83,6 +83,7 @@ impl CommitObserver {
         }
 
         self.report_metrics(&sent_sub_dags);
+        tracing::debug!("Committed & sent {sent_sub_dags:#?}");
         sent_sub_dags
     }
 
@@ -135,12 +136,19 @@ impl CommitObserver {
                 .unwrap_or_default();
 
             total += 1;
+
             self.context
                 .metrics
                 .node_metrics
                 .block_commit_latency
                 .observe(latency_ms as f64);
+            self.context
+                .metrics
+                .node_metrics
+                .last_committed_leader_round
+                .set(block.round() as i64);
         }
+
         self.context
             .metrics
             .node_metrics
