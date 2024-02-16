@@ -110,6 +110,9 @@ const MAX_PROTOCOL_VERSION: u64 = 38;
 //             Set the consensus accepted transaction size and the included transactions size in the proposed block.
 // Version 37: Reject entry functions with mutable Random.
 // Version 38: Allow skipped epochs for randomness updates.
+// Version 39: Add native bridge.
+//             Enable native bridge in devnet
+
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -336,6 +339,10 @@ struct FeatureFlags {
     // Enable random beacon protocol
     #[serde(skip_serializing_if = "is_false")]
     random_beacon: bool,
+
+    // Enable bridge protocol
+    #[serde(skip_serializing_if = "is_false")]
+    bridge: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     enable_effects_v2: bool,
@@ -1113,6 +1120,15 @@ impl ProtocolConfig {
         if ret {
             // random beacon requires narwhal v2 headers
             assert!(self.feature_flags.narwhal_header_v2);
+        }
+        ret
+    }
+
+    pub fn enable_bridge(&self) -> bool {
+        let ret = self.feature_flags.bridge;
+        if ret {
+            // bridge required end-of-epoch transactions
+            assert!(self.feature_flags.end_of_epoch_transaction_supported);
         }
         ret
     }
@@ -1905,6 +1921,12 @@ impl ProtocolConfig {
                     }
                 }
                 38 => {}
+                39 => {
+                    // enable bridge in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.bridge = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
