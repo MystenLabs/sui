@@ -1214,10 +1214,7 @@ impl ObjectFilter {
     }
 
     pub(crate) fn has_filters(&self) -> bool {
-        self.type_.is_some()
-            || self.owner.is_some()
-            || self.object_ids.is_some()
-            || self.object_keys.is_some()
+        self != &Default::default()
     }
 }
 

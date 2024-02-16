@@ -62,50 +62,58 @@ impl Checkpointed for JsonCursor<ConsistentNamedCursor> {
 
 /// Constructs a `RawQuery` against the `objects_snapshot` and `objects_history` table to fetch
 /// objects that satisfy some filtering criteria `filter_fn` within the provided checkpoint range
-/// `lhs` and `rhs`. The `objects_snapshot` table contains the latest versions of objects up to the
-/// latest checkpoint sequence number on the table, and `objects_history` captures changes after
-/// that, so a query to both tables is necessary to capture objects in these scenarios:
+/// `lhs` and `rhs`. The `objects_snapshot` table contains the latest versions of objects up to a
+/// checkpoint sequence number, and `objects_history` captures changes after that, so a query to
+/// both tables is necessary to handle these object states:
 /// 1) In snapshot, not in history - occurs when an object gets snapshotted and then has not been
 ///    modified since
 /// 2) In history, not in snapshot - occurs when a new object is created
 /// 3) In snapshot and in history - occurs when an object is snapshotted and further modified
 ///
-/// One approach is to issue two queries and merge in the application, but this can also be achieved
-/// directly in the database with `UNION ALL` and `SELECT DISTINCT ON (object_id)`.
+/// Additionally, even among objects that satisfy the filtering criteria, it is possible that there
+/// is a yet more recent version of the object within the checkpoint range, such as when the owner
+/// of an object changes. The `LEFT JOIN` against the `objects_history` table handles this and
+/// scenario 3. Note that the implementation applies the `LEFT JOIN` to each inner query in
+/// conjunction with the `page`'s cursor and limit. If this was instead done once at the end, the
+/// query would be drastically inefficient as we would be dealing with a large number of rows from
+/// `objects_snapshot`, and potentially `objects_history` as the checkpoint range grows. Instead,
+/// the `LEFT JOIN` and limit applied on the inner queries work in conjunction to make the final
+/// query noticeably more efficient. The former serves as a filter, and the latter reduces the
+/// number of rows that the database needs to work with.
 ///
-/// The query also applies the `page`'s cursor and limit to each inner query to ensure that the page
-/// of results are in step based on `object_id`.
+/// However, not all queries require this `LEFT JOIN`, such as when no filtering criteria is
+/// specified, or if the filter is a lookup at a specific `object_id` and `object_version`. This is
+/// controlled by the `view` parameter. If the `view` parameter is set to `Consistent`, this filter
+/// is applied, otherwise if the `view` parameter is set to `Historical`, this filter is not
+/// applied.
 ///
-/// Additionally, even among the objects that satisfy the filtering criteria, it is possible that
-/// there is a yet more recent version of the object within the checkpoint range. The `view`
-/// parameter controls whether to filter out such objects. If the `view` parameter is set to
-/// `Consistent`, this filter is applied, otherwise if the `view` parameter is set to `Historical`,
-/// this filter is not applied.
-pub(crate) fn build_objects_query<F>(
+/// Finallly, the two queries are merged together with `UNION ALL`. We use `UNION ALL` instead of
+/// `UNION`; the latter incurs significant overhead as it additionally de-duplicates records from
+/// both sources. This dedupe is unnecessary, since we have the fragment `SELECT DISTINCT ON
+/// (object_id) ... ORDER BY object_id, object_version DESC`. This is also redundant for the most
+/// part, due to the invariant that the `objects_history` captures changes that occur after
+/// `objects_snapshot`, but it's a safeguard to handle any possible overlap during snapshot
+/// creation.
+pub(crate) fn build_objects_query(
     view: View,
     lhs: i64,
     rhs: i64,
     page: &Page<Cursor>,
-    filter_fn: F,
-) -> RawQuery
-where
-    F: Fn(RawQuery) -> RawQuery,
-{
+    filter_fn: impl Fn(RawQuery) -> RawQuery,
+) -> RawQuery {
+    // Subquery to be used in `LEFT JOIN` against the inner queries for more recent object versions
     let mut newer = query!("SELECT object_id, object_version FROM objects_history");
     newer = filter!(
         newer,
         format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
     );
 
-    // Construct the filtered inner query - apply the same filtering criteria to both
-    // objects_snapshot and objects_history tables.
     let mut snapshot_objs_inner = query!("SELECT * FROM objects_snapshot");
     snapshot_objs_inner = filter_fn(snapshot_objs_inner);
 
     let mut snapshot_objs = match view {
         View::Consistent => {
-            // The LEFT JOIN filters out objects that have a more recent version within the
-            // checkpoint range
+            // The `LEFT JOIN` serves as a filter to remove objects that have a more recent version
             let mut snapshot_objs = query!(
                 r#"SELECT candidates.* FROM ({}) candidates
                     LEFT JOIN ({}) newer
@@ -116,26 +124,27 @@ where
             snapshot_objs = filter!(snapshot_objs, "newer.object_version IS NULL");
             snapshot_objs
         }
-        View::Historical => query!(
-            "SELECT candidates.* FROM ({}) candidates",
-            snapshot_objs_inner
-        ),
+        View::Historical => {
+            // The cursor pagination logic refers to the table with the `candidates` alias
+            query!(
+                "SELECT candidates.* FROM ({}) candidates",
+                snapshot_objs_inner
+            )
+        }
     };
 
-    // Always apply cursor pagination and limit so that each part of the query is in step, and to
-    // avoid a scenario where a user provides more `objectKeys` than allowed by the maximum page
-    // size.
+    // Always apply cursor pagination and limit to constrain the number of rows returned, ensure
+    // that the inner queries are in step, and to handle the scenario where a user provides more
+    // `objectKeys` than allowed by the maximum page size.
     snapshot_objs = page.apply::<StoredHistoryObject>(snapshot_objs);
 
     // Similar to the snapshot query, construct the filtered inner query for the history table.
     let mut history_objs_inner = query!("SELECT * FROM objects_history");
-    // filter_fn must go before filtering on checkpoint_sequence_number - namely for multi-gets
-    // based on `object_id` and `object_version`
     history_objs_inner = filter_fn(history_objs_inner);
 
     let mut history_objs = match view {
         View::Consistent => {
-            // Bound the inner `objects_history` query by the checkpoint range
+            // Additionally bound the inner `objects_history` query by the checkpoint range
             history_objs_inner = filter!(
                 history_objs_inner,
                 format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
@@ -151,15 +160,18 @@ where
             history_objs = filter!(history_objs, "newer.object_version IS NULL");
             history_objs
         }
-        View::Historical => query!(
-            "SELECT candidates.* FROM ({}) candidates",
-            history_objs_inner
-        ),
+        View::Historical => {
+            // The cursor pagination logic refers to the table with the `candidates` alias
+            query!(
+                "SELECT candidates.* FROM ({}) candidates",
+                history_objs_inner
+            )
+        }
     };
 
-    // Always apply cursor pagination and limit so that each part of the query is in step, and to
-    // avoid a scenario where a user provides more `objectKeys` than allowed by the maximum page
-    // size.
+    // Always apply cursor pagination and limit to constrain the number of rows returned, ensure
+    // that the inner queries are in step, and to handle the scenario where a user provides more
+    // `objectKeys` than allowed by the maximum page size.
     history_objs = page.apply::<StoredHistoryObject>(history_objs);
 
     // Combine the two queries, and select the most recent version of each object. The result set is
