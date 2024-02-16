@@ -178,7 +178,7 @@ async fn run_publish(
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path: package_path.clone(),
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
@@ -208,7 +208,7 @@ async fn run_upgrade(
     let resp = SuiClientCommands::Upgrade {
         package_path: upgrade_pkg_path,
         upgrade_capability: cap.reference.object_id,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,

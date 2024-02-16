@@ -30,13 +30,14 @@ pub fn download_dependency_repos<Progress: Write>(
     progress_output: &mut Progress,
 ) -> Result<()> {
     let install_dir = build_options
+        .build_info
         .install_dir
         .as_ref()
         .unwrap_or(&root_path.to_path_buf())
         .to_owned();
     let file_reader = std::mem::take(&mut build_options.file_reader);
     let mut dep_graph_builder = DependencyGraphBuilder::new(
-        build_options.skip_fetch_latest_git_deps,
+        build_options.build_info.skip_fetch_latest_git_deps,
         progress_output,
         install_dir,
         file_reader,
@@ -54,7 +55,7 @@ pub fn download_dependency_repos<Progress: Write>(
             continue;
         }
 
-        if !(build_options.dev_mode || graph.always_deps.contains(&pkg_id)) {
+        if !(build_options.build_info.dev_mode || graph.always_deps.contains(&pkg_id)) {
             continue;
         }
 

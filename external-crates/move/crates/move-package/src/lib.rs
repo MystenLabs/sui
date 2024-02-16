@@ -44,6 +44,21 @@ use crate::{
 #[derivative(Debug, Eq, PartialEq, PartialOrd, Clone)]
 #[clap(about)]
 pub struct BuildConfig {
+    #[structopt(flatten)]
+    pub build_info: BuildInfo,
+
+    /// Optional source file reader
+    #[clap(skip)]
+    #[serde(skip_deserializing, skip_serializing)]
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(PartialOrd = "ignore")]
+    #[derivative(Debug = "ignore")]
+    #[derivative(Clone(clone_with = "clone_file_reader"))]
+    pub file_reader: Option<Box<dyn FileReader>>,
+}
+
+#[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
+pub struct BuildInfo {
     /// Compile in 'dev' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used if
     /// this flag is set. This flag is useful for development of packages that expose named
     /// addresses that are not set to a specific value.
@@ -107,15 +122,6 @@ pub struct BuildConfig {
     /// If `true`, disable linters
     #[clap(long, global = true)]
     pub no_lint: bool,
-
-    /// Optional source file reader
-    #[clap(skip)]
-    #[serde(skip_deserializing, skip_serializing)]
-    #[derivative(PartialEq = "ignore")]
-    #[derivative(PartialOrd = "ignore")]
-    #[derivative(Debug = "ignore")]
-    #[derivative(Clone(clone_with = "clone_file_reader"))]
-    pub file_reader: Option<Box<dyn FileReader>>,
 }
 
 /// Does not really do cloning - it's implemented to make Serde happy but the field itself
@@ -135,25 +141,64 @@ pub struct ModelConfig {
 
 pub const NEEDS_MIGRATION: &str = "NO_ROOT_CRATE_EDITION";
 
+impl BuildInfo {
+    pub fn update_lock_file_toolchain_version(
+        &self,
+        path: &PathBuf,
+        compiler_version: String,
+    ) -> Result<()> {
+        let Some(lock_file) = self.lock_file.as_ref() else {
+            return Ok(());
+        };
+        let install_dir = self.install_dir.as_ref().unwrap_or(path).to_owned();
+        let mut lock = LockFile::from(install_dir, lock_file)?;
+        lock.seek(SeekFrom::Start(0))?;
+        update_compiler_toolchain(
+            &mut lock,
+            compiler_version,
+            self.default_edition.unwrap_or_default(),
+            self.default_flavor.unwrap_or_default(),
+        )?;
+        let _mutx = PackageLock::lock();
+        lock.commit(lock_file)?;
+        Ok(())
+    }
+
+    pub fn compiler_flags(&self) -> Flags {
+        let flags = if self.test_mode {
+            Flags::testing()
+        } else {
+            Flags::empty()
+        };
+        flags
+            .set_warnings_are_errors(self.warnings_are_errors)
+            .set_silence_warnings(self.silence_warnings)
+    }
+}
+
 impl BuildConfig {
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
     /// failure.
-    pub fn compile_package<W: Write>(self, path: &Path, writer: &mut W) -> Result<CompiledPackage> {
-        let resolved_graph = self.resolution_graph_for_package(path, writer)?;
-        let _mutx = PackageLock::lock(); // held until function returns
-        BuildPlan::create(resolved_graph)?.compile(writer)
-    }
-
-    /// Compile the package at `path` or the containing Move package. Exit process on warning or
-    /// failure. Will trigger migration if the package is missing an edition.
-    pub fn cli_compile_package<W: Write>(
-        self,
+    pub fn compile_package<W: Write>(
+        mut self,
         path: &Path,
         writer: &mut W,
     ) -> Result<CompiledPackage> {
         let resolved_graph = self.resolution_graph_for_package(path, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
-        let mut build_plan = BuildPlan::create(resolved_graph)?;
+        BuildPlan::create(resolved_graph, None)?.compile(writer)
+    }
+
+    /// Compile the package at `path` or the containing Move package. Exit process on warning or
+    /// failure. Will trigger migration if the package is missing an edition.
+    pub fn cli_compile_package<W: Write>(
+        mut self,
+        path: &Path,
+        writer: &mut W,
+    ) -> Result<CompiledPackage> {
+        let resolved_graph = self.resolution_graph_for_package(path, writer)?;
+        let _mutx = PackageLock::lock(); // held until function returns
+        let mut build_plan = BuildPlan::create(resolved_graph, None)?;
         // TODO: When we are ready to release and enable automatic migration, uncomment this.
         // if !build_plan.root_crate_edition_defined() {
         //     Err(anyhow::format_err!(NEEDS_MIGRATION))
@@ -166,26 +211,26 @@ impl BuildConfig {
     /// Compile the package at `path` or the containing Move package. Do not exit process on warning
     /// or failure.
     pub fn compile_package_no_exit<W: Write>(
-        self,
+        mut self,
         path: &Path,
         writer: &mut W,
     ) -> Result<CompiledPackage> {
         let resolved_graph = self.resolution_graph_for_package(path, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
-        BuildPlan::create(resolved_graph)?.compile_no_exit(writer)
+        BuildPlan::create(resolved_graph, None)?.compile_no_exit(writer)
     }
 
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
     /// failure.
     pub fn migrate_package<W: Write, R: BufRead>(
-        self,
+        mut self,
         path: &Path,
         writer: &mut W,
         reader: &mut R,
     ) -> Result<()> {
         let resolved_graph = self.resolution_graph_for_package(path, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
-        let build_plan = BuildPlan::create(resolved_graph)?;
+        let build_plan = BuildPlan::create(resolved_graph, None)?;
         migration::migrate(build_plan, writer, reader)?;
         Ok(())
     }
@@ -196,7 +241,7 @@ impl BuildConfig {
     // TODO: In the future we will need a better way to do this to support renaming in packages
     // where we want to support building a Move model.
     pub fn move_model_for_package(
-        self,
+        mut self,
         path: &Path,
         model_config: ModelConfig,
     ) -> Result<GlobalEnv> {
@@ -230,12 +275,12 @@ impl BuildConfig {
     }
 
     pub fn resolution_graph_for_package<W: Write>(
-        mut self,
+        &mut self,
         path: &Path,
         writer: &mut W,
     ) -> Result<ResolvedGraph> {
-        if self.test_mode {
-            self.dev_mode = true;
+        if self.build_info.test_mode {
+            self.build_info.dev_mode = true;
         }
         let path = SourcePackageLayout::try_find_root(path)?;
         let mut manifest_string = String::new();
@@ -250,12 +295,17 @@ impl BuildConfig {
             .map(|_| buf);
         let _mutx = PackageLock::lock(); // held until function returns
 
-        let install_dir_set = self.install_dir.is_some();
-        let install_dir = self.install_dir.as_ref().unwrap_or(&path).to_owned();
+        let install_dir_set = self.build_info.install_dir.is_some();
+        let install_dir = self
+            .build_info
+            .install_dir
+            .as_ref()
+            .unwrap_or(&path)
+            .to_owned();
 
         let file_reader = std::mem::take(&mut self.file_reader);
         let mut dep_graph_builder = DependencyGraphBuilder::new(
-            self.skip_fetch_latest_git_deps,
+            self.build_info.skip_fetch_latest_git_deps,
             writer,
             install_dir.clone(),
             file_reader,
@@ -271,7 +321,7 @@ impl BuildConfig {
             // (1) Write the Move.lock file if the existing one is `modified`, or
             // (2) `install_dir` is set explicitly, which may be a different directory, and where a Move.lock does not exist yet.
             let lock = dependency_graph.write_to_lock(install_dir)?;
-            if let Some(lock_path) = &self.lock_file {
+            if let Some(lock_path) = &self.build_info.lock_file {
                 lock.commit(lock_path)?;
             }
         }
@@ -288,39 +338,6 @@ impl BuildConfig {
             &mut dependency_cache,
             progress_output,
         )
-    }
-
-    pub fn compiler_flags(&self) -> Flags {
-        let flags = if self.test_mode {
-            Flags::testing()
-        } else {
-            Flags::empty()
-        };
-        flags
-            .set_warnings_are_errors(self.warnings_are_errors)
-            .set_silence_warnings(self.silence_warnings)
-    }
-
-    pub fn update_lock_file_toolchain_version(
-        &self,
-        path: &PathBuf,
-        compiler_version: String,
-    ) -> Result<()> {
-        let Some(lock_file) = self.lock_file.as_ref() else {
-            return Ok(());
-        };
-        let install_dir = self.install_dir.as_ref().unwrap_or(path).to_owned();
-        let mut lock = LockFile::from(install_dir, lock_file)?;
-        lock.seek(SeekFrom::Start(0))?;
-        update_compiler_toolchain(
-            &mut lock,
-            compiler_version,
-            self.default_edition.unwrap_or_default(),
-            self.default_flavor.unwrap_or_default(),
-        )?;
-        let _mutx = PackageLock::lock();
-        lock.commit(lock_file)?;
-        Ok(())
     }
 
     pub fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {

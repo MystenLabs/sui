@@ -90,7 +90,7 @@ use move_compiler::{
     expansion::ast::{self as E, Fields, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
     parser::ast::{self as P, StructName},
-    shared::{Identifier, Name},
+    shared::{FileReader, FileSystemFileReader, Identifier, Name},
     typing::ast::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
         ModuleCall, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
@@ -98,7 +98,10 @@ use move_compiler::{
     PASS_PARSER, PASS_TYPING,
 };
 use move_ir_types::location::*;
-use move_package::compilation::build_plan::BuildPlan;
+use move_package::{
+    compilation::build_plan::BuildPlan, resolution::resolution_graph::ResolvedGraph,
+    source_package::parsed_manifest::FileName,
+};
 use move_symbol_pool::Symbol;
 
 /// Enabling/disabling the language server reporting readiness to support go-to-def and
@@ -961,25 +964,27 @@ pub fn get_symbols(
         all_files: HashMap::new(),
     };
 
-    let build_config = move_package::BuildConfig {
-        test_mode: true,
-        install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-        default_flavor: Some(Flavor::Sui),
-        no_lint: !lint,
-        file_reader: Some(Box::new(vfs)),
-        ..Default::default()
+    let mut build_config = move_package::BuildConfig {
+        build_info: move_package::BuildInfo {
+            test_mode: true,
+            install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+            default_flavor: Some(Flavor::Sui),
+            no_lint: !lint,
+            ..Default::default()
+        },
+        file_reader: Some(Box::new(vfs.clone())),
     };
 
     eprintln!("symbolicating {:?}", pkg_path);
 
     // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
     // vector as the writer
-    let mut resolution_graph =
-        build_config.resolution_graph_for_package(pkg_path, &mut Vec::new())?;
+    let resolution_graph = build_config.resolution_graph_for_package(pkg_path, &mut Vec::new())?;
 
+    let file_reader = std::mem::take(&mut build_config.file_reader);
     // get source files to be able to correlate positions (in terms of byte offsets) with actual
     // file locations (in terms of line/column numbers)
-    let source_files = resolution_graph.file_sources();
+    let (source_files, file_reader) = file_sources(&resolution_graph, file_reader);
     let mut files: SimpleFiles<Symbol, String> = SimpleFiles::new();
     let mut file_id_mapping = HashMap::new();
     let mut file_id_to_lines = HashMap::new();
@@ -995,7 +1000,7 @@ pub fn get_symbols(
         file_id_to_lines.insert(id, lines);
     }
 
-    let mut build_plan = BuildPlan::create(resolution_graph)?;
+    let mut build_plan = BuildPlan::create(resolution_graph, file_reader)?;
     let mut parsed_ast = None;
     let mut typed_ast = None;
     let mut diagnostics = None;
@@ -1171,6 +1176,38 @@ pub fn get_symbols(
     eprintln!("get_symbols load complete");
 
     Ok((Some(symbols), ide_diagnostics))
+}
+
+pub fn file_sources(
+    resolved_graph: &ResolvedGraph,
+    mut file_reader: Option<Box<dyn FileReader>>,
+) -> (
+    BTreeMap<FileHash, (FileName, String)>,
+    Option<Box<dyn FileReader>>,
+) {
+    let files = resolved_graph
+        .package_table
+        .iter()
+        .flat_map(|(_, rpkg)| {
+            rpkg.get_sources(&resolved_graph.build_options)
+                .unwrap()
+                .iter()
+                .map(|fname| {
+                    let mut contents = String::new();
+                    let _ = match file_reader.as_mut() {
+                        Some(reader) => {
+                            reader.read_to_string(&PathBuf::from(fname.as_str()), &mut contents)
+                        }
+                        None => FileSystemFileReader
+                            .read_to_string(&PathBuf::from(fname.as_str()), &mut contents),
+                    };
+                    let fhash = FileHash::new(&contents);
+                    (fhash, (*fname, contents))
+                })
+                .collect::<BTreeMap<_, _>>()
+        })
+        .collect();
+    (files, file_reader)
 }
 
 /// Produces module ident string of the form pkg_name::module_name to be used as a map key.

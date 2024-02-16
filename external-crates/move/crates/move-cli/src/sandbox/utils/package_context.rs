@@ -18,6 +18,7 @@ impl PackageContext {
     pub fn new(path: &Option<PathBuf>, build_config: &BuildConfig) -> Result<Self> {
         let path = path.as_deref().unwrap_or_else(|| Path::new("."));
         let build_dir = build_config
+            .build_info
             .install_dir
             .as_ref()
             .unwrap_or(&PathBuf::from(DEFAULT_BUILD_DIR))

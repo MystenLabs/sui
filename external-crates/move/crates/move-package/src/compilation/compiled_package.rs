@@ -9,7 +9,7 @@ use crate::{
         layout::{SourcePackageLayout, REFERENCE_TEMPLATE_FILENAME},
         parsed_manifest::{FileName, PackageDigest, PackageName},
     },
-    BuildConfig,
+    BuildInfo,
 };
 use anyhow::{ensure, Result};
 use colored::Colorize;
@@ -68,7 +68,7 @@ pub struct CompiledPackageInfo {
     /// package is not available/this package was not compiled.
     pub source_digest: Option<PackageDigest>,
     /// The build flags that were used when compiling this package.
-    pub build_flags: BuildConfig,
+    pub build_flags: BuildInfo,
 }
 
 /// Represents a compiled package in memory.
@@ -270,8 +270,8 @@ impl OnDiskCompiledPackage {
     }
 
     #[allow(unused)]
-    pub(crate) fn are_build_flags_different(&self, build_config: &BuildConfig) -> bool {
-        build_config != &self.package.compiled_package_info.build_flags
+    pub(crate) fn are_build_flags_different(&self, build_info: &BuildInfo) -> bool {
+        build_info != &self.package.compiled_package_info.build_flags
     }
 
     fn get_compiled_units_paths(&self, package_name: Symbol) -> Result<Vec<String>> {
@@ -436,9 +436,9 @@ impl CompiledPackage {
         w: &mut W,
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
-        build_options: &mut BuildConfig,
+        build_info: &BuildInfo,
         contains_renaming: Option<PackageName>,
-        source_file_reader: Option<Box<dyn FileReader>>,
+        file_reader: Option<Box<dyn FileReader>>,
         mut compiler_driver: impl FnMut(Compiler) -> Result<T>,
     ) -> Result<BuildResult<T>> {
         let immediate_dependencies = transitive_dependencies
@@ -454,11 +454,11 @@ impl CompiledPackage {
 
         // gather source/dep files with their address mappings
         let (sources_package_paths, deps_package_paths) = make_source_and_deps_for_compiler(
-            build_options,
+            build_info,
             &resolved_package,
             transitive_dependencies,
         )?;
-        let flags = build_options.compiler_flags();
+        let flags = build_info.compiler_flags();
         // Partition deps_package according whether src is available
         let (src_deps, bytecode_deps): (Vec<_>, Vec<_>) = deps_package_paths
             .clone()
@@ -482,15 +482,15 @@ impl CompiledPackage {
         let mut paths = src_deps;
         paths.push(sources_package_paths.clone());
 
-        let lint = !build_options.no_lint;
-        let sui_mode = build_options
+        let lint = !build_info.no_lint;
+        let sui_mode = build_info
             .default_flavor
             .map_or(false, |f| f == Flavor::Sui);
 
         let mut compiler = Compiler::from_package_paths(paths, bytecode_deps)
             .unwrap()
             .set_flags(flags);
-        if let Some(file_reader) = source_file_reader {
+        if let Some(file_reader) = file_reader {
             compiler = compiler.set_file_reader(file_reader);
         }
         if sui_mode {
@@ -513,17 +513,18 @@ impl CompiledPackage {
         w: &mut W,
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
-        build_options: &mut BuildConfig,
+        build_info: &BuildInfo,
         contains_renaming: Option<PackageName>,
+        file_reader: Option<Box<dyn FileReader>>,
         compiler_driver: impl FnMut(Compiler) -> Result<T>,
     ) -> Result<T> {
         let build_result = Self::build_for_driver(
             w,
             resolved_package,
             transitive_dependencies,
-            build_options,
+            build_info,
             contains_renaming,
-            None,
+            file_reader,
             compiler_driver,
         )?;
         Ok(build_result.result)
@@ -534,7 +535,7 @@ impl CompiledPackage {
         project_root: &Path,
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
-        build_options: &mut BuildConfig,
+        build_info: &BuildInfo,
         contains_renaming: Option<PackageName>,
         file_reader: Option<Box<dyn FileReader>>,
         compiler_driver: impl FnMut(Compiler) -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
@@ -549,7 +550,7 @@ impl CompiledPackage {
             w,
             resolved_package.clone(),
             transitive_dependencies,
-            build_options,
+            build_info,
             contains_renaming,
             file_reader,
             compiler_driver,
@@ -572,7 +573,7 @@ impl CompiledPackage {
         }
 
         let mut compiled_docs = None;
-        if build_options.generate_docs {
+        if build_info.generate_docs {
             let model = run_model_builder_with_options(
                 vec![sources_package_paths],
                 deps_package_paths.into_iter().map(|(p, _)| p).collect_vec(),
@@ -580,13 +581,13 @@ impl CompiledPackage {
                 None,
             )?;
 
-            if build_options.generate_docs {
+            if build_info.generate_docs {
                 compiled_docs = Some(Self::build_docs(
                     resolved_package.source_package.package.name,
                     &model,
                     &resolved_package.package_path,
                     &immediate_dependencies,
-                    &build_options.install_dir,
+                    &build_info.install_dir,
                 ));
             }
         };
@@ -596,7 +597,7 @@ impl CompiledPackage {
                 package_name: resolved_package.source_package.package.name,
                 address_alias_instantiation: resolved_package.resolved_table,
                 source_digest: Some(resolved_package.source_digest),
-                build_flags: build_options.clone(),
+                build_flags: build_info.clone(),
             },
             root_compiled_units,
             deps_compiled_units,
@@ -803,7 +804,7 @@ pub(crate) fn apply_named_address_renaming(
 }
 
 pub(crate) fn make_source_and_deps_for_compiler(
-    build_options: &mut BuildConfig,
+    build_info: &BuildInfo,
     root: &Package,
     deps: Vec<DependencyInfo>,
 ) -> Result<(
@@ -835,11 +836,11 @@ pub(crate) fn make_source_and_deps_for_compiler(
         named_address_mapping_for_compiler(&root.resolved_table),
         &root.renaming,
     );
-    let sources = root.get_sources(build_options)?;
+    let sources = root.get_sources(build_info)?;
     let source_package_paths = PackagePaths {
         name: Some((
             root.source_package.package.name,
-            root.compiler_config(/* is_dependency */ false, build_options),
+            root.compiler_config(/* is_dependency */ false, &build_info),
         )),
         paths: sources,
         named_address_map: root_named_addrs,

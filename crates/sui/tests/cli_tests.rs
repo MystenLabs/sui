@@ -396,7 +396,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
         skip_dependency_verification: false,
@@ -617,7 +617,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
@@ -684,7 +684,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
@@ -791,7 +791,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
@@ -917,7 +917,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
@@ -1043,7 +1043,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
@@ -1171,7 +1171,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
@@ -1239,7 +1239,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
     let build_config = BuildConfig::new_for_testing().config;
     let result = SuiClientCommands::Publish {
         package_path,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
@@ -1285,7 +1285,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
     let build_config = BuildConfig::new_for_testing().config;
     let result = SuiClientCommands::Publish {
         package_path,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
@@ -1340,7 +1340,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
     let build_config = BuildConfig::new_for_testing().config;
     let result = SuiClientCommands::Publish {
         package_path,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
@@ -1382,7 +1382,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
     let build_config = BuildConfig::new_for_testing().config;
     let result = SuiClientCommands::Publish {
         package_path,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
@@ -1421,11 +1421,11 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
     package_path.push("module_publish_with_nonexistent_dependency");
     let mut build_config: MoveBuildConfig = BuildConfig::new_for_testing().config;
     // this would have been the result of calling `sui client publish --test`
-    build_config.test_mode = true;
+    build_config.build_info.test_mode = true;
 
     let result = SuiClientCommands::Publish {
         package_path,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
@@ -1480,7 +1480,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path: package_path.clone(),
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
@@ -1552,7 +1552,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Upgrade {
         package_path: upgrade_pkg_path,
         upgrade_capability: cap.reference.object_id,
-        build_config,
+        build_info: build_config.build_info,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,

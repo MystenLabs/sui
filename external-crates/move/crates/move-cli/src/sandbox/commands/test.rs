@@ -15,7 +15,7 @@ use move_package::{
     compilation::{compiled_package::OnDiskCompiledPackage, package_layout::CompiledPackageLayout},
     resolution::resolution_graph::ResolvedGraph,
     source_package::{layout::SourcePackageLayout, manifest_parser::parse_move_manifest_from_file},
-    BuildConfig,
+    BuildConfig, BuildInfo,
 };
 use std::{
     collections::{BTreeMap, HashMap},
@@ -129,8 +129,11 @@ fn copy_deps(tmp_dir: &Path, pkg_dir: &Path) -> anyhow::Result<PathBuf> {
     // don't need to nest at all. Resolution graph diagnostics are only needed for CLI commands so
     // ignore them by passing a vector as the writer.
     let package_resolution = match (BuildConfig {
-        dev_mode: true,
-        ..Default::default()
+        build_info: BuildInfo {
+            dev_mode: true,
+            ..Default::default()
+        },
+        file_reader: None,
     })
     .resolution_graph_for_package(pkg_dir, &mut Vec::new())
     {

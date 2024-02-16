@@ -18,7 +18,7 @@ use fastcrypto::{
 
 use json_to_table::json_to_table;
 use move_core_types::language_storage::TypeTag;
-use move_package::BuildConfig as MoveBuildConfig;
+use move_package::{BuildConfig as MoveBuildConfig, BuildInfo};
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -426,7 +426,7 @@ pub enum SuiClientCommands {
 
         /// Package build options
         #[clap(flatten)]
-        build_config: MoveBuildConfig,
+        build_info: BuildInfo,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
@@ -597,7 +597,7 @@ pub enum SuiClientCommands {
 
         /// Package build options
         #[clap(flatten)]
-        build_config: MoveBuildConfig,
+        build_info: BuildInfo,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
@@ -640,7 +640,7 @@ pub enum SuiClientCommands {
 
         /// Package build options
         #[clap(flatten)]
-        build_config: MoveBuildConfig,
+        build_info: BuildInfo,
     },
 
     /// Verify local Move packages against on-chain packages, and optionally their dependencies.
@@ -652,7 +652,7 @@ pub enum SuiClientCommands {
 
         /// Package build options
         #[clap(flatten)]
-        build_config: MoveBuildConfig,
+        build_info: BuildInfo,
 
         /// Verify on-chain dependencies.
         #[clap(long)]
@@ -852,7 +852,7 @@ impl SuiClientCommands {
             SuiClientCommands::Upgrade {
                 package_path,
                 upgrade_capability,
-                build_config,
+                build_info,
                 gas,
                 gas_budget,
                 skip_dependency_verification,
@@ -867,7 +867,7 @@ impl SuiClientCommands {
                 let (dependencies, compiled_modules, compiled_package, package_id) =
                     compile_package(
                         &client,
-                        build_config,
+                        build_info,
                         package_path,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
@@ -940,14 +940,14 @@ impl SuiClientCommands {
             SuiClientCommands::Publish {
                 package_path,
                 gas,
-                build_config,
+                build_info,
                 gas_budget,
                 skip_dependency_verification,
                 with_unpublished_dependencies,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
             } => {
-                if build_config.test_mode {
+                if build_info.test_mode {
                     return Err(SuiError::ModulePublishFailure {
                         error:
                             "The `publish` subcommand should not be used with the `--test` flag\n\
@@ -968,7 +968,7 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let (dependencies, compiled_modules, _, _) = compile_package(
                     &client,
-                    build_config,
+                    build_info,
                     package_path,
                     with_unpublished_dependencies,
                     skip_dependency_verification,
@@ -996,12 +996,16 @@ impl SuiClientCommands {
 
             SuiClientCommands::VerifyBytecodeMeter {
                 package_path,
-                build_config,
+                build_info,
             } => {
                 let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
                 let registry = &Registry::new();
                 let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
 
+                let build_config = MoveBuildConfig {
+                    build_info,
+                    file_reader: None,
+                };
                 let package = compile_package_simple(build_config, package_path)?;
                 let modules: Vec<_> = package.get_modules().cloned().collect();
 
@@ -1500,7 +1504,7 @@ impl SuiClientCommands {
             ),
             SuiClientCommands::VerifySource {
                 package_path,
-                build_config,
+                build_info,
                 verify_deps,
                 skip_source,
                 address_override,
@@ -1511,6 +1515,10 @@ impl SuiClientCommands {
                     ));
                 }
 
+                let build_config = MoveBuildConfig {
+                    build_info,
+                    file_reader: None,
+                };
                 let build_config =
                     resolve_lock_file_path(build_config, Some(package_path.clone()))?;
                 let compiled_package = BuildConfig {
@@ -1569,7 +1577,7 @@ fn compile_package_simple(
 
 async fn compile_package(
     client: &SuiClient,
-    build_config: MoveBuildConfig,
+    build_info: BuildInfo,
     package_path: PathBuf,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
@@ -1582,6 +1590,10 @@ async fn compile_package(
     ),
     anyhow::Error,
 > {
+    let build_config = MoveBuildConfig {
+        build_info,
+        file_reader: None,
+    };
     let config = resolve_lock_file_path(build_config, Some(package_path.clone()))?;
     let run_bytecode_verifier = true;
     let print_diags_to_stderr = true;

@@ -9,7 +9,7 @@ use crate::{
         manifest_parser::{resolve_move_manifest_path, EDITION_NAME, PACKAGE_NAME},
         parsed_manifest::PackageName,
     },
-    BuildConfig,
+    BuildInfo,
 };
 use anyhow::Result;
 use move_compiler::{
@@ -18,6 +18,7 @@ use move_compiler::{
         report_diagnostics_to_color_buffer, report_warnings, FilesSourceText, Migration,
     },
     editions::Edition,
+    shared::FileReader,
     Compiler,
 };
 use std::{
@@ -33,11 +34,11 @@ use super::{
     package_layout::CompiledPackageLayout,
 };
 
-#[derive(Debug, Clone)]
 pub struct BuildPlan {
     root: PackageName,
     sorted_deps: Vec<PackageName>,
     resolution_graph: ResolvedGraph,
+    file_reader: Option<Box<dyn FileReader>>,
 }
 
 struct CompilationDependencies<'a> {
@@ -47,7 +48,10 @@ struct CompilationDependencies<'a> {
 }
 
 impl BuildPlan {
-    pub fn create(resolution_graph: ResolvedGraph) -> Result<Self> {
+    pub fn create(
+        resolution_graph: ResolvedGraph,
+        file_reader: Option<Box<dyn FileReader>>,
+    ) -> Result<Self> {
         let mut sorted_deps = resolution_graph.topological_order();
         sorted_deps.reverse();
 
@@ -55,6 +59,7 @@ impl BuildPlan {
             root: resolution_graph.root_package(),
             sorted_deps,
             resolution_graph,
+            file_reader,
         })
     }
 
@@ -81,15 +86,17 @@ impl BuildPlan {
                 project_root,
                 transitive_dependencies,
             },
-            build_options,
+            file_reader,
+            build_info,
         ) = self.compute_dependencies();
 
         let (_, migration) = CompiledPackage::build_for_result(
             writer,
             root_package,
             transitive_dependencies,
-            build_options,
+            build_info,
             contains_renaming,
+            file_reader,
             |compiler| compiler.generate_migration_patch(&root_module),
         )?;
 
@@ -121,7 +128,13 @@ impl BuildPlan {
         })
     }
 
-    fn compute_dependencies(&mut self) -> (CompilationDependencies, &mut BuildConfig) {
+    fn compute_dependencies(
+        &mut self,
+    ) -> (
+        CompilationDependencies,
+        Option<Box<dyn FileReader>>,
+        &BuildInfo,
+    ) {
         let root_package = &self.resolution_graph.package_table[&self.root];
         let project_root = match &self.resolution_graph.build_options.install_dir {
             Some(under_path) => under_path.clone(),
@@ -166,13 +179,17 @@ impl BuildPlan {
                 }
             })
             .collect();
+
+        let file_reader = std::mem::take(&mut self.file_reader);
+
         (
             CompilationDependencies {
                 root_package: root_package.clone(),
                 project_root,
                 transitive_dependencies,
             },
-            &mut self.resolution_graph.build_options,
+            file_reader,
+            &self.resolution_graph.build_options,
         )
     }
 
@@ -191,16 +208,16 @@ impl BuildPlan {
                 project_root,
                 transitive_dependencies,
             },
-            build_options,
+            file_reader,
+            build_info,
         ) = self.compute_dependencies();
 
-        let file_reader = std::mem::take(&mut build_options.file_reader);
         let compiled = CompiledPackage::build_all(
             writer,
             &project_root,
             root_package,
             transitive_dependencies,
-            build_options,
+            build_info,
             contains_renaming,
             file_reader,
             &mut compiler_driver,

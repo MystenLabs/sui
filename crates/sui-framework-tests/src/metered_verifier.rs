@@ -16,7 +16,7 @@ use sui_verifier::{default_verifier_config, meter::SuiVerifierMeter};
 
 fn build(path: PathBuf) -> SuiResult<CompiledPackage> {
     let mut config = sui_move_build::BuildConfig::new_for_testing();
-    config.config.warnings_are_errors = true;
+    config.config.build_info.warnings_are_errors = true;
     config.build(path)
 }
 

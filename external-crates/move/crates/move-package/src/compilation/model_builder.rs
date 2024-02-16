@@ -83,7 +83,7 @@ impl ModelBuilder {
             .collect::<Result<Vec<_>>>()?;
 
         let (target, deps) = make_source_and_deps_for_compiler(
-            &mut self.resolution_graph.build_options,
+            &self.resolution_graph.build_options,
             &root_package,
             deps_source_info,
         )?;

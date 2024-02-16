@@ -415,6 +415,7 @@ pub fn build_test_modules_with_dep_addr(
     for (addr_name, obj_id) in dep_original_addresses {
         build_config
             .config
+            .build_info
             .additional_named_addresses
             .insert(addr_name.to_string(), AccountAddress::from(obj_id));
     }
@@ -461,6 +462,7 @@ pub async fn publish_package_on_single_authority(
     for (addr_name, obj_id) in dep_original_addresses {
         build_config
             .config
+            .build_info
             .additional_named_addresses
             .insert(addr_name.to_string(), AccountAddress::from(obj_id));
     }

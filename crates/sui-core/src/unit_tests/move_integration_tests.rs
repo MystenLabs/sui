@@ -2774,7 +2774,7 @@ fn ascii_tag() -> TypeTag {
 #[cfg_attr(msim, ignore)]
 async fn test_object_no_id_error() {
     let mut build_config = BuildConfig::new_for_testing();
-    build_config.config.test_mode = true;
+    build_config.config.build_info.test_mode = true;
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     // in this package object struct (NotObject) is defined incorrectly and publishing should
     // fail (it's defined in test-only code hence cannot be checked by transactional testing

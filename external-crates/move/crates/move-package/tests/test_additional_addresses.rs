@@ -6,7 +6,7 @@ use move_core_types::account_address::AccountAddress;
 use move_package::{
     resolution::{dependency_graph as DG, resolution_graph as RG},
     source_package::{layout::SourcePackageLayout, parsed_manifest as PM},
-    BuildConfig,
+    BuildConfig, BuildInfo,
 };
 use std::{collections::BTreeMap, path::PathBuf};
 use tempfile::tempdir;
@@ -48,12 +48,15 @@ fn test_additonal_addresses() {
     assert!(RG::ResolvedGraph::resolve(
         dg.clone(),
         BuildConfig {
-            install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-            additional_named_addresses: BTreeMap::from([(
-                "A".to_string(),
-                AccountAddress::from_hex_literal("0x1").unwrap()
-            )]),
-            ..Default::default()
+            build_info: BuildInfo {
+                install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+                additional_named_addresses: BTreeMap::from([(
+                    "A".to_string(),
+                    AccountAddress::from_hex_literal("0x1").unwrap()
+                )]),
+                ..Default::default()
+            },
+            file_reader: None,
         },
         &mut dependency_cache,
         &mut progress_output,
@@ -63,8 +66,11 @@ fn test_additonal_addresses() {
     assert!(RG::ResolvedGraph::resolve(
         dg,
         BuildConfig {
-            install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-            ..Default::default()
+            build_info: BuildInfo {
+                install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+                ..Default::default()
+            },
+            file_reader: None,
         },
         &mut dependency_cache,
         &mut progress_output,
@@ -105,12 +111,15 @@ fn test_additonal_addresses_already_assigned_same_value() {
     assert!(RG::ResolvedGraph::resolve(
         dg,
         BuildConfig {
-            install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-            additional_named_addresses: BTreeMap::from([(
-                "A".to_string(),
-                AccountAddress::from_hex_literal("0x0").unwrap()
-            )]),
-            ..Default::default()
+            build_info: BuildInfo {
+                install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+                additional_named_addresses: BTreeMap::from([(
+                    "A".to_string(),
+                    AccountAddress::from_hex_literal("0x0").unwrap()
+                )]),
+                ..Default::default()
+            },
+            file_reader: None,
         },
         &mut dependency_cache,
         &mut progress_output,
@@ -151,12 +160,15 @@ fn test_additonal_addresses_already_assigned_different_value() {
     assert!(RG::ResolvedGraph::resolve(
         dg,
         BuildConfig {
-            install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-            additional_named_addresses: BTreeMap::from([(
-                "A".to_string(),
-                AccountAddress::from_hex_literal("0x1").unwrap()
-            )]),
-            ..Default::default()
+            build_info: BuildInfo {
+                install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+                additional_named_addresses: BTreeMap::from([(
+                    "A".to_string(),
+                    AccountAddress::from_hex_literal("0x1").unwrap()
+                )]),
+                ..Default::default()
+            },
+            file_reader: None,
         },
         &mut dependency_cache,
         &mut progress_output,

@@ -34,7 +34,7 @@ use move_package::{
     },
     package_hooks::{PackageHooks, PackageIdentifier},
     resolution::resolution_graph::ResolvedGraph,
-    BuildConfig as MoveBuildConfig,
+    BuildConfig as MoveBuildConfig, BuildInfo,
 };
 use move_package::{
     resolution::resolution_graph::Package, source_package::parsed_manifest::CustomDepInfo,
@@ -85,9 +85,9 @@ impl BuildConfig {
         let mut build_config: Self = Default::default();
         let install_dir = tempfile::tempdir().unwrap().into_path();
         let lock_file = install_dir.join("Move.lock");
-        build_config.config.install_dir = Some(install_dir);
-        build_config.config.lock_file = Some(lock_file);
-        build_config.config.no_lint = true;
+        build_config.config.build_info.install_dir = Some(install_dir);
+        build_config.config.build_info.lock_file = Some(lock_file);
+        build_config.config.build_info.no_lint = true;
         build_config
     }
 
@@ -100,6 +100,7 @@ impl BuildConfig {
         for (addr_name, obj_id) in dep_original_addresses {
             build_config
                 .config
+                .build_info
                 .additional_named_addresses
                 .insert(addr_name.into(), AccountAddress::from(obj_id));
         }
@@ -125,7 +126,7 @@ impl BuildConfig {
         resolution_graph: ResolvedGraph,
         writer: &mut W,
     ) -> anyhow::Result<(MoveCompiledPackage, FnInfoMap)> {
-        let build_plan = BuildPlan::create(resolution_graph)?;
+        let mut build_plan = BuildPlan::create(resolution_graph, None)?;
         let mut fn_info = None;
         let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
             let (files, units_res) = compiler.build()?;
@@ -215,7 +216,10 @@ pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&FilesSourceT
 pub fn set_sui_flavor(build_config: &mut MoveBuildConfig) -> Option<String> {
     use move_compiler::editions::Flavor;
 
-    let flavor = build_config.default_flavor.get_or_insert(Flavor::Sui);
+    let flavor = build_config
+        .build_info
+        .default_flavor
+        .get_or_insert(Flavor::Sui);
     if flavor != &Flavor::Sui {
         return Some(format!(
             "The flavor of the Move compiler cannot be overridden with anything but \
@@ -578,8 +582,11 @@ impl CompiledPackage {
 impl Default for BuildConfig {
     fn default() -> Self {
         let config = MoveBuildConfig {
-            default_flavor: Some(move_compiler::editions::Flavor::Sui),
-            ..MoveBuildConfig::default()
+            build_info: BuildInfo {
+                default_flavor: Some(move_compiler::editions::Flavor::Sui),
+                ..BuildInfo::default()
+            },
+            file_reader: None,
         };
         BuildConfig {
             config,

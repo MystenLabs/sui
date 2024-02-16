@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use move_binary_format::CompiledModule;
-use move_package::BuildConfig as MoveBuildConfig;
+use move_package::{BuildConfig as MoveBuildConfig, BuildInfo};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -88,13 +88,16 @@ fn build_packages(
     out_dir: PathBuf,
 ) {
     let config = MoveBuildConfig {
-        generate_docs: true,
-        warnings_are_errors: true,
-        install_dir: Some(PathBuf::from(".")),
-        no_lint: true,
-        ..Default::default()
+        build_info: BuildInfo {
+            generate_docs: true,
+            warnings_are_errors: true,
+            install_dir: Some(PathBuf::from(".")),
+            no_lint: true,
+            ..Default::default()
+        },
+        file_reader: None,
     };
-    debug_assert!(!config.test_mode);
+    debug_assert!(!config.build_info.test_mode);
     build_packages_with_move_config(
         bridge_path.clone(),
         deepbook_path.clone(),
@@ -110,12 +113,15 @@ fn build_packages(
         true,
     );
     let config = MoveBuildConfig {
-        generate_docs: true,
-        test_mode: true,
-        warnings_are_errors: true,
-        install_dir: Some(PathBuf::from(".")),
-        no_lint: true,
-        ..Default::default()
+        build_info: BuildInfo {
+            generate_docs: true,
+            test_mode: true,
+            warnings_are_errors: true,
+            install_dir: Some(PathBuf::from(".")),
+            no_lint: true,
+            ..Default::default()
+        },
+        file_reader: None,
     };
     build_packages_with_move_config(
         bridge_path,

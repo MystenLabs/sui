@@ -158,8 +158,8 @@ pub async fn verify_package(
         MoveBuildConfig::default(),
         Some(package_path.as_ref().to_path_buf()),
     )?;
-    config.no_lint = true;
-    config.silence_warnings = true;
+    config.build_info.no_lint = true;
+    config.build_info.silence_warnings = true;
     let build_config = BuildConfig {
         config,
         run_bytecode_verifier: false, /* no need to run verifier if code is on-chain */

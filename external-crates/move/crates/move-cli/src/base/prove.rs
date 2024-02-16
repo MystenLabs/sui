@@ -162,7 +162,7 @@ pub fn run_move_prover(
     mut options: move_prover::cli::Options,
 ) -> anyhow::Result<()> {
     // Always run the prover in dev mode, so addresses get default assignments
-    config.dev_mode = true;
+    config.build_info.dev_mode = true;
 
     if !options.move_sources.is_empty() {
         bail!(

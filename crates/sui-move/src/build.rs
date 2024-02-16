@@ -98,10 +98,10 @@ pub fn resolve_lock_file_path(
     mut build_config: MoveBuildConfig,
     package_path: Option<PathBuf>,
 ) -> Result<MoveBuildConfig, anyhow::Error> {
-    if build_config.lock_file.is_none() {
+    if build_config.build_info.lock_file.is_none() {
         let package_root = base::reroot_path(package_path)?;
         let lock_file_path = package_root.join(SourcePackageLayout::Lock.path());
-        build_config.lock_file = Some(lock_file_path);
+        build_config.build_info.lock_file = Some(lock_file_path);
     }
     Ok(build_config)
 }

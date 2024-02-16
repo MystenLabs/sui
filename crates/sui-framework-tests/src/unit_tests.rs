@@ -87,12 +87,12 @@ fn run_docs_examples_move_unit_tests() -> io::Result<()> {
 /// Ensure packages build outside of test mode.
 fn check_package_builds(path: PathBuf) {
     let mut config = BuildConfig::new_for_testing();
-    config.config.dev_mode = true;
+    config.config.build_info.dev_mode = true;
     config.run_bytecode_verifier = true;
     config.print_diags_to_stderr = true;
-    config.config.warnings_are_errors = true;
-    config.config.silence_warnings = false;
-    config.config.no_lint = false;
+    config.config.build_info.warnings_are_errors = true;
+    config.config.build_info.silence_warnings = false;
+    config.config.build_info.no_lint = false;
     config
         .build(path.clone())
         .unwrap_or_else(|e| panic!("Building package {}.\nWith error {e}", path.display()));
@@ -101,13 +101,13 @@ fn check_package_builds(path: PathBuf) {
 fn check_move_unit_tests(path: PathBuf) {
     let mut config = BuildConfig::new_for_testing();
     // Make sure to verify tests
-    config.config.dev_mode = true;
-    config.config.test_mode = true;
+    config.config.build_info.dev_mode = true;
+    config.config.build_info.test_mode = true;
     config.run_bytecode_verifier = true;
     config.print_diags_to_stderr = true;
-    config.config.warnings_are_errors = true;
-    config.config.silence_warnings = false;
-    config.config.no_lint = false;
+    config.config.build_info.warnings_are_errors = true;
+    config.config.build_info.silence_warnings = false;
+    config.config.build_info.no_lint = false;
     let move_config = config.config.clone();
     let mut testing_config = UnitTestingConfig::default_with_bound(Some(3_000_000));
     testing_config.filter = std::env::var(FILTER_ENV).ok().map(|s| s.to_string());

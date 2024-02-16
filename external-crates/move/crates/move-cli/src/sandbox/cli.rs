@@ -270,6 +270,7 @@ impl SandboxCommand {
                 let build_dir = Path::new(
                     &move_args
                         .build_config
+                        .build_info
                         .install_dir
                         .as_ref()
                         .unwrap_or(&PathBuf::from(DEFAULT_BUILD_DIR)),

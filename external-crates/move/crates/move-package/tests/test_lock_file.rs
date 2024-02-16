@@ -12,7 +12,7 @@ use tempfile::TempDir;
 use move_compiler::editions::{Edition, Flavor};
 use move_package::lock_file::schema::ToolchainVersion;
 use move_package::lock_file::LockFile;
-use move_package::BuildConfig;
+use move_package::{BuildConfig, BuildInfo};
 
 #[test]
 fn commit() {
@@ -79,13 +79,17 @@ fn update_lock_file_toolchain_version() {
     lock.commit(&lock_path).unwrap();
 
     let build_config = BuildConfig {
-        default_flavor: Some(Flavor::Sui),
-        default_edition: Some(Edition::E2024_ALPHA),
-        lock_file: Some(lock_path.clone()),
-        ..Default::default()
+        build_info: BuildInfo {
+            default_flavor: Some(Flavor::Sui),
+            default_edition: Some(Edition::E2024_ALPHA),
+            lock_file: Some(lock_path.clone()),
+            ..Default::default()
+        },
+        file_reader: None,
     };
-    let _ =
-        build_config.update_lock_file_toolchain_version(&pkg.path().to_path_buf(), "0.0.1".into());
+    let _ = build_config
+        .build_info
+        .update_lock_file_toolchain_version(&pkg.path().to_path_buf(), "0.0.1".into());
 
     let mut lock_file = File::open(lock_path).unwrap();
     let toolchain_version =

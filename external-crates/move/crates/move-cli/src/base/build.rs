@@ -14,10 +14,10 @@ pub struct Build;
 impl Build {
     pub fn execute(self, path: Option<PathBuf>, config: BuildConfig) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
-        if config.fetch_deps_only {
+        if config.build_info.fetch_deps_only {
             let mut config = config;
-            if config.test_mode {
-                config.dev_mode = true;
+            if config.build_info.test_mode {
+                config.build_info.dev_mode = true;
             }
             config.download_deps_for_package(&rerooted_path, &mut std::io::stdout())?;
             return Ok(());

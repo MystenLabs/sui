@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_package::BuildConfig;
+use move_package::{BuildConfig, BuildInfo};
 use std::{io::Write, path::Path};
 use tempfile::tempdir;
 
@@ -14,8 +14,11 @@ fn package_hash_skips_non_move_files() {
     // passing a vector as the writer
 
     let pkg1 = BuildConfig {
-        install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-        ..Default::default()
+        build_info: BuildInfo {
+            install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+            ..Default::default()
+        },
+        file_reader: None,
     }
     .resolution_graph_for_package(path, &mut Vec::new())
     .unwrap();
@@ -27,8 +30,11 @@ fn package_hash_skips_non_move_files() {
         .unwrap();
 
     let pkg2 = BuildConfig {
-        install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-        ..Default::default()
+        build_info: BuildInfo {
+            install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+            ..Default::default()
+        },
+        file_reader: None,
     }
     .resolution_graph_for_package(path, &mut Vec::new())
     .unwrap();

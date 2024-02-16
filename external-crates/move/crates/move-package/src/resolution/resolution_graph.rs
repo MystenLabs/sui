@@ -4,7 +4,7 @@
 
 use anyhow::{bail, Context, Result};
 use move_command_line_common::files::{
-    extension_equals, find_filenames, find_move_filenames, FileHash, MOVE_COMPILED_EXTENSION,
+    extension_equals, find_filenames, find_move_filenames, MOVE_COMPILED_EXTENSION,
 };
 use move_compiler::command_line::DEFAULT_OUTPUT_DIR;
 use move_compiler::{diagnostics::WarningFilters, shared::PackageConfig};
@@ -27,7 +27,7 @@ use crate::{
             FileName, NamedAddress, PackageDigest, PackageName, SourceManifest, SubstOrRename,
         },
     },
-    BuildConfig,
+    BuildConfig, BuildInfo,
 };
 
 use super::{
@@ -49,7 +49,7 @@ use super::{
 pub struct ResolvedGraph {
     pub graph: DG::DependencyGraph,
     /// Build options
-    pub build_options: BuildConfig,
+    pub build_options: BuildInfo,
     /// A mapping of package name to its resolution
     pub package_table: PackageTable,
 }
@@ -76,14 +76,14 @@ pub struct Package {
 impl ResolvedGraph {
     pub fn resolve<Progress: Write>(
         graph: DG::DependencyGraph,
-        build_options: BuildConfig,
+        build_options: &mut BuildConfig,
         dependency_cache: &mut DependencyCache,
         progress_output: &mut Progress,
     ) -> Result<ResolvedGraph> {
         let mut package_table = PackageTable::new();
         let mut resolving_table = ResolvingTable::new();
 
-        let dep_mode = if build_options.dev_mode {
+        let dep_mode = if build_options.build_info.dev_mode {
             DG::DependencyMode::DevOnly
         } else {
             DG::DependencyMode::Always
@@ -93,7 +93,7 @@ impl ResolvedGraph {
         // dependencies get resolved before it does.
         for pkg_id in graph.topological_order().into_iter().rev() {
             // Skip dev-mode packages if not in dev-mode.
-            if !(build_options.dev_mode || graph.always_deps.contains(&pkg_id)) {
+            if !(build_options.build_info.dev_mode || graph.always_deps.contains(&pkg_id)) {
                 continue;
             }
 
@@ -154,7 +154,7 @@ impl ResolvedGraph {
         }
 
         // Add additional addresses to all package resolution tables.
-        for (name, addr) in &build_options.additional_named_addresses {
+        for (name, addr) in &build_options.build_info.additional_named_addresses {
             let name = NamedAddress::from(name.as_str());
             for pkg in package_table.keys() {
                 resolving_table
@@ -168,7 +168,7 @@ impl ResolvedGraph {
         let root_package = &package_table[&graph.root_package_id];
 
         // Add dev addresses, but only for the root package
-        if build_options.dev_mode {
+        if build_options.build_info.dev_mode {
             let mut addr_to_name_mapping = BTreeMap::new();
             for (name, addr) in resolving_table.bindings(graph.root_package_id) {
                 if let Some(addr) = addr {
@@ -247,7 +247,7 @@ impl ResolvedGraph {
 
         Ok(ResolvedGraph {
             graph,
-            build_options,
+            build_options: build_options.build_info.clone(),
             package_table,
         })
     }
@@ -306,26 +306,6 @@ impl ResolvedGraph {
             .resolved_table
             .clone()
             .into_iter()
-    }
-
-    pub fn file_sources(&mut self) -> BTreeMap<FileHash, (FileName, String)> {
-        self.package_table
-            .iter()
-            .flat_map(|(_, rpkg)| {
-                rpkg.get_sources(&self.build_options)
-                    .unwrap()
-                    .iter()
-                    .map(|fname| {
-                        let mut contents = String::new();
-                        self.build_options
-                            .read_to_string(&PathBuf::from(fname.as_str()), &mut contents)
-                            .unwrap();
-                        let fhash = FileHash::new(&contents);
-                        (fhash, (*fname, contents))
-                    })
-                    .collect::<BTreeMap<_, _>>()
-            })
-            .collect()
     }
 
     pub fn contains_renaming(&self) -> Option<PackageName> {
@@ -494,8 +474,8 @@ impl Package {
             .collect()
     }
 
-    pub fn get_sources(&self, config: &BuildConfig) -> Result<Vec<FileName>> {
-        let places_to_look = source_paths_for_config(&self.package_path, config);
+    pub fn get_sources(&self, build_info: &BuildInfo) -> Result<Vec<FileName>> {
+        let places_to_look = source_paths_for_config(&self.package_path, build_info);
         Ok(find_move_filenames(&places_to_look, false)?
             .into_iter()
             .map(FileName::from)
@@ -524,7 +504,7 @@ impl Package {
     pub(crate) fn compiler_config(
         &self,
         is_dependency: bool,
-        config: &BuildConfig,
+        build_info: &BuildInfo,
     ) -> PackageConfig {
         PackageConfig {
             is_dependency,
@@ -532,20 +512,20 @@ impl Package {
                 .source_package
                 .package
                 .flavor
-                .or(config.default_flavor)
+                .or(build_info.default_flavor)
                 .unwrap_or_default(),
             edition: self
                 .source_package
                 .package
                 .edition
-                .or(config.default_edition)
+                .or(build_info.default_edition)
                 .unwrap_or_default(),
             warning_filter: WarningFilters::new_for_source(),
         }
     }
 }
 
-fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<PathBuf> {
+fn source_paths_for_config(package_path: &Path, build_info: &BuildInfo) -> Vec<PathBuf> {
     let mut places_to_look = Vec::new();
     let mut add_path = |layout_path: SourcePackageLayout| {
         let path = package_path.join(layout_path.path());
@@ -558,7 +538,7 @@ fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<Pat
     add_path(SourcePackageLayout::Sources);
     add_path(SourcePackageLayout::Scripts);
 
-    if config.dev_mode {
+    if build_info.dev_mode {
         add_path(SourcePackageLayout::Examples);
         add_path(SourcePackageLayout::Tests);
     }
@@ -567,7 +547,7 @@ fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<Pat
 }
 
 fn package_digest_for_config(package_path: &Path, config: &BuildConfig) -> Result<PackageDigest> {
-    let mut source_paths = source_paths_for_config(package_path, config);
+    let mut source_paths = source_paths_for_config(package_path, &config.build_info);
     source_paths.push(package_path.join(SourcePackageLayout::Manifest.path()));
     compute_digest(&source_paths)
 }

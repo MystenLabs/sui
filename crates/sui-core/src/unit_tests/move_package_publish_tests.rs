@@ -197,7 +197,7 @@ async fn test_generate_lock_file() {
     let lock_file_path = tmp.path().join("Move.lock");
 
     let mut build_config = BuildConfig::new_for_testing();
-    build_config.config.lock_file = Some(lock_file_path.clone());
+    build_config.config.build_info.lock_file = Some(lock_file_path.clone());
     build_config
         .clone()
         .build(path.clone())
@@ -205,6 +205,7 @@ async fn test_generate_lock_file() {
     // Update the lock file with placeholder compiler version so this isn't bumped every release.
     build_config
         .config
+        .build_info
         .update_lock_file_toolchain_version(&path, "0.0.1".into())
         .expect("Could not update lock file");
 
@@ -288,7 +289,7 @@ async fn test_custom_property_parse_published_at() {
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
 async fn test_custom_property_check_unpublished_dependencies() {
-    let build_config = BuildConfig::new_for_testing();
+    let mut build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend([
         "src",

@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_package::{compilation::package_layout::CompiledPackageLayout, BuildConfig};
+use move_package::{compilation::package_layout::CompiledPackageLayout, BuildConfig, BuildInfo};
 use std::path::Path;
 use tempfile::tempdir;
 
@@ -12,10 +12,13 @@ fn test_that_second_build_artifacts_removed() {
     let dir = tempdir().unwrap().path().to_path_buf();
 
     BuildConfig {
-        dev_mode: true,
-        test_mode: true,
-        install_dir: Some(dir.clone()),
-        ..Default::default()
+        build_info: BuildInfo {
+            dev_mode: true,
+            test_mode: true,
+            install_dir: Some(dir.clone()),
+            ..Default::default()
+        },
+        file_reader: None,
     }
     .compile_package(path, &mut Vec::new())
     .unwrap();
@@ -37,10 +40,13 @@ fn test_that_second_build_artifacts_removed() {
 
     // Now make sure the MoveStdlib still exists, but that the test-only code is removed
     BuildConfig {
-        dev_mode: true,
-        test_mode: false,
-        install_dir: Some(dir.clone()),
-        ..Default::default()
+        build_info: BuildInfo {
+            dev_mode: true,
+            test_mode: false,
+            install_dir: Some(dir.clone()),
+            ..Default::default()
+        },
+        file_reader: None,
     }
     .compile_package(path, &mut Vec::new())
     .unwrap();
@@ -55,10 +61,13 @@ fn test_that_second_build_artifacts_removed() {
         .exists());
 
     BuildConfig {
-        dev_mode: false,
-        test_mode: false,
-        install_dir: Some(dir.clone()),
-        ..Default::default()
+        build_info: BuildInfo {
+            dev_mode: false,
+            test_mode: false,
+            install_dir: Some(dir.clone()),
+            ..Default::default()
+        },
+        file_reader: None,
     }
     .compile_package(path, &mut Vec::new())
     .unwrap();

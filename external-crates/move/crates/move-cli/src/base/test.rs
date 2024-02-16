@@ -139,8 +139,8 @@ pub fn run_move_unit_tests<W: Write + Send>(
     writer: &mut W,
 ) -> Result<(UnitTestResult, Option<Diagnostics>)> {
     let mut test_plan = None;
-    build_config.test_mode = true;
-    build_config.dev_mode = true;
+    build_config.build_info.test_mode = true;
+    build_config.build_info.dev_mode = true;
 
     // Build the resolution graph (resolution graph diagnostics are only needed for CLI commands so
     // ignore them by passing a vector as the writer)
@@ -176,7 +176,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
         })
         .collect();
     let root_package = resolution_graph.root_package();
-    let mut build_plan = BuildPlan::create(resolution_graph)?;
+    let mut build_plan = BuildPlan::create(resolution_graph, None)?;
     // Compile the package. We need to intercede in the compilation, process being performed by the
     // Move package system, to first grab the compilation env, construct the test plan from it, and
     // then save it, before resuming the rest of the compilation and returning the results and

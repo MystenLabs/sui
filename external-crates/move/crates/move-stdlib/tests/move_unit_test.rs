@@ -29,9 +29,12 @@ fn run_tests_for_pkg(path_to_pkg: impl Into<String>, include_nursery_natives: bo
     let result = run_move_unit_tests(
         &pkg_path,
         move_package::BuildConfig {
-            test_mode: true,
-            install_dir: Some(tempdir().unwrap().path().to_path_buf()),
-            ..Default::default()
+            build_info: move_package::BuildInfo {
+                test_mode: true,
+                install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+                ..Default::default()
+            },
+            file_reader: None,
         },
         UnitTestingConfig::default_with_bound(Some(1_000_000_000)),
         natives,

@@ -10,12 +10,10 @@ use move_package::{
     compilation::{
         build_plan::BuildPlan, compiled_package::CompiledPackageInfo, model_builder::ModelBuilder,
     },
-    package_hooks,
-    package_hooks::PackageHooks,
-    package_hooks::PackageIdentifier,
+    package_hooks::{self, PackageHooks, PackageIdentifier},
     resolution::resolution_graph::Package,
     source_package::parsed_manifest::{CustomDepInfo, PackageDigest, SourceManifest},
-    BuildConfig, ModelConfig,
+    BuildConfig, BuildInfo, ModelConfig,
 };
 use move_symbol_pool::Symbol;
 use std::{
@@ -121,15 +119,18 @@ impl Test<'_> {
         let lock_path = out_path.join("Move.lock");
 
         let config = BuildConfig {
-            dev_mode: true,
-            test_mode: false,
-            generate_docs: false,
-            install_dir: Some(out_path),
-            force_recompilation: false,
-            lock_file: ["locked", "notlocked"]
-                .contains(&ext)
-                .then(|| lock_path.clone()),
-            ..Default::default()
+            build_info: BuildInfo {
+                dev_mode: true,
+                test_mode: false,
+                generate_docs: false,
+                install_dir: Some(out_path),
+                force_recompilation: false,
+                lock_file: ["locked", "notlocked"]
+                    .contains(&ext)
+                    .then(|| lock_path.clone()),
+                ..Default::default()
+            },
+            file_reader: None,
         };
 
         let mut progress = Vec::new();
@@ -170,7 +171,7 @@ impl Test<'_> {
                     scrub_resolved_package(package)
                 }
 
-                scrub_build_config(&mut resolved_package.build_options);
+                scrub_build_config(&mut resolved_package.build_options.build_info);
                 format!("{:#?}\n", resolved_package)
             }
 
@@ -179,7 +180,7 @@ impl Test<'_> {
     }
 }
 
-fn scrub_build_config(config: &mut BuildConfig) {
+fn scrub_build_config(config: &mut BuildInfo) {
     config.install_dir = Some(PathBuf::from("ELIDED_FOR_TEST"));
     config.lock_file = Some(PathBuf::from("ELIDED_FOR_TEST"));
 }

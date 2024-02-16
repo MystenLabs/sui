@@ -5375,6 +5375,7 @@ async fn test_publish_transitive_dependencies_ok() {
     let mut build_config = BuildConfig::new_for_testing();
     build_config
         .config
+        .build_info
         .additional_named_addresses
         .insert("c".to_string(), AccountAddress::ZERO);
 
@@ -5407,10 +5408,14 @@ async fn test_publish_transitive_dependencies_ok() {
     package_b_path.extend(["src", "unit_tests", "data", "transitive_dependencies", "b"]);
 
     let mut build_config = BuildConfig::new_for_testing();
-    build_config.config.additional_named_addresses.extend([
-        ("b".to_string(), AccountAddress::ZERO),
-        ("c".to_string(), (package_c_id).into()),
-    ]);
+    build_config
+        .config
+        .build_info
+        .additional_named_addresses
+        .extend([
+            ("b".to_string(), AccountAddress::ZERO),
+            ("c".to_string(), (package_c_id).into()),
+        ]);
 
     let modules = build_config
         .build(package_b_path)
@@ -5443,11 +5448,15 @@ async fn test_publish_transitive_dependencies_ok() {
     package_a_path.extend(["src", "unit_tests", "data", "transitive_dependencies", "a"]);
 
     let mut build_config = BuildConfig::new_for_testing();
-    build_config.config.additional_named_addresses.extend([
-        ("a".to_string(), AccountAddress::ZERO),
-        ("b".to_string(), (package_b_id).into()),
-        ("c".to_string(), (package_c_id).into()),
-    ]);
+    build_config
+        .config
+        .build_info
+        .additional_named_addresses
+        .extend([
+            ("a".to_string(), AccountAddress::ZERO),
+            ("b".to_string(), (package_b_id).into()),
+            ("c".to_string(), (package_c_id).into()),
+        ]);
 
     let modules = build_config
         .build(package_a_path)
@@ -5486,12 +5495,16 @@ async fn test_publish_transitive_dependencies_ok() {
     ]);
 
     let mut build_config = BuildConfig::new_for_testing();
-    build_config.config.additional_named_addresses.extend([
-        ("examples".to_string(), AccountAddress::ZERO),
-        ("a".to_string(), (package_a_id).into()),
-        ("b".to_string(), (package_b_id).into()),
-        ("c".to_string(), (package_c_id).into()),
-    ]);
+    build_config
+        .config
+        .build_info
+        .additional_named_addresses
+        .extend([
+            ("examples".to_string(), AccountAddress::ZERO),
+            ("a".to_string(), (package_a_id).into()),
+            ("b".to_string(), (package_b_id).into()),
+            ("c".to_string(), (package_c_id).into()),
+        ]);
 
     let modules = build_config
         .build(package_root_path)
