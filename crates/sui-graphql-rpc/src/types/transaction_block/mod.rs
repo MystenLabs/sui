@@ -23,7 +23,7 @@ use sui_types::{
 };
 pub(crate) use tx_cursor::Cursor;
 use tx_cursor::TxLookup;
-use tx_lookups::{subqueries, TxBounds};
+pub(crate) use tx_lookups::{subqueries, TxBounds};
 
 use crate::{
     config::ServiceConfig,
@@ -312,9 +312,11 @@ impl TransactionBlock {
 
         use transactions::dsl as tx;
 
-        let (prev, next, transactions, tx_bounds): (
+        let (prev, next, before, after, transactions, tx_bounds): (
             bool,
             bool,
+            Option<u64>,
+            Option<u64>,
             Vec<StoredTransaction>,
             Option<TxBounds>,
         ) = db
@@ -329,7 +331,14 @@ impl TransactionBlock {
                     &page,
                 )?
                 else {
-                    return Ok::<_, diesel::result::Error>((false, false, Vec::new(), None));
+                    return Ok::<_, diesel::result::Error>((
+                        false,
+                        false,
+                        None,
+                        None,
+                        Vec::new(),
+                        None,
+                    ));
                 };
 
                 // If no filters are selected, or if the filter is composed of only checkpoint
@@ -337,7 +346,7 @@ impl TransactionBlock {
                 // fetch the set of `tx_sequence_number` from a join over relevant lookup tables,
                 // and then issue a query against the `transactions` table to fetch the remaining
                 // contents.
-                let (prev, next, transactions) = if !filter.has_filters() {
+                let (prev, next, before, after, transactions) = if !filter.has_filters() {
                     let (prev, next, iter) = page.paginate_query::<StoredTransaction, _, _, _>(
                         conn,
                         checkpoint_viewed_at,
@@ -349,11 +358,16 @@ impl TransactionBlock {
                         },
                     )?;
 
-                    (prev, next, iter.collect())
+                    (prev, next, None, None, iter.collect())
                 } else {
                     let subquery = subqueries(&filter, tx_bounds).unwrap();
-                    let (prev, next, results) =
-                        page.paginate_raw_query::<TxLookup>(conn, checkpoint_viewed_at, subquery)?;
+                    let (prev, next, before, after, results) = page
+                        .paginate_raw_query_with_scan_limit::<TxLookup>(
+                            conn,
+                            checkpoint_viewed_at,
+                            tx_bounds,
+                            subquery,
+                        )?;
 
                     let tx_sequence_numbers = results
                         .into_iter()
@@ -365,10 +379,17 @@ impl TransactionBlock {
                             .filter(tx::tx_sequence_number.eq_any(tx_sequence_numbers.clone()))
                     })?;
 
-                    (prev, next, transactions)
+                    (prev, next, before, after, transactions)
                 };
 
-                Ok::<_, diesel::result::Error>((prev, next, transactions, Some(tx_bounds)))
+                Ok::<_, diesel::result::Error>((
+                    prev,
+                    next,
+                    before,
+                    after,
+                    transactions,
+                    Some(tx_bounds),
+                ))
             })
             .await?;
 
@@ -388,33 +409,55 @@ impl TransactionBlock {
             conn.edges.push(Edge::new(cursor, transaction));
         }
 
-        //
-        if scan_limit.is_some() {
-            if !prev {
-                conn.has_previous_page = tx_bounds.scan_has_prev_page();
-                if conn.has_previous_page {
-                    conn.start_cursor = Some(
-                        Cursor::new(tx_cursor::TransactionBlockCursor {
-                            checkpoint_viewed_at,
-                            tx_sequence_number: tx_bounds.scan_lo(),
-                        })
-                        .encode_cursor(),
-                    );
-                }
-            }
-            if !next {
-                conn.has_next_page = tx_bounds.scan_has_next_page();
-                if conn.has_next_page {
-                    conn.end_cursor = Some(
-                        Cursor::new(tx_cursor::TransactionBlockCursor {
-                            checkpoint_viewed_at,
-                            tx_sequence_number: tx_bounds.scan_hi(),
-                        })
-                        .encode_cursor(),
-                    );
-                }
-            }
+        if let Some(before) = before {
+            conn.has_previous_page = true;
+            conn.start_cursor = Some(
+                Cursor::new(tx_cursor::TransactionBlockCursor {
+                    checkpoint_viewed_at,
+                    tx_sequence_number: before,
+                })
+                .encode_cursor(),
+            );
         }
+
+        if let Some(after) = after {
+            conn.has_next_page = true;
+            conn.end_cursor = Some(
+                Cursor::new(tx_cursor::TransactionBlockCursor {
+                    checkpoint_viewed_at,
+                    tx_sequence_number: after,
+                })
+                .encode_cursor(),
+            );
+        }
+
+        //
+        // if scan_limit.is_some() {
+        // if !prev {
+        // conn.has_previous_page = tx_bounds.scan_has_prev_page();
+        // if conn.has_previous_page {
+        // conn.start_cursor = Some(
+        // Cursor::new(tx_cursor::TransactionBlockCursor {
+        // checkpoint_viewed_at,
+        // tx_sequence_number: tx_bounds.scan_lo(),
+        // })
+        // .encode_cursor(),
+        // );
+        // }
+        // }
+        // if !next {
+        // conn.has_next_page = tx_bounds.scan_has_next_page();
+        // if conn.has_next_page {
+        // conn.end_cursor = Some(
+        // Cursor::new(tx_cursor::TransactionBlockCursor {
+        // checkpoint_viewed_at,
+        // tx_sequence_number: tx_bounds.scan_hi(),
+        // })
+        // .encode_cursor(),
+        // );
+        // }
+        // }
+        // }
 
         Ok(conn)
     }

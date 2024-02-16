@@ -5,6 +5,7 @@ use super::QueryExecutor;
 use crate::{config::Limits, error::Error, metrics::Metrics};
 use async_trait::async_trait;
 use diesel::{
+    debug_query,
     pg::Pg,
     query_builder::{Query, QueryFragment, QueryId},
     query_dsl::LoadQuery,
@@ -71,6 +72,7 @@ impl QueryExecutor for PgExecutor {
         result.map_err(|e| Error::Internal(e.to_string()))
     }
 
+    /// TODO annotate with docs
     async fn execute_repeatable<T, U, E>(&self, txn: T) -> Result<U, Error>
     where
         T: FnOnce(&mut Self::DbConnection<'_>) -> Result<U, E>,
@@ -106,6 +108,9 @@ impl<'c> super::DbConnection for PgConnection<'c> {
         Q: QueryId + QueryFragment<Self::Backend>,
     {
         query_cost::log(self.conn, self.max_cost, query());
+        let binding = query();
+        let debugged = debug_query(&binding);
+        println!("Query: {}", debugged);
         query().get_result(self.conn)
     }
 
@@ -116,6 +121,9 @@ impl<'c> super::DbConnection for PgConnection<'c> {
         Q: QueryId + QueryFragment<Self::Backend>,
     {
         query_cost::log(self.conn, self.max_cost, query());
+        let binding = query();
+        let debugged = debug_query(&binding);
+        println!("Query: {}", debugged);
         query().get_results(self.conn)
     }
 }

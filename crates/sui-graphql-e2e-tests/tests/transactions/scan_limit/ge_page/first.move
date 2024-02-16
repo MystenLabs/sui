@@ -32,30 +32,53 @@ module Test::M1 {
 
 //# run Test::M1::create --args 1 @A --sender A
 
-//# run Test::M1::create --args 2 @A --sender A
+//# run Test::M1::create --args 2 @B --sender B
 
-//# run Test::M1::create --args 3 @A --sender A
+//# run Test::M1::create --args 3 @B --sender B
 
-//# run Test::M1::create --args 4 @A --sender A
+//# run Test::M1::create --args 4 @B --sender B
 
 //# create-checkpoint
 
-//# run Test::M1::create --args 100 @A --sender A
+//# run Test::M1::create --args 100 @B --sender B
 
-//# run Test::M1::create --args 101 @A --sender A
+//# run Test::M1::create --args 101 @B --sender B
 
-//# run Test::M1::create --args 102 @A --sender A
+//# run Test::M1::create --args 102 @B --sender B
 
-//# run Test::M1::create --args 103 @A --sender A
+//# run Test::M1::create --args 103 @B --sender B
 
-//# run Test::M1::create --args 104 @A --sender A
+//# run Test::M1::create --args 104 @B --sender B
+
+//# create-checkpoint
+
+//# run Test::M1::create --args 100 @B --sender B
+
+//# run Test::M1::create --args 101 @B --sender B
+
+//# run Test::M1::create --args 102 @B --sender B
+
+//# run Test::M1::create --args 103 @B --sender B
+
+//# run Test::M1::create --args 104 @B --sender B
+
+//# create-checkpoint
+
+//# run Test::M1::create --args 200 @A --sender A
+
+//# run Test::M1::create --args 201 @B --sender B
+
+//# run Test::M1::create --args 202 @B --sender B
+
+//# run Test::M1::create --args 203 @B --sender B
+
+//# run Test::M1::create --args 204 @A --sender A
 
 //# create-checkpoint
 
 //# run-graphql
-# Expect ten results
 {
-  transactionBlocks(first: 50 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -74,11 +97,9 @@ module Test::M1 {
 }
 
 
-//# run-graphql
-# With a scanLimit of 1, we should get a transaction whose digest corresponds to the first of the
-# previous result, and `hasNextPage` should be true
+//# run-graphql --cursors {"c":7,"t":13}
 {
-  transactionBlocks(first: 5 scanLimit: 100 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 1 scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -96,10 +117,9 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":2}
-# The query fetches the second transaction from the list of ten
+//# run-graphql --cursors {"c":7,"t":2}
 {
-  transactionBlocks(first: 5 scanLimit: 100 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -117,10 +137,10 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":6}
-# The query fetches the sixth transaction from the set, also the first transaction from checkpoint 3
+
+//# run-graphql --cursors {"c":7,"t":3}
 {
-  transactionBlocks(first: 5 scanLimit: 100 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -138,10 +158,9 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":10}
-# Fetches the last transaction, hasPrevPage is true, hasNextPage is false
+//# run-graphql --cursors {"c":7,"t":8}
 {
-  transactionBlocks(first: 5 scanLimit: 100 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -159,10 +178,9 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":11}
-# Should yield no results, no cursors, and both pages are false
+//# run-graphql --cursors {"c":7,"t":13}
 {
-  transactionBlocks(first: 5 scanLimit: 100 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasNextPage
       hasPreviousPage
@@ -180,10 +198,29 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":12}
-# Should yield no results, no cursors, and both pages are false
+//# run-graphql --cursors {"c":7,"t":17}
 {
-  transactionBlocks(first: 5 scanLimit: 100 after: "@{cursor_0}" filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 4}) {
+  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      endCursor
+      startCursor
+    }
+    nodes {
+      digest
+      effects {
+        checkpoint {
+          sequenceNumber
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors {"c":7,"t":21}
+{
+  transactionBlocks(first: 1 after: "@{cursor_0}" scanLimit: 5 filter: {recvAddress: "@{A}" afterCheckpoint: 1 beforeCheckpoint: 6}) {
     pageInfo {
       hasNextPage
       hasPreviousPage

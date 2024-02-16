@@ -22,6 +22,8 @@ use crate::{
     raw_query::RawQuery,
 };
 
+use super::transaction_block::TxBounds;
+
 /// Cursor that hides its value by encoding it as JSON and then Base64.
 pub(crate) struct JsonCursor<C>(OpaqueCursor<C>);
 
@@ -391,24 +393,34 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
                 // cursors, so the bounds must have been invalid, no matter which end the page was
                 // drawn from.
                 (_, None, _, _, _) | (_, _, None, _, _) => {
+                    println!("paginate_results:a");
+                    // So the thing is, this is very much possible given `scanLimit`
                     return (false, false, vec![].into_iter());
                 }
 
                 // Page drawn from the front, and the cursor for the first element does not match
                 // `after`. This implies the bound was invalid, so we return an empty result.
                 (Some(a), Some(f), _, _, End::Front) if f != *a => {
+                    println!("paginate_results:b");
+                    // this is possible if the `endCursor` was set to `scanLimit`, so we'd continue after `scanLimit`
+                    // the first result returned, if there is one, does not necessarily need to be = `endCursor`
                     return (false, false, vec![].into_iter());
                 }
 
                 // Similar to above case, but for back of results.
                 (_, _, Some(l), Some(b), End::Back) if l != *b => {
+                    println!("paginate_results:c");
                     return (false, false, vec![].into_iter());
                 }
+
+                // So the thing is that in these scenarios, either yes, we actually returned the element whose cursor is the endCursor in the previous page, and we can drop them
+                // or we were just lucky? Actually this may not ever be the case ...
 
                 // From here onwards, we know that the results are non-empty and if a cursor was
                 // supplied on the end the page is being drawn from, it was found in the results
                 // (implying a page follows in that direction).
                 (after, _, Some(l), before, End::Front) => {
+                    println!("paginate_results:d");
                     let has_previous_page = after.is_some();
                     let prefix = has_previous_page as usize;
 
@@ -424,6 +436,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
 
                 // Symmetric to the previous case, but drawing from the back.
                 (after, Some(f), _, before, End::Back) => {
+                    println!("paginate_results:e");
                     let has_next_page = before.is_some();
                     let suffix = has_next_page as usize;
 
@@ -439,19 +452,175 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         // previous or next page, because there will be no start or end cursor for this page to
         // anchor on.
         if results.len() == prefix + suffix {
+            println!("paginate_results:f");
             return (false, false, vec![].into_iter());
         }
 
         // We finally made it -- trim the prefix and suffix rows from the result and send it!
         let mut results = results.into_iter();
         if prefix > 0 {
+            println!("paginate_results:g");
             results.nth(prefix - 1);
         }
         if suffix > 0 {
+            println!("paginate_results:h");
             results.nth_back(suffix - 1);
         }
 
         (prev, next, results)
+    }
+
+    /// This function is similar to `paginate_query`, but is specifically designed for handling
+    /// `RawQuery`. Treat the cursors of this page as upper- and lowerbound filters for a database
+    /// `query`. Returns two booleans indicating whether there is a previous or next page in the
+    /// range, followed by an iterator of values in the page, fetched from the database.
+    ///
+    /// `checkpoint_viewed_at` is a required parameter to and passed to each element to construct a
+    /// consistent cursor.
+    pub(crate) fn paginate_raw_query_with_scan_limit<T>(
+        &self,
+        conn: &mut Conn<'_>,
+        checkpoint_viewed_at: u64,
+        tx_bounds: TxBounds,
+        query: RawQuery,
+    ) -> QueryResult<(
+        bool,
+        bool,
+        Option<u64>,
+        Option<u64>,
+        impl Iterator<Item = T>,
+    )>
+    where
+        T: Send + RawPaginated<C> + FromSqlRow<Untyped, DieselBackend> + 'static,
+    {
+        let new_query = move || {
+            let query = self.apply::<T>(query.clone());
+            query.into_boxed()
+        };
+
+        let results: Vec<T> = if self.limit() == 0 {
+            // Avoid the database roundtrip in the degenerate case.
+            vec![]
+        } else {
+            let mut results: Vec<T> = conn.results(new_query)?;
+            if !self.is_from_front() {
+                results.reverse();
+            }
+            results
+        };
+
+        Ok(self.paginate_results_with_scan_limit(
+            results.first().map(|f| f.cursor(checkpoint_viewed_at)),
+            results.last().map(|l| l.cursor(checkpoint_viewed_at)),
+            results,
+            tx_bounds,
+        ))
+    }
+
+    /// Given the results of a database query, determine whether the result set has a previous and
+    /// next page and is consistent with the provided cursors.
+    ///
+    /// Returns two booleans indicating whether there is a previous or next page in the range,
+    /// followed by an iterator of values in the page, fetched from the database. The values
+    /// returned implement `Target<C>`, so are able to compute their own cursors.
+    ///
+    /// if 3rd and 4th are some, then it means we're using scanLimit-adjusted cursor
+    pub(crate) fn paginate_results_with_scan_limit<T>(
+        &self,
+        f_cursor: Option<C>, // from the current page
+        l_cursor: Option<C>,
+        results: Vec<T>,
+        tx_bounds: TxBounds,
+    ) -> (
+        bool,
+        bool,
+        Option<u64>,
+        Option<u64>,
+        impl Iterator<Item = T>,
+    )
+    where
+        T: Send + 'static,
+    {
+        let (has_prev_page, before) = tx_bounds.scan_prev_page_and_lo();
+        let (has_next_page, after) = tx_bounds.scan_next_page_and_hi();
+
+        // Detect whether the results imply the existence of a previous or next page.
+        let (prev, next, prefix, suffix) =
+            match (self.after(), f_cursor, l_cursor, self.before(), self.end) {
+                // Results came back empty; as long as we're still scanning within the range, there
+                // will be a previous and/ or next page.
+                (_, None, _, _, _) | (_, _, None, _, _) => {
+                    return (
+                        has_prev_page,
+                        has_next_page,
+                        before,
+                        after,
+                        vec![].into_iter(),
+                    );
+                }
+
+                // From here onwards, we know that the results are non-empty and if a cursor was
+                // supplied on the end the page is being drawn from, it was found in the results
+                // (implying a page follows in that direction).
+                (after, Some(f), Some(l), before, End::Front) => {
+                    println!("paginate_results:d");
+                    let has_previous_page = after.is_some();
+                    // In the scenario where page is_from_front, we only prune if the left tip
+                    // matches the cursor
+                    let prefix = after.is_some_and(|a| *a == f) as usize;
+
+                    // If results end with the before cursor, we will at least need to trim one element
+                    // from the suffix and we trim more off the end if there is more after applying the
+                    // limit.
+                    let mut suffix = before.is_some_and(|b| *b == l) as usize;
+                    suffix += results.len().saturating_sub(self.limit() + prefix + suffix);
+                    // let has_next_page = suffix > 0; // todo: with scan limit we should just defer to whether within range
+
+                    (has_previous_page, has_next_page, prefix, suffix)
+                }
+
+                // Symmetric to the previous case, but drawing from the back.
+                (after, Some(f), Some(l), before, End::Back) => {
+                    println!("paginate_results:e");
+                    let has_next_page = before.is_some();
+                    // Similarly, we only prune if the tip matches the cursor
+                    let suffix = before.is_some_and(|b| *b == l) as usize;
+
+                    let mut prefix = after.is_some_and(|a| *a == f) as usize;
+                    prefix += results.len().saturating_sub(self.limit() + prefix + suffix);
+                    // let has_previous_page = prefix > 0; // todo: with scan limit we should just defer to whether within range
+
+                    (has_prev_page, has_next_page, prefix, suffix)
+                }
+            };
+
+        // If after trimming, we're going to return no elements, then forget whether there's a
+        // previous or next page, because there will be no start or end cursor for this page to
+        // anchor on.
+        if results.len() == prefix + suffix {
+            println!("paginate_results:f");
+
+            return (
+                has_prev_page,
+                has_next_page,
+                before,
+                after,
+                vec![].into_iter(),
+            );
+        }
+
+        // We finally made it -- trim the prefix and suffix rows from the result and send it!
+        let mut results = results.into_iter();
+        if prefix > 0 {
+            println!("paginate_results:g");
+            results.nth(prefix - 1);
+        }
+        if suffix > 0 {
+            println!("paginate_results:h");
+            results.nth_back(suffix - 1);
+        }
+
+        (prev, next, None, None, results)
     }
 
     pub(crate) fn apply<T>(&self, mut query: RawQuery) -> RawQuery
