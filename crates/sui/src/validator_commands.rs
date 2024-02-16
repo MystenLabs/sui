@@ -12,15 +12,10 @@ use std::{
 use sui_genesis_builder::validator_info::GenesisValidatorInfo;
 
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress},
-    crypto::{AuthorityPublicKey, NetworkPublicKey, Signable, DEFAULT_EPOCH_ID},
-    multiaddr::Multiaddr,
-    object::Owner,
-    sui_system_state::{
+    base_types::{ObjectID, ObjectRef, SuiAddress}, crypto::{AuthorityPublicKey, NetworkPublicKey, Signable, DEFAULT_EPOCH_ID}, governance::StakedSui, multiaddr::Multiaddr, object::Owner, sui_system_state::{
         sui_system_state_inner_v1::{UnverifiedValidatorOperationCapV1, ValidatorV1},
         sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary},
-    },
-    SUI_SYSTEM_PACKAGE_ID,
+    }, SUI_SYSTEM_PACKAGE_ID
 };
 use tap::tap::TapOptional;
 
@@ -163,6 +158,14 @@ pub enum SuiValidatorCommand {
         #[clap(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
+    /// Withdraw Staking in batch.
+    WithdrawStakingInBatch {
+        /// A list of Staked Object Ids to be withdrawn.
+        staked_obj_ids: Vec<ObjectID>,
+        /// Gas budget for this transaction.
+        #[clap(name = "gas-budget", long)]
+        gas_budget: Option<u64>,
+    },
 }
 
 #[derive(Serialize)]
@@ -181,6 +184,7 @@ pub enum SuiValidatorCommandResponse {
         data: TransactionData,
         serialized_data: String,
     },
+    WithdrawStakingInBatch(Vec<SuiTransactionBlockResponse>),
 }
 
 fn make_key_files(
@@ -454,10 +458,46 @@ impl SuiValidatorCommand {
                     serialized_data,
                 }
             }
+            
+            SuiValidatorCommand::WithdrawStakingInBatch {
+                staked_obj_ids,
+                gas_budget,
+            } => {
+                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let mut responses: Vec<SuiTransactionBlockResponse>  = Vec::new();
+                let mut args = vec![];
+                for staked_obj_id in staked_obj_ids {
+                    let (_status, _summary, cap_obj_ref) =
+                    get_cap_object_ref(context, Some(staked_obj_id)).await?;
+                    args.push(CallArg::Object(ObjectArg::ImmOrOwnedObject(cap_obj_ref)));
+                 
+                    let response = call_0x5(context, "request_withdraw_stake", args.clone(), gas_budget).await?;
+                    responses.push(response);
+                }
+                SuiValidatorCommandResponse::WithdrawStakingInBatch(responses)
+            }
         });
         ret
     }
 }
+
+// //Gree request : Withdraw Staking in batches
+// async fn withdraw_staking_in_batch(
+//     context: &mut WalletContext,
+//     staked_obj_ids: Vec<ObjectID>,
+//     gas_budget: u64,
+// ) -> Result<SuiTransactionBlockResponse> {
+//     let mut responses: Vec<SuiTransactionBlockResponse>  = Vec::new();
+//     for staked in staked_obj_ids {
+//         let args = vec![
+//             CallArg::Object(ObjectArg::ImmOrOwnedObject(cap_obj_ref.clone())),
+//         ];
+//         let response = call_0x5(context, "request_withdraw_stake", args, gas_budget).await?;
+//         responses.push(response);
+//     }
+    
+//     Ok(responses)
+// }
 
 async fn get_cap_object_ref(
     context: &mut WalletContext,
@@ -688,6 +728,13 @@ impl Display for SuiValidatorCommandResponse {
                     "Transaction: {:?}, \nSerialized transaction: {:?}",
                     data, serialized_data
                 )?;
+            }
+            // Return the response of each transaction in the batch
+            SuiValidatorCommandResponse::WithdrawStakingInBatch(responses) => {
+                // Print the response of each transaction in the batch
+                for response in responses {
+                    write!(writer, "{}", write_transaction_response(response)?)?;
+                }
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
