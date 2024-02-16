@@ -9,7 +9,7 @@ use sui_config::Config;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
 use sui_graphql_rpc::config::ConnectionConfig;
 use sui_graphql_rpc::test_infra::cluster::start_graphql_server_with_fn_rpc;
-use sui_indexer::test_utils::{start_test_indexer_v2, ReaderWriterConfig};
+use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
@@ -223,19 +223,17 @@ impl Cluster for LocalNewCluster {
             (options.pg_address.clone(), indexer_address)
         {
             // Start in writer mode
-            start_test_indexer_v2(
+            start_test_indexer(
                 Some(pg_address.clone()),
                 fullnode_url.clone(),
-                options.use_indexer_experimental_methods,
                 ReaderWriterConfig::writer_mode(None),
             )
             .await;
 
             // Start in reader mode
-            start_test_indexer_v2(
+            start_test_indexer(
                 Some(pg_address),
                 fullnode_url.clone(),
-                options.use_indexer_experimental_methods,
                 ReaderWriterConfig::reader_mode(indexer_address.to_string()),
             )
             .await;

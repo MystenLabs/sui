@@ -29,6 +29,7 @@ use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
 use crate::metrics::IndexerMetrics;
 
+use crate::db::PgConnectionPool;
 use crate::models_v2::checkpoints::StoredCheckpoint;
 use crate::models_v2::display::StoredDisplay;
 use crate::models_v2::epoch::StoredEpochInfo;
@@ -45,7 +46,6 @@ use crate::schema::{
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
 use crate::store::module_resolver_v2::IndexerStorePackageModuleResolver;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
-use crate::PgConnectionPool;
 
 use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
 use super::IndexerStoreV2;

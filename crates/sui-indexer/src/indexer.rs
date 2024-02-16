@@ -1,44 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::apis::{
-    CoinReadApiV2, ExtendedApiV2, GovernanceReadApiV2, IndexerApiV2, MoveUtilsApiV2, ReadApiV2,
-    TransactionBuilderApiV2, WriteApi,
-};
-use crate::errors::IndexerError;
-use crate::indexer_reader::IndexerReader;
-use crate::metrics::IndexerMetrics;
-use crate::IndexerConfig;
-use anyhow::Result;
-use mysten_metrics::spawn_monitored_task;
-use prometheus::Registry;
 use std::env;
-use std::net::SocketAddr;
-use sui_json_rpc::ServerType;
-use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
-use tokio::runtime::Handle;
+
+use anyhow::Result;
+use prometheus::Registry;
 use tracing::info;
 
+use mysten_metrics::spawn_monitored_task;
+
+use crate::build_json_rpc_server;
+use crate::errors::IndexerError;
 use crate::framework::fetcher::CheckpointFetcher;
 use crate::handlers::checkpoint_handler_v2::new_handlers;
+use crate::indexer_reader::IndexerReader;
+use crate::metrics::IndexerMetrics;
 use crate::processors_v2::objects_snapshot_processor::{
     ObjectsSnapshotProcessor, SnapshotLagConfig,
 };
 use crate::processors_v2::processor_orchestrator_v2::ProcessorOrchestratorV2;
 use crate::store::{IndexerStoreV2, PgIndexerAnalyticalStore};
-
-pub struct IndexerV2;
+use crate::IndexerConfig;
 
 const DOWNLOAD_QUEUE_SIZE: usize = 1000;
 
-impl IndexerV2 {
+pub struct Indexer;
+
+impl Indexer {
     pub async fn start_writer<S: IndexerStoreV2 + Sync + Send + Clone + 'static>(
         config: &IndexerConfig,
         store: S,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         let snapshot_config = SnapshotLagConfig::default();
-        IndexerV2::start_writer_with_config(config, store, metrics, snapshot_config).await
+        Indexer::start_writer_with_config(config, store, metrics, snapshot_config).await
     }
 
     pub async fn start_writer_with_config<S: IndexerStoreV2 + Sync + Send + Clone + 'static>(
@@ -48,7 +43,7 @@ impl IndexerV2 {
         snapshot_config: SnapshotLagConfig,
     ) -> Result<(), IndexerError> {
         info!(
-            "Sui indexerV2 Writer (version {:?}) started...",
+            "Sui Indexer Writer (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
 
@@ -87,7 +82,7 @@ impl IndexerV2 {
         );
         spawn_monitored_task!(objects_snapshot_processor.start());
 
-        let checkpoint_handler = new_handlers(store, metrics, config).await?;
+        let checkpoint_handler = new_handlers(store, metrics).await?;
         crate::framework::runner::run(
             mysten_metrics::metered_channel::ReceiverStream::new(
                 downloaded_checkpoint_data_receiver,
@@ -105,7 +100,7 @@ impl IndexerV2 {
         db_url: String,
     ) -> Result<(), IndexerError> {
         info!(
-            "Sui indexerV2 Reader (version {:?}) started...",
+            "Sui Indexer Reader (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
         let indexer_reader = IndexerReader::new(db_url)?;
@@ -124,39 +119,11 @@ impl IndexerV2 {
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         info!(
-            "Sui indexerV2 Analytical Worker (version {:?}) started...",
+            "Sui Indexer Analytical Worker (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
         let mut processor_orchestrator_v2 = ProcessorOrchestratorV2::new(store, metrics);
         processor_orchestrator_v2.run_forever().await;
         Ok(())
     }
-}
-
-pub async fn build_json_rpc_server(
-    prometheus_registry: &Registry,
-    reader: IndexerReader,
-    config: &IndexerConfig,
-    custom_runtime: Option<Handle>,
-) -> Result<ServerHandle, IndexerError> {
-    let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
-    let http_client = crate::get_http_client(config.rpc_client_url.as_str())?;
-
-    builder.register_module(WriteApi::new(http_client.clone()))?;
-    builder.register_module(IndexerApiV2::new(reader.clone()))?;
-    builder.register_module(TransactionBuilderApiV2::new(reader.clone()))?;
-    builder.register_module(MoveUtilsApiV2::new(reader.clone()))?;
-    builder.register_module(GovernanceReadApiV2::new(reader.clone()))?;
-    builder.register_module(ReadApiV2::new(reader.clone()))?;
-    builder.register_module(CoinReadApiV2::new(reader.clone()))?;
-    builder.register_module(ExtendedApiV2::new(reader.clone()))?;
-
-    let default_socket_addr: SocketAddr = SocketAddr::new(
-        // unwrap() here is safe b/c the address is a static config.
-        config.rpc_server_url.as_str().parse().unwrap(),
-        config.rpc_server_port,
-    );
-    Ok(builder
-        .start(default_socket_addr, custom_runtime, Some(ServerType::Http))
-        .await?)
 }

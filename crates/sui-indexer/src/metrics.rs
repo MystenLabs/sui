@@ -1,10 +1,71 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+use std::net::SocketAddr;
+
+use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
 };
+use prometheus::{Registry, TextEncoder};
+use regex::Regex;
+use tracing::{info, warn};
+
+use mysten_metrics::RegistryService;
+
+const METRICS_ROUTE: &str = "/metrics";
+
+pub fn start_prometheus_server(
+    addr: SocketAddr,
+    fn_url: &str,
+) -> Result<(RegistryService, Registry), anyhow::Error> {
+    let converted_fn_url = convert_url(fn_url);
+    if converted_fn_url.is_none() {
+        warn!(
+            "Failed to convert full node url {} to a shorter version",
+            fn_url
+        );
+    }
+    let fn_url_str = converted_fn_url.unwrap_or_else(|| "unknown_url".to_string());
+
+    let labels = HashMap::from([("indexer_fullnode".to_string(), fn_url_str)]);
+    info!("Starting prometheus server with labels: {:?}", labels);
+    let registry = Registry::new_custom(Some("indexer".to_string()), Some(labels))?;
+    let registry_service = RegistryService::new(registry.clone());
+
+    let app = Router::new()
+        .route(METRICS_ROUTE, get(metrics))
+        .layer(Extension(registry_service.clone()));
+
+    tokio::spawn(async move {
+        axum::Server::bind(&addr)
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
+    });
+    Ok((registry_service, registry))
+}
+
+async fn metrics(Extension(registry_service): Extension<RegistryService>) -> (StatusCode, String) {
+    let metrics_families = registry_service.gather_all();
+    match TextEncoder.encode_to_string(&metrics_families) {
+        Ok(metrics) => (StatusCode::OK, metrics),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("unable to encode metrics: {error}"),
+        ),
+    }
+}
+
+fn convert_url(url_str: &str) -> Option<String> {
+    // NOTE: unwrap here is safe because the regex is a constant.
+    let re = Regex::new(r"https?://([a-z0-9-]+\.[a-z0-9-]+\.[a-z]+)").unwrap();
+    let captures = re.captures(url_str)?;
+
+    captures.get(1).map(|m| m.as_str().to_string())
+}
 
 /// Prometheus metrics for sui-indexer.
 // buckets defined in seconds
@@ -617,31 +678,6 @@ impl IndexerMetrics {
             checkpoint_metrics_processor_failure: register_int_counter_with_registry!(
                 "checkpoint_metrics_processor_failure",
                 "Total number of checkpoint metrics processor failure",
-                registry,
-            )
-            .unwrap(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct IndexerObjectProcessorMetrics {
-    pub total_object_batch_processed: IntCounter,
-    pub total_object_processor_error: IntCounter,
-}
-
-impl IndexerObjectProcessorMetrics {
-    pub fn new(registry: &Registry) -> Self {
-        Self {
-            total_object_batch_processed: register_int_counter_with_registry!(
-                "total_object_batch_processed",
-                "Total number of object batches processed",
-                registry,
-            )
-            .unwrap(),
-            total_object_processor_error: register_int_counter_with_registry!(
-                "total_object_processor_error",
-                "Total number of object processor error",
                 registry,
             )
             .unwrap(),
