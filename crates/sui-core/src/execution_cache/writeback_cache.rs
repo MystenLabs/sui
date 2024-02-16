@@ -64,6 +64,7 @@ use std::collections::BTreeSet;
 use std::hash::Hash;
 use std::sync::Arc;
 use sui_config::node::AuthorityStorePruningConfig;
+use sui_macros::fail_point_async;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData};
@@ -96,6 +97,16 @@ enum ObjectEntry {
     Object(Object),
     Deleted,
     Wrapped,
+}
+
+#[cfg(test)]
+impl ObjectEntry {
+    fn unwrap_object(&self) -> &Object {
+        match self {
+            ObjectEntry::Object(o) => o,
+            _ => panic!("unwrap_object called on non-Object"),
+        }
+    }
 }
 
 impl std::fmt::Debug for ObjectEntry {
@@ -289,18 +300,39 @@ impl WritebackCache {
         }
     }
 
-    fn write_object_entry(
+    async fn write_object_entry(
         &self,
         object_id: &ObjectID,
         version: SequenceNumber,
         object: ObjectEntry,
     ) {
-        tracing::debug!("inserting object entry {:?}: {:?}", object_id, version);
+        tracing::trace!("inserting object entry {:?}: {:?}", object_id, version);
+        fail_point_async!("write_object_entry");
         self.dirty
             .objects
             .entry(*object_id)
             .or_default()
             .insert(version, object);
+    }
+
+    async fn write_marker_value(
+        &self,
+        epoch_id: EpochId,
+        object_key: &ObjectKey,
+        marker_value: MarkerValue,
+    ) {
+        tracing::trace!(
+            "inserting marker value {:?}: {:?}",
+            object_key,
+            marker_value
+        );
+        fail_point_async!("write_marker_entry");
+        self.dirty
+            .markers
+            .entry((epoch_id, object_key.0))
+            .or_default()
+            .value_mut()
+            .insert(object_key.1, marker_value);
     }
 
     // lock both the dirty and committed sides of the cache, and then pass the entries to
@@ -981,87 +1013,95 @@ impl ExecutionCacheWrite for WritebackCache {
         epoch_id: EpochId,
         tx_outputs: Arc<TransactionOutputs>,
     ) -> BoxFuture<'_, SuiResult> {
-        let TransactionOutputs {
-            transaction,
-            effects,
-            markers,
-            written,
-            deleted,
-            wrapped,
-            events,
-            ..
-        } = &*tx_outputs;
+        async move {
+            let TransactionOutputs {
+                transaction,
+                effects,
+                markers,
+                written,
+                deleted,
+                wrapped,
+                events,
+                ..
+            } = &*tx_outputs;
 
-        // Update all markers
-        for (object_key, marker_value) in markers.iter() {
-            self.dirty
-                .markers
-                .entry((epoch_id, object_key.0))
-                .or_default()
-                .value_mut()
-                .insert(object_key.1, *marker_value);
-        }
-
-        // Write children before parents to ensure that readers do not observe a parent object
-        // before its most recent children are visible.
-        for (object_id, object) in written.iter() {
-            if object.is_child_object() {
-                self.write_object_entry(object_id, object.version(), object.clone().into());
+            // Deletions and wraps must be written first. The reason is that one of the deletes
+            // may be a child object, and if we write the parent object first, a reader may or may
+            // not see the previous version of the child object, instead of the deleted/wrapped
+            // tombstone, which would cause an execution fork
+            for ObjectKey(id, version) in deleted.iter() {
+                self.write_object_entry(id, *version, ObjectEntry::Deleted)
+                    .await;
             }
-        }
-        for (object_id, object) in written.iter() {
-            if !object.is_child_object() {
-                self.write_object_entry(object_id, object.version(), object.clone().into());
-                if object.is_package() {
-                    self.packages
-                        .insert(*object_id, PackageObject::new(object.clone()));
+
+            for ObjectKey(id, version) in wrapped.iter() {
+                self.write_object_entry(id, *version, ObjectEntry::Wrapped)
+                    .await;
+            }
+
+            // Update all markers
+            for (object_key, marker_value) in markers.iter() {
+                self.write_marker_value(epoch_id, object_key, *marker_value)
+                    .await;
+            }
+
+            // Write children before parents to ensure that readers do not observe a parent object
+            // before its most recent children are visible.
+            for (object_id, object) in written.iter() {
+                if object.is_child_object() {
+                    self.write_object_entry(object_id, object.version(), object.clone().into())
+                        .await;
                 }
             }
-        }
-
-        for ObjectKey(id, version) in deleted.iter() {
-            self.write_object_entry(id, *version, ObjectEntry::Deleted);
-        }
-        for ObjectKey(id, version) in wrapped.iter() {
-            self.write_object_entry(id, *version, ObjectEntry::Wrapped);
-        }
-
-        let tx_digest = *transaction.digest();
-        let effects_digest = effects.digest();
-
-        self.dirty
-            .transaction_effects
-            .insert(effects_digest, effects.clone());
-
-        match self.dirty.transaction_events.entry(events.digest()) {
-            DashMapEntry::Occupied(mut occupied) => {
-                occupied.get_mut().0.insert(tx_digest);
+            for (object_id, object) in written.iter() {
+                if !object.is_child_object() {
+                    self.write_object_entry(object_id, object.version(), object.clone().into())
+                        .await;
+                    if object.is_package() {
+                        self.packages
+                            .insert(*object_id, PackageObject::new(object.clone()));
+                    }
+                }
             }
-            DashMapEntry::Vacant(entry) => {
-                let mut txns = BTreeSet::new();
-                txns.insert(tx_digest);
-                entry.insert((txns, events.clone()));
+
+            let tx_digest = *transaction.digest();
+            let effects_digest = effects.digest();
+
+            self.dirty
+                .transaction_effects
+                .insert(effects_digest, effects.clone());
+
+            match self.dirty.transaction_events.entry(events.digest()) {
+                DashMapEntry::Occupied(mut occupied) => {
+                    occupied.get_mut().0.insert(tx_digest);
+                }
+                DashMapEntry::Vacant(entry) => {
+                    let mut txns = BTreeSet::new();
+                    txns.insert(tx_digest);
+                    entry.insert((txns, events.clone()));
+                }
             }
+
+            self.dirty
+                .executed_effects_digests
+                .insert(tx_digest, effects_digest);
+
+            self.dirty
+                .pending_transaction_writes
+                .insert(tx_digest, tx_outputs);
+
+            self.executed_effects_digests_notify_read
+                .notify(&tx_digest, &effects_digest);
+
+            if let Some(metrics) = &self.metrics {
+                metrics
+                    .pending_notify_read
+                    .set(self.executed_effects_digests_notify_read.num_pending() as i64);
+            }
+
+            Ok(())
         }
-
-        self.dirty
-            .executed_effects_digests
-            .insert(tx_digest, effects_digest);
-
-        self.dirty
-            .pending_transaction_writes
-            .insert(tx_digest, tx_outputs);
-
-        self.executed_effects_digests_notify_read
-            .notify(&tx_digest, &effects_digest);
-
-        if let Some(metrics) = &self.metrics {
-            metrics
-                .pending_notify_read
-                .set(self.executed_effects_digests_notify_read.num_pending() as i64);
-        }
-
-        std::future::ready(Ok(())).boxed()
+        .boxed()
     }
 }
 
