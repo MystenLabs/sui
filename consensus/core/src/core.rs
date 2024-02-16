@@ -300,7 +300,7 @@ impl Core {
         let sequenced_leaders = self.committer.try_commit(self.last_decided_leader);
 
         if let Some(last) = sequenced_leaders.last() {
-            self.last_decided_leader = last.clone().get_decided_slot();
+            self.last_decided_leader = last.get_decided_slot();
             self.context
                 .metrics
                 .node_metrics
@@ -310,7 +310,7 @@ impl Core {
 
         let committed_leaders = sequenced_leaders
             .into_iter()
-            .filter_map(|leader| leader.get_committed_block())
+            .filter_map(|leader| leader.into_committed_block())
             .collect::<Vec<_>>();
 
         self.commit_observer.handle_commit(committed_leaders);

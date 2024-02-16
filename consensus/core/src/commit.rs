@@ -205,15 +205,17 @@ impl LeaderStatus {
         }
     }
 
-    pub fn get_decided_slot(self) -> Slot {
+    // Only should be called when the leader status is decided (Commit/Skip)
+    pub fn get_decided_slot(&self) -> Slot {
         match self {
             Self::Commit(block) => block.reference().into(),
-            Self::Skip(leader) => leader,
+            Self::Skip(leader) => *leader,
             Self::Undecided(..) => panic!("Decided block is either Commit or Skip"),
         }
     }
 
-    pub fn get_committed_block(self) -> Option<VerifiedBlock> {
+    // Only should be called when the leader status is decided (Commit/Skip)
+    pub fn into_committed_block(self) -> Option<VerifiedBlock> {
         match self {
             Self::Commit(block) => Some(block),
             Self::Skip(leader) => None,
