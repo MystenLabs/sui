@@ -396,7 +396,7 @@
 
 
 
-<pre><code><b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_bridge">bridge</a>(): <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>
+<pre><code><b>fun</b> <a href="../../bridge.md#0xb_bridge">bridge</a>(): <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a>
 </code></pre>
 
 
@@ -405,7 +405,7 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../../dependencies/sui-framework/object.md#0x2_object_bridge">bridge</a>(): <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a> {
+<pre><code><b>fun</b> <a href="../../bridge.md#0xb_bridge">bridge</a>(): <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a> {
     <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">UID</a> {
         id: <a href="../../dependencies/sui-framework/object.md#0x2_object_ID">ID</a> { bytes: <a href="../../dependencies/sui-framework/object.md#0x2_object_SUI_BRIDGE_ID">SUI_BRIDGE_ID</a> }
     }
