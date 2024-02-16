@@ -224,6 +224,39 @@ impl DagState {
             .collect()
     }
 
+    /// Returns the requested blocks by looking into the cache first, and for any non found block into the store.
+    pub(crate) fn get_blocks(
+        &self,
+        block_refs: Vec<BlockRef>,
+    ) -> ConsensusResult<Vec<Option<VerifiedBlock>>> {
+        let mut blocks = vec![None; block_refs.len()];
+        let mut missing = Vec::new();
+
+        for (index, block_ref) in block_refs.into_iter().enumerate() {
+            if let Some(block) = self.recent_blocks.get(&block_ref) {
+                blocks[index] = Some(block.clone());
+            } else {
+                missing.push((index, block_ref));
+            }
+        }
+
+        if missing.is_empty() {
+            return Ok(blocks);
+        }
+
+        let missing_refs = missing
+            .iter()
+            .map(|(_, block_ref)| *block_ref)
+            .collect::<Vec<_>>();
+        let store_results = self.store.read_blocks(&missing_refs)?;
+
+        for ((index, _), result) in missing.into_iter().zip(store_results.into_iter()) {
+            blocks[index] = result;
+        }
+
+        Ok(blocks)
+    }
+
     pub(crate) fn contains_block(&self, block_ref: &BlockRef) -> ConsensusResult<bool> {
         let blocks = self.contains_blocks(vec![*block_ref])?;
         Ok(blocks.first().cloned().expect("Result should be present"))
@@ -649,6 +682,62 @@ mod test {
 
         // Then all should be found apart from the last one
         expected.insert(3, false);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_get_blocks_in_cache_or_store() {
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Create test blocks for round 1 ~ 10
+        let num_rounds: u32 = 10;
+        let num_authorities: u32 = 4;
+        let mut blocks = Vec::new();
+
+        for round in 1..=num_rounds {
+            for author in 0..num_authorities {
+                let block = VerifiedBlock::new_for_test(TestBlock::new(round, author).build());
+                blocks.push(block);
+            }
+        }
+
+        // Now write in store the blocks from first 4 rounds and the rest to the dag state
+        blocks.clone().into_iter().for_each(|block| {
+            if block.round() <= 4 {
+                store.write(vec![block], vec![]).unwrap();
+            } else {
+                dag_state.accept_blocks(vec![block]);
+            }
+        });
+
+        // Now when trying to query whether we have all the blocks, we should successfully retrieve a positive answer
+        // where the blocks of first 4 round should be found in DagState and the rest in store.
+        let mut block_refs = blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<Vec<_>>();
+        let result = dag_state.get_blocks(block_refs.clone()).unwrap();
+
+        let mut expected = blocks
+            .into_iter()
+            .map(Some)
+            .collect::<Vec<Option<VerifiedBlock>>>();
+
+        // Ensure everything is found
+        assert_eq!(result, expected.clone());
+
+        // Now try to ask also for one block ref that is neither in cache nor in store
+        block_refs.insert(
+            3,
+            BlockRef::new(11, AuthorityIndex::new_for_test(3), BlockDigest::default()),
+        );
+        let result = dag_state.get_blocks(block_refs).unwrap();
+
+        // Then all should be found apart from the last one
+        expected.insert(3, None);
         assert_eq!(result, expected);
     }
 }

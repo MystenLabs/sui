@@ -137,7 +137,7 @@ where
             commit_observer,
             core_signals,
             protocol_keypair,
-            dag_state,
+            dag_state.clone(),
             store,
         );
 
@@ -171,6 +171,7 @@ where
             block_verifier,
             core_dispatcher,
             synchronizer: synchronizer.clone(),
+            dag_state,
         });
         network_manager.install_service(network_keypair, network_service);
 
@@ -216,6 +217,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     block_verifier: Arc<dyn BlockVerifier>,
     core_dispatcher: Arc<C>,
     synchronizer: Arc<SynchronizerHandle>,
+    dag_state: Arc<RwLock<DagState>>,
 }
 
 #[async_trait]
@@ -301,10 +303,39 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
     async fn handle_fetch_blocks(
         &self,
-        _peer: AuthorityIndex,
-        _block_refs: Vec<BlockRef>,
+        peer: AuthorityIndex,
+        block_refs: Vec<BlockRef>,
     ) -> ConsensusResult<Vec<Bytes>> {
-        Ok(vec![])
+        const MAX_ALLOWED_FETCH_BLOCKS: usize = 200;
+
+        if block_refs.len() > MAX_ALLOWED_FETCH_BLOCKS {
+            return Err(ConsensusError::TooManyFetchBlocksRequested(peer));
+        }
+
+        // Some quick validation of the requested block refs
+        for block in &block_refs {
+            if !self.context.committee.is_valid_index(block.author) {
+                return Err(ConsensusError::InvalidAuthorityIndex {
+                    index: block.author,
+                    max: self.context.committee.size(),
+                });
+            }
+            if block.round == 0 {
+                return Err(ConsensusError::UnexpectedGenesisBlockRequested);
+            }
+        }
+
+        // For now ask dag state directly
+        let blocks = self.dag_state.read().get_blocks(block_refs)?;
+
+        // Return the serialised blocks
+        let result = blocks
+            .into_iter()
+            .flatten()
+            .map(|block| block.serialized().clone())
+            .collect::<Vec<_>>();
+
+        Ok(result)
     }
 }
 
@@ -364,7 +395,7 @@ mod tests {
             unimplemented!()
         }
 
-        async fn get_missing_blocks(&self) -> Result<Vec<BTreeSet<BlockRef>>, CoreError> {
+        async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
             unimplemented!()
         }
     }
