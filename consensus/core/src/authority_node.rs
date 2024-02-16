@@ -31,10 +31,47 @@ use crate::{
     CommitConsumer,
 };
 
-// This type is used by Sui as part of starting consensus via  MysticetiManager.
-pub type ConsensusAuthority = AuthorityNode<AnemoManager>;
+// This type is used by Sui as part of starting consensus via MysticetiManager.
+// It hides the details of the types.
+pub struct ConsensusAuthority(AuthorityNode<AnemoManager>);
 
-pub struct AuthorityNode<N>
+impl ConsensusAuthority {
+    pub async fn start(
+        own_index: AuthorityIndex,
+        committee: Committee,
+        parameters: Parameters,
+        protocol_config: ProtocolConfig,
+        protocol_keypair: ProtocolKeyPair,
+        network_keypair: NetworkKeyPair,
+        transaction_verifier: Arc<dyn TransactionVerifier>,
+        commit_consumer: CommitConsumer,
+        registry: Registry,
+    ) -> Self {
+        let authority_node = AuthorityNode::start(
+            own_index,
+            committee,
+            parameters,
+            protocol_config,
+            protocol_keypair,
+            network_keypair,
+            transaction_verifier,
+            commit_consumer,
+            registry,
+        )
+        .await;
+        Self(authority_node)
+    }
+
+    pub async fn stop(self) {
+        self.0.stop().await;
+    }
+
+    pub fn transaction_client(&self) -> Arc<TransactionClient> {
+        self.0.transaction_client()
+    }
+}
+
+pub(crate) struct AuthorityNode<N>
 where
     N: NetworkManager<AuthorityService<ChannelCoreThreadDispatcher>>,
 {
@@ -51,7 +88,7 @@ impl<N> AuthorityNode<N>
 where
     N: NetworkManager<AuthorityService<ChannelCoreThreadDispatcher>>,
 {
-    pub async fn start(
+    pub(crate) async fn start(
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
@@ -135,7 +172,7 @@ where
         }
     }
 
-    pub async fn stop(mut self) {
+    pub(crate) async fn stop(mut self) {
         info!(
             "Stopping authority. Total run time: {:?}",
             self.start_time.elapsed()
@@ -153,13 +190,13 @@ where
             .observe(self.start_time.elapsed().as_secs_f64());
     }
 
-    pub fn transaction_client(&self) -> Arc<TransactionClient> {
+    pub(crate) fn transaction_client(&self) -> Arc<TransactionClient> {
         self.transaction_client.clone()
     }
 }
 
 /// Authority's network interface.
-pub struct AuthorityService<C: CoreThreadDispatcher> {
+pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
     block_verifier: Arc<dyn BlockVerifier>,
     core_dispatcher: C,
@@ -333,9 +370,9 @@ mod tests {
         )
         .await;
 
-        assert_eq!(authority.context.own_index, own_index);
-        assert_eq!(authority.context.committee.epoch(), 0);
-        assert_eq!(authority.context.committee.size(), 1);
+        assert_eq!(authority.0.context.own_index, own_index);
+        assert_eq!(authority.0.context.committee.epoch(), 0);
+        assert_eq!(authority.0.context.committee.size(), 1);
 
         authority.stop().await;
     }

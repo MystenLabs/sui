@@ -18,7 +18,7 @@ use crate::metrics::Metrics;
 /// of this authority.
 #[allow(dead_code)]
 #[derive(Clone)]
-pub struct Context {
+pub(crate) struct Context {
     /// Index of this authority in the committee.
     pub own_index: AuthorityIndex,
     /// Committee of the current epoch.

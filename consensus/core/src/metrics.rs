@@ -16,9 +16,9 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     12.5, 15., 17.5, 20., 25., 30., 60., 90., 120., 180., 300.,
 ];
 
-pub struct Metrics {
-    pub node_metrics: NodeMetrics,
-    pub channel_metrics: ChannelMetrics,
+pub(crate) struct Metrics {
+    pub(crate) node_metrics: NodeMetrics,
+    pub(crate) channel_metrics: ChannelMetrics,
 }
 
 pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
@@ -36,7 +36,7 @@ pub(crate) fn test_metrics() -> Arc<Metrics> {
     initialise_metrics(Registry::new())
 }
 
-pub struct NodeMetrics {
+pub(crate) struct NodeMetrics {
     pub uptime: Histogram,
     pub quorum_receive_latency: Histogram,
     pub core_lock_enqueued: IntCounter,
@@ -161,7 +161,7 @@ impl NodeMetrics {
     }
 }
 
-pub struct ChannelMetrics {
+pub(crate) struct ChannelMetrics {
     /// occupancy of the channel from TransactionClient to TransactionConsumer
     pub tx_transactions_submit: IntGauge,
     /// total received on channel from TransactionClient to TransactionConsumer

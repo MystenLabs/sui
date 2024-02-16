@@ -92,7 +92,7 @@ impl CoreThread {
 }
 
 #[derive(Clone)]
-pub struct ChannelCoreThreadDispatcher {
+pub(crate) struct ChannelCoreThreadDispatcher {
     sender: metered_channel::WeakSender<CoreThreadCommand>,
     context: Arc<Context>,
 }
