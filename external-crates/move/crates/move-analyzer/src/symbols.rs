@@ -981,7 +981,7 @@ impl Symbols {
     }
 
     pub fn mod_defs(&self, fhash: &FileHash, mod_ident: ModuleIdent_) -> Option<&ModuleDefs> {
-        let Some(fpath) = self.file_name_mapping.get(&fhash) else {
+        let Some(fpath) = self.file_name_mapping.get(fhash) else {
             return None;
         };
         let Some(mod_defs) = self.file_mods.get(fpath) else {
