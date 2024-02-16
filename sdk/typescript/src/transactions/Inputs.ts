@@ -67,23 +67,23 @@ export function getIdFromCallArg(arg: string | CallArg) {
 		return normalizeSuiAddress(arg);
 	}
 
-	if ('Object' in arg) {
-		if ('ImmOrOwnedObject' in arg.Object) {
+	if (arg.Object) {
+		if (arg.Object.ImmOrOwnedObject) {
 			return normalizeSuiAddress(arg.Object.ImmOrOwnedObject.objectId);
 		}
 
-		if ('Receiving' in arg.Object) {
+		if (arg.Object.Receiving) {
 			return normalizeSuiAddress(arg.Object.Receiving.objectId);
 		}
 
 		return normalizeSuiAddress(arg.Object.SharedObject.objectId);
 	}
 
-	if ('UnresolvedObject' in arg) {
+	if (arg.UnresolvedObject) {
 		return normalizeSuiAddress(arg.UnresolvedObject.value);
 	}
 
-	if ('RawValue' in arg && arg.RawValue.type === 'Object') {
+	if (arg.RawValue && arg.RawValue.type === 'Object') {
 		return normalizeSuiAddress(arg.RawValue.value as string);
 	}
 
@@ -91,9 +91,7 @@ export function getIdFromCallArg(arg: string | CallArg) {
 }
 
 export function getSharedObjectInput(arg: CallArg): SharedObjectRef | undefined {
-	return typeof arg === 'object' && 'Object' in arg && 'SharedObject' in arg.Object
-		? arg.Object.SharedObject
-		: undefined;
+	return typeof arg === 'object' && arg.Object?.SharedObject ? arg.Object.SharedObject : undefined;
 }
 
 export function isSharedObjectInput(arg: CallArg): boolean {

@@ -11,7 +11,13 @@ import {
 	stringLikeBcsType,
 	uIntBcsType,
 } from './bcs-type.js';
-import type { GenericPlaceholder, ReplaceBcsGenerics } from './types.js';
+import type {
+	EnumInputShape,
+	EnumOutputShape,
+	GenericPlaceholder,
+	Merge,
+	ReplaceBcsGenerics,
+} from './types.js';
 import { ulebEncode } from './uleb.js';
 
 export const bcs = {
@@ -457,33 +463,10 @@ export const bcs = {
 	enum<T extends Record<string, BcsType<any> | null>>(
 		name: string,
 		values: T,
-		options?: Omit<
-			BcsTypeOptions<
-				{
-					[K in keyof T]: T[K] extends BcsType<infer U, any>
-						? { [K2 in K]: U }
-						: { [K2 in K]: true };
-				}[keyof T],
-				{
-					[K in keyof T]: T[K] extends BcsType<any, infer U>
-						? { [K2 in K]: U }
-						: { [K2 in K]: unknown };
-				}[keyof T]
-			>,
-			'name'
-		>,
+		options?: Omit<BcsTypeOptions<EnumOutputShape<T>, EnumInputShape<T>>, 'name'>,
 	) {
 		const canonicalOrder = Object.entries(values as object);
-		return new BcsType<
-			{
-				[K in keyof T]: T[K] extends BcsType<infer U, any> ? { [K2 in K]: U } : { [K2 in K]: true };
-			}[keyof T],
-			{
-				[K in keyof T]: T[K] extends BcsType<any, infer U>
-					? { [K2 in K]: U }
-					: { [K2 in K]: unknown };
-			}[keyof T]
-		>({
+		return new BcsType<Merge<EnumOutputShape<T>>, EnumInputShape<T>>({
 			name,
 			read: (reader) => {
 				const index = reader.readULEB();

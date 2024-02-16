@@ -18,7 +18,8 @@ function prepareSuiAddress(address: string) {
 export class TransactionBlockDataBuilder implements TransactionBlockState {
 	static fromKindBytes(bytes: Uint8Array) {
 		const kind = bcs.TransactionKind.parse(bytes);
-		const programmableTx = 'ProgrammableTransaction' in kind ? kind.ProgrammableTransaction : null;
+
+		const programmableTx = kind.ProgrammableTransaction;
 		if (!programmableTx) {
 			throw new Error('Unable to deserialize from bytes.');
 		}
@@ -42,8 +43,8 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 	static fromBytes(bytes: Uint8Array) {
 		const rawData = bcs.TransactionData.parse(bytes);
 		const data = rawData?.V1;
-		const programmableTx =
-			'ProgrammableTransaction' in data.kind ? data?.kind?.ProgrammableTransaction : null;
+		const programmableTx = data.kind.ProgrammableTransaction;
+
 		if (!data || !programmableTx) {
 			throw new Error('Unable to deserialize from bytes.');
 		}

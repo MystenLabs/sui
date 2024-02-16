@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { BaseSchema, Output } from 'valibot';
+import type { BaseSchema, Output, UnionOptions, UnionSchema } from 'valibot';
 import {
 	array,
 	boolean,
@@ -23,6 +23,18 @@ import {
 
 import type { StructTag as StructTagType, TypeTag as TypeTagType } from '../../bcs/index.js';
 import { isValidSuiAddress, normalizeSuiAddress } from '../../utils/sui-types.js';
+
+type Merge<T> = T extends object ? { [K in keyof T]: T[K] } : never;
+type UnionToEnum<
+	T,
+	Keys extends string = string & (T extends object ? keyof T : never),
+> = T extends object ? Merge<T & { [K in Exclude<Keys, keyof T>]?: never }> : never;
+
+type UnionToEnumSchema<T extends BaseSchema<unknown>> = BaseSchema<UnionToEnum<Output<T>>>;
+
+function enumUnion<T extends UnionOptions>(options: T): UnionToEnumSchema<UnionSchema<T>> {
+	return union(options);
+}
 
 const SuiAddress = transform(string(), (value) => normalizeSuiAddress(value), [
 	custom(isValidSuiAddress),
@@ -52,8 +64,8 @@ export const ObjectRef = object({
 export type ObjectRef = Output<typeof ObjectRef>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L690-L702
-export const Argument = union([
-	object({ GasCoin: nullable(literal(true)) }),
+export const Argument = enumUnion([
+	object({ GasCoin: literal(true) }),
 	object({ Input: number([integer()]), type: optional(literal('pure')) }),
 	object({ Input: number([integer()]), type: optional(literal('object')) }),
 	object({ Result: number([integer()]) }),
@@ -71,18 +83,18 @@ export const GasData = object({
 export type GasData = Output<typeof GasData>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/external-crates/move/crates/move-core-types/src/language_storage.rs#L33-L59
-export const TypeTag: BaseSchema<TypeTagType> = union([
-	object({ bool: nullable(literal(true)) }),
-	object({ u8: nullable(literal(true)) }),
-	object({ u64: nullable(literal(true)) }),
-	object({ u128: nullable(literal(true)) }),
-	object({ address: nullable(literal(true)) }),
-	object({ signer: nullable(literal(true)) }),
+export const TypeTag: BaseSchema<TypeTagType> = enumUnion([
+	object({ bool: literal(true) }),
+	object({ u8: literal(true) }),
+	object({ u64: literal(true) }),
+	object({ u128: literal(true) }),
+	object({ address: literal(true) }),
+	object({ signer: literal(true) }),
 	object({ vector: recursive(() => TypeTag) }),
 	object({ struct: recursive(() => StructTag) }),
-	object({ u16: nullable(literal(true)) }),
-	object({ u32: nullable(literal(true)) }),
-	object({ u256: nullable(literal(true)) }),
+	object({ u16: literal(true) }),
+	object({ u32: literal(true) }),
+	object({ u256: literal(true) }),
 ]);
 export type TypeTag = Output<typeof TypeTag>;
 
@@ -108,7 +120,7 @@ const ProgrammableMoveCall = object({
 export type ProgrammableMoveCall = Output<typeof ProgrammableMoveCall>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L657-L685
-const Transaction = union([
+const Transaction = enumUnion([
 	object({ MoveCall: ProgrammableMoveCall }),
 	object({ TransferObjects: tuple([array(Argument), Argument]) }),
 	object({ SplitCoins: tuple([Argument, array(Argument)]) }),
@@ -116,7 +128,7 @@ const Transaction = union([
 	object({ Publish: tuple([array(BCSBytes), array(ObjectID)]) }),
 	object({
 		MakeMoveVec: tuple([
-			union([object({ None: nullable(literal(true)) }), object({ Some: TypeTag })]),
+			enumUnion([object({ None: literal(true) }), object({ Some: TypeTag })]),
 			array(Argument),
 		]),
 	}),
@@ -125,7 +137,7 @@ const Transaction = union([
 export type Transaction = Output<typeof Transaction>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L102-L114
-const ObjectArg = union([
+const ObjectArg = enumUnion([
 	object({ ImmOrOwnedObject: ObjectRef }),
 	object({
 		SharedObject: object({
@@ -188,7 +200,7 @@ const OpenMoveTypeSignature = object({
 export type OpenMoveTypeSignature = Output<typeof OpenMoveTypeSignature>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L75-L80
-const CallArg = union([
+const CallArg = enumUnion([
 	object({ Object: ObjectArg }),
 	object({ Pure: BCSBytes }),
 	// added for sui:unresolvedObjectIds
@@ -208,10 +220,13 @@ const CallArg = union([
 ]);
 export type CallArg = Output<typeof CallArg>;
 
-export const NormalizedCallArg = union([object({ Object: ObjectArg }), object({ Pure: BCSBytes })]);
+export const NormalizedCallArg = enumUnion([
+	object({ Object: ObjectArg }),
+	object({ Pure: BCSBytes }),
+]);
 
-const TransactionExpiration = union([
-	object({ None: nullable(literal(true)) }),
+const TransactionExpiration = enumUnion([
+	object({ None: literal(true) }),
 	object({ Epoch: JsonU64 }),
 ]);
 export type TransactionExpiration = Output<typeof TransactionExpiration>;
