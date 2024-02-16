@@ -108,7 +108,7 @@ impl ResolvedGraph {
                 graph.root_path.join(local_path(&pkg.kind))
             };
 
-            let mut resolved_pkg = Package::new(package_path, &build_options)
+            let mut resolved_pkg = Package::new(package_path, build_options)
                 .with_context(|| format!("Resolving package '{pkg_id}'"))?;
 
             // Check dependencies package names from manifest are consistent with ther names

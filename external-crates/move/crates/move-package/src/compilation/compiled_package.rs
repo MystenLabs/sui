@@ -840,7 +840,7 @@ pub(crate) fn make_source_and_deps_for_compiler(
     let source_package_paths = PackagePaths {
         name: Some((
             root.source_package.package.name,
-            root.compiler_config(/* is_dependency */ false, &build_info),
+            root.compiler_config(/* is_dependency */ false, build_info),
         )),
         paths: sources,
         named_address_map: root_named_addrs,
