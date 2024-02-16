@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiJsonValue, SuiMoveNormalizedType } from '../client/index.js';
+import type { SuiMoveNormalizedType } from '../client/index.js';
 import { MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS } from '../utils/index.js';
 import { isValidSuiAddress } from '../utils/sui-types.js';
 import { extractStructTag } from './utils.js';
@@ -50,7 +50,7 @@ export function isTxContext(param: SuiMoveNormalizedType): boolean {
 	);
 }
 
-function expectType(typeName: string, argVal?: SuiJsonValue) {
+function expectType(typeName: string, argVal?: unknown) {
 	if (typeof argVal === 'undefined') {
 		return;
 	}
@@ -63,7 +63,7 @@ const allowedTypes = ['Address', 'Bool', 'U8', 'U16', 'U32', 'U64', 'U128', 'U25
 
 export function getPureSerializationType(
 	normalizedType: SuiMoveNormalizedType,
-	argVal: SuiJsonValue | undefined,
+	argVal: unknown,
 ): string | undefined {
 	if (typeof normalizedType === 'string' && allowedTypes.includes(normalizedType)) {
 		if (normalizedType in ['U8', 'U16', 'U32', 'U64', 'U128', 'U256']) {

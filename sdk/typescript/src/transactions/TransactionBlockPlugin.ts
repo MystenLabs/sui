@@ -1,24 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, mask } from 'superstruct';
+import { parse } from 'valibot';
 
-import { bcs } from '../bcs/index.js';
 import type { SuiClient } from '../client/client.js';
-import type { SuiMoveNormalizedType } from '../client/index.js';
 import { SUI_TYPE_ARG } from '../utils/index.js';
 import { normalizeSuiAddress, normalizeSuiObjectId } from '../utils/sui-types.js';
-import {
-	BuilderCallArg,
-	Inputs,
-	isMutableSharedObjectInput,
-	PureCallArg,
-	SuiObjectRef,
-} from './Inputs.js';
+import type { CallArg, OpenMoveTypeSignature, Transaction } from './blockData/v2.js';
+import { ObjectRef } from './blockData/v2.js';
+import { Inputs, isMutableSharedObjectInput } from './Inputs.js';
 import { getPureSerializationType, isTxContext } from './serializer.js';
 import type { TransactionBlockDataBuilder } from './TransactionBlockData.js';
-import type { MoveCallTransaction, TransactionBlockInput } from './Transactions.js';
-import { extractMutableReference, extractReference, extractStructTag } from './utils.js';
+import { extractStructTag } from './utils.js';
 
 export type MaybePromise<T> = T | Promise<T>;
 export interface TransactionBlockPlugin {
@@ -83,7 +76,7 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 			return;
 		}
 
-		blockData.gasConfig.price = await this.#getClient().getReferenceGasPrice();
+		blockData.gasConfig.price = String(await this.#getClient().getReferenceGasPrice());
 	};
 
 	setGasBudget: NonNullable<TransactionBlockPlugin['setGasBudget']> = async (
@@ -96,7 +89,7 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 				transactionBlock: blockData.build({
 					maxSizeBytes: options.maxTxSizeBytes,
 					overrides: {
-						gasConfig: {
+						gasData: {
 							budget: String(options.maxTxGas),
 							payment: [],
 						},
@@ -156,12 +149,8 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 			// Filter out coins that are also used as input:
 			.filter((coin) => {
 				const matchingInput = blockData.inputs.find((input) => {
-					if (
-						is(input.value, BuilderCallArg) &&
-						'Object' in input.value &&
-						'ImmOrOwned' in input.value.Object
-					) {
-						return coin.coinObjectId === input.value.Object.ImmOrOwned.objectId;
+					if ('Object' in input && 'ImmOrOwnedObject' in input.Object) {
+						return coin.coinObjectId === input.Object.ImmOrOwnedObject.objectId;
 					}
 
 					return false;
@@ -180,36 +169,26 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 			throw new Error('No valid gas coins found for the transaction.');
 		}
 
-		blockData.gasConfig.payment = paymentCoins.map((payment) => mask(payment, SuiObjectRef));
+		blockData.gasConfig.payment = paymentCoins.map((payment) => parse(ObjectRef, payment));
 	};
 
 	resolveObjectReferences: NonNullable<TransactionBlockPlugin['resolveObjectReferences']> = async (
 		blockData,
 	) => {
 		await this.#runHook('resolveObjectReferences', blockData);
-		const { inputs } = blockData;
 
 		// Keep track of the object references that will need to be resolved at the end of the transaction.
 		// We keep the input by-reference to avoid needing to re-resolve it:
-		const objectsToResolve: {
-			id: string;
-			input: TransactionBlockInput;
-			normalizedType?: SuiMoveNormalizedType;
-		}[] = [];
-
-		inputs.forEach((input) => {
-			if (typeof input.value === 'string' && (input.type === 'object' || input.normalizedType)) {
-				// The input is a string that we need to resolve to an object reference:
-				objectsToResolve.push({
-					id: normalizeSuiAddress(input.value),
-					input,
-					normalizedType: input.normalizedType,
-				});
-			}
-		});
+		const objectsToResolve = blockData.inputs.filter((input) => {
+			return 'UnresolvedObject' in input;
+		}) as Extract<CallArg, { UnresolvedObject: unknown }>[];
 
 		if (objectsToResolve.length) {
-			const dedupedIds = [...new Set(objectsToResolve.map(({ id }) => id))];
+			const dedupedIds = [
+				...new Set(
+					objectsToResolve.map((input) => normalizeSuiObjectId(input.UnresolvedObject.value)),
+				),
+			];
 			const objectChunks = chunk(dedupedIds, MAX_OBJECTS_PER_FETCH);
 			const objects = (
 				await Promise.all(
@@ -235,7 +214,10 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 				throw new Error(`The following input objects are invalid: ${invalidObjects.join(', ')}`);
 			}
 
-			objectsToResolve.forEach(({ id, input, normalizedType }) => {
+			objectsToResolve.forEach((input) => {
+				let updated: CallArg = input;
+				const id = normalizeSuiAddress(input.UnresolvedObject.value);
+				const normalizedType = input.UnresolvedObject.typeSignature;
 				const object = objectsById.get(id)!;
 				const owner = object.data?.owner;
 				const initialSharedVersion =
@@ -247,25 +229,22 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 					// There could be multiple transactions that reference the same shared object.
 					// If one of them is a mutable reference or taken by value, then we should mark the input
 					// as mutable.
-					const isByValue =
-						normalizedType != null &&
-						extractMutableReference(normalizedType) == null &&
-						extractReference(normalizedType) == null;
+					const isByValue = !normalizedType.ref;
 					const mutable =
-						isMutableSharedObjectInput(input.value) ||
-						isByValue ||
-						(normalizedType != null && extractMutableReference(normalizedType) != null);
+						isMutableSharedObjectInput(input) || isByValue || normalizedType.ref === '&mut';
 
-					input.value = Inputs.SharedObjectRef({
+					updated = Inputs.SharedObjectRef({
 						objectId: id,
 						initialSharedVersion,
 						mutable,
 					});
 				} else if (normalizedType && isReceivingType(normalizedType)) {
-					input.value = Inputs.ReceivingRef(object.data!);
+					updated = Inputs.ReceivingRef(object.data!);
 				} else {
-					input.value = Inputs.ObjectRef(object.data!);
+					updated = Inputs.ObjectRef(object.data!);
 				}
+
+				blockData.inputs[blockData.inputs.indexOf(input)] = updated;
 			});
 		}
 	};
@@ -273,55 +252,59 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 	normalizeInputs: NonNullable<TransactionBlockPlugin['normalizeInputs']> = async (blockData) => {
 		await this.#runHook('normalizeInputs', blockData);
 		const { inputs, transactions } = blockData;
-		const moveModulesToResolve: MoveCallTransaction[] = [];
+		const moveModulesToResolve: Extract<Transaction, { MoveCall: unknown }>['MoveCall'][] = [];
 
 		transactions.forEach((transaction) => {
 			// Special case move call:
-			if (transaction.kind === 'MoveCall') {
+			if ('MoveCall' in transaction) {
 				// Determine if any of the arguments require encoding.
 				// - If they don't, then this is good to go.
 				// - If they do, then we need to fetch the normalized move module.
-				const needsResolution = transaction.arguments.some(
-					(arg) => arg.kind === 'Input' && !is(inputs[arg.index].value, BuilderCallArg),
-				);
+				const inputs = transaction.MoveCall.arguments.map((arg) => {
+					if ('Input' in arg) {
+						return blockData.inputs[arg.Input];
+					}
+					return null;
+				});
+				const needsResolution = inputs.some((input) => input && 'RawInput' in input);
 
 				if (needsResolution) {
-					moveModulesToResolve.push(transaction);
+					moveModulesToResolve.push(transaction.MoveCall);
 				}
 			}
 
 			// Special handling for values that where previously encoded using the wellKnownEncoding pattern.
 			// This should only happen when transaction block data was hydrated from an old version of the SDK
-			if (transaction.kind === 'SplitCoins') {
-				transaction.amounts.forEach((amount) => {
-					if (amount.kind === 'Input') {
-						const input = inputs[amount.index];
-						if (typeof input.value !== 'object') {
-							input.value = Inputs.Pure(bcs.U64.serialize(input.value));
-						}
-					}
-				});
+			if ('SplitCoins' in transaction) {
+				// TODO: Fix this during hydration
+				// const amounts = transaction.SplitCoins[1].map((amount) => {
+				// transaction.amounts.forEach((amount) => {
+				// 	if (amount.kind === 'Input') {
+				// 		const input = inputs[amount.index];
+				// 		if (typeof input.value !== 'object') {
+				// 			input.value = Inputs.Pure(bcs.U64.serialize(input.value));
+				// 		}
+				// 	}
+				// });
 			}
 
-			if (transaction.kind === 'TransferObjects') {
-				if (transaction.address.kind === 'Input') {
-					const input = inputs[transaction.address.index];
-					if (typeof input.value !== 'object') {
-						input.value = Inputs.Pure(bcs.Address.serialize(input.value));
-					}
-				}
-			}
+			// if (transaction.kind === 'TransferObjects') {
+			// 	if (transaction.address.kind === 'Input') {
+			// 		const input = inputs[transaction.address.index];
+			// 		if (typeof input.value !== 'object') {
+			// 			input.value = Inputs.Pure(bcs.Address.serialize(input.value));
+			// 		}
+			// 	}
+			// }
 		});
 
 		if (moveModulesToResolve.length) {
 			await Promise.all(
 				moveModulesToResolve.map(async (moveCall) => {
-					const [packageId, moduleName, functionName] = moveCall.target.split('::');
-
 					const normalized = await this.#getClient().getNormalizedMoveFunction({
-						package: normalizeSuiObjectId(packageId),
-						module: moduleName,
-						function: functionName,
+						package: moveCall.package,
+						module: moveCall.module,
+						function: moveCall.function,
 					});
 
 					// Entry functions can have a mutable reference to an instance of the TxContext
@@ -340,17 +323,17 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 
 					params.forEach((param, i) => {
 						const arg = moveCall.arguments[i];
-						if (arg.kind !== 'Input') return;
-						const input = inputs[arg.index];
+						if (!('Input' in arg)) return;
+						const input = inputs[arg.Input];
 						// Skip if the input is already resolved
-						if (is(input.value, BuilderCallArg)) return;
+						if (!('RawValue' in input)) return;
 
-						const inputValue = input.value;
+						const inputValue = input.RawValue.value;
 
 						const serType = getPureSerializationType(param, inputValue);
 
 						if (serType) {
-							input.value = Inputs.Pure(inputValue, serType);
+							inputs[inputs.indexOf(input)] = Inputs.Pure(inputValue, serType);
 							return;
 						}
 
@@ -366,8 +349,13 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 								);
 							}
 
-							input.normalizedType = param;
-
+							inputs[inputs.indexOf(input)] = {
+								UnresolvedObject: {
+									value: inputValue,
+									// TODO convert to OpenMoveTypeSignature
+									typeSignature: param,
+								},
+							};
 							return;
 						}
 
@@ -388,10 +376,10 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 		await this.#runHook('validate', blockData, options);
 		// Validate all inputs are the correct size:
 		blockData.inputs.forEach((input, index) => {
-			if (is(input.value, PureCallArg)) {
-				if (input.value.Pure.length > options.maxPureArgumentSize) {
+			if ('Pure' in input) {
+				if (input.Pure.length > options.maxPureArgumentSize) {
 					throw new Error(
-						`Input at index ${index} is too large, max pure input size is ${options.maxPureArgumentSize} bytes, got ${input.value.Pure.length} bytes`,
+						`Input at index ${index} is too large, max pure input size is ${options.maxPureArgumentSize} bytes, got ${input.Pure.length} bytes`,
 					);
 				}
 			}
@@ -399,14 +387,14 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 	};
 }
 
-function isReceivingType(normalizedType: SuiMoveNormalizedType): boolean {
-	const tag = extractStructTag(normalizedType);
-	if (tag) {
-		return (
-			tag.Struct.address === '0x2' &&
-			tag.Struct.module === 'transfer' &&
-			tag.Struct.name === 'Receiving'
-		);
+function isReceivingType(type: OpenMoveTypeSignature): boolean {
+	if (typeof type.body !== 'object' || !('datatype' in type.body)) {
+		return false;
 	}
-	return false;
+
+	return (
+		type.body.datatype.package === '0x2' &&
+		type.body.datatype.module === 'transfer' &&
+		type.body.datatype.type === 'Receiving'
+	);
 }

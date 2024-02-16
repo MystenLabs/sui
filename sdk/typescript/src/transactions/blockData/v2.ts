@@ -12,6 +12,7 @@ import {
 	nullish,
 	number,
 	object,
+	optional,
 	recursive,
 	string,
 	transform,
@@ -41,23 +42,26 @@ const JsonU64 = union(
 		}, 'Invalid u64'),
 	],
 );
-
-// https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-json-rpc-types/src/sui_object.rs#L661-L668
+// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/base_types.rs#L138
+// Implemented as a tuple in rust
 export const ObjectRef = object({
 	digest: string(),
 	objectId: SuiAddress,
 	version: JsonU64,
 });
+export type ObjectRef = Output<typeof ObjectRef>;
 
-// https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-json-rpc-types/src/sui_transaction.rs#L1680-L1692
-const SuiArgument = union([
+// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L690-L702
+export const Argument = union([
 	object({ GasCoin: nullable(literal(true)) }),
-	object({ Input: number([integer()]) }),
+	object({ Input: number([integer()]), type: optional(literal('pure')) }),
+	object({ Input: number([integer()]), type: optional(literal('object')) }),
 	object({ Result: number([integer()]) }),
 	object({ NestedResult: tuple([number([integer()]), number([integer()])]) }),
 ]);
+export type Argument = Output<typeof Argument>;
 
-// https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-json-rpc-types/src/sui_transaction.rs#L1143-L1153
+// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L1387-L1392
 export const GasData = object({
 	budget: nullable(JsonU64),
 	price: nullable(JsonU64),
@@ -66,33 +70,7 @@ export const GasData = object({
 });
 export type GasData = Output<typeof GasData>;
 
-// https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-json-rpc-types/src/sui_transaction.rs#L1719-L1732
-const SuiProgrammableMoveCall = object({
-	package: ObjectID,
-	module: string(),
-	function: string(),
-	typeArguments: array(string()),
-	arguments: array(SuiArgument),
-});
-
-// https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-json-rpc-types/src/sui_transaction.rs#L1578-L1601
-const SuiTransaction = union([
-	object({ MoveCall: SuiProgrammableMoveCall }),
-	object({ TransferObjects: tuple([array(SuiArgument), SuiArgument]) }),
-	object({ SplitCoins: tuple([SuiArgument, array(SuiArgument)]) }),
-	object({ MergeCoins: tuple([SuiArgument, array(SuiArgument)]) }),
-	object({ Publish: array(ObjectID) }),
-	object({ Upgrade: tuple([array(ObjectID), ObjectID, SuiArgument]) }),
-	object({
-		MakeMoveVec: tuple([
-			union([object({ None: nullable(literal(true)) }), object({ Some: string() })]),
-			array(SuiArgument),
-		]),
-	}),
-]);
-export type SuiTransaction = Output<typeof SuiTransaction>;
-
-// https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/external-crates/move/crates/move-core-types/src/language_storage.rs#L33-L59
+// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/external-crates/move/crates/move-core-types/src/language_storage.rs#L33-L59
 export const TypeTag: BaseSchema<TypeTagType> = union([
 	object({ bool: nullable(literal(true)) }),
 	object({ u8: nullable(literal(true)) }),
@@ -106,37 +84,62 @@ export const TypeTag: BaseSchema<TypeTagType> = union([
 	object({ u32: nullable(literal(true)) }),
 	object({ u256: nullable(literal(true)) }),
 ]);
+export type TypeTag = Output<typeof TypeTag>;
 
-// https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/external-crates/move/crates/move-core-types/src/language_storage.rs#L140-L147
+// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/external-crates/move/crates/move-core-types/src/language_storage.rs#L140-L147
 export const StructTag: BaseSchema<StructTagType> = object({
 	address: string(),
 	module: string(),
 	name: string(),
+	// type_params in rust, should be updated to use camelCase
 	typeParams: array(TypeTag),
 });
+export type StructTag = Output<typeof StructTag>;
 
-// https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-json-rpc-types/src/sui_transaction.rs#L1995-L2024
-const SuiObjectArg = union([
+// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L707-L718
+const ProgrammableMoveCall = object({
+	package: ObjectID,
+	module: string(),
+	function: string(),
+	// snake case in rust
+	typeArguments: array(TypeTag),
+	arguments: array(Argument),
+});
+export type ProgrammableMoveCall = Output<typeof ProgrammableMoveCall>;
+
+// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L657-L685
+const Transaction = union([
+	object({ MoveCall: ProgrammableMoveCall }),
+	object({ TransferObjects: tuple([array(Argument), Argument]) }),
+	object({ SplitCoins: tuple([Argument, array(Argument)]) }),
+	object({ MergeCoins: tuple([Argument, array(Argument)]) }),
+	object({ Publish: tuple([array(BCSBytes), array(ObjectID)]) }),
+	object({
+		MakeMoveVec: tuple([
+			union([object({ None: nullable(literal(true)) }), object({ Some: TypeTag })]),
+			array(Argument),
+		]),
+	}),
+	object({ Upgrade: tuple([array(BCSBytes), array(ObjectID), ObjectID, Argument]) }),
+]);
+export type Transaction = Output<typeof Transaction>;
+
+// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L102-L114
+const ObjectArg = union([
 	object({ ImmOrOwnedObject: ObjectRef }),
 	object({
-		SharedObject: object({ objectId: ObjectID, initialSharedVersion: JsonU64, mutable: boolean() }),
+		SharedObject: object({
+			objectId: ObjectID,
+			// snake case in rust
+			initialSharedVersion: JsonU64,
+			mutable: boolean(),
+		}),
 	}),
 	object({ Receiving: ObjectRef }),
 ]);
 
-// https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-json-rpc-types/src/sui_transaction.rs#L1975-L1980
-const SuiPureValue = union([
-	object({
-		valueType: union([object({ None: nullable(literal(true)) }), object({ Some: TypeTag })]),
-		value: BCSBytes,
-	}),
-	object({
-		value: BCSBytes,
-	}),
-]);
-
-// https://github.com/MystenLabs/sui/blob/f2601e580e5ec26012669de04fb888ece12bbc06/crates/sui-graphql-rpc/src/types/open_move_type.rs#L86-L105
-type OpenMoveTypeSignatureBody =
+// https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-graphql-rpc/schema/current_progress_schema.graphql#L1614-L1627
+export type OpenMoveTypeSignatureBody =
 	| 'address'
 	| 'bool'
 	| 'u8'
@@ -177,16 +180,17 @@ const OpenMoveTypeSignatureBody: BaseSchema<OpenMoveTypeSignatureBody> = union([
 	object({ typeParameter: number([integer()]) }),
 ]);
 
-// https://github.com/MystenLabs/sui/blob/f2601e580e5ec26012669de04fb888ece12bbc06/crates/sui-graphql-rpc/src/types/open_move_type.rs#L69-L82
+// https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-graphql-rpc/schema/current_progress_schema.graphql#L1609-L1612
 const OpenMoveTypeSignature = object({
 	ref: nullable(union([literal('&'), literal('&mut')])),
 	body: OpenMoveTypeSignatureBody,
 });
+export type OpenMoveTypeSignature = Output<typeof OpenMoveTypeSignature>;
 
-// https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-json-rpc-types/src/sui_transaction.rs#L1912-L1917
-const SuiCallArg = union([
-	object({ Object: SuiObjectArg }),
-	object({ Pure: SuiPureValue }),
+// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L75-L80
+const CallArg = union([
+	object({ Object: ObjectArg }),
+	object({ Pure: BCSBytes }),
 	// added for sui:unresolvedObjectIds
 	object({
 		UnresolvedObject: object({
@@ -202,9 +206,10 @@ const SuiCallArg = union([
 		}),
 	}),
 ]);
-export type SuiCallArg = Output<typeof SuiCallArg>;
+export type CallArg = Output<typeof CallArg>;
 
-// https://github.com/MystenLabs/sui/blob/f2601e580e5ec26012669de04fb888ece12bbc06/crates/sui-types/src/transaction.rs#L1395-L1401
+export const NormalizedCallArg = union([object({ Object: ObjectArg }), object({ Pure: BCSBytes })]);
+
 const TransactionExpiration = union([
 	object({ None: nullable(literal(true)) }),
 	object({ Epoch: JsonU64 }),
@@ -217,7 +222,7 @@ export const TransactionBlockState = object({
 	sender: nullish(SuiAddress),
 	expiration: nullish(TransactionExpiration),
 	gasData: GasData,
-	inputs: array(SuiCallArg),
-	transactions: array(SuiTransaction),
+	inputs: array(CallArg),
+	transactions: array(Transaction),
 });
 export type TransactionBlockState = Output<typeof TransactionBlockState>;

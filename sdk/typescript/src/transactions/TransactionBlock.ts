@@ -3,27 +3,25 @@
 
 import type { SerializedBcs } from '@mysten/bcs';
 import { fromB64, isSerializedBcs } from '@mysten/bcs';
-import { is, mask } from 'superstruct';
+import { is, parse } from 'valibot';
 
+import type { ObjectCallArg } from '../bcs/index.js';
 import type { ProtocolConfig, SuiClient } from '../client/index.js';
 import type { SignatureWithBytes, Signer } from '../cryptography/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import { getIdFromCallArg, Inputs, ObjectCallArg, SuiObjectRef } from './Inputs.js';
+import type { CallArg, Transaction, TransactionExpiration } from './blockData/v2.js';
+import { Argument, ObjectRef } from './blockData/v2.js';
+import { getIdFromCallArg, Inputs } from './Inputs.js';
 import { createPure } from './pure.js';
-import type { TransactionExpiration } from './TransactionBlockData.js';
 import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 import { DefaultTransactionBlockFeatures } from './TransactionBlockPlugin.js';
-import type { TransactionArgument, TransactionType } from './Transactions.js';
-import { TransactionBlockInput, Transactions } from './Transactions.js';
-import { create } from './utils.js';
+import { Transactions } from './Transactions.js';
 
-export type TransactionObjectArgument = Exclude<
-	TransactionArgument,
-	{ kind: 'Input'; type: 'pure' }
->;
+export type TransactionArgument = Argument;
+export type TransactionObjectArgument = Exclude<Argument, { type?: 'pure' }>;
 
-export type TransactionResult = Extract<TransactionArgument, { kind: 'Result' }> &
-	Extract<TransactionArgument, { kind: 'NestedResult' }>[];
+export type TransactionResult = Extract<Argument, { Result: unknown }> &
+	Extract<Argument, { NestedResult: unknown }>[];
 
 const DefaultOfflineLimits = {
 	maxPureArgumentSize: 16 * 1024,
@@ -33,14 +31,12 @@ const DefaultOfflineLimits = {
 } satisfies Limits;
 
 function createTransactionResult(index: number): TransactionResult {
-	const baseResult: TransactionArgument = { kind: 'Result', index };
+	const baseResult: TransactionArgument = { Result: index };
 
 	const nestedResults: TransactionArgument[] = [];
 	const nestedResultFor = (resultIndex: number): TransactionArgument =>
 		(nestedResults[resultIndex] ??= {
-			kind: 'NestedResult',
-			index,
-			resultIndex,
+			NestedResult: [index, resultIndex],
 		});
 
 	return new Proxy(baseResult, {
@@ -173,8 +169,8 @@ export class TransactionBlock {
 			this.#blockData.sender = sender;
 		}
 	}
-	setExpiration(expiration?: TransactionExpiration) {
-		this.#blockData.expiration = expiration;
+	setExpiration(expiration?: TransactionExpiration | null) {
+		this.#blockData.expiration = expiration ?? null;
 	}
 	setGasPrice(price: number | bigint) {
 		this.#blockData.gasConfig.price = String(price);
@@ -185,8 +181,8 @@ export class TransactionBlock {
 	setGasOwner(owner: string) {
 		this.#blockData.gasConfig.owner = owner;
 	}
-	setGasPayment(payments: SuiObjectRef[]) {
-		this.#blockData.gasConfig.payment = payments.map((payment) => mask(payment, SuiObjectRef));
+	setGasPayment(payments: ObjectRef[]) {
+		this.#blockData.gasConfig.payment = payments.map((payment) => parse(ObjectRef, payment));
 	}
 
 	#blockData: TransactionBlockDataBuilder;
@@ -219,7 +215,7 @@ export class TransactionBlock {
 						? Inputs.Pure(value)
 						: type
 						? Inputs.Pure(value, type)
-						: value,
+						: { RawValue: { type: 'Pure', value } },
 				);
 			}),
 		});
@@ -234,8 +230,8 @@ export class TransactionBlock {
 	}
 
 	/** Returns an argument for the gas coin, to be used in a transaction. */
-	get gas(): TransactionObjectArgument {
-		return { kind: 'GasCoin' };
+	get gas() {
+		return { GasCoin: true };
 	}
 
 	/**
@@ -247,52 +243,44 @@ export class TransactionBlock {
 	 * is the format required for custom serialization.
 	 *
 	 */
-	#input<T extends 'object' | 'pure'>(type: T, value?: unknown) {
+	#input<T extends 'object' | 'pure'>(type: T, arg: CallArg) {
 		const index = this.#blockData.inputs.length;
-		const input = create(
-			{
-				kind: 'Input',
-				// bigints can't be serialized to JSON, so just string-convert them here:
-				value: typeof value === 'bigint' ? String(value) : value,
-				index,
-				type,
-			},
-			TransactionBlockInput,
-		);
-		this.#blockData.inputs.push(input);
-		return input as Extract<typeof input, { type: T }>;
+		this.#blockData.inputs.push(arg);
+		return { Input: index, type };
 	}
 
 	/**
 	 * Add a new object input to the transaction.
 	 */
-	object(value: TransactionObjectInput) {
-		if (typeof value === 'object' && 'kind' in value) {
+	object(value: TransactionObjectInput): TransactionObjectArgument {
+		if (typeof value === 'object' && is(Argument, value)) {
 			return value;
 		}
 
 		const id = getIdFromCallArg(value);
 
-		const inserted = this.#blockData.inputs.find(
-			(i) => i.type === 'object' && id === getIdFromCallArg(i.value),
-		) as Extract<TransactionArgument, { type?: 'object' }> | undefined;
+		const inserted = this.#blockData.inputs.find((i) => id === getIdFromCallArg(i));
 
 		// Upgrade shared object inputs to mutable if needed:
 		if (
 			inserted &&
-			is(inserted.value, ObjectCallArg) &&
-			'Shared' in inserted.value.Object &&
-			is(value, ObjectCallArg) &&
-			'Shared' in value.Object
+			'Object' in inserted &&
+			'SharedObject' in inserted.Object &&
+			typeof value === 'object' &&
+			'SharedObject' in value.Object
 		) {
-			inserted.value.Object.Shared.mutable =
-				inserted.value.Object.Shared.mutable || value.Object.Shared.mutable;
+			inserted.Object.SharedObject.mutable =
+				inserted.Object.SharedObject.mutable || value.Object.SharedObject.mutable;
 		}
 
-		return (
-			inserted ??
-			this.#input('object', typeof value === 'string' ? normalizeSuiAddress(value) : value)
-		);
+		return inserted
+			? { Input: this.#blockData.inputs.indexOf(inserted), type: 'object' }
+			: this.#input(
+					'object',
+					typeof value === 'string'
+						? { RawValue: { type: 'Object', value: normalizeSuiAddress(value) } }
+						: value,
+			  );
 	}
 
 	/**
@@ -320,7 +308,7 @@ export class TransactionBlock {
 	}
 
 	/** Add a transaction to the transaction block. */
-	add(transaction: TransactionType) {
+	add(transaction: Transaction) {
 		const index = this.#blockData.transactions.push(transaction);
 		return createTransactionResult(index - 1);
 	}
@@ -391,20 +379,11 @@ export class TransactionBlock {
 			}),
 		);
 	}
-	moveCall({
-		arguments: args,
-		typeArguments,
-		target,
-	}: {
-		arguments?: (TransactionArgument | SerializedBcs<any>)[];
-		typeArguments?: string[];
-		target: `${string}::${string}::${string}`;
-	}) {
+	moveCall({ arguments: args, ...input }: Parameters<typeof Transactions.MoveCall>[0]) {
 		return this.add(
 			Transactions.MoveCall({
+				...input,
 				arguments: args?.map((arg) => this.#normalizeTransactionArgument(arg)),
-				typeArguments,
-				target,
 			}),
 		);
 	}

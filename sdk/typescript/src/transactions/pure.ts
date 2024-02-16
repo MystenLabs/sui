@@ -4,11 +4,9 @@
 import type { SerializedBcs } from '@mysten/bcs';
 
 import { bcs } from '../bcs/index.js';
-import type { TransactionBlockInput } from './Transactions.js';
+import type { Argument } from './blockData/v2.js';
 
-export function createPure(
-	makePure: (value: unknown, type?: string | undefined) => TransactionBlockInput,
-) {
+export function createPure(makePure: (value: unknown, type?: string | undefined) => Argument) {
 	/**
 	 * Add a new non-object input to the transaction.
 	 */
@@ -18,7 +16,7 @@ export function createPure(
 		 * is assumed to be raw bytes, and will be used directly.
 		 */
 		value: SerializedBcs<any, any> | Uint8Array,
-	): TransactionBlockInput;
+	): Argument;
 	/**
 	 * @deprecated Pass the pure value as SerializedBcs instead.
 	 */
@@ -33,9 +31,9 @@ export function createPure(
 		 * based on how the input is used.
 		 */
 		type?: string,
-	): TransactionBlockInput;
+	): Argument;
 
-	function pure(value: unknown, type?: string): TransactionBlockInput {
+	function pure(value: unknown, type?: string): Argument {
 		return makePure(value, type);
 	}
 

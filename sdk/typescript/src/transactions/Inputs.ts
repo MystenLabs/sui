@@ -3,47 +3,16 @@
 
 import type { SerializedBcs } from '@mysten/bcs';
 import { isSerializedBcs } from '@mysten/bcs';
-import type { Infer } from 'superstruct';
-import { array, bigint, boolean, integer, number, object, string, union } from 'superstruct';
 
 import { bcs } from '../bcs/index.js';
-import type { SharedObjectRef } from '../bcs/index.js';
+import type { ObjectCallArg, PureArg, SharedObjectRef } from '../bcs/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
+import type { CallArg, ObjectRef } from './blockData/v2.js';
 
-export const SuiObjectRef = object({
-	/** Base64 string representing the object digest */
-	digest: string(),
-	/** Hex code as string representing the object id */
-	objectId: string(),
-	/** Object version */
-	version: union([number(), string(), bigint()]),
-});
-export type SuiObjectRef = Infer<typeof SuiObjectRef>;
-
-const ObjectArg = union([
-	object({ ImmOrOwned: SuiObjectRef }),
-	object({
-		Shared: object({
-			objectId: string(),
-			initialSharedVersion: union([integer(), string()]),
-			mutable: boolean(),
-		}),
-	}),
-	object({ Receiving: SuiObjectRef }),
-]);
-
-export const PureCallArg = object({ Pure: array(integer()) });
-export const ObjectCallArg = object({ Object: ObjectArg });
-export type PureCallArg = Infer<typeof PureCallArg>;
-export type ObjectCallArg = Infer<typeof ObjectCallArg>;
-
-export const BuilderCallArg = union([PureCallArg, ObjectCallArg]);
-export type BuilderCallArg = Infer<typeof BuilderCallArg>;
-
-function Pure(data: Uint8Array | SerializedBcs<any>, type?: string): PureCallArg;
+function Pure(data: Uint8Array | SerializedBcs<any>, type?: string): PureArg;
 /** @deprecated pass SerializedBcs values instead */
-function Pure(data: unknown, type?: string): PureCallArg;
-function Pure(data: unknown, type?: string): PureCallArg {
+function Pure(data: unknown, type?: string): PureArg;
+function Pure(data: unknown, type?: string): PureArg {
 	return {
 		Pure: Array.from(
 			data instanceof Uint8Array
@@ -58,10 +27,10 @@ function Pure(data: unknown, type?: string): PureCallArg {
 
 export const Inputs = {
 	Pure,
-	ObjectRef({ objectId, digest, version }: SuiObjectRef): ObjectCallArg {
+	ObjectRef({ objectId, digest, version }: ObjectRef): ObjectCallArg {
 		return {
 			Object: {
-				ImmOrOwned: {
+				ImmOrOwnedObject: {
 					digest,
 					version,
 					objectId: normalizeSuiAddress(objectId),
@@ -72,7 +41,7 @@ export const Inputs = {
 	SharedObjectRef({ objectId, mutable, initialSharedVersion }: SharedObjectRef): ObjectCallArg {
 		return {
 			Object: {
-				Shared: {
+				SharedObject: {
 					mutable,
 					initialSharedVersion,
 					objectId: normalizeSuiAddress(objectId),
@@ -80,7 +49,7 @@ export const Inputs = {
 			},
 		};
 	},
-	ReceivingRef({ objectId, digest, version }: SuiObjectRef): ObjectCallArg {
+	ReceivingRef({ objectId, digest, version }: ObjectRef): ObjectCallArg {
 		return {
 			Object: {
 				Receiving: {
@@ -93,31 +62,44 @@ export const Inputs = {
 	},
 };
 
-export function getIdFromCallArg(arg: string | ObjectCallArg) {
+export function getIdFromCallArg(arg: string | CallArg) {
 	if (typeof arg === 'string') {
 		return normalizeSuiAddress(arg);
 	}
-	if ('ImmOrOwned' in arg.Object) {
-		return normalizeSuiAddress(arg.Object.ImmOrOwned.objectId);
+
+	if ('Object' in arg) {
+		if ('ImmOrOwnedObject' in arg.Object) {
+			return normalizeSuiAddress(arg.Object.ImmOrOwnedObject.objectId);
+		}
+
+		if ('Receiving' in arg.Object) {
+			return normalizeSuiAddress(arg.Object.Receiving.objectId);
+		}
+
+		return normalizeSuiAddress(arg.Object.SharedObject.objectId);
 	}
 
-	if ('Receiving' in arg.Object) {
-		return normalizeSuiAddress(arg.Object.Receiving.objectId);
+	if ('UnresolvedObject' in arg) {
+		return normalizeSuiAddress(arg.UnresolvedObject.value);
 	}
 
-	return normalizeSuiAddress(arg.Object.Shared.objectId);
+	if ('RawValue' in arg && arg.RawValue.type === 'Object') {
+		return normalizeSuiAddress(arg.RawValue.value as string);
+	}
+
+	return undefined;
 }
 
-export function getSharedObjectInput(arg: BuilderCallArg): SharedObjectRef | undefined {
-	return typeof arg === 'object' && 'Object' in arg && 'Shared' in arg.Object
-		? arg.Object.Shared
+export function getSharedObjectInput(arg: CallArg): SharedObjectRef | undefined {
+	return typeof arg === 'object' && 'Object' in arg && 'SharedObject' in arg.Object
+		? arg.Object.SharedObject
 		: undefined;
 }
 
-export function isSharedObjectInput(arg: BuilderCallArg): boolean {
+export function isSharedObjectInput(arg: CallArg): boolean {
 	return !!getSharedObjectInput(arg);
 }
 
-export function isMutableSharedObjectInput(arg: BuilderCallArg): boolean {
+export function isMutableSharedObjectInput(arg: CallArg): boolean {
 	return getSharedObjectInput(arg)?.mutable ?? false;
 }
