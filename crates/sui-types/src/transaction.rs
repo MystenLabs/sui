@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{base_types::*, error::*};
+use super::{base_types::*, error::*, SUI_FRAMEWORK_ADDRESS};
 use crate::authenticator_state::ActiveJwk;
 use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
@@ -32,8 +32,10 @@ use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::Either;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
+use move_core_types::language_storage::StructTag;
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use nonempty::{nonempty, NonEmpty};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
@@ -801,14 +803,20 @@ impl Command {
     }
 
     fn contains_random_object(&self) -> bool {
+        static SUI_RANDOMNESS_STATE_OBJECT_TYPE_TAG: Lazy<TypeTag> = Lazy::new(|| {
+            TypeTag::Struct(Box::from(StructTag {
+                address: SUI_FRAMEWORK_ADDRESS,
+                module: Identifier::new("random").unwrap(),
+                name: Identifier::new("Random").unwrap(),
+                type_params: vec![],
+            }))
+        });
+
         match self {
-            Command::MoveCall(c) => c.input_objects().iter().any(|obj| {
-                if let InputObjectKind::SharedMoveObject { id, .. } = obj {
-                    *id == SUI_RANDOMNESS_STATE_OBJECT_ID
-                } else {
-                    false
-                }
-            }),
+            Command::MoveCall(c) => c
+                .type_arguments
+                .iter()
+                .any(|tag| *tag == *SUI_RANDOMNESS_STATE_OBJECT_TYPE_TAG),
             _ => false,
         }
     }
@@ -961,18 +969,20 @@ impl ProgrammableTransaction {
         }
 
         // A command that uses Random can only be followed by TransferObjects or MergeCoins.
-        let mut used_random_object = false;
-        for command in commands {
-            if !used_random_object {
-                used_random_object = command.contains_random_object();
-            } else {
-                fp_ensure!(
-                    matches!(
-                        command,
-                        Command::TransferObjects(_, _) | Command::MergeCoins(_, _)
-                    ),
-                    UserInputError::PostRandomCommandLimits
-                );
+        if config.enable_randomness_ptb_limits() {
+            let mut used_random_object = false;
+            for command in commands {
+                if !used_random_object {
+                    used_random_object = command.contains_random_object();
+                } else {
+                    fp_ensure!(
+                        matches!(
+                            command,
+                            Command::TransferObjects(_, _) | Command::MergeCoins(_, _)
+                        ),
+                        UserInputError::PostRandomCommandLimits
+                    );
+                }
             }
         }
 

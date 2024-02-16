@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::move_integration_tests::build_and_publish_test_package;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
 use mysten_network::Multiaddr;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::ops::Deref;
+use std::str::FromStr;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::dbg_addr,
@@ -46,7 +50,9 @@ use crate::{
 
 use super::*;
 use fastcrypto::traits::AggregateAuthenticator;
+use move_core_types::identifier::Identifier;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 
 pub use crate::authority::authority_test_utils::init_state_with_ids;
 
@@ -976,6 +982,224 @@ async fn test_oversized_txn() {
         .unwrap()
         .to_string()
         .contains("serialized transaction size exceeded maximum"));
+}
+
+async fn get_object_ref(obj_id: &ObjectID, authority_state: &Arc<AuthorityState>) -> ObjectRef {
+    authority_state
+        .get_object(&obj_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .compute_object_reference()
+}
+
+#[tokio::test]
+async fn test_allowed_pbt_with_random_txn() {
+    telemetry_subscribers::init_for_testing();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let num_of_tx = 9;
+    let obj_ids = (0..num_of_tx)
+        .map(|_| ObjectID::random())
+        .collect::<Vec<_>>();
+    let authority_state =
+        init_state_with_ids(obj_ids.iter().map(|id| (sender, *id)).collect::<Vec<_>>()).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let initial_shared_version =
+        get_randomness_state_obj_initial_shared_version(authority_state.get_object_store())
+            .unwrap()
+            .unwrap();
+
+    // Publish the two packages we will call
+    let random_pkg = build_and_publish_test_package(
+        &authority_state,
+        &sender,
+        &sender_key,
+        &obj_ids[0],
+        "random",
+        /* with_unpublished_deps */ false,
+    )
+    .await
+    .0;
+    let object_basics_pkg = build_and_publish_test_package(
+        &authority_state,
+        &sender,
+        &sender_key,
+        &obj_ids[0],
+        "object_basics",
+        /* with_unpublished_deps */ false,
+    )
+    .await
+    .0;
+
+    // Create a server and a client
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+    let server = AuthorityServer::new_for_test(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+        authority_state.clone(),
+        consensus_address,
+    );
+    let server_handle = server.spawn_for_test().await.unwrap();
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
+
+    let obj_basics_id = Identifier::new("object_basics").unwrap();
+    let share_id = Identifier::new("share").unwrap();
+    let random_id = Identifier::new("random").unwrap();
+    let no_op_id = Identifier::new("no_op").unwrap();
+    let random_tag =
+        TypeTag::from_str(format!("{}::random::Random", SUI_FRAMEWORK_PACKAGE_ID).as_str())
+            .unwrap();
+    let random_arg = CallArg::Object(ObjectArg::SharedObject {
+        id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+        initial_shared_version,
+        mutable: false,
+    });
+
+    // good tx - random.no_op
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            random_pkg,
+            random_id.clone(),
+            no_op_id.clone(),
+            vec![random_tag.clone()],
+            vec![random_arg.clone()],
+        )
+        .unwrap();
+    let tx = to_sender_signed_transaction(
+        TransactionData::new_programmable(
+            sender,
+            vec![get_object_ref(&obj_ids[1], &authority_state).await],
+            builder.finish(),
+            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+            rgp,
+        ),
+        &sender_key,
+    );
+    assert!(client.handle_transaction(tx).await.is_ok());
+
+    // good tx - object_basics.share, random.no_op, transfer, merge (via pay without destinations)
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            object_basics_pkg,
+            obj_basics_id.clone(),
+            share_id.clone(),
+            vec![],
+            vec![],
+        )
+        .unwrap();
+    builder
+        .move_call(
+            random_pkg,
+            random_id.clone(),
+            no_op_id.clone(),
+            vec![random_tag.clone()],
+            vec![random_arg.clone()],
+        )
+        .unwrap();
+    builder
+        .transfer_object(sender, get_object_ref(&obj_ids[2], &authority_state).await)
+        .unwrap();
+    builder
+        .pay(
+            vec![
+                get_object_ref(&obj_ids[3], &authority_state).await,
+                get_object_ref(&obj_ids[4], &authority_state).await,
+            ],
+            vec![],
+            vec![],
+        )
+        .unwrap();
+    let tx = to_sender_signed_transaction(
+        TransactionData::new_programmable(
+            sender,
+            vec![get_object_ref(&obj_ids[5], &authority_state).await],
+            builder.finish(),
+            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+            rgp,
+        ),
+        &sender_key,
+    );
+    assert!(client.handle_transaction(tx).await.is_ok());
+
+    // bad tx - random.no_op, object_basics.share
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            random_pkg,
+            random_id.clone(),
+            no_op_id.clone(),
+            vec![random_tag.clone()],
+            vec![random_arg.clone()],
+        )
+        .unwrap();
+    builder
+        .move_call(
+            object_basics_pkg,
+            obj_basics_id.clone(),
+            share_id.clone(),
+            vec![],
+            vec![],
+        )
+        .unwrap();
+    let tx = to_sender_signed_transaction(
+        TransactionData::new_programmable(
+            sender,
+            vec![get_object_ref(&obj_ids[6], &authority_state).await],
+            builder.finish(),
+            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+            rgp,
+        ),
+        &sender_key,
+    );
+    assert_matches!(
+        client.handle_transaction(tx).await.unwrap_err(),
+        SuiError::UserInputError {
+            error: UserInputError::PostRandomCommandLimits
+        }
+    );
+
+    // bad tx - random.no_op, transfer objects, object_basics.share
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            random_pkg,
+            random_id.clone(),
+            no_op_id.clone(),
+            vec![random_tag.clone()],
+            vec![random_arg.clone()],
+        )
+        .unwrap();
+    builder
+        .transfer_object(sender, get_object_ref(&obj_ids[7], &authority_state).await)
+        .unwrap();
+    builder
+        .move_call(
+            object_basics_pkg,
+            obj_basics_id.clone(),
+            share_id.clone(),
+            vec![],
+            vec![],
+        )
+        .unwrap();
+    let tx = to_sender_signed_transaction(
+        TransactionData::new_programmable(
+            sender,
+            vec![get_object_ref(&obj_ids[8], &authority_state).await],
+            builder.finish(),
+            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+            rgp,
+        ),
+        &sender_key,
+    );
+    assert_matches!(
+        client.handle_transaction(tx).await.unwrap_err(),
+        SuiError::UserInputError {
+            error: UserInputError::PostRandomCommandLimits
+        }
+    );
 }
 
 #[tokio::test]
