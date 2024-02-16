@@ -26,6 +26,21 @@ module bridge::treasury {
         treasuries: ObjectBag
     }
 
+    public fun token_id<T>(): u8 {
+        let coin_type = type_name::get<T>();
+        if (coin_type == type_name::get<BTC>()) {
+            1
+        } else if (coin_type == type_name::get<ETH>()) {
+            2
+        } else if (coin_type == type_name::get<USDC>()) {
+            3
+        } else if (coin_type == type_name::get<USDT>()) {
+            4
+        } else {
+            abort EUnsupportedTokenType
+        }
+    }
+
     public(friend) fun create(ctx: &mut TxContext): BridgeTreasury {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         BridgeTreasury {
@@ -61,20 +76,5 @@ module bridge::treasury {
                 abort EUnsupportedTokenType
             };
         };
-    }
-
-    public fun token_id<T>(): u8 {
-        let coin_type = type_name::get<T>();
-        if (coin_type == type_name::get<BTC>()) {
-            1
-        } else if (coin_type == type_name::get<ETH>()) {
-            2
-        } else if (coin_type == type_name::get<USDC>()) {
-            3
-        } else if (coin_type == type_name::get<USDT>()) {
-            4
-        } else {
-            abort EUnsupportedTokenType
-        }
     }
 }

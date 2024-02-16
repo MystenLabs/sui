@@ -114,31 +114,6 @@ module bridge::bridge {
         transfer::share_object(bridge);
     }
 
-    fun load_inner_mut(
-        self: &mut Bridge,
-    ): &mut BridgeInner {
-        let version = versioned::version(&self.inner);
-
-        // TODO: Replace this with a lazy update function when we add a new version of the inner object.
-        assert!(version == CURRENT_VERSION, EWrongInnerVersion);
-        let inner: &mut BridgeInner = versioned::load_value_mut(&mut self.inner);
-        assert!(inner.bridge_version == version, EWrongInnerVersion);
-        inner
-    }
-
-    #[allow(unused_function)] // TODO: remove annotation after implementing user-facing API
-    fun load_inner(
-        self: &Bridge,
-    ): &BridgeInner {
-        let version = versioned::version(&self.inner);
-
-        // TODO: Replace this with a lazy update function when we add a new version of the inner object.
-        assert!(version == CURRENT_VERSION, EWrongInnerVersion);
-        let inner: &BridgeInner = versioned::load_value(&self.inner);
-        assert!(inner.bridge_version == version, EWrongInnerVersion);
-        inner
-    }
-
     // Create bridge request to send token to other chain, the request will be in pending state until approved
     public fun send_token<T>(
         self: &mut Bridge,
@@ -234,6 +209,82 @@ module bridge::bridge {
         emit(TokenTransferApproved { message_key: key });
     }
 
+
+    // This function can only be called by the token recipient
+    // Abort if the token has already been claimed.
+    public fun claim_token<T>(self: &mut Bridge, source_chain: u8, bridge_seq_num: u64, ctx: &mut TxContext): Coin<T> {
+        let (maybe_token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
+        // Only token owner can claim the token
+        assert!(tx_context::sender(ctx) == owner, EUnauthorisedClaim);
+        assert!(option::is_some(&maybe_token), ETokenAlreadyClaimed);
+        option::destroy_some(maybe_token)
+    }
+
+    // This function can be called by anyone to claim and transfer the token to the recipient
+    // If the token has already been claimed, it will return instead of aborting.
+    public fun claim_and_transfer_token<T>(
+        self: &mut Bridge,
+        source_chain: u8,
+        bridge_seq_num: u64,
+        ctx: &mut TxContext
+    ) {
+        let (token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
+        if (option::is_none(&token)) {
+            option::destroy_none(token);
+            let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
+            emit(TokenTransferAlreadyClaimed { message_key: key });
+            return
+        };
+        transfer::public_transfer(option::destroy_some(token), owner)
+    }
+
+    public fun execute_emergency_op(
+        self: &mut Bridge,
+        message: BridgeMessage,
+        signatures: vector<vector<u8>>,
+    ) {
+        assert!(message::message_type(&message) == message_types::emergency_op(), EUnexpectedMessageType);
+        let inner = load_inner_mut(self);
+        // check emergency ops seq number, emergency ops can only be executed in sequence order.
+        let emergency_op_seq_num = next_seq_num(inner, message_types::emergency_op());
+        assert!(message::seq_num(&message) == emergency_op_seq_num, EUnexpectedSeqNum);
+        committee::verify_signatures(&inner.committee, message, signatures);
+        let payload = message::extract_emergency_op_payload(&message);
+
+        if (message::emergency_op_type(&payload) == FREEZE) {
+            inner.frozen == true;
+        } else if (message::emergency_op_type(&payload) == UNFREEZE) {
+            inner.frozen == false;
+        } else {
+            abort EUnexpectedOperation
+        };
+    }
+
+    fun load_inner_mut(
+        self: &mut Bridge,
+    ): &mut BridgeInner {
+        let version = versioned::version(&self.inner);
+
+        // TODO: Replace this with a lazy update function when we add a new version of the inner object.
+        assert!(version == CURRENT_VERSION, EWrongInnerVersion);
+        let inner: &mut BridgeInner = versioned::load_value_mut(&mut self.inner);
+        assert!(inner.bridge_version == version, EWrongInnerVersion);
+        inner
+    }
+
+    #[allow(unused_function)] // TODO: remove annotation after implementing user-facing API
+    fun load_inner(
+        self: &Bridge,
+    ): &BridgeInner {
+        let version = versioned::version(&self.inner);
+
+        // TODO: Replace this with a lazy update function when we add a new version of the inner object.
+        assert!(version == CURRENT_VERSION, EWrongInnerVersion);
+        let inner: &BridgeInner = versioned::load_value(&self.inner);
+        assert!(inner.bridge_version == version, EWrongInnerVersion);
+        inner
+    }
+
     // Claim token from approved bridge message
     // Returns Some(Coin) if coin can be claimed. If already claimed, return None
     fun claim_token_internal<T>(
@@ -284,56 +335,6 @@ module bridge::bridge {
         record.claimed = true;
         emit(TokenTransferClaimed { message_key: key });
         (option::some(token), owner)
-    }
-
-    // This function can only be called by the token recipient
-    // Abort if the token has already been claimed.
-    public fun claim_token<T>(self: &mut Bridge, source_chain: u8, bridge_seq_num: u64, ctx: &mut TxContext): Coin<T> {
-        let (maybe_token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
-        // Only token owner can claim the token
-        assert!(tx_context::sender(ctx) == owner, EUnauthorisedClaim);
-        assert!(option::is_some(&maybe_token), ETokenAlreadyClaimed);
-        option::destroy_some(maybe_token)
-    }
-
-    // This function can be called by anyone to claim and transfer the token to the recipient
-    // If the token has already been claimed, it will return instead of aborting.
-    public fun claim_and_transfer_token<T>(
-        self: &mut Bridge,
-        source_chain: u8,
-        bridge_seq_num: u64,
-        ctx: &mut TxContext
-    ) {
-        let (token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
-        if (option::is_none(&token)) {
-            option::destroy_none(token);
-            let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
-            emit(TokenTransferAlreadyClaimed { message_key: key });
-            return
-        };
-        transfer::public_transfer(option::destroy_some(token), owner)
-    }
-
-    public fun execute_emergency_op(
-        self: &mut Bridge,
-        message: BridgeMessage,
-        signatures: vector<vector<u8>>,
-    ) {
-        assert!(message::message_type(&message) == message_types::emergency_op(), EUnexpectedMessageType);
-        let inner = load_inner_mut(self);
-        // check emergency ops seq number, emergency ops can only be executed in sequence order.
-        let emergency_op_seq_num = next_seq_num(inner, message_types::emergency_op());
-        assert!(message::seq_num(&message) == emergency_op_seq_num, EUnexpectedSeqNum);
-        committee::verify_signatures(&inner.committee, message, signatures);
-        let payload = message::extract_emergency_op_payload(&message);
-
-        if (message::emergency_op_type(&payload) == FREEZE) {
-            inner.frozen == true;
-        } else if (message::emergency_op_type(&payload) == UNFREEZE) {
-            inner.frozen == false;
-        } else {
-            abort EUnexpectedOperation
-        };
     }
 
     fun next_seq_num(self: &mut BridgeInner, msg_type: u8): u64 {
