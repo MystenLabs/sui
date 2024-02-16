@@ -43,6 +43,9 @@ const STEADY_OVERLOAD_REDUCTION_PERCENTAGE: u32 = 10;
 const EXECUTION_RATE_RATIO_FOR_COMPARISON: f64 = 0.9;
 const ADDITIONAL_LOAD_SHEDDING: f64 = 0.1;
 
+// The update interval of the random seed used to determine whether a txn should be rejected.
+const SEED_UPDATE_DURATION_SECS: u64 = 30;
+
 // Monitors the overload signals in `authority_state` periodically, and updates its `overload_info`
 // when the signals indicates overload.
 pub async fn overload_monitor(
@@ -215,11 +218,11 @@ fn check_overload_signals(
 fn should_reject_tx(
     load_shedding_percentage: u32,
     tx_digest: TransactionDigest,
-    minutes_since_epoch: u64,
+    temporal_seed: u64,
 ) -> bool {
     // TODO: we also need to add a secret salt (e.g. first consensus commit in the current epoch),
     // to prevent gaming the system.
-    let mut hasher = XxHash64::with_seed(minutes_since_epoch);
+    let mut hasher = XxHash64::with_seed(temporal_seed);
     hasher.write(tx_digest.inner());
     let value = hasher.finish();
     value % 100 < load_shedding_percentage as u64
@@ -230,17 +233,23 @@ pub fn overload_monitor_accept_tx(
     load_shedding_percentage: u32,
     tx_digest: TransactionDigest,
 ) -> SuiResult {
-    // Using the minutes_since_epoch as the hash seed to allow rejected transaction's
-    // retry to have a chance to go through in the future.
-    let minutes_since_epoch = SystemTime::now()
+    // Derive a random seed from the epoch time for transaction selection. Changing the seed every
+    // `SEED_UPDATE_DURATION_SECS` interval allows rejected transaction's retry to have a chance
+    // to go through in the future.
+    // Also, using the epoch time instead of randomly generating a seed allows that all validators
+    // makes the same decision.
+    let temporal_seed = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Sui did not exist prior to 1970")
         .as_secs()
-        / 60;
+        / SEED_UPDATE_DURATION_SECS;
 
-    if should_reject_tx(load_shedding_percentage, tx_digest, minutes_since_epoch) {
-        // TODO: complete the suggestion for client retry deadline.
-        fp_bail!(SuiError::ValidatorOverloadedRetryAfter { retry_after_sec: 0 });
+    if should_reject_tx(load_shedding_percentage, tx_digest, temporal_seed) {
+        // TODO: using `SEED_UPDATE_DURATION_SECS` is a safe suggestion that the time based seed
+        // is definitely different by then. However, a shorter suggestion may be available.
+        fp_bail!(SuiError::ValidatorOverloadedRetryAfter {
+            retry_after_secs: SEED_UPDATE_DURATION_SECS
+        });
     }
     Ok(())
 }
@@ -712,31 +721,31 @@ mod tests {
     async fn test_txn_rejection_over_time() {
         let start_time = Instant::now();
         let mut digest = TransactionDigest::random();
-        let mut minutes_since_epoch = 28455473;
+        let mut temporal_seed = 1708108277 / SEED_UPDATE_DURATION_SECS;
         let load_shedding_percentage = 50;
 
         // Find a rejected transaction with 50% rejection rate.
-        while !should_reject_tx(load_shedding_percentage, digest, minutes_since_epoch)
+        while !should_reject_tx(load_shedding_percentage, digest, temporal_seed)
             && start_time.elapsed() < Duration::from_secs(30)
         {
             digest = TransactionDigest::random();
         }
 
-        // It should always be rejected in the current minute.
+        // It should always be rejected using the current temporal_seed.
         for _ in 0..100 {
             assert!(should_reject_tx(
                 load_shedding_percentage,
                 digest,
-                minutes_since_epoch
+                temporal_seed
             ));
         }
 
         // It will be accepted in the future.
-        minutes_since_epoch += 1;
-        while should_reject_tx(load_shedding_percentage, digest, minutes_since_epoch)
+        temporal_seed += 1;
+        while should_reject_tx(load_shedding_percentage, digest, temporal_seed)
             && start_time.elapsed() < Duration::from_secs(30)
         {
-            minutes_since_epoch += 1;
+            temporal_seed += 1;
         }
 
         // Make sure that the tests can finish within 30 seconds.

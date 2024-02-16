@@ -613,8 +613,8 @@ pub enum SuiError {
     #[error("Storage error: {0}")]
     Storage(String),
 
-    #[error("Validator cannot handle the request at the moment. Please retry after at least {retry_after_sec}.")]
-    ValidatorOverloadedRetryAfter { retry_after_sec: u64 },
+    #[error("Validator cannot handle the request at the moment. Please retry after at least {retry_after_secs} seconds.")]
+    ValidatorOverloadedRetryAfter { retry_after_secs: u64 },
 }
 
 #[repr(u64)]
