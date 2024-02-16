@@ -434,9 +434,9 @@ This function handles all events emitted by the `lock` module. It takes an array
 
 As we mentioned earlier, we should expose the indexed data for external consumption through an API Service. Particularly, we will use [Express](https://expressjs.com/) to build a Node.js HTTP API.
 
-## API Design
+### API Design
 
-### WHERE Parameters
+#### Query Parameters
 
 We want our API to accept the query string in the URL as the parameters for database WHERE query. Hence, we want utility that can extract and parse the URL query string into valid query parameters for Prisma. With the `parseWhereStatement()` function, we allow the callers to filter the set of keys from URL query string and transform those corresponding key-value pairs into the correct format for Prisma.
 
@@ -484,7 +484,7 @@ export const parseWhereStatement = (query: Record<string, any>, acceptedParams: 
 };
 ```
 
-### Query Pagination
+#### Query Pagination
 
 Pagination is another crucial part to ensure our API will return sufficient or/and ordered chunk of information instead all the data which might be the vector for DDOS attack. Similar to **WHERE parameters**, we define a set of keys in the URL query string to be accepted as valid pagination parameters. `parsePaginationForQuery()` utility function helps us to achieve this by filtering the pre-determined keys `sort`, `limit`, `cursor` and parsing corresponding key-value pairs into `ApiPagination` which can be consumed by Prisma.
 
