@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use self::metrics::Metrics;
+use self::{auth::AllowedPeersUpdatable, metrics::Metrics};
 use anemo::PeerId;
 use anyhow::Result;
 use fastcrypto::groups::bls12381;
@@ -24,6 +24,7 @@ use sui_types::{
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
 
+mod auth;
 mod builder;
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.Randomness.rs"));
@@ -129,6 +130,7 @@ enum RandomnessMessage {
 struct RandomnessEventLoop {
     mailbox: mpsc::Receiver<RandomnessMessage>,
     network: anemo::Network,
+    allowed_peers: AllowedPeersUpdatable,
     metrics: Metrics,
     randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
 
@@ -212,6 +214,12 @@ impl RandomnessEventLoop {
                 Ok(acc)
             },
         )?);
+        self.allowed_peers.update(Arc::new(
+            authority_info
+                .values()
+                .map(|(peer_id, _)| *peer_id)
+                .collect(),
+        ));
         self.epoch = new_epoch;
         self.authority_info = Arc::new(authority_info);
         self.dkg_output = Some(dkg_output);
@@ -577,7 +585,8 @@ impl RandomnessEventLoop {
             .collect();
 
         loop {
-            // TODO-DNS figure out errors about peers not being found
+            // TODO-DNS figure out errors about peers not being found-probably due to
+            // failed send-to-self?
             let mut requests = FuturesUnordered::new();
             for (name, peer) in &peers {
                 let mut client = RandomnessClient::new(peer.clone());

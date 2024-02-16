@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
 use super::{
-    metrics::Metrics, server::Server, Handle, Randomness, RandomnessEventLoop, RandomnessMessage,
-    RandomnessServer,
+    auth::AllowedPeersUpdatable, metrics::Metrics, server::Server, Handle, RandomnessEventLoop,
+    RandomnessMessage, RandomnessServer,
 };
 use anemo::codegen::InboundRequestLayer;
-use anemo_tower::inflight_limit;
+use anemo_tower::{auth::RequireAuthorizationLayer, inflight_limit};
 use sui_config::p2p::RandomnessConfig;
 use sui_types::{committee::EpochId, crypto::RandomnessRound};
 use tokio::sync::mpsc;
@@ -42,7 +42,7 @@ impl Builder {
         self
     }
 
-    pub fn build(self) -> (UnstartedRandomness, RandomnessServer<impl Randomness>) {
+    pub fn build(self) -> (UnstartedRandomness, anemo::Router) {
         let Builder {
             config,
             metrics,
@@ -57,7 +57,6 @@ impl Builder {
         let server = Server {
             sender: sender.downgrade(),
         };
-        // TODO-DNS add auth layer to reject requests from non-authority peers
         let randomness_server = RandomnessServer::new(server)
             .add_layer_for_send_partial_signatures(InboundRequestLayer::new(
                 inflight_limit::InflightLimitLayer::new(
@@ -66,14 +65,20 @@ impl Builder {
                 ),
             ));
 
+        let allowed_peers = AllowedPeersUpdatable::new(Arc::new(HashSet::new()));
+        let router = anemo::Router::new()
+            .route_layer(RequireAuthorizationLayer::new(allowed_peers.clone()))
+            .add_rpc_service(randomness_server);
+
         (
             UnstartedRandomness {
                 handle,
                 mailbox,
+                allowed_peers,
                 metrics,
                 randomness_tx,
             },
-            randomness_server,
+            router,
         )
     }
 }
@@ -82,6 +87,7 @@ impl Builder {
 pub struct UnstartedRandomness {
     pub(super) handle: Handle,
     pub(super) mailbox: mpsc::Receiver<RandomnessMessage>,
+    pub(super) allowed_peers: AllowedPeersUpdatable,
     pub(super) metrics: Metrics,
     pub(super) randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
 }
@@ -91,6 +97,7 @@ impl UnstartedRandomness {
         let Self {
             handle,
             mailbox,
+            allowed_peers,
             metrics,
             randomness_tx,
         } = self;
@@ -98,6 +105,7 @@ impl UnstartedRandomness {
             RandomnessEventLoop {
                 mailbox,
                 network,
+                allowed_peers,
                 metrics,
                 randomness_tx,
 

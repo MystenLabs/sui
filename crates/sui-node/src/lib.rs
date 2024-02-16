@@ -947,7 +947,7 @@ impl SuiNode {
             .config(config.p2p_config.clone())
             .build();
 
-        let (randomness, randomness_server) = randomness::Builder::new(randomness_tx)
+        let (randomness, randomness_router) = randomness::Builder::new(randomness_tx)
             .config(config.p2p_config.randomness.clone().unwrap_or_default())
             .with_metrics(prometheus_registry)
             .build();
@@ -955,8 +955,8 @@ impl SuiNode {
         let p2p_network = {
             let routes = anemo::Router::new()
                 .add_rpc_service(discovery_server)
-                .add_rpc_service(state_sync_server)
-                .add_rpc_service(randomness_server);
+                .add_rpc_service(state_sync_server);
+            let routes = routes.merge(randomness_router);
 
             let inbound_network_metrics =
                 NetworkMetrics::new("sui", "inbound", prometheus_registry);

@@ -21,7 +21,9 @@ sui-types.workspace = true
 sui-config.workspace = true
 sui-swarm-config.workspace = true
 
+arc-swap.workspace = true
 bcs.workspace = true
+bytes.workspace = true
 fastcrypto.workspace = true
 fastcrypto-tbls.workspace = true
 mysten-network.workspace = true
