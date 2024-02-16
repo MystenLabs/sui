@@ -537,10 +537,6 @@ pub enum SuiError {
     HandleConsensusTransactionFailure(String),
 
     // Cryptography errors.
-    #[error("Signature seed invalid length, input byte size was: {0}")]
-    SignatureSeedInvalidLength(usize),
-    #[error("HKDF error: {0}")]
-    HkdfError(String),
     #[error("Signature key generation error: {0}")]
     SignatureKeyGenError(String),
     #[error("Key Conversion Error: {0}")]
@@ -703,17 +699,6 @@ impl From<&str> for SuiError {
         }
     }
 }
-
-// impl From<FastCryptoError> for SuiError {
-//     fn from(kind: FastCryptoError) -> Self {
-//         match kind {
-//             FastCryptoError::InvalidSignature => SuiError::InvalidSignature {
-//                 error: "Invalid signature".to_string(),
-//             },
-//             _ => SuiError::Unknown("Unknown cryptography error".to_string()),
-//         }
-//     }
-// }
 
 impl TryFrom<SuiError> for UserInputError {
     type Error = anyhow::Error;

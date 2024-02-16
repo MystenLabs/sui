@@ -1,15 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::ZkLoginAuthenticator;
-use crate::crypto::{PublicKey, Signature, SignatureScheme, SuiKeyPair, ZkLoginPublicIdentifier};
-use crate::error::SuiError;
+use crate::crypto::{PublicKey, SignatureScheme, ZkLoginPublicIdentifier};
+
 use crate::signature::{AuthenticatorTrait, VerifyParams};
-use crate::utils::{
-    get_legacy_zklogin_user_address, get_zklogin_user_address, make_transaction_data,
-    make_zklogin_tx, sign_zklogin_personal_msg,
-};
-use crate::utils::{load_test_vectors, TestData, SHORT_ADDRESS_SEED};
+use crate::utils::{get_zklogin_user_address, make_zklogin_tx, sign_zklogin_personal_msg};
+use crate::utils::{load_test_vectors, SHORT_ADDRESS_SEED};
 use crate::{
     base_types::SuiAddress, signature::GenericSignature, zk_login_util::DEFAULT_JWK_BYTES,
 };
@@ -22,92 +18,8 @@ use im::hashmap::HashMap as ImHashMap;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 
 #[test]
-fn zklogin_authenticator_jwk() {
-    let (user_address, tx, authenticator) = make_zklogin_tx(get_zklogin_user_address(), false);
-    let intent_msg = IntentMessage::new(
-        Intent::sui_transaction(),
-        tx.into_data().transaction_data().clone(),
-    );
-
-    // Create sui address derived with a legacy way.
-    let (legacy_user_address, legacy_tx, legacy_authenticator) =
-        make_zklogin_tx(get_legacy_zklogin_user_address(), true);
-    let legacy_intent_msg = IntentMessage::new(
-        Intent::sui_transaction(),
-        legacy_tx.into_data().transaction_data().clone(),
-    );
-
-    let parsed: ImHashMap<JwkId, JWK> = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch)
-        .unwrap()
-        .into_iter()
-        .collect();
-
-    // Construct the required info to verify a zk login authenticator, jwks, supported providers list and env (prod/test).
-    let aux_verify_data = VerifyParams::new(parsed.clone(), vec![], ZkLoginEnv::Test, true, true);
-
-    let file = std::fs::File::open("./src/unit_tests/zklogin_test_vectors.json")
-        .expect("Unable to open file");
-    let test_datum: Vec<TestData> = serde_json::from_reader(file).unwrap();
-
-    for test in test_datum {
-        let kp = SuiKeyPair::decode(&test.kp).unwrap();
-        let inputs = ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap();
-        let pk_zklogin = PublicKey::from_zklogin_inputs(&inputs).unwrap();
-
-        let addr = (&pk_zklogin).into();
-        let tx_data = make_transaction_data(addr);
-        let msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
-        let eph_sig = Signature::new_secure(&msg, &kp);
-        let generic_sig =
-            GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(inputs, 10, eph_sig));
-        let res = generic_sig.verify_authenticator(&msg, addr, Some(0), &aux_verify_data);
-        assert!(res.is_ok());
-    }
-
-    let res = legacy_authenticator.verify_authenticator(
-        &legacy_intent_msg,
-        legacy_user_address,
-        Some(0),
-        &aux_verify_data,
-    );
-    // Verify passes for legacy address derivation.
-    assert_eq!(
-        res.unwrap_err(),
-        SuiError::InvalidSignature {
-            error: "General cryptographic error: Groth16 proof verify failed".to_string()
-        }
-    );
-
-    let aux_verify_data =
-        VerifyParams::new(Default::default(), vec![], ZkLoginEnv::Test, true, true);
-    let res =
-        authenticator.verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data);
-    assert!(res.is_err());
-
-    // Epoch expired fails to verify.
-    let aux_verify_data = VerifyParams::new(parsed.clone(), vec![], ZkLoginEnv::Test, true, true);
-    assert!(authenticator
-        .verify_authenticator(&intent_msg, user_address, Some(11), &aux_verify_data)
-        .is_err());
-    let parsed: ImHashMap<JwkId, JWK> = parsed
-        .into_iter()
-        .map(|(jwk_id, v)| {
-            (
-                JwkId::new(format!("nosuchkey_{}", jwk_id.iss), jwk_id.kid),
-                v,
-            )
-        })
-        .collect();
-
-    // Correct kid can no longer be found fails to verify.
-    let aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true);
-    assert!(authenticator
-        .verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data)
-        .is_err());
-}
-
-#[test]
 fn test_serde_zk_login_signature() {
+    // consistency test with typescript: sdk/typescript/test/unit/zklogin/signature.test.ts
     use fastcrypto::encoding::Encoding;
     let (user_address, _tx, authenticator) = make_zklogin_tx(get_zklogin_user_address(), false);
     let serialized = authenticator.as_ref();
@@ -121,7 +33,7 @@ fn test_serde_zk_login_signature() {
 
 #[test]
 fn test_serde_zk_public_identifier() {
-    let (_, _, inputs) = &load_test_vectors()[0];
+    let (_, _, inputs) = &load_test_vectors("./src/unit_tests/zklogin_test_vectors.json")[0];
     let modified_inputs =
         ZkLoginInputs::from_json(&serde_json::to_string(&inputs).unwrap(), SHORT_ADDRESS_SEED)
             .unwrap();
