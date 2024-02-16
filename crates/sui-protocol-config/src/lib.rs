@@ -114,6 +114,9 @@ const MAX_PROTOCOL_VERSION: u64 = 41;
 //             Extra version to fix `test_upgrade_compatibility` simtest.
 // Version 40:
 // Version 41: Migrate sui framework and related code to Move 2024
+// Version 42: Add native bridge.
+//             Enable native bridge in devnet
+
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -336,6 +339,10 @@ struct FeatureFlags {
     // Enable random beacon protocol
     #[serde(skip_serializing_if = "is_false")]
     random_beacon: bool,
+
+    // Enable bridge protocol
+    #[serde(skip_serializing_if = "is_false")]
+    bridge: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     enable_effects_v2: bool,
@@ -1132,6 +1139,15 @@ impl ProtocolConfig {
 
     pub fn random_beacon(&self) -> bool {
         self.feature_flags.random_beacon
+    }
+
+    pub fn enable_bridge(&self) -> bool {
+        let ret = self.feature_flags.bridge;
+        if ret {
+            // bridge required end-of-epoch transactions
+            assert!(self.feature_flags.end_of_epoch_transaction_supported);
+        }
+        ret
     }
 
     pub fn enable_effects_v2(&self) -> bool {
@@ -1970,6 +1986,12 @@ impl ProtocolConfig {
                 }
                 40 => {}
                 41 => {}
+                42 => {
+                    // enable bridge in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.bridge = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
