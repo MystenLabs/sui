@@ -986,7 +986,7 @@ async fn test_oversized_txn() {
 
 async fn get_object_ref(obj_id: &ObjectID, authority_state: &Arc<AuthorityState>) -> ObjectRef {
     authority_state
-        .get_object(&obj_id)
+        .get_object(obj_id)
         .await
         .unwrap()
         .unwrap()
