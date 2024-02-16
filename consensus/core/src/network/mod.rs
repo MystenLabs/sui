@@ -19,7 +19,7 @@ pub(crate) mod anemo_network;
 
 /// Network client for communicating with peers.
 #[async_trait]
-pub trait NetworkClient: Send + Sync + 'static {
+pub(crate) trait NetworkClient: Send + Sync + 'static {
     /// Sends a serialized SignedBlock to a peer.
     async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()>;
 
@@ -35,7 +35,7 @@ pub trait NetworkClient: Send + Sync + 'static {
 /// NOTE: using `async_trait` macro because `NetworkService` methods are called in the trait impl
 /// of `anemo_gen::ConsensusRpc`, which itself is annotated with `async_trait`.
 #[async_trait]
-pub trait NetworkService: Send + Sync + 'static {
+pub(crate) trait NetworkService: Send + Sync + 'static {
     async fn handle_send_block(&self, peer: AuthorityIndex, block: Bytes) -> ConsensusResult<()>;
     async fn handle_fetch_blocks(
         &self,
@@ -46,7 +46,7 @@ pub trait NetworkService: Send + Sync + 'static {
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.
 /// Dropping `NetworkManager` will shutdown the network service.
-pub trait NetworkManager<S>: Send + Sync
+pub(crate) trait NetworkManager<S>: Send + Sync
 where
     S: NetworkService,
 {
@@ -62,8 +62,6 @@ where
     fn install_service(&self, network_keypair: NetworkKeyPair, service: Arc<S>);
 
     /// Stops the network service.
-    // TODO: Investigate if we need to use async fn here
-    #[allow(async_fn_in_trait)]
     async fn stop(&self);
 }
 

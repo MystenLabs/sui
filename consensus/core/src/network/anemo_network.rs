@@ -28,7 +28,7 @@ use crate::{
 };
 
 /// Implements RPC client for Consensus.
-pub struct AnemoClient {
+pub(crate) struct AnemoClient {
     context: Arc<Context>,
     network: Arc<ArcSwapOption<anemo::Network>>,
 }
@@ -230,14 +230,14 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
 /// 3. Create consensus components.
 /// 4. Create `AnemoService` for consensus RPC handler.
 /// 5. Install `AnemoService` to `AnemoManager` with `AnemoManager::install_service()`.
-pub struct AnemoManager {
+pub(crate) struct AnemoManager {
     context: Arc<Context>,
     client: Arc<AnemoClient>,
     network: Arc<ArcSwapOption<anemo::Network>>,
 }
 
 impl AnemoManager {
-    pub fn new(context: Arc<Context>) -> Self {
+    pub(crate) fn new(context: Arc<Context>) -> Self {
         Self {
             context: context.clone(),
             client: Arc::new(AnemoClient::new(context)),
@@ -415,7 +415,7 @@ mod test {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_basics() {
         let (context, keys) = Context::new_for_test(4);
 

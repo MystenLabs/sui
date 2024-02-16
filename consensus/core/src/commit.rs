@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    fmt::{self, Display, Formatter},
-    sync::Arc,
-};
+use std::fmt::{self, Display, Formatter};
 
 use consensus_config::AuthorityIndex;
 use serde::{Deserialize, Serialize};
@@ -80,30 +77,6 @@ impl CommittedSubDag {
         }
     }
 
-    // Used for recovery, which is why we need to get the data from block store.
-    pub fn new_from_commit_data(commit_data: Commit, block_store: Arc<dyn Store>) -> Self {
-        let mut leader_block_idx = None;
-        let commit_blocks = block_store
-            .read_blocks(&commit_data.blocks)
-            .expect("We should have the block referenced in the commit data");
-        let blocks = commit_blocks
-            .into_iter()
-            .enumerate()
-            .map(|(idx, commit_block_opt)| {
-                let commit_block = commit_block_opt
-                    .expect("We should have the block referenced in the commit data");
-                if commit_block.reference() == commit_data.leader {
-                    leader_block_idx = Some(idx);
-                }
-                commit_block
-            })
-            .collect::<Vec<_>>();
-        let leader_block_idx = leader_block_idx.expect("Leader block must be in the sub-dag");
-        let leader_block_ref = blocks[leader_block_idx].reference();
-        let timestamp_ms = blocks[leader_block_idx].timestamp_ms();
-        CommittedSubDag::new(leader_block_ref, blocks, timestamp_ms, commit_data.index)
-    }
-
     /// Sort the blocks of the sub-dag by round number then authority index. Any
     /// deterministic & stable algorithm works.
     pub fn sort(&mut self) {
@@ -140,6 +113,33 @@ impl fmt::Debug for CommittedSubDag {
         }
         write!(f, ")")
     }
+}
+
+// Recovers the full CommittedSubDag from block store, based on Commit.
+pub fn load_committed_subdag_from_store(
+    block_store: &dyn Store,
+    commit_data: Commit,
+) -> CommittedSubDag {
+    let mut leader_block_idx = None;
+    let commit_blocks = block_store
+        .read_blocks(&commit_data.blocks)
+        .expect("We should have the block referenced in the commit data");
+    let blocks = commit_blocks
+        .into_iter()
+        .enumerate()
+        .map(|(idx, commit_block_opt)| {
+            let commit_block =
+                commit_block_opt.expect("We should have the block referenced in the commit data");
+            if commit_block.reference() == commit_data.leader {
+                leader_block_idx = Some(idx);
+            }
+            commit_block
+        })
+        .collect::<Vec<_>>();
+    let leader_block_idx = leader_block_idx.expect("Leader block must be in the sub-dag");
+    let leader_block_ref = blocks[leader_block_idx].reference();
+    let timestamp_ms = blocks[leader_block_idx].timestamp_ms();
+    CommittedSubDag::new(leader_block_ref, blocks, timestamp_ms, commit_data.index)
 }
 
 #[allow(unused)]
@@ -181,7 +181,7 @@ pub(crate) enum LeaderStatus {
 
 #[allow(unused)]
 impl LeaderStatus {
-    pub fn round(&self) -> Round {
+    pub(crate) fn round(&self) -> Round {
         match self {
             Self::Commit(block) => block.round(),
             Self::Skip(leader) => leader.round,
@@ -189,7 +189,7 @@ impl LeaderStatus {
         }
     }
 
-    pub fn authority(&self) -> AuthorityIndex {
+    pub(crate) fn authority(&self) -> AuthorityIndex {
         match self {
             Self::Commit(block) => block.author(),
             Self::Skip(leader) => leader.authority,
@@ -197,7 +197,7 @@ impl LeaderStatus {
         }
     }
 
-    pub fn is_decided(&self) -> bool {
+    pub(crate) fn is_decided(&self) -> bool {
         match self {
             Self::Commit(_) => true,
             Self::Skip(_) => true,
@@ -218,8 +218,9 @@ impl Display for LeaderStatus {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::sync::Arc;
 
+    use super::*;
     use crate::{block::TestBlock, context::Context, storage::mem_store::MemStore};
 
     #[test]
@@ -282,7 +283,7 @@ mod tests {
             last_committed_rounds: vec![],
         };
 
-        let subdag = CommittedSubDag::new_from_commit_data(commit_data, store.clone());
+        let subdag = load_committed_subdag_from_store(store.as_ref(), commit_data);
         assert_eq!(subdag.leader, leader_ref);
         assert_eq!(subdag.timestamp_ms, leader_block.timestamp_ms());
         assert_eq!(
