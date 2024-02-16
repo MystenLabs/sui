@@ -14,15 +14,6 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/named_blocks_invalid_3.move:4:14
-  │
-4 │         'name: {
-  │              ^
-  │              │
-  │              Unexpected ':'
-  │              Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E04007]: incompatible types
   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:4:14
   │
@@ -56,15 +47,6 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E01002]: unexpected token
-   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:11:19
-   │
-11 │         loop 'name: {
-   │                   ^
-   │                   │
-   │                   Unexpected ':'
-   │                   Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E04007]: incompatible types
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:11:19
    │
@@ -97,15 +79,6 @@ error[E13001]: feature is not supported in specified edition
    │              ^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
-error[E01002]: unexpected token
-   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:17:20
-   │
-17 │         loop 'outer: {
-   │                    ^
-   │                    │
-   │                    Unexpected ':'
-   │                    Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:17:20
@@ -154,15 +127,6 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E01002]: unexpected token
-   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:26:28
-   │
-26 │         while (cond) 'outer: {
-   │                            ^
-   │                            │
-   │                            Unexpected ':'
-   │                            Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:27:26
    │
@@ -199,15 +163,6 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E01002]: unexpected token
-   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:35:28
-   │
-35 │         while (cond) 'outer: {
-   │                            ^
-   │                            │
-   │                            Unexpected ':'
-   │                            Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:36:22
    │
@@ -235,15 +190,6 @@ error[E13001]: feature is not supported in specified edition
    │              ^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
-error[E01002]: unexpected token
-   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:45:16
-   │
-45 │         loop 'l: {
-   │                ^
-   │                │
-   │                Unexpected ':'
-   │                Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/parser/named_blocks_invalid_3.move:46:18

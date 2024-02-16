@@ -15,15 +15,6 @@ error[E01002]: unexpected token
   │             Unexpected 'mut'
   │             Expected an identifier
 
-error[E01002]: unexpected token
-  ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:13
-  │
-6 │         S { mut f } = s1;
-  │             ^^^
-  │             │
-  │             Unexpected 'mut'
-  │             Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E06001]: unused value without 'drop'
   ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:13
   │

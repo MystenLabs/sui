@@ -7,12 +7,3 @@ error[E01002]: unexpected token
   │                       To match this '<'
   │                       Perhaps you need a blank space before this '<' operator?
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/vector_literal_unclosed_type_args.move:4:27
-  │
-4 │         let v = vector<u64[0, 1];
-  │                           ^
-  │                           │
-  │                           Unexpected '['
-  │                           Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-

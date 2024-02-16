@@ -6,12 +6,3 @@ error[E01002]: unexpected token
   │
   = Character literals are not supported, and string literals use double-quote (").
 
-error[E01002]: unexpected token
-  ┌─ tests/move_2024/parser/invalid_labels_0.move:3:21
-  │
-3 │         let _x = 'a';
-  │                     ^
-  │                     │
-  │                     Unexpected ';'
-  │                     Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-

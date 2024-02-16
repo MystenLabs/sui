@@ -6,12 +6,3 @@ error[E01002]: unexpected token
   │                   │          
   │                   To match this '('
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/type_mut_space.move:5:29
-  │
-5 │     public fun foo(x: & mut S): & mut S {
-  │                             ^
-  │                             │
-  │                             Unexpected 'S'
-  │                             Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-

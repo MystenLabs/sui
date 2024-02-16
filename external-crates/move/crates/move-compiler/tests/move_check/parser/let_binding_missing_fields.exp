@@ -15,15 +15,6 @@ error[E01002]: unexpected token
   │                          Unexpected '='
   │                          Expected '{'
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/let_binding_missing_fields.move:6:26
-  │
-6 │         let Generic<u64> = g; // Test a type name with no field bindings
-  │                          ^
-  │                          │
-  │                          Unexpected '='
-  │                          Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E06001]: unused value without 'drop'
   ┌─ tests/move_check/parser/let_binding_missing_fields.move:6:26
   │

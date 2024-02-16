@@ -14,15 +14,6 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/named_blocks_invalid_2.move:4:15
-  │
-4 │         'name {
-  │               ^
-  │               │
-  │               Unexpected '{'
-  │               Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E04007]: incompatible types
   ┌─ tests/move_check/parser/named_blocks_invalid_2.move:4:15
   │

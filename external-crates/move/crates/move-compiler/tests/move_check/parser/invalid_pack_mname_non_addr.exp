@@ -8,15 +8,6 @@ error[E01002]: unexpected token
   │              Expected ';'
 
 error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/invalid_pack_mname_non_addr.move:4:14
-  │
-4 │         false::M::S { }
-  │              ^^
-  │              │
-  │              Unexpected '::'
-  │              Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
-error[E01002]: unexpected token
   ┌─ tests/move_check/parser/invalid_pack_mname_non_addr.move:8:9
   │
 8 │         fun bar()::bar()::M::S { }
@@ -41,13 +32,4 @@ error[E01002]: unexpected token
   │                  │
   │                  Unexpected '::'
   │                  Expected '{'
-
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/invalid_pack_mname_non_addr.move:8:18
-  │
-8 │         fun bar()::bar()::M::S { }
-  │                  ^^
-  │                  │
-  │                  Unexpected '::'
-  │                  Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 

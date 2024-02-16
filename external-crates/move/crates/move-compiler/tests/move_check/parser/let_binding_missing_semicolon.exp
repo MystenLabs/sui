@@ -7,9 +7,3 @@ error[E01002]: unexpected token
   │     Unexpected '}'
   │     Expected ';'
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/let_binding_missing_semicolon.move:5:1
-  │
-5 │ }
-  │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'
-

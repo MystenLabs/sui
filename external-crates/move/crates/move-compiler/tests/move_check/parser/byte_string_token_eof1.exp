@@ -16,9 +16,3 @@ error[E04007]: incompatible types
   │     Invalid return expression
   │     Given: '()'
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/byte_string_token_eof1.move:5:1
-  │
-5 │ }
-  │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'
-

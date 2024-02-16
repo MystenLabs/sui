@@ -4,15 +4,6 @@ error[E01012]: invalid identifier escape
 4 │     fun foo(`x: u64): u64 { `x }
   │             ^^ Missing closing backtick (`) for restricted identifier escaping
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/unmatched_restricted_identifier.move:4:15
-  │
-4 │     fun foo(`x: u64): u64 { `x }
-  │               ^
-  │               │
-  │               Unexpected ':'
-  │               Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E01012]: invalid identifier escape
   ┌─ tests/move_check/parser/unmatched_restricted_identifier.move:4:29
   │

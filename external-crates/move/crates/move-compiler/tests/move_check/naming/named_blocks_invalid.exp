@@ -14,15 +14,6 @@ error[E13001]: feature is not supported in specified edition
   │
   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/naming/named_blocks_invalid.move:3:14
-  │
-3 │         'name: {
-  │              ^
-  │              │
-  │              Unexpected ':'
-  │              Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E04007]: incompatible types
   ┌─ tests/move_check/naming/named_blocks_invalid.move:3:14
   │
@@ -62,15 +53,6 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E01002]: unexpected token
-   ┌─ tests/move_check/naming/named_blocks_invalid.move:11:19
-   │
-11 │         loop 'name: {
-   │                   ^
-   │                   │
-   │                   Unexpected ':'
-   │                   Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E04007]: incompatible types
    ┌─ tests/move_check/naming/named_blocks_invalid.move:11:19
    │
@@ -103,15 +85,6 @@ error[E13001]: feature is not supported in specified edition
    │              ^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
-error[E01002]: unexpected token
-   ┌─ tests/move_check/naming/named_blocks_invalid.move:17:20
-   │
-17 │         loop 'outer: {
-   │                    ^
-   │                    │
-   │                    Unexpected ':'
-   │                    Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/naming/named_blocks_invalid.move:17:20
@@ -160,15 +133,6 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E01002]: unexpected token
-   ┌─ tests/move_check/naming/named_blocks_invalid.move:26:28
-   │
-26 │         while (cond) 'outer: {
-   │                            ^
-   │                            │
-   │                            Unexpected ':'
-   │                            Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:27:26
    │
@@ -205,15 +169,6 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E01002]: unexpected token
-   ┌─ tests/move_check/naming/named_blocks_invalid.move:35:28
-   │
-35 │         while (cond) 'outer: {
-   │                            ^
-   │                            │
-   │                            Unexpected ':'
-   │                            Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:36:22
    │
@@ -241,15 +196,6 @@ error[E13001]: feature is not supported in specified edition
    │              ^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
-error[E01002]: unexpected token
-   ┌─ tests/move_check/naming/named_blocks_invalid.move:45:16
-   │
-45 │         loop 'l: {
-   │                ^
-   │                │
-   │                Unexpected ':'
-   │                Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:46:18
@@ -280,15 +226,6 @@ error[E13001]: feature is not supported in specified edition
    │         ^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
-error[E01002]: unexpected token
-   ┌─ tests/move_check/naming/named_blocks_invalid.move:53:14
-   │
-53 │         'name: {
-   │              ^
-   │              │
-   │              Unexpected ':'
-   │              Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/naming/named_blocks_invalid.move:53:14
@@ -322,15 +259,6 @@ error[E13001]: feature is not supported in specified edition
    │              ^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
-error[E01002]: unexpected token
-   ┌─ tests/move_check/naming/named_blocks_invalid.move:60:19
-   │
-60 │         loop 'name: {
-   │                   ^
-   │                   │
-   │                   Unexpected ':'
-   │                   Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/naming/named_blocks_invalid.move:60:19
@@ -370,15 +298,6 @@ error[E13001]: feature is not supported in specified edition
    │              ^^^^^^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
-error[E01002]: unexpected token
-   ┌─ tests/move_check/naming/named_blocks_invalid.move:67:21
-   │
-67 │         loop 'outer2: {
-   │                     ^
-   │                     │
-   │                     Unexpected ':'
-   │                     Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/naming/named_blocks_invalid.move:67:21
@@ -427,15 +346,6 @@ error[E13001]: feature is not supported in specified edition
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
 
-error[E01002]: unexpected token
-   ┌─ tests/move_check/naming/named_blocks_invalid.move:76:28
-   │
-76 │         while (cond) 'outer: {
-   │                            ^
-   │                            │
-   │                            Unexpected ':'
-   │                            Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:77:26
    │
@@ -463,15 +373,6 @@ error[E13001]: feature is not supported in specified edition
    │              ^^ Block labels are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
    │
    = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
-
-error[E01002]: unexpected token
-   ┌─ tests/move_check/naming/named_blocks_invalid.move:85:16
-   │
-85 │         loop 'l: {
-   │                ^
-   │                │
-   │                Unexpected ':'
-   │                Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 
 error[E13001]: feature is not supported in specified edition
    ┌─ tests/move_check/naming/named_blocks_invalid.move:86:18

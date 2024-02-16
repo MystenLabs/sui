@@ -7,12 +7,3 @@ error[E01002]: unexpected token
   │                 Unexpected ';'
   │                 Expected '('
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/expansion/type_arguments_on_field_access.move:6:17
-  │
-6 │         x.f<u64>;
-  │                 ^
-  │                 │
-  │                 Unexpected ';'
-  │                 Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-

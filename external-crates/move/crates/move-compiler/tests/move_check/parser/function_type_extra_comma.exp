@@ -4,12 +4,3 @@ error[E01002]: unexpected token
 2 │     fun fn<,T>() { } // Test a comma before the first type parameter
   │            ^ Expected a type parameter
 
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/function_type_extra_comma.move:2:12
-  │
-2 │     fun fn<,T>() { } // Test a comma before the first type parameter
-  │            ^
-  │            │
-  │            Unexpected ','
-  │            Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
-
