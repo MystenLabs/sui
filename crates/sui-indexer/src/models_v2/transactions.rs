@@ -17,10 +17,10 @@ use sui_types::event::Event;
 use sui_types::transaction::SenderSignedData;
 
 use crate::errors::IndexerError;
-use crate::schema_v2::transactions;
-use crate::types_v2::IndexedObjectChange;
-use crate::types_v2::IndexedTransaction;
-use crate::types_v2::IndexerResult;
+use crate::schema::transactions;
+use crate::types::IndexedObjectChange;
+use crate::types::IndexedTransaction;
+use crate::types::IndexerResult;
 
 #[derive(Clone, Debug, Queryable, Insertable, QueryableByName)]
 #[diesel(table_name = transactions)]

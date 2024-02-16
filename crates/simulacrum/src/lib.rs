@@ -11,6 +11,7 @@
 //! [`Simulacrum`]: crate::Simulacrum
 
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use fastcrypto::traits::Signer;
@@ -24,7 +25,7 @@ use sui_types::base_types::{AuthorityName, ObjectID, VersionNumber};
 use sui_types::crypto::AuthoritySignature;
 use sui_types::digests::ConsensusCommitDigest;
 use sui_types::object::Object;
-use sui_types::storage::ObjectStore;
+use sui_types::storage::{ObjectStore, ReadStore};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::transaction::EndOfEpochTransactionKind;
 use sui_types::{
@@ -403,6 +404,111 @@ impl<T, V: store::SimulatorStore> ObjectStore for Simulacrum<T, V> {
         version: VersionNumber,
     ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         self.store.get_object_by_key(object_id, version)
+    }
+}
+
+impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
+    fn get_committee(
+        &self,
+        _epoch: sui_types::committee::EpochId,
+    ) -> sui_types::storage::error::Result<Option<std::sync::Arc<Committee>>> {
+        todo!()
+    }
+
+    fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        Ok(self.store().get_highest_checkpint().unwrap())
+    }
+
+    fn get_highest_verified_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        todo!()
+    }
+
+    fn get_highest_synced_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        todo!()
+    }
+
+    fn get_lowest_available_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<sui_types::messages_checkpoint::CheckpointSequenceNumber>
+    {
+        // TODO wire this up to the underlying sim store, for now this will work since we never
+        // prune the sim store
+        Ok(0)
+    }
+
+    fn get_checkpoint_by_digest(
+        &self,
+        digest: &sui_types::messages_checkpoint::CheckpointDigest,
+    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
+        Ok(self.store().get_checkpoint_by_digest(digest))
+    }
+
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
+        Ok(self
+            .store()
+            .get_checkpoint_by_sequence_number(sequence_number))
+    }
+
+    fn get_checkpoint_contents_by_digest(
+        &self,
+        digest: &sui_types::messages_checkpoint::CheckpointContentsDigest,
+    ) -> sui_types::storage::error::Result<Option<sui_types::messages_checkpoint::CheckpointContents>>
+    {
+        Ok(self.store().get_checkpoint_contents(digest))
+    }
+
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        _sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<Option<sui_types::messages_checkpoint::CheckpointContents>>
+    {
+        todo!()
+    }
+
+    fn get_transaction(
+        &self,
+        tx_digest: &sui_types::digests::TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<Arc<VerifiedTransaction>>> {
+        Ok(self.store().get_transaction(tx_digest).map(Arc::new))
+    }
+
+    fn get_transaction_effects(
+        &self,
+        tx_digest: &sui_types::digests::TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<TransactionEffects>> {
+        Ok(self.store().get_transaction_effects(tx_digest))
+    }
+
+    fn get_events(
+        &self,
+        event_digest: &sui_types::digests::TransactionEventsDigest,
+    ) -> sui_types::storage::error::Result<Option<sui_types::effects::TransactionEvents>> {
+        Ok(self.store().get_transaction_events(event_digest))
+    }
+
+    fn get_full_checkpoint_contents_by_sequence_number(
+        &self,
+        _sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
+    > {
+        todo!()
+    }
+
+    fn get_full_checkpoint_contents(
+        &self,
+        _digest: &sui_types::messages_checkpoint::CheckpointContentsDigest,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
+    > {
+        todo!()
     }
 }
 

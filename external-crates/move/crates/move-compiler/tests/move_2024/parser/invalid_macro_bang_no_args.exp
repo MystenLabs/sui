@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/invalid_macro_bang_no_args.move:3:21
+  │
+3 │     fun bar() { foo!; }
+  │                     ^
+  │                     │
+  │                     Unexpected ';'
+  │                     Expected '('
+

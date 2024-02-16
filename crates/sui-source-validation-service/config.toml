@@ -2,66 +2,72 @@
 source = "Repository"
 [packages.values]
 repository = "https://github.com/mystenlabs/sui"
+network = "mainnet"
+[[packages.values.branches]]
 branch = "framework/mainnet"
-network = "mainnet"
-packages = [
-    { path = "crates/sui-framework/packages/deepbook", watch = "0xdee9" },
-    { path = "crates/sui-framework/packages/move-stdlib", watch = "0x1" },
-    { path = "crates/sui-framework/packages/sui-framework", watch = "0x2" },
-    { path = "crates/sui-framework/packages/sui-system", watch = "0x3" },
+paths = [
+  { path = "crates/sui-framework/packages/deepbook", watch = "0xdee9" },
+  { path = "crates/sui-framework/packages/move-stdlib", watch = "0x1" },
+  { path = "crates/sui-framework/packages/sui-framework", watch = "0x2" },
+  { path = "crates/sui-framework/packages/sui-system", watch = "0x3" }
 ]
 
 [[packages]]
 source = "Repository"
 [packages.values]
 repository = "https://github.com/mystenlabs/sui"
+network = "testnet"
+[[packages.values.branches]]
 branch = "framework/testnet"
-network = "testnet"
-packages = [
-    { path = "crates/sui-framework/packages/deepbook", watch = "0xdee9" },
-    { path = "crates/sui-framework/packages/move-stdlib", watch = "0x1" },
-    { path = "crates/sui-framework/packages/sui-framework", watch = "0x2" },
-    { path = "crates/sui-framework/packages/sui-system", watch = "0x3" },
+paths = [
+  { path = "crates/sui-framework/packages/deepbook", watch = "0xdee9" },
+  { path = "crates/sui-framework/packages/move-stdlib", watch = "0x1" },
+  { path = "crates/sui-framework/packages/sui-framework", watch = "0x2" },
+  { path = "crates/sui-framework/packages/sui-system", watch = "0x3" }
 ]
 
 [[packages]]
 source = "Repository"
 [packages.values]
 repository = "https://github.com/mystenlabs/sui"
-branch = "framework/devnet"
 network = "devnet"
-packages = [
-    { path = "crates/sui-framework/packages/deepbook", watch = "0xdee9" },
-    { path = "crates/sui-framework/packages/move-stdlib", watch = "0x1" },
-    { path = "crates/sui-framework/packages/sui-framework", watch = "0x2" },
-    { path = "crates/sui-framework/packages/sui-system", watch = "0x3" },
+[[packages.values.branches]]
+branch = "framework/devnet"
+paths = [
+  { path = "crates/sui-framework/packages/deepbook", watch = "0xdee9" },
+  { path = "crates/sui-framework/packages/move-stdlib", watch = "0x1" },
+  { path = "crates/sui-framework/packages/sui-framework", watch = "0x2" },
+  { path = "crates/sui-framework/packages/sui-system", watch = "0x3" }
 ]
 
 [[packages]]
 source = "Repository"
 [packages.values]
 repository = "https://github.com/mystenlabs/apps"
-branch = "main"
 network = "mainnet"
-packages = [
-    { path = "kiosk" },
+[[packages.values.branches]]
+branch = "main"
+paths = [
+  { path = "kiosk" },
 ]
 
 [[packages]]
 source = "Repository"
 [packages.values]
 repository = "https://github.com/mystenlabs/apps"
-branch = "testnet"
 network = "testnet"
-packages = [
-    { path = "kiosk" },
+[[packages.values.branches]]
+branch = "testnet"
+paths = [
+  { path = "kiosk" },
 ]
 
-[[packages]]
-source = "Repository"
-[packages.values]
-repository = "https://github.com/kunalabs-io/sui-smart-contracts"
-branch = "master"
-packages = [
-    { path = "kai-finance" }
-]
+# [[packages]]
+# source = "Repository"
+# [packages.values]
+# repository = "https://github.com/kunalabs-io/sui-smart-contracts"
+# [[packages.values.branches]]
+# branch = "master"
+# paths = [
+#   { path = "kai-finance" }
+# ]

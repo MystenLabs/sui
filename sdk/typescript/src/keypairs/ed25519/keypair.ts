@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
 
-import type { ExportedKeypair } from '../../cryptography/keypair.js';
-import { Keypair, PRIVATE_KEY_SIZE } from '../../cryptography/keypair.js';
+import { encodeSuiPrivateKey, Keypair, PRIVATE_KEY_SIZE } from '../../cryptography/keypair.js';
 import { isValidHardenedPath, mnemonicToSeedHex } from '../../cryptography/mnemonics.js';
 import type { SignatureScheme } from '../../cryptography/signature-scheme.js';
 import { derivePath } from './ed25519-hd-key.js';
@@ -63,18 +61,6 @@ export class Ed25519Keypair extends Keypair {
 	 * This is NOT the private scalar which is result of hashing and bit clamping of
 	 * the raw secret key.
 	 *
-	 * The sui.keystore key is a list of Base64 encoded `flag || privkey`. To import
-	 * a key from sui.keystore to typescript, decode from base64 and remove the first
-	 * flag byte after checking it is indeed the Ed25519 scheme flag 0x00 (See more
-	 * on flag for signature scheme: https://github.com/MystenLabs/sui/blob/818406c5abdf7de1b80915a0519071eec3a5b1c7/crates/sui-types/src/crypto.rs#L1650):
-	 * ```
-	 * import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
-	 * const raw = fromB64(t[1]);
-	 * if (raw[0] !== 0 || raw.length !== PRIVATE_KEY_SIZE + 1) {
-	 *   throw new Error('invalid key');
-	 * }
-	 * const imported = Ed25519Keypair.fromSecretKey(raw.slice(1))
-	 * ```
 	 * @throws error if the provided secret key is invalid and validation is not skipped.
 	 *
 	 * @param secretKey secret key byte array
@@ -107,6 +93,16 @@ export class Ed25519Keypair extends Keypair {
 	 */
 	getPublicKey(): Ed25519PublicKey {
 		return new Ed25519PublicKey(this.keypair.publicKey);
+	}
+
+	/**
+	 * The Bech32 secret key string for this Ed25519 keypair
+	 */
+	getSecretKey(): string {
+		return encodeSuiPrivateKey(
+			this.keypair.secretKey.slice(0, PRIVATE_KEY_SIZE),
+			this.getKeyScheme(),
+		);
 	}
 
 	async sign(data: Uint8Array) {
@@ -155,15 +151,5 @@ export class Ed25519Keypair extends Keypair {
 		const { key } = derivePath(path, seedHex);
 
 		return Ed25519Keypair.fromSecretKey(key);
-	}
-
-	/**
-	 * This returns an exported keypair object, the private key field is the pure 32-byte seed.
-	 */
-	export(): ExportedKeypair {
-		return {
-			schema: 'ED25519',
-			privateKey: toB64(this.keypair.secretKey.slice(0, PRIVATE_KEY_SIZE)),
-		};
 	}
 }

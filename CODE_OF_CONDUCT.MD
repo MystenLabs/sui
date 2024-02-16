@@ -19,7 +19,7 @@ diverse, inclusive, and healthy community.
 
 ## More information
 
-See the central [Sui Code of Conduct](doc/src/contribute/code-of-conduct.md) for
+See the central [Sui Code of Conduct](https://github.com/MystenLabs/sui/blob/main/docs/content/references/contribute/code-of-conduct.mdx) for
 full details.
 
 Our Code of Conduct is adapted from the

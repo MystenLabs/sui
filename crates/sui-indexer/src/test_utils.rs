@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use diesel::connection::SimpleConnection;
 use mysten_metrics::init_metrics;
-use prometheus::Registry;
 use tokio::task::JoinHandle;
 
 use std::env;
@@ -12,13 +10,12 @@ use std::net::SocketAddr;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use tracing::info;
 
+use crate::db::{new_pg_connection_pool, reset_database};
 use crate::errors::IndexerError;
-use crate::indexer_v2::IndexerV2;
+use crate::indexer::Indexer;
 use crate::processors_v2::objects_snapshot_processor::SnapshotLagConfig;
-use crate::store::{PgIndexerStore, PgIndexerStoreV2};
-use crate::utils::reset_database;
-use crate::{new_pg_connection_pool, Indexer, IndexerConfig};
-use crate::{new_pg_connection_pool_impl, IndexerMetrics};
+use crate::store::PgIndexerStoreV2;
+use crate::{IndexerConfig, IndexerMetrics};
 
 pub enum ReaderWriterConfig {
     Reader { reader_mode_rpc_url: String },
@@ -39,26 +36,17 @@ impl ReaderWriterConfig {
     }
 }
 
-pub async fn start_test_indexer_v2(
+pub async fn start_test_indexer(
     db_url: Option<String>,
     rpc_url: String,
-    use_indexer_experimental_methods: bool,
     reader_writer_config: ReaderWriterConfig,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
-    start_test_indexer_v2_impl(
-        db_url,
-        rpc_url,
-        use_indexer_experimental_methods,
-        reader_writer_config,
-        None,
-    )
-    .await
+    start_test_indexer_impl(db_url, rpc_url, reader_writer_config, None).await
 }
 
-pub async fn start_test_indexer_v2_impl(
+pub async fn start_test_indexer_impl(
     db_url: Option<String>,
     rpc_url: String,
-    use_indexer_experimental_methods: bool,
     reader_writer_config: ReaderWriterConfig,
     new_database: Option<String>,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
@@ -74,21 +62,13 @@ pub async fn start_test_indexer_v2_impl(
         format!("postgres://postgres:{pw}@{pg_host}:{pg_port}")
     });
 
-    let migrated_methods = if use_indexer_experimental_methods {
-        IndexerConfig::all_implemented_methods()
-    } else {
-        vec![]
-    };
-
     // Default writer mode
     let mut config = IndexerConfig {
         db_url: Some(db_url.clone()),
         rpc_client_url: rpc_url,
-        migrated_methods,
         reset_db: true,
         fullnode_sync_worker: true,
         rpc_server_worker: false,
-        use_v2: true,
         ..Default::default()
     };
 
@@ -105,25 +85,22 @@ pub async fn start_test_indexer_v2_impl(
         let (default_db_url, _) = replace_db_name(&parsed_url, "postgres");
 
         // Open in default mode
-        let blocking_pool = new_pg_connection_pool_impl(&default_db_url, Some(5)).unwrap();
+        let blocking_pool = new_pg_connection_pool(&default_db_url, Some(5)).unwrap();
+        let mut default_conn = blocking_pool.get().unwrap();
 
         // Delete the old db if it exists
-        blocking_pool
-            .get()
-            .unwrap()
+        default_conn
             .batch_execute(&format!("DROP DATABASE IF EXISTS {}", new_database))
             .unwrap();
 
         // Create the new db
-        blocking_pool
-            .get()
-            .unwrap()
+        default_conn
             .batch_execute(&format!("CREATE DATABASE {}", new_database))
             .unwrap();
         parsed_url = replace_db_name(&parsed_url, &new_database).0;
     }
 
-    let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(5)).unwrap();
+    let blocking_pool = new_pg_connection_pool(&parsed_url, Some(5)).unwrap();
     let store = PgIndexerStoreV2::new(blocking_pool.clone(), indexer_metrics.clone());
 
     let handle = match reader_writer_config {
@@ -137,17 +114,16 @@ pub async fn start_test_indexer_v2_impl(
             config.rpc_server_worker = true;
             config.rpc_server_url = reader_mode_rpc_url.ip().to_string();
             config.rpc_server_port = reader_mode_rpc_url.port();
-
-            tokio::spawn(async move { IndexerV2::start_reader(&config, &registry, db_url).await })
+            tokio::spawn(async move { Indexer::start_reader(&config, &registry, db_url).await })
         }
         ReaderWriterConfig::Writer { snapshot_config } => {
             if config.reset_db {
-                reset_database(&mut blocking_pool.get().unwrap(), true, config.use_v2).unwrap();
+                reset_database(&mut blocking_pool.get().unwrap(), true).unwrap();
             }
             let store_clone = store.clone();
 
             tokio::spawn(async move {
-                IndexerV2::start_writer_with_config(
+                Indexer::start_writer_with_config(
                     &config,
                     store_clone,
                     indexer_metrics,
@@ -177,40 +153,12 @@ pub async fn force_delete_database(db_url: String) {
     // Hence switch to the default `postgres` database to drop the active database.
     let (default_db_url, db_name) = replace_db_name(&db_url, "postgres");
 
-    let blocking_pool = new_pg_connection_pool_impl(&default_db_url, Some(5)).unwrap();
+    let blocking_pool = new_pg_connection_pool(&default_db_url, Some(5)).unwrap();
     blocking_pool
         .get()
         .unwrap()
         .batch_execute(&format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", db_name))
         .unwrap();
-}
-
-/// Spawns an indexer thread with provided Postgres DB url
-pub async fn start_test_indexer(
-    config: IndexerConfig,
-) -> Result<(PgIndexerStore, JoinHandle<Result<(), IndexerError>>), anyhow::Error> {
-    let parsed_url = config.base_connection_url()?;
-    let blocking_pool = new_pg_connection_pool(&parsed_url)
-        .map_err(|e| anyhow!("unable to connect to Postgres, is it running? {e}"))?;
-    if config.reset_db {
-        reset_database(
-            &mut blocking_pool
-                .get()
-                .map_err(|e| anyhow!("Fail to get pg_connection_pool {e}"))?,
-            true,
-            config.use_v2,
-        )?;
-    }
-
-    let registry = Registry::default();
-    let indexer_metrics = IndexerMetrics::new(&registry);
-
-    let store = PgIndexerStore::new(blocking_pool, indexer_metrics.clone());
-    let store_clone = store.clone();
-    let handle = tokio::spawn(async move {
-        Indexer::start(&config, &registry, store_clone, indexer_metrics, None).await
-    });
-    Ok((store, handle))
 }
 
 #[derive(Clone)]

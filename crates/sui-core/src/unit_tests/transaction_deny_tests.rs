@@ -61,7 +61,7 @@ async fn reload_state_with_new_deny_config(
     TestAuthorityBuilder::new()
         .with_transaction_deny_config(config)
         .with_network_config(network_config)
-        .with_store(state.db())
+        .with_store(state.database_for_testing().clone())
         .build()
         .await
 }

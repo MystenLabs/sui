@@ -20,7 +20,7 @@ error[E01003]: invalid modifier
   ┌─ tests/move_check/parser/use_with_modifiers.move:6:5
   │
 6 │     native use a::m as m4;
-  │     ^^^^^^ Invalid use declaration. Unexpected 'native' modifier
+  │     ^^^^^^ Invalid use declaration. 'native' is used only on functions or structs
 
 error[E01003]: invalid modifier
   ┌─ tests/move_check/parser/use_with_modifiers.move:7:5
@@ -32,7 +32,7 @@ error[E01003]: invalid modifier
   ┌─ tests/move_check/parser/use_with_modifiers.move:7:12
   │
 7 │     public native entry use a::m as m5;
-  │            ^^^^^^ Invalid use declaration. Unexpected 'native' modifier
+  │            ^^^^^^ Invalid use declaration. 'native' is used only on functions or structs
 
 error[E01003]: invalid modifier
   ┌─ tests/move_check/parser/use_with_modifiers.move:7:19

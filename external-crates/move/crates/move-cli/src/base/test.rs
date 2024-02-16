@@ -194,7 +194,12 @@ pub fn run_move_unit_tests<W: Write + Send>(
         let (units, warnings) =
             diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
         diagnostics::report_warnings(&files, warnings.clone());
-        test_plan = Some((built_test_plan, files.clone(), units.clone()));
+        let named_units: Vec<_> = units
+            .clone()
+            .into_iter()
+            .map(|unit| unit.named_module)
+            .collect();
+        test_plan = Some((built_test_plan, files.clone(), named_units));
         warning_diags = Some(warnings);
         Ok((files, units))
     })?;

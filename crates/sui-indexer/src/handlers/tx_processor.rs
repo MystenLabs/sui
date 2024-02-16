@@ -33,28 +33,27 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
 
-use crate::types_v2::IndexedPackage;
-use crate::types_v2::{IndexedObjectChange, IndexerResult};
+use crate::types::IndexedPackage;
+use crate::types::{IndexedObjectChange, IndexerResult};
 
-// GC the cache every 10 minutes
-pub const PACKAGE_CACHE_GC_INTERVAL: Duration = Duration::from_secs(600);
-
-/// An in-mem cache for packages during writer path indexing.
+// GC the buffer every 300 checkpoints, or 5 minutes
+pub const BUFFER_GC_INTERVAL: Duration = Duration::from_secs(300);
+/// An in-mem buffer for modules during writer path indexing.
 /// It has static lifetime. Since we batch process checkpoints,
 /// it's possible that when a package is looked up (e.g. to create dynamic field),
 /// it has not been persisted in the database yet. So it works as an in-mem
-/// store for package resolution. To avoid bloating memory, we GC packages
+/// store for package resolution. To avoid bloating memory, we GC modules
 /// that are older than the committed checkpoints.
-pub struct IndexingPackageCache {
-    packages: HashMap<(ObjectID, String), (Arc<CompiledModule>, CheckpointSequenceNumber)>,
+pub struct IndexingModuleBuffer {
+    modules: HashMap<(ObjectID, String), (Arc<CompiledModule>, CheckpointSequenceNumber)>,
 }
 
-impl IndexingPackageCache {
+impl IndexingModuleBuffer {
     pub fn start(
         commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
     ) -> Arc<Mutex<Self>> {
         let cache = Arc::new(Mutex::new(Self {
-            packages: HashMap::new(),
+            modules: HashMap::new(),
         }));
         let cache_clone = cache.clone();
         spawn_monitored_task!(Self::remove_committed(cache_clone, commit_watcher));
@@ -65,30 +64,30 @@ impl IndexingPackageCache {
         cache: Arc<Mutex<Self>>,
         commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
     ) {
-        let mut interval = tokio::time::interval_at(Instant::now(), PACKAGE_CACHE_GC_INTERVAL);
+        let mut interval = tokio::time::interval_at(Instant::now(), BUFFER_GC_INTERVAL);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
-            let _scope = monitored_scope("InMemObjectCache::remove_committed");
+            let _scope = monitored_scope("IndexingModuleBuffer::remove_committed");
             let Some(committed_checkpoint) = *commit_watcher.borrow() else {
                 continue;
             };
-            debug!("About to GC packages older than: {committed_checkpoint}");
+            debug!("About to GC modules older than: {committed_checkpoint}");
 
             let mut cache = cache.lock().unwrap();
             let mut to_remove = vec![];
-            for (id, (_, checkpoint_seq)) in cache.packages.iter() {
+            for (id, (_, checkpoint_seq)) in cache.modules.iter() {
                 if *checkpoint_seq <= committed_checkpoint {
                     to_remove.push(id.clone());
                 }
             }
             for id in to_remove {
-                cache.packages.remove(&id);
+                cache.modules.remove(&id);
             }
         }
     }
 
-    pub fn insert_packages(&mut self, new_packages: &[IndexedPackage]) {
+    pub fn insert_modules(&mut self, new_packages: &[IndexedPackage]) {
         let new_packages = new_packages
             .iter()
             .flat_map(|p| {
@@ -104,16 +103,92 @@ impl IndexingPackageCache {
                     })
             })
             .collect::<HashMap<_, _>>();
-        self.packages.extend(new_packages);
+        self.modules.extend(new_packages);
     }
 
     pub fn get_module_by_id(&self, id: &ModuleId) -> Option<Arc<CompiledModule>> {
         let package_id = ObjectID::from(*id.address());
         let name = id.name().to_string();
-        self.packages
+        self.modules
             .get(&(package_id, name))
             .as_ref()
             .map(|(m, _)| m.clone())
+    }
+}
+
+pub struct IndexingPackageBuffer {
+    packages: HashMap<
+        ObjectID,
+        (
+            Arc<Object>,
+            u64, /* package version */
+            CheckpointSequenceNumber,
+        ),
+    >,
+}
+
+impl IndexingPackageBuffer {
+    pub fn start(
+        commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
+    ) -> Arc<Mutex<Self>> {
+        let cache = Arc::new(Mutex::new(Self {
+            packages: HashMap::new(),
+        }));
+        let cache_clone = cache.clone();
+        spawn_monitored_task!(Self::remove_committed(cache_clone, commit_watcher));
+        cache
+    }
+
+    pub async fn remove_committed(
+        cache: Arc<Mutex<Self>>,
+        commit_watcher: watch::Receiver<Option<CheckpointSequenceNumber>>,
+    ) {
+        let mut interval = tokio::time::interval_at(Instant::now(), BUFFER_GC_INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            let _scope = monitored_scope("IndexingPackageBuffer::remove_committed");
+            let Some(committed_checkpoint) = *commit_watcher.borrow() else {
+                continue;
+            };
+            debug!("About to GC packages older than: {committed_checkpoint}");
+
+            let mut cache = cache.lock().unwrap();
+            let mut to_remove = vec![];
+            for (id, (_, _, checkpoint_seq)) in cache.packages.iter() {
+                if *checkpoint_seq <= committed_checkpoint {
+                    to_remove.push(*id);
+                }
+            }
+            for id in to_remove {
+                cache.packages.remove(&id);
+            }
+        }
+    }
+
+    pub fn insert_packages(&mut self, new_package_objects: &[(IndexedPackage, Object)]) {
+        let new_packages = new_package_objects
+            .iter()
+            .map(|(p, obj)| {
+                (
+                    p.package_id,
+                    (
+                        Arc::new(obj.clone()),
+                        p.move_package.version().value(),
+                        p.checkpoint_sequence_number,
+                    ),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        self.packages.extend(new_packages);
+    }
+
+    pub fn get_package(&self, id: &ObjectID) -> Option<Arc<Object>> {
+        self.packages.get(id).as_ref().map(|(o, _, _)| o.clone())
+    }
+
+    pub fn get_version(&self, id: &ObjectID) -> Option<u64> {
+        self.packages.get(id).as_ref().map(|(_, v, _)| *v)
     }
 }
 

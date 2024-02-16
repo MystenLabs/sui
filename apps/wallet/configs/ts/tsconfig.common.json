@@ -43,7 +43,6 @@
 			"_values/*": ["./src/ui/styles/values/*"],
 			"_utils": ["./src/ui/styles/utils"],
 			"_utils/*": ["./src/ui/styles/utils/*"],
-			"@mysten/sui.js/transactions": ["../../sdk/typescript/src/builder/export.ts"],
 			"@mysten/sui.js/*": ["../../sdk/typescript/src/*"],
 			"@mysten/sui.js": ["../../sdk/typescript/src/"],
 			"@mysten/kiosk": ["../../sdk/kiosk/src/index.ts"],

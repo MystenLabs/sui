@@ -62,7 +62,7 @@ module examples::gem {
     const LARGE_BUNDLE: u64 = 1_000_000_000_000;
     const LARGE_AMOUNT: u64 = 100_000;
 
-    #[lint_allow(coin_field)]
+    #[allow(lint(coin_field))]
     /// Gems can be purchased through the `Store`.
     struct GemStore has key {
         id: UID,

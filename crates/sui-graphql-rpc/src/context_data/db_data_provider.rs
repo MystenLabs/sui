@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    config::DEFAULT_SERVER_DB_POOL_SIZE,
+    config::{DEFAULT_REQUEST_TIMEOUT_MS, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
     types::{address::Address, sui_address::SuiAddress, validator::Validator},
 };
-use std::collections::BTreeMap;
-use sui_indexer::{
-    apis::GovernanceReadApiV2, indexer_reader::IndexerReader, PgConnectionPoolConfig,
-};
+use std::{collections::BTreeMap, time::Duration};
+use sui_indexer::db::PgConnectionPoolConfig;
+use sui_indexer::{apis::GovernanceReadApiV2, indexer_reader::IndexerReader};
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
@@ -30,15 +29,21 @@ impl PgManager {
 
     /// Create a new underlying reader, which is used by this type as well as other data providers.
     pub(crate) fn reader(db_url: impl Into<String>) -> Result<IndexerReader, Error> {
-        Self::reader_with_config(db_url, DEFAULT_SERVER_DB_POOL_SIZE)
+        Self::reader_with_config(
+            db_url,
+            DEFAULT_SERVER_DB_POOL_SIZE,
+            DEFAULT_REQUEST_TIMEOUT_MS,
+        )
     }
 
     pub(crate) fn reader_with_config(
         db_url: impl Into<String>,
         pool_size: u32,
+        timeout_ms: u64,
     ) -> Result<IndexerReader, Error> {
         let mut config = PgConnectionPoolConfig::default();
         config.set_pool_size(pool_size);
+        config.set_statement_timeout(Duration::from_millis(timeout_ms));
         IndexerReader::new_with_config(db_url, config)
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }
@@ -117,9 +122,13 @@ impl PgManager {
     }
 }
 
+/// `checkpoint_viewed_at` represents the checkpoint sequence number at which the set of
+/// `SuiValidatorSummary` was queried for. Each `Validator` will inherit this checkpoint, so that
+/// when viewing the `Validator`'s state, it will be as if it was read at the same checkpoint.
 pub(crate) fn convert_to_validators(
     validators: Vec<SuiValidatorSummary>,
     system_state: Option<NativeSuiSystemStateSummary>,
+    checkpoint_viewed_at: u64,
 ) -> Vec<Validator> {
     let (at_risk, reports) = if let Some(NativeSuiSystemStateSummary {
         at_risk_validators,
@@ -145,6 +154,7 @@ pub(crate) fn convert_to_validators(
                     .cloned()
                     .map(|a| Address {
                         address: SuiAddress::from(a),
+                        checkpoint_viewed_at: Some(checkpoint_viewed_at),
                     })
                     .collect()
             });
@@ -153,6 +163,7 @@ pub(crate) fn convert_to_validators(
                 validator_summary,
                 at_risk,
                 report_records,
+                checkpoint_viewed_at,
             }
         })
         .collect()

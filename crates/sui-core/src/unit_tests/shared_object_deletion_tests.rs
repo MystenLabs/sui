@@ -112,8 +112,7 @@ impl TestRunner {
 
     pub fn get_object_latest_version(&mut self, obj_id: ObjectID) -> SequenceNumber {
         self.authority_state
-            .database
-            .perpetual_tables
+            .get_cache_reader()
             .get_latest_object_ref_or_tombstone(obj_id)
             .unwrap()
             .unwrap()

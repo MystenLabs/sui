@@ -6,6 +6,12 @@ error[E01003]: invalid modifier
   │
   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
 
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_2024/parser/global_access_exists_invalid.move:9:9
+  │
+9 │     fun freeze(): u64 { 0 }
+  │         ^^^^^^ Invalid function name 'freeze'. 'freeze' is restricted and cannot be used to name a function
+
 error[E01002]: unexpected token
    ┌─ tests/move_2024/parser/global_access_exists_invalid.move:13:26
    │

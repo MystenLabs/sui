@@ -1,7 +1,6 @@
 # Themes
 
-The components in dApp kit can be customized by using by providing a theme to the `WalletProvider`
-component.
+You can provide a theme to the `WalletProvider` component to customize the components in dApp Kit.
 
 ```tsx
 import { lightTheme, WalletProvider } from '@mysten/dapp-kit';
@@ -15,7 +14,7 @@ const App = () => {
 };
 ```
 
-## Dynamic Themes
+## Dynamic themes
 
 To dynamically change the theme, you can provide multiple themes to the `WalletProvider` component:
 
@@ -53,8 +52,8 @@ const App = () => {
 
 ## Theme variables
 
-To define a custom theme, you will need to implement the `ThemeVars` interface with CSS variable
-values for your theme:
+To define a custom theme, implement the `ThemeVars` interface with CSS variable values for your
+theme:
 
 ```tsx
 import { ThemeVars } from '@mysten/dapp-kit';

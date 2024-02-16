@@ -31,7 +31,9 @@ use crate::authority_aggregator::{
 };
 use crate::authority_client::AuthorityAPI;
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
-use mysten_metrics::{spawn_monitored_task, GaugeGuard};
+use mysten_metrics::{
+    spawn_monitored_task, GaugeGuard, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX,
+};
 use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
@@ -683,7 +685,9 @@ where
             ..
         } = task;
         let tx_digest = *transaction.digest();
+        let is_single_writer_tx = !transaction.contains_shared_object();
 
+        let timer = Instant::now();
         let tx_cert = match tx_cert {
             None => match quorum_driver.process_transaction(transaction.clone()).await {
                 Ok(ProcessTransactionResult::Certified(tx_cert)) => {
@@ -736,6 +740,15 @@ where
                 return;
             }
         };
+        quorum_driver
+            .metrics
+            .settlement_finality_latency
+            .with_label_values(&[if is_single_writer_tx {
+                TX_TYPE_SINGLE_WRITER_TX
+            } else {
+                TX_TYPE_SHARED_OBJ_TX
+            }])
+            .observe(timer.elapsed().as_secs_f64());
 
         quorum_driver.notify(&transaction, &Ok(response), old_retry_times + 1);
     }

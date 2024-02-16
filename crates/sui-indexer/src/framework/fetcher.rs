@@ -6,11 +6,14 @@ use sui_rest_api::{CheckpointData, Client};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tracing::{info, warn};
 
+use crate::metrics::IndexerMetrics;
+
 pub struct CheckpointFetcher {
     client: Client,
     last_downloaded_checkpoint: Option<CheckpointSequenceNumber>,
     highest_known_checkpoint: CheckpointSequenceNumber,
     sender: mysten_metrics::metered_channel::Sender<CheckpointData>,
+    metrics: IndexerMetrics,
 }
 
 impl CheckpointFetcher {
@@ -21,12 +24,14 @@ impl CheckpointFetcher {
         client: Client,
         last_downloaded_checkpoint: Option<CheckpointSequenceNumber>,
         sender: mysten_metrics::metered_channel::Sender<CheckpointData>,
+        metrics: IndexerMetrics,
     ) -> Self {
         Self {
             client,
             last_downloaded_checkpoint,
             highest_known_checkpoint: 0,
             sender,
+            metrics,
         }
     }
 
@@ -55,6 +60,11 @@ impl CheckpointFetcher {
         let checkpoint = self.client.get_latest_checkpoint().await?;
         self.highest_known_checkpoint =
             std::cmp::max(self.highest_known_checkpoint, *checkpoint.sequence_number());
+        // NOTE: this metric is used to monitor delta between the highest known checkpoint on FN and in DB,
+        // there is an alert based on the delta of these two metrics.
+        self.metrics
+            .latest_fullnode_checkpoint_sequence_number
+            .set(self.highest_known_checkpoint as i64);
         Ok(())
     }
 
@@ -86,6 +96,10 @@ impl CheckpointFetcher {
                 "successfully downloaded checkpoint"
             );
 
+            let checkpoint_bytes_size = bcs::serialized_size(&checkpoint)?;
+            self.metrics
+                .checkpoint_download_bytes_size
+                .set(checkpoint_bytes_size as i64);
             self.sender
                 .send(checkpoint)
                 .await

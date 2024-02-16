@@ -1,5 +1,25 @@
 # @mysten/suins-toolkit
 
+## 0.4.3
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+- Updated dependencies [4830361fa4]
+  - @mysten/sui.js@0.50.1
+
+## 0.4.2
+
+### Patch Changes
+
+- Updated dependencies [a34f1cb67d]
+- Updated dependencies [c08e3569ef]
+- Updated dependencies [9a14e61db4]
+- Updated dependencies [13e922d9b1]
+- Updated dependencies [a34f1cb67d]
+- Updated dependencies [220a766d86]
+  - @mysten/sui.js@0.50.0
+
 ## 0.4.1
 
 ### Patch Changes

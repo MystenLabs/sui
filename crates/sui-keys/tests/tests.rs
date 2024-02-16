@@ -110,7 +110,7 @@ fn keystore_no_aliases() {
     let temp_dir = TempDir::new().unwrap();
     let mut keystore_path = temp_dir.path().join("sui.keystore");
     let (_, keypair, _, _) = generate_new_key(SignatureScheme::ED25519, None, None).unwrap();
-    let private_keys = vec![EncodeDecodeBase64::encode_base64(&keypair)];
+    let private_keys = vec![keypair.encode_base64()];
     let keystore_data = serde_json::to_string_pretty(&private_keys).unwrap();
     fs::write(&keystore_path, keystore_data).unwrap();
 

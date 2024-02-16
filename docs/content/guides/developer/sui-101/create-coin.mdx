@@ -1,6 +1,8 @@
 ---
-title: Create a Coin
+title: Create Coins and Tokens
 ---
+
+Coins and tokens on Sui are similar. In practice, the terms are used interchangeably, but there are some differences in their implementation. You can learn about these differences in the respective standard documentation, [Closed-Loop Token](../../../standards/closed-loop-token.mdx) and [Coin](../../../standards/coin.mdx).
 
 Publishing a coin on Sui is nearly as straightforward as publishing a new type. The main difference is the requirement of a [one-time witness](/concepts/sui-move-concepts/one-time-witness.mdx) when creating a coin.
 
@@ -26,7 +28,7 @@ module examples::mycoin {
 }
 ```
 
-The `Coin<T>` is a generic implementation of a coin on Sui. The owner of the `TreasuryCap` gets control over the minting and burning of coins. Further transactions can be sent directly to the `sui::coin::Coin` with `TreasuryCap` object as authorization.
+The `Coin<T>` is a generic implementation of a coin on Sui. Access to the `TreasuryCap` provides control over the minting and burning of coins. Further transactions can be sent directly to the `sui::coin::Coin` with `TreasuryCap` object as authorization.
 
 Extending the example further, add a `mint` function to the module. Use the `mint` function of the `Coin` module to create (mint) a coin and then transfer it to an address. 
 
@@ -64,12 +66,6 @@ Amount: <COIN-AMOUNT>
 
 ## DenyList
 
-:::info
-
-The `DenyList` object and regulated coins are currently available in Devnet only. 
-
-:::
-
 The Sui framework provides a `DenyList` singleton, shared object that the bearer of a `DenyCap` can access to specify a list of addresses that are unable to use a Sui core type. The initial use case for `DenyList`, however, focuses on limiting access to coins of a specified type. This is useful, for example, when creating a regulated coin on Sui that requires the ability to block certain addresses from using it as inputs to transactions. Regulated coins on Sui satisfy any regulations that require the ability to prevent known bad actors from having access to those coins. 
 
 :::info
@@ -84,113 +80,21 @@ If you need the ability to deny specific addresses from having access to your co
 
 Behind the scenes, `create_regulated_currency` uses the `create_currency` function to create the coin, but also produces a `DenyCap` object that allows its bearer to control access to the coin's deny list in a `DenyList` object. Consequently, the way to create a coin using `create_regulated_currency` is similar to the previous example, with the addition of a transfer of the `DenyCap` object to the module publisher.
 
-```move title="regcoin.move"
-module examples::regcoin {
-    use std::option;
-    use sui::coin;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+## Create tokens
 
-    struct REGCOIN has drop {}
+Tokens reuse the `TreasuryCap` defined in the `sui::coin` module and therefore have the same initialization process. The `coin::create_currency` function guarantees the uniqueness of the `TreasuryCap` and forces the creation of a `CoinMetadata` object.
 
-    fun init(witness: REGCOIN, ctx: &mut TxContext) {
-        let (treasury, deny_cap, metadata) = coin::create_regulated_currency(witness, 6, b"REGCOIN", b"", b"", option::none(), ctx);
-        transfer::public_freeze_object(metadata);
-        transfer::public_transfer(treasury, tx_context::sender(ctx));
-        transfer::public_transfer(deny_cap, tx_context::sender(ctx))
-    }
-}
-```
+Coin-like functions perform the minting and burning of tokens. Both require the `TreasuryCap`:
 
-When you deploy the previous module using `sui client publish`, the console responds with transaction effects, including the creation of the following objects:
+- `token::mint` - mint a token
+- `token::burn` - burn a token
 
-```shell
-...
+See [Closed-Loop Token](../../../standards/closed-loop-token.mdx) standard for complete details of working with tokens.
 
-Object Changes
+## Examples
 
-Created Objects:
+See the following topics for examples of some common use cases for coin and token creation.
 
-   ObjectID: <OBJECT-ID>
-   Sender: <SENDER-ADDR>
-   Owner: Immutable
-   ObjectType: 0x2::coin::CoinMetadata<<PACKAGE-ID>::regcoin::REGCOIN>
-   Version: <VERSION-NUMBER>
-   Digest: <DIGEST-HASH>
-
-   ObjectID: <OBJECT-ID>
-   Sender: <SENDER-ADDR>
-   Owner: Account Address ( <PUBLISHER-ADDRESS )
-   ObjectType: 0x2::package::UpgradeCap
-   Version: <VERSION-NUMBER>
-   Digest: <DIGEST-HASH>
-
-   ObjectID: <OBJECT-ID>
-   Sender: <SENDER-ADDR>
-   Owner: Immutable
-   ObjectType: 0x2::coin::RegulatedCoinMetadata<<PACKAGE-ID>::regcoin::REGCOIN>
-   Version: <VERSION-NUMBER>
-   Digest: <DIGEST-HASH>
-
-   ObjectID: <OBJECT-ID>
-   Sender: <SENDER-ADDR>
-   Owner: Account Address ( <PUBLISHER-ADDRESS )
-   ObjectType: 0x2::coin::DenyCap<<PACKAGE-ID>::regcoin::REGCOIN>
-   Version: <VERSION-NUMBER>
-   Digest: <DIGEST-HASH>
-
-
-   ObjectID: <OBJECT-ID>
-   Sender: <SENDER-ADDR>
-   Owner: Account Address ( <PUBLISHER-ADDRESS )
-   ObjectType: 0x2::coin::TreasuryCap<PACKAGE-ID>::regcoin::REGCOIN>
-   Version: <VERSION-NUMBER>
-   Digest: <DIGEST-HASH>
-
-...
-```
-
-As you might have noticed, the publish action creates a `RegulatedCoinMetadata` object along with the standard `CoinMetadata` object. You don't need to explicitly call the `freeze_object` on the `RegulatedCoinMetadata` object, however, because `create_regulated_currency` automatically performs this action.
-
-The output also shows the three objects that the publisher now owns: `UpgradeCap` for [package upgrades](../../../concepts/sui-move-concepts/packages/upgrade.mdx), `TreasuryCap` for minting or burning coins, and the `DenyCap` for adding or removing addresses to or from the deny list for this coin.
-
-### Manipulate deny list
-
-For the ability to manipulate the addresses assigned to the deny list for your coin, you must add a few functions to the previous example.
-
-```move
-public fun add_addr_from_deny_list(denylist: &mut DenyList, denycap: &mut DenyCap<REGCOIN>, denyaddy: address, ctx: &mut TxContext){
-    coin::deny_list_add(denylist, denycap, denyaddy, ctx );
-}
-
-public fun remove_addr_from_deny_list(denylist: &mut DenyList, denycap: &mut DenyCap<REGCOIN>, denyaddy: address, ctx: &mut TxContext){
-    coin::deny_list_remove(denylist, denycap, denyaddy, ctx );
-}
-```
-
-To use these functions, you pass the `DenyList` object (`0x403`), your `DenyCap` object ID, and the address you want to either add or remove. Using the Sui CLI, you could use `sui client call` with the required information:
-
-```shell
-sui client call --function add_addr_from_deny_list --module regcoin --package <PACKAGE-ID> --args <DENY-LIST> <DENY-CAP> <ADDRESS-TO-DENY> --gas-budget <GAS-AMOUNT>
-Transaction Digest: <DIGEST-HASH>
-```
-
-The console displays the response from the network, where you can verify the DenyList object is mutated.
-
-```shell
-...
-
-MutatedObjects:
-
-  ObjectID: 0x0...403               
-  Sender: <SENDER-ADDRESS>
-  Owner: Shared
-  ObjectType: 0x2::deny_list::DenyList
-  Version: <VERSION-NUMBER>
-  Digest: <DIGEST-HASH>
-
-...
-
-```
-
-For all `Coin` functions available on Devnet, see the [Sui framework documentation](https://github.com/MystenLabs/sui/blob/devnet/crates/sui-framework/docs/sui-framework/coin.md) on the `devnet` branch.
+- [Regulated Coin and Deny List](./create-coin/regulated.mdx): Create a regulated coin and add or remove names from the deny list.
+- [Loyalty Token](./create-coin/loyalty.mdx): Create a token to reward user loyalty.
+- [In-Game Token](./create-coin/in-game-token.mdx): Create tokens that can be used only within a mobile game.

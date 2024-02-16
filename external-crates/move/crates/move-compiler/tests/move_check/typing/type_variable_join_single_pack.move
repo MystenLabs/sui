@@ -1,4 +1,4 @@
-module M {
+module 0x42::M {
     struct Box<T> copy, drop { f1: T, f2: T }
 
     fun t0() {

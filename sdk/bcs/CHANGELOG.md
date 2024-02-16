@@ -1,5 +1,17 @@
 # Change Log
 
+## 0.11.1
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+
+## 0.11.0
+
+### Minor Changes
+
+- bae8802fe3: Update base64 encoding to use global `atob` and `btoa` functions.
+
 ## 0.10.1
 
 ### Patch Changes

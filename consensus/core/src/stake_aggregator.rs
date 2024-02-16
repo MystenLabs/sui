@@ -5,7 +5,7 @@ use consensus_config::{AuthorityIndex, Committee, Stake};
 use std::collections::HashSet;
 use std::marker::PhantomData;
 
-pub trait CommitteeThreshold {
+pub(crate) trait CommitteeThreshold {
     fn is_threshold(committee: &Committee, amount: Stake) -> bool;
 }
 
@@ -27,7 +27,7 @@ impl CommitteeThreshold for ValidityThreshold {
 
 #[allow(unused)]
 
-pub struct StakeAggregator<T> {
+pub(crate) struct StakeAggregator<T> {
     votes: HashSet<AuthorityIndex>,
     stake: Stake,
     _phantom: PhantomData<T>,
@@ -36,7 +36,7 @@ pub struct StakeAggregator<T> {
 #[allow(unused)]
 
 impl<T: CommitteeThreshold> StakeAggregator<T> {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             votes: Default::default(),
             stake: 0,
@@ -47,14 +47,14 @@ impl<T: CommitteeThreshold> StakeAggregator<T> {
     /// Adds a vote for the specified authority index to the aggregator. It is guaranteed to count
     /// the vote only once for an authority. The method returns true when the required threshold has
     /// been reached.
-    pub fn add(&mut self, vote: AuthorityIndex, committee: &Committee) -> bool {
+    pub(crate) fn add(&mut self, vote: AuthorityIndex, committee: &Committee) -> bool {
         if self.votes.insert(vote) {
             self.stake += committee.stake(vote);
         }
         T::is_threshold(committee, self.stake)
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.votes.clear();
         self.stake = 0;
     }
@@ -62,12 +62,13 @@ impl<T: CommitteeThreshold> StakeAggregator<T> {
 
 #[cfg(test)]
 mod tests {
+    use consensus_config::{local_committee_and_keys, AuthorityIndex};
+
     use super::*;
-    use consensus_config::AuthorityIndex;
 
     #[test]
     fn test_aggregator_quorum_threshold() {
-        let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
+        let committee = local_committee_and_keys(0, vec![1, 1, 1, 1]).0;
         let mut aggregator = StakeAggregator::<QuorumThreshold>::new();
 
         assert!(!aggregator.add(AuthorityIndex::new_for_test(0), &committee));
@@ -78,7 +79,7 @@ mod tests {
 
     #[test]
     fn test_aggregator_validity_threshold() {
-        let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
+        let committee = local_committee_and_keys(0, vec![1, 1, 1, 1]).0;
         let mut aggregator = StakeAggregator::<ValidityThreshold>::new();
 
         assert!(!aggregator.add(AuthorityIndex::new_for_test(0), &committee));
@@ -87,7 +88,7 @@ mod tests {
 
     #[test]
     fn test_aggregator_clear() {
-        let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
+        let committee = local_committee_and_keys(0, vec![1, 1, 1, 1]).0;
         let mut aggregator = StakeAggregator::<ValidityThreshold>::new();
 
         assert!(!aggregator.add(AuthorityIndex::new_for_test(0), &committee));

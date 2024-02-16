@@ -288,6 +288,10 @@ fn type_(context: &mut Context, sp!(_, ty_): &N::Type) {
             types(context, tys);
         }
         T::Ref(_, t) => type_(context, t),
+        T::Fun(tys, t) => {
+            types(context, tys);
+            type_(context, t);
+        }
         T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError => (),
     }
 }
@@ -309,7 +313,7 @@ fn type_opt(context: &mut Context, t_opt: &Option<N::Type>) {
 // Expressions
 //**************************************************************************************************
 
-fn sequence(context: &mut Context, sequence: &T::Sequence) {
+fn sequence(context: &mut Context, (_, sequence): &T::Sequence) {
     use T::SequenceItem_ as SI;
     for sp!(_, item_) in sequence {
         match item_ {
@@ -373,7 +377,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e2);
             exp(context, e3);
         }
-        E::While(e1, _, e2) => {
+        E::While(_, e1, e2) => {
             exp(context, e1);
             exp(context, e2);
         }

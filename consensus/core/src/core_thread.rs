@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{collections::BTreeSet, fmt::Debug, sync::Arc, thread};
+
+use async_trait::async_trait;
 use mysten_metrics::{metered_channel, monitored_scope};
-use std::{collections::HashSet, fmt::Debug, sync::Arc, thread};
 use thiserror::Error;
-use tokio::sync::oneshot;
-use tokio::sync::oneshot::error::RecvError;
+use tokio::sync::{oneshot, oneshot::error::RecvError};
 use tracing::warn;
 
 use crate::{
@@ -17,13 +18,39 @@ use crate::{
 
 const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 32;
 
+enum CoreThreadCommand {
+    /// Add blocks to be processed and accepted
+    AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<Vec<BlockRef>>),
+    /// Called when a leader timeout occurs and a block should be produced
+    ForceNewBlock(Round, oneshot::Sender<()>),
+    /// Request missing blocks that need to be synced.
+    GetMissing(oneshot::Sender<Vec<BTreeSet<BlockRef>>>),
+}
+
+#[derive(Error, Debug)]
+pub enum CoreError {
+    #[error("Core thread shutdown: {0}")]
+    Shutdown(RecvError),
+}
+
+/// The interface to dispatch commands to CoreThread and Core.
+/// Also this allows the easier mocking during unit tests.
+#[async_trait]
+pub trait CoreThreadDispatcher: Sync + Send + 'static {
+    async fn add_blocks(&self, blocks: Vec<VerifiedBlock>) -> Result<Vec<BlockRef>, CoreError>;
+
+    async fn force_new_block(&self, round: Round) -> Result<(), CoreError>;
+
+    async fn get_missing_blocks(&self) -> Result<Vec<BTreeSet<BlockRef>>, CoreError>;
+}
+
 #[allow(unused)]
-pub(crate) struct CoreThreadDispatcherHandle {
+pub(crate) struct CoreThreadHandle {
     sender: metered_channel::Sender<CoreThreadCommand>,
     join_handle: thread::JoinHandle<()>,
 }
 
-impl CoreThreadDispatcherHandle {
+impl CoreThreadHandle {
     #[allow(unused)]
     pub fn stop(self) {
         // drop the sender, that will force all the other weak senders to not able to upgrade.
@@ -65,30 +92,13 @@ impl CoreThread {
 }
 
 #[derive(Clone)]
-#[allow(dead_code)]
-pub(crate) struct CoreThreadDispatcher {
+pub(crate) struct ChannelCoreThreadDispatcher {
     sender: metered_channel::WeakSender<CoreThreadCommand>,
     context: Arc<Context>,
 }
 
-enum CoreThreadCommand {
-    /// Add blocks to be processed and accepted
-    AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<Vec<BlockRef>>),
-    /// Called when a leader timeout occurs and a block should be produced
-    ForceNewBlock(Round, oneshot::Sender<()>),
-    /// Request missing blocks that need to be synced.
-    GetMissing(oneshot::Sender<Vec<HashSet<BlockRef>>>),
-}
-
-#[derive(Error, Debug)]
-pub(crate) enum CoreError {
-    #[error("Core thread shutdown: {0}")]
-    Shutdown(RecvError),
-}
-
-#[allow(unused)]
-impl CoreThreadDispatcher {
-    pub fn start(core: Core, context: Arc<Context>) -> (Self, CoreThreadDispatcherHandle) {
+impl ChannelCoreThreadDispatcher {
+    pub(crate) fn start(core: Core, context: Arc<Context>) -> (Self, CoreThreadHandle) {
         let (sender, receiver) = metered_channel::channel_with_total(
             CORE_THREAD_COMMANDS_CHANNEL_SIZE,
             &context.metrics.channel_metrics.core_thread,
@@ -105,35 +115,15 @@ impl CoreThreadDispatcher {
             .unwrap();
         // Explicitly using downgraded sender in order to allow sharing the CoreThreadDispatcher but
         // able to shutdown the CoreThread by dropping the original sender.
-        let dispatcher = CoreThreadDispatcher {
+        let dispatcher = ChannelCoreThreadDispatcher {
             sender: sender.downgrade(),
             context,
         };
-        let handler = CoreThreadDispatcherHandle {
+        let handle = CoreThreadHandle {
             join_handle,
             sender,
         };
-        (dispatcher, handler)
-    }
-
-    pub async fn add_blocks(&self, blocks: Vec<VerifiedBlock>) -> Result<Vec<BlockRef>, CoreError> {
-        let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::AddBlocks(blocks, sender))
-            .await;
-        receiver.await.map_err(Shutdown)
-    }
-
-    pub async fn force_new_block(&self, round: Round) -> Result<(), CoreError> {
-        let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::ForceNewBlock(round, sender))
-            .await;
-        receiver.await.map_err(Shutdown)
-    }
-
-    pub async fn get_missing_blocks(&self) -> Result<Vec<HashSet<BlockRef>>, CoreError> {
-        let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::GetMissing(sender)).await;
-        receiver.await.map_err(Shutdown)
+        (dispatcher, handle)
     }
 
     async fn send(&self, command: CoreThreadCommand) {
@@ -149,32 +139,75 @@ impl CoreThreadDispatcher {
     }
 }
 
+#[async_trait]
+impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
+    async fn add_blocks(&self, blocks: Vec<VerifiedBlock>) -> Result<Vec<BlockRef>, CoreError> {
+        let (sender, receiver) = oneshot::channel();
+        self.send(CoreThreadCommand::AddBlocks(blocks, sender))
+            .await;
+        receiver.await.map_err(Shutdown)
+    }
+
+    async fn force_new_block(&self, round: Round) -> Result<(), CoreError> {
+        let (sender, receiver) = oneshot::channel();
+        self.send(CoreThreadCommand::ForceNewBlock(round, sender))
+            .await;
+        receiver.await.map_err(Shutdown)
+    }
+
+    async fn get_missing_blocks(&self) -> Result<Vec<BTreeSet<BlockRef>>, CoreError> {
+        let (sender, receiver) = oneshot::channel();
+        self.send(CoreThreadCommand::GetMissing(sender)).await;
+        receiver.await.map_err(Shutdown)
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use parking_lot::RwLock;
+    use tokio::sync::mpsc::unbounded_channel;
+
     use super::*;
-    use crate::block_manager::BlockManager;
-    use crate::context::Context;
-    use crate::core::{CoreOptions, CoreSignals};
-    use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
+    use crate::{
+        block_manager::BlockManager,
+        commit_observer::CommitObserver,
+        context::Context,
+        core::CoreSignals,
+        dag_state::DagState,
+        storage::mem_store::MemStore,
+        transaction::{TransactionClient, TransactionConsumer},
+    };
 
     #[tokio::test]
     async fn test_core_thread() {
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
-        let block_manager = BlockManager::new();
-        let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
-        let transactions_consumer = TransactionsConsumer::new(tx_receiver);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, _signal_receivers) = CoreSignals::new();
+
+        let (sender, _receiver) = unbounded_channel();
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            sender.clone(),
+            0, // last_processed_index
+            dag_state.clone(),
+            store.clone(),
+        );
         let core = Core::new(
             context.clone(),
-            transactions_consumer,
+            transaction_consumer,
             block_manager,
+            commit_observer,
             signals,
-            CoreOptions::default(),
-            key_pairs.remove(context.own_index.value()).0,
+            key_pairs.remove(context.own_index.value()).1,
+            store,
         );
 
-        let (core_dispatcher, handle) = CoreThreadDispatcher::start(core, context);
+        let (core_dispatcher, handle) = ChannelCoreThreadDispatcher::start(core, context);
 
         // Now create some clones of the dispatcher
         let dispatcher_1 = core_dispatcher.clone();

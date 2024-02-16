@@ -4,9 +4,6 @@
 import { fromB64, toB64 } from '@mysten/bcs';
 
 import { bcs } from '../bcs/index.js';
-import type { TransactionBlock } from '../builder/TransactionBlock.js';
-import { isTransactionBlock } from '../builder/TransactionBlock.js';
-import { TransactionBlockDataBuilder } from '../builder/TransactionBlockData.js';
 import type {
 	DevInspectResults,
 	DryRunTransactionBlockResponse,
@@ -17,6 +14,9 @@ import type {
 } from '../client/index.js';
 import { IntentScope, messageWithIntent } from '../cryptography/intent.js';
 import type { SerializedSignature } from '../cryptography/signature.js';
+import type { TransactionBlock } from '../transactions/TransactionBlock.js';
+import { isTransactionBlock } from '../transactions/TransactionBlock.js';
+import { TransactionBlockDataBuilder } from '../transactions/TransactionBlockData.js';
 import type { Signer } from './signer.js';
 import type { SignedMessage, SignedTransaction } from './types.js';
 

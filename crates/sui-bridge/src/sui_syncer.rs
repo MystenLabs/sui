@@ -13,7 +13,7 @@ use crate::{
 use mysten_metrics::spawn_logged_monitored_task;
 use std::{collections::HashMap, sync::Arc};
 use sui_json_rpc_types::SuiEvent;
-use sui_types::{digests::TransactionDigest, Identifier};
+use sui_types::{event::EventID, Identifier};
 use tokio::{
     task::JoinHandle,
     time::{self, Duration},
@@ -25,8 +25,8 @@ use tokio_retry::Retry;
 // const PACKAGE_ID: ObjectID = SUI_SYSTEM_PACKAGE_ID;
 const SUI_EVENTS_CHANNEL_SIZE: usize = 1000;
 
-/// Map from contract address to their start block.
-pub type SuiTargetModules = HashMap<Identifier, TransactionDigest>;
+/// Map from contract address to their start cursor (exclusive)
+pub type SuiTargetModules = HashMap<Identifier, EventID>;
 
 pub struct SuiSyncer<C> {
     sui_client: Arc<SuiClient<C>>,
@@ -82,26 +82,18 @@ where
         // The module where interested events are defined.
         // Moudle is always of bridge package 0x9.
         module: Identifier,
-        mut next_cursor: TransactionDigest,
+        mut cursor: EventID,
         events_sender: mysten_metrics::metered_channel::Sender<(Identifier, Vec<SuiEvent>)>,
         sui_client: Arc<SuiClient<C>>,
         query_interval: Duration,
     ) {
-        tracing::info!(
-            ?module,
-            ?next_cursor,
-            "Starting sui events listening task from tx_digest {next_cursor}"
-        );
+        tracing::info!(?module, ?cursor, "Starting sui events listening task");
         let mut interval = time::interval(query_interval);
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
             let Ok(events) = retry_with_max_delay!(
-                sui_client.query_events_by_module(
-                    *get_bridge_package_id(),
-                    module.clone(),
-                    next_cursor
-                ),
+                sui_client.query_events_by_module(*get_bridge_package_id(), module.clone(), cursor),
                 Duration::from_secs(600)
             ) else {
                 tracing::error!("Failed to query events from sui client after retry");
@@ -118,10 +110,10 @@ where
                     .send((module.clone(), events.data))
                     .await
                     .expect("All Sui event channel receivers are closed");
-                // Unwrap: `query_events_by_module` always returns Some `next_cursor`
-                // If the events list is empty, `next_cursor` will be the same as `start_tx_digest`
-                next_cursor = events.next_cursor.unwrap();
-                tracing::info!(?module, ?next_cursor, "Observed {len} new Sui events");
+                if let Some(next) = events.next_cursor {
+                    cursor = next;
+                }
+                tracing::info!(?module, ?cursor, "Observed {len} new Sui events");
             }
         }
     }
@@ -148,7 +140,10 @@ mod tests {
         let module_foo = Identifier::new("Foo").unwrap();
         let module_bar = Identifier::new("Bar").unwrap();
         let empty_events = EventPage::empty();
-        let cursor = TransactionDigest::random();
+        let cursor = EventID {
+            tx_digest: TransactionDigest::random(),
+            event_seq: 0,
+        };
         add_event_response(&mock, module_foo.clone(), cursor, empty_events.clone());
         add_event_response(&mock, module_bar.clone(), cursor, empty_events.clone());
 
@@ -172,15 +167,10 @@ mod tests {
         event_1.type_.module = module_foo.clone();
         let module_foo_events_1: sui_json_rpc_types::Page<SuiEvent, EventID> = EventPage {
             data: vec![event_1.clone(), event_1.clone()],
-            next_cursor: None,
+            next_cursor: Some(event_1.id),
             has_next_page: false,
         };
-        add_event_response(
-            &mock,
-            module_foo.clone(),
-            event_1.id.tx_digest,
-            empty_events.clone(),
-        );
+        add_event_response(&mock, module_foo.clone(), event_1.id, empty_events.clone());
         add_event_response(
             &mock,
             module_foo.clone(),
@@ -202,15 +192,10 @@ mod tests {
         event_2.type_.module = module_bar.clone();
         let module_bar_events_1 = EventPage {
             data: vec![event_2.clone()],
-            next_cursor: None,
+            next_cursor: Some(event_2.id),
             has_next_page: false,
         };
-        add_event_response(
-            &mock,
-            module_bar.clone(),
-            event_2.id.tx_digest,
-            empty_events.clone(),
-        );
+        add_event_response(&mock, module_bar.clone(), event_2.id, empty_events.clone());
 
         add_event_response(&mock, module_bar.clone(), cursor, module_bar_events_1);
 
@@ -237,16 +222,13 @@ mod tests {
     fn add_event_response(
         mock: &SuiMockClient,
         module: Identifier,
-        cursor: TransactionDigest,
+        cursor: EventID,
         events: EventPage,
     ) {
         mock.add_event_response(
             *get_bridge_package_id(),
             module.clone(),
-            EventID {
-                tx_digest: cursor,
-                event_seq: u16::MAX as u64,
-            },
+            cursor,
             events.clone(),
         );
     }

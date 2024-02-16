@@ -25,6 +25,7 @@ use std::time::Duration;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_core::epoch::randomness::RandomnessManager;
+use sui_core::execution_cache::NotifyReadWrapper;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::digests::ChainIdentifier;
@@ -49,6 +50,7 @@ use sui_archival::reader::ArchiveReaderBalancer;
 use sui_archival::writer::ArchiveWriter;
 use sui_config::node::{ConsensusProtocol, DBCheckpointConfig, RunWithRange};
 use sui_config::node_config_metrics::NodeConfigMetrics;
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -74,7 +76,7 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
-use sui_core::in_mem_execution_cache::ExecutionCache;
+use sui_core::execution_cache::{ExecutionCache, ExecutionCacheReconfigAPI};
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
@@ -99,7 +101,6 @@ use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::state_sync;
 use sui_protocol_config::{Chain, ProtocolConfig, SupportedProtocolVersions};
 use sui_snapshot::uploader::StateSnapshotUploader;
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_storage::{
     http_key_value_store::HttpKVStore,
     key_value_store::{FallbackTransactionKVStore, TransactionKeyValueStore},
@@ -248,7 +249,7 @@ impl SuiNode {
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
     ) -> Result<Arc<SuiNode>> {
-        Self::start_async(config, registry_service, custom_rpc_runtime).await
+        Self::start_async(config, registry_service, custom_rpc_runtime, "unknown").await
     }
 
     fn start_jwk_updater(
@@ -390,6 +391,7 @@ impl SuiNode {
         config: &NodeConfig,
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
+        software_version: &'static str,
     ) -> Result<Arc<SuiNode>> {
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(config);
         let mut config = config.clone();
@@ -481,7 +483,7 @@ impl SuiNode {
             // check SUI conservation is at genesis. Otherwise we may be in the middle of
             // an epoch and the SUI conservation check will fail. This also initialize
             // the expected_network_sui_amount table.
-            store
+            execution_cache
                 .expensive_check_sui_conservation(&epoch_store)
                 .expect("SUI conservation check cannot fail at genesis");
         }
@@ -506,7 +508,6 @@ impl SuiNode {
         );
 
         let state_sync_store = RocksDbStore::new(
-            store.clone(),
             execution_cache.clone(),
             committee_store.clone(),
             checkpoint_store.clone(),
@@ -553,7 +554,8 @@ impl SuiNode {
 
         // Start archiving local state to remote store
         let state_archive_handle =
-            Self::start_state_archival(&config, &prometheus_registry, state_sync_store).await?;
+            Self::start_state_archival(&config, &prometheus_registry, state_sync_store.clone())
+                .await?;
 
         // Start uploading state snapshot to remote store
         let state_snapshot_handle = Self::start_state_snapshot(&config, &prometheus_registry)?;
@@ -593,7 +595,7 @@ impl SuiNode {
             config.certificate_deny_config.clone(),
             config.indirect_objects_threshold,
             config.state_debug_dump_config.clone(),
-            config.overload_threshold_config.clone(),
+            config.authority_overload_config.clone(),
             archive_readers,
         )
         .await;
@@ -620,8 +622,11 @@ impl SuiNode {
             .enable_secondary_index_checks()
         {
             if let Some(indexes) = state.indexes.clone() {
-                sui_core::verify_indexes::verify_indexes(state.database.clone(), indexes)
-                    .expect("secondary indexes are inconsistent");
+                sui_core::verify_indexes::verify_indexes(
+                    state.get_accumulator_store().as_ref(),
+                    indexes,
+                )
+                .expect("secondary indexes are inconsistent");
             }
         }
 
@@ -643,10 +648,12 @@ impl SuiNode {
 
         let http_server = build_http_server(
             state.clone(),
+            state_sync_store,
             &transaction_orchestrator.clone(),
             &config,
             &prometheus_registry,
             custom_rpc_runtime,
+            software_version,
         )?;
 
         let accumulator = Arc::new(StateAccumulator::new(store));
@@ -1233,11 +1240,12 @@ impl SuiNode {
         let max_checkpoint_size_bytes =
             epoch_store.protocol_config().max_checkpoint_size_bytes() as usize;
 
+        let notify_read: NotifyReadWrapper<_> = state.get_effects_notify_read().clone();
         CheckpointService::spawn(
             state.clone(),
             checkpoint_store,
             epoch_store,
-            state.get_effects_notify_read(),
+            Arc::new(notify_read),
             accumulator,
             checkpoint_output,
             Box::new(certified_checkpoint_output),
@@ -1316,9 +1324,11 @@ impl SuiNode {
         self.state.committee_store().clone()
     }
 
+    /*
     pub fn clone_authority_store(&self) -> Arc<AuthorityStore> {
         self.state.db()
     }
+    */
 
     /// Clone an AuthorityAggregator currently used in this node's
     /// QuorumDriver, if the node is a fullnode. After reconfig,
@@ -1412,7 +1422,7 @@ impl SuiNode {
             // Safe to call because we are in the middle of reconfiguration.
             let latest_system_state = self
                 .state
-                .database
+                .get_cache_reader()
                 .get_sui_system_state_object_unsafe()
                 .expect("Read Sui System State object cannot fail");
 
@@ -1563,15 +1573,16 @@ impl SuiNode {
             // Arc<AuthorityPerEpochStore> may linger.
             cur_epoch_store.release_db_handles();
 
-            #[cfg(msim)]
-            if !matches!(
-                self.config
-                    .authority_store_pruning_config
-                    .num_epochs_to_retain_for_checkpoints(),
-                None | Some(u64::MAX) | Some(0)
-            ) {
+            if cfg!(msim)
+                && !matches!(
+                    self.config
+                        .authority_store_pruning_config
+                        .num_epochs_to_retain_for_checkpoints(),
+                    None | Some(u64::MAX) | Some(0)
+                )
+            {
                 self.state
-                .prune_checkpoints_for_eligible_epochs(
+                .prune_checkpoints_for_eligible_epochs_for_testing(
                     self.config.clone(),
                     sui_core::authority::authority_store_pruner::AuthorityStorePruningMetrics::new_for_test(),
                 )
@@ -1601,7 +1612,7 @@ impl SuiNode {
         let epoch_start_configuration = EpochStartConfiguration::new(
             next_epoch_start_system_state,
             *last_checkpoint.digest(),
-            &state.database,
+            state.get_object_store().as_ref(),
         )
         .expect("EpochStartConfiguration construction cannot fail");
 
@@ -1620,7 +1631,7 @@ impl SuiNode {
             .expect("Reconfigure authority state cannot fail");
         info!(next_epoch, "Node State has been reconfigured");
         assert_eq!(next_epoch, new_epoch_store.epoch());
-        self.state.database.update_epoch_flags_metrics(
+        self.state.get_reconfig_api().update_epoch_flags_metrics(
             cur_epoch_store.epoch_start_config().flags(),
             new_epoch_store.epoch_start_config().flags(),
         );
@@ -1731,15 +1742,19 @@ fn build_kv_store(
 
 pub fn build_http_server(
     state: Arc<AuthorityState>,
+    store: RocksDbStore,
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
     _custom_runtime: Option<Handle>,
+    software_version: &'static str,
 ) -> Result<Option<tokio::task::JoinHandle<()>>> {
     // Validators do not expose these APIs
     if config.consensus_config().is_some() {
         return Ok(None);
     }
+
+    let chain_id = state.get_chain_identifier().unwrap();
 
     let mut router = axum::Router::new();
 
@@ -1798,7 +1813,7 @@ pub fn build_http_server(
             metrics,
             config.indexer_max_subscriptions,
         ))?;
-        server.register_module(MoveUtils::new(state.clone()))?;
+        server.register_module(MoveUtils::new(state))?;
 
         server.to_router(None)?
     };
@@ -1806,7 +1821,9 @@ pub fn build_http_server(
     router = router.merge(json_rpc_router);
 
     if config.enable_experimental_rest_api {
-        let rest_router = sui_rest_api::rest_router(state);
+        let rest_router =
+            sui_rest_api::RestService::new(Arc::new(store.clone()), chain_id, software_version)
+                .into_router();
         router = router.nest("/rest", rest_router);
     }
 

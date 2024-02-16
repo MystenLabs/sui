@@ -54,7 +54,7 @@ use crate::authority::AuthorityState;
 use crate::checkpoints::checkpoint_executor::data_ingestion_handler::store_checkpoint_locally;
 use crate::state_accumulator::StateAccumulator;
 use crate::transaction_manager::TransactionManager;
-use crate::{checkpoints::CheckpointStore, in_mem_execution_cache::ExecutionCacheRead};
+use crate::{checkpoints::CheckpointStore, execution_cache::ExecutionCacheRead};
 
 use self::metrics::CheckpointExecutorMetrics;
 
@@ -68,11 +68,7 @@ type CheckpointExecutionBuffer = FuturesOrdered<JoinHandle<VerifiedCheckpoint>>;
 /// The interval to log checkpoint progress, in # of checkpoints processed.
 const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
 
-#[cfg(msim)]
-const SCHEDULING_EVENT_FUTURE_TIMEOUT_MS: u64 = 200;
-
-#[cfg(not(msim))]
-const SCHEDULING_EVENT_FUTURE_TIMEOUT_MS: u64 = 1000;
+const SCHEDULING_EVENT_FUTURE_TIMEOUT_MS: u64 = 2000;
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum StopReason {
@@ -106,7 +102,7 @@ impl CheckpointExecutor {
             mailbox,
             state: state.clone(),
             checkpoint_store,
-            cache_reader: state.get_cache_reader(),
+            cache_reader: state.get_cache_reader().clone(),
             tx_manager: state.transaction_manager().clone(),
             accumulator,
             config,
@@ -248,10 +244,8 @@ impl CheckpointExecutor {
                 // Check for newly synced checkpoints from StateSync.
                 received = timeout(scheduling_timeout, self.mailbox.recv()) => match received {
                     Err(_elapsed) => {
-                        error!(
-                            "Received no new synced checkpoints for {:?}. Next checkpoint to be scheduled: {}",
-                            scheduling_timeout,
-                            next_to_schedule,
+                        warn!(
+                            "Received no new synced checkpoints for {scheduling_timeout:?}. Next checkpoint to be scheduled: {next_to_schedule}",
                         );
                         fail_point!("cp_exec_scheduling_timeout_reached");
                     },
@@ -1100,11 +1094,13 @@ fn finalize_checkpoint(
         epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
     }
     // TODO remove once we no longer need to support this table for read RPC
-    state.database.deprecated_insert_finalized_transactions(
-        tx_digests,
-        epoch_store.epoch(),
-        checkpoint.sequence_number,
-    )?;
+    state
+        .get_checkpoint_cache()
+        .deprecated_insert_finalized_transactions(
+            tx_digests,
+            epoch_store.epoch(),
+            checkpoint.sequence_number,
+        )?;
 
     accumulator.accumulate_checkpoint(effects, checkpoint.sequence_number, epoch_store)?;
     if let Some(path) = data_ingestion_dir {

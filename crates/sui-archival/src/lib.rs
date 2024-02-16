@@ -27,15 +27,17 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::genesis::Genesis;
 use sui_config::node::ArchiveReaderConfig;
+use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::util::{get, put};
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreGetExt, ObjectStorePutExt};
-use sui_storage::{compute_sha3_checksum, SHA3_BYTES};
+use sui_storage::object_store::{ObjectStoreGetExt, ObjectStorePutExt};
+use sui_storage::{compute_sha3_checksum, compute_sha3_checksum_for_bytes, SHA3_BYTES};
 use sui_types::base_types::ExecutionData;
 use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
-use sui_types::storage::{ReadStore, SingleCheckpointSharedInMemoryStore, WriteStore};
+use sui_types::storage::{SingleCheckpointSharedInMemoryStore, WriteStore};
 use tracing::{error, info};
 
+#[allow(rustdoc::invalid_html_tags)]
 /// Checkpoints and summaries are persisted as blob files. Files are committed to local store
 /// by duration or file size. Committed files are synced with the remote store continuously. Files are
 /// optionally compressed with the zstd compression format. Filenames follow the format
@@ -87,8 +89,8 @@ use tracing::{error, info};
 ///├──────────────────────────────┤
 ///│      sha3 <32 bytes>         │
 ///└──────────────────────────────┘
-const CHECKPOINT_FILE_MAGIC: u32 = 0x0000DEAD;
-const SUMMARY_FILE_MAGIC: u32 = 0x0000CAFE;
+pub const CHECKPOINT_FILE_MAGIC: u32 = 0x0000DEAD;
+pub const SUMMARY_FILE_MAGIC: u32 = 0x0000CAFE;
 const MANIFEST_FILE_MAGIC: u32 = 0x00C0FFEE;
 const MAGIC_BYTES: usize = 4;
 const CHECKPOINT_FILE_SUFFIX: &str = "chk";
@@ -261,9 +263,29 @@ pub fn create_file_metadata(
     Ok(file_metadata)
 }
 
+pub fn create_file_metadata_from_bytes(
+    bytes: Bytes,
+    file_type: FileType,
+    epoch_num: u64,
+    checkpoint_seq_range: Range<u64>,
+) -> Result<FileMetadata> {
+    let sha3_digest = compute_sha3_checksum_for_bytes(bytes)?;
+    let file_metadata = FileMetadata {
+        file_type,
+        epoch_num,
+        checkpoint_seq_range,
+        sha3_digest,
+    };
+    Ok(file_metadata)
+}
+
 pub async fn read_manifest<S: ObjectStoreGetExt>(remote_store: S) -> Result<Manifest> {
     let manifest_file_path = Path::from(MANIFEST_FILENAME);
     let vec = get(&remote_store, &manifest_file_path).await?.to_vec();
+    read_manifest_from_bytes(vec)
+}
+
+pub fn read_manifest_from_bytes(vec: Vec<u8>) -> Result<Manifest> {
     let manifest_file_size = vec.len();
     let mut manifest_reader = Cursor::new(vec);
     manifest_reader.rewind()?;
@@ -292,11 +314,7 @@ pub async fn read_manifest<S: ObjectStoreGetExt>(remote_store: S) -> Result<Mani
     Blob::read(&mut manifest_reader)?.decode()
 }
 
-pub async fn write_manifest<S: ObjectStorePutExt>(
-    manifest: Manifest,
-    remote_store: S,
-) -> Result<()> {
-    let path = Path::from(MANIFEST_FILENAME);
+pub fn finalize_manifest(manifest: Manifest) -> Result<Bytes> {
     let mut buf = BufWriter::new(vec![]);
     buf.write_u32::<BigEndian>(MANIFEST_FILE_MAGIC)?;
     let blob = Blob::encode(&manifest, BlobEncoding::Bcs)?;
@@ -306,7 +324,15 @@ pub async fn write_manifest<S: ObjectStorePutExt>(
     hasher.update(buf.get_ref());
     let computed_digest = hasher.finalize().digest;
     buf.write_all(&computed_digest)?;
-    let bytes = Bytes::from(buf.into_inner()?);
+    Ok(Bytes::from(buf.into_inner()?))
+}
+
+pub async fn write_manifest<S: ObjectStorePutExt>(
+    manifest: Manifest,
+    remote_store: S,
+) -> Result<()> {
+    let path = Path::from(MANIFEST_FILENAME);
+    let bytes = finalize_manifest(manifest)?;
     put(&remote_store, &path, bytes).await?;
     Ok(())
 }
@@ -395,7 +421,6 @@ pub async fn verify_archive_with_local_store<S>(
 ) -> Result<()>
 where
     S: WriteStore + Clone + Send + 'static,
-    <S as ReadStore>::Error: std::error::Error,
 {
     let metrics = ArchiveReaderMetrics::new(&Registry::default());
     let config = ArchiveReaderConfig {

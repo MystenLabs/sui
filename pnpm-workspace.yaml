@@ -7,7 +7,7 @@ packages:
   - '!sdk/create-dapp/templates'
   - '!sdk/typescript/*/**'
   - '!sdk/typescript/scripts'
-  - '!sdk/typescript/builder'
+  - '!sdk/typescript/transactions'
   - '!sdk/typescript/cryptography'
   - '!sdk/typescript/faucet'
   - '!sdk/typescript/transactions'
@@ -20,3 +20,4 @@ packages:
   - '!sdk/enoki/react'
   - '!sdk/move-binary-format-wasm/pkg'
   - '!sdk/move-binary-format/pkg'
+  - '!sdk/typescript/graphql'

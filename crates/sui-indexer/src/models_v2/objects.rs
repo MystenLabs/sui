@@ -15,8 +15,8 @@ use sui_types::object::Object;
 use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
-use crate::schema_v2::{objects, objects_history};
-use crate::types_v2::{IndexedDeletedObject, IndexedObject, ObjectStatus};
+use crate::schema::{objects, objects_history};
+use crate::types::{IndexedDeletedObject, IndexedObject, ObjectStatus};
 
 #[derive(Queryable)]
 pub struct DynamicFieldColumn {

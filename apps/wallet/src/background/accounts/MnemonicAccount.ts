@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
-import { type ExportedKeypair, type Keypair } from '@mysten/sui.js/cryptography';
+import { type Keypair } from '@mysten/sui.js/cryptography';
 
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 import {
@@ -34,7 +34,7 @@ export function isMnemonicSerializedUiAccount(
 	return account.type === 'mnemonic-derived';
 }
 
-type SessionStorageData = { keyPair: ExportedKeypair };
+type SessionStorageData = { keyPair: string };
 
 export class MnemonicAccount
 	extends Account<MnemonicSerializedAccount, SessionStorageData>
@@ -93,7 +93,7 @@ export class MnemonicAccount
 			await mnemonicSource.unlock(password);
 		}
 		await this.setEphemeralValue({
-			keyPair: (await mnemonicSource.deriveKeyPair(derivationPath)).export(),
+			keyPair: (await mnemonicSource.deriveKeyPair(derivationPath)).getSecretKey(),
 		});
 		await this.onUnlocked();
 	}
@@ -138,11 +138,11 @@ export class MnemonicAccount
 		return this.getCachedData().then(({ sourceID }) => sourceID);
 	}
 
-	async exportKeyPair(password: string): Promise<ExportedKeypair> {
+	async exportKeyPair(password: string): Promise<string> {
 		const { derivationPath } = await this.getStoredData();
 		const mnemonicSource = await this.#getMnemonicSource();
 		await mnemonicSource.unlock(password);
-		return (await mnemonicSource.deriveKeyPair(derivationPath)).export();
+		return (await mnemonicSource.deriveKeyPair(derivationPath)).getSecretKey();
 	}
 
 	async #getKeyPair() {

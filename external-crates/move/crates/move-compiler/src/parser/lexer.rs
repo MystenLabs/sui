@@ -21,6 +21,7 @@ pub enum Tok {
     NumTypedValue,
     ByteStringValue,
     Identifier,
+    SyntaxIdentifier,
     Exclaim,
     ExclaimEqual,
     Percent,
@@ -89,6 +90,7 @@ pub enum Tok {
     Type,
     Match,
     BlockLabel,
+    MinusGreater,
 }
 
 impl fmt::Display for Tok {
@@ -100,6 +102,7 @@ impl fmt::Display for Tok {
             NumTypedValue => "[NumTyped]",
             ByteStringValue => "[ByteString]",
             Identifier => "[Identifier]",
+            SyntaxIdentifier => "[SyntaxIdentifier]",
             Exclaim => "!",
             ExclaimEqual => "!=",
             Percent => "%",
@@ -168,6 +171,7 @@ impl fmt::Display for Tok {
             Type => "type",
             Match => "match",
             BlockLabel => "'[Identifier]",
+            MinusGreater => "->",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -222,6 +226,10 @@ impl<'input> Lexer<'input> {
 
     pub fn current_token_loc(&self) -> Loc {
         make_loc(self.file_hash(), self.cur_start, self.cur_end)
+    }
+
+    pub fn edition(&self) -> Edition {
+        self.edition
     }
 
     /// Strips line and block comments from input source, and collects documentation comments,
@@ -335,13 +343,37 @@ impl<'input> Lexer<'input> {
         Ok(text)
     }
 
+    // Trim until reaching whitespace: space, tab, lf(\n) and crlf(\r\n).
+    fn trim_until_whitespace(&self, offset: usize) -> &'input str {
+        let mut text = &self.text[offset..];
+        let mut iter = text.chars();
+        while let Some(c) = iter.next() {
+            if c == ' '
+                || c == '\t'
+                || c == '\n'
+                || (c == '\r' && matches!(iter.next(), Some('\n')))
+            {
+                break;
+            }
+            text = &text[c.len_utf8()..];
+        }
+        text
+    }
+
     // Look ahead to the next token after the current one and return it, and its starting offset,
     // without advancing the state of the lexer.
     pub fn lookahead(&mut self) -> Result<Tok, Box<Diagnostic>> {
         let text = self.trim_whitespace_and_comments(self.cur_end)?;
         let next_start = self.text.len() - text.len();
-        let (tok, _) = find_token(self.file_hash, self.edition, text, next_start)?;
-        Ok(tok)
+        let (result, _) = find_token(
+            /* panic_mode */ false,
+            self.file_hash,
+            self.edition,
+            text,
+            next_start,
+        );
+        // unwrap safe because panic_mode is false
+        result.map_err(|diag_opt| diag_opt.unwrap())
     }
 
     // Look ahead to the next two tokens after the current one and return them without advancing
@@ -349,10 +381,24 @@ impl<'input> Lexer<'input> {
     pub fn lookahead2(&mut self) -> Result<(Tok, Tok), Box<Diagnostic>> {
         let text = self.trim_whitespace_and_comments(self.cur_end)?;
         let offset = self.text.len() - text.len();
-        let (first, length) = find_token(self.file_hash, self.edition, text, offset)?;
+        let (result, length) = find_token(
+            /* panic_mode */ false,
+            self.file_hash,
+            self.edition,
+            text,
+            offset,
+        );
+        let first = result.map_err(|diag_opt| diag_opt.unwrap())?;
         let text2 = self.trim_whitespace_and_comments(offset + length)?;
         let offset2 = self.text.len() - text2.len();
-        let (second, _) = find_token(self.file_hash, self.edition, text2, offset2)?;
+        let (result2, _) = find_token(
+            /* panic_mode */ false,
+            self.file_hash,
+            self.edition,
+            text2,
+            offset2,
+        );
+        let second = result2.map_err(|diag_opt| diag_opt.unwrap())?;
         Ok((first, second))
     }
 
@@ -403,14 +449,60 @@ impl<'input> Lexer<'input> {
         std::mem::take(&mut self.matched_doc_comments)
     }
 
+    /// Advance to the next token. This function will keep trying to advance the lexer until it
+    /// actually finds a valid token, skipping over non-token text snippets if necessary (in the
+    /// worst case, it will eventually encounter EOF). If parsing errors are encountered when
+    /// skipping over non-tokens, the first diagnostic will be recorded and returned, so that it can
+    /// be acted upon (if parsing needs to stop) or ignored (if parsing should proceed regardless).
     pub fn advance(&mut self) -> Result<(), Box<Diagnostic>> {
+        let text_end = self.text.len();
         self.prev_end = self.cur_end;
-        let text = self.trim_whitespace_and_comments(self.cur_end)?;
-        self.cur_start = self.text.len() - text.len();
-        let (token, len) = find_token(self.file_hash, self.edition, text, self.cur_start)?;
-        self.cur_end = self.cur_start + len;
+        let mut err = None;
+        // loop until the next valid token (which ultimately can be EOF) is found
+        let token = loop {
+            let mut cur_end = self.cur_end;
+            // loop until the next text snippet which may contain a valid token is found)
+            let text = loop {
+                match self.trim_whitespace_and_comments(cur_end) {
+                    Ok(t) => break t,
+                    Err(diag) => {
+                        // only report the first diag encountered
+                        err = err.or(Some(diag));
+                        // currently, this error can happen here if there is an unclosed block
+                        // comment, in which case we advance to the next whitespace and try trimming
+                        // again let
+                        let trimmed = self.trim_until_whitespace(cur_end);
+                        cur_end += trimmed.len();
+                    }
+                };
+            };
+            let new_start = self.text.len() - text.len();
+            // panic_mode determines if a diag should be actually recorded in find_token (so that
+            // only first one is recorded)
+            let panic_mode = err.is_some();
+            let (result, len) =
+                find_token(panic_mode, self.file_hash, self.edition, text, new_start);
+            self.cur_start = new_start;
+            self.cur_end = std::cmp::min(self.cur_start + len, text_end);
+            match result {
+                Ok(token) => break token,
+                Err(diag_opt) => {
+                    // only report the first diag encountered
+                    err = err.or(diag_opt);
+                    if self.cur_end == text_end {
+                        break Tok::EOF;
+                    }
+                }
+            }
+        };
+        // regardless of whether an error was encountered (and diagnostic recorded) or not, the
+        // token is advanced
         self.token = token;
-        Ok(())
+        if let Some(err) = err {
+            Err(err)
+        } else {
+            Ok(())
+        }
     }
 
     // Replace the current token. The lexer will always match the longest token,
@@ -418,35 +510,48 @@ impl<'input> Lexer<'input> {
     // e.g., ">" instead of ">>".
     pub fn replace_token(&mut self, token: Tok, len: usize) {
         self.token = token;
-        self.cur_end = self.cur_start + len
+        self.cur_end = self.cur_start + len;
     }
 }
 
 // Find the next token and its length without changing the state of the lexer.
 fn find_token(
+    panic_mode: bool,
     file_hash: FileHash,
     edition: Edition,
     text: &str,
     start_offset: usize,
-) -> Result<(Tok, usize), Box<Diagnostic>> {
+) -> (Result<Tok, Option<Box<Diagnostic>>>, usize) {
+    macro_rules! maybe_diag {
+        ( $($s:stmt);* ) => {{
+            if panic_mode {
+                None
+            } else {
+                Some({
+                    $($s)*
+                })
+            }
+        }};
+    }
     let c: char = match text.chars().next() {
         Some(next_char) => next_char,
         None => {
-            return Ok((Tok::EOF, 0));
+            return (Ok(Tok::EOF), 0);
         }
     };
-    let (tok, len) = match c {
+    let (res, len) = match c {
         '0'..='9' => {
             if text.starts_with("0x") && text.len() > 2 {
                 let (tok, hex_len) = get_hex_number(&text[2..]);
                 if hex_len == 0 {
                     // Fall back to treating this as a "0" token.
-                    (Tok::NumValue, 1)
+                    (Ok(Tok::NumValue), 1)
                 } else {
-                    (tok, 2 + hex_len)
+                    (Ok(tok), 2 + hex_len)
                 }
             } else {
-                get_decimal_number(text)
+                let (tok, len) = get_decimal_number(text);
+                (Ok(tok), len)
             }
         }
         '`' => {
@@ -464,14 +569,14 @@ fn find_token(
                 (false, 1)
             };
             if !is_valid {
-                let loc = make_loc(file_hash, start_offset, start_offset + len);
-                let msg = "Missing closing backtick (`) for restricted identifier escaping";
-                return Err(Box::new(diag!(
-                    Syntax::InvalidRestrictedIdentifier,
-                    (loc, msg)
-                )));
+                let diag = maybe_diag! {
+                    let loc = make_loc(file_hash, start_offset, start_offset + len);
+                    let msg = "Missing closing backtick (`) for restricted identifier escaping";
+                    Box::new(diag!(Syntax::InvalidRestrictedIdentifier, (loc, msg)))
+                };
+                (Err(diag), len)
             } else {
-                (Tok::RestrictedIdentifier, len)
+                (Ok(Tok::RestrictedIdentifier), len)
             }
         }
         '\'' if edition.supports(FeatureGate::BlockLabels) => {
@@ -485,17 +590,26 @@ fn find_token(
                 (false, 1)
             };
             if text[len..].starts_with('\'') {
-                let loc = make_loc(file_hash, start_offset, start_offset + len + 1);
-                let msg = "Single-quote (') may only prefix control flow labels";
-                let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
-                diag.add_note("Character literals are not supported, and string literals use double-quote (\").");
-                return Err(Box::new(diag));
+                let diag = maybe_diag! {
+                    let loc = make_loc(file_hash, start_offset, start_offset + len + 1);
+                    let msg = "Single-quote (') may only prefix control flow labels";
+                    let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
+                    diag.add_note(
+                        "Character literals are not supported, \
+                        and string literals use double-quote (\")."
+                    );
+                    Box::new(diag)
+                };
+                (Err(diag), len)
             } else if !is_valid {
-                let loc = make_loc(file_hash, start_offset, start_offset + len);
-                let msg = "Invalid control flow label";
-                return Err(Box::new(diag!(Syntax::UnexpectedToken, (loc, msg))));
+                let diag = maybe_diag! {
+                    let loc = make_loc(file_hash, start_offset, start_offset + len);
+                    let msg = "Invalid control flow label";
+                    Box::new(diag!(Syntax::UnexpectedToken, (loc, msg)))
+                };
+                (Err(diag), len)
             } else {
-                (Tok::BlockLabel, len)
+                (Ok(Tok::BlockLabel), len)
             }
         }
         '\'' => {
@@ -510,19 +624,27 @@ fn find_token(
             };
             let rest_text = &text[len..];
             if rest_text.starts_with('\'') {
-                let loc = make_loc(file_hash, start_offset, start_offset + len + 1);
-                let msg = "Charater literals are not supported";
-                let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
-                diag.add_note("String literals use double-quote (\").");
-                return Err(Box::new(diag));
+                let diag = maybe_diag! {
+                    let loc = make_loc(file_hash, start_offset, start_offset + len + 1);
+                    let msg = "Charater literals are not supported";
+                    let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
+                    diag.add_note("String literals use double-quote (\").");
+                    Box::new(diag)
+                };
+                (Err(diag), len)
             } else if is_valid && (rest_text.starts_with(':') || rest_text.starts_with(" {")) {
-                let loc = make_loc(file_hash, start_offset, start_offset + len);
-                let diag = create_feature_error(edition, FeatureGate::BlockLabels, loc);
-                return Err(Box::new(diag));
+                let diag = maybe_diag! {
+                    let loc = make_loc(file_hash, start_offset, start_offset + len);
+                    Box::new(create_feature_error(edition, FeatureGate::BlockLabels, loc))
+                };
+                (Err(diag), len)
             } else {
-                let loc = make_loc(file_hash, start_offset, start_offset + len);
-                let msg = "Unexpected character (')";
-                return Err(Box::new(diag!(Syntax::InvalidCharacter, (loc, msg))));
+                let diag = maybe_diag! {
+                    let loc = make_loc(file_hash, start_offset, start_offset + len);
+                    let msg = "Unexpected character (')";
+                    Box::new(diag!(Syntax::InvalidCharacter, (loc, msg)))
+                };
+                (Err(diag), len)
             }
         }
 
@@ -531,116 +653,142 @@ fn find_token(
             if is_hex || text.starts_with("b\"") {
                 let line = &text.lines().next().unwrap()[2..];
                 match get_string_len(line) {
-                    Some(last_quote) => (Tok::ByteStringValue, 2 + last_quote + 1),
+                    Some(last_quote) => (Ok(Tok::ByteStringValue), 2 + last_quote + 1),
                     None => {
-                        let loc = make_loc(file_hash, start_offset, start_offset + line.len() + 2);
-                        return Err(Box::new(diag!(
-                            if is_hex {
-                                Syntax::InvalidHexString
-                            } else {
-                                Syntax::InvalidByteString
-                            },
-                            (loc, "Missing closing quote (\") after byte string")
-                        )));
+                        let diag = maybe_diag! {
+                            let loc =
+                                make_loc(file_hash, start_offset, start_offset + line.len() + 2);
+                            Box::new(diag!(
+                                if is_hex {
+                                    Syntax::InvalidHexString
+                                } else {
+                                    Syntax::InvalidByteString
+                                },
+                                (loc, "Missing closing quote (\") after byte string")
+                            ))
+                        };
+                        (Err(diag), line.len() + 2)
                     }
                 }
             } else {
                 let len = get_name_len(text);
-                (get_name_token(edition, &text[..len]), len)
+                (Ok(get_name_token(edition, &text[..len])), len)
+            }
+        }
+        '$' => {
+            if text.len() > 1 && text[1..].starts_with(|c| matches!(c,'A'..='Z' | 'a'..='z' | '_'))
+            {
+                let len = get_name_len(&text[1..]);
+                (Ok(Tok::SyntaxIdentifier), len + 1)
+            } else {
+                let loc = make_loc(file_hash, start_offset, start_offset);
+                let diag = maybe_diag! { Box::new(diag!(
+                    Syntax::UnexpectedToken,
+                    (loc, "Expected an identifier following '$', e.g. '$x'"),
+                )) };
+                (Err(diag), 1)
             }
         }
         '&' => {
             if text.starts_with("&mut ") {
-                (Tok::AmpMut, 5)
+                (Ok(Tok::AmpMut), 5)
             } else if text.starts_with("&&") {
-                (Tok::AmpAmp, 2)
+                (Ok(Tok::AmpAmp), 2)
             } else {
-                (Tok::Amp, 1)
+                (Ok(Tok::Amp), 1)
             }
         }
         '|' => {
             if text.starts_with("||") {
-                (Tok::PipePipe, 2)
+                (Ok(Tok::PipePipe), 2)
             } else {
-                (Tok::Pipe, 1)
+                (Ok(Tok::Pipe), 1)
             }
         }
         '=' => {
             if text.starts_with("==>") {
-                (Tok::EqualEqualGreater, 3)
+                (Ok(Tok::EqualEqualGreater), 3)
             } else if text.starts_with("==") {
-                (Tok::EqualEqual, 2)
+                (Ok(Tok::EqualEqual), 2)
             } else {
-                (Tok::Equal, 1)
+                (Ok(Tok::Equal), 1)
             }
         }
         '!' => {
             if text.starts_with("!=") {
-                (Tok::ExclaimEqual, 2)
+                (Ok(Tok::ExclaimEqual), 2)
             } else {
-                (Tok::Exclaim, 1)
+                (Ok(Tok::Exclaim), 1)
             }
         }
         '<' => {
             if text.starts_with("<==>") {
-                (Tok::LessEqualEqualGreater, 4)
+                (Ok(Tok::LessEqualEqualGreater), 4)
             } else if text.starts_with("<=") {
-                (Tok::LessEqual, 2)
+                (Ok(Tok::LessEqual), 2)
             } else if text.starts_with("<<") {
-                (Tok::LessLess, 2)
+                (Ok(Tok::LessLess), 2)
             } else {
-                (Tok::Less, 1)
+                (Ok(Tok::Less), 1)
             }
         }
         '>' => {
             if text.starts_with(">=") {
-                (Tok::GreaterEqual, 2)
+                (Ok(Tok::GreaterEqual), 2)
             } else if text.starts_with(">>") {
-                (Tok::GreaterGreater, 2)
+                (Ok(Tok::GreaterGreater), 2)
             } else {
-                (Tok::Greater, 1)
+                (Ok(Tok::Greater), 1)
             }
         }
         ':' => {
             if text.starts_with("::") {
-                (Tok::ColonColon, 2)
+                (Ok(Tok::ColonColon), 2)
             } else {
-                (Tok::Colon, 1)
+                (Ok(Tok::Colon), 1)
             }
         }
-        '%' => (Tok::Percent, 1),
-        '(' => (Tok::LParen, 1),
-        ')' => (Tok::RParen, 1),
-        '[' => (Tok::LBracket, 1),
-        ']' => (Tok::RBracket, 1),
-        '*' => (Tok::Star, 1),
-        '+' => (Tok::Plus, 1),
-        ',' => (Tok::Comma, 1),
-        '-' => (Tok::Minus, 1),
         '.' => {
             if text.starts_with("..") {
-                (Tok::PeriodPeriod, 2)
+                (Ok(Tok::PeriodPeriod), 2)
             } else {
-                (Tok::Period, 1)
+                (Ok(Tok::Period), 1)
             }
         }
-        '/' => (Tok::Slash, 1),
-        ';' => (Tok::Semicolon, 1),
-        '^' => (Tok::Caret, 1),
-        '{' => (Tok::LBrace, 1),
-        '}' => (Tok::RBrace, 1),
-        '#' => (Tok::NumSign, 1),
-        '@' => (Tok::AtSign, 1),
+        '-' => {
+            if text.starts_with("->") {
+                (Ok(Tok::MinusGreater), 2)
+            } else {
+                (Ok(Tok::Minus), 1)
+            }
+        }
+        '%' => (Ok(Tok::Percent), 1),
+        '(' => (Ok(Tok::LParen), 1),
+        ')' => (Ok(Tok::RParen), 1),
+        '[' => (Ok(Tok::LBracket), 1),
+        ']' => (Ok(Tok::RBracket), 1),
+        '*' => (Ok(Tok::Star), 1),
+        '+' => (Ok(Tok::Plus), 1),
+        ',' => (Ok(Tok::Comma), 1),
+        '/' => (Ok(Tok::Slash), 1),
+        ';' => (Ok(Tok::Semicolon), 1),
+        '^' => (Ok(Tok::Caret), 1),
+        '{' => (Ok(Tok::LBrace), 1),
+        '}' => (Ok(Tok::RBrace), 1),
+        '#' => (Ok(Tok::NumSign), 1),
+        '@' => (Ok(Tok::AtSign), 1),
         c => {
-            let loc = make_loc(file_hash, start_offset, start_offset);
-            return Err(Box::new(diag!(
-                Syntax::InvalidCharacter,
-                (loc, format!("Unexpected character: '{}'", DisplayChar(c),))
-            )));
+            let diag = maybe_diag! {
+                let loc = make_loc(file_hash, start_offset, start_offset);
+                Box::new(diag!(
+                    Syntax::InvalidCharacter,
+                    (loc, format!("Unexpected character: '{}'", DisplayChar(c),))
+                ))
+            };
+            (Err(diag), c.len_utf8())
         }
     };
-
-    Ok((tok, len))
+    (res, len)
 }
 
 // Return the length of the substring matching [a-zA-Z0-9_]. Note that

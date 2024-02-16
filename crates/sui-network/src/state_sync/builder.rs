@@ -10,7 +10,7 @@ use std::{
 };
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::p2p::StateSyncConfig;
-use sui_types::{messages_checkpoint::VerifiedCheckpoint, storage::ReadStore};
+use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use tap::Pipe;
 use tokio::{
     sync::{broadcast, mpsc},
@@ -72,7 +72,6 @@ impl<S> Builder<S> {
 impl<S> Builder<S>
 where
     S: WriteStore + Clone + Send + Sync + 'static,
-    <S as ReadStore>::Error: std::error::Error,
 {
     pub fn build(self) -> (UnstartedStateSync<S>, StateSyncServer<impl StateSync>) {
         let state_sync_config = self.config.clone().unwrap_or_default();
@@ -189,7 +188,6 @@ pub struct UnstartedStateSync<S> {
 impl<S> UnstartedStateSync<S>
 where
     S: WriteStore + Clone + Send + Sync + 'static,
-    <S as ReadStore>::Error: std::error::Error,
 {
     pub(super) fn build(self, network: anemo::Network) -> (StateSyncEventLoop<S>, Handle) {
         let Self {

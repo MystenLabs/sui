@@ -160,7 +160,7 @@ module sui::token {
         (policy, cap)
     }
 
-    #[lint_allow(share_owned)]
+    #[allow(lint(share_owned))]
     /// Share the `TokenPolicy`. Due to `key`-only restriction, it must be
     /// shared after initialization.
     public fun share_policy<T>(policy: TokenPolicy<T>) {
@@ -293,7 +293,7 @@ module sui::token {
         object::delete(id);
     }
 
-    #[lint_allow(self_transfer)]
+    #[allow(lint(self_transfer))]
     /// Transfer the `Token` to the transaction sender.
     public fun keep<T>(token: Token<T>, ctx: &mut TxContext) {
         transfer::transfer(token, tx_context::sender(ctx))

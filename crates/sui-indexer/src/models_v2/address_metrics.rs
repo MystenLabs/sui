@@ -8,7 +8,7 @@ use diesel::sql_types::BigInt;
 
 use sui_json_rpc_types::AddressMetrics;
 
-use crate::schema_v2::{active_addresses, address_metrics, addresses};
+use crate::schema::{active_addresses, address_metrics, addresses};
 
 #[derive(Clone, Debug, Queryable, Insertable)]
 #[diesel(table_name = addresses)]

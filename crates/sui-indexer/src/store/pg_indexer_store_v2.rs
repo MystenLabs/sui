@@ -3,6 +3,7 @@
 
 use core::result::Result::Ok;
 use itertools::Itertools;
+use std::any::Any;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -28,6 +29,7 @@ use crate::handlers::EpochToCommit;
 use crate::handlers::TransactionObjectChangesToCommit;
 use crate::metrics::IndexerMetrics;
 
+use crate::db::PgConnectionPool;
 use crate::models_v2::checkpoints::StoredCheckpoint;
 use crate::models_v2::display::StoredDisplay;
 use crate::models_v2::epoch::StoredEpochInfo;
@@ -37,19 +39,17 @@ use crate::models_v2::objects::{
 };
 use crate::models_v2::packages::StoredPackage;
 use crate::models_v2::transactions::StoredTransaction;
-use crate::schema_v2::{
+use crate::schema::{
     checkpoints, display, epochs, events, objects, objects_history, objects_snapshot, packages,
     transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
 };
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
-use crate::store::module_resolver_v2::IndexerStoreModuleResolver;
-use crate::types_v2::{
-    IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
-};
-use crate::PgConnectionPool;
+use crate::store::module_resolver_v2::IndexerStorePackageModuleResolver;
+use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 
 use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
 use super::IndexerStoreV2;
+use super::ObjectChangeToCommit;
 
 #[macro_export]
 macro_rules! chunk {
@@ -107,7 +107,7 @@ SET object_version = EXCLUDED.object_version,
 #[derive(Clone)]
 pub struct PgIndexerStoreV2 {
     blocking_cp: PgConnectionPool,
-    module_cache: Arc<SyncModuleCache<IndexerStoreModuleResolver>>,
+    module_cache: Arc<SyncModuleCache<IndexerStorePackageModuleResolver>>,
     metrics: IndexerMetrics,
     parallel_chunk_size: usize,
     parallel_objects_chunk_size: usize,
@@ -116,8 +116,8 @@ pub struct PgIndexerStoreV2 {
 
 impl PgIndexerStoreV2 {
     pub fn new(blocking_cp: PgConnectionPool, metrics: IndexerMetrics) -> Self {
-        let module_cache: Arc<SyncModuleCache<IndexerStoreModuleResolver>> = Arc::new(
-            SyncModuleCache::new(IndexerStoreModuleResolver::new(blocking_cp.clone())),
+        let module_cache: Arc<SyncModuleCache<IndexerStorePackageModuleResolver>> = Arc::new(
+            SyncModuleCache::new(IndexerStorePackageModuleResolver::new(blocking_cp.clone())),
         );
         let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
             .unwrap_or_else(|_e| PG_COMMIT_PARALLEL_CHUNK_SIZE_PER_DB_TX.to_string())
@@ -849,7 +849,7 @@ impl PgIndexerStoreV2 {
 
 #[async_trait]
 impl IndexerStoreV2 for PgIndexerStoreV2 {
-    type ModuleCache = SyncModuleCache<IndexerStoreModuleResolver>;
+    type ModuleCache = SyncModuleCache<IndexerStorePackageModuleResolver>;
 
     async fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
         self.execute_in_blocking_worker(|this| this.get_latest_tx_checkpoint_sequence_number())
@@ -1128,6 +1128,10 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
     fn module_cache(&self) -> Arc<Self::ModuleCache> {
         self.module_cache.clone()
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// Construct deleted objects and mutated objects to commit.
@@ -1197,10 +1201,4 @@ fn make_objects_history_to_commit(
                 .map(ObjectChangeToCommit::MutatedObject),
         )
         .collect()
-}
-
-#[allow(clippy::large_enum_variant)]
-enum ObjectChangeToCommit {
-    MutatedObject(StoredObject),
-    DeletedObject(StoredDeletedObject),
 }

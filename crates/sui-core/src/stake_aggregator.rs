@@ -64,7 +64,7 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
                 return InsertResult::Failed {
                     error: SuiError::StakeAggregatorRepeatedSigner {
                         signer: authority,
-                        conflicting_sig: oc.get() == &s,
+                        conflicting_sig: oc.get() != &s,
                     },
                 };
             }

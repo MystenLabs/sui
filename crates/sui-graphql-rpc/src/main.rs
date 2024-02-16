@@ -34,8 +34,8 @@ async fn main() {
         Command::GenerateDocsExamples => {
             let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             // we are looking to put examples content in
-            // sui/docs/content/references/sui-api/graphql/examples.mdx
-            let filename = "docs/content/references/sui-api/graphql/examples.mdx";
+            // sui/docs/content/references/sui-graphql/examples.mdx
+            let filename = "docs/content/references/sui-graphql/examples.mdx";
             buf.pop();
             buf.pop();
             buf.push(filename);

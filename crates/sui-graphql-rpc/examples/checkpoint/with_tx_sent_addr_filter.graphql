@@ -4,7 +4,6 @@
     digest
     sequenceNumber
     timestamp
-    liveObjectSetDigest
     transactionBlocks(
       filter: {
         signAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"

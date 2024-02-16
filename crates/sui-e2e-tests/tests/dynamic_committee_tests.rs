@@ -10,7 +10,6 @@ use std::{
     sync::Arc,
 };
 use sui_core::authority::AuthorityState;
-use sui_core::authority::AuthorityStore;
 use sui_macros::*;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -164,7 +163,7 @@ impl StressTestRunner {
             .type_layout_resolver(Box::new(backing_package_store.as_ref()));
         for (obj_ref, _) in effects.created() {
             let object_opt = state
-                .database
+                .get_object_store()
                 .get_object_by_key(&obj_ref.0, obj_ref.1)
                 .unwrap();
             let Some(object) = object_opt else { continue };
@@ -177,7 +176,7 @@ impl StressTestRunner {
         println!("MUTATED:");
         for (obj_ref, _) in effects.mutated() {
             let object = state
-                .database
+                .get_object_store()
                 .get_object_by_key(&obj_ref.0, obj_ref.1)
                 .unwrap()
                 .unwrap();
@@ -191,7 +190,7 @@ impl StressTestRunner {
         for kind in effects.input_shared_objects() {
             let (obj_id, version) = kind.id_and_version();
             let object = state
-                .database
+                .get_object_store()
                 .get_object_by_key(&obj_id, version)
                 .unwrap()
                 .unwrap();
@@ -202,9 +201,10 @@ impl StressTestRunner {
         }
     }
 
+    /*
     pub fn db(&self) -> Arc<AuthorityStore> {
         self.state().db()
-    }
+    }*/
 
     pub fn state(&self) -> Arc<AuthorityState> {
         self.test_cluster.fullnode_handle.sui_node.state()
@@ -243,7 +243,7 @@ impl StressTestRunner {
     }
 
     async fn get_from_effects(&self, effects: &[(ObjectRef, Owner)], name: &str) -> Option<Object> {
-        let db = self.db();
+        let db = self.state().get_object_store().clone();
         let found: Vec<_> = effects
             .iter()
             .filter_map(|(obj_ref, _)| {

@@ -30,7 +30,7 @@
 
 //# create-checkpoint 12
 
-//# run-graphql --cursors 6
+//# run-graphql --cursors {"c":12,"s":6}
 {
   checkpoints(first: 4, after: "@{cursor_0}") {
     pageInfo {
@@ -44,7 +44,7 @@
   }
 }
 
-//# run-graphql --cursors 6 8
+//# run-graphql --cursors {"c":12,"s":6} {"c":12,"s":8}
 {
   checkpoints(first: 4, after: "@{cursor_0}", before: "@{cursor_1}") {
     pageInfo {
@@ -58,7 +58,7 @@
   }
 }
 
-//# run-graphql --cursors 6
+//# run-graphql --cursors {"c":12,"s":6}
 {
   checkpoints(first: 4, before: "@{cursor_0}") {
     pageInfo {
@@ -72,7 +72,7 @@
   }
 }
 
-//# run-graphql --cursors 3 6
+//# run-graphql --cursors {"c":12,"s":3} {"c":12,"s":6}
 {
   checkpoints(first: 4, after: "@{cursor_0}" before: "@{cursor_1}") {
     pageInfo {
@@ -86,7 +86,7 @@
   }
 }
 
-//# run-graphql --cursors 3
+//# run-graphql --cursors {"c":12,"s":3}
 {
   checkpoints(first: 4, before: "@{cursor_0}") {
     pageInfo {
@@ -100,7 +100,7 @@
   }
 }
 
-//# run-graphql --cursors 6
+//# run-graphql --cursors {"c":12,"s":6}
 {
   checkpoints(last: 4, after: "@{cursor_0}") {
     pageInfo {
@@ -114,7 +114,7 @@
   }
 }
 
-//# run-graphql --cursors 4
+//# run-graphql --cursors {"c":12,"s":4}
 {
   checkpoints(before: "@{cursor_0}") {
     pageInfo {
@@ -128,7 +128,7 @@
   }
 }
 
-//# run-graphql --cursors 4
+//# run-graphql --cursors {"c":12,"s":4}
 {
   checkpoints(after: "@{cursor_0}") {
     pageInfo {
@@ -142,7 +142,7 @@
   }
 }
 
-//# run-graphql --cursors 6
+//# run-graphql --cursors {"c":12,"s":6}
 {
   checkpoints(last: 4, before: "@{cursor_0}") {
     pageInfo {
@@ -156,7 +156,7 @@
   }
 }
 
-//# run-graphql --cursors 3 6
+//# run-graphql --cursors {"c":12,"s":3} {"c":12,"s":6}
 {
   checkpoints(last: 4, after: "@{cursor_0}" before: "@{cursor_1}") {
     pageInfo {
@@ -170,7 +170,7 @@
   }
 }
 
-//# run-graphql --cursors 9
+//# run-graphql --cursors {"c":12,"s":9}
 {
   checkpoints(last: 4, after: "@{cursor_0}") {
     pageInfo {
@@ -229,6 +229,21 @@
 //# run-graphql
 {
   checkpoints(first: 4, last: 2) {
+    pageInfo {
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      cursor
+      node { sequenceNumber }
+    }
+  }
+}
+
+//# run-graphql --cursors {"c":10,"s":3} {"c":12,"s":6}
+# Should throw a client error about inconsistent cursors.
+{
+  checkpoints(last: 4, after: "@{cursor_0}" before: "@{cursor_1}") {
     pageInfo {
       hasPreviousPage
       hasNextPage

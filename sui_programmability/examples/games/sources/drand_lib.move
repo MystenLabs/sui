@@ -40,6 +40,8 @@ module games::drand_lib {
         // Convert round to a byte array in big-endian order.
         let round_bytes: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0];
         let i = 7;
+
+        // Note that this loop never copies the last byte of round_bytes, though it is not expected to ever be non-zero.
         while (i > 0) {
             let curr_byte = round % 0x100;
             let curr_element = vector::borrow_mut(&mut round_bytes, i);

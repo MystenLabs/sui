@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::VecDeque;
 use std::{
     ops::Bound::{Included, Unbounded},
     time::Duration,
@@ -18,7 +19,7 @@ use super::Store;
 use crate::{
     block::{BlockDigest, BlockRef, Round, SignedBlock, VerifiedBlock},
     commit::{Commit, CommitIndex},
-    error::ConsensusResult,
+    error::{ConsensusError, ConsensusResult},
 };
 
 /// Persistent storage with RocksDB.
@@ -106,16 +107,20 @@ impl Store for RocksDBStore {
     }
 
     fn read_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<Option<VerifiedBlock>>> {
-        let refs = refs
+        let keys = refs
             .iter()
             .map(|r| (r.round, r.author, r.digest))
             .collect::<Vec<_>>();
-        let serialized = self.blocks.multi_get(refs)?;
+        let serialized = self.blocks.multi_get(keys)?;
         let mut blocks = vec![];
-        for serialized in serialized {
+        for (key, serialized) in refs.iter().zip(serialized) {
             if let Some(serialized) = serialized {
-                let signed_block: SignedBlock = bcs::from_bytes(&serialized)?;
-                let block = VerifiedBlock::new_verified(signed_block, serialized)?;
+                let signed_block: SignedBlock =
+                    bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
+                // Only accepted blocks should have been written to storage.
+                let block = VerifiedBlock::new_verified(signed_block, serialized);
+                // Makes sure block data is not corrupted, by comparing digests.
+                assert_eq!(*key, block.reference());
                 blocks.push(Some(block));
             } else {
                 blocks.push(None);
@@ -147,6 +152,36 @@ impl Store for RocksDBStore {
             refs.push(BlockRef::new(round, author, digest));
         }
         let results = self.read_blocks(refs.as_slice())?;
+        let mut blocks = vec![];
+        for (r, block) in refs.into_iter().zip(results.into_iter()) {
+            blocks.push(
+                block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),
+            );
+        }
+        Ok(blocks)
+    }
+
+    // The method returns the last `num_of_rounds` rounds blocks by author in round ascending order.
+    fn scan_last_blocks_by_author(
+        &self,
+        author: AuthorityIndex,
+        num_of_rounds: u64,
+    ) -> ConsensusResult<Vec<VerifiedBlock>> {
+        let mut refs = VecDeque::new();
+        for kv in self
+            .digests_by_authorities
+            .safe_range_iter((
+                Included((author, Round::MIN, BlockDigest::MIN)),
+                Included((author, Round::MAX, BlockDigest::MAX)),
+            ))
+            .skip_to_last()
+            .reverse()
+            .take(num_of_rounds as usize)
+        {
+            let ((author, round, digest), _) = kv?;
+            refs.push_front(BlockRef::new(round, author, digest));
+        }
+        let results = self.read_blocks(refs.as_slices().0)?;
         let mut blocks = vec![];
         for (r, block) in refs.into_iter().zip(results.into_iter()) {
             blocks.push(

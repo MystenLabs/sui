@@ -64,7 +64,7 @@ fragment Modules on Object {
     }
 }
 
-//# run-graphql --cursors "m" "o"
+//# run-graphql --cursors {"n":"m","c":1} {"n":"o","c":1}
 fragment NodeNames on MoveModuleConnection {
     edges {
         cursor
@@ -103,7 +103,7 @@ fragment Modules on Object {
     }
 }
 
-//# run-graphql --cursors "m" "o"
+//# run-graphql --cursors {"n":"m","c":1} {"n":"o","c":1}
 fragment NodeNames on MoveModuleConnection {
     edges {
         cursor

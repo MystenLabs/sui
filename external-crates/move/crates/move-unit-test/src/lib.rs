@@ -161,6 +161,7 @@ impl UnitTestingConfig {
         let (units, warnings) =
             diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
         diagnostics::report_warnings(&files, warnings);
+        let units: Vec<_> = units.into_iter().map(|unit| unit.named_module).collect();
         test_plan.map(|tests| TestPlan::new(tests, files, units))
     }
 

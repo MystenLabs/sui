@@ -55,9 +55,6 @@ exclude = [
   "external-crates/move/crates/move-vm-types",
   "external-crates/move/crates/serializer-tests",
   "external-crates/move/crates/test-generation",
-  "external-crates/move/move-execution/next-vm/crates/move-bytecode-verifier",
-  "external-crates/move/move-execution/next-vm/crates/move-stdlib",
-  "external-crates/move/move-execution/next-vm/crates/move-vm-runtime",
   "external-crates/move/move-execution/v0/move-bytecode-verifier",
   "external-crates/move/move-execution/v0/move-stdlib",
   "external-crates/move/move-execution/v0/move-vm/runtime",
@@ -97,6 +94,7 @@ members = [
   "crates/sui-core",
   "crates/sui-cost",
   "crates/sui-data-ingestion",
+  "crates/sui-data-ingestion-core",
   "crates/sui-e2e-tests",
   "crates/sui-enum-compat-util",
   "crates/sui-faucet",
@@ -155,6 +153,7 @@ members = [
   "crates/sui-types",
   "crates/sui-upgrade-compatibility-transactional-tests",
   "crates/sui-verifier-transactional-tests",
+  "crates/suins-indexer",
   "crates/suiop-cli",
   "crates/telemetry-subscribers",
   "crates/test-cluster",
@@ -179,9 +178,6 @@ members = [
   "sui-execution/latest/sui-adapter",
   "sui-execution/latest/sui-move-natives",
   "sui-execution/latest/sui-verifier",
-  "sui-execution/next-vm/sui-adapter",
-  "sui-execution/next-vm/sui-move-natives",
-  "sui-execution/next-vm/sui-verifier",
   "sui-execution/v0/sui-adapter",
   "sui-execution/v0/sui-move-natives",
   "sui-execution/v0/sui-verifier",
@@ -192,7 +188,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.18.0"
+version = "1.19.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -348,6 +344,7 @@ indicatif = "0.17.2"
 inquire = "0.6.0"
 insta = { version = "1.21.1", features = ["redactions", "yaml", "json"] }
 integer-encoding = "3.0.1"
+ipnetwork = "0.20.0"
 itertools = "0.10.5"
 jemalloc-ctl = "^0.5"
 jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = [
@@ -494,6 +491,7 @@ tower-http = { version = "0.3.4", features = [
 ] }
 # tower-http = { version="0.4", features = ["trace"] }
 tower-layer = "0.3.2"
+twox-hash = "1.6.3"
 tracing = "0.1.37"
 tracing-appender = "0.2.2"
 tracing-subscriber = { version = "0.3.15", default-features = false, features = [
@@ -550,10 +548,10 @@ fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ea6
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ea66012b860d9dd152abb7f2156275698ee91126", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -580,6 +578,7 @@ sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion = { path = "crates/sui-data-ingestion" }
+sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
 sui-e2e-tests = { path = "crates/sui-e2e-tests" }
 sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }

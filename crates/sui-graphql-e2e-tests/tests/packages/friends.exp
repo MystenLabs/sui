@@ -37,19 +37,19 @@ Response: {
                         "all": {
                           "edges": [
                             {
-                              "cursor": "MA",
+                              "cursor": "eyJpIjowLCJjIjoxfQ",
                               "node": {
                                 "name": "m0"
                               }
                             },
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
                             },
                             {
-                              "cursor": "Mg",
+                              "cursor": "eyJpIjoyLCJjIjoxfQ",
                               "node": {
                                 "name": "m2"
                               }
@@ -63,13 +63,13 @@ Response: {
                         "after": {
                           "edges": [
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
                             },
                             {
-                              "cursor": "Mg",
+                              "cursor": "eyJpIjoyLCJjIjoxfQ",
                               "node": {
                                 "name": "m2"
                               }
@@ -83,13 +83,13 @@ Response: {
                         "before": {
                           "edges": [
                             {
-                              "cursor": "MA",
+                              "cursor": "eyJpIjowLCJjIjoxfQ",
                               "node": {
                                 "name": "m0"
                               }
                             },
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
@@ -201,7 +201,7 @@ Response: {
                         "prefix": {
                           "edges": [
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
@@ -215,13 +215,13 @@ Response: {
                         "prefixAll": {
                           "edges": [
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
                             },
                             {
-                              "cursor": "Mg",
+                              "cursor": "eyJpIjoyLCJjIjoxfQ",
                               "node": {
                                 "name": "m2"
                               }
@@ -235,7 +235,7 @@ Response: {
                         "suffix": {
                           "edges": [
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
@@ -249,13 +249,13 @@ Response: {
                         "suffixAll": {
                           "edges": [
                             {
-                              "cursor": "MA",
+                              "cursor": "eyJpIjowLCJjIjoxfQ",
                               "node": {
                                 "name": "m0"
                               }
                             },
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoxfQ",
                               "node": {
                                 "name": "m1"
                               }
@@ -308,25 +308,25 @@ Response: {
                         "friends": {
                           "edges": [
                             {
-                              "cursor": "MA",
+                              "cursor": "eyJpIjowLCJjIjoyfQ",
                               "node": {
                                 "name": "m0"
                               }
                             },
                             {
-                              "cursor": "MQ",
+                              "cursor": "eyJpIjoxLCJjIjoyfQ",
                               "node": {
                                 "name": "m1"
                               }
                             },
                             {
-                              "cursor": "Mg",
+                              "cursor": "eyJpIjoyLCJjIjoyfQ",
                               "node": {
                                 "name": "m2"
                               }
                             },
                             {
-                              "cursor": "Mw",
+                              "cursor": "eyJpIjozLCJjIjoyfQ",
                               "node": {
                                 "name": "m3"
                               }

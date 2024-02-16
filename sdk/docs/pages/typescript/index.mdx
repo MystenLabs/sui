@@ -1,3 +1,5 @@
+import { Callout } from 'nextra/components';
+
 # Sui TypeScript SDK Quick Start
 
 The Sui TypeScript SDK is a modular library of tools for interacting with the Sui blockchain. Use it
@@ -20,6 +22,19 @@ The following table lists the locations for Sui networks.
 | Testnet | `https://fullnode.testnet.sui.io:443` | `https://faucet.testnet.sui.io/gas`   |
 | Mainnet | `https://fullnode.mainnet.sui.io:443` | `null`                                |
 
+<Callout type="warning">
+
+Use dedicated nodes/shared services rather than public endpoints for production apps. The public
+endpoints maintained by Mysten Labs (`fullnode.<NETWORK>.sui.io:443`) are rate-limited, and support
+only 100 requests per 30 seconds or so. Do not use public endpoints in production applications with
+high traffic volume.
+
+You can either run your own Full nodes, or outsource this to a professional infrastructure provider
+(preferred for apps that have high traffic). You can find a list of reliable RPC endpoint providers
+for Sui on the [Sui Dev Portal](https://sui.io/developers#dev-tools) using the **Node Service** tab.
+
+</Callout>
+
 ## Migrate to version 0.38.0
 
 The Sui TypeScript SDK was refactored beginning with version 0.38.0. If you are updating from an
@@ -36,15 +51,15 @@ the complete SDK module. Now, you upload the individual packages of the SDK modu
 The Sui TypeScript SDK deprecates the following classes with version 0.38.0:
 
 - `JsonRpcProvider` - The `JsonRpcProvider` class is deprecated in favor of the `suiClient` class
-  when creating a client for a Sui network. See [Network Interactions with SuiClient](sui-client)
-  for more information.
+  when creating a client for a Sui network. See
+  [Network Interactions with SuiClient](typescript/sui-client) for more information.
 - `SignerWithProver` and `RawSigner` - Key pairs now directly support signing transactions and
-  messages without the need of a `Signer` class. See the [Key pairs](cryptography/keypairs) topic
-  for more information.
+  messages without the need of a `Signer` class. See the
+  [Key pairs](typescript/cryptography/keypairs) topic for more information.
 - `signAndExecuteTransactionBlock` - This method was not deprecated, but is now part of `SuiClient`.
 - `Connection` classes - The `Connection` classes (`Connection`, `devnetConnection`, and so on) have
   been deprecated in favor of using `suiClient` for establishing the connection. See
-  [Network Interactions with SuiClient](sui-client) for more information.
+  [Network Interactions with SuiClient](typescript/sui-client) for more information.
 - The `superstruct` type definitions for `JsonRPCProvider` types are replaced with generated types
   exported from `@mysten/sui.js/client`. The new type definitions are pure TypeScript types that you
   can't use for runtime validation.
@@ -55,7 +70,7 @@ The Sui TypeScript SDK deprecates the following classes with version 0.38.0:
 
 Signing and sending transaction blocks changes slightly with the deprecation of the `Signer`
 pattern. For an example of transaction signing, see the
-[Sui Programmable Transaction Blocks Basics](basics) topic.
+[Sui Programmable Transaction Blocks Basics](typescript/transaction-building/basics) topic.
 
 ### Faucet requests
 

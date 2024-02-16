@@ -5,7 +5,6 @@ import { fromB64, toB58, toB64 } from '@mysten/bcs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../../src/bcs';
-import { TransactionBlock } from '../../../src/builder';
 import { parseSerializedSignature, SIGNATURE_SCHEME_TO_FLAG } from '../../../src/cryptography';
 // import { setup, TestToolbox } from './utils/setup';
 import { SignatureWithBytes } from '../../../src/cryptography/keypair';
@@ -14,6 +13,7 @@ import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519'
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
 import { MultiSigPublicKey, parsePartialSignatures } from '../../../src/multisig';
+import { TransactionBlock } from '../../../src/transactions';
 import { toZkLoginPublicIdentifier } from '../../../src/zklogin/publickey';
 
 describe('Multisig scenarios', () => {
@@ -233,9 +233,7 @@ describe('Multisig scenarios', () => {
 		expect(isValidSig2).toBe(true);
 
 		// publickey.ts
-		expect(() => multiSigPublicKey.combinePartialSignatures([sig3.signature])).toThrow(
-			new Error(`Unsupported signature scheme`),
-		);
+		expect(() => multiSigPublicKey.combinePartialSignatures([sig3.signature])).toThrowError();
 	});
 
 	it('providing signatures with invalid order', async () => {

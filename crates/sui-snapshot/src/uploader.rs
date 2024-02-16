@@ -10,13 +10,14 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::db_checkpoint_handler::{STATE_SNAPSHOT_COMPLETED_MARKER, SUCCESS_MARKER};
 use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_missing_epochs_dirs, path_to_filesystem, put,
     run_manifest_update_loop,
 };
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
+
 use sui_storage::FileCompression;
 use tracing::{debug, error, info};
 

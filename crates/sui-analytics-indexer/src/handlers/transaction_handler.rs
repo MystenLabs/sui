@@ -184,8 +184,8 @@ mod tests {
     use fastcrypto::encoding::{Base64, Encoding};
     use simulacrum::Simulacrum;
     use sui_indexer::framework::Handler;
-    use sui_rest_api::node_state_getter::NodeStateGetter;
     use sui_types::base_types::SuiAddress;
+    use sui_types::storage::ReadStore;
 
     #[tokio::test]
     pub async fn test_transaction_handler() -> anyhow::Result<()> {
@@ -201,7 +201,8 @@ mod tests {
         let checkpoint = sim.create_checkpoint();
         let checkpoint_data = sim.get_checkpoint_data(
             checkpoint.clone(),
-            sim.get_checkpoint_contents(checkpoint.content_digest)?,
+            sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)?
+                .unwrap(),
         )?;
         let mut txn_handler = TransactionHandler::new();
         txn_handler.process_checkpoint(&checkpoint_data).await?;

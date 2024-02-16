@@ -49,11 +49,11 @@ fn no_dep_graph() {
         .expect("Creating DependencyGraph");
 
     assert!(
-        graph.package_graph.contains_node(graph.root_package),
+        graph.package_graph.contains_node(graph.root_package_id),
         "A graph for a package with no dependencies should still contain the root package",
     );
 
-    assert_eq!(graph.topological_order(), vec![graph.root_package]);
+    assert_eq!(graph.topological_order(), vec![graph.root_package_id]);
 }
 
 #[test]
@@ -64,17 +64,18 @@ fn no_dep_graph_from_lock() {
     let graph = DependencyGraph::read_from_lock(
         pkg,
         Symbol::from("Root"),
+        Symbol::from("Root"),
         &mut File::open(snapshot).expect("Opening snapshot"),
         None,
     )
     .expect("Reading DependencyGraph");
 
     assert!(
-        graph.package_graph.contains_node(graph.root_package),
+        graph.package_graph.contains_node(graph.root_package_id),
         "A graph for a package with no dependencies should still contain the root package",
     );
 
-    assert_eq!(graph.topological_order(), vec![graph.root_package]);
+    assert_eq!(graph.topological_order(), vec![graph.root_package_id]);
 }
 
 #[test]
@@ -87,6 +88,7 @@ fn lock_file_roundtrip() {
 
     let graph = DependencyGraph::read_from_lock(
         pkg,
+        Symbol::from("Root"),
         Symbol::from("Root"),
         &mut File::open(&snapshot).expect("Opening snapshot"),
         None,
@@ -127,6 +129,7 @@ fn lock_file_missing_dependency() {
 
     let Err(err) = DependencyGraph::read_from_lock(
         pkg,
+        Symbol::from("Root"),
         Symbol::from("Root"),
         &mut File::open(&commit).expect("Opening empty lock file"),
         None,
@@ -180,6 +183,7 @@ fn always_deps_from_lock() {
     let graph = DependencyGraph::read_from_lock(
         pkg,
         Symbol::from("Root"),
+        Symbol::from("Root"),
         &mut File::open(snapshot).expect("Opening snapshot"),
         None,
     )
@@ -202,6 +206,7 @@ fn merge_simple() {
     let mut outer = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
+        Symbol::from("Root"),
         &mut A_LOCK.as_bytes(),
         None,
     )
@@ -214,6 +219,7 @@ fn merge_simple() {
     let inner = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("A"),
+        Symbol::from("A"),
         &mut EMPTY_LOCK.as_bytes(),
         None,
     )
@@ -221,7 +227,7 @@ fn merge_simple() {
 
     let dep_graphs = BTreeMap::from([(
         Symbol::from("A"),
-        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
+        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false, None),
     )]);
     let dependencies = &BTreeMap::from([(
         Symbol::from("A"),
@@ -254,6 +260,7 @@ fn merge_into_root() {
     let mut outer = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
+        Symbol::from("Root"),
         &mut EMPTY_LOCK.as_bytes(),
         None,
     )
@@ -267,6 +274,7 @@ fn merge_into_root() {
     let inner = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
+        Symbol::from("Root"),
         &mut A_LOCK.as_bytes(),
         None,
     )
@@ -274,7 +282,7 @@ fn merge_into_root() {
 
     let dep_graphs = BTreeMap::from([(
         Symbol::from("A"),
-        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
+        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false, None),
     )]);
     let dependencies = &BTreeMap::from([(
         Symbol::from("A"),
@@ -309,6 +317,7 @@ fn merge_detached() {
     let mut outer = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
+        Symbol::from("Root"),
         &mut EMPTY_LOCK.as_bytes(),
         None,
     )
@@ -321,6 +330,7 @@ fn merge_detached() {
     let inner = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("OtherDep"),
+        Symbol::from("OtherDep"),
         &mut EMPTY_LOCK.as_bytes(),
         None,
     )
@@ -328,7 +338,7 @@ fn merge_detached() {
 
     let dep_graphs = BTreeMap::from([(
         Symbol::from("OtherDep"),
-        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
+        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false, None),
     )]);
     let orig_names: BTreeMap<Symbol, Symbol> = dep_graphs.keys().map(|k| (*k, *k)).collect();
     let Err(err) = outer.merge(
@@ -351,6 +361,7 @@ fn merge_after_calculating_always_deps() {
     let mut outer = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
+        Symbol::from("Root"),
         &mut A_LOCK.as_bytes(),
         None,
     )
@@ -359,6 +370,7 @@ fn merge_after_calculating_always_deps() {
     let inner = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("A"),
+        Symbol::from("A"),
         &mut EMPTY_LOCK.as_bytes(),
         None,
     )
@@ -366,7 +378,7 @@ fn merge_after_calculating_always_deps() {
 
     let dep_graphs = BTreeMap::from([(
         Symbol::from("A"),
-        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
+        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false, None),
     )]);
     let orig_names: BTreeMap<Symbol, Symbol> = dep_graphs.keys().map(|k| (*k, *k)).collect();
     let Err(err) = outer.merge(
@@ -390,6 +402,7 @@ fn merge_overlapping() {
     let mut outer = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
+        Symbol::from("Root"),
         &mut EMPTY_LOCK.as_bytes(),
         None,
     )
@@ -402,6 +415,7 @@ fn merge_overlapping() {
     let inner1 = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("C"),
+        Symbol::from("C"),
         &mut AB_LOCK.as_bytes(),
         None,
     )
@@ -409,6 +423,7 @@ fn merge_overlapping() {
 
     let inner2 = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
+        Symbol::from("C"),
         Symbol::from("C"),
         &mut A_LOCK.as_bytes(),
         None,
@@ -418,11 +433,11 @@ fn merge_overlapping() {
     let dep_graphs = BTreeMap::from([
         (
             Symbol::from("B"),
-            DependencyGraphInfo::new(inner1, DependencyMode::Always, false, false),
+            DependencyGraphInfo::new(inner1, DependencyMode::Always, false, false, None),
         ),
         (
             Symbol::from("C"),
-            DependencyGraphInfo::new(inner2, DependencyMode::Always, false, false),
+            DependencyGraphInfo::new(inner2, DependencyMode::Always, false, false, None),
         ),
     ]);
     let dependencies = &BTreeMap::from([
@@ -465,6 +480,7 @@ fn merge_overlapping_different_deps() {
     let mut outer = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
+        Symbol::from("Root"),
         &mut EMPTY_LOCK.as_bytes(),
         None,
     )
@@ -477,6 +493,7 @@ fn merge_overlapping_different_deps() {
     let inner1 = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("C"),
+        Symbol::from("C"),
         &mut A_DEP_B_LOCK.as_bytes(),
         None,
     )
@@ -484,6 +501,7 @@ fn merge_overlapping_different_deps() {
 
     let inner2 = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
+        Symbol::from("C"),
         Symbol::from("C"),
         &mut A_LOCK.as_bytes(),
         None,
@@ -493,11 +511,11 @@ fn merge_overlapping_different_deps() {
     let dep_graphs = BTreeMap::from([
         (
             Symbol::from("B"),
-            DependencyGraphInfo::new(inner1, DependencyMode::Always, false, false),
+            DependencyGraphInfo::new(inner1, DependencyMode::Always, false, false, None),
         ),
         (
             Symbol::from("C"),
-            DependencyGraphInfo::new(inner2, DependencyMode::Always, false, false),
+            DependencyGraphInfo::new(inner2, DependencyMode::Always, false, false, None),
         ),
     ]);
     let dependencies = &BTreeMap::from([

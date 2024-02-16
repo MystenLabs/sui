@@ -90,15 +90,16 @@ module conventions::profile {
 
 module conventions::defi {
 
-  use conventions::lib::{Self, Profile};
+  use conventions::profile::{Self, Profile};
 
   public fun get_tokens(profile: &Profile) {
 
-  // ✅ Right
-  let name = profile.age();
+   // ✅ Right
+   let name = profile.age();
 
-  // ❌ Wrong
-  let name2 = profile.profile_age();
+   // ❌ Wrong
+   let name2 = profile.profile_age();
+  }
 }
 ```
 

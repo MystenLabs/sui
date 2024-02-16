@@ -13,9 +13,8 @@ use lsp_types::{
 };
 use std::{
     collections::BTreeMap,
-    path::Path,
+    path::PathBuf,
     sync::{Arc, Mutex},
-    thread,
 };
 
 use move_analyzer::{
@@ -24,7 +23,6 @@ use move_analyzer::{
     symbols,
     vfs::{on_text_document_sync_notification, VirtualFileSystem},
 };
-use move_symbol_pool::Symbol;
 use url::Url;
 
 #[derive(Parser)]
@@ -111,7 +109,7 @@ fn main() {
     })
     .expect("could not serialize server capabilities");
 
-    let (diag_sender, diag_receiver) = bounded::<Result<BTreeMap<Symbol, Vec<Diagnostic>>>>(0);
+    let (diag_sender, diag_receiver) = bounded::<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>(0);
     let mut symbolicator_runner = symbols::SymbolicatorRunner::idle();
     if symbols::DEFS_AND_REFS_SUPPORT {
         let initialize_params: lsp_types::InitializeParams =
@@ -136,20 +134,10 @@ fn main() {
         // to be available right after the client is initialized.
         if let Some(uri) = initialize_params.root_uri {
             if let Some(p) = symbols::SymbolicatorRunner::root_dir(&uri.to_file_path().unwrap()) {
-                // need to evaluate in a separate thread to allow for a larger stack size (needed on
-                // Windows)
-                thread::Builder::new()
-                    .stack_size(symbols::STACK_SIZE_BYTES)
-                    .spawn(move || {
-                        if let Ok((Some(new_symbols), _)) = symbols::get_symbols(p.as_path(), lint)
-                        {
-                            let mut old_symbols = symbols.lock().unwrap();
-                            (*old_symbols).merge(new_symbols);
-                        }
-                    })
-                    .unwrap()
-                    .join()
-                    .unwrap();
+                if let Ok((Some(new_symbols), _)) = symbols::get_symbols(p.as_path(), lint) {
+                    let mut old_symbols = symbols.lock().unwrap();
+                    (*old_symbols).merge(new_symbols);
+                }
             }
         }
     };
@@ -173,7 +161,7 @@ fn main() {
                         match result {
                             Ok(diags) => {
                                 for (k, v) in diags {
-                                    let url = Url::from_file_path(Path::new(&k.to_string())).unwrap();
+                                    let url = Url::from_file_path(k).unwrap();
                                     let params = lsp_types::PublishDiagnosticsParams::new(url, v, None);
                                     let notification = Notification::new(lsp_types::notification::PublishDiagnostics::METHOD.to_string(), params);
                                     if let Err(err) = context

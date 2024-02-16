@@ -3,7 +3,7 @@ name: Sui doc content issue or request
 about: Creates an issue for Sui documentation
 title: 'Sui doc content issue or request'
 labels: doc-issue
-assignees: 'randall-Mysten'
+assignees: 'ronny-mysten'
 ---
 
 If this is an issue with existing content, provide the URL or GitHub path to the topic. Otherwise, use **New**.

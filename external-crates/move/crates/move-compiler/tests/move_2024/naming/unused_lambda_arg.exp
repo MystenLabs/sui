@@ -1,0 +1,32 @@
+warning[W09003]: unused assignment
+   ┌─ tests/move_2024/naming/unused_lambda_arg.move:12:13
+   │
+12 │         p!(|p| 0);
+   │             ^ Unused assignment for variable 'p'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_p')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09003]: unused assignment
+   ┌─ tests/move_2024/naming/unused_lambda_arg.move:13:24
+   │
+13 │         p!(|Point { x, y }| x);
+   │                        ^ Unused assignment for variable 'y'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_y')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09003]: unused assignment
+   ┌─ tests/move_2024/naming/unused_lambda_arg.move:14:13
+   │
+14 │         r!(|p| 0);
+   │             ^ Unused assignment for variable 'p'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_p')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09003]: unused assignment
+   ┌─ tests/move_2024/naming/unused_lambda_arg.move:15:24
+   │
+15 │         r!(|Point { x, y }| *x);
+   │                        ^ Unused assignment for variable 'y'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_y')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

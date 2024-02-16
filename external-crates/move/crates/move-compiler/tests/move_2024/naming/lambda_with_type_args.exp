@@ -1,0 +1,6 @@
+error[E03007]: too many type arguments
+  ┌─ tests/move_2024/naming/lambda_with_type_args.move:3:9
+  │
+3 │         $f<u64>(0)
+  │         ^^ Invalid lambda call. Expected zero type arguments
+

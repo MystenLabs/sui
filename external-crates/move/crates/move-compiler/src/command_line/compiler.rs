@@ -11,9 +11,8 @@ use crate::{
         codes::{Severity, WarningFilter},
         *,
     },
-    expansion,
-    expansion::ast as E,
-    hlir, interface_generator, naming, parser,
+    editions::Edition,
+    expansion, hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
         CompilationEnv, Flags, IndexedPackagePath, NamedAddressMap, NamedAddressMaps,
@@ -21,7 +20,7 @@ use crate::{
     },
     to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
-    unit_test, verification,
+    unit_test,
 };
 use move_command_line_common::files::{
     extension_equals, find_filenames, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
@@ -29,7 +28,7 @@ use move_command_line_common::files::{
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fs,
     fs::File,
     io::{Read, Write},
@@ -40,16 +39,6 @@ use tempfile::NamedTempFile;
 //**************************************************************************************************
 // Definitions
 //**************************************************************************************************
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct KnownFiltersInfo {
-    /// An name that identifies attribute used for filtering (e.g. "allow" in
-    /// #[allow(unused_function)].
-    filter_attr_name: expansion::ast::AttributeName_,
-    /// A list of known warning filters that can be suppressed by the compiler suppression warning
-    /// system.
-    filters: Vec<WarningFilter>,
-}
 
 pub struct Compiler<'a> {
     maps: NamedAddressMaps,
@@ -62,7 +51,7 @@ pub struct Compiler<'a> {
     visitors: Vec<Visitor>,
     /// Predefined filter for compiler warnings.
     warning_filter: Option<WarningFilters>,
-    known_warning_filters: BTreeSet<KnownFiltersInfo>,
+    known_warning_filters: Vec<(/* Prefix */ Option<Symbol>, Vec<WarningFilter>)>,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
 }
@@ -169,7 +158,7 @@ impl<'a> Compiler<'a> {
             flags: Flags::empty(),
             visitors: vec![],
             warning_filter: None,
-            known_warning_filters: BTreeSet::new(),
+            known_warning_filters: vec![],
             package_configs,
             default_config: None,
         })
@@ -251,15 +240,15 @@ impl<'a> Compiler<'a> {
         self
     }
 
+    /// `prefix` is None for the default 'allow'.
+    /// Some(prefix) for a custom set of warnings, e.g. 'allow(lint(_))'.
     pub fn add_custom_known_filters(
         mut self,
+        prefix: Option<impl Into<Symbol>>,
         filters: Vec<WarningFilter>,
-        filter_attr_name: E::AttributeName_,
     ) -> Self {
-        self.known_warning_filters.insert(KnownFiltersInfo {
-            filter_attr_name,
-            filters,
-        });
+        self.known_warning_filters
+            .push((prefix.map(|s| s.into()), filters));
         self
     }
 
@@ -300,22 +289,33 @@ impl<'a> Compiler<'a> {
         if let Some(filter) = warning_filter {
             compilation_env.add_warning_filter_scope(filter);
         }
-        for KnownFiltersInfo {
-            filter_attr_name,
-            filters,
-        } in known_warning_filters
-        {
-            compilation_env.add_custom_known_filters(filters, filter_attr_name)?;
+        for (prefix, filters) in known_warning_filters {
+            compilation_env.add_custom_known_filters(prefix, filters)?;
         }
 
         let (source_text, pprog, comments) =
-            parse_program(&mut compilation_env, maps, targets, deps)?;
+            with_large_stack!(parse_program(&mut compilation_env, maps, targets, deps))?;
 
         let res: Result<_, Diagnostics> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
                 .run::<TARGET>()
                 .map(|compiler| (comments, compiler));
+
         Ok((source_text, res))
+    }
+
+    pub fn generate_migration_patch(
+        mut self,
+        root_module: &Symbol,
+    ) -> anyhow::Result<(FilesSourceText, Option<Migration>)> {
+        self.package_configs.get_mut(root_module).unwrap().edition = Edition::E2024_MIGRATION;
+        let (files, res) = self.run::<PASS_COMPILATION>()?;
+        if let Err(diags) = res {
+            let migration = generate_migration_diff(&files, &diags);
+            Ok((files, migration))
+        } else {
+            Ok((files, None))
+        }
     }
 
     pub fn check(self) -> anyhow::Result<(FilesSourceText, Result<(), Diagnostics>)> {
@@ -850,92 +850,108 @@ fn run(
     pre_compiled_lib: Option<&FullyCompiledProgram>,
     cur: PassResult,
     until: Pass,
-    mut result_check: impl FnMut(&PassResult, &CompilationEnv),
+    result_check: impl FnMut(&PassResult, &CompilationEnv),
 ) -> Result<PassResult, Diagnostics> {
-    compilation_env.check_diags_at_or_above_severity(Severity::Bug)?;
-    assert!(
-        until <= PASS_COMPILATION,
-        "Invalid pass for run_to. Target is greater than maximum pass"
-    );
-    result_check(&cur, compilation_env);
-    if cur.equivalent_pass() >= until {
-        return Ok(cur);
-    }
+    fn rec(
+        compilation_env: &mut CompilationEnv,
+        pre_compiled_lib: Option<&FullyCompiledProgram>,
+        cur: PassResult,
+        until: Pass,
+        mut result_check: impl FnMut(&PassResult, &CompilationEnv),
+    ) -> Result<PassResult, Diagnostics> {
+        compilation_env.check_diags_at_or_above_severity(Severity::Bug)?;
+        assert!(
+            until <= PASS_COMPILATION,
+            "Invalid pass for run_to. Target is greater than maximum pass"
+        );
+        result_check(&cur, compilation_env);
+        if cur.equivalent_pass() >= until {
+            return Ok(cur);
+        }
 
-    match cur {
-        PassResult::Parser(prog) => {
-            let prog = parser::merge_spec_modules::program(compilation_env, prog);
-            let prog = unit_test::filter_test_members::program(compilation_env, prog);
-            let prog = verification::ast_filter::program(compilation_env, prog);
-            let eprog = expansion::translate::program(compilation_env, pre_compiled_lib, prog);
-            run(
-                compilation_env,
-                pre_compiled_lib,
-                PassResult::Expansion(eprog),
-                until,
-                result_check,
-            )
+        match cur {
+            PassResult::Parser(prog) => {
+                let eprog = {
+                    let prog = unit_test::filter_test_members::program(compilation_env, prog);
+                    let prog = verification_attribute_filter::program(compilation_env, prog);
+                    expansion::translate::program(compilation_env, pre_compiled_lib, prog)
+                };
+                rec(
+                    compilation_env,
+                    pre_compiled_lib,
+                    PassResult::Expansion(eprog),
+                    until,
+                    result_check,
+                )
+            }
+            PassResult::Expansion(eprog) => {
+                let nprog = naming::translate::program(compilation_env, pre_compiled_lib, eprog);
+                rec(
+                    compilation_env,
+                    pre_compiled_lib,
+                    PassResult::Naming(nprog),
+                    until,
+                    result_check,
+                )
+            }
+            PassResult::Naming(nprog) => {
+                let tprog = typing::translate::program(compilation_env, pre_compiled_lib, nprog);
+                rec(
+                    compilation_env,
+                    pre_compiled_lib,
+                    PassResult::Typing(tprog),
+                    until,
+                    result_check,
+                )
+            }
+            PassResult::Typing(tprog) => {
+                compilation_env.check_diags_at_or_above_severity(Severity::BlockingError)?;
+                let hprog = hlir::translate::program(compilation_env, pre_compiled_lib, tprog);
+                rec(
+                    compilation_env,
+                    pre_compiled_lib,
+                    PassResult::HLIR(hprog),
+                    until,
+                    result_check,
+                )
+            }
+            PassResult::HLIR(hprog) => {
+                let cprog = cfgir::translate::program(compilation_env, pre_compiled_lib, hprog);
+                rec(
+                    compilation_env,
+                    pre_compiled_lib,
+                    PassResult::CFGIR(cprog),
+                    until,
+                    result_check,
+                )
+            }
+            PassResult::CFGIR(cprog) => {
+                // Don't generate bytecode if there are any errors
+                compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
+                let compiled_units =
+                    to_bytecode::translate::program(compilation_env, pre_compiled_lib, cprog);
+                // Report any errors from bytecode generation
+                compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
+                let warnings = compilation_env.take_final_warning_diags();
+                assert!(until == PASS_COMPILATION);
+                rec(
+                    compilation_env,
+                    pre_compiled_lib,
+                    PassResult::Compilation(compiled_units, warnings),
+                    PASS_COMPILATION,
+                    result_check,
+                )
+            }
+            PassResult::Compilation(_, _) => unreachable!("ICE Pass::Compilation is >= all passes"),
         }
-        PassResult::Expansion(eprog) => {
-            let nprog = naming::translate::program(compilation_env, pre_compiled_lib, eprog);
-            run(
-                compilation_env,
-                pre_compiled_lib,
-                PassResult::Naming(nprog),
-                until,
-                result_check,
-            )
-        }
-        PassResult::Naming(nprog) => {
-            let tprog = typing::translate::program(compilation_env, pre_compiled_lib, nprog);
-            run(
-                compilation_env,
-                pre_compiled_lib,
-                PassResult::Typing(tprog),
-                until,
-                result_check,
-            )
-        }
-        PassResult::Typing(tprog) => {
-            compilation_env.check_diags_at_or_above_severity(Severity::BlockingError)?;
-            let hprog = hlir::translate::program(compilation_env, pre_compiled_lib, tprog);
-            run(
-                compilation_env,
-                pre_compiled_lib,
-                PassResult::HLIR(hprog),
-                until,
-                result_check,
-            )
-        }
-        PassResult::HLIR(hprog) => {
-            let cprog = cfgir::translate::program(compilation_env, pre_compiled_lib, hprog);
-            run(
-                compilation_env,
-                pre_compiled_lib,
-                PassResult::CFGIR(cprog),
-                until,
-                result_check,
-            )
-        }
-        PassResult::CFGIR(cprog) => {
-            // Don't generate bytecode if there are any errors
-            compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
-            let compiled_units =
-                to_bytecode::translate::program(compilation_env, pre_compiled_lib, cprog);
-            // Report any errors from bytecode generation
-            compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
-            let warnings = compilation_env.take_final_warning_diags();
-            assert!(until == PASS_COMPILATION);
-            run(
-                compilation_env,
-                pre_compiled_lib,
-                PassResult::Compilation(compiled_units, warnings),
-                PASS_COMPILATION,
-                result_check,
-            )
-        }
-        PassResult::Compilation(_, _) => unreachable!("ICE Pass::Compilation is >= all passes"),
     }
+    with_large_stack!(rec(
+        compilation_env,
+        pre_compiled_lib,
+        cur,
+        until,
+        result_check
+    ))
 }
 
 //**************************************************************************************************

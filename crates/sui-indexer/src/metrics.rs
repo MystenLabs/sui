@@ -1,10 +1,71 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+use std::net::SocketAddr;
+
+use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
 };
+use prometheus::{Registry, TextEncoder};
+use regex::Regex;
+use tracing::{info, warn};
+
+use mysten_metrics::RegistryService;
+
+const METRICS_ROUTE: &str = "/metrics";
+
+pub fn start_prometheus_server(
+    addr: SocketAddr,
+    fn_url: &str,
+) -> Result<(RegistryService, Registry), anyhow::Error> {
+    let converted_fn_url = convert_url(fn_url);
+    if converted_fn_url.is_none() {
+        warn!(
+            "Failed to convert full node url {} to a shorter version",
+            fn_url
+        );
+    }
+    let fn_url_str = converted_fn_url.unwrap_or_else(|| "unknown_url".to_string());
+
+    let labels = HashMap::from([("indexer_fullnode".to_string(), fn_url_str)]);
+    info!("Starting prometheus server with labels: {:?}", labels);
+    let registry = Registry::new_custom(Some("indexer".to_string()), Some(labels))?;
+    let registry_service = RegistryService::new(registry.clone());
+
+    let app = Router::new()
+        .route(METRICS_ROUTE, get(metrics))
+        .layer(Extension(registry_service.clone()));
+
+    tokio::spawn(async move {
+        axum::Server::bind(&addr)
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
+    });
+    Ok((registry_service, registry))
+}
+
+async fn metrics(Extension(registry_service): Extension<RegistryService>) -> (StatusCode, String) {
+    let metrics_families = registry_service.gather_all();
+    match TextEncoder.encode_to_string(&metrics_families) {
+        Ok(metrics) => (StatusCode::OK, metrics),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("unable to encode metrics: {error}"),
+        ),
+    }
+}
+
+fn convert_url(url_str: &str) -> Option<String> {
+    // NOTE: unwrap here is safe because the regex is a constant.
+    let re = Regex::new(r"https?://([a-z0-9-]+\.[a-z0-9-]+\.[a-z]+)").unwrap();
+    let captures = re.captures(url_str)?;
+
+    captures.get(1).map(|m| m.as_str().to_string())
+}
 
 /// Prometheus metrics for sui-indexer.
 // buckets defined in seconds
@@ -38,6 +99,7 @@ pub struct IndexerMetrics {
     pub latest_network_metrics_cp_seq: IntGauge,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
+    pub checkpoint_download_bytes_size: IntGauge,
     pub fullnode_checkpoint_data_download_latency: Histogram,
     pub fullnode_checkpoint_wait_and_download_latency: Histogram,
     pub fullnode_transaction_download_latency: Histogram,
@@ -48,7 +110,7 @@ pub struct IndexerMetrics {
     pub indexing_get_object_in_mem_hit: IntCounter,
     pub indexing_get_object_db_hit: IntCounter,
     pub indexing_module_resolver_in_mem_hit: IntCounter,
-    pub indexing_module_resolver_in_mem_miss: IntCounter,
+    pub indexing_package_resolver_in_mem_hit: IntCounter,
     pub indexing_packages_latency: Histogram,
     pub checkpoint_objects_index_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
@@ -199,6 +261,11 @@ impl IndexerMetrics {
                 "Latest network metrics cp seq",
                 registry,
             ).unwrap(),
+            checkpoint_download_bytes_size: register_int_gauge_with_registry!(
+                "checkpoint_download_bytes_size",
+                "Size of the downloaded checkpoint in bytes",
+                registry,
+            ).unwrap(),
             fullnode_checkpoint_data_download_latency: register_histogram_with_registry!(
                 "fullnode_checkpoint_data_download_latency",
                 "Time spent in downloading checkpoint and transation for a new checkpoint from the Full Node",
@@ -274,9 +341,9 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            indexing_module_resolver_in_mem_miss: register_int_counter_with_registry!(
-                "indexing_module_resolver_in_mem_miss",
-                "Total number module resolver miss in mem",
+            indexing_package_resolver_in_mem_hit: register_int_counter_with_registry!(
+                "indexing_package_resolver_in_mem_hit",
+                "Total number package resolver hit in mem",
                 registry,
             )
             .unwrap(),
@@ -611,31 +678,6 @@ impl IndexerMetrics {
             checkpoint_metrics_processor_failure: register_int_counter_with_registry!(
                 "checkpoint_metrics_processor_failure",
                 "Total number of checkpoint metrics processor failure",
-                registry,
-            )
-            .unwrap(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct IndexerObjectProcessorMetrics {
-    pub total_object_batch_processed: IntCounter,
-    pub total_object_processor_error: IntCounter,
-}
-
-impl IndexerObjectProcessorMetrics {
-    pub fn new(registry: &Registry) -> Self {
-        Self {
-            total_object_batch_processed: register_int_counter_with_registry!(
-                "total_object_batch_processed",
-                "Total number of object batches processed",
-                registry,
-            )
-            .unwrap(),
-            total_object_processor_error: register_int_counter_with_registry!(
-                "total_object_processor_error",
-                "Total number of object processor error",
                 registry,
             )
             .unwrap(),

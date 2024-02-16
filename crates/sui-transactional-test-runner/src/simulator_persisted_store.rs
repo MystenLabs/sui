@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
@@ -10,23 +10,23 @@ use simulacrum::Simulacrum;
 use std::num::NonZeroUsize;
 use sui_config::genesis;
 use sui_protocol_config::ProtocolVersion;
-use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_types::storage::ReadStore;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, VersionNumber},
     committee::{Committee, EpochId},
     crypto::AccountKeyPair,
     digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
-    error::{SuiError, SuiResult, UserInputError},
+    error::{SuiError, UserInputError},
     messages_checkpoint::{
         CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
         VerifiedCheckpoint,
     },
     object::{Object, Owner},
     storage::{
-        load_package_object_from_object_store, BackingPackageStore, ChildObjectResolver, ObjectKey,
+        load_package_object_from_object_store, BackingPackageStore, ChildObjectResolver,
         ObjectStore, PackageObject, ParentSync,
     },
     transaction::VerifiedTransaction,
@@ -534,131 +534,11 @@ impl ParentSync for PersistedStore {
     }
 }
 
-impl NodeStateGetter for PersistedStoreInnerReadOnlyWrapper {
-    fn get_verified_checkpoint_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> SuiResult<VerifiedCheckpoint> {
-        self.sync();
-        self.inner
-            .checkpoints
-            .get(&sequence_number)
-            .expect("Fatal: DB read failed")
-            .map(|checkpoint| checkpoint.into())
-            .ok_or(SuiError::UserInputError {
-                error: UserInputError::VerifiedCheckpointNotFound(sequence_number),
-            })
-    }
-
-    fn get_latest_checkpoint_sequence_number(&self) -> SuiResult<CheckpointSequenceNumber> {
-        self.sync();
-        self.inner
-            .checkpoints
-            .unbounded_iter()
-            .skip_to_last()
-            .next()
-            .map(|(checkpoint, _)| checkpoint)
-            .ok_or(SuiError::UserInputError {
-                error: UserInputError::LatestCheckpointSequenceNumberNotFound,
-            })
-    }
-
-    fn get_checkpoint_contents(
-        &self,
-        content_digest: CheckpointContentsDigest,
-    ) -> SuiResult<CheckpointContents> {
-        self.sync();
-
-        self.inner
-            .checkpoint_contents
-            .get(&content_digest)
-            .expect("Fatal: DB read failed")
-            .ok_or(SuiError::UserInputError {
-                error: UserInputError::CheckpointContentsNotFound(content_digest),
-            })
-    }
-
-    fn multi_get_transaction_blocks(
-        &self,
-        tx_digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
-        self.sync();
-
-        Ok(self
-            .inner
-            .transactions
-            .multi_get(tx_digests)
-            .expect("Fatal: DB read failed")
-            .into_iter()
-            .map(|transaction| transaction.map(|x| x.into()))
-            .collect())
-    }
-
-    fn multi_get_executed_effects(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        self.sync();
-
-        Ok(self
-            .inner
-            .effects
-            .multi_get(digests)
-            .expect("Fatal: DB read failed")
-            .into_iter()
-            .collect())
-    }
-
-    fn multi_get_events(
-        &self,
-        event_digests: &[TransactionEventsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        self.sync();
-
-        Ok(self
-            .inner
-            .events
-            .multi_get(event_digests)
-            .expect("Fatal: DB read failed")
-            .into_iter()
-            .collect())
-    }
-
-    fn multi_get_object_by_key(
-        &self,
-        object_keys: &[ObjectKey],
-    ) -> Result<Vec<Option<Object>>, SuiError> {
-        self.sync();
-
-        Ok(self
-            .inner
-            .objects
-            // Get the seq maps for each object
-            .multi_get(object_keys.iter().map(|w| w.0))
-            .expect("Fatal: DB read failed")
-            .into_iter()
-            .enumerate()
-            // Get the object at the required seq
-            .map(|(idx, mp)| mp.and_then(|sm| sm.get(&object_keys[idx].1).cloned()))
-            .collect())
-    }
-
-    fn get_object_by_key(
+impl ObjectStore for PersistedStoreInnerReadOnlyWrapper {
+    fn get_object(
         &self,
         object_id: &ObjectID,
-        version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
-        self.sync();
-
-        Ok(self
-            .inner
-            .objects
-            .get(object_id)
-            .expect("Fatal: DB read failed")
-            .and_then(|x| x.get(&version).cloned()))
-    }
-
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    ) -> sui_types::storage::error::Result<Option<Object>> {
         self.sync();
 
         self.inner
@@ -668,6 +548,160 @@ impl NodeStateGetter for PersistedStoreInnerReadOnlyWrapper {
             .map(|version| self.get_object_by_key(object_id, version))
             .transpose()
             .map(|f| f.flatten())
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> sui_types::storage::error::Result<Option<Object>> {
+        self.sync();
+
+        Ok(self
+            .inner
+            .objects
+            .get(object_id)
+            .expect("Fatal: DB read failed")
+            .and_then(|x| x.get(&version).cloned()))
+    }
+}
+
+impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
+    fn get_committee(
+        &self,
+        _epoch: EpochId,
+    ) -> sui_types::storage::error::Result<Option<std::sync::Arc<Committee>>> {
+        todo!()
+    }
+
+    fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        self.sync();
+        self.inner
+            .checkpoints
+            .unbounded_iter()
+            .skip_to_last()
+            .next()
+            .map(|(_, checkpoint)| checkpoint.into())
+            .ok_or(SuiError::UserInputError {
+                error: UserInputError::LatestCheckpointSequenceNumberNotFound,
+            })
+            .map_err(sui_types::storage::error::Error::custom)
+    }
+
+    fn get_highest_verified_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        todo!()
+    }
+
+    fn get_highest_synced_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        todo!()
+    }
+
+    fn get_lowest_available_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
+        Ok(0)
+    }
+
+    fn get_checkpoint_by_digest(
+        &self,
+        _digest: &CheckpointDigest,
+    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
+        todo!()
+    }
+
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
+        self.sync();
+        Ok(self
+            .inner
+            .checkpoints
+            .get(&sequence_number)
+            .expect("Fatal: DB read failed")
+            .map(|checkpoint| checkpoint.into()))
+    }
+
+    fn get_checkpoint_contents_by_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> sui_types::storage::error::Result<Option<CheckpointContents>> {
+        self.sync();
+
+        Ok(self
+            .inner
+            .checkpoint_contents
+            .get(digest)
+            .expect("Fatal: DB read failed"))
+    }
+
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        _sequence_number: CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<Option<CheckpointContents>> {
+        todo!()
+    }
+
+    fn get_transaction(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<Arc<VerifiedTransaction>>> {
+        self.sync();
+
+        Ok(self
+            .inner
+            .transactions
+            .get(tx_digest)
+            .expect("Fatal: DB read failed")
+            .map(|transaction| Arc::new(transaction.into())))
+    }
+
+    fn get_transaction_effects(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<TransactionEffects>> {
+        self.sync();
+
+        Ok(self
+            .inner
+            .effects
+            .get(tx_digest)
+            .expect("Fatal: DB read failed"))
+    }
+
+    fn get_events(
+        &self,
+        event_digest: &TransactionEventsDigest,
+    ) -> sui_types::storage::error::Result<Option<TransactionEvents>> {
+        self.sync();
+
+        Ok(self
+            .inner
+            .events
+            .get(event_digest)
+            .expect("Fatal: DB read failed"))
+    }
+
+    fn get_full_checkpoint_contents_by_sequence_number(
+        &self,
+        _sequence_number: CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
+    > {
+        todo!()
+    }
+
+    fn get_full_checkpoint_contents(
+        &self,
+        _digest: &CheckpointContentsDigest,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
+    > {
+        todo!()
     }
 }
 

@@ -12,7 +12,9 @@ use indexmap::IndexMap;
 use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use sui_types::{base_types::TransactionDigest, error::SuiResult, fp_ensure};
+use sui_types::{
+    base_types::TransactionDigest, error::SuiResult, fp_ensure, message_envelope::Message,
+};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     committee::EpochId,
@@ -29,7 +31,7 @@ use tracing::{error, info, instrument, trace, warn};
 use crate::authority::AuthorityMetrics;
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    in_mem_execution_cache::ExecutionCacheRead,
+    execution_cache::ExecutionCacheRead,
 };
 use sui_types::transaction::SenderSignedData;
 use tap::TapOptional;
@@ -756,6 +758,7 @@ impl TransactionManager {
         assert!(inner
             .executing_certificates
             .insert(*pending_certificate.certificate.digest()));
+        self.metrics.txn_ready_rate_tracker.lock().record();
         let _ = self.tx_ready_certificates.send(pending_certificate);
         self.metrics.transaction_manager_num_ready.inc();
         self.metrics.execution_driver_dispatch_queue.inc();
@@ -816,6 +819,7 @@ impl TransactionManager {
                 threshold: MAX_TM_QUEUE_LENGTH,
             }
         );
+        tx_data.digest();
 
         for (object_id, queue_len, txn_age) in self.objects_queue_len_and_age(
             tx_data
@@ -933,6 +937,7 @@ mod test {
     use prometheus::Registry;
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn test_available_objects_cache() {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::default()));
         let mut cache = AvailableObjectsCache::new_with_size(metrics, 5);

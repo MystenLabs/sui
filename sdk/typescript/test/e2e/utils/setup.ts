@@ -7,7 +7,6 @@ import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
 import { WebSocket } from 'ws';
 
-import { TransactionBlock, UpgradePolicy } from '../../../src/builder/index.js';
 import type { SuiObjectChangePublished } from '../../../src/client/index.js';
 import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '../../../src/client/index.js';
 import type { Keypair } from '../../../src/cryptography/index.js';
@@ -17,10 +16,12 @@ import {
 	requestSuiFromFaucetV0,
 } from '../../../src/faucet/index.js';
 import { Ed25519Keypair } from '../../../src/keypairs/ed25519/index.js';
+import { TransactionBlock, UpgradePolicy } from '../../../src/transactions/index.js';
 import { SUI_TYPE_ARG } from '../../../src/utils/index.js';
 
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
+
 const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 
 export const DEFAULT_RECIPIENT =
@@ -55,23 +56,27 @@ export class TestToolbox {
 	}
 }
 
-export function getClient(): SuiClient {
+export function getClient(url = DEFAULT_FULLNODE_URL): SuiClient {
 	return new SuiClient({
 		transport: new SuiHTTPTransport({
-			url: DEFAULT_FULLNODE_URL,
+			url,
 			WebSocketConstructor: WebSocket as never,
 		}),
 	});
 }
 
-export async function setup() {
+export async function setup(options: { graphQLURL?: string; rpcURL?: string } = {}) {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
-	return setupWithFundedAddress(keypair, address);
+	return setupWithFundedAddress(keypair, address, options);
 }
 
-export async function setupWithFundedAddress(keypair: Ed25519Keypair, address: string) {
-	const client = getClient();
+export async function setupWithFundedAddress(
+	keypair: Ed25519Keypair,
+	address: string,
+	{ rpcURL }: { graphQLURL?: string; rpcURL?: string } = {},
+) {
+	const client = getClient(rpcURL);
 	await retry(() => requestSuiFromFaucetV0({ host: DEFAULT_FAUCET_URL, recipient: address }), {
 		backoff: 'EXPONENTIAL',
 		// overall timeout in 60 seconds

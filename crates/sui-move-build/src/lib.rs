@@ -22,8 +22,6 @@ use move_compiler::{
     diagnostics::{
         report_diagnostics_to_color_buffer, report_warnings, Diagnostics, FilesSourceText,
     },
-    expansion::ast::{AttributeName_, Attributes},
-    shared::known_attributes::KnownAttribute,
     sui_mode::linters::LINT_WARNING_PREFIX,
 };
 use move_core_types::{
@@ -34,7 +32,7 @@ use move_package::{
     compilation::{
         build_plan::BuildPlan, compiled_package::CompiledPackage as MoveCompiledPackage,
     },
-    package_hooks::PackageHooks,
+    package_hooks::{PackageHooks, PackageIdentifier},
     resolution::resolution_graph::ResolvedGraph,
     BuildConfig as MoveBuildConfig,
 };
@@ -107,19 +105,14 @@ impl BuildConfig {
         build_config
     }
 
-    fn is_test(attributes: &Attributes) -> bool {
-        attributes
-            .iter()
-            .any(|(_, name, _)| matches!(name, AttributeName_::Known(KnownAttribute::Testing(_))))
-    }
-
     fn fn_info(units: &[AnnotatedCompiledModule]) -> FnInfoMap {
         let mut fn_info_map = BTreeMap::new();
         for u in units {
             let mod_addr = u.named_module.address.into_inner();
+            let mod_is_test = u.attributes.is_test_or_test_only();
             for (_, s, info) in &u.function_infos {
                 let fn_name = s.as_str().to_string();
-                let is_test = Self::is_test(&info.attributes);
+                let is_test = mod_is_test || info.attributes.is_test_or_test_only();
                 fn_info_map.insert(FnInfoKey { fn_name, mod_addr }, FnInfo { is_test });
             }
         }
@@ -624,8 +617,15 @@ impl PackageHooks for SuiPackageHooks {
         Ok(())
     }
 
-    fn custom_resolve_pkg_name(&self, manifest: &SourceManifest) -> anyhow::Result<Symbol> {
+    fn custom_resolve_pkg_id(
+        &self,
+        manifest: &SourceManifest,
+    ) -> anyhow::Result<PackageIdentifier> {
         Ok(manifest.package.name)
+    }
+
+    fn resolve_version(&self, _: &SourceManifest) -> anyhow::Result<Option<Symbol>> {
+        Ok(None)
     }
 }
 

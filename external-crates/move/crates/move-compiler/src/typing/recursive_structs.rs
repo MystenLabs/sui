@@ -105,6 +105,10 @@ fn type_(context: &mut Context, sp!(loc, ty_): &N::Type) {
             }
             tys.iter().for_each(|t| type_(context, t))
         }
+        Fun(ts, t) => {
+            ts.iter().for_each(|t| type_(context, t));
+            type_(context, t)
+        }
     }
 }
 

@@ -263,21 +263,15 @@ impl ValidatorService {
     pub async fn execute_certificate_for_testing(
         &self,
         cert: CertifiedTransaction,
-    ) -> HandleCertificateResponseV2 {
-        self.handle_certificate_v2(tonic::Request::new(cert))
-            .await
-            .unwrap()
-            .into_inner()
+    ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
+        self.handle_certificate_v2(tonic::Request::new(cert)).await
     }
 
     pub async fn handle_transaction_for_testing(
         &self,
         transaction: Transaction,
-    ) -> HandleTransactionResponse {
-        self.transaction(tonic::Request::new(transaction))
-            .await
-            .unwrap()
-            .into_inner()
+    ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
+        self.transaction(tonic::Request::new(transaction)).await
     }
 
     async fn handle_transaction(
@@ -312,14 +306,31 @@ impl ValidatorService {
             .into());
         }
 
-        let overload_check_res =
-            state.check_system_overload(&consensus_adapter, transaction.data());
+        // When authority is overloaded and decide to reject this tx, we still lock the object
+        // and ask the client to retry in the future. This is because without locking, the
+        // input objects can be locked by a different tx in the future, however, the input objects
+        // may already be locked by this tx in other validators. This can cause non of the txes
+        // to have enough quorum to form a certificate, causing the objects to be locked for
+        // the entire epoch. By doing locking but pushback, retrying transaction will have
+        // higher chance to succeed.
+        let mut validator_pushback_error = None;
+        let overload_check_res = state.check_system_overload(
+            &consensus_adapter,
+            transaction.data(),
+            state.check_system_overload_at_signing(),
+        );
         if let Err(error) = overload_check_res {
             metrics
                 .num_rejected_tx_during_overload
                 .with_label_values(&[error.as_ref()])
                 .inc();
-            return Err(error.into());
+            // TODO: consider change the behavior for other types of overload errors.
+            match error {
+                SuiError::ValidatorOverloadedRetryAfter { .. } => {
+                    validator_pushback_error = Some(error)
+                }
+                _ => return Err(error.into()),
+            }
         }
 
         let _handle_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
@@ -345,6 +356,11 @@ impl ValidatorService {
                 }
             })?;
 
+        if let Some(error) = validator_pushback_error {
+            // TODO: right now, we still sign the txn, but just don't return it. We can also skip signing
+            // to save more CPU.
+            return Err(error.into());
+        }
         Ok(tonic::Response::new(info))
     }
 
@@ -414,8 +430,11 @@ impl ValidatorService {
 
         // 2) Verify the cert.
         // Check system overload
-        let overload_check_res =
-            state.check_system_overload(&consensus_adapter, certificate.data());
+        let overload_check_res = state.check_system_overload(
+            &consensus_adapter,
+            certificate.data(),
+            state.check_system_overload_at_execution(),
+        );
         if let Err(error) = overload_check_res {
             metrics
                 .num_rejected_cert_during_overload
@@ -591,7 +610,10 @@ impl Validator for ValidatorService {
         &self,
         _request: tonic::Request<SystemStateRequest>,
     ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
-        let response = self.state.database.get_sui_system_state_object_unsafe()?;
+        let response = self
+            .state
+            .get_cache_reader()
+            .get_sui_system_state_object_unsafe()?;
 
         return Ok(tonic::Response::new(response));
     }

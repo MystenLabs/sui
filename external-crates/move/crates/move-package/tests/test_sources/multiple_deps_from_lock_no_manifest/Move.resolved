@@ -1,8 +1,8 @@
 ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/multiple_deps_from_lock_no_manifest",
-        root_package: "test",
-        root_package_orig_name: "test",
+        root_package_id: "test",
+        root_package_name: "test",
         package_graph: {
             "test": [
                 (
@@ -32,12 +32,14 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/C",
                 ),
+                version: None,
                 resolver: None,
             },
             "D": Package {
                 kind: Local(
                     "deps_only/D",
                 ),
+                version: None,
                 resolver: None,
             },
         },

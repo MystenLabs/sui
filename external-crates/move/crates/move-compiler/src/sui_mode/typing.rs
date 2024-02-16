@@ -246,6 +246,7 @@ fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
         body,
         warning_filter: _,
         index: _,
+        macro_: _,
         attributes,
         entry,
     } = fdef;
@@ -667,7 +668,8 @@ fn is_mut_clock(param_ty: &Type) -> bool {
         | Type_::Param(_)
         | Type_::Var(_)
         | Type_::Anything
-        | Type_::UnresolvedError => false,
+        | Type_::UnresolvedError
+        | Type_::Fun(_, _) => false,
     }
 }
 
@@ -730,7 +732,7 @@ fn is_entry_primitive_ty(param_ty: &Type) -> bool {
         Type_::Unit => false,
 
         // Error case nothing to do
-        Type_::UnresolvedError | Type_::Anything | Type_::Var(_) => true,
+        Type_::UnresolvedError | Type_::Anything | Type_::Var(_) | Type_::Fun(_, _) => true,
     }
 }
 
@@ -760,7 +762,11 @@ fn is_entry_object_ty_inner(param_ty: &Type) -> bool {
         Type_::Apply(Some(abilities), _, _) => abilities.has_ability_(Ability_::Key),
 
         // Error case nothing to do
-        Type_::UnresolvedError | Type_::Anything | Type_::Var(_) | Type_::Unit => true,
+        Type_::UnresolvedError
+        | Type_::Anything
+        | Type_::Var(_)
+        | Type_::Unit
+        | Type_::Fun(_, _) => true,
         // Unreachable cases
         Type_::Apply(None, _, _) => unreachable!("ICE abilities should have been expanded"),
     }
@@ -821,7 +827,7 @@ fn entry_return(
             }
         }
         // Error case nothing to do
-        Type_::UnresolvedError | Type_::Anything | Type_::Var(_) => (),
+        Type_::UnresolvedError | Type_::Anything | Type_::Var(_) | Type_::Fun(_, _) => (),
         // Unreachable cases
         Type_::Apply(None, _, _) => unreachable!("ICE abilities should have been expanded"),
     }
@@ -887,30 +893,10 @@ fn exp(context: &mut Context, e: &T::Exp) {
             if is_transfer_module && PRIVATE_TRANSFER_FUNCTIONS.contains(&name.value()) {
                 check_private_transfer(context, e.exp.loc, mcall)
             }
-            // TODO(tzakian): Temporary
-            if is_transfer_module && &*name.value() == "receiving_object_id" {
-                let diag = diag!(
-                    crate::diagnostics::codes::custom(
-                        SUI_DIAG_PREFIX,
-                        Severity::NonblockingError,
-                        TYPING,
-                        10,
-                        "Non-supported call"
-                    ),
-                    (
-                        e.exp.loc,
-                        "Calling 'receiving_object_id' is not supported at this time"
-                    ),
-                );
-                context.env.add_diag(diag);
-            }
         }
         T::UnannotatedExp_::Pack(m, s, _, _) => {
             if !context.in_test
-                && !context
-                    .current_module()
-                    .value
-                    .is(SUI_ADDR_NAME, SUI_MODULE_NAME)
+                && !otw_special_cases(context)
                 && context.one_time_witness.as_ref().is_some_and(|otw| {
                     otw.as_ref()
                         .is_ok_and(|o| m == context.current_module() && o == s)
@@ -925,6 +911,16 @@ fn exp(context: &mut Context, e: &T::Exp) {
         }
         _ => (),
     }
+}
+
+fn otw_special_cases(context: &Context) -> bool {
+    BRIDGE_SUPPORTED_ASSET
+        .iter()
+        .any(|token| context.current_module().value.is(BRIDGE_ADDR_NAME, token))
+        || context
+            .current_module()
+            .value
+            .is(SUI_ADDR_NAME, SUI_MODULE_NAME)
 }
 
 fn check_event_emit(context: &mut Context, loc: Loc, mcall: &ModuleCall) {

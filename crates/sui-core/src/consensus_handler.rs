@@ -1,19 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_per_epoch_store::{
-    AuthorityPerEpochStore, ConsensusStats, ConsensusStatsAPI, ExecutionIndicesWithStats,
+use std::{
+    collections::{hash_map::DefaultHasher, HashMap, HashSet},
+    hash::{Hash, Hasher},
+    num::NonZeroUsize,
+    sync::Arc,
 };
-use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
-use crate::authority::{AuthorityMetrics, AuthorityState};
-use crate::checkpoints::{CheckpointService, CheckpointServiceNotify};
-use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
-use crate::consensus_types::committee_api::CommitteeAPI;
-use crate::consensus_types::consensus_output_api::ConsensusOutputAPI;
-use crate::consensus_types::AuthorityIndex;
-use crate::in_mem_execution_cache::ExecutionCacheRead;
-use crate::scoring_decision::update_low_scoring_authorities;
-use crate::transaction_manager::TransactionManager;
+
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use lru::LruCache;
@@ -22,23 +16,35 @@ use narwhal_config::Committee;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::ConsensusOutput;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
-use std::num::NonZeroUsize;
-use std::sync::Arc;
-use sui_types::authenticator_state::ActiveJwk;
-use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
-use sui_types::digests::ConsensusCommitDigest;
-use sui_types::executable_transaction::{
-    TrustedExecutableTransaction, VerifiedExecutableTransaction,
+use sui_macros::{fail_point_async, fail_point_if};
+use sui_types::{
+    authenticator_state::ActiveJwk,
+    base_types::{AuthorityName, EpochId, TransactionDigest},
+    digests::ConsensusCommitDigest,
+    executable_transaction::{TrustedExecutableTransaction, VerifiedExecutableTransaction},
+    messages_consensus::{ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind},
+    sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
+    transaction::{SenderSignedData, VerifiedTransaction},
 };
-use sui_types::messages_consensus::{
-    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-};
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
 use tracing::{debug, error, info, instrument, trace_span};
+
+use crate::{
+    authority::{
+        authority_per_epoch_store::{
+            AuthorityPerEpochStore, ConsensusStats, ConsensusStatsAPI, ExecutionIndicesWithStats,
+        },
+        epoch_start_configuration::EpochStartConfigTrait,
+        AuthorityMetrics, AuthorityState,
+    },
+    checkpoints::{CheckpointService, CheckpointServiceNotify},
+    consensus_throughput_calculator::ConsensusThroughputCalculator,
+    consensus_types::{
+        committee_api::CommitteeAPI, consensus_output_api::ConsensusOutputAPI, AuthorityIndex,
+    },
+    execution_cache::ExecutionCacheRead,
+    scoring_decision::update_low_scoring_authorities,
+    transaction_manager::TransactionManager,
+};
 
 pub struct ConsensusHandlerInitializer {
     state: Arc<AuthorityState>,
@@ -256,12 +262,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             timestamp
         };
 
-        info!(
-            "Received consensus output {} at epoch {}",
-            consensus_output,
-            self.epoch_store.epoch(),
-        );
-
         let prologue_transaction = match self
             .epoch_store
             .protocol_config()
@@ -274,6 +274,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             ),
             false => self.consensus_commit_prologue_transaction(round, timestamp),
         };
+
+        info!(
+            %consensus_output,
+            epoch = ?self.epoch_store.epoch(),
+            prologue_transaction_digest = ?prologue_transaction.digest(),
+            "Received consensus output"
+        );
+
         let empty_bytes = vec![];
         transactions.push((
             empty_bytes.as_slice(),
@@ -377,7 +385,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         for i in 0..self.committee.size() {
             let hostname = self
                 .committee
-                .authority_hostname_by_index(i as u16)
+                .authority_hostname_by_index(i as AuthorityIndex)
                 .unwrap_or_default();
             self.metrics
                 .consensus_committed_messages
@@ -463,6 +471,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.throughput_calculator
             .add_transactions(timestamp, transactions_to_schedule.len() as u64);
 
+        fail_point_if!("correlated-crash-after-consensus-commit-boundary", || {
+            let key = [commit_sub_dag_index, self.epoch_store.epoch()];
+            if sui_simulator::random::deterministic_probabilty(&key, 0.01) {
+                sui_simulator::task::kill_current_node(None);
+            }
+        });
+
+        fail_point_async!("crash"); // for tests that produce random crashes
+
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
             .await;
@@ -512,9 +529,7 @@ pub struct MysticetiConsensusHandler {
 impl MysticetiConsensusHandler {
     pub fn new(
         mut consensus_handler: ConsensusHandler<CheckpointService>,
-        mut receiver: tokio::sync::mpsc::UnboundedReceiver<
-            mysticeti_core::consensus::linearizer::CommittedSubDag,
-        >,
+        mut receiver: tokio::sync::mpsc::UnboundedReceiver<consensus_core::CommittedSubDag>,
     ) -> Self {
         let handle = spawn_monitored_task!(async move {
             while let Some(committed_subdag) = receiver.recv().await {
@@ -809,12 +824,8 @@ impl SequencedConsensusTransaction {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::authority::authority_per_epoch_store::{ConsensusStats, ConsensusStatsAPI};
-    use crate::authority::test_authority_builder::TestAuthorityBuilder;
-    use crate::checkpoints::CheckpointServiceNoop;
-    use crate::consensus_adapter::consensus_tests::{test_certificates, test_gas_objects};
-    use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
+    use std::collections::BTreeSet;
+
     use narwhal_config::AuthorityIdentifier;
     use narwhal_test_utils::latest_protocol_version;
     use narwhal_types::{
@@ -822,17 +833,29 @@ mod tests {
     };
     use prometheus::Registry;
     use shared_crypto::intent::Intent;
-    use std::collections::BTreeSet;
     use sui_protocol_config::{ConsensusTransactionOrdering, SupportedProtocolVersions};
-    use sui_types::base_types::{random_object_ref, AuthorityName, SuiAddress};
-    use sui_types::committee::Committee;
-    use sui_types::messages_consensus::{
-        AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKind,
+    use sui_types::{
+        base_types::{random_object_ref, AuthorityName, SuiAddress},
+        committee::Committee,
+        messages_consensus::{
+            AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKind,
+        },
+        object::Object,
+        sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
+        transaction::{
+            CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+        },
     };
-    use sui_types::object::Object;
-    use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-    use sui_types::transaction::{
-        CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+
+    use super::*;
+    use crate::{
+        authority::{
+            authority_per_epoch_store::{ConsensusStats, ConsensusStatsAPI},
+            test_authority_builder::TestAuthorityBuilder,
+        },
+        checkpoints::CheckpointServiceNoop,
+        consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
+        post_consensus_tx_reorder::PostConsensusTxReorder,
     };
 
     #[tokio::test]

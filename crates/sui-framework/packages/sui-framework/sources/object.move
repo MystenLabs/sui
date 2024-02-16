@@ -120,7 +120,7 @@ module sui::object {
     }
 
     /// Create the `UID` for the singleton `DenyList` object.
-    /// This should only be called once from `coin`.
+    /// This should only be called once from `deny_list`.
     public(friend) fun sui_deny_list_object_id(): UID {
         UID {
             id: ID { bytes: SUI_DENY_LIST_OBJECT_ID }
@@ -213,23 +213,5 @@ module sui::object {
     public fun last_created(ctx: &TxContext): ID {
         ID { bytes: tx_context::last_created_object_id(ctx) }
     }
-
-
-    // === Prover support (to avoid circular dependency ===
-
-    #[verify_only]
-    /// Ownership information for a given object (stored at the object's address)
-    struct Ownership {
-        owner: address, // only matters if status == OWNED
-        status: u64,
-    }
-
-    #[verify_only]
-    /// List of fields with a given name type of an object containing fields (stored at the
-    /// containing object's address)
-    struct DynamicFields<K: copy + drop + store> {
-        names: vector<K>,
-    }
-
 
 }

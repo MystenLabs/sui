@@ -2,7 +2,7 @@
 
 [move]
 version = 0
-manifest_digest = "EE966AF65A364E10F79C8D04690C10863F8B1084F45A4480A1F421D4A592A659"
+manifest_digest = "598DCC919F7378E59F328E1B448D1AAC70B8F34894146860B3ABF46600F9F79B"
 deps_digest = "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082"
 
 dependencies = [
@@ -11,7 +11,7 @@ dependencies = [
 
 [[move.package]]
 name = "MoveNursery"
-source = { git = "https://github.com/move-language/move", rev = "781c844", subdir = "language/move-stdlib/nursery" }
+source = { git = "https://github.com/MystenLabs/sui", rev = "5d8a867", subdir = "external-crates/move/crates/move-stdlib/nursery" }
 
 dependencies = [
   { name = "MoveStdlib" },
@@ -19,4 +19,4 @@ dependencies = [
 
 [[move.package]]
 name = "MoveStdlib"
-source = { git = "https://github.com/move-language/move", rev = "781c844", subdir = "language/move-stdlib" }
+source = { git = "https://github.com/MystenLabs/sui", rev = "5d8a867", subdir = "external-crates/move/crates/move-stdlib" }

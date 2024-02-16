@@ -3,7 +3,7 @@
 
 use diesel::prelude::*;
 
-use crate::schema_v2::tx_count_metrics;
+use crate::schema::tx_count_metrics;
 
 #[derive(Clone, Debug, Queryable, Insertable)]
 #[diesel(table_name = tx_count_metrics)]

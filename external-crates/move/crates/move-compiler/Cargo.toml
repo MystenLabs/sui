@@ -17,6 +17,7 @@ petgraph.workspace = true
 tempfile.workspace = true
 once_cell.workspace = true
 serde.workspace = true
+stacker.workspace = true
 
 bcs.workspace = true
 

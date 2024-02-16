@@ -1,0 +1,51 @@
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:7:26
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;
+   │                                        ---- 'copy' constraint declared here
+   ·
+ 7 │     macro fun bar<$T>(_: NeedsCopy<$T>) {}
+   │                          ^^^^^^^^^^^^^ 'copy' constraint not satisifed
+   ·
+14 │         bar!<None>(NeedsCopy {});
+   │              ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:9:26
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;
+   │                                        ---- 'copy' constraint declared here
+   ·
+ 9 │     macro fun baz<$T>(): NeedsCopy<$T> { abort 0 }
+   │                          ^^^^^^^^^^^^^ 'copy' constraint not satisifed
+   ·
+18 │         baz!<None>(); // TODO do not complain about dead code?
+   │              ---- The type 'a::m::None' does not have the ability 'copy'
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:9:42
+  │
+9 │     macro fun baz<$T>(): NeedsCopy<$T> { abort 0 }
+  │                                          ^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints_simple.move:13:9
+   │
+ 2 │     public struct None()
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+   ·
+ 5 │     macro fun foo<$T: copy>() {}
+   │                       ---- 'copy' constraint declared here
+   ·
+13 │         foo!<None>();
+   │         ^^^^^^^^^^^^
+   │         │    │
+   │         │    The type 'a::m::None' does not have the ability 'copy'
+   │         'copy' constraint not satisifed
+

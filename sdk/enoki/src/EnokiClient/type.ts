@@ -6,6 +6,8 @@ import type { ZkLoginSignatureInputs } from '@mysten/sui.js/zklogin';
 
 import type { AuthProvider } from '../EnokiFlow.js';
 
+export type EnokiNetwork = 'mainnet' | 'testnet' | 'devnet';
+
 export interface GetAppApiInput {}
 export interface GetAppApiResponse {
 	authenticationProviders: {
@@ -23,7 +25,9 @@ export interface GetZkLoginApiResponse {
 }
 
 export interface CreateZkLoginNonceApiInput {
+	network?: EnokiNetwork;
 	ephemeralPublicKey: PublicKey;
+	additionalEpochs?: number;
 }
 export interface CreateZkLoginNonceApiResponse {
 	nonce: string;
@@ -34,6 +38,7 @@ export interface CreateZkLoginNonceApiResponse {
 }
 
 export interface CreateZkLoginZkpApiInput {
+	network?: EnokiNetwork;
 	jwt: string;
 	ephemeralPublicKey: PublicKey;
 	randomness: string;
@@ -42,7 +47,7 @@ export interface CreateZkLoginZkpApiInput {
 export interface CreateZkLoginZkpApiResponse extends ZkLoginSignatureInputs {}
 
 export interface CreateSponsoredTransactionBlockApiInput {
-	network?: 'mainnet' | 'testnet';
+	network?: EnokiNetwork;
 	jwt: string;
 	transactionBlockKindBytes: string;
 }

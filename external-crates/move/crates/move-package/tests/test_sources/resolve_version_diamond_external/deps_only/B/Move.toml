@@ -1,0 +1,5 @@
+[package]
+name = "B"
+
+[dependencies]
+ADep = { local = "../ADep-local" }

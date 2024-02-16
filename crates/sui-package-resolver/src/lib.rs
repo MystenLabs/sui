@@ -1134,7 +1134,6 @@ mod tests {
     use std::sync::Arc;
     use std::{path::PathBuf, str::FromStr, sync::RwLock};
 
-    use expect_test::expect;
     use move_compiler::compiled_unit::NamedCompiledModule;
     use sui_move_build::{BuildConfig, CompiledPackage};
 
@@ -1149,19 +1148,7 @@ mod tests {
             .type_layout(type_("0xa0::m::T0"))
             .await
             .unwrap();
-        let expect = expect![[r#"
-            struct 0xa0::m::T0 {
-                b: bool,
-                v: vector<struct 0xa0::m::T1<0xa0::m::T2, u128> {
-                    a: address,
-                    p: struct 0xa0::m::T2 {
-                        x: u8,
-                    },
-                    q: vector<u128>,
-                }>,
-            }"#]];
-
-        expect.assert_eq(&format!("{layout:#}"));
+        insta::assert_snapshot!(format!("{layout:#}"));
     }
 
     /// A type that refers to types from other modules in the same package.
@@ -1170,19 +1157,7 @@ mod tests {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
         let resolver = Resolver::new(cache);
         let layout = resolver.type_layout(type_("0xa0::n::T0")).await.unwrap();
-        let expect = expect![[r#"
-            struct 0xa0::n::T0 {
-                t: struct 0xa0::m::T1<u16, u32> {
-                    a: address,
-                    p: u16,
-                    q: vector<u32>,
-                },
-                u: struct 0xa0::m::T2 {
-                    x: u8,
-                },
-            }"#]];
-
-        expect.assert_eq(&format!("{layout:#}"));
+        insta::assert_snapshot!(format!("{layout:#}"));
     }
 
     /// A type that refers to types from other modules in the same package.
@@ -1195,24 +1170,7 @@ mod tests {
         let resolver = Resolver::new(cache);
 
         let layout = resolver.type_layout(type_("0xb0::m::T0")).await.unwrap();
-        let expect = expect![[r#"
-            struct 0xb0::m::T0 {
-                m: struct 0xa0::m::T2 {
-                    x: u8,
-                },
-                n: struct 0xa0::n::T0 {
-                    t: struct 0xa0::m::T1<u16, u32> {
-                        a: address,
-                        p: u16,
-                        q: vector<u32>,
-                    },
-                    u: struct 0xa0::m::T2 {
-                        x: u8,
-                    },
-                },
-            }"#]];
-
-        expect.assert_eq(&format!("{layout:#}"));
+        insta::assert_snapshot!(format!("{layout:#}"));
     }
 
     /// A type from an upgraded package, mixing structs defined in the original package and the
@@ -1226,21 +1184,7 @@ mod tests {
         let resolver = Resolver::new(cache);
 
         let layout = resolver.type_layout(type_("0xa1::n::T1")).await.unwrap();
-        let expect = expect![[r#"
-            struct 0xa1::n::T1 {
-                t: struct 0xa0::m::T1<0xa1::m::T3, u32> {
-                    a: address,
-                    p: struct 0xa1::m::T3 {
-                        y: u16,
-                    },
-                    q: vector<u32>,
-                },
-                u: struct 0xa1::m::T4 {
-                    z: u32,
-                },
-            }"#]];
-
-        expect.assert_eq(&format!("{layout:#}"));
+        insta::assert_snapshot!(format!("{layout:#}"));
     }
 
     /// A generic type instantiation where the type parameters are resolved relative to linkage
@@ -1257,26 +1201,7 @@ mod tests {
             .type_layout(type_("0xa0::m::T1<0xa0::m::T0, 0xa1::m::T3>"))
             .await
             .unwrap();
-
-        let expect = expect![[r#"
-            struct 0xa0::m::T1<0xa0::m::T0, 0xa1::m::T3> {
-                a: address,
-                p: struct 0xa0::m::T0 {
-                    b: bool,
-                    v: vector<struct 0xa0::m::T1<0xa0::m::T2, u128> {
-                        a: address,
-                        p: struct 0xa0::m::T2 {
-                            x: u8,
-                        },
-                        q: vector<u128>,
-                    }>,
-                },
-                q: vector<struct 0xa1::m::T3 {
-                    y: u16,
-                }>,
-            }"#]];
-
-        expect.assert_eq(&format!("{layout:#}"))
+        insta::assert_snapshot!(format!("{layout:#}"));
     }
 
     /// Refer to a type, not by its defining ID, but by the ID of some later version of that
@@ -1295,26 +1220,7 @@ mod tests {
             .type_layout(type_("0xa1::m::T1<0xa1::m::T3, 0xa1::m::T0>"))
             .await
             .unwrap();
-
-        let expect = expect![[r#"
-            struct 0xa0::m::T1<0xa1::m::T3, 0xa0::m::T0> {
-                a: address,
-                p: struct 0xa1::m::T3 {
-                    y: u16,
-                },
-                q: vector<struct 0xa0::m::T0 {
-                    b: bool,
-                    v: vector<struct 0xa0::m::T1<0xa0::m::T2, u128> {
-                        a: address,
-                        p: struct 0xa0::m::T2 {
-                            x: u8,
-                        },
-                        q: vector<u128>,
-                    }>,
-                }>,
-            }"#]];
-
-        expect.assert_eq(&format!("{layout:#}"));
+        insta::assert_snapshot!(format!("{layout:#}"));
     }
 
     /// A type that refers to a types in a relinked package.  C depends on B and overrides its
@@ -1331,54 +1237,7 @@ mod tests {
         let resolver = Resolver::new(cache);
 
         let layout = resolver.type_layout(type_("0xc0::m::T0")).await.unwrap();
-        let expect = expect![[r#"
-            struct 0xc0::m::T0 {
-                t: struct 0xa0::n::T0 {
-                    t: struct 0xa0::m::T1<u16, u32> {
-                        a: address,
-                        p: u16,
-                        q: vector<u32>,
-                    },
-                    u: struct 0xa0::m::T2 {
-                        x: u8,
-                    },
-                },
-                u: struct 0xa1::n::T1 {
-                    t: struct 0xa0::m::T1<0xa1::m::T3, u32> {
-                        a: address,
-                        p: struct 0xa1::m::T3 {
-                            y: u16,
-                        },
-                        q: vector<u32>,
-                    },
-                    u: struct 0xa1::m::T4 {
-                        z: u32,
-                    },
-                },
-                v: struct 0xa0::m::T2 {
-                    x: u8,
-                },
-                w: struct 0xa1::m::T3 {
-                    y: u16,
-                },
-                x: struct 0xb0::m::T0 {
-                    m: struct 0xa0::m::T2 {
-                        x: u8,
-                    },
-                    n: struct 0xa0::n::T0 {
-                        t: struct 0xa0::m::T1<u16, u32> {
-                            a: address,
-                            p: u16,
-                            q: vector<u32>,
-                        },
-                        u: struct 0xa0::m::T2 {
-                            x: u8,
-                        },
-                    },
-                },
-            }"#]];
-
-        expect.assert_eq(&format!("{layout:#}"));
+        insta::assert_snapshot!(format!("{layout:#}"));
     }
 
     #[tokio::test]
@@ -1400,14 +1259,7 @@ mod tests {
             .type_layout(type_("0xa0::m::T1<u8, u8>"))
             .await
             .unwrap();
-        let expect = expect![[r#"
-            struct 0xa0::m::T1<u8, u8> {
-                a: address,
-                p: u8,
-                q: vector<u8>,
-            }"#]];
-
-        expect.assert_eq(&format!("{layout:#}"));
+        insta::assert_snapshot!(format!("{layout:#}"));
     }
 
     #[tokio::test]
@@ -1530,12 +1382,7 @@ mod tests {
         );
 
         let layout = resolver.type_layout(type_("0x1::m::T1")).await.unwrap();
-        let expect = expect![[r#"
-            struct 0x1::m::T1 {
-                x: u256,
-            }"#]];
-
-        expect.assert_eq(&format!("{layout:#}"));
+        insta::assert_snapshot!(format!("{layout:#}"));
     }
 
     #[tokio::test]
@@ -1673,90 +1520,10 @@ mod tests {
         let t1 = m.struct_def("T1").unwrap().unwrap();
         let t2 = m.struct_def("T2").unwrap().unwrap();
 
-        let expect = expect![[r#"
-            a0::m::T0: StructDef {
-                defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
-                abilities: [],
-                type_params: [],
-                fields: [
-                    (
-                        "b",
-                        Bool,
-                    ),
-                    (
-                        "v",
-                        Vector(
-                            Datatype(
-                                DatatypeRef {
-                                    package: 00000000000000000000000000000000000000000000000000000000000000a0,
-                                    module: "m",
-                                    name: "T1",
-                                },
-                                [
-                                    Datatype(
-                                        DatatypeRef {
-                                            package: 00000000000000000000000000000000000000000000000000000000000000a0,
-                                            module: "m",
-                                            name: "T2",
-                                        },
-                                        [],
-                                    ),
-                                    U128,
-                                ],
-                            ),
-                        ),
-                    ),
-                ],
-            }
-            a0::m::T1: StructDef {
-                defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
-                abilities: [],
-                type_params: [
-                    StructTypeParameter {
-                        constraints: [],
-                        is_phantom: false,
-                    },
-                    StructTypeParameter {
-                        constraints: [],
-                        is_phantom: false,
-                    },
-                ],
-                fields: [
-                    (
-                        "a",
-                        Address,
-                    ),
-                    (
-                        "p",
-                        TypeParameter(
-                            0,
-                        ),
-                    ),
-                    (
-                        "q",
-                        Vector(
-                            TypeParameter(
-                                1,
-                            ),
-                        ),
-                    ),
-                ],
-            }
-            a0::m::T2: StructDef {
-                defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
-                abilities: [],
-                type_params: [],
-                fields: [
-                    (
-                        "x",
-                        U8,
-                    ),
-                ],
-            }"#]];
-        expect.assert_eq(&format!(
+        insta::assert_snapshot!(format!(
             "a0::m::T0: {t0:#?}\n\
              a0::m::T1: {t1:#?}\n\
-             a0::m::T2: {t2:#?}"
+             a0::m::T2: {t2:#?}",
         ));
     }
 
@@ -1799,75 +1566,7 @@ mod tests {
         let bar = m.function_def("bar").unwrap().unwrap();
         let baz = m.function_def("baz").unwrap().unwrap();
 
-        let expect = expect![[r#"
-            c0::m::foo: FunctionDef {
-                visibility: Public,
-                is_entry: false,
-                type_params: [],
-                parameters: [],
-                return_: [],
-            }
-            c0::m::bar: FunctionDef {
-                visibility: Friend,
-                is_entry: false,
-                type_params: [],
-                parameters: [
-                    OpenSignature {
-                        ref_: Some(
-                            Immutable,
-                        ),
-                        body: Datatype(
-                            DatatypeRef {
-                                package: 00000000000000000000000000000000000000000000000000000000000000c0,
-                                module: "m",
-                                name: "T0",
-                            },
-                            [],
-                        ),
-                    },
-                    OpenSignature {
-                        ref_: Some(
-                            Mutable,
-                        ),
-                        body: Datatype(
-                            DatatypeRef {
-                                package: 00000000000000000000000000000000000000000000000000000000000000a0,
-                                module: "n",
-                                name: "T1",
-                            },
-                            [],
-                        ),
-                    },
-                ],
-                return_: [
-                    OpenSignature {
-                        ref_: None,
-                        body: U64,
-                    },
-                ],
-            }
-            c0::m::baz: FunctionDef {
-                visibility: Private,
-                is_entry: false,
-                type_params: [],
-                parameters: [
-                    OpenSignature {
-                        ref_: None,
-                        body: U8,
-                    },
-                ],
-                return_: [
-                    OpenSignature {
-                        ref_: None,
-                        body: U16,
-                    },
-                    OpenSignature {
-                        ref_: None,
-                        body: U32,
-                    },
-                ],
-            }"#]];
-        expect.assert_eq(&format!(
+        insta::assert_snapshot!(format!(
             "c0::m::foo: {foo:#?}\n\
              c0::m::bar: {bar:#?}\n\
              c0::m::baz: {baz:#?}"

@@ -7,7 +7,7 @@ use tracing::{error, info};
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerAnalyticalStore;
-use crate::types_v2::IndexerResult;
+use crate::types::IndexerResult;
 
 const NETWORK_METRICS_PROCESSOR_BATCH_SIZE: usize = 10;
 const PARALLELISM: usize = 1;

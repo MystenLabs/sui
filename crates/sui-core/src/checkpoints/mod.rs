@@ -153,6 +153,7 @@ impl CheckpointStore {
         )
     }
 
+    #[instrument(level = "info", skip_all)]
     pub fn insert_genesis_checkpoint(
         &self,
         checkpoint: VerifiedCheckpoint,
@@ -433,6 +434,10 @@ impl CheckpointStore {
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), TypedStoreError> {
+        debug!(
+            checkpoint_seq = checkpoint.sequence_number(),
+            "Inserting certified checkpoint",
+        );
         let mut batch = self.certified_checkpoints.batch();
         batch
             .insert_batch(
@@ -463,6 +468,7 @@ impl CheckpointStore {
 
     // Called by state sync, apart from inserting the checkpoint and updating
     // related tables, it also bumps the highest_verified_checkpoint watermark.
+    #[instrument(level = "debug", skip_all)]
     pub fn insert_verified_checkpoint(
         &self,
         checkpoint: &VerifiedCheckpoint,
@@ -480,6 +486,10 @@ impl CheckpointStore {
                 .get_highest_verified_checkpoint()?
                 .map(|x| *x.sequence_number())
         {
+            debug!(
+                checkpoint_seq = checkpoint.sequence_number(),
+                "Updating highest verified checkpoint",
+            );
             self.watermarks.insert(
                 &CheckpointWatermark::HighestVerified,
                 &(*checkpoint.sequence_number(), *checkpoint.digest()),
@@ -493,6 +503,10 @@ impl CheckpointStore {
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), TypedStoreError> {
+        debug!(
+            checkpoint_seq = checkpoint.sequence_number(),
+            "Updating highest synced checkpoint",
+        );
         self.watermarks.insert(
             &CheckpointWatermark::HighestSynced,
             &(*checkpoint.sequence_number(), *checkpoint.digest()),
@@ -512,6 +526,10 @@ impl CheckpointStore {
             checkpoint.sequence_number(),
             seq_number);
         }
+        debug!(
+            checkpoint_seq = checkpoint.sequence_number(),
+            "Updating highest executed checkpoint",
+        );
         self.watermarks.insert(
             &CheckpointWatermark::HighestExecuted,
             &(*checkpoint.sequence_number(), *checkpoint.digest()),
@@ -546,6 +564,10 @@ impl CheckpointStore {
         &self,
         contents: CheckpointContents,
     ) -> Result<(), TypedStoreError> {
+        debug!(
+            checkpoint_seq = ?contents.digest(),
+            "Inserting checkpoint contents",
+        );
         self.checkpoint_content.insert(contents.digest(), &contents)
     }
 
@@ -810,7 +832,8 @@ impl CheckpointBuilder {
             debug!(
                 checkpoint_commit_height = height,
                 checkpoint_seq = summary.sequence_number,
-                "Created checkpoint",
+                contents_digest = ?contents.digest(),
+                "writing checkpoint",
             );
             self.output
                 .checkpoint_created(summary, contents, &self.epoch_store)
@@ -1891,7 +1914,7 @@ mod tests {
             }]);
         for i in 0..15 {
             state
-                .database
+                .database_for_testing()
                 .perpetual_tables
                 .transactions
                 .insert(&d(i), dummy_tx.serializable_ref())
@@ -1899,7 +1922,7 @@ mod tests {
         }
         for i in 15..20 {
             state
-                .database
+                .database_for_testing()
                 .perpetual_tables
                 .transactions
                 .insert(&d(i), dummy_tx_with_data.serializable_ref())
@@ -1969,7 +1992,7 @@ mod tests {
         let ckpt_dir = tempfile::tempdir().unwrap();
         let checkpoint_store = CheckpointStore::new(ckpt_dir.path());
 
-        let accumulator = StateAccumulator::new(state.database.clone());
+        let accumulator = StateAccumulator::new(state.get_accumulator_store().clone());
 
         let epoch_store = state.epoch_store_for_testing();
         let (checkpoint_service, _exit) = CheckpointService::spawn(

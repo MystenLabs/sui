@@ -5,5 +5,5 @@ error[E04001]: restricted visibility
    │         --------- This function is internal to its module. Only 'public', 'public(friend)', and 'public(package)' functions can be called outside of their module
    ·
 26 │     public entry fun f_script_call_private() { X::f_private() }
-   │                                                ^^^^^^^^^^^^^^ Invalid call to '0x2::X::f_private'
+   │                                                ^^^^^^^^^^^^^^ Invalid call to internal function '0x2::X::f_private'
 

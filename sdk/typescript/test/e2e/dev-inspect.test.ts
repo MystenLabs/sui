@@ -3,9 +3,9 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { TransactionBlock } from '../../src/builder';
 import { SuiClient } from '../../src/client';
 import { Keypair } from '../../src/cryptography';
+import { TransactionBlock } from '../../src/transactions';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test dev inspect', () => {

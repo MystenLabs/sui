@@ -1,5 +1,29 @@
 # @mysten/enoki
 
+## 0.1.3
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+- Updated dependencies [4830361fa4]
+  - @mysten/sui.js@0.50.1
+  - @mysten/zklogin@0.4.3
+
+## 0.1.2
+
+### Patch Changes
+
+- 33752daf9c: Fix decoding of ephemeral keypair secret
+- 4bf3e0060b: Update to latest Enoki API changes
+- Updated dependencies [a34f1cb67d]
+- Updated dependencies [c08e3569ef]
+- Updated dependencies [9a14e61db4]
+- Updated dependencies [13e922d9b1]
+- Updated dependencies [a34f1cb67d]
+- Updated dependencies [220a766d86]
+  - @mysten/sui.js@0.50.0
+  - @mysten/zklogin@0.4.2
+
 ## 0.1.1
 
 ### Patch Changes

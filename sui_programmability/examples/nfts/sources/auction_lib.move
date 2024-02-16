@@ -160,7 +160,7 @@ module nfts::auction_lib {
         transfer::transfer(obj, recipient)
     }
 
-    #[lint_allow(share_owned)]
+    #[allow(lint(share_owned))]
     public fun share_object<T: key + store>(obj: Auction<T>) {
         transfer::share_object(obj)
     }

@@ -11,7 +11,7 @@ Response: {
   "data": {
     "epoch": {
       "protocolConfigs": {
-        "protocolVersion": 35,
+        "protocolVersion": 36,
         "randomBeacon": {
           "value": true
         }
@@ -28,7 +28,7 @@ Response: {
           "json": {
             "id": "0x0000000000000000000000000000000000000000000000000000000000000008",
             "inner": {
-              "id": "0xd75e8f8fd1d84e9e2fc7655f6476e5877863de159ec892a46384ddd434ddf6b0",
+              "id": "0x685818336483f8152913a8ad149c6c266df62029df4692ec0c561a447a5e63d5",
               "version": "1"
             }
           }
@@ -43,13 +43,13 @@ Response: {
             "transactions": {
               "edges": [
                 {
-                  "cursor": "MA",
+                  "cursor": "eyJpIjowLCJjIjoyfQ",
                   "node": {
                     "__typename": "RandomnessStateCreateTransaction"
                   }
                 },
                 {
-                  "cursor": "MQ",
+                  "cursor": "eyJpIjoxLCJjIjoyfQ",
                   "node": {
                     "__typename": "ChangeEpochTransaction"
                   }

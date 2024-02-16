@@ -1,0 +1,106 @@
+Command `migrate`:
+Package toml does not specify an edition. As of 2024, Move requires all packages to define a language edition.
+
+Please select one of the following editions:
+
+1) 2024.alpha
+2) legacy
+
+Selection (default=1): Recorded edition in 'Move.toml'
+
+Would you like the Move compiler to migrate your code to Move 2024? (Y/n) 
+Generated changes . . .
+BUILDING A
+
+The following changes will be made.
+============================================================
+
+--- ./sources/mod0.move
++++ ./sources/mod0.move
+@@ -2,1 +2,1 @@
+-    struct S { f: u64 }
++    public struct S { f: u64 }
+@@ -4,1 +4,1 @@
+-    struct LongerName {
++    public struct LongerName {
+@@ -9,1 +9,1 @@
+-    struct Positional(u64, u64, u64)
++    public struct Positional(u64, u64, u64)
+@@ -11,1 +11,1 @@
+-    entry fun t0(x: u64, s: S): u64 {
++    entry fun t0(mut x: u64, s: S): u64 {
+@@ -12,1 +12,1 @@
+-        let S { f: fin } = s;
++        let S { f: mut fin } = s;
+--- ./sources/mod1.move
++++ ./sources/mod1.move
+@@ -3,1 +3,1 @@
+-    public fun t(x: u64, yip: u64, s: S): u64  {
++    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
+@@ -4,1 +4,1 @@
+-        let yes = 0;
++        let mut yes = 0;
+@@ -5,1 +5,1 @@
+-        let S { f: fin } = s;
++        let S { f: mut fin } = s;
+--- ./sources/mod2.move
++++ ./sources/mod2.move
+@@ -3,1 +3,1 @@
+-    public fun t(x: u64, yip: u64, s: S): u64  {
++    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
+@@ -4,1 +4,1 @@
+-        let yes = 0;
++        let mut yes = 0;
+@@ -5,1 +5,1 @@
+-        let S { f: fin } = s;
++        let S { f: mut fin } = s;
+@@ -15,1 +15,1 @@
+-        let x = 5; let y = 10;
++        let mut x = 5; let mut y = 10;
+--- ./sources/mod3_4.move
++++ ./sources/mod3_4.move
+@@ -2,1 +2,1 @@
+-    struct S { f: u64 }
++    public struct S { f: u64 }
+@@ -4,1 +4,1 @@
+-    struct LongerName {
++    public struct LongerName {
+@@ -9,1 +9,1 @@
+-    struct Positional(u64, u64, u64)
++    public struct Positional(u64, u64, u64)
+@@ -11,1 +11,1 @@
+-    entry fun t0(x: u64, s: S): u64 {
++    entry fun t0(mut x: u64, s: S): u64 {
+@@ -12,1 +12,1 @@
+-        let S { f: fin } = s;
++        let S { f: mut fin } = s;
+@@ -22,1 +22,1 @@
+-    public fun t(x: u64, yip: u64, s: S): u64  {
++    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
+@@ -23,1 +23,1 @@
+-        let yes = 0;
++        let mut yes = 0;
+@@ -24,1 +24,1 @@
+-        let S { f: fin } = s;
++        let S { f: mut fin } = s;
+
+
+============================================================
+Apply changes? (Y/n) 
+Updating "./sources/mod0.move" . . .
+Updating "./sources/mod1.move" . . .
+Updating "./sources/mod2.move" . . .
+Updating "./sources/mod3_4.move" . . .
+
+Changes complete
+Wrote patchfile out to: ./migration.patch
+
+External Command `diff -s migration.patch expected_migration.patch`:
+Files migration.patch and expected_migration.patch are identical
+External Command `diff -r -s sources migration_sources`:
+Files sources/mod0.move and migration_sources/mod0.move are identical
+Files sources/mod1.move and migration_sources/mod1.move are identical
+Files sources/mod2.move and migration_sources/mod2.move are identical
+Files sources/mod3_4.move and migration_sources/mod3_4.move are identical
+External Command `diff -s Move.toml Move.toml.expected`:
+Files Move.toml and Move.toml.expected are identical

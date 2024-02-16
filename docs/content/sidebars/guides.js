@@ -56,7 +56,19 @@ const guides = [
 				},
 				items: [
 					'guides/developer/sui-101/shared-owned',
-					'guides/developer/sui-101/create-coin',
+					{
+						type: 'category',
+						label: 'Create Coins and Tokens',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/sui-101/create-coin',
+						},
+						items: [
+							'guides/developer/sui-101/create-coin/regulated',
+							'guides/developer/sui-101/create-coin/in-game-token',
+							'guides/developer/sui-101/create-coin/loyalty',
+						],
+					},
 					'guides/developer/sui-101/create-nft',
 					'guides/developer/sui-101/using-events',
 					'guides/developer/sui-101/access-time',
@@ -66,9 +78,9 @@ const guides = [
 						type: 'category',
 						label: 'Working with PTBs',
 						items: [
-							'guides/developer/sui-101/simulating-refs',
-							'guides/developer/sui-101/coin-mgt',
 							'guides/developer/sui-101/building-ptb',
+							'guides/developer/sui-101/coin-mgt',
+							'guides/developer/sui-101/simulating-refs',
 						],
 					},
 				],
@@ -90,7 +102,10 @@ const guides = [
 			{
 				type: 'category',
 				label: 'Advanced Topics',
-				items: ['guides/developer/advanced/asset-tokenization'],
+				items: [
+					'guides/developer/advanced/asset-tokenization',
+					'guides/developer/advanced/graphql-migration',
+				],
 			},
 			/*{
 				type: 'category',

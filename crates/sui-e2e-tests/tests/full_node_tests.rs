@@ -12,6 +12,7 @@ use serde_json::json;
 use std::sync::Arc;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::node::RunWithRange;
+use sui_core::authority::EffectsNotifyRead;
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiExecutionStatus,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -528,7 +529,16 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
-async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
+async fn test_full_node_sync_flood() {
+    do_test_full_node_sync_flood().await
+}
+
+#[sim_test(check_determinism)]
+async fn test_full_node_sync_flood_determinism() {
+    do_test_full_node_sync_flood().await
+}
+
+async fn do_test_full_node_sync_flood() {
     let mut test_cluster = TestClusterBuilder::new().build().await;
 
     // Start a new fullnode that is not on the write path
@@ -624,8 +634,6 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         .notify_read_executed_effects(digests)
         .await
         .unwrap();
-
-    Ok(())
 }
 
 #[sim_test]
@@ -1328,7 +1336,7 @@ async fn test_access_old_object_pruned() {
         state.prune_objects_and_compact_for_testing().await;
         // Make sure the old version of the object is already pruned.
         assert!(state
-            .db()
+            .get_object_store()
             .get_object_by_key(&gas_object.0, gas_object.1)
             .unwrap()
             .is_none());

@@ -1,19 +1,5 @@
 ---
-title: Coin / Token API comparison
+title: Coin/Token API comparison
 ---
 
-This appendix compares the API of the `Coin` and `Token` modules and can be used as a quick reference.
-
-| Function                    | Coin | Token       | Note                                                                             |
-|-----------------------------|------|-------------|----------------------------------------------------------------------------------|
-| mint                        | +    | +           | Requires TreasuryCap                                                             |
-| burn                        | +    | +           | Requires TreasuryCap                                                             |
-| join                        | +    | +           | Public                                                                           |
-| split                       | +    | +           | Public                                                                           |
-| zero                        | +    | +           | Public                                                                           |
-| destroy_zero                | +    | +           | Public                                                                           |
-| keep                        | -    | +           | Send Token to sender, not required for Coin due to lack of transfer restrictions |
-| transfer                    | +    | \[protected] | Coin is transferable by default, Token requires authorization                   |
-| to_balance / to_coin        | +    | \[protected] | Token can be converted "to_coin", requires authorization                        |
-| from_balance / from_coin    | +    | \[protected] | Token can be created "from_coin", requires authorization                        |
-| spend                       | -    | \[protected] | Token can be "spent", requires authorization (see "spending")                   |
+{@include: ../../snippets/coin-token-apis.mdx}

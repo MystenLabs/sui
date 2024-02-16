@@ -4,9 +4,9 @@
 import { fromB64 } from '@mysten/bcs';
 import { describe, expect, it } from 'vitest';
 
-import { TransactionBlock } from '../../src/builder';
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
 import { MultiSigPublicKey } from '../../src/multisig/publickey';
+import { TransactionBlock } from '../../src/transactions';
 import { getZkLoginSignature } from '../../src/zklogin';
 import { toZkLoginPublicIdentifier } from '../../src/zklogin/publickey';
 import { DEFAULT_RECIPIENT, setupWithFundedAddress } from './utils/setup';
