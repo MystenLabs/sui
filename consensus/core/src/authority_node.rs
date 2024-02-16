@@ -315,8 +315,8 @@ mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
-    use consensus_config::{local_committee_and_keys, NetworkKeyPair, Parameters, ProtocolKeyPair};
-    use fastcrypto::traits::ToFromBytes;
+    use consensus_config::{local_committee_and_keys, Parameters};
+    use fastcrypto::traits::KeyPair;
     use parking_lot::Mutex;
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
@@ -370,7 +370,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn start_and_stop() {
+    async fn test_authority_start_and_stop() {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
         let registry = Registry::new();
 
@@ -381,9 +381,9 @@ mod tests {
         };
         let txn_verifier = NoopTransactionVerifier {};
 
-        let (own_index, _) = committee.authorities().last().unwrap();
-        let protocol_keypair = ProtocolKeyPair::from_bytes(keypairs[0].1.as_bytes()).unwrap();
-        let network_keypair = NetworkKeyPair::from_bytes(keypairs[0].0.as_bytes()).unwrap();
+        let own_index = committee.to_authority_index(0).unwrap();
+        let protocol_keypair = keypairs[own_index].1.copy();
+        let network_keypair = keypairs[own_index].0.copy();
 
         let (sender, _receiver) = unbounded_channel();
         let commit_consumer = CommitConsumer::new(
@@ -448,4 +448,77 @@ mod tests {
     //     assert_eq!(blocks.len(), 1);
     //     assert_eq!(blocks[0], input_block);
     // }
+
+    // TODO: build AuthorityFixture.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_authority_committee() {
+        let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
+        let mut output_receivers = vec![];
+        let mut authorities = vec![];
+        for (index, _authority_info) in committee.authorities() {
+            let registry = Registry::new();
+
+            let temp_dir = TempDir::new().unwrap();
+            let parameters = Parameters {
+                db_path: Some(temp_dir.into_path()),
+                ..Default::default()
+            };
+            let txn_verifier = NoopTransactionVerifier {};
+
+            let protocol_keypair = keypairs[index].1.copy();
+            let network_keypair = keypairs[index].0.copy();
+
+            let (sender, receiver) = unbounded_channel();
+            let commit_consumer = CommitConsumer::new(
+                sender, 0, // last_processed_index
+            );
+            output_receivers.push(receiver);
+
+            let authority = ConsensusAuthority::start(
+                index,
+                committee.clone(),
+                parameters,
+                ProtocolConfig::get_for_max_version_UNSAFE(),
+                protocol_keypair,
+                network_keypair,
+                Arc::new(txn_verifier),
+                commit_consumer,
+                registry,
+            )
+            .await;
+            authorities.push(authority);
+        }
+
+        const NUM_TRANSACTIONS: u8 = 15;
+        for i in 0..NUM_TRANSACTIONS {
+            authorities[i as usize % authorities.len()]
+                .transaction_client()
+                .submit(vec![i; 16])
+                .await
+                .unwrap();
+        }
+
+        // TODO: enable after commit logic is integrated into Core.
+        // for mut receiver in output_receivers {
+        //     let mut received_txns = BTreeSet::<Vec<u8>>::new();
+        //     loop {
+        //         let committed_subdag = tokio::time::timeout(Duration::from_secs(1), receiver.recv())
+        //             .await
+        //             .unwrap()
+        //             .unwrap();
+        //         for b in committed_subdag.blocks {
+        //             for txn in b.transactions().iter().map(|t| t.data().to_vec()) {
+        //                 assert!(received_txns.insert(txn));
+        //             }
+        //         }
+        //         if received_txns.len() == NUM_TRANSACTIONS {
+        //             break;
+        //         }
+        //     }
+        // }
+
+        for authority in authorities {
+            authority.stop().await;
+        }
+    }
 }
