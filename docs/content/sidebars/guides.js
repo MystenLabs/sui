@@ -141,6 +141,7 @@ const guides = [
 					'guides/developer/app-examples/e2e-counter',
 					'guides/developer/app-examples/auction',
 					'guides/developer/app-examples/escrow',
+					'guides/developer/app-examples/plinko',
 					'guides/developer/app-examples/trusted-swap',
 					'guides/developer/app-examples/tic-tac-toe',
 					'guides/developer/app-examples/recaptcha',
