@@ -1902,6 +1902,12 @@ impl ProtocolConfig {
                     cfg.consensus_max_transactions_in_block_bytes = Some(6 * 1_024 * 1024);
                     // 6 MB
                 }
+                37 => {
+                    // enable bridge in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.bridge = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
