@@ -78,7 +78,7 @@ where
         let (core_signals, signals_receivers) = CoreSignals::new();
         let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(context.clone(), dag_state);
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let core = Core::new(
             context.clone(),
             tx_consumer,
@@ -114,6 +114,7 @@ where
             block_verifier,
             core_dispatcher,
             synchronizer: synchronizer.clone(),
+            dag_state,
         });
         network_manager.install_service(network_keypair, network_service);
 
@@ -159,6 +160,7 @@ pub struct AuthorityService {
     block_verifier: Arc<dyn BlockVerifier>,
     core_dispatcher: Arc<dyn CoreThreadDispatcher>,
     synchronizer: Arc<SynchronizerHandle>,
+    dag_state: Arc<RwLock<DagState>>,
 }
 
 #[async_trait]
@@ -215,10 +217,39 @@ impl NetworkService for AuthorityService {
 
     async fn handle_fetch_blocks(
         &self,
-        _peer: AuthorityIndex,
-        _block_refs: Vec<BlockRef>,
+        peer: AuthorityIndex,
+        block_refs: Vec<BlockRef>,
     ) -> ConsensusResult<Vec<Bytes>> {
-        Ok(vec![])
+        const MAX_ALLOWED_FETCH_BLOCKS: usize = 200;
+
+        if block_refs.len() > MAX_ALLOWED_FETCH_BLOCKS {
+            return Err(ConsensusError::TooManyFetchBlocksRequested(peer));
+        }
+
+        // Some quick validation of the requested block refs
+        for block in &block_refs {
+            if !self.context.committee.is_valid_index(block.author) {
+                return Err(ConsensusError::InvalidAuthorityIndex {
+                    index: block.author,
+                    max: self.context.committee.size(),
+                });
+            }
+            if block.round == 0 {
+                return Err(ConsensusError::UnexpectedGenesisBlockRequested);
+            }
+        }
+
+        // For now ask dag state directly
+        let blocks = self.dag_state.read().get_blocks(block_refs)?;
+
+        // Return the serialised blocks
+        let result = blocks
+            .into_iter()
+            .flatten()
+            .map(|block| block.serialized().clone())
+            .collect::<Vec<_>>();
+
+        Ok(result)
     }
 }
 
