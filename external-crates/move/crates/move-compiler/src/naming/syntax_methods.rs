@@ -393,8 +393,7 @@ fn valid_return_type(
         }
 
         SyntaxMethodKind_::IndexMut if valid_mut_ref(ty) => {
-            let ret_ty = valid_index_return_type(context, loc, ty);
-            ret_ty
+            valid_index_return_type(context, loc, ty)
         }
         SyntaxMethodKind_::IndexMut if valid_imm_ref(ty) => {
             let msg = format!("Invalid {} annotation", SyntaxAttribute::SYNTAX);

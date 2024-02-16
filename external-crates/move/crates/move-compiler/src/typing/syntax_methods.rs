@@ -46,7 +46,6 @@ fn validate_index_syntax_methods(
     index: &SyntaxMethod,
     index_mut: &SyntaxMethod,
 ) -> bool {
-
     let index_ann_loc = index.kind.loc;
     let (index_module, index_fn) = &index.target_function;
     let (index_mut_module, index_mut_fn) = &index_mut.target_function;
@@ -211,7 +210,7 @@ fn validate_index_syntax_methods(
         }
     }
 
-    if let Err(_) = core::subtype(subst, &index_mut_ty.return_, &index_ty.return_) {
+    if core::subtype(subst, &index_mut_ty.return_, &index_ty.return_).is_err() {
         let sp!(index_loc, index_type) = &index_finfo.signature.return_type;
         let sp!(mut_loc, mut_type) = &mut_finfo.signature.return_type;
         let index_msg = format!("This index function returns type {}", ty_str_(index_type));
