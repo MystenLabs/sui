@@ -263,10 +263,9 @@ export class TransactionBlock {
 
 		// Upgrade shared object inputs to mutable if needed:
 		if (
-			inserted &&
-			'Object' in inserted &&
-			'SharedObject' in inserted.Object &&
+			inserted?.Object?.SharedObject &&
 			typeof value === 'object' &&
+			// TODO update to match enum style
 			'SharedObject' in value.Object
 		) {
 			inserted.Object.SharedObject.mutable =

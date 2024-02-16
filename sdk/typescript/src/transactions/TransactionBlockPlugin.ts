@@ -149,7 +149,7 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 			// Filter out coins that are also used as input:
 			.filter((coin) => {
 				const matchingInput = blockData.inputs.find((input) => {
-					if ('Object' in input && 'ImmOrOwnedObject' in input.Object) {
+					if (input.Object?.ImmOrOwnedObject) {
 						return coin.coinObjectId === input.Object.ImmOrOwnedObject.objectId;
 					}
 
@@ -180,7 +180,7 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 		// Keep track of the object references that will need to be resolved at the end of the transaction.
 		// We keep the input by-reference to avoid needing to re-resolve it:
 		const objectsToResolve = blockData.inputs.filter((input) => {
-			return 'UnresolvedObject' in input;
+			return input.UnresolvedObject;
 		}) as Extract<CallArg, { UnresolvedObject: unknown }>[];
 
 		if (objectsToResolve.length) {
@@ -256,17 +256,18 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 
 		transactions.forEach((transaction) => {
 			// Special case move call:
-			if ('MoveCall' in transaction) {
+			if (transaction.MoveCall) {
 				// Determine if any of the arguments require encoding.
 				// - If they don't, then this is good to go.
 				// - If they do, then we need to fetch the normalized move module.
+
 				const inputs = transaction.MoveCall.arguments.map((arg) => {
-					if ('Input' in arg) {
+					if (arg.Input) {
 						return blockData.inputs[arg.Input];
 					}
 					return null;
 				});
-				const needsResolution = inputs.some((input) => input && 'RawInput' in input);
+				const needsResolution = inputs.some((input) => input && input.RawValue);
 
 				if (needsResolution) {
 					moveModulesToResolve.push(transaction.MoveCall);
@@ -275,7 +276,7 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 
 			// Special handling for values that where previously encoded using the wellKnownEncoding pattern.
 			// This should only happen when transaction block data was hydrated from an old version of the SDK
-			if ('SplitCoins' in transaction) {
+			if (transaction.SplitCoins) {
 				// TODO: Fix this during hydration
 				// const amounts = transaction.SplitCoins[1].map((amount) => {
 				// transaction.amounts.forEach((amount) => {
@@ -323,10 +324,10 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 
 					params.forEach((param, i) => {
 						const arg = moveCall.arguments[i];
-						if (!('Input' in arg)) return;
+						if (!arg.Input) return;
 						const input = inputs[arg.Input];
 						// Skip if the input is already resolved
-						if (!('RawValue' in input)) return;
+						if (!input.RawValue) return;
 
 						const inputValue = input.RawValue.value;
 
@@ -376,7 +377,7 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 		await this.#runHook('validate', blockData, options);
 		// Validate all inputs are the correct size:
 		blockData.inputs.forEach((input, index) => {
-			if ('Pure' in input) {
+			if (input.Pure) {
 				if (input.Pure.length > options.maxPureArgumentSize) {
 					throw new Error(
 						`Input at index ${index} is too large, max pure input size is ${options.maxPureArgumentSize} bytes, got ${input.Pure.length} bytes`,
