@@ -130,7 +130,7 @@ impl fmt::Display for Tok {
             Equal => "=",
             EqualEqual => "==",
             EqualEqualGreater => "==>",
-            EqualGreater => "==>",
+            EqualGreater => "=>",
             LessEqualEqualGreater => "<==>",
             LessLess => "<<",
             Greater => ">",

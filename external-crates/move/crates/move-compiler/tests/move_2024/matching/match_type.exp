@@ -4,15 +4,3 @@ error[E03018]: invalid type parameter
 15 │             Option::None<u64> => (),
    │                         ^^^^^ Cannot use type parameters on an enum variant
 
-bug[ICE12003]: INTERNAL COMPILER ERROR
-   ┌─ tests/move_2024/matching/match_type.move:15:26
-   │
-15 │             Option::None<u64> => (),
-   │                          ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
-
-   │
-   = The Move compiler has encountered an internal compiler error.
-      Please report this this issue to the Mysten Labs Move language team,
-      including this error and any relevant code, to the Mysten Labs issue tracker
-      at : https://github.com/MystenLabs/sui/issues
-

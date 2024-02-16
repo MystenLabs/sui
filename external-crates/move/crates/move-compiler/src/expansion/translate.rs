@@ -3023,7 +3023,22 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
             };
             let tys = optional_sp_types(context, pts_opt);
             match head_ctor_name {
-                sp!(loc, EM::Name(name)) => sp(loc, EP::Binder(Var(name))),
+                sp!(loc, EM::Name(name)) => {
+                    let name_value = name.value;
+                    if !valid_local_variable_name(name_value) {
+                        let msg = format!(
+                            "Invalid pattern variable name '{}'. Pattern variable names must start \
+                            with 'a'..'z' (or '_')",
+                            name_value,
+                        );
+                        context
+                            .env()
+                            .add_diag(diag!(Declarations::InvalidName, (name.loc, msg)));
+                        error_pattern!()
+                    } else {
+                        sp(loc, EP::Binder(Var(name)))
+                    }
+                }
                 head_ctor_name @ sp!(_, EM::Variant(_, _)) => {
                     sp(loc, EP::HeadConstructor(head_ctor_name, tys))
                 }
@@ -3045,7 +3060,20 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                 Box::new(match_pattern(context, *rhs)),
             ),
         ),
-        PP::At(x, inner) => sp(loc, EP::At(x, Box::new(match_pattern(context, *inner)))),
+        PP::At(x, inner) => {
+            if x.is_underscore() {
+                context.env().add_diag(diag!(
+                    NameResolution::InvalidPattern,
+                    (x.loc(), "Can't use '_' as a binder in an '@' pattern")
+                ));
+                match_pattern(context, *inner)
+            } else if x.starts_with_underscore() {
+                // Explicitly ignoring the at binding is okay?
+                match_pattern(context, *inner)
+            } else {
+                sp(loc, EP::At(x, Box::new(match_pattern(context, *inner))))
+            }
+        }
     }
 }
 
@@ -3433,6 +3461,10 @@ fn check_valid_address_name(
             check_restricted_name_all_cases(context, NameCase::Address, n)
         }
     }
+}
+
+fn valid_local_variable_name(s: Symbol) -> bool {
+    s.starts_with('_') || s.starts_with(|c: char| c.is_ascii_lowercase())
 }
 
 fn check_valid_function_parameter_name(context: &mut Context, is_macro: Option<Loc>, v: &Var) {

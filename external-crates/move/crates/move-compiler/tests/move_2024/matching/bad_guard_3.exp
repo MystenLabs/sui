@@ -1,24 +1,9 @@
-bug[ICE12003]: INTERNAL COMPILER ERROR
-   ┌─ tests/move_2024/matching/bad_guard_3.move:17:13
+error[E07003]: invalid operation, could create dangling a reference
+   ┌─ tests/move_2024/matching/bad_guard_3.move:16:20
    │
-17 │             Option::Some(x) => *x,
-   │             ^^^^^^^^^^^^^^^ ICE base type constraint failed: &(u64: copy+drop+store)
-
-   │
-   = The Move compiler has encountered an internal compiler error.
-      Please report this this issue to the Mysten Labs Move language team,
-      including this error and any relevant code, to the Mysten Labs issue tracker
-      at : https://github.com/MystenLabs/sui/issues
-
-bug[ICE12003]: INTERNAL COMPILER ERROR
-   ┌─ tests/move_2024/matching/bad_guard_3.move:17:13
-   │
-17 │             Option::Some(x) => *x,
-   │             ^^^^^^^^^^^^^^^ ICE base type constraint failed: &mut (u64: copy+drop+store)
-
-   │
-   = The Move compiler has encountered an internal compiler error.
-      Please report this this issue to the Mysten Labs Move language team,
-      including this error and any relevant code, to the Mysten Labs issue tracker
-      at : https://github.com/MystenLabs/sui/issues
+14 │         match (o) {
+   │                - It is still being mutably borrowed by this reference
+15 │             Option::None => 0,
+16 │             _ if ({*o = Option::None; false}) => 1,
+   │                    ^^^^^^^^^^^^^^^^^ Invalid mutation of reference.
 

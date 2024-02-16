@@ -1,12 +1,8 @@
-bug[ICE12003]: INTERNAL COMPILER ERROR
-  ┌─ tests/move_2024/matching/abc_match_binder.move:9:19
+error[E13003]: feature is under active development
+  ┌─ tests/move_2024/matching/abc_match_binder.move:3:17
   │
-9 │     fun t0(x: ABC<u64>): ABC<u64> {
-  │                   ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
-
+3 │     public enum ABC<T> has drop {
+  │                 ^^^ Enums are not supported in bytecode.
   │
-  = The Move compiler has encountered an internal compiler error.
-     Please report this this issue to the Mysten Labs Move language team,
-     including this error and any relevant code, to the Mysten Labs issue tracker
-     at : https://github.com/MystenLabs/sui/issues
+  = This feature is currently in development.
 

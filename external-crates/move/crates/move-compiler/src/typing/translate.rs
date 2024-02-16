@@ -2075,6 +2075,7 @@ fn match_arm(
     let ploc = pattern.loc;
     let pattern = match_pattern(context, pattern, ref_mut);
 
+
     subtype(
         context,
         ploc,

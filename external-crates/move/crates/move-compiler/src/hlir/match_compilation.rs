@@ -1528,26 +1528,12 @@ fn find_counterexample(
             .collect()
     }
 
-    // \mathcal{I} from Maranget. Warning for pattern matching. 1992.
-    fn find_counterexample(
+    fn find_counterexample_bool(
         context: &mut Context,
         matrix: PatternMatrix,
         arity: u32,
         ndx: &mut u32,
     ) -> Option<Vec<CounterExample>> {
-        // println!("checking matrix");
-        // matrix.print_verbose();
-        let result = if matrix.patterns_empty() {
-            None
-        } else if matrix.is_empty() {
-            Some(make_wildcards(arity as usize))
-        } else if let Some(sp!(_, BuiltinTypeName_::Bool)) = matrix
-            .tys
-            .first()
-            .unwrap()
-            .value
-            .unfold_to_builtin_type_name()
-        {
             let literals = matrix.first_lits();
             assert!(literals.len() <= 2, "ICE match exhaustiveness failure");
             if literals.len() == 2 {
@@ -1596,7 +1582,15 @@ fn find_counterexample(
                     None
                 }
             }
-        } else if let Some(sp!(_, _)) = matrix.tys[0].value.unfold_to_builtin_type_name() {
+        }
+
+
+    fn find_counterexample_builtin(
+        context: &mut Context,
+        matrix: PatternMatrix,
+        arity: u32,
+        ndx: &mut u32,
+    ) -> Option<Vec<CounterExample>> {
             // For all other non-literals, we don't consider a case where the constructors are
             // saturated.
             let literals = matrix.first_lits();
@@ -1625,21 +1619,22 @@ fn find_counterexample(
             } else {
                 None
             }
-        } else {
+        }
+
+    fn find_counterexample_datatype(
+        context: &mut Context,
+        matrix: PatternMatrix,
+        arity: u32,
+        ndx: &mut u32,
+        mident: ModuleIdent,
+        datatype_name: DatatypeName,
+    ) -> Option<Vec<CounterExample>> {
             // println!("matrix types:");
             // for ty in &matrix.tys {
             //     ty.print_verbose();
             // }
-            let (mident, datatype_name) = matrix.tys[0]
-                .value
-                .unfold_to_type_name()
-                // .map(|name| {
-                //     println!("name: {:#?}", name);
-                //     name
-                // })
-                .and_then(|sp!(_, name)| name.datatype_name())
-                .expect("ICE non-datatype type in head constructor fringe position");
 
+            // TODO: if we ever want to match against structs, this needs to behave differently
             if context.is_struct(&mident, &datatype_name) {
                 let (_, default) = matrix.default();
                 if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx)
@@ -1719,6 +1714,44 @@ fn find_counterexample(
                     None
                 }
             }
+        }
+
+    // \mathcal{I} from Maranget. Warning for pattern matching. 1992.
+    fn find_counterexample(
+        context: &mut Context,
+        matrix: PatternMatrix,
+        arity: u32,
+        ndx: &mut u32,
+    ) -> Option<Vec<CounterExample>> {
+        // println!("checking matrix");
+        // matrix.print_verbose();
+        let result = if matrix.patterns_empty() {
+            None
+        } else if let Some(ty) = matrix.tys.first() {
+            if let Some(sp!(_, BuiltinTypeName_::Bool)) = ty.value.unfold_to_builtin_type_name() {
+                find_counterexample_bool(context, matrix, arity, ndx)
+            } else if let Some(_builtin) = ty.value.unfold_to_builtin_type_name() {
+                find_counterexample_builtin(context, matrix, arity, ndx)
+            } else if let Some((mident, datatype_name)) = ty.value.unfold_to_type_name().and_then(|sp!(_, name)| name.datatype_name()) {
+                // This will need to also support structs if and when we add matching for them.
+                find_counterexample_datatype(context, matrix, arity, ndx, mident, datatype_name)
+            } else {
+                // This can only be a binding or wildcard, so we act accordingly.
+                let (_, default) = matrix.default();
+                if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx)
+                {
+                    let result = [CounterExample::Wildcard]
+                        .into_iter()
+                        .chain(counterexample)
+                        .collect();
+                    Some(result)
+                } else {
+                    None
+                }
+            }
+        } else {
+            assert!(matrix.is_empty());
+            Some(make_wildcards(arity as usize))
         };
         // print!("result:");
         // match result {
@@ -1728,12 +1761,6 @@ fn find_counterexample(
         // println!();
         result
     }
-
-    // let result = fancy_i(context, matrix, 1);
-    // match result {
-    //     Some(ref n) => println!("{}", n[0]),
-    //     None => println!("NON"),
-    // }
 
     let mut ndx = 0;
     if let Some(mut counterexample) = find_counterexample(context, matrix, 1, &mut ndx) {

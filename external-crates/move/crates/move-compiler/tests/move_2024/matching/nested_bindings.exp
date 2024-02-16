@@ -1,60 +1,16 @@
-bug[ICE12003]: INTERNAL COMPILER ERROR
-   ┌─ tests/move_2024/matching/nested_bindings.move:14:20
-   │
-14 │     fun t0(in: ABC<u64, QEither<u64, u64>>): u64 {
-   │                    ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
+error[E13003]: feature is under active development
+  ┌─ tests/move_2024/matching/nested_bindings.move:3:17
+  │
+3 │     public enum ABC<Q,R> has drop {
+  │                 ^^^ Enums are not supported in bytecode.
+  │
+  = This feature is currently in development.
 
-   │
-   = The Move compiler has encountered an internal compiler error.
-      Please report this this issue to the Mysten Labs Move language team,
-      including this error and any relevant code, to the Mysten Labs issue tracker
-      at : https://github.com/MystenLabs/sui/issues
-
-bug[ICE12003]: INTERNAL COMPILER ERROR
-   ┌─ tests/move_2024/matching/nested_bindings.move:14:33
-   │
-14 │     fun t0(in: ABC<u64, QEither<u64, u64>>): u64 {
-   │                                 ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
-
-   │
-   = The Move compiler has encountered an internal compiler error.
-      Please report this this issue to the Mysten Labs Move language team,
-      including this error and any relevant code, to the Mysten Labs issue tracker
-      at : https://github.com/MystenLabs/sui/issues
-
-bug[ICE12003]: INTERNAL COMPILER ERROR
-   ┌─ tests/move_2024/matching/nested_bindings.move:14:38
-   │
-14 │     fun t0(in: ABC<u64, QEither<u64, u64>>): u64 {
-   │                                      ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
-
-   │
-   = The Move compiler has encountered an internal compiler error.
-      Please report this this issue to the Mysten Labs Move language team,
-      including this error and any relevant code, to the Mysten Labs issue tracker
-      at : https://github.com/MystenLabs/sui/issues
-
-bug[ICE12003]: INTERNAL COMPILER ERROR
-   ┌─ tests/move_2024/matching/nested_bindings.move:17:23
-   │
-17 │             ABC::C(x, QEither::Right(y)) => x + y,
-   │                       ^^^^^^^^^^^^^^^^^ ICE base type constraint failed: &(0x42::m::QEither<(u64: copy+drop+store), (u64: copy+drop+store)>: drop)
-
-   │
-   = The Move compiler has encountered an internal compiler error.
-      Please report this this issue to the Mysten Labs Move language team,
-      including this error and any relevant code, to the Mysten Labs issue tracker
-      at : https://github.com/MystenLabs/sui/issues
-
-bug[ICE12003]: INTERNAL COMPILER ERROR
-   ┌─ tests/move_2024/matching/nested_bindings.move:19:23
-   │
-19 │             ABC::A(c, QEither::Right(e)) => c + e,
-   │                       ^^^^^^^^^^^^^^^^^ ICE base type constraint failed: &(0x42::m::QEither<(u64: copy+drop+store), (u64: copy+drop+store)>: drop)
-
-   │
-   = The Move compiler has encountered an internal compiler error.
-      Please report this this issue to the Mysten Labs Move language team,
-      including this error and any relevant code, to the Mysten Labs issue tracker
-      at : https://github.com/MystenLabs/sui/issues
+error[E13003]: feature is under active development
+  ┌─ tests/move_2024/matching/nested_bindings.move:9:17
+  │
+9 │     public enum QEither<L,R> has drop {
+  │                 ^^^^^^^ Enums are not supported in bytecode.
+  │
+  = This feature is currently in development.
 

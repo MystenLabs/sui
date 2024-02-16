@@ -863,24 +863,6 @@ macro_rules! make_block {
     ($($elems:expr),+) => { VecDeque::from([$($elems),*]) };
 }
 
-// fn match_subject(context: &mut Context, block: &mut Block, subject: T::Exp) -> Box<H::Exp> {
-//     let eloc = subject.exp.loc;
-//     let out_type = type_(context, subject.ty.clone());
-//     let exp = value(context, block, Some(&out_type), subject);
-//     let bound_exp = bind_exp(context, block, exp);
-//     let tmp = match bound_exp.exp.value {
-//         H::UnannotatedExp_::Move {
-//             annotation: MoveOpAnnotation::InferredLastUsage,
-//             var,
-//         } => var,
-//         _ => panic!("ICE invalid bind_exp for single value"),
-//     };
-//     Box::new(H::exp(
-//         out_type,
-//         sp(eloc, H::UnannotatedExp_::BorrowLocal(false, tmp)),
-//     ))
-// }
-
 // -------------------------------------------------------------------------------------------------
 // Tail Position
 // -------------------------------------------------------------------------------------------------
@@ -2437,9 +2419,9 @@ fn assign(
             let bs = base_types(context, tbs);
 
             let mut fields = vec![];
-            for (decl_idx, f, bt, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
+            for (decl_idx, f, st, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
                 assert!(fields.len() == decl_idx);
-                let st = &H::SingleType_::base(bt);
+                assert!(!matches!(&st, sp!(_, H::SingleType_::Ref(_, _))));
                 let (fa, mut fafter) = assign(context, case, tfa, &st);
                 after.append(&mut fafter);
                 fields.push((f, fa))
@@ -2449,21 +2431,21 @@ fn assign(
         A::BorrowUnpackVariant(mut_, m, e, v, tbs, tfields) => {
             let bs = base_types(context, tbs);
 
-            let unpack_type = if mut_ {
+            let unpack = if mut_ {
                 UnpackType::ByMutRef
             } else {
                 UnpackType::ByImmRef
             };
 
             let mut fields = vec![];
-            for (decl_idx, f, bt, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
+            for (decl_idx, f, st, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
                 assert!(fields.len() == decl_idx);
-                let borrow_ty = sp(f.loc(), H::SingleType_::Ref(mut_, bt));
-                let (fa, mut fafter) = assign(context, case, tfa, &borrow_ty);
+                assert!(matches!(&st, sp!(_, H::SingleType_::Ref(st_mut, _)) if st_mut == &mut_));
+                let (fa, mut fafter) = assign(context, case, tfa, &st);
                 after.append(&mut fafter);
                 fields.push((f, fa))
             }
-            L::UnpackVariant(e, v, unpack_type, loc, bs, fields)
+            L::UnpackVariant(e, v, unpack, loc, bs, fields)
         }
     };
     (sp(loc, l_), after)
@@ -2498,35 +2480,40 @@ fn assign_struct_fields(
     tfields_vec
 }
 
+// Unlike struct unpacking, we don't have the luxury of doing direct field accesses as borrows, so
+// we return SingleTypes that account for the borrowing in UnpackVariants that happen to return
+// borrowed values.
 fn assign_variant_fields(
     context: &mut Context,
     m: &ModuleIdent,
     e: &DatatypeName,
     v: &VariantName,
     tfields: Fields<(N::Type, T::LValue)>,
-) -> Vec<(usize, Field, H::BaseType, T::LValue)> {
+) -> Vec<(usize, Field, H::SingleType, T::LValue)> {
     let decl_fields = context.enum_variant_fields(m, e, v).cloned();
     let mut tfields_vec: Vec<_> = match decl_fields {
         Some(m) => tfields
             .into_iter()
             .map(|(f, (_idx, (tbt, tfa)))| {
                 let field = *m.get(&f).unwrap();
-                let base_ty = base_type(context, tbt);
-                (field, f, base_ty, tfa)
+                let single_ty = single_type(context, tbt);
+                (field, f, single_ty, tfa)
             })
             .collect(),
         None => tfields
             .into_iter()
             .enumerate()
             .map(|(ndx, (f, (_idx, (tbt, tfa))))| {
-                let base_ty = base_type(context, tbt);
-                (ndx, f, base_ty, tfa)
+                let single_ty = single_type(context, tbt);
+                (ndx, f, single_ty, tfa)
             })
             .collect(),
+
     };
     tfields_vec.sort_by(|(idx1, _, _, _), (idx2, _, _, _)| idx1.cmp(idx2));
     tfields_vec
 }
+
 
 //**************************************************************************************************
 // Commands

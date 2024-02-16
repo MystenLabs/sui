@@ -330,6 +330,10 @@ mod recolor_struct {
             }
         }
 
+        pub fn add_var(&mut self, var: &Var) {
+            self.vars.insert(*var);
+        }
+
         pub fn add_block_label(&mut self, label: BlockLabel) {
             self.block_labels.insert(label);
         }
@@ -514,12 +518,14 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
                     rhs,
                 } = &mut arm.value;
                 for var in binders.iter_mut() {
+                    ctx.add_var(&var);
                     recolor_var(ctx, var);
                 }
                 let mut old_guard_binders = std::mem::take(guard_binders)
                     .into_iter()
                     .collect::<Vec<_>>();
                 for (pv, gv) in old_guard_binders.iter_mut() {
+                    ctx.add_var(&gv);
                     recolor_var(ctx, pv);
                     recolor_var(ctx, gv);
                 }
@@ -534,9 +540,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
                 }
                 let _ = std::mem::replace(rhs_binders, recolored_rhs_binders.into_iter().collect());
                 recolor_pat(ctx, pattern);
-                guard.iter_mut().map(|guard| recolor_exp(ctx, guard));
-                recolor_exp(ctx, rhs);
-                guard.as_mut().map(|guard| recolor_exp(ctx, guard));
+                let _ = guard.as_mut().map(|guard| recolor_exp(ctx, guard));
                 recolor_exp(ctx, rhs);
             }
         }
@@ -778,6 +782,13 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             exp(context, ef);
         }
         N::Exp_::Match(subject, arms) => {
+            macro_rules! take_and_mut_replace {
+                ($target:ident, $local:ident, $block:block) => {
+                    let mut $local = std::mem::take($target);
+                    $block;
+                    let _ = std::mem::replace($target, $local);
+                };
+            }
             exp(context, subject);
             for arm in &mut arms.value {
                 let MatchArm_ {
@@ -788,37 +799,39 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                     rhs_binders,
                     rhs,
                 } = &mut arm.value;
-                let valid_binders = std::mem::take(binders);
-                let taken_binders = valid_binders
-                    .into_iter()
-                    .filter(|sp!(_, var_)| {
-                        if context.all_params.contains_key(var_) {
-                            assert!(
-                                context.core.env.has_errors(),
-                                "ICE cannot use macro parameter in pattern"
-                            );
-                            false
-                        } else {
-                            true
-                        }
-                    })
-                    .collect::<BTreeSet<_>>();
-                let old_guard = std::mem::take(guard_binders);
-                let valid_guard_binders = old_guard.filter_map(|k, v| {
-                    if taken_binders.contains(&k) {
-                        Some(v)
-                    } else {
-                        None
-                    }
+                take_and_mut_replace!(binders, valid_binders, {
+                    let valid_binders_set = valid_binders
+                        .clone()
+                        .into_iter()
+                        .filter(|sp!(_, var_)| {
+                            if context.all_params.contains_key(var_) {
+                                assert!(
+                                    context.core.env.has_errors(),
+                                    "ICE cannot use macro parameter in pattern"
+                                );
+                                false
+                            } else {
+                                true
+                            }
+                        })
+                        .collect::<BTreeSet<_>>();
+                    take_and_mut_replace!(guard_binders, cur_guard_binders, {
+                        cur_guard_binders = cur_guard_binders.filter_map(|k, v| {
+                            if valid_binders.contains(&k) {
+                                Some(v)
+                            } else {
+                                None
+                            }
+                        });
+                    });
+                    take_and_mut_replace!(rhs_binders, valid_rhs_binders, {
+                        valid_rhs_binders = valid_rhs_binders
+                            .into_iter()
+                            .filter(|v| valid_binders.contains(&v))
+                            .collect();
+                    });
+                    valid_binders = valid_binders_set.into_iter().collect::<Vec<_>>();
                 });
-                std::mem::replace(guard_binders, valid_guard_binders);
-                let old_rhs_binders = std::mem::take(rhs_binders);
-                let valid_rhs_binders = old_rhs_binders
-                    .into_iter()
-                    .filter(|v| taken_binders.contains(&v))
-                    .collect();
-                std::mem::replace(rhs_binders, valid_rhs_binders);
-                std::mem::replace(binders, taken_binders.into_iter().collect());
                 pat(context, pattern);
                 guard.as_mut().map(|guard| exp(context, guard));
                 exp(context, rhs);

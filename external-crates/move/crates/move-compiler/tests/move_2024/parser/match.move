@@ -120,7 +120,6 @@ module 0x42::m {
 
     public fun has_done(expressions: &mut vector<Expression>): bool {
         use 0x42::m::Expression as E;
-        let mut n = 0;
         while (!expressions.is_empty()) {
             match (expressions.pop_back()) {
                 E::Add | E::Mul | E::Num(_) => (),

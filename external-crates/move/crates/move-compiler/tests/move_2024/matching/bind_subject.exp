@@ -6,11 +6,3 @@ error[E13003]: feature is under active development
   │
   = This feature is currently in development.
 
-warning[W09003]: unused assignment
-   ┌─ tests/move_2024/matching/bind_subject.move:16:13
-   │
-16 │             z => default(z),
-   │             ^ Unused assignment for variable 'z'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_z')
-   │
-   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

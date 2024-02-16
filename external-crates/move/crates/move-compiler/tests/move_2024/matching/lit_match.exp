@@ -6,11 +6,3 @@ error[E13003]: feature is under active development
   │
   = This feature is currently in development.
 
-warning[W09003]: unused assignment
-   ┌─ tests/move_2024/matching/lit_match.move:13:13
-   │
-13 │             x => fib(x-1) + fib(x-2),
-   │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
-   │
-   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-

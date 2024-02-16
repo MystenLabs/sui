@@ -1,4 +1,8 @@
-// Copyright (c) The Diem Core Contributors Copyright (c) The Move Contributors SPDX-License-Identifier: Apache-2.0 In the informal grammar comments in this file, Comma<T> is shorthand for:
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+// In the informal grammar comments in this file, Comma<T> is shorthand for:
 //      (<T> ",")* <T>?
 // Note that this allows an optional trailing comma.
 
@@ -1729,7 +1733,7 @@ fn parse_match_arms(context: &mut Context) -> Result<Spanned<Vec<MatchArm>>, Box
 }
 
 // Parses a match arm:
-//   <MatchArm> = <MatchPat> ("if" <Exp>)? "=>" ("{" <Exp> "}" | <Exp>)
+//   <MatchArm> = <MatchPat> ( "if" "(" <Exp>")" )? "=>" ("{" <Exp> "}" | <Exp>)
 fn parse_match_arm(context: &mut Context) -> Result<MatchArm, Box<Diagnostic>> {
     ok_with_loc!(context, {
         let pattern = parse_match_pattern(context)?;
@@ -1778,8 +1782,8 @@ fn parse_match_arm(context: &mut Context) -> Result<MatchArm, Box<Diagnostic>> {
 //   <PatField> = <Field> ( ":" <MatchPat> )?
 
 fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagnostic>> {
-    const WILDCARD_AT_ERROR_MSG: &str = "Can't use '_' as a binder in an '@' pattern";
     const INVALID_PAT_ERROR_MSG: &str = "Invalid pattern";
+    const WILDCARD_AT_ERROR_MSG: &str = "Cannot use '_' as an at-pattern";
 
     use MatchPattern_ as MP;
 
@@ -2697,9 +2701,9 @@ fn parse_optional_type_parameters(
     }
 }
 
-// Parse optional struct type parameters:
-//    StructTypeParameter = '<' Comma<TypeParameterWithPhantomDecl> ">" | <empty>
-fn parse_struct_type_parameters(
+// Parse optional datatype type parameters:
+//    DatatypeTypeParameter = '<' Comma<TypeParameterWithPhantomDecl> ">" | <empty>
+fn parse_datatype_type_parameters(
     context: &mut Context,
 ) -> Result<Vec<DatatypeTypeParameter>, Box<Diagnostic>> {
     if context.tokens.peek() == Tok::Less {
@@ -2707,7 +2711,7 @@ fn parse_struct_type_parameters(
             context,
             Tok::Less,
             Tok::Greater,
-            parse_struct_type_parameter,
+            parse_datatype_type_parameter,
             "a type parameter",
         )
     } else {
@@ -2717,38 +2721,7 @@ fn parse_struct_type_parameters(
 
 // Parse type parameter with optional phantom declaration:
 //   TypeParameterWithPhantomDecl = "phantom"? <TypeParameter>
-fn parse_struct_type_parameter(
-    context: &mut Context,
-) -> Result<DatatypeTypeParameter, Box<Diagnostic>> {
-    let (is_phantom, name, constraints) = parse_type_parameter_with_phantom_decl(context)?;
-    Ok(DatatypeTypeParameter {
-        is_phantom,
-        name,
-        constraints,
-    })
-}
-
-// Parse optional enum type parameters:
-//    EnumTypeParameter = '<' Comma<TypeParameterWithPhantomDecl> ">" | <empty>
-fn parse_enum_type_parameters(
-    context: &mut Context,
-) -> Result<Vec<DatatypeTypeParameter>, Box<Diagnostic>> {
-    if context.tokens.peek() == Tok::Less {
-        parse_comma_list(
-            context,
-            Tok::Less,
-            Tok::Greater,
-            parse_enum_type_parameter,
-            "a type parameter",
-        )
-    } else {
-        Ok(vec![])
-    }
-}
-
-// Parse type parameter with optional phantom declaration:
-//   TypeParameterWithPhantomDecl = "phantom"? <TypeParameter>
-fn parse_enum_type_parameter(
+fn parse_datatype_type_parameter(
     context: &mut Context,
 ) -> Result<DatatypeTypeParameter, Box<Diagnostic>> {
     let (is_phantom, name, constraints) = parse_type_parameter_with_phantom_decl(context)?;
@@ -2872,7 +2845,6 @@ fn parse_parameter(context: &mut Context) -> Result<(Mutability, Var, Type), Box
 //          <Identifier> <OptionalTypeParameters>
 // Where the the two "has" statements are mutually exclusive -- an enum cannot be declared with
 // both infix and postfix ability declarations.
-
 fn parse_enum_decl(
     attributes: Vec<Attributes>,
     start_loc: usize,
@@ -2905,7 +2877,7 @@ fn parse_enum_decl(
 
     // <EnumDefName>
     let name = DatatypeName(parse_identifier(context)?);
-    let type_parameters = parse_enum_type_parameters(context)?;
+    let type_parameters = parse_datatype_type_parameters(context)?;
 
     let infix_ability_declaration_loc =
         if context.tokens.peek() == Tok::Identifier && context.tokens.content() == "has" {
@@ -3094,7 +3066,7 @@ fn parse_struct_decl(
 
     // <StructDefName>
     let name = DatatypeName(parse_identifier(context)?);
-    let type_parameters = parse_struct_type_parameters(context)?;
+    let type_parameters = parse_datatype_type_parameters(context)?;
 
     let infix_ability_declaration_loc =
         if context.tokens.peek() == Tok::Identifier && context.tokens.content() == "has" {

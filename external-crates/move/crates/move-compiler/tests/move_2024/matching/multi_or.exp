@@ -1,7 +1,7 @@
 error[E13003]: feature is under active development
-  ┌─ tests/move_2024/matching/abc_match_no_drop.move:3:17
+  ┌─ tests/move_2024/matching/multi_or.move:3:17
   │
-3 │     public enum ABC<T> {
+3 │     public enum ABC<T> has drop {
   │                 ^^^ Enums are not supported in bytecode.
   │
   = This feature is currently in development.

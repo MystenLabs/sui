@@ -2471,10 +2471,6 @@ fn match_arm(context: &mut Context, sp!(aloc, arm): E::MatchArm) -> N::MatchArm 
     context.new_local_scope();
     // NB: we already checked the binders for duplicates and listed them all during expansion, so
     // now we just need to set up the map and recur down everything.
-    for binder in &pat_binders {
-        context.declare_local(false, binder.0);
-    }
-
     let binders: Vec<N::Var> = pat_binders
         .clone()
         .into_iter()
@@ -2499,6 +2495,20 @@ fn match_arm(context: &mut Context, sp!(aloc, arm): E::MatchArm) -> N::MatchArm 
         .collect::<Vec<_>>();
     // Next we process the guard to mark guard usage for the guard variables.
     let guard = guard.map(|guard| exp(context, guard));
+
+
+    // Next we compute the used guard variables, and add the pattern/guard pairs to the guard
+    // binders. We assume we don't need to mark unused guard bindings as used (to avoid incorrect
+    // unused errors) because we will never check their usage in the unused-checking pass.
+    //
+    // We also need to mark usage for the pattern variables we do use, but we postpone that until
+    // after we handle the right-hand side.
+    let mut guard_binders = UniqueMap::new();
+    for (pat_var, guard_var) in guard_binder_pairs {
+        if context.used_locals.contains(&guard_var.value) {
+            guard_binders.add(pat_var, guard_var).expect("ICE guard pattern issue");
+        }
+    }
     context.close_local_scope();
 
     // Then we visit the right-hand side to mark binder usage there, then compute all the pattern
@@ -2512,12 +2522,9 @@ fn match_arm(context: &mut Context, sp!(aloc, arm): E::MatchArm) -> N::MatchArm 
         .map(|binder| binder.clone())
         .collect();
 
-    // Next we compute the used guard variables, and mark usage for the pattern variables that the
-    // guard references. This allows us to avoid bindings in guards, plus ensures correct pattern
-    // usage marking.
-    let mut guard_binders = UniqueMap::new();
-    for (pat_var, guard_var) in guard_binder_pairs {
-        guard_binders.add(pat_var, guard_var).unwrap();
+    // Now we mark usage for the guard-used pattern variables.
+    for (pat_var, _) in guard_binders.key_cloned_iter() {
+            context.used_locals.insert(pat_var.value);
     }
 
     // Finally we handle the pattern, replacing unused variables with wildcards
@@ -3212,9 +3219,11 @@ fn remove_unused_bindings_exp(
             remove_unused_bindings_exp(context, used, ef);
         }
         N::Exp_::Match(esubject, arms) => {
-            // TODO: account for and remove unused pattern bindings
             remove_unused_bindings_exp(context, used, esubject);
             for arm in &mut arms.value {
+                let binders = std::mem::take(&mut arm.value.binders);
+                let used_binders = binders.into_iter().filter(|v| used.contains(&v.value)).collect();
+                arm.value.binders = used_binders;
                 remove_unused_bindings_pattern(context, used, &mut arm.value.pattern);
                 if let Some(guard) = arm.value.guard.as_mut() {
                     remove_unused_bindings_exp(context, used, guard)

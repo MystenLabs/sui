@@ -1,72 +1,8 @@
-bug[ICE12003]: INTERNAL COMPILER ERROR
-  ┌─ tests/move_2024/matching/enum_no_tyargs_match.move:4:13
+error[E13003]: feature is under active development
+  ┌─ tests/move_2024/matching/enum_no_tyargs_match.move:3:17
   │
-4 │         One(u64),
-  │             ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
-
+3 │     public enum Threes has drop {
+  │                 ^^^^^^ Enums are not supported in bytecode.
   │
-  = The Move compiler has encountered an internal compiler error.
-     Please report this this issue to the Mysten Labs Move language team,
-     including this error and any relevant code, to the Mysten Labs issue tracker
-     at : https://github.com/MystenLabs/sui/issues
-
-bug[ICE12003]: INTERNAL COMPILER ERROR
-  ┌─ tests/move_2024/matching/enum_no_tyargs_match.move:5:13
-  │
-5 │         Two(u64, u64),
-  │             ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
-
-  │
-  = The Move compiler has encountered an internal compiler error.
-     Please report this this issue to the Mysten Labs Move language team,
-     including this error and any relevant code, to the Mysten Labs issue tracker
-     at : https://github.com/MystenLabs/sui/issues
-
-bug[ICE12003]: INTERNAL COMPILER ERROR
-  ┌─ tests/move_2024/matching/enum_no_tyargs_match.move:5:18
-  │
-5 │         Two(u64, u64),
-  │                  ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
-
-  │
-  = The Move compiler has encountered an internal compiler error.
-     Please report this this issue to the Mysten Labs Move language team,
-     including this error and any relevant code, to the Mysten Labs issue tracker
-     at : https://github.com/MystenLabs/sui/issues
-
-bug[ICE12003]: INTERNAL COMPILER ERROR
-  ┌─ tests/move_2024/matching/enum_no_tyargs_match.move:6:15
-  │
-6 │         Three(u64, u64, u64)
-  │               ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
-
-  │
-  = The Move compiler has encountered an internal compiler error.
-     Please report this this issue to the Mysten Labs Move language team,
-     including this error and any relevant code, to the Mysten Labs issue tracker
-     at : https://github.com/MystenLabs/sui/issues
-
-bug[ICE12003]: INTERNAL COMPILER ERROR
-  ┌─ tests/move_2024/matching/enum_no_tyargs_match.move:6:20
-  │
-6 │         Three(u64, u64, u64)
-  │                    ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
-
-  │
-  = The Move compiler has encountered an internal compiler error.
-     Please report this this issue to the Mysten Labs Move language team,
-     including this error and any relevant code, to the Mysten Labs issue tracker
-     at : https://github.com/MystenLabs/sui/issues
-
-bug[ICE12003]: INTERNAL COMPILER ERROR
-  ┌─ tests/move_2024/matching/enum_no_tyargs_match.move:6:25
-  │
-6 │         Three(u64, u64, u64)
-  │                         ^^^ ICE base type constraint failed: &(u64: copy+drop+store)
-
-  │
-  = The Move compiler has encountered an internal compiler error.
-     Please report this this issue to the Mysten Labs Move language team,
-     including this error and any relevant code, to the Mysten Labs issue tracker
-     at : https://github.com/MystenLabs/sui/issues
+  = This feature is currently in development.
 
