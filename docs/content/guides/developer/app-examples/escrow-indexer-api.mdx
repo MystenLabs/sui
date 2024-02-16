@@ -2,11 +2,6 @@
 title: Escrow Indexing and API Service
 ---
 
-[prisma-link]: https://www.prisma.io/
-[trading-api-repo-link]: https://github.com/MystenLabs/sui/examples/trading/api
-[sui-ts-sdk-link]: https://sdk.mystenlabs.com/typescript
-[express-link]: https://expressjs.com/
-
 This is a continuation of the Escrow smart contract guide to demonstrate how to implement a service responsible for indexing chain state in order to discover trades.
 
 In most cases where we want to enhance our dApp and ensure it is production ready, we need to have an indexing service (indexer) listening to the blockchain for on-chain data, shaping the data to fit our application needs, storing the transformed data into the local off-chain database so we can query them in the most efficient way. Joining hands with an indexer, we will expose an API allowing frontend to query the indexed data and update the screen as escrows are made and swaps are fulfilled.
@@ -17,16 +12,16 @@ Architecturally, we will have the service doing the heavy-lifting indexing the d
 
 :::info
 
-The full source code for the indexing service available at the [Trading API example directory]([trading-api-repo-link]).
+The full source code for the indexing service available at the [Trading API example directory](https://github.com/MystenLabs/sui/examples/trading/api).
 
 :::
 
 Before getting started, make sure you:
 - Understand [the mechanism behind the Escrow smart contract backend](/guides/developers/app-examples/escrow).
-- Check out the [indexer's README]([trading-api-repo-link]) to setup the development environment.
-- Check out [Prisma]([prisma-link]) to have an overall sense on what it is as we will use it to facilitate all the database interactions.
-- Check out [Express]([express-link]) to learn how to quickly setup a Web server application in Node.js as we will use it to bootstrap our API service
-- Check out [Sui Typescript SDK]([sui-ts-sdk-link]) for its usage.
+- Check out the [indexer's README](https://github.com/MystenLabs/sui/examples/trading/api) to setup the development environment.
+- Check out [Prisma](https://www.prisma.io/) to have an overall sense on what it is as we will use it to facilitate all the database interactions.
+- Check out [Express](https://expressjs.com/) to learn how to quickly setup a Web server application in Node.js as we will use it to bootstrap our API service
+- Check out [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript) for its usage.
 
 :::note
 
@@ -38,7 +33,7 @@ For technology that is fairly new you, don't worry, we will walk you through the
 
 ### Data Model
 
-In most cases, when we're working with a database directly from a backend service, we may want to use some sort of database libraries and toolings to abstract us away from database creation and management complexity. In our case, we use [Prisma]([prisma-link]) to manage all the database interactions such as defining data models and database migrations.
+In most cases, when we're working with a database directly from a backend service, we may want to use some sort of database libraries and toolings to abstract us away from database creation and management complexity. In our case, we use [Prisma](https://www.prisma.io/) to manage all the database interactions such as defining data models and database migrations.
 
 First of all, we want to design what data to index
 
@@ -437,7 +432,7 @@ This function handles all events emitted by the `lock` module. It takes an array
 
 ## API Service
 
-As we mentioned earlier, we should expose the indexed data for external consumption through an API Service. Particularly, we will use [Express]([express-link]) to build a Node.js HTTP API.
+As we mentioned earlier, we should expose the indexed data for external consumption through an API Service. Particularly, we will use [Express](https://expressjs.com/) to build a Node.js HTTP API.
 
 ## API Design
 
