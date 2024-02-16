@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeMap,
+    collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
     path::PathBuf,
     sync::Arc,
 };
 
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{anyhow, bail, ensure, Context};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
@@ -140,6 +140,9 @@ pub enum SuiClientCommands {
         /// Address (or its alias)
         #[arg(value_parser)]
         address: Option<KeyIdentity>,
+        /// Show balance only for the specified coin type
+        #[clap(long, required = false)]
+        coin_type: Option<String>,
         /// Show coins' object IDs, balance, and symbol
         #[clap(long, required = false)]
         with_coins: bool,
@@ -853,12 +856,14 @@ impl SuiClientCommands {
             }
             SuiClientCommands::Balance {
                 address,
+                coin_type,
                 with_coins,
             } => {
                 let address = get_identity_address(address, context)?;
                 let client = context.get_client().await?;
                 let mut objects: Vec<Coin> = Vec::new();
                 let mut cursor = None;
+
                 loop {
                     let response = client
                         .coin_read_api()
@@ -872,24 +877,41 @@ impl SuiClientCommands {
                         break;
                     }
                 }
+
                 let mut coins_by_type: BTreeMap<String, (Option<SuiCoinMetadata>, Vec<Coin>)> =
                     BTreeMap::new();
                 for c in objects {
-                    if let Some(coins) = coins_by_type.get_mut(&c.coin_type) {
-                        coins.1.push(c);
-                    } else {
-                        let coin_metadata = client
-                            .coin_read_api()
-                            .get_coin_metadata(c.coin_type.clone())
-                            .await
-                            .map_err(|_| {
-                                anyhow!("Cannot fetch the coin metadata for coin {}", c.coin_type)
-                            })?;
+                    match coins_by_type.entry(c.coin_type.clone()) {
+                        Entry::Occupied(mut e) => {
+                            e.get_mut().1.push(c);
+                        }
+                        Entry::Vacant(e) => {
+                            let coin_metadata = client
+                                .coin_read_api()
+                                .get_coin_metadata(c.coin_type.clone())
+                                .await
+                                .with_context(|| {
+                                    format!(
+                                        "Cannot fetch the coin metadata for coin {}",
+                                        c.coin_type
+                                    )
+                                })?;
 
-                        coins_by_type.insert(c.coin_type.clone(), (coin_metadata, vec![c]));
-                    }
+                            let _ = &e.insert((coin_metadata, vec![c]));
+                        }
+                    };
                 }
-                SuiClientCommandResult::Balance(coins_by_type, with_coins)
+
+                let coins = if let Some(coin_type) = coin_type {
+                    coins_by_type
+                        .iter()
+                        .filter(|x| x.0 == &coin_type)
+                        .map(|x| (x.0.clone(), x.1.clone()))
+                        .collect::<BTreeMap<String, (Option<SuiCoinMetadata>, Vec<Coin>)>>()
+                } else {
+                    coins_by_type
+                };
+                SuiClientCommandResult::Balance(coins, with_coins)
             }
 
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
@@ -1726,7 +1748,7 @@ impl Display for SuiClientCommandResult {
                     return write!(f, "No coins found for this address.");
                 }
                 let mut builder = TableBuilder::default();
-                pretty_print_balance(coins, &mut builder, with_coins);
+                pretty_print_balance(coins, &mut builder, *with_coins);
                 let mut table = builder.build();
                 table.with(TablePanel::header("Balance of coins owned by this address"));
                 table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
@@ -2318,12 +2340,12 @@ pub async fn request_tokens_from_faucet(
 fn pretty_print_balance(
     coins: &BTreeMap<String, (Option<SuiCoinMetadata>, Vec<Coin>)>,
     builder: &mut TableBuilder,
-    with_coins: &bool,
+    with_coins: bool,
 ) {
     fn print(
         builder: &mut TableBuilder,
         coins: Vec<&(Option<SuiCoinMetadata>, Vec<Coin>)>,
-        with_coins: &bool,
+        with_coins: bool,
     ) {
         let mut table_builder = TableBuilder::default();
         for (metadata, coins) in coins {
@@ -2337,8 +2359,8 @@ fn pretty_print_balance(
                 ("unknown".to_string(), "unknown symbol".to_string(), 10u8)
             };
 
-            if *with_coins {
-                let coin_numbers = if coins.len() > 1 { "coins" } else { "coin" };
+            if with_coins {
+                let coin_numbers = if coins.len() != 1 { "coins" } else { "coin" };
                 builder.push_record(vec![format!(
                     "{}: {} {coin_numbers}, Balance: {:<2.2} {}\n ┌",
                     name,
