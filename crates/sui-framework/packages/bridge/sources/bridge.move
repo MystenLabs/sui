@@ -74,6 +74,7 @@ module bridge::bridge {
     const EInvalidBridgeRoute: u64 = 10;
     const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 11;
     const EMessageNotFoundInRecords: u64 = 12;
+    const ETokenAlreadyClaimed: u64 = 12;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -242,10 +243,12 @@ module bridge::bridge {
         ctx: &mut TxContext
     ): (Option<Coin<T>>, address) {
         let inner = load_inner_mut(self);
+        assert!(!inner.frozen, EBridgeUnavailable);
+
         let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
-        if (!linked_table::contains(&inner.bridge_records, key)) {
-            abort EMessageNotFoundInRecords
-        };
+
+        assert!(linked_table::contains(&inner.bridge_records, key), EMessageNotFoundInRecords);
+
         // retrieve approved bridge message
         let record = linked_table::borrow_mut(&mut inner.bridge_records, key);
         // ensure this is a token bridge message
@@ -260,7 +263,6 @@ module bridge::bridge {
 
         // If already claimed, exit early
         if (record.claimed) {
-            emit(TokenTransferAlreadyClaimed { message_key: key });
             return (option::none(), owner)
         };
 
@@ -286,12 +288,13 @@ module bridge::bridge {
     }
 
     // This function can only be called by the token recipient
-    // Returns None if the token has already been claimed.
-    public fun claim_token<T>(self: &mut Bridge, source_chain: u8, bridge_seq_num: u64, ctx: &mut TxContext): Option<Coin<T>> {
-        let (token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
+    // Abort if the token has already been claimed.
+    public fun claim_token<T>(self: &mut Bridge, source_chain: u8, bridge_seq_num: u64, ctx: &mut TxContext): Coin<T> {
+        let (maybe_token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
         // Only token owner can claim the token
         assert!(tx_context::sender(ctx) == owner, EUnauthorisedClaim);
-        token
+        assert!(option::is_some(&maybe_token), ETokenAlreadyClaimed);
+        option::destroy_some(maybe_token)
     }
 
     // This function can be called by anyone to claim and transfer the token to the recipient
@@ -305,6 +308,8 @@ module bridge::bridge {
         let (token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
         if (option::is_none(&token)) {
             option::destroy_none(token);
+            let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
+            emit(TokenTransferAlreadyClaimed { message_key: key });
             return
         };
         transfer::public_transfer(option::destroy_some(token), owner)
