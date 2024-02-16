@@ -87,7 +87,7 @@ impl Checkpointed for JsonCursor<ConsistentNamedCursor> {
 /// is applied, otherwise if the `view` parameter is set to `Historical`, this filter is not
 /// applied.
 ///
-/// Finallly, the two queries are merged together with `UNION ALL`. We use `UNION ALL` instead of
+/// Finally, the two queries are merged together with `UNION ALL`. We use `UNION ALL` instead of
 /// `UNION`; the latter incurs significant overhead as it additionally de-duplicates records from
 /// both sources. This dedupe is unnecessary, since we have the fragment `SELECT DISTINCT ON
 /// (object_id) ... ORDER BY object_id, object_version DESC`. This is also redundant for the most
