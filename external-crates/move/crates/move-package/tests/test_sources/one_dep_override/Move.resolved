@@ -33,28 +33,26 @@ ResolvedGraph {
         manifest_digest: "340302CAC58F9844D483E9F19F08D9578B90043E621D953A62A4B679F8D98896",
         deps_digest: "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082",
     },
-    build_options: BuildConfig {
-        build_info: BuildInfo {
-            dev_mode: true,
-            test_mode: false,
-            generate_docs: false,
-            install_dir: Some(
-                "ELIDED_FOR_TEST",
-            ),
-            force_recompilation: false,
-            lock_file: Some(
-                "ELIDED_FOR_TEST",
-            ),
-            fetch_deps_only: false,
-            skip_fetch_latest_git_deps: false,
-            default_flavor: None,
-            default_edition: None,
-            deps_as_root: false,
-            silence_warnings: false,
-            warnings_are_errors: false,
-            additional_named_addresses: {},
-            no_lint: false,
-        },
+    build_options: BuildInfo {
+        dev_mode: true,
+        test_mode: false,
+        generate_docs: false,
+        install_dir: Some(
+            "ELIDED_FOR_TEST",
+        ),
+        force_recompilation: false,
+        lock_file: Some(
+            "ELIDED_FOR_TEST",
+        ),
+        fetch_deps_only: false,
+        skip_fetch_latest_git_deps: false,
+        default_flavor: None,
+        default_edition: None,
+        deps_as_root: false,
+        silence_warnings: false,
+        warnings_are_errors: false,
+        additional_named_addresses: {},
+        no_lint: false,
     },
     package_table: {
         "OtherDep": Package {

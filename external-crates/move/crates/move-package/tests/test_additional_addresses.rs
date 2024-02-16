@@ -47,7 +47,7 @@ fn test_additonal_addresses() {
 
     assert!(RG::ResolvedGraph::resolve(
         dg.clone(),
-        BuildConfig {
+        &mut BuildConfig {
             build_info: BuildInfo {
                 install_dir: Some(tempdir().unwrap().path().to_path_buf()),
                 additional_named_addresses: BTreeMap::from([(
@@ -65,7 +65,7 @@ fn test_additonal_addresses() {
 
     assert!(RG::ResolvedGraph::resolve(
         dg,
-        BuildConfig {
+        &mut BuildConfig {
             build_info: BuildInfo {
                 install_dir: Some(tempdir().unwrap().path().to_path_buf()),
                 ..Default::default()
@@ -110,7 +110,7 @@ fn test_additonal_addresses_already_assigned_same_value() {
 
     assert!(RG::ResolvedGraph::resolve(
         dg,
-        BuildConfig {
+        &mut BuildConfig {
             build_info: BuildInfo {
                 install_dir: Some(tempdir().unwrap().path().to_path_buf()),
                 additional_named_addresses: BTreeMap::from([(
@@ -159,7 +159,7 @@ fn test_additonal_addresses_already_assigned_different_value() {
 
     assert!(RG::ResolvedGraph::resolve(
         dg,
-        BuildConfig {
+        &mut BuildConfig {
             build_info: BuildInfo {
                 install_dir: Some(tempdir().unwrap().path().to_path_buf()),
                 additional_named_addresses: BTreeMap::from([(

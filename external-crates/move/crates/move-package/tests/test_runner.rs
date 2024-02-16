@@ -118,7 +118,7 @@ impl Test<'_> {
         let out_path = self.output_dir.path().to_path_buf();
         let lock_path = out_path.join("Move.lock");
 
-        let config = BuildConfig {
+        let mut config = BuildConfig {
             build_info: BuildInfo {
                 dev_mode: true,
                 test_mode: false,
@@ -148,7 +148,7 @@ impl Test<'_> {
             "notlocked" => "Lock file uncommitted\n".to_string(),
 
             "compiled" => {
-                let mut pkg = BuildPlan::create(resolved_package?)?.compile(&mut progress)?;
+                let mut pkg = BuildPlan::create(resolved_package?, None)?.compile(&mut progress)?;
                 scrub_compiled_package(&mut pkg.compiled_package_info);
                 format!("{:#?}\n", pkg.compiled_package_info)
             }
@@ -171,7 +171,7 @@ impl Test<'_> {
                     scrub_resolved_package(package)
                 }
 
-                scrub_build_config(&mut resolved_package.build_options.build_info);
+                scrub_build_config(&mut resolved_package.build_options);
                 format!("{:#?}\n", resolved_package)
             }
 
