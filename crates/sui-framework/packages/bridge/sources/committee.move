@@ -3,8 +3,6 @@
 
 #[allow(unused_use)]
 module bridge::committee {
-    use std::option;
-    use std::option::Option;
     use std::vector;
 
     use sui::ecdsa_k1;
@@ -15,9 +13,6 @@ module bridge::committee {
     use bridge::crypto;
     use sui_system::sui_system;
     use sui_system::sui_system::SuiSystemState;
-    use sui_system::validator;
-    use sui_system::validator::Validator;
-    use sui_system::validator_set;
 
     use bridge::message::{Self, BridgeMessage, Blocklist};
     use bridge::message_types;
@@ -144,18 +139,16 @@ module bridge::committee {
 
     public(friend) fun register(
         self: &mut BridgeCommittee,
-        system_state: &SuiSystemState,
+        system_state: &mut SuiSystemState,
         bridge_pubkey_bytes: vector<u8>,
         http_rest_url: vector<u8>,
         ctx: &TxContext
     ) {
         // sender must be the same sender that created the validator object
         let sender = tx_context::sender(ctx);
-        let validators = sui_system::validators(system_state);
-        let active_validators = validator_set::active_validators(validators);
-        let validator_index = find_validator(active_validators, sender);
+        let validators = sui_system::active_validator_addresses(system_state);
 
-        assert!(option::is_some(&validator_index), ESenderNotActiveValidator);
+        assert!(vector::contains(&validators, &sender), ESenderNotActiveValidator);
         // Sender is active validator, record the registration
 
         // In case validator need to update the info
@@ -178,11 +171,10 @@ module bridge::committee {
     // This is to ensure we don't fail the end of epoch transaction.
     public(friend) fun try_create_next_committee(
         self: &mut BridgeCommittee,
-        system_state: &SuiSystemState,
+        system_state: &mut SuiSystemState,
         min_stake_participation_percentage: u8,
     ) {
-        let validators = sui_system::validators(system_state);
-        let active_validators = validator_set::active_validators(validators);
+        let validators = sui_system::active_validator_addresses(system_state);
         let total_member_stake = 0;
         let i = 0;
 
@@ -191,14 +183,11 @@ module bridge::committee {
         while (i < vec_map::size(&self.member_registration)) {
             // retrieve registration
             let (_, registration) = vec_map::get_entry_by_idx(&self.member_registration, i);
-            // Find validator info from system state
-            let validator_index = find_validator(active_validators, registration.sui_address);
-            // Process registration if it's active validator
-            if (option::is_some(&validator_index)) {
-                let index = option::destroy_some(validator_index);
-                let validator = vector::borrow(active_validators, index);
-                let stake_amount = validator::stake_amount(validator);
+            // Find validator stake amount from system state
 
+            // Process registration if it's active validator
+            if (vector::contains(&validators, &registration.sui_address)) {
+                let stake_amount = sui_system::validator_stake_amount(system_state, registration.sui_address);
                 total_member_stake = total_member_stake + stake_amount;
                 let member = CommitteeMember {
                     sui_address: registration.sui_address,
@@ -213,8 +202,8 @@ module bridge::committee {
         };
 
         // Make sure the new committee represent enough stakes
-        let stake_participation_percentage = ((total_member_stake * 100 / validator_set::total_stake(
-            validators
+        let stake_participation_percentage = ((total_member_stake * 100 / sui_system::total_stake_amount(
+            system_state
         )) as u8);
 
         // Store new committee info
@@ -225,20 +214,6 @@ module bridge::committee {
             self.members = new_members
         }
     }
-
-    fun find_validator(validators: &vector<Validator>, validator_address: address): Option<u64> {
-        let length = vector::length(validators);
-        let i = 0;
-        while (i < length) {
-            let v = vector::borrow(validators, i);
-            if (validator::sui_address(v) == validator_address) {
-                return option::some(i)
-            };
-            i = i + 1;
-        };
-        option::none()
-    }
-
 
     // This function applys the blocklist to the committee members, we won't need to run this very often so this is not gas optimised.
     // TODO: add tests for this function
@@ -375,14 +350,14 @@ module bridge::committee {
         let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // validator registration
-        register(&mut committee, &system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@validator1, 0));
-        register(&mut committee, &system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@validator2, 0));
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@validator1, 0));
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@validator2, 0));
 
         // Check committee before creation
         assert!(vec_map::is_empty(&committee.members), 0);
         assert_eq(0, committee.total_member_stake);
 
-        try_create_next_committee(&mut committee, &system_state, 60);
+        try_create_next_committee(&mut committee, &mut system_state, 60);
 
         assert_eq(2, vec_map::size(&committee.members));
         assert_eq(100 * 2 * 1_000_000_000, committee.total_member_stake);
@@ -410,7 +385,7 @@ module bridge::committee {
         let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // validator registration
-        register(&mut committee, &system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@validator3, 0));
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@validator3, 0));
 
         test_utils::destroy(committee);
         test_scenario::return_shared(system_state);
@@ -434,13 +409,13 @@ module bridge::committee {
         let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
 
         // validator registration
-        register(&mut committee, &system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@validator1, 0));
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@validator1, 0));
 
         // Check committee before creation
         assert!(vec_map::is_empty(&committee.members), 0);
         assert_eq(0, committee.total_member_stake);
 
-        try_create_next_committee(&mut committee, &system_state, 60);
+        try_create_next_committee(&mut committee, &mut system_state, 60);
 
         // committee should be empty because registration did not reach min stake threshold.
         assert!(vec_map::is_empty(&committee.members), 0);

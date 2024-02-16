@@ -55,6 +55,7 @@
 -  [Function `genesis_system_state_version`](#0x3_sui_system_state_inner_genesis_system_state_version)
 -  [Function `epoch_start_timestamp_ms`](#0x3_sui_system_state_inner_epoch_start_timestamp_ms)
 -  [Function `validator_stake_amount`](#0x3_sui_system_state_inner_validator_stake_amount)
+-  [Function `total_stake_amount`](#0x3_sui_system_state_inner_total_stake_amount)
 -  [Function `validator_staking_pool_id`](#0x3_sui_system_state_inner_validator_staking_pool_id)
 -  [Function `validator_staking_pool_mappings`](#0x3_sui_system_state_inner_validator_staking_pool_mappings)
 -  [Function `get_reporters_of`](#0x3_sui_system_state_inner_get_reporters_of)
@@ -63,7 +64,6 @@
 -  [Function `pool_exchange_rates`](#0x3_sui_system_state_inner_pool_exchange_rates)
 -  [Function `active_validator_addresses`](#0x3_sui_system_state_inner_active_validator_addresses)
 -  [Function `extract_coin_balance`](#0x3_sui_system_state_inner_extract_coin_balance)
--  [Function `validators`](#0x3_sui_system_state_inner_validators)
 
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
@@ -2382,6 +2382,31 @@ Aborts if <code>validator_addr</code> is not an active validator.
 
 </details>
 
+<a name="0x3_sui_system_state_inner_total_stake_amount"></a>
+
+## Function `total_stake_amount`
+
+Returns the total stake.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_total_stake_amount">total_stake_amount</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_total_stake_amount">total_stake_amount</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): u64 {
+    <a href="validator_set.md#0x3_validator_set_total_stake">validator_set::total_stake</a>(&self.validators)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x3_sui_system_state_inner_validator_staking_pool_id"></a>
 
 ## Function `validator_staking_pool_id`
@@ -2601,31 +2626,6 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
     } <b>else</b> {
         total_balance
     }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x3_sui_system_state_inner_validators"></a>
-
-## Function `validators`
-
-Return the current validator set
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_validators">validators</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>): &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_validators">validators</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): &ValidatorSet {
-    &self.validators
 }
 </code></pre>
 

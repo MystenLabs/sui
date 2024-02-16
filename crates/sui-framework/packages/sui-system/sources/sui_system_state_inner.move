@@ -1006,6 +1006,11 @@ module sui_system::sui_system_state_inner {
         validator_set::validator_total_stake_amount(&self.validators, validator_addr)
     }
 
+    /// Returns the total stake.
+    public(friend) fun total_stake_amount(self: &SuiSystemStateInnerV2): u64 {
+        validator_set::total_stake(&self.validators)
+    }
+
     /// Returns the staking pool id of a given validator.
     /// Aborts if `validator_addr` is not an active validator.
     public(friend) fun validator_staking_pool_id(self: &SuiSystemStateInnerV2, validator_addr: address): ID {
@@ -1073,6 +1078,7 @@ module sui_system::sui_system_state_inner {
         }
     }
 
+    #[test_only]
     /// Return the current validator set
     public(friend) fun validators(self: &SuiSystemStateInnerV2): &ValidatorSet {
         &self.validators

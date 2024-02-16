@@ -56,9 +56,9 @@ module sui_system::sui_system {
     use sui_system::staking_pool::PoolTokenExchangeRate;
     use std::option;
     use sui::dynamic_field;
-    use sui_system::validator_set::ValidatorSet;
 
     #[test_only] use sui::balance;
+    #[test_only] use sui_system::validator_set::ValidatorSet;
     #[test_only] use sui_system::validator_set;
     #[test_only] use sui::vec_set::VecSet;
 
@@ -596,13 +596,6 @@ module sui_system::sui_system {
         inner
     }
 
-    // For read only operations
-    fun load_inner(self: &SuiSystemState): &SuiSystemStateInnerV2 {
-        let inner = dynamic_field::borrow(&self.id, self.version);
-        assert!(sui_system_state_inner::system_state_version(inner) == self.version, EWrongInnerVersion);
-        inner
-    }
-
     #[test_only]
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
     /// since epochs are ever-increasing and epoch changes are intended to happen every 24 hours.
@@ -618,12 +611,17 @@ module sui_system::sui_system {
         sui_system_state_inner::epoch_start_timestamp_ms(self)
     }
 
-    #[test_only]
     /// Returns the total amount staked with `validator_addr`.
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_stake_amount(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
         let self = load_system_state(wrapper);
         sui_system_state_inner::validator_stake_amount(self, validator_addr)
+    }
+
+    /// Returns the total amount staked globally.
+    public fun total_stake_amount(wrapper: &mut SuiSystemState): u64 {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::total_stake_amount(self)
     }
 
     #[test_only]
@@ -648,9 +646,10 @@ module sui_system::sui_system {
         sui_system_state_inner::get_reporters_of(self, addr)
     }
 
+    #[test_only]
     /// Return the current validator set
-    public fun validators(wrapper: &SuiSystemState): &ValidatorSet {
-        let self = load_inner(wrapper);
+    public fun validators(wrapper: &mut SuiSystemState): &ValidatorSet {
+        let self = load_system_state(wrapper);
         sui_system_state_inner::validators(self)
     }
 

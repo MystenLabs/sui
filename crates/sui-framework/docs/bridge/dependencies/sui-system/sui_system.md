@@ -48,8 +48,8 @@
 -  [Function `load_system_state`](#0x3_sui_system_load_system_state)
 -  [Function `load_system_state_mut`](#0x3_sui_system_load_system_state_mut)
 -  [Function `load_inner_maybe_upgrade`](#0x3_sui_system_load_inner_maybe_upgrade)
--  [Function `load_inner`](#0x3_sui_system_load_inner)
--  [Function `validators`](#0x3_sui_system_validators)
+-  [Function `validator_stake_amount`](#0x3_sui_system_validator_stake_amount)
+-  [Function `total_stake_amount`](#0x3_sui_system_total_stake_amount)
 
 
 <pre><code><b>use</b> <a href="../../dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
@@ -66,7 +66,6 @@
 <b>use</b> <a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner">0x3::sui_system_state_inner</a>;
 <b>use</b> <a href="../../dependencies/sui-system/validator.md#0x3_validator">0x3::validator</a>;
 <b>use</b> <a href="../../dependencies/sui-system/validator_cap.md#0x3_validator_cap">0x3::validator_cap</a>;
-<b>use</b> <a href="../../dependencies/sui-system/validator_set.md#0x3_validator_set">0x3::validator_set</a>;
 </code></pre>
 
 
@@ -1382,13 +1381,13 @@
 
 </details>
 
-<a name="0x3_sui_system_load_inner"></a>
+<a name="0x3_sui_system_validator_stake_amount"></a>
 
-## Function `load_inner`
+## Function `validator_stake_amount`
 
 
 
-<pre><code><b>fun</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_load_inner">load_inner</a>(self: &<a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_validator_stake_amount">validator_stake_amount</a>(wrapper: &<b>mut</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, validator_addr: <b>address</b>): u64
 </code></pre>
 
 
@@ -1397,10 +1396,9 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_load_inner">load_inner</a>(self: &<a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &SuiSystemStateInnerV2 {
-    <b>let</b> inner = <a href="../../dependencies/sui-framework/dynamic_field.md#0x2_dynamic_field_borrow">dynamic_field::borrow</a>(&self.id, self.version);
-    <b>assert</b>!(<a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_system_state_version">sui_system_state_inner::system_state_version</a>(inner) == self.version, <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_EWrongInnerVersion">EWrongInnerVersion</a>);
-    inner
+<pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_validator_stake_amount">validator_stake_amount</a>(wrapper: &<b>mut</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>, validator_addr: <b>address</b>): u64 {
+    <b>let</b> self = <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(wrapper);
+    <a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_validator_stake_amount">sui_system_state_inner::validator_stake_amount</a>(self, validator_addr)
 }
 </code></pre>
 
@@ -1408,13 +1406,13 @@
 
 </details>
 
-<a name="0x3_sui_system_validators"></a>
+<a name="0x3_sui_system_total_stake_amount"></a>
 
-## Function `validators`
+## Function `total_stake_amount`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_validators">validators</a>(wrapper: &<a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="../../dependencies/sui-system/validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_total_stake_amount">total_stake_amount</a>(wrapper: &<b>mut</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): u64
 </code></pre>
 
 
@@ -1423,9 +1421,9 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_validators">validators</a>(wrapper: &<a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &ValidatorSet {
-    <b>let</b> self = <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_load_inner">load_inner</a>(wrapper);
-    <a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_validators">sui_system_state_inner::validators</a>(self)
+<pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_total_stake_amount">total_stake_amount</a>(wrapper: &<b>mut</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): u64 {
+    <b>let</b> self = <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(wrapper);
+    <a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_total_stake_amount">sui_system_state_inner::total_stake_amount</a>(self)
 }
 </code></pre>
 
