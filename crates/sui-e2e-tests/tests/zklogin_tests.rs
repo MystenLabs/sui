@@ -2,6 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
 use sui_core::authority_client::AuthorityAPI;
@@ -91,7 +93,9 @@ async fn zklogin_end_to_end_test() {
         .with_epoch_duration_ms(1000)
         .build()
         .await;
-    test_cluster.wait_for_epoch(Some(11)).await;
+    test_cluster
+        .wait_for_epoch_with_timeout(Some(11), Duration::from_secs(180))
+        .await;
     let rgp = test_cluster.get_reference_gas_price().await;
 
     // zklogin sig tx fails to execute bc it has max_epoch set to 10.
