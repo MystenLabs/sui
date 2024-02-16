@@ -3245,13 +3245,14 @@ fn parse_module(
 fn next_def_fast_forward(context: &mut Context, prev_token_loc: Loc) -> bool {
     let mut stop_parsing = false;
     let next_tok = skip_to_next_desired_tok_or_eof(context, is_start_of_member_or_module);
-    if next_tok == Tok::EOF || next_tok == Tok::Module {
-        // either end of file or next module to potentially be parsed
-        stop_parsing = true;
-    } else if prev_token_loc == context.tokens.current_token_loc() {
-        // token wasn't advanced by either `parse_module_member` nor by
-        // `skip_to_next_member_or_module_or_eof` - no further parsing is possible (in
-        // particular, without this check, compiler tests get stuck)
+    if next_tok == Tok::EOF
+        || next_tok == Tok::Module
+        || prev_token_loc == context.tokens.current_token_loc()
+    {
+        // either end of file or next module to potentially be parsed; alternatively, token wasn't
+        // advanced by either `parse_module_member` nor by `skip_to_next_member_or_module_or_eof` -
+        // no further parsing is possible (in particular, without this check, compiler tests get
+        // stuck)
         stop_parsing = true;
     }
     stop_parsing
