@@ -800,6 +800,10 @@ impl SuiError {
                 | SuiError::TooManyTransactionsPendingConsensus
         )
     }
+
+    pub fn is_retryable_overload(&self) -> bool {
+        matches!(self, SuiError::ValidatorOverloadedRetryAfter { .. })
+    }
 }
 
 impl Ord for SuiError {

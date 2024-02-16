@@ -58,6 +58,12 @@ pub enum QuorumDriverError {
     },
     #[error("Transaction is already finalized but with different user signatures")]
     TxAlreadyFinalizedWithDifferentUserSignatures,
+    #[error("Transaction is not processed because {overload_stake} of validators are overloaded and asked client to retry after {retry_after_secs}.")]
+    SystemOverloadRetryAfter {
+        overload_stake: StakeUnit,
+        errors: GroupedErrors,
+        retry_after_secs: u64,
+    },
 }
 
 pub type GroupedErrors = Vec<(SuiError, StakeUnit, Vec<ConciseAuthorityPublicKeyBytes>)>;
