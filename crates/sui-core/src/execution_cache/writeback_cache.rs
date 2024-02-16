@@ -79,7 +79,7 @@ use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::VerifiedTransaction;
-use tracing::instrument;
+use tracing::{info, instrument};
 
 use super::ExecutionCacheAPI;
 use super::{
@@ -187,6 +187,15 @@ impl UncommittedData {
             pending_transaction_writes: DashMap::new(),
             transaction_events: DashMap::new(),
         }
+    }
+
+    fn clear(&self) {
+        self.objects.clear();
+        self.markers.clear();
+        self.transaction_effects.clear();
+        self.executed_effects_digests.clear();
+        self.pending_transaction_writes.clear();
+        self.transaction_events.clear();
     }
 }
 
@@ -626,6 +635,34 @@ impl WritebackCache {
 
     pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper<Self> {
         NotifyReadWrapper(self)
+    }
+
+    fn clear_state_end_of_epoch_impl(&self, _execution_guard: &ExecutionLockWriteGuard<'_>) {
+        info!("clearing state at end of epoch");
+        assert!(
+            self.dirty.pending_transaction_writes.is_empty(),
+            "should be empty due to revert_state_update"
+        );
+        self.dirty.clear();
+    }
+
+    fn revert_state_update_impl(&self, tx: &TransactionDigest) -> SuiResult {
+        // TODO: remove revert_state_update_impl entirely, and simply drop all dirty
+        // state when clear_state_end_of_epoch_impl is called.
+        let (_, outputs) = self
+            .dirty
+            .pending_transaction_writes
+            .remove(tx)
+            .expect("transaction must exist");
+
+        for (object_id, object) in outputs.written.iter() {
+            if object.is_package() {
+                info!("removing non-finalized package from cache: {:?}", object_id);
+                self.packages.invalidate(object_id);
+            }
+        }
+
+        Ok(())
     }
 
     #[cfg(test)]

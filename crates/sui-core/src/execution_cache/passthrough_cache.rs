@@ -36,6 +36,7 @@ use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::VerifiedTransaction;
+use tap::TapFallible;
 use tracing::instrument;
 use typed_store::Map;
 
@@ -96,6 +97,19 @@ impl PassthroughCache {
         )
         .await;
         let _ = AuthorityStorePruner::compact(&self.store.perpetual_tables);
+    }
+
+    fn revert_state_update_impl(&self, digest: &TransactionDigest) -> SuiResult {
+        self.store.revert_state_update(digest)
+    }
+
+    fn clear_state_end_of_epoch_impl(&self, execution_guard: &ExecutionLockWriteGuard) {
+        self.store
+            .clear_object_per_epoch_marker_table(execution_guard)
+            .tap_err(|e| {
+                tracing::error!(?e, "Failed to clear object per-epoch marker table");
+            })
+            .ok();
     }
 }
 

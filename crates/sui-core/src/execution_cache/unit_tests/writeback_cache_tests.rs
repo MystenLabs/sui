@@ -5,9 +5,11 @@ use rand::{rngs::StdRng, SeedableRng};
 use std::{
     collections::BTreeMap,
     future::Future,
+    path::PathBuf,
     sync::atomic::Ordering,
     sync::{atomic::AtomicU32, Arc},
 };
+use sui_framework::BuiltInFramework;
 use sui_macros::{register_fail_point_async, sim_test};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
@@ -180,6 +182,23 @@ impl Scenario {
         )
     }
 
+    fn new_package() -> Object {
+        use sui_move_build::BuildConfig;
+
+        // add object_basics package object to genesis, since lots of test use it
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("src/unit_tests/data/object_basics");
+        let modules: Vec<_> = BuildConfig::new_for_testing()
+            .build(path)
+            .unwrap()
+            .get_modules()
+            .cloned()
+            .collect();
+        let digest = TransactionDigest::genesis_marker();
+        Object::new_package_for_testing(&modules, digest, BuiltInFramework::genesis_move_packages())
+            .unwrap()
+    }
+
     fn new_child(owner: ObjectID) -> Object {
         let id = ObjectID::random();
         Object::new_move(
@@ -219,6 +238,16 @@ impl Scenario {
             self.outputs
                 .new_locks_to_init
                 .push(object.compute_object_reference());
+            let id = object.id();
+            assert!(self.id_map.insert(*short_id, id).is_none());
+            self.outputs.written.insert(id, object.clone());
+            self.objects.insert(id, object).assert_inserted();
+        }
+    }
+
+    fn with_packages(&mut self, short_ids: &[u32]) {
+        for short_id in short_ids {
+            let object = Self::new_package();
             let id = object.id();
             assert!(self.id_map.insert(*short_id, id).is_none());
             self.outputs.written.insert(id, object.clone());
@@ -323,6 +352,12 @@ impl Scenario {
         res
     }
 
+    async fn clear_state_end_of_epoch(&self) {
+        let execution_guard = tokio::sync::RwLock::new(1u64);
+        let lock = execution_guard.write().await;
+        self.cache().clear_state_end_of_epoch(&lock);
+    }
+
     fn evict_caches(&self) {
         self.cache.clear_caches();
     }
@@ -368,6 +403,16 @@ impl Scenario {
             //  .get_lock(expected.compute_object_reference(), 1)
             //  .unwrap()
             //  .is_locked());
+        }
+    }
+
+    fn assert_packages(&self, short_ids: &[u32]) {
+        self.assert_live(short_ids);
+        for short_id in short_ids {
+            let id = self.id_map.get(short_id).expect("no such object");
+            self.cache()
+                .get_package_object(id)
+                .expect("no such package");
         }
     }
 
@@ -633,6 +678,103 @@ async fn test_write_transaction_outputs_is_sync() {
             .now_or_never()
             .unwrap()
             .unwrap();
+    })
+    .await;
+}
+
+#[tokio::test]
+#[should_panic(expected = "should be empty due to revert_state_update")]
+async fn test_missing_reverts_panic() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1]);
+        s.do_tx().await;
+        s.clear_state_end_of_epoch().await;
+    })
+    .await;
+}
+
+#[tokio::test]
+#[should_panic(expected = "transaction must exist")]
+async fn test_revert_commited_tx_panics() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1]);
+        let tx1 = s.do_tx().await;
+        s.commit(tx1).await.unwrap();
+        s.cache().revert_state_update(&tx1).unwrap();
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_revert_state_update_created() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        // newly created object
+        s.with_created(&[1]);
+        let tx1 = s.do_tx().await;
+        s.assert_live(&[1]);
+
+        s.cache().revert_state_update(&tx1).unwrap();
+        s.clear_state_end_of_epoch().await;
+
+        s.assert_not_exists(&[1]);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_revert_state_update_mutated() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        let v1 = {
+            s.with_created(&[1]);
+            let tx = s.do_tx().await;
+            s.commit(tx).await.unwrap();
+            s.cache()
+                .get_object(&s.obj_id(1))
+                .unwrap()
+                .unwrap()
+                .version()
+        };
+
+        s.with_mutated(&[1]);
+        let tx = s.do_tx().await;
+
+        s.cache().revert_state_update(&tx).unwrap();
+        s.clear_state_end_of_epoch().await;
+
+        let version_after_revert = s
+            .cache()
+            .get_object(&s.obj_id(1))
+            .unwrap()
+            .unwrap()
+            .version();
+        assert_eq!(v1, version_after_revert);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_invalidate_package_cache_on_revert() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1]);
+        s.with_packages(&[2]);
+        let tx1 = s.do_tx().await;
+
+        s.assert_live(&[1]);
+        s.assert_packages(&[2]);
+
+        s.cache().revert_state_update(&tx1).unwrap();
+        s.clear_state_end_of_epoch().await;
+
+        assert!(s
+            .cache()
+            .get_package_object(&s.obj_id(2))
+            .unwrap()
+            .is_none());
     })
     .await;
 }

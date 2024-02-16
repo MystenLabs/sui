@@ -536,7 +536,7 @@ pub trait ExecutionCacheReconfigAPI: Send + Sync {
 
     fn update_epoch_flags_metrics(&self, old: &[EpochFlag], new: &[EpochFlag]);
 
-    fn clear_object_per_epoch_marker_table(&self, execution_guard: &ExecutionLockWriteGuard<'_>);
+    fn clear_state_end_of_epoch(&self, execution_guard: &ExecutionLockWriteGuard<'_>);
 
     fn expensive_check_sui_conservation(
         &self,
@@ -740,7 +740,7 @@ macro_rules! implement_passthrough_traits {
             }
 
             fn revert_state_update(&self, digest: &TransactionDigest) -> SuiResult {
-                self.store.revert_state_update(digest)
+                self.revert_state_update_impl(digest)
             }
 
             fn set_epoch_start_configuration(
@@ -754,17 +754,8 @@ macro_rules! implement_passthrough_traits {
                 self.store.update_epoch_flags_metrics(old, new)
             }
 
-            fn clear_object_per_epoch_marker_table(
-                &self,
-                execution_guard: &ExecutionLockWriteGuard<'_>,
-            ) {
-                use tap::TapFallible;
-                self.store
-                    .clear_object_per_epoch_marker_table(execution_guard)
-                    .tap_err(|e| {
-                        tracing::error!(?e, "Failed to clear object per-epoch marker table");
-                    })
-                    .ok();
+            fn clear_state_end_of_epoch(&self, execution_guard: &ExecutionLockWriteGuard<'_>) {
+                self.clear_state_end_of_epoch_impl(execution_guard)
             }
 
             fn expensive_check_sui_conservation(
