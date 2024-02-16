@@ -7,14 +7,3 @@ error[E01002]: unexpected token
   │             Unexpected '::'
   │             Expected an expression term
 
-error[E04007]: incompatible types
-  ┌─ tests/move_check/parser/global_access_value.move:3:13
-  │
-2 │     fun foo(): u64 {
-  │                --- Expected: 'u64'
-3 │         1 + ::global_value
-  │             ^^
-  │             │
-  │             Invalid return expression
-  │             Given: '()'
-

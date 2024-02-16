@@ -5,9 +5,9 @@ module 0x42::m {
 
     fun just_type_args<T>
 
-    fun just_param<T>(u: u64)
+    fun just_param<T>(_u: u64)
 
-    fun just_ret<T>(u: u64): u64
+    fun just_ret<T>(_u: u64): u64
 
     fun everything<T>(u: u64): u64 {
         u

@@ -5,18 +5,6 @@ error[E01008]: invalid hex string
   │         ^^^^^^ Missing closing quote (") after byte string
 
 error[E04007]: incompatible types
-  ┌─ tests/move_check/parser/recovery_parse_member_no_token.move:6:5
-  │
-4 │     public fun missing_quote(): vector<u8> {
-  │                                 ---------- Expected: 'vector<u8>'
-5 │         x"abcd
-6 │     }
-  │     ^
-  │     │
-  │     Invalid return expression
-  │     Given: '()'
-
-error[E04007]: incompatible types
   ┌─ tests/move_check/parser/recovery_parse_member_no_token.move:8:36
   │    
 8 │         public fun wrong_return(): u64 {

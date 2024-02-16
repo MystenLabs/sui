@@ -5,6 +5,6 @@ module 0x42::M {
     }
 
     fun bar() {
-        fun bar()::bar()::M::S { }
+        fun baz()::baz()::M::S { }
     }
 }

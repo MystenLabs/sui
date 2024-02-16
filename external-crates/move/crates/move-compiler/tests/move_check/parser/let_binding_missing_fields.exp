@@ -1,11 +1,3 @@
-warning[W09002]: unused variable
-  ┌─ tests/move_check/parser/let_binding_missing_fields.move:5:11
-  │
-5 │     fun g(g: Generic<u64>) {
-  │           ^ Unused parameter 'g'. Consider removing or prefixing with an underscore: '_g'
-  │
-  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/let_binding_missing_fields.move:6:26
   │
@@ -14,17 +6,4 @@ error[E01002]: unexpected token
   │                          │
   │                          Unexpected '='
   │                          Expected '{'
-
-error[E06001]: unused value without 'drop'
-  ┌─ tests/move_check/parser/let_binding_missing_fields.move:6:26
-  │
-2 │     struct Generic<T> {
-  │            ------- To satisfy the constraint, the 'drop' ability would need to be added here
-  ·
-5 │     fun g(g: Generic<u64>) {
-  │           -  ------------ The type '0x42::M::Generic<u64>' does not have the ability 'drop'
-  │           │   
-  │           The parameter 'g' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
-6 │         let Generic<u64> = g; // Test a type name with no field bindings
-  │                          ^ Invalid return
 

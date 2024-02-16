@@ -10,36 +10,20 @@ error[E01002]: unexpected token
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/function_incomplete.move:8:5
   │
-8 │     fun just_param<T>(u: u64)
+8 │     fun just_param<T>(_u: u64)
   │     ^^^
   │     │
   │     Unexpected 'fun'
   │     Expected '('
 
-warning[W09002]: unused variable
-  ┌─ tests/move_check/parser/function_incomplete.move:8:23
-  │
-8 │     fun just_param<T>(u: u64)
-  │                       ^ Unused parameter 'u'. Consider removing or prefixing with an underscore: '_u'
-  │
-  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 error[E01002]: unexpected token
    ┌─ tests/move_check/parser/function_incomplete.move:10:5
    │
-10 │     fun just_ret<T>(u: u64): u64
+10 │     fun just_ret<T>(_u: u64): u64
    │     ^^^
    │     │
    │     Unexpected 'fun'
    │     Expected '{'
-
-warning[W09002]: unused variable
-   ┌─ tests/move_check/parser/function_incomplete.move:10:21
-   │
-10 │     fun just_ret<T>(u: u64): u64
-   │                     ^ Unused parameter 'u'. Consider removing or prefixing with an underscore: '_u'
-   │
-   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E01002]: unexpected token
    ┌─ tests/move_check/parser/function_incomplete.move:12:5
@@ -53,8 +37,8 @@ error[E01002]: unexpected token
 error[E04007]: incompatible types
    ┌─ tests/move_check/parser/function_incomplete.move:12:5
    │
-10 │     fun just_ret<T>(u: u64): u64
-   │                              --- Expected: 'u64'
+10 │     fun just_ret<T>(_u: u64): u64
+   │                               --- Expected: 'u64'
 11 │ 
 12 │     fun everything<T>(u: u64): u64 {
    │     ^^^

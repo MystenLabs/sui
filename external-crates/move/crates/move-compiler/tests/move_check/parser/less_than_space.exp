@@ -1,11 +1,3 @@
-warning[W09002]: unused variable
-  ┌─ tests/move_check/parser/less_than_space.move:2:11
-  │
-2 │     fun f(v: u64): u64 {
-  │           ^ Unused parameter 'v'. Consider removing or prefixing with an underscore: '_v'
-  │
-  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/less_than_space.move:5:18
   │
@@ -14,16 +6,4 @@ error[E01002]: unexpected token
   │              │ │  
   │              │ Expected '::' after an address in a module access chain
   │              Perhaps you need a blank space before this '<' operator?
-
-error[E04007]: incompatible types
-  ┌─ tests/move_check/parser/less_than_space.move:5:18
-  │
-2 │     fun f(v: u64): u64 {
-  │                    --- Expected: 'u64'
-  ·
-5 │         if (v< 10) return v;
-  │                  ^
-  │                  │
-  │                  Invalid return expression
-  │                  Given: '()'
 

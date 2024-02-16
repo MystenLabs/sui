@@ -7,15 +7,3 @@ error[E01002]: unexpected token
   │             Unexpected 'mut'
   │             Expected an identifier
 
-error[E04007]: incompatible types
-  ┌─ tests/move_2024/parser/mut_field_pun_invalid_pack.move:6:13
-  │
-4 │     public fun foo(): S {
-  │                       - Expected: 'a::m::S'
-5 │         let f = 0;
-6 │         S { mut f }
-  │             ^^^
-  │             │
-  │             Invalid return expression
-  │             Given: '()'
-

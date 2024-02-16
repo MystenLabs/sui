@@ -4,15 +4,3 @@ error[E01008]: invalid hex string
 3 │         x"abcd
   │         ^^^^^^ Missing closing quote (") after byte string
 
-error[E04007]: incompatible types
-  ┌─ tests/move_check/parser/hexstring_missing_quote.move:4:5
-  │
-2 │     public fun missing_quote(): vector<u8> {
-  │                                 ---------- Expected: 'vector<u8>'
-3 │         x"abcd
-4 │     }
-  │     ^
-  │     │
-  │     Invalid return expression
-  │     Given: '()'
-
