@@ -2,21 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB58 } from '@mysten/bcs';
+import { parse } from 'valibot';
 
 import { bcs } from '../bcs/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { SerializedTransactionDataBuilderV1 } from './blockData/v1.js';
-import type {
-	GasData,
-	SuiCallArg,
-	SuiTransaction,
-	TransactionBlockState,
-	TransactionExpiration,
-} from './blockData/v2.js';
+import type { CallArg, GasData, Transaction, TransactionExpiration } from './blockData/v2.js';
+import { TransactionBlockState } from './blockData/v2.js';
 import { hashTypedData } from './hash.js';
-import { BuilderCallArg, PureCallArg } from './Inputs.js';
-import { TransactionBlockInput } from './Transactions.js';
-import { create } from './utils.js';
 
 function prepareSuiAddress(address: string) {
 	return normalizeSuiAddress(address).replace('0x', '');
@@ -30,8 +23,11 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 			throw new Error('Unable to deserialize from bytes.');
 		}
 
-		TransactionBlockDataBuilder.restore({
+		return TransactionBlockDataBuilder.restore({
 			version: 2,
+			features: [],
+			sender: null,
+			expiration: null,
 			gasData: {
 				budget: null,
 				owner: null,
@@ -41,28 +37,6 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 			inputs: programmableTx.inputs,
 			transactions: programmableTx.transactions,
 		});
-
-		const serialized = create(
-			{
-				version: 1,
-				gasConfig: {},
-				inputs: programmableTx.inputs.map((value: unknown, index: number) =>
-					create(
-						{
-							kind: 'Input',
-							value,
-							index,
-							type: is(value, PureCallArg) ? 'pure' : 'object',
-						},
-						TransactionBlockInput,
-					),
-				),
-				transactions: programmableTx.transactions,
-			},
-			SerializedTransactionDataBuilder,
-		);
-
-		return TransactionBlockDataBuilder.restore(serialized);
 	}
 
 	static fromBytes(bytes: Uint8Array) {
@@ -74,35 +48,20 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 			throw new Error('Unable to deserialize from bytes.');
 		}
 
-		const serialized = create(
-			{
-				version: 1,
-				sender: data.sender,
-				expiration: data.expiration,
-				gasConfig: data.gasData,
-				inputs: programmableTx.inputs.map((value: unknown, index: number) =>
-					create(
-						{
-							kind: 'Input',
-							value,
-							index,
-							type: is(value, PureCallArg) ? 'pure' : 'object',
-						},
-						TransactionBlockInput,
-					),
-				),
-				transactions: programmableTx.transactions,
-			},
-			SerializedTransactionDataBuilder,
-		);
-
-		return TransactionBlockDataBuilder.restore(serialized);
+		return TransactionBlockDataBuilder.restore({
+			version: 2,
+			features: [],
+			sender: data.sender,
+			expiration: data.expiration,
+			gasData: data.gasData,
+			inputs: programmableTx.inputs,
+			transactions: programmableTx.transactions,
+		});
 	}
 
 	static restore(data: TransactionBlockState | SerializedTransactionDataBuilderV1) {
 		if (data.version === 2) {
-			// TODO run validator
-			return new TransactionBlockDataBuilder(data);
+			return new TransactionBlockDataBuilder(parse(TransactionBlockState, data));
 		} else {
 			throw new Error('Todo implement transform');
 		}
@@ -119,13 +78,22 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 		return toB58(hash);
 	}
 
+	// @deprecated use gasData instead
+	get gasConfig() {
+		return this.gasData;
+	}
+	// @deprecated use gasData instead
+	set gasConfig(value) {
+		this.gasData = value;
+	}
+
 	features: string[];
 	version = 2 as const;
 	sender: string | null;
 	expiration: TransactionExpiration | null;
 	gasData: GasData;
-	inputs: SuiCallArg[];
-	transactions: SuiTransaction[];
+	inputs: CallArg[];
+	transactions: Transaction[];
 
 	constructor(clone?: TransactionBlockState) {
 		this.features = clone?.features ?? [];
@@ -147,15 +115,17 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 		onlyTransactionKind,
 	}: {
 		maxSizeBytes?: number;
-		overrides?: Pick<Partial<TransactionBlockDataBuilder>, 'sender' | 'gasConfig' | 'expiration'>;
+		overrides?: {
+			expiration?: TransactionExpiration;
+			sender?: string;
+			// @deprecated use gasData instead
+			gasConfig?: Partial<GasData>;
+			gasData?: Partial<GasData>;
+		};
 		onlyTransactionKind?: boolean;
 	} = {}) {
-		// Resolve inputs down to values:
-		const inputs = this.inputs.map((input) => {
-			assert(input.value, BuilderCallArg);
-			return input.value;
-		});
-
+		// TODO validate that inputs are actually resolved
+		const inputs = this.inputs as Extract<CallArg, { Object: unknown } | { Pure: unknown }>[];
 		const kind = {
 			ProgrammableTransaction: {
 				inputs,
@@ -169,21 +139,21 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 
 		const expiration = overrides?.expiration ?? this.expiration;
 		const sender = overrides?.sender ?? this.sender;
-		const gasConfig = { ...this.gasConfig, ...overrides?.gasConfig };
+		const gasData = { ...this.gasData, ...overrides?.gasConfig, ...overrides?.gasData };
 
 		if (!sender) {
 			throw new Error('Missing transaction sender');
 		}
 
-		if (!gasConfig.budget) {
+		if (!gasData.budget) {
 			throw new Error('Missing gas budget');
 		}
 
-		if (!gasConfig.payment) {
+		if (!gasData.payment) {
 			throw new Error('Missing gas payment');
 		}
 
-		if (!gasConfig.price) {
+		if (!gasData.price) {
 			throw new Error('Missing gas price');
 		}
 
@@ -191,10 +161,10 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 			sender: prepareSuiAddress(sender),
 			expiration: expiration ? expiration : { None: true },
 			gasData: {
-				payment: gasConfig.payment,
-				owner: prepareSuiAddress(this.gasConfig.owner ?? sender),
-				price: BigInt(gasConfig.price),
-				budget: BigInt(gasConfig.budget),
+				payment: gasData.payment,
+				owner: prepareSuiAddress(this.gasData.owner ?? sender),
+				price: BigInt(gasData.price),
+				budget: BigInt(gasData.budget),
 			},
 			kind: {
 				ProgrammableTransaction: {
@@ -215,7 +185,7 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 		return TransactionBlockDataBuilder.getDigestFromBytes(bytes);
 	}
 
-	snapshot(): SerializedTransactionDataBuilder {
-		return create(this, SerializedTransactionDataBuilder);
+	snapshot(): TransactionBlockState {
+		return parse(TransactionBlockState, this);
 	}
 }
