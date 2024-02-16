@@ -865,7 +865,7 @@ async fn zk_multisig_test() {
 
     // Step 1. construct 2 zklogin signatures
     let test_vectors =
-        &load_test_vectors("/crates/sui-types/src/unit_tests/zklogin_test_vectors.json")[1..];
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1..];
     let mut zklogin_sigs = vec![];
     for (kp, _pk_zklogin, inputs) in test_vectors {
         let intent_message = IntentMessage::new(Intent::sui_transaction(), data.clone());
