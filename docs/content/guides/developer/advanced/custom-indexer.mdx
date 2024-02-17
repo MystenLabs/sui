@@ -5,8 +5,6 @@ description: You can build custom indexers using the Sui micro-data ingestion fr
 
 You can build custom indexers using the Sui micro-data ingestion framework. To create an indexer, you subscribe to a checkpoint stream with full checkpoint content. This stream can be one of the publicly available streams from Mysten Labs, one that you set up in your local environment, or a combination of the two.  
 
-![Data ingestion flow](./images/data-ingestion.png)
-
 Establishing a custom indexer helps improve latency, allows pruning the data of your Sui Full node, and provides efficient assemblage of checkpoint data.
 
 ## Interface and data format
@@ -49,7 +47,9 @@ checkpoint-executor-config:
 
 ### Hybrid mode
 
-Specify both a local and remote store as a fallback to ensure constant data flow. The framework always prioritizes locally available checkpoint data over remote data. It's useful when you want to start utilizing your own Full node for data ingestion but need to partially backfill historical data or just have a failover.
+Specify both a local and remote store as a fallback to ensure constant data flow. The framework always prioritizes locally available checkpoint data over remote data. It's useful when you want to start utilizing your own Full node for data ingestion but need to partially backfill historical data or just have a failover. 
+
+![Data ingestion flow](./images/custom-indexer.png)
 
 ## Example
 
