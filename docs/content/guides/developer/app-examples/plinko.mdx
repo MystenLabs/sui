@@ -10,7 +10,7 @@ Building an on-chain Plinko game shares a lot of similarities with the [Coin Fli
 
 In Plinko, the game begins with the player selecting the number of balls to play and determining the bet size for each one. This strategic choice allows the player to influence their potential rewards and mitigate their risk. After making their selection, the player initiates the game, which then employs blockchain technology to ensure the randomness and fairness of each ball's drop through a pegged board. The goal is to land the balls in slots at the bottom of the board, each offering different prize multipliers. The outcome of the game, dictated by where the balls land, is calculated automatically, with the smart contract assessing the results to determine the player's total winnings.
 
-## Plinko smart contracts
+## Backend
 
 Follow the comments in each module's code to understand the logic each creates.
 
@@ -282,7 +282,7 @@ module plinko::plinko {
 
 #### Constants
 
-- `GAME_RETURN`: Defines the return multiplier for the game.
+- `GAME_RETURN`: Used in fee calculations. Might be removed in the current repo.
 
 #### Error codes
 
@@ -711,33 +711,62 @@ module plinko::counter_nft {
 
 - `burn_for_testing`: A test-only function that facilitates the burning of a Counter NFT within test environments. This utility supports the testing framework by allowing the simulation of Counter NFT lifecycle events without affecting the production environment.
 
+## Deployment
+
+{@include: ../../../snippets/initialize-sui-client-cli.mdx}
+
+{@include: ../../../snippets/publish-to-devnet-with-coins.mdx}
+
+The package should successfully deploy. Now, it's time to create a frontend that can interact with it.
+
+
 ## Frontend
 
-The Plinko component, a central element of the plinko game's frontend module, is structured to create an interactive and responsive gaming experience. Written in React, it integrates several features and functions to handle the game's logic and user interactions effectively.
+The `Plinko` component, a central element of the Plinko game's frontend module, is structured to create an interactive and responsive gaming experience. Written in React, it integrates several features and functions to handle the game's logic and user interactions effectively.
 
 ## State management and setup
 
-• State hooks: The module uses React's `useState` to manage various game states, including `finalPaths`, `isPlaying`, `totalWon`, and more. These states are vital for tracking the current game status and updating the UI accordingly.
+- State hooks: The module uses React's `useState` to manage various game states, including `finalPaths`, `isPlaying`, `totalWon`, and more. These states are vital for tracking the current game status and updating the UI accordingly.
 
-• Modal for game initialization: A modal is implemented to facilitate the creation of a new game. It captures the randomness and uses `handlePlayClick` to initiate the game with the backend.
+- Modal for game initialization: A modal is implemented to facilitate the creation of a new game. It captures the randomness and uses `handlePlayClick` to initiate the game with the backend.
 
-• Modal for game initialization: A modal is implemented to facilitate the creation of a new game. It captures the randomness and uses `handlePlayClick` to initiate the game with the backend.
+- Modal for game initialization: A modal is implemented to facilitate the creation of a new game. It captures the randomness and uses `handlePlayClick` to initiate the game with the backend.
 
 ## UI components and styling
 
+The `MatterSim` and `PlinkoSettings` components are the foundation for the Plinko frontend. To see code for all components and source files, see the [Plinko repo](https://github.com/MystenLabs/plinko-poc/tree/main/app/src).  
+
 ### Simulation component
 
-The MatterSim component plays a pivotal role in the Plinko game by rendering the game board with a realistic physical representation of the dropping balls. It leverages the robust capabilities of Matter.js, a renowned physics engine, to simulate the intricate dynamics of the Plinko game's environment. The randomness integral to the game's fairness and unpredictability, as detailed in the Counter NFT module, dictates the path of each ball dropped by the player. To align the balls' movement with the predetermined paths derived from on-chain data, MatterSim meticulously applies physics principles, such as gravity, to ensure natural ball descent. Additionally, to accurately guide the balls along these specific trajectories, MatterSim introduces subtle, custom forces. These adjustments are carefully calibrated to not only ensure compliance with the paths determined by the game's underlying blockchain mechanics but also to maintain a visually coherent and physically plausible ball movement, enhancing the player's immersive experience in the game.
+The [`MatterSim` component](https://github.com/MystenLabs/plinko-poc/blob/main/app/src/components/MatterSim.tsx) plays a pivotal role in the Plinko game by rendering the game board with a realistic physical representation of the dropping Plinko balls. It leverages the robust capabilities of [Matter.js](https://brm.io/matter-js/), a renowned physics engine, to simulate the intricate dynamics of the Plinko game's environment. 
+
+```ts
+...
+import Matter, {
+  Engine,
+  Render,
+  Runner,
+  Bodies,
+  Composite,
+  Vector,
+  Events,
+  Body,
+  Common,
+} from "matter-js";
+...
+```
+
+The randomness integral to the game's fairness and unpredictability, as detailed in the [`counter_nft` module](https://github.com/MystenLabs/plinko-poc/blob/main/plinko/sources/counter_nft.move), dictates the path of each ball dropped by the player. To align the Plinko balls' movement with the predetermined paths derived from on-chain data, `MatterSim` applies physics principles, such as gravity, to ensure natural ball descent. Additionally, to accurately guide the balls along these specific trajectories, `MatterSim` introduces subtle, custom forces. These adjustments are calibrated to not only ensure compliance with the paths determined by the game's underlying blockchain mechanics but also to maintain a visually coherent and physically plausible ball movement, to better simulate realism.
 
 ## Plinko settings component
 
-The `PlinkoSettings` component is an integral part of the user interface in the Plinko game, enabling players to customize their gameplay experience according to their preferences. This React component allows users to select the number of balls they wish to play with, set the bet size for each ball, and initiate the game round by pressing the "Play" button. Here's an overview of its functionalities:
+The [`PlinkoSettings` component](https://github.com/MystenLabs/plinko-poc/blob/main/app/src/components/PlinkoSettings.tsx) is an integral part of the user interface in the Plinko game, enabling players to customize their gameplay experience according to their preferences. This React component allows users to select the number of Plinko balls they want to drop, set the bet size for each ball, and initiate the game round by pressing the **Play** button.
 
 ### Customization options
 
-- Bet Size Per Ball: Players can specify the amount they wish to bet on each ball. This is a crucial feature that allows users to manage their risk and potential rewards.
-- Number of Balls: This setting lets players choose how many balls they want to play in a single round, adding a strategic layer to the game as the total bet size is a multiplication of the bet size per ball and the number of balls.
+- `betSize` (per ball): Players can specify the amount they want to bet on each ball. This is a crucial feature that allows users to manage their risk and potential rewards.
+- `numberOfBalls`: This setting lets players choose how many balls they want to play in a single round, adding a strategic layer to the game as the total bet size is a multiplication of the bet size per ball and the number of balls.
 
 ## User interaction and feedback
 
-Game Initiation: After selecting the desired number of balls and setting the bet size for each, players can initiate a new game by pressing the "Play" button. This action starts the game, with the button becoming disabled during gameplay to prevent new games from being initiated until the current game concludes and the last ball has reached the end.Links are also provided for players to view game details on the Sui explorer, enhancing transparency and engagement.
+Game Initiation: After selecting the desired number of balls and setting the bet size for each, players can initiate a new game by pressing the **Play** button. This action starts the game, with the button becoming disabled during gameplay to prevent new games from being initiated until the current game concludes and the last ball has reached the end. Links are also provided for players to view game details on the Sui explorer for transparency and engagement.
