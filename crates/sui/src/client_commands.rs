@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{btree_map::Entry, BTreeMap},
+    collections::BTreeMap,
     fmt::{Debug, Display, Formatter, Write},
     path::PathBuf,
     sync::Arc,
@@ -140,10 +140,10 @@ pub enum SuiClientCommands {
         /// Address (or its alias)
         #[arg(value_parser)]
         address: Option<KeyIdentity>,
-        /// Show balance only for the specified coin type
+        /// Show balance for the specified coin. If absent, it will show the balance for all coins
         #[clap(long, required = false)]
         coin_type: Option<String>,
-        /// Show coins' object IDs, balance, and symbol
+        /// Show a list with each coin's object ID and balance
         #[clap(long, required = false)]
         with_coins: bool,
     },
@@ -861,14 +861,25 @@ impl SuiClientCommands {
             } => {
                 let address = get_identity_address(address, context)?;
                 let client = context.get_client().await?;
+
                 let mut objects: Vec<Coin> = Vec::new();
                 let mut cursor = None;
-
                 loop {
-                    let response = client
-                        .coin_read_api()
-                        .get_all_coins(address, cursor, None)
-                        .await?;
+                    let response = match coin_type {
+                        Some(ref coin_type) => {
+                            client
+                                .coin_read_api()
+                                .get_coins(address, Some(coin_type.clone()), cursor, None)
+                                .await?
+                        }
+                        None => {
+                            client
+                                .coin_read_api()
+                                .get_all_coins(address, cursor, None)
+                                .await?
+                        }
+                    };
+
                     objects.extend(response.data);
 
                     if response.has_next_page {
@@ -881,37 +892,27 @@ impl SuiClientCommands {
                 let mut coins_by_type: BTreeMap<String, (Option<SuiCoinMetadata>, Vec<Coin>)> =
                     BTreeMap::new();
                 for c in objects {
-                    match coins_by_type.entry(c.coin_type.clone()) {
-                        Entry::Occupied(mut e) => {
-                            e.get_mut().1.push(c);
-                        }
-                        Entry::Vacant(e) => {
+                    let coin_type = c.coin_type.clone();
+                    coins_by_type
+                        .entry(coin_type.clone())
+                        .and_modify(|val| val.1.push(c.clone()))
+                        .or_insert({
                             let coin_metadata = client
                                 .coin_read_api()
-                                .get_coin_metadata(c.coin_type.clone())
+                                .get_coin_metadata(coin_type.clone())
                                 .await
                                 .with_context(|| {
                                     format!(
                                         "Cannot fetch the coin metadata for coin {}",
-                                        c.coin_type
+                                        coin_type.clone()
                                     )
                                 })?;
 
-                            let _ = &e.insert((coin_metadata, vec![c]));
-                        }
-                    };
+                            (coin_metadata, vec![c])
+                        });
                 }
 
-                let coins = if let Some(coin_type) = coin_type {
-                    coins_by_type
-                        .iter()
-                        .filter(|x| x.0 == &coin_type)
-                        .map(|x| (x.0.clone(), x.1.clone()))
-                        .collect::<BTreeMap<String, (Option<SuiCoinMetadata>, Vec<Coin>)>>()
-                } else {
-                    coins_by_type
-                };
-                SuiClientCommandResult::Balance(coins, with_coins)
+                SuiClientCommandResult::Balance(coins_by_type, with_coins)
             }
 
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
@@ -2357,25 +2358,17 @@ fn pretty_print_balance(
 
     let mut table_builder = TableBuilder::default();
     for (metadata, coins) in ordered_coins_sui_first {
-        let (name, symbol, decimals) = if let Some(metadata) = metadata {
-            (
-                metadata.name.as_str(),
-                metadata.symbol.as_str(),
-                metadata.decimals,
-            )
-        } else {
-            ("unknown", "unknown symbol", 10u8)
-        };
-
+        let name = metadata
+            .as_ref()
+            .map(|x| x.name.as_str())
+            .unwrap_or_else(|| "unknown");
         if with_coins {
             let coin_numbers = if coins.len() != 1 { "coins" } else { "coin" };
             builder.push_record(vec![format!(
-                "{}: {} {coin_numbers}, Balance: {:<2.2} {}\n ┌",
+                "{}: {} {coin_numbers}, Balance: {}\n ┌",
                 name,
                 coins.len(),
-                coins.iter().map(|x| x.balance).sum::<u64>() as f64
-                    / 10u64.pow(decimals as u32) as f64,
-                symbol
+                coins.iter().map(|x| x.balance as u128).sum::<u128>(),
             )]);
 
             let mut table_builder = TableBuilder::default();
@@ -2383,12 +2376,7 @@ fn pretty_print_balance(
                 table_builder.push_record(vec![
                     "│",
                     c.coin_object_id.to_string().as_str(),
-                    format!(
-                        "{:<2.2}",
-                        c.balance as f64 / 10u64.pow(decimals as u32) as f64
-                    )
-                    .as_str(),
-                    symbol,
+                    format!("{}", c.balance).as_str(),
                 ]);
             }
             builder.push_record(vec![table_builder
@@ -2399,13 +2387,7 @@ fn pretty_print_balance(
         } else {
             table_builder.push_record(vec![
                 name,
-                format!(
-                    "{:<2.2}",
-                    coins.iter().map(|x| x.balance).sum::<u64>() as f64
-                        / 10u64.pow(decimals as u32) as f64
-                )
-                .as_str(),
-                symbol,
+                format!("{}", coins.iter().map(|x| x.balance as u128).sum::<u128>()).as_str(),
             ]);
         }
     }
