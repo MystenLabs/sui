@@ -11491,7 +11491,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -11653,7 +11653,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -11707,7 +11707,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
@@ -12263,7 +12263,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -12488,7 +12488,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12779,7 +12779,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -12821,7 +12821,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -12942,7 +12942,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -12993,7 +12993,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13031,7 +13031,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13276,7 +13276,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13306,7 +13306,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -13430,7 +13430,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -13559,7 +13559,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -13707,7 +13707,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anemo",
  "anemo-cli",
