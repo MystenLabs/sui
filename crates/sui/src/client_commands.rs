@@ -144,7 +144,8 @@ pub enum SuiClientCommands {
         /// Address (or its alias)
         #[arg(value_parser)]
         address: Option<KeyIdentity>,
-        /// Show balance for the specified coin. If absent, it will show the balance for all coins
+        /// Show balance for the specified coin (e.g., 0x2::sui::SUI).
+        /// All coins will be shown if none is passed.
         #[clap(long, required = false)]
         coin_type: Option<String>,
         /// Show a list with each coin's object ID and balance
@@ -915,8 +916,23 @@ impl SuiClientCommands {
                             (coin_metadata, vec![c])
                         });
                 }
+                let coin_type_tag = TypeTag::from_str(SUI_COIN_TYPE)
+                    .map_err(|e| anyhow!("Cannot parse the coin type: {e}"))?;
+                // show SUI first
+                let mut ordered_coins_sui_first = coins_by_type
+                    .clone()
+                    .into_iter()
+                    .filter(|x| x.0 == coin_type_tag.to_string())
+                    .map(|x| x.1)
+                    .collect::<Vec<_>>();
+                let other_coins = coins_by_type
+                    .into_iter()
+                    .filter(|x| x.0 != coin_type_tag.to_string())
+                    .map(|x| x.1)
+                    .collect::<Vec<_>>();
 
-                SuiClientCommandResult::Balance(coins_by_type, with_coins)
+                ordered_coins_sui_first.extend(other_coins);
+                SuiClientCommandResult::Balance(ordered_coins_sui_first, with_coins)
             }
 
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
@@ -2252,7 +2268,7 @@ pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
     Addresses(AddressesOutput),
-    Balance(BTreeMap<String, (Option<SuiCoinMetadata>, Vec<Coin>)>, bool),
+    Balance(Vec<(Option<SuiCoinMetadata>, Vec<Coin>)>, bool),
     Call(SuiTransactionBlockResponse),
     ChainIdentifier(String),
     DynamicFieldQuery(DynamicFieldPage),
@@ -2343,27 +2359,12 @@ pub async fn request_tokens_from_faucet(
 }
 
 fn pretty_print_balance(
-    coins: &BTreeMap<String, (Option<SuiCoinMetadata>, Vec<Coin>)>,
+    coins_by_type: &Vec<(Option<SuiCoinMetadata>, Vec<Coin>)>,
     builder: &mut TableBuilder,
     with_coins: bool,
-) -> Result<(), anyhow::Error> {
-    let coin_type_tag =
-        TypeTag::from_str(SUI_COIN_TYPE).map_err(|e| anyhow!("Cannot parse the coin type: {e}"))?;
-    let mut ordered_coins_sui_first = coins
-        .iter()
-        .filter(|x| x.0 == &coin_type_tag.to_string())
-        .map(|x| x.1)
-        .collect::<Vec<_>>();
-    let other_coins = coins
-        .iter()
-        .filter(|x| x.0 != &coin_type_tag.to_string())
-        .map(|x| x.1)
-        .collect::<Vec<_>>();
-
-    ordered_coins_sui_first.extend(other_coins);
-
+) {
     let mut table_builder = TableBuilder::default();
-    for (metadata, coins) in ordered_coins_sui_first {
+    for (metadata, coins) in coins_by_type {
         let name = metadata
             .as_ref()
             .map(|x| x.name.as_str())
@@ -2401,5 +2402,4 @@ fn pretty_print_balance(
         .build()
         .with(TableStyle::blank())
         .to_string()]);
-    Ok(())
 }
