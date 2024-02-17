@@ -1,7 +1,9 @@
-import React from 'react';
-import {useThemeConfig} from '@docusaurus/theme-common';
-import {useNavbarMobileSidebar} from '@docusaurus/theme-common/internal';
-import NavbarItem from '@theme/NavbarItem';
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+import React from "react";
+import { useThemeConfig } from "@docusaurus/theme-common";
+import { useNavbarMobileSidebar } from "@docusaurus/theme-common/internal";
+import NavbarItem from "@theme/NavbarItem";
 function useNavbarItems() {
   // TODO temporary casting until ThemeConfig type is improved
   return useThemeConfig().navbar.items;
