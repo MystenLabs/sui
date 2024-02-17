@@ -16,6 +16,7 @@ use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+use sui_client_gen::cli::run_client_gen;
 use sui_config::node::Genesis;
 use sui_config::p2p::SeedPeer;
 use sui_config::{
@@ -154,6 +155,30 @@ pub enum SuiCommand {
     FireDrill {
         #[clap(subcommand)]
         fire_drill: FireDrill,
+    },
+
+    /// Tool for generating TypeScript SDKs for Move packages.
+    #[clap(name = "client-gen")]
+    ClientGen {
+        #[clap(
+            short,
+            long,
+            help = "Path to the `gen.toml` file.",
+            default_value = "./gen.toml"
+        )]
+        manifest: String,
+        #[clap(
+            short,
+            long,
+            help = "Path to the output directory. If omitted, the current directory will be used.",
+            default_value = "."
+        )]
+        out: String,
+        #[clap(
+            long,
+            help = "Remove all contents of the output directory before generating, except for gen.toml. Use with caution."
+        )]
+        clean: bool,
     },
 }
 
@@ -320,6 +345,11 @@ impl SuiCommand {
                 cmd,
             } => execute_move_command(package_path, build_config, cmd),
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
+            SuiCommand::ClientGen {
+                manifest,
+                out,
+                clean,
+            } => run_client_gen(manifest, out, clean).await,
         }
     }
 }
