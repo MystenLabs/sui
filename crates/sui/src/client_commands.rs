@@ -5,6 +5,7 @@ use std::{
     collections::BTreeMap,
     fmt::{Debug, Display, Formatter, Write},
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
 };
 
@@ -42,8 +43,11 @@ use sui_move_build::{
     gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
 use sui_replay::ReplayToolCommand;
-use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::SuiClient;
+use sui_sdk::{
+    sui_client_config::{SuiClientConfig, SuiEnv},
+    SUI_COIN_TYPE,
+};
 use sui_sdk::{
     wallet_context::WalletContext, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
 };
@@ -2342,15 +2346,17 @@ fn pretty_print_balance(
     coins: &BTreeMap<String, (Option<SuiCoinMetadata>, Vec<Coin>)>,
     builder: &mut TableBuilder,
     with_coins: bool,
-) {
+) -> Result<(), anyhow::Error> {
+    let coin_type_tag =
+        TypeTag::from_str(SUI_COIN_TYPE).map_err(|e| anyhow!("Cannot parse the coin type: {e}"))?;
     let mut ordered_coins_sui_first = coins
         .iter()
-        .filter(|x| x.0 == "0x2::sui::SUI")
+        .filter(|x| x.0 == &coin_type_tag.to_string())
         .map(|x| x.1)
         .collect::<Vec<_>>();
     let other_coins = coins
         .iter()
-        .filter(|x| x.0 != "0x2::sui::SUI")
+        .filter(|x| x.0 != &coin_type_tag.to_string())
         .map(|x| x.1)
         .collect::<Vec<_>>();
 
@@ -2395,4 +2401,5 @@ fn pretty_print_balance(
         .build()
         .with(TableStyle::blank())
         .to_string()]);
+    Ok(())
 }
