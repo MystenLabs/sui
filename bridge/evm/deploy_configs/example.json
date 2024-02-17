@@ -1,0 +1,10 @@
+{
+  "committeeMemberStake": [0],
+  "committeeMembers": ["0x000"],
+  "sourceChainId": 0,
+  "supportedChainIDs": [1],
+  "supportedTokens": ["0x000", "0x000", "0x000", "0x000"],
+  "tokenPrices": [12800, 432518900, 25969600, 10000],
+  "totalBridgeLimitInDollars": 1000000,
+  "wETHAddress": "0x000"
+}
