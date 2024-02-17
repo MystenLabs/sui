@@ -118,8 +118,7 @@ const guides = [
 					},*/
 					'guides/developer/advanced/asset-tokenization',
 					'guides/developer/advanced/graphql-migration',
-					'guides/operator/data-ingestion',
-					//'guides/developer/advanced/custom-indexers',
+					'guides/developer/advanced/custom-indexer',
 				],
 			},
 			{
