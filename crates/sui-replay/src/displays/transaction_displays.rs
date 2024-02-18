@@ -1,29 +1,43 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::displays::Pretty;
-use move_core_types::language_storage::TypeTag;
-use serde_json::Value;
+use crate::displays::{Pretty, PrettyM};
+use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::annotated_value::{MoveTypeLayout, MoveValue};
+use move_core_types::language_storage::{ModuleId, TypeTag};
 use std::fmt::{Display, Formatter};
-use sui_sdk::json::SuiJsonValue;
+
+use sui_types::base_types::ObjectID;
+use sui_types::error::SuiResult;
 use sui_types::execution_mode::ExecutionResult;
+use sui_types::storage::{BackingPackageStore, PackageObject};
 use sui_types::transaction::CallArg::Pure;
 use sui_types::transaction::{
     write_sep, Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
 };
+use sui_types::type_resolver::LayoutResolver;
 use tabled::{
     builder::Builder as TableBuilder,
     settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
 };
 
-pub type FullPTB = (ProgrammableTransaction, Vec<ExecutionResult>);
+pub struct FullPTB {
+    pub ptb: ProgrammableTransaction,
+    pub results: Vec<ExecutionResult>,
+    pub layout_resolver: Box<dyn LayoutResolver>,
+}
 
 /// These Display implementations provide alternate displays that are used to format info contained
 /// in these Structs when calling the CLI replay command with an additional provided flag.
-impl<'a> Display for Pretty<'a, FullPTB> {
+impl<'a> Display for PrettyM<'a, FullPTB> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let Pretty(full_ptb) = self;
-        let (ptb, results) = full_ptb;
+        let PrettyM(mut full_ptb) = self;
+        let FullPTB {
+            ptb,
+            results,
+            layout_resolver,
+        } = full_ptb;
 
         let mut builder = TableBuilder::default();
 
@@ -90,13 +104,16 @@ impl<'a> Display for Pretty<'a, FullPTB> {
 
         if !commands.is_empty() {
             let mut builder = TableBuilder::default();
-            for (i, c) in commands.iter().enumerate() {
+            for ((i, c), result) in commands.iter().enumerate().zip(results) {
                 if i == commands.len() - 1 {
-                    builder.push_record(vec![format!("{i:<2} {} {}", Pretty(c), Pretty(result))]);
+                    builder.push_record(vec![format!("{i:<2} {}", Pretty(c),)]);
+                    display_result(f, result.clone(), layout_resolver)?;
                 } else {
-                    builder.push_record(vec![format!("{i:<2} {} {}\n", Pretty(c), Pretty(result))]);
+                    builder.push_record(vec![format!("{i:<2} {}\n", Pretty(c),)]);
+                    display_result(f, result.clone(), layout_resolver)?;
                 }
             }
+
             let mut table = builder.build();
             table.with(TablePanel::header("Commands"));
             table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
@@ -209,34 +226,39 @@ impl<'a> Display for Pretty<'a, Argument> {
     }
 }
 
-impl<'a> Display for Pretty<'a, ExecutionResult> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let Pretty((mutable_ref_outputs, return_values)) = self;
-        let len_m_ref = mutable_ref_outputs.len();
-        let len_ret_vals = return_values.len();
-        if len_ret_vals > 0 || len_m_ref > 0 {
-            write!(f, "\n ┌ ")?;
-        }
-        if len_m_ref > 0 {
-            write!(f, "\n │ Mutable Reference Outputs:")?;
-        }
-        for (arg, bytes, type_tag) in mutable_ref_outputs {
-            write!(f, "\n │   {} ", arg)?;
-            resolve_value(f, bytes, type_tag)?;
-        }
-        if len_ret_vals > 0 {
-            write!(f, "\n │ Return Values:")?;
-        }
+fn display_result(
+    f: &mut Formatter<'_>,
+    result: ExecutionResult,
+    layout_resolver: &mut Box<dyn LayoutResolver>,
+) -> std::fmt::Result {
+    let (mutable_ref_outputs, return_values) = result;
 
-        for (i, (bytes, type_tag)) in return_values.iter().enumerate() {
-            write!(f, "\n │   {i:<2} ")?;
-            resolve_value(f, bytes, type_tag)?;
-        }
-        if len_ret_vals > 0 || len_m_ref > 0 {
-            write!(f, "\n └")?;
-        }
-        Ok(())
+    let len_m_ref = mutable_ref_outputs.len();
+    let len_ret_vals = return_values.len();
+    if len_ret_vals > 0 || len_m_ref > 0 {
+        write!(f, "\n ┌ ")?;
     }
+    if len_m_ref > 0 {
+        write!(f, "\n │ Mutable Reference Outputs:")?;
+    }
+    for (arg, bytes, type_tag) in mutable_ref_outputs {
+        write!(f, "\n │   {} ", arg)?;
+        let value = resolve_value(&bytes, &type_tag, layout_resolver).unwrap();
+        write!(f, "\n │   {} ", value)?;
+    }
+    if len_ret_vals > 0 {
+        write!(f, "\n │ Return Values:")?;
+    }
+
+    for (i, (bytes, type_tag)) in return_values.iter().enumerate() {
+        write!(f, "\n │   {i:<2} ")?;
+        let value = resolve_value(bytes, type_tag, layout_resolver).unwrap();
+        write!(f, "\n │   {} ", value)?;
+    }
+    if len_ret_vals > 0 || len_m_ref > 0 {
+        write!(f, "\n └")?;
+    }
+    Ok(())
 }
 
 impl<'a> Display for Pretty<'a, TypeTag> {
@@ -256,31 +278,51 @@ impl<'a> Display for Pretty<'a, TypeTag> {
     }
 }
 
-fn resolve_value(f: &mut Formatter<'_>, bytes: &[u8], type_tag: &TypeTag) -> std::fmt::Result {
-    let value = SuiJsonValue::from_bcs_bytes(None, bytes)
-        .unwrap_or_else(|e| panic!("Could not resolve value from bcs bytes: {e}"))
-        .to_json_value();
-    write!(f, "{}", Pretty(type_tag))?;
-    match value {
-        Value::Null => {
-            write!(f, "   Null")
+fn resolve_to_layout(
+    type_tag: &Box<TypeTag>,
+    layout_resolver: &mut Box<dyn LayoutResolver>,
+) -> MoveTypeLayout {
+    match *type_tag.clone() {
+        TypeTag::Vector(inner) => {
+            MoveTypeLayout::Vector(Box::from(resolve_to_layout(&inner, layout_resolver)))
         }
-        Value::Bool(b) => {
-            write!(f, "   {b}")
+        TypeTag::Struct(inner) => {
+            MoveTypeLayout::Struct(layout_resolver.get_annotated_layout(&inner).unwrap())
         }
-        Value::Number(n) => {
-            write!(f, "   {n}")
+        TypeTag::Bool => MoveTypeLayout::Bool,
+        TypeTag::U8 => MoveTypeLayout::U8,
+        TypeTag::U64 => MoveTypeLayout::U64,
+        TypeTag::U128 => MoveTypeLayout::U128,
+        TypeTag::Address => MoveTypeLayout::Address,
+        TypeTag::Signer => MoveTypeLayout::Signer,
+        TypeTag::U16 => MoveTypeLayout::U16,
+        TypeTag::U32 => MoveTypeLayout::U32,
+        TypeTag::U256 => MoveTypeLayout::U256,
+    }
+}
+
+fn resolve_value(
+    bytes: &[u8],
+    type_tag: &TypeTag,
+    layout_resolver: &mut Box<dyn LayoutResolver>,
+) -> anyhow::Result<MoveValue> {
+    match type_tag {
+        TypeTag::Vector(inner_type_tag) => {
+            let inner_layout = resolve_to_layout(inner_type_tag, layout_resolver);
+            MoveValue::simple_deserialize(bytes, &MoveTypeLayout::Vector(Box::from(inner_layout)))
         }
-        Value::String(s) => {
-            write!(f, "   {s}")
+        TypeTag::Struct(struct_tag) => {
+            let annotated = layout_resolver.get_annotated_layout(struct_tag)?;
+            MoveValue::simple_deserialize(bytes, &MoveTypeLayout::Struct(annotated))
         }
-        Value::Array(_a) => {
-            Ok(()) // We haven't printed this value by default for readability
-                   // but if you need it, add `write!(f, "{:?}", _a)`
-        }
-        Value::Object(_o) => {
-            Ok(()) // We haven't printed this value by default for readability
-                   // but if you need it, add `write!(f, "{:?}", _o)`
-        }
+        TypeTag::Bool => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::Bool),
+        TypeTag::U8 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U8),
+        TypeTag::U64 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U64),
+        TypeTag::U128 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U128),
+        TypeTag::Address => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::Address),
+        TypeTag::Signer => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::Signer),
+        TypeTag::U16 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U16),
+        TypeTag::U32 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U32),
+        TypeTag::U256 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U256),
     }
 }
