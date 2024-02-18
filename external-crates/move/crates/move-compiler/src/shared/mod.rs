@@ -24,6 +24,8 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
     hash::Hash,
+    io::Read,
+    path::Path,
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering as AtomicOrdering},
 };
@@ -224,6 +226,8 @@ pub struct CompilationEnv {
     known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
     prim_definers:
         BTreeMap<crate::naming::ast::BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
+    /// Abstracted source file reader
+    file_reader: Option<Box<dyn VFS>>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
@@ -248,6 +252,7 @@ impl CompilationEnv {
         mut visitors: Vec<cli::compiler::Visitor>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
+        file_reader: Option<Box<dyn VFS>>,
     ) -> Self {
         use crate::diagnostics::codes::{TypeSafety, UnusedItem};
         visitors.extend([
@@ -340,6 +345,7 @@ impl CompilationEnv {
             known_filters,
             known_filter_names,
             prim_definers: BTreeMap::new(),
+            file_reader,
         }
     }
 
@@ -544,6 +550,13 @@ impl CompilationEnv {
 
     pub fn primitive_definer(&self, t: N::BuiltinTypeName_) -> Option<&E::ModuleIdent> {
         self.prim_definers.get(&t)
+    }
+
+    pub fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
+        match self.file_reader.as_mut() {
+            Some(reader) => reader.read_to_string(fpath, buf),
+            None => FileSystemVFS.read_to_string(fpath, buf),
+        }
     }
 }
 
@@ -860,3 +873,21 @@ macro_rules! process_binops {
 }
 
 pub(crate) use process_binops;
+
+//**************************************************************************************************
+// Virtual file system
+//**************************************************************************************************
+
+pub trait VFS {
+    fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize>;
+}
+
+pub struct FileSystemVFS;
+
+impl VFS for FileSystemVFS {
+    fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
+        let mut f = std::fs::File::open(fpath)
+            .map_err(|err| std::io::Error::new(err.kind(), format!("{}: {:?}", err, fpath)))?;
+        f.read_to_string(buf)
+    }
+}

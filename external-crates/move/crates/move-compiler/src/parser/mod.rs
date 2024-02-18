@@ -19,11 +19,7 @@ use anyhow::anyhow;
 use comments::*;
 use move_command_line_common::files::{find_move_filenames, FileHash};
 use move_symbol_pool::Symbol;
-use std::{
-    collections::{BTreeSet, HashMap},
-    fs::File,
-    io::Read,
-};
+use std::collections::{BTreeSet, HashMap};
 
 pub(crate) fn parse_program(
     compilation_env: &mut CompilationEnv,
@@ -152,10 +148,8 @@ fn parse_file(
     MatchedFileCommentMap,
     FileHash,
 )> {
-    let mut f = File::open(fname.as_str())
-        .map_err(|err| std::io::Error::new(err.kind(), format!("{}: {}", err, fname)))?;
     let mut source_buffer = String::new();
-    f.read_to_string(&mut source_buffer)?;
+    compilation_env.read_to_string(std::path::Path::new(fname.as_str()), &mut source_buffer)?;
     let file_hash = FileHash::new(&source_buffer);
     let buffer = match verify_string(file_hash, &source_buffer) {
         Err(ds) => {

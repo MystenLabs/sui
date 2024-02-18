@@ -58,8 +58,10 @@ use crate::{
     context::Context,
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
     utils::get_loc,
+    vfs::VirtualFileSystem,
 };
 use anyhow::{anyhow, Result};
+use chashmap::CHashMap;
 use codespan_reporting::files::SimpleFiles;
 use crossbeam::channel::Sender;
 use derivative::*;
@@ -88,7 +90,7 @@ use move_compiler::{
     expansion::ast::{self as E, Fields, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
     parser::ast::{self as P, StructName},
-    shared::{Identifier, Name},
+    shared::{Identifier, Name, VFS},
     typing::ast::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
         ModuleCall, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
@@ -96,7 +98,10 @@ use move_compiler::{
     PASS_PARSER, PASS_TYPING,
 };
 use move_ir_types::location::*;
-use move_package::compilation::build_plan::BuildPlan;
+use move_package::{
+    compilation::build_plan::BuildPlan, resolution::resolution_graph::ResolvedGraph,
+    source_package::parsed_manifest::FileName,
+};
 use move_symbol_pool::Symbol;
 
 /// Enabling/disabling the language server reporting readiness to support go-to-def and
@@ -652,6 +657,7 @@ impl SymbolicatorRunner {
 
     /// Create a new runner
     pub fn new(
+        files: Arc<CHashMap<PathBuf, String>>,
         symbols: Arc<Mutex<Symbols>>,
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
         lint: bool,
@@ -711,7 +717,7 @@ impl SymbolicatorRunner {
                             continue;
                         }
                         eprintln!("symbolication started");
-                        match get_symbols(root_dir.unwrap().as_path(), lint) {
+                        match get_symbols(files.clone(), root_dir.unwrap().as_path(), lint) {
                             Ok((symbols_opt, lsp_diagnostics)) => {
                                 eprintln!("symbolication finished");
                                 if let Some(new_symbols) = symbols_opt {
@@ -949,6 +955,7 @@ impl Symbols {
 /// actually (re)computed and the diagnostics are returned, the old symbolic information should
 /// be retained even if it's getting out-of-date.
 pub fn get_symbols(
+    virtual_files: Arc<CHashMap<PathBuf, String>>,
     pkg_path: &Path,
     lint: bool,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
@@ -966,14 +973,19 @@ pub fn get_symbols(
     // vector as the writer
     let resolution_graph = build_config.resolution_graph_for_package(pkg_path, &mut Vec::new())?;
 
+    let mut vfs = VirtualFileSystem {
+        ide_files: virtual_files.clone(),
+        all_files: HashMap::new(),
+    };
+
     // get source files to be able to correlate positions (in terms of byte offsets) with actual
     // file locations (in terms of line/column numbers)
-    let source_files = &resolution_graph.file_sources();
-    let mut files = SimpleFiles::new();
+    let source_files = file_sources(&resolution_graph, &mut vfs);
+    let mut files: SimpleFiles<Symbol, String> = SimpleFiles::new();
     let mut file_id_mapping = HashMap::new();
     let mut file_id_to_lines = HashMap::new();
     let mut file_name_mapping = BTreeMap::new();
-    for (fhash, (fname, source)) in source_files {
+    for (fhash, (fname, source)) in &source_files {
         let id = files.add(*fname, source.clone());
         file_id_mapping.insert(*fhash, id);
         file_name_mapping.insert(
@@ -988,7 +1000,7 @@ pub fn get_symbols(
     let mut parsed_ast = None;
     let mut typed_ast = None;
     let mut diagnostics = None;
-    build_plan.compile_with_driver(&mut std::io::sink(), |compiler| {
+    build_plan.compile_with_driver(Some(Box::new(vfs)), &mut std::io::sink(), |compiler| {
         // extract expansion AST
         let (files, compilation_result) = compiler.run::<PASS_PARSER>()?;
         let (_, compiler) = match compilation_result {
@@ -1180,6 +1192,28 @@ fn expansion_mod_ident_to_map_key(mod_ident: &E::ModuleIdent_) -> String {
             format!("{n}::{}", mod_ident.module).to_string()
         }
     }
+}
+
+pub fn file_sources(
+    resolved_graph: &ResolvedGraph,
+    vfs: &mut VirtualFileSystem,
+) -> BTreeMap<FileHash, (FileName, String)> {
+    resolved_graph
+        .package_table
+        .iter()
+        .flat_map(|(_, rpkg)| {
+            rpkg.get_sources(&resolved_graph.build_options)
+                .unwrap()
+                .iter()
+                .map(|fname| {
+                    let mut contents = String::new();
+                    let _ = vfs.read_to_string(&PathBuf::from(fname.as_str()), &mut contents);
+                    let fhash = FileHash::new(&contents);
+                    (fhash, (*fname, contents))
+                })
+                .collect::<BTreeMap<_, _>>()
+        })
+        .collect()
 }
 
 /// Get empty symbols
@@ -3468,7 +3502,7 @@ fn docstring_test() {
 
     path.push("tests/symbols");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(Arc::new(CHashMap::new()), path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -3738,7 +3772,7 @@ fn symbols_test() {
 
     path.push("tests/symbols");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(Arc::new(CHashMap::new()), path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -4778,7 +4812,7 @@ fn const_test() {
 
     path.push("tests/symbols");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(Arc::new(CHashMap::new()), path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5017,7 +5051,7 @@ fn imports_test() {
 
     path.push("tests/symbols");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(Arc::new(CHashMap::new()), path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5218,7 +5252,7 @@ fn module_access_test() {
 
     path.push("tests/symbols");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(Arc::new(CHashMap::new()), path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5372,7 +5406,7 @@ fn parse_error_test() {
 
     path.push("tests/parse-error");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(Arc::new(CHashMap::new()), path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5456,7 +5490,7 @@ fn parse_error_with_deps_test() {
 
     path.push("tests/parse-error-dep");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(Arc::new(CHashMap::new()), path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5504,7 +5538,7 @@ fn pretype_error_test() {
 
     path.push("tests/pre-type-error");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(Arc::new(CHashMap::new()), path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5538,7 +5572,7 @@ fn pretype_error_with_deps_test() {
 
     path.push("tests/pre-type-error-dep");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(Arc::new(CHashMap::new()), path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5635,7 +5669,7 @@ fn dot_call_test() {
 
     path.push("tests/move-2024");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(Arc::new(CHashMap::new()), path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5964,7 +5998,7 @@ fn mod_ident_uniform_test() {
 
     path.push("tests/mod-ident-uniform");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let (symbols_opt, _) = get_symbols(Arc::new(CHashMap::new()), path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
