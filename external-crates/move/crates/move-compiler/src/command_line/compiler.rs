@@ -33,6 +33,7 @@ use std::{
     fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use tempfile::NamedTempFile;
 
@@ -55,7 +56,7 @@ pub struct Compiler<'a> {
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
     /// Virtual file system
-    vfs: Option<Box<dyn VFS>>,
+    vfs: Option<Arc<Box<dyn VFS>>>,
 }
 
 pub struct SteppedCompiler<'a, const P: Pass> {
@@ -262,7 +263,7 @@ impl<'a> Compiler<'a> {
         self
     }
 
-    pub fn set_vfs(mut self, vfs: Box<dyn VFS>) -> Self {
+    pub fn set_vfs(mut self, vfs: Arc<Box<dyn VFS>>) -> Self {
         assert!(self.vfs.is_none());
         self.vfs = Some(vfs);
         self

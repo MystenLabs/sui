@@ -973,14 +973,14 @@ pub fn get_symbols(
     // vector as the writer
     let resolution_graph = build_config.resolution_graph_for_package(pkg_path, &mut Vec::new())?;
 
-    let mut vfs = VirtualFileSystem {
+    let vfs: Arc<Box<dyn VFS>> = Arc::new(Box::new(VirtualFileSystem {
         ide_files: virtual_files.clone(),
-        all_files: HashMap::new(),
-    };
+        all_files: Arc::new(CHashMap::new()),
+    }));
 
     // get source files to be able to correlate positions (in terms of byte offsets) with actual
     // file locations (in terms of line/column numbers)
-    let source_files = file_sources(&resolution_graph, &mut vfs);
+    let source_files = file_sources(&resolution_graph, vfs.clone());
     let mut files: SimpleFiles<Symbol, String> = SimpleFiles::new();
     let mut file_id_mapping = HashMap::new();
     let mut file_id_to_lines = HashMap::new();
@@ -1000,7 +1000,8 @@ pub fn get_symbols(
     let mut parsed_ast = None;
     let mut typed_ast = None;
     let mut diagnostics = None;
-    build_plan.compile_with_driver(Some(Box::new(vfs)), &mut std::io::sink(), |compiler| {
+    build_plan.compile_with_driver(&mut std::io::sink(), |mut compiler| {
+        compiler = compiler.set_vfs(vfs.clone());
         // extract expansion AST
         let (files, compilation_result) = compiler.run::<PASS_PARSER>()?;
         let (_, compiler) = match compilation_result {
@@ -1196,7 +1197,7 @@ fn expansion_mod_ident_to_map_key(mod_ident: &E::ModuleIdent_) -> String {
 
 pub fn file_sources(
     resolved_graph: &ResolvedGraph,
-    vfs: &mut VirtualFileSystem,
+    vfs: Arc<Box<dyn VFS>>,
 ) -> BTreeMap<FileHash, (FileName, String)> {
     resolved_graph
         .package_table

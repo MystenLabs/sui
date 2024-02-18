@@ -19,7 +19,6 @@ use lsp_types::{
 };
 use move_compiler::shared::VFS;
 use std::{
-    collections::HashMap,
     io::Read,
     path::{Path, PathBuf},
     sync::Arc,
@@ -35,11 +34,11 @@ pub struct VirtualFileSystem {
     /// Files pushed to the LSP server by the IDE via file open or update notifications
     pub ide_files: Arc<CHashMap<PathBuf, String>>,
     /// Files served by this VFS (populated on demand from IDE files or from the file system)
-    pub all_files: HashMap<PathBuf, String>,
+    pub all_files: Arc<CHashMap<PathBuf, String>>,
 }
 
 impl VFS for VirtualFileSystem {
-    fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
+    fn read_to_string(&self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
         // We may have a race here between a file being pushed by the IDE (and available in
         // `ide_files`) and files only available in the file system. This should be OK, though, as
         // in the worst case, we can always read from a file:

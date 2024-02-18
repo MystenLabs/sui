@@ -27,7 +27,10 @@ use std::{
     io::Read,
     path::Path,
     rc::Rc,
-    sync::atomic::{AtomicUsize, Ordering as AtomicOrdering},
+    sync::{
+        atomic::{AtomicUsize, Ordering as AtomicOrdering},
+        Arc,
+    },
 };
 
 pub mod ast_debug;
@@ -227,7 +230,7 @@ pub struct CompilationEnv {
     prim_definers:
         BTreeMap<crate::naming::ast::BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
     /// Virtual file system
-    vfs: Option<Box<dyn VFS>>,
+    vfs: Option<Arc<Box<dyn VFS>>>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
@@ -252,7 +255,7 @@ impl CompilationEnv {
         mut visitors: Vec<cli::compiler::Visitor>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
-        vfs: Option<Box<dyn VFS>>,
+        vfs: Option<Arc<Box<dyn VFS>>>,
     ) -> Self {
         use crate::diagnostics::codes::{TypeSafety, UnusedItem};
         visitors.extend([
@@ -879,13 +882,13 @@ pub(crate) use process_binops;
 //**************************************************************************************************
 
 pub trait VFS {
-    fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize>;
+    fn read_to_string(&self, fpath: &Path, buf: &mut String) -> std::io::Result<usize>;
 }
 
 pub struct FileSystemVFS;
 
 impl VFS for FileSystemVFS {
-    fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
+    fn read_to_string(&self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
         let mut f = std::fs::File::open(fpath)
             .map_err(|err| std::io::Error::new(err.kind(), format!("{}: {:?}", err, fpath)))?;
         f.read_to_string(buf)

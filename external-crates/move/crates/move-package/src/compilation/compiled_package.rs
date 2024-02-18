@@ -28,7 +28,7 @@ use move_compiler::{
     compiled_unit::{AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule},
     diagnostics::FilesSourceText,
     editions::Flavor,
-    shared::{NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths, VFS},
+    shared::{NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
     sui_mode::linters::{known_filters, linter_visitors},
     Compiler,
 };
@@ -437,7 +437,6 @@ impl CompiledPackage {
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        source_file_reader: Option<Box<dyn VFS>>,
         mut compiler_driver: impl FnMut(Compiler) -> Result<T>,
     ) -> Result<BuildResult<T>> {
         let immediate_dependencies = transitive_dependencies
@@ -490,9 +489,6 @@ impl CompiledPackage {
         let mut compiler = Compiler::from_package_paths(paths, bytecode_deps)
             .unwrap()
             .set_flags(flags);
-        if let Some(file_reader) = source_file_reader {
-            compiler = compiler.set_vfs(file_reader);
-        }
         if sui_mode {
             let (filter_attr_name, filters) = known_filters();
             compiler = compiler.add_custom_known_filters(filter_attr_name, filters);
@@ -521,7 +517,6 @@ impl CompiledPackage {
             resolved_package,
             transitive_dependencies,
             resolution_graph,
-            None,
             compiler_driver,
         )?;
         Ok(build_result.result)
@@ -533,7 +528,6 @@ impl CompiledPackage {
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        file_reader: Option<Box<dyn VFS>>,
         compiler_driver: impl FnMut(Compiler) -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
     ) -> Result<CompiledPackage> {
         let BuildResult {
@@ -547,7 +541,6 @@ impl CompiledPackage {
             resolved_package.clone(),
             transitive_dependencies,
             resolution_graph,
-            file_reader,
             compiler_driver,
         )?;
         let (file_map, all_compiled_units) = result;
