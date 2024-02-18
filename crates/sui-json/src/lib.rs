@@ -236,7 +236,10 @@ impl SuiJsonValue {
         }
     }
 
-    fn to_move_value(val: &JsonValue, ty: &MoveTypeLayout) -> Result<R::MoveValue, anyhow::Error> {
+    pub fn to_move_value(
+        val: &JsonValue,
+        ty: &MoveTypeLayout,
+    ) -> Result<R::MoveValue, anyhow::Error> {
         Ok(match (val, ty) {
             // Bool to Bool is simple
             (JsonValue::Bool(b), MoveTypeLayout::Bool) => R::MoveValue::Bool(*b),
