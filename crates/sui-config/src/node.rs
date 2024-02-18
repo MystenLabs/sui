@@ -401,7 +401,7 @@ impl ConsensusConfig {
 }
 
 pub fn default_consensus_protocol() -> ConsensusProtocol {
-    ConsensusProtocol::Narwhal
+    ConsensusProtocol::Mysticeti
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
