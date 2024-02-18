@@ -491,7 +491,7 @@ impl CompiledPackage {
             .unwrap()
             .set_flags(flags);
         if let Some(file_reader) = source_file_reader {
-            compiler = compiler.set_file_reader(file_reader);
+            compiler = compiler.set_vfs(file_reader);
         }
         if sui_mode {
             let (filter_attr_name, filters) = known_filters();

@@ -226,8 +226,8 @@ pub struct CompilationEnv {
     known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
     prim_definers:
         BTreeMap<crate::naming::ast::BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
-    /// Abstracted source file reader
-    file_reader: Option<Box<dyn VFS>>,
+    /// Virtual file system
+    vfs: Option<Box<dyn VFS>>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
@@ -252,7 +252,7 @@ impl CompilationEnv {
         mut visitors: Vec<cli::compiler::Visitor>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
-        file_reader: Option<Box<dyn VFS>>,
+        vfs: Option<Box<dyn VFS>>,
     ) -> Self {
         use crate::diagnostics::codes::{TypeSafety, UnusedItem};
         visitors.extend([
@@ -345,7 +345,7 @@ impl CompilationEnv {
             known_filters,
             known_filter_names,
             prim_definers: BTreeMap::new(),
-            file_reader,
+            vfs,
         }
     }
 
@@ -553,7 +553,7 @@ impl CompilationEnv {
     }
 
     pub fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
-        match self.file_reader.as_mut() {
+        match self.vfs.as_mut() {
             Some(reader) => reader.read_to_string(fpath, buf),
             None => FileSystemVFS.read_to_string(fpath, buf),
         }

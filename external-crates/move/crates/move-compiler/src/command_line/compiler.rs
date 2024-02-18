@@ -54,8 +54,8 @@ pub struct Compiler<'a> {
     known_warning_filters: Vec<(/* Prefix */ Option<Symbol>, Vec<WarningFilter>)>,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
-    /// Abstracted source file reader
-    file_reader: Option<Box<dyn VFS>>,
+    /// Virtual file system
+    vfs: Option<Box<dyn VFS>>,
 }
 
 pub struct SteppedCompiler<'a, const P: Pass> {
@@ -163,7 +163,7 @@ impl<'a> Compiler<'a> {
             known_warning_filters: vec![],
             package_configs,
             default_config: None,
-            file_reader: None,
+            vfs: None,
         })
     }
 
@@ -262,9 +262,9 @@ impl<'a> Compiler<'a> {
         self
     }
 
-    pub fn set_file_reader(mut self, file_reader: Box<dyn VFS>) -> Self {
-        assert!(self.file_reader.is_none());
-        self.file_reader = Some(file_reader);
+    pub fn set_vfs(mut self, vfs: Box<dyn VFS>) -> Self {
+        assert!(self.vfs.is_none());
+        self.vfs = Some(vfs);
         self
     }
 
@@ -287,20 +287,15 @@ impl<'a> Compiler<'a> {
             known_warning_filters,
             package_configs,
             default_config,
-            file_reader,
+            vfs,
         } = self;
         generate_interface_files_for_deps(
             &mut deps,
             interface_files_dir_opt,
             &compiled_module_named_address_mapping,
         )?;
-        let mut compilation_env = CompilationEnv::new(
-            flags,
-            visitors,
-            package_configs,
-            default_config,
-            file_reader,
-        );
+        let mut compilation_env =
+            CompilationEnv::new(flags, visitors, package_configs, default_config, vfs);
         if let Some(filter) = warning_filter {
             compilation_env.add_warning_filter_scope(filter);
         }
