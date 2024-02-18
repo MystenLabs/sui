@@ -21,14 +21,16 @@ use move_command_line_common::{
 use move_core_types::identifier::Identifier;
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, error::Error, fmt::Debug};
+use sui_types::base_types::ObjectID;
 
 use super::{
-    ast::{GasPicker, ModuleAccess, ParsedPTBCommand, Program},
-    errors::PTBResult,
+    ast::{GasPicker, ModuleAccess, ParsedPTBCommand, ParsedProgram, Program, ProgramMetadata},
+    errors::PTBResult, utils::read_ptb_file,
 };
 
 /// Parse a program
 pub struct ProgramParser<'a> {
+    file_table: &'a mut BTreeMap<Symbol, String>,
     current_scope: Scope<'a>,
     file_scopes: LinkedHashMap<Symbol, Scope<'a>>,
     seen_scopes: BTreeMap<Symbol, usize>,
@@ -41,6 +43,8 @@ struct ProgramParsingState {
     preview_set: bool,
     summary_set: bool,
     warn_shadows_set: bool,
+    json_set: bool,
+    gas_object_id: Option<Spanned<ObjectID>>,
 }
 
 /// A `Scope` is a single file scope that we are parsing. It holds the current tokens, the current
@@ -50,6 +54,9 @@ pub struct Scope<'a> {
     pub current_scope: FileScope,
 }
 
+/// A `Spanner` is a simple wrapper around a vector of tokens that allows us to iterate over them.
+/// It keeps track of our current location in the token stream (useful for creating spans) as well
+/// as consuming any whitespace tokens.
 pub struct Spanner<'a> {
     pub current_location: usize,
     tokens: Vec<(PTBToken, &'a str)>,
@@ -64,23 +71,31 @@ pub enum ScopeParsingResult {
 }
 
 impl<'a> ProgramParser<'a> {
-    pub fn new(starting_contents: String) -> PTBResult<Self> {
-        let current_scope = Scope::new("console", starting_contents)?;
+    pub fn new(
+        starting_contents: String,
+        file_table: &'a mut BTreeMap<Symbol, String>,
+    ) -> PTBResult<Self> {
+        let name = Symbol::from("console");
+        file_table.insert(name, starting_contents);
+        let current_scope = Scope::new(name, file_table[&name].clone(), 0)?;
         Ok(Self {
+            file_table,
             current_scope,
             file_scopes: LinkedHashMap::new(),
-            seen_scopes: [(Symbol::from("console"), 0)].into_iter().collect(),
+            seen_scopes: [(name, 0)].into_iter().collect(),
             state: ProgramParsingState {
                 parsed: vec![],
                 errors: vec![],
                 preview_set: false,
                 summary_set: false,
                 warn_shadows_set: false,
+                json_set: false,
+                gas_object_id: None,
             },
         })
     }
 
-    pub fn parse(mut self) -> Result<Program, Vec<PTBError>> {
+    pub fn parse(mut self) -> Result<ParsedProgram, Vec<PTBError>> {
         loop {
             // If current scope is done, finish it and pop up to the previous scope
             // If there are no more scopes, we are done so break the loop.
@@ -91,8 +106,6 @@ impl<'a> ProgramParser<'a> {
                     break;
                 }
             }
-
-            println!("current_scope: {:?}", self.current_scope.current_scope);
 
             // Parse current scope
             let result = match self.current_scope.parse(&mut self.state) {
@@ -109,7 +122,7 @@ impl<'a> ProgramParser<'a> {
                 // If we hit a file include command, we will swap the current scope with the new one
                 ScopeParsingResult::File(sp!(loc, name)) => {
                     let file_path = self.current_scope.current_scope.qualify_path(&name);
-                    let Ok(file_contents) = std::fs::read_to_string(&file_path) else {
+                    let Ok(file_contents) = read_ptb_file(&file_path) else {
                         self.state.errors.push(PTBError::WithSource {
                             span: loc,
                             message: format!("Unable to read file '{:?}'", file_path),
@@ -117,7 +130,15 @@ impl<'a> ProgramParser<'a> {
                         });
                         continue;
                     };
-                    let Ok(new_scope) = Scope::new(&file_path.to_str().unwrap(), file_contents)
+                    let name = Symbol::from(file_path.to_str().unwrap());
+                    let name_index = self
+                        .seen_scopes
+                        .entry(name)
+                        .and_modify(|i| *i += 1)
+                        .or_insert(0);
+                    self.file_table.insert(name, file_contents);
+                    let Ok(new_scope) =
+                        Scope::new(name, self.file_table[&name].clone(), *name_index)
                     else {
                         self.state.errors.push(PTBError::WithSource {
                             span: loc,
@@ -126,11 +147,10 @@ impl<'a> ProgramParser<'a> {
                         });
                         continue;
                     };
-                    let name = Symbol::from(file_path.to_str().unwrap());
-                    if dbg!(self
+                    if self
                         .file_scopes
                         .insert(name, std::mem::replace(&mut self.current_scope, new_scope))
-                        .is_some())
+                        .is_some()
                     {
                         self.state.errors.push(PTBError::WithSource {
                             span: loc,
@@ -144,12 +164,18 @@ impl<'a> ProgramParser<'a> {
         }
 
         if self.state.errors.is_empty() {
-            Ok(Program {
-                commands: self.state.parsed,
-                preview_set: self.state.preview_set,
-                summary_set: self.state.summary_set,
-                warn_shadows_set: self.state.warn_shadows_set,
-            })
+            Ok((
+                Program {
+                    commands: self.state.parsed,
+                    warn_shadows_set: self.state.warn_shadows_set,
+                },
+                ProgramMetadata {
+                    preview_set: self.state.preview_set,
+                    summary_set: self.state.summary_set,
+                    gas_object_id: self.state.gas_object_id,
+                    json_set: self.state.json_set,
+                },
+            ))
         } else {
             Err(self.state.errors)
         }
@@ -157,16 +183,17 @@ impl<'a> ProgramParser<'a> {
 }
 
 impl<'a> Scope<'a> {
-    fn new(file_path: &str, contents: String) -> PTBResult<Self> {
+    fn new(name: Symbol, contents: String, name_index: usize) -> PTBResult<Self> {
         let fscope = FileScope {
             file_command_index: 0,
-            name: Symbol::from(file_path),
-            name_index: 0,
+            name,
+            name_index,
         };
         let len = contents.len();
+        // TODO: handle this leak
         let tokens: Vec<_> = PTBToken::tokenize(Box::leak(Box::new(contents))).map_err(|e| {
             PTBError::WithSource {
-                span: Span::new(0, len, 0, fscope),
+                span: Span::new(0, len, fscope),
                 message: e.to_string(),
                 help: None,
             }
@@ -178,22 +205,21 @@ impl<'a> Scope<'a> {
     }
 
     fn fast_forward_to_command(&mut self) {
-        while let Some(tok) = self.tokens.peek_non_white() {
-            if tok.0.is_command_token() {
-                break;
-            }
+        while self
+            .tokens
+            .peek()
+            .is_some_and(|(tok, _)| !tok.is_command_token())
+        {
             self.tokens.next();
         }
     }
 
-    fn parse(
-        &mut self,
-        parsing_state: &mut ProgramParsingState,
-    ) -> PTBResult<ScopeParsingResult> {
-        let mut starting_loc = self.tokens.current_location();
+    fn parse(&mut self, parsing_state: &mut ProgramParsingState) -> PTBResult<ScopeParsingResult> {
+        // Consume whitespace and comments before getting the starting location so we don't include
+        // them in the span.
+        let mut starting_loc = self.tokens.current_location_before();
 
         while let Some((tok, _c)) = self.tokens.next() {
-            // println!("tok: {:?}, c: |{}|", tok, c);
             match tok {
                 c @ (PTBToken::CommandTransferObjects
                 | PTBToken::CommandSplitCoins
@@ -208,8 +234,7 @@ impl<'a> Scope<'a> {
                     Ok(cmd) => parsing_state.parsed.push(Spanned {
                         span: Span::new(
                             starting_loc,
-                            self.tokens.current_location,
-                            0,
+                            self.tokens.current_location(),
                             self.current_scope,
                         ),
                         value: cmd,
@@ -223,29 +248,35 @@ impl<'a> Scope<'a> {
                 PTBToken::CommandWarnShadows => parsing_state.warn_shadows_set = true,
                 PTBToken::CommandPreview => parsing_state.preview_set = true,
                 PTBToken::CommandSummary => parsing_state.summary_set = true,
-
+                PTBToken::CommandJson => parsing_state.json_set = true,
+                PTBToken::CommandGas => match self.parse_gas_specifier() {
+                    Ok(gas) => parsing_state.gas_object_id = Some(gas),
+                    Err(e) => {
+                        parsing_state.errors.push(e);
+                        self.fast_forward_to_command();
+                    }
+                },
                 PTBToken::CommandFile => match self.parse_file_name() {
-                    Ok(name) => return Ok(ScopeParsingResult::File(name)),
+                    Ok(name) => {
+                        self.current_scope.increment_file_command_index();
+                        return Ok(ScopeParsingResult::File(name));
+                    }
                     Err(e) => parsing_state.errors.push(e),
                 },
 
-                // Strip whitespace
-                PTBToken::Whitespace => {
-                    starting_loc = self.tokens.current_location();
-                    continue;
-                }
-                PTBToken::Eof => break,
+                PTBToken::Comment => (),
+
                 _ => error!(
                     Span::new(
                         starting_loc,
                         self.tokens.current_location(),
-                        0,
                         self.current_scope
                     ),
                     "Unexpected token '{}'", tok
                 ),
             }
-            starting_loc = self.tokens.current_location();
+            self.current_scope.increment_file_command_index();
+            starting_loc = self.tokens.current_location_before();
         }
         Ok(ScopeParsingResult::Done)
     }
@@ -265,6 +296,8 @@ impl<'a> Spanner<'a> {
     }
 
     fn next(&mut self) -> Option<(PTBToken, &'a str)> {
+        self.consume_whitepace();
+
         if let Some((tok, contents)) = self.tokens.pop() {
             self.current_location += contents.len();
             Some((tok, contents))
@@ -274,43 +307,36 @@ impl<'a> Spanner<'a> {
     }
 
     fn peek(&self) -> Option<(PTBToken, &'a str)> {
-        self.tokens.last().copied()
-    }
-
-    fn peek_non_white(&self) -> Option<(PTBToken, &'a str)> {
         self.tokens
             .iter()
-            .rposition(|(tok, _)| !tok.is_whitespace())
+            .rposition(|(tok, _)| !tok.is_whitespace() && tok != &PTBToken::Comment)
             .and_then(|i| self.tokens.get(i).copied())
-    }
-
-    fn consume_whitespace(&mut self) {
-        while let Some((tok, _)) = self.peek() {
-            if tok.is_whitespace() {
-                self.next();
-            } else {
-                break;
-            }
-        }
     }
 
     fn current_location(&self) -> usize {
         self.current_location
     }
-}
 
-impl<'a> Iterator for Spanner<'a> {
-    type Item = (PTBToken, &'a str);
+    fn current_location_before(&mut self) -> usize {
+        self.consume_whitepace();
+        self.current_location
+    }
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next()
+    fn consume_whitepace(&mut self) {
+        while let Some((tok, contents)) = self.tokens.last() {
+            if tok.is_whitespace() || tok == &PTBToken::Comment {
+                self.current_location += contents.len();
+                self.tokens.pop();
+            } else {
+                break;
+            }
+        }
     }
 }
 
 // Parser impls for a single command
 impl<'a> Scope<'a> {
     fn parse_ptb_command(&mut self, command: PTBToken) -> PTBResult<ParsedPTBCommand> {
-        self.parse_whitespace()?;
         match command {
             PTBToken::CommandPublish => self.parse_publish(),
             PTBToken::CommandUpgrade => self.parse_upgrade(),
@@ -322,7 +348,11 @@ impl<'a> Scope<'a> {
             PTBToken::CommandAssign => self.parse_assign(),
             PTBToken::CommandPickGasBudget => self.parse_pick_gas_budget(),
             PTBToken::CommandGasBudget => self.parse_gas_budget(),
-            PTBToken::CommandWarnShadows | PTBToken::CommandPreview | PTBToken::CommandSummary => {
+            PTBToken::CommandWarnShadows
+            | PTBToken::CommandPreview
+            | PTBToken::CommandSummary
+            | PTBToken::CommandJson
+            | PTBToken::CommandGas => {
                 unreachable!()
             }
             _ => unreachable!(),
@@ -355,14 +385,12 @@ impl<'a> Scope<'a> {
 
     fn parse_upgrade(&mut self) -> PTBResult<ParsedPTBCommand> {
         let s = self.parse_file_name()?;
-        self.parse_whitespace()?;
         let cap_obj = self.parse_argument()?;
         Ok(ParsedPTBCommand::Upgrade(s, cap_obj))
     }
 
     fn parse_transfer_objects(&mut self) -> PTBResult<ParsedPTBCommand> {
         let transfer_to = self.parse_argument()?;
-        self.parse_whitespace()?;
         let transfer_froms = self.parse_array()?;
         Ok(ParsedPTBCommand::TransferObjects(
             transfer_to,
@@ -397,14 +425,13 @@ impl<'a> Scope<'a> {
 
         let mut args = None;
 
-        while let Some(tok) = self.tokens.peek_non_white() {
+        while let Some(tok) = self.tokens.peek() {
             if tok.0.is_command_token() {
                 break;
             }
-            self.tokens.consume_whitespace();
             if PTBToken::TypeArgString == tok.0 {
                 let tys = self.parse_type_args()?;
-                if let Some(other_tys) = tys_opt {
+                if tys_opt.is_some() {
                     error!(
                         tys.span,
                         "Type arguments already specified in function call but also supplied here"
@@ -431,9 +458,7 @@ impl<'a> Scope<'a> {
             |loc| { error!(loc, "Expected variable binding") }
         );
 
-        let assign_to = if !matches!(self.tokens.peek_non_white(), Some(tok) if tok.0.is_command_token())
-        {
-            self.tokens.consume_whitespace();
+        let assign_to = if !matches!(self.tokens.peek(), Some(tok) if tok.0.is_command_token()) {
             Some(self.parse_argument()?)
         } else {
             None
@@ -462,8 +487,16 @@ impl<'a> Scope<'a> {
         });
         Ok(ParsedPTBCommand::GasBudget(span(loc, u)))
     }
+
+    fn parse_gas_specifier(&mut self) -> PTBResult<Spanned<ObjectID>> {
+        bind!(loc, Argument::Address(a) = self.parse_argument()?, |loc| {
+            error!(loc, "Expected an address")
+        });
+        Ok(span(loc, ObjectID::from(a.into_inner())))
+    }
 }
 
+// Core token stream consumption, parsing, and span generation helpers
 impl<'a> Scope<'a> {
     fn advance_any(&mut self) -> AResult<(PTBToken, &'a str)> {
         match self.tokens.next() {
@@ -508,57 +541,16 @@ impl<'a> Scope<'a> {
         Ok(v)
     }
 
-    /// Parses a list of items separated by `delim` and terminated by `end_token`, skipping any
-    /// tokens that match `skip`.
-    /// This is used to parse lists of arguments, e.g. `1, 2, 3` or `1, 2, 3` where the tokenizer
-    /// we're using is space-sensitive so we want to `skip` whitespace, and `delim` by ','.
-    fn parse_list_skip<R>(
-        &mut self,
-        parse_list_item: impl Fn(&mut Self) -> PTBResult<R>,
-        delim: PTBToken,
-        end_token: PTBToken,
-        skip: PTBToken,
-        allow_trailing_delim: bool,
-    ) -> PTBResult<Vec<R>> {
-        let is_end = |parser: &mut Self| -> PTBResult<bool> {
-            while parser.peek_tok() == Some(skip) {
-                parser.spanned(|p| p.advance(skip))?;
-            }
-            let is_end = parser
-                .peek_tok()
-                .map(|tok| tok == end_token)
-                .unwrap_or(true);
-
-            Ok(is_end)
-        };
-        let mut v = vec![];
-
-        while !is_end(self)? {
-            v.push(parse_list_item(self)?);
-            if is_end(self)? {
-                break;
-            }
-            self.spanned(|p| p.advance(delim))?;
-            if is_end(self)? && allow_trailing_delim {
-                break;
-            }
-        }
-        Ok(v)
-    }
-}
-
-impl<'a> Scope<'a> {
     fn spanned<T: Debug + Clone + Eq + PartialEq, E: Into<Box<dyn Error>>>(
         &mut self,
         parse: impl Fn(&mut Self) -> Result<T, E>,
     ) -> PTBResult<Spanned<T>> {
-        let start = self.tokens.current_location();
+        let start = self.tokens.current_location_before();
         let arg = parse(self);
         let end = self.tokens.current_location();
         let sp = Span {
             start,
             end,
-            arg_idx: 0,
             file_scope: self.current_scope,
         };
         let arg = arg.map_err(|e| PTBError::WithSource {
@@ -582,25 +574,14 @@ impl<'a> Scope<'a> {
         })?;
         Ok(span(sp, arg))
     }
+}
 
-    fn sp<T: Debug + Clone + Eq + PartialEq>(&mut self, start_loc: usize, x: T) -> Spanned<T> {
-        let end = self.tokens.current_location();
-        span(
-            Span {
-                start: start_loc,
-                end,
-                arg_idx: 0,
-                file_scope: self.current_scope,
-            },
-            x,
-        )
-    }
-
+// Core argument parsing
+impl<'a> Scope<'a> {
     // Parse a single PTB argument and allow trailing characters possibly.
     fn parse_argument(&mut self) -> PTBResult<Spanned<Argument>> {
         use super::token::PTBToken as Tok;
         use Argument as V;
-        self.tokens.consume_whitespace();
         let sp!(tl_loc, arg) = self.spanned(|p| p.advance_any())?;
         Ok(match arg {
             (Tok::Ident, "true") => span(tl_loc, V::Bool(true)),
@@ -652,8 +633,14 @@ impl<'a> Scope<'a> {
                 span(sp, V::Option(span(arg_span, Some(Box::new(arg)))))
             }
             (Tok::None_, _) => span(tl_loc, V::Option(span(tl_loc, None))),
-            (Tok::DoubleQuote, contents) => span(tl_loc, V::String(contents.to_owned())),
-            (Tok::SingleQuote, contents) => span(tl_loc, V::String(contents.to_owned())),
+            (Tok::DoubleQuote, contents) => span(
+                tl_loc,
+                V::String(contents[1..contents.len() - 1].to_owned()),
+            ),
+            (Tok::SingleQuote, contents) => span(
+                tl_loc,
+                V::String(contents[1..contents.len() - 1].to_owned()),
+            ),
             (Tok::Vector, _) => self.parse_array()?.map(V::Vector),
             (Tok::Ident, contents) if matches!(self.peek_tok(), Some(Tok::Dot)) => {
                 let mut fields = vec![];
@@ -703,7 +690,7 @@ impl<'a> Scope<'a> {
 
     // Parse a list of type arguments
     fn parse_type_args(&mut self) -> PTBResult<Spanned<Vec<ParsedType>>> {
-        self.tokens.consume_whitespace();
+        self.tokens.consume_whitepace();
         let sp!(tl_loc, contents) = self.spanned(|p| p.advance(PTBToken::TypeArgString))?;
         self.with_span(tl_loc, |_| {
             let type_tokens: Vec<_> = TypeToken::tokenize(contents)?
@@ -725,13 +712,12 @@ impl<'a> Scope<'a> {
     // Parse an array of arguments. These each element of the array is separated by a comma and the
     // parsing is not whitespace-sensitive.
     fn parse_array(&mut self) -> PTBResult<Spanned<Vec<Spanned<Argument>>>> {
-        self.tokens.consume_whitespace();
+        self.tokens.consume_whitepace();
         let sp!(start_loc, _) = self.spanned(|p| p.advance(PTBToken::LBracket))?;
-        let values = self.parse_list_skip(
+        let values = self.parse_list(
             |p| p.parse_argument(),
             PTBToken::Comma,
             PTBToken::RBracket,
-            PTBToken::Whitespace,
             /* allow_trailing_delim */ true,
         )?;
         let sp!(end_span, _) = self.spanned(|p| p.advance(PTBToken::RBracket))?;
@@ -746,8 +732,7 @@ impl<'a> Scope<'a> {
     fn parse_module_access(
         &mut self,
     ) -> PTBResult<(Spanned<ModuleAccess>, Option<Spanned<Vec<ParsedType>>>)> {
-        self.tokens.consume_whitespace();
-        let begin_loc = self.tokens.current_location();
+        let begin_loc = self.tokens.current_location_before();
         let sp!(tl_loc, (tok, contents)) = self.spanned(|p| p.advance_any())?;
         let address = Self::parse_address(tl_loc, tok, contents)?;
         self.spanned(|p| p.advance(PTBToken::ColonColon))?;
@@ -769,8 +754,12 @@ impl<'a> Scope<'a> {
                     .with_context(|| "Unable to parse function name".to_string())?,
             )
         })?;
-        let module_access = self.sp(
-            begin_loc,
+        let module_access = span(
+            Span::new(
+                begin_loc,
+                self.tokens.current_location(),
+                self.current_scope,
+            ),
             ModuleAccess {
                 address,
                 module_name,
@@ -788,14 +777,5 @@ impl<'a> Scope<'a> {
             None
         };
         Ok((module_access, ty_args_opt))
-    }
-
-    // Consume at least one whitespace token, and then consume any additional whitespace tokens.
-    fn parse_whitespace(&mut self) -> PTBResult<()> {
-        self.spanned(|p| p.advance(PTBToken::Whitespace))?;
-        while self.peek_tok() == Some(PTBToken::Whitespace) {
-            self.spanned(|p| p.advance(PTBToken::Whitespace))?;
-        }
-        Ok(())
     }
 }

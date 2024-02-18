@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::Path;
+
 // This lint is is disabled because it's not good and doesn't look at what you're actually
 // iterating over. This seems to be a common problem with this lint.
 // See e.g., https://github.com/rust-lang/rust-clippy/issues/6075
@@ -96,4 +98,16 @@ pub fn to_ordinal_contraction(num: usize) -> String {
         },
     };
     format!("{}{}", num, suffix)
+}
+
+// Handle escaping quotes in the file contents
+// Non-escaped quotes in PTB files are stripped out -- this is to allow for
+// similar syntax with the CLI args (i.e., allow copy-pasting from the CLI to a
+// PTB file).
+pub fn read_ptb_file(path: &Path) -> Result<String, std::io::Error> {
+    std::fs::read_to_string(path).map(|s| {
+        s.replace("\\\"", "%__REPLACE_ME__%")
+            .replace("\"", "")
+            .replace("%__REPLACE_ME__%", "\"")
+    })
 }

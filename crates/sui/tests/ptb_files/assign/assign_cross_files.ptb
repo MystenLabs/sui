@@ -5,7 +5,7 @@
 # And that results flow out from the PTB file
 --assign coins
 --assign c0 coins.0
---assign c1 coins.1
+--assign "c1" coins.1
 --merge-coins gas [c0, c1]
 
 --gas-budget 10000000

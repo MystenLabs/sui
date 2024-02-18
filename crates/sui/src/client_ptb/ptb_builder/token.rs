@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::bail;
-use move_command_line_common::parser;
 use move_core_types::identifier;
 use std::fmt::{self, Display};
 
@@ -101,9 +100,12 @@ pub enum PTBToken {
     CommandPickGasBudget,
     CommandGasBudget,
     CommandFile,
+    CommandJson,
+    CommandGas,
 
-    Void,
-    Eof,
+    // Comment start
+    Comment,
+
 }
 
 pub const TRANSFER_OBJECTS: &str = "--transfer-objects";
@@ -120,22 +122,8 @@ pub const PICK_GAS_BUDGET: &str = "--pick-gas-budget";
 pub const GAS_BUDGET: &str = "--gas-budget";
 pub const FILE: &str = "--file";
 pub const SUMMARY: &str = "--summary";
-
-pub const ALL_PUBLIC_COMMAND_TOKENS: &[&str] = &[
-    TRANSFER_OBJECTS,
-    SPLIT_COINS,
-    MERGE_COINS,
-    MAKE_MOVE_VEC,
-    MOVE_CALL,
-    PUBLISH,
-    UPGRADE,
-    ASSIGN,
-    PREVIEW,
-    WARN_SHADOWS,
-    PICK_GAS_BUDGET,
-    GAS_BUDGET,
-    SUMMARY,
-];
+pub const GAS: &str = "--gas-coin";
+pub const JSON: &str = "--json";
 
 impl PTBToken {
     pub fn is_command_token(&self) -> bool {
@@ -153,7 +141,9 @@ impl PTBToken {
             | PTBToken::CommandPickGasBudget
             | PTBToken::CommandGasBudget
             | PTBToken::CommandFile
-            | PTBToken::CommandSummary => true,
+            | PTBToken::CommandSummary
+            | PTBToken::CommandJson
+            | PTBToken::CommandGas => true,
             _ => false,
         }
     }
@@ -163,8 +153,6 @@ impl Display for PTBToken {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         let s = match *self {
             PTBToken::Whitespace => "[whitespace]",
-            PTBToken::Void => "[void]",
-            PTBToken::Eof=> "[eof]",
             PTBToken::Ident => "[ident]",
             PTBToken::Number => "[number]",
             PTBToken::NumberTyped => "[number_typed]",
@@ -197,17 +185,29 @@ impl Display for PTBToken {
             PTBToken::CommandGasBudget => GAS_BUDGET,
             PTBToken::CommandFile => FILE,
             PTBToken::CommandSummary => SUMMARY,
+            PTBToken::CommandJson => JSON,
+            PTBToken::CommandGas => GAS,
+            PTBToken::Comment => "#",
         };
         fmt::Display::fmt(s, formatter)
     }
 }
 
-impl parser::Token for PTBToken {
-    fn is_whitespace(&self) -> bool {
+impl PTBToken {
+    pub fn tokenize(mut s: &str) -> anyhow::Result<Vec<(Self, &str)>> {
+        let mut v = vec![];
+        while let Some((tok, n)) = Self::next_token(s)? {
+            v.push((tok, &s[..n]));
+            s = &s[n..];
+        }
+        Ok(v)
+    }
+
+    pub fn is_whitespace(&self) -> bool {
         matches!(self, Self::Whitespace)
     }
 
-    fn next_token(s: &str) -> anyhow::Result<Option<(Self, usize)>> {
+    pub fn next_token(s: &str) -> anyhow::Result<Option<(Self, usize)>> {
         fn number_maybe_with_suffix(text: &str, num_text_len: usize) -> (PTBToken, usize) {
             let rest = &text[num_text_len..];
             if rest.starts_with("u8") {
@@ -250,12 +250,19 @@ impl parser::Token for PTBToken {
             (GAS_BUDGET, Self::CommandGasBudget),
             (SUMMARY, Self::CommandSummary),
             (FILE, Self::CommandFile),
+            (JSON, Self::CommandJson),
+            (GAS, Self::CommandGas),
         ];
 
         // type arguments get delegated to a different parser
         if s.starts_with('<') {
             let len = extract_sub_parser_token_string(s, "<", ">")?;
             return Ok(Some((Self::TypeArgString, len)));
+        }
+
+        if s.starts_with('#') {
+            let len = extract_sub_parser_token_string(s, "#", "\n")?;
+            return Ok(Some((Self::Comment, len)));
         }
 
         for keyword in keywords {
@@ -468,4 +475,3 @@ mod tests {
         }
     }
 }
-

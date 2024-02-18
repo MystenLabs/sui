@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::ptb_builder::errors::{PTBError, Span};
+use super::ptb_builder::{
+    ast::{ParsedProgram, Program},
+    errors::{FileTable, PTBError},
+};
 use crate::client_ptb::{
     displays::Pretty,
-    ptb_builder::{
-        build_ptb::PTBBuilder, command::ParsedPTBCommand, errors::render_errors,
-        parse_ptb::PTBParser, parser::ProgramParser,
-    },
+    ptb_builder::{build_ptb::PTBBuilder, errors::render_errors, parser::ProgramParser},
 };
 
 use anyhow::{anyhow, Error};
@@ -26,7 +26,6 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::{wallet_context::WalletContext, SuiClient};
 use sui_types::{
-    base_types::ObjectID,
     digests::TransactionDigest,
     gas::GasCostSummary,
     quorum_driver_types::ExecuteTransactionRequestType,
@@ -66,8 +65,8 @@ pub enum PTBGas {
     Sum,
 }
 
-pub struct PTBPreview {
-    pub cmds: Vec<PTBCommand>,
+pub struct PTBPreview<'a> {
+    pub program: &'a Program,
 }
 
 #[derive(Serialize)]
@@ -146,14 +145,6 @@ impl PTB {
             }
         }
         Ok(())
-    }
-
-    pub fn preview(&self, commands: &[PTBCommand]) -> Option<PTBPreview> {
-        // Preview the PTB instead of executing if preview flag is set
-        let preview = commands.iter().any(|x| x.name == "preview");
-        preview.then_some(PTBPreview {
-            cmds: commands.to_owned(),
-        })
     }
 
     /// Resolve the passed file into the existing array of PTB commands (output)
@@ -240,12 +231,12 @@ impl PTB {
         Ok(())
     }
 
-    pub async fn parse_and_build_ptb(
+    pub async fn build_ptb(
         &self,
-        parsed: Vec<(Span, ParsedPTBCommand)>,
+        program: Program,
         context: &WalletContext,
         client: SuiClient,
-    ) -> Result<(ProgrammableTransaction, u64, bool), Vec<PTBError>> {
+    ) -> Result<(ProgrammableTransaction, u64), Vec<PTBError>> {
         let starting_addresses = context
             .config
             .keystore
@@ -253,13 +244,8 @@ impl PTB {
             .into_iter()
             .map(|(sa, alias)| (alias.alias.clone(), AccountAddress::from(*sa)))
             .collect();
-        let mut builder = PTBBuilder::new(starting_addresses, client.read_api());
-
-        for p in parsed.into_iter() {
-            builder.handle_command(p).await;
-        }
-
-        builder.finish()
+        let builder = PTBBuilder::new(starting_addresses, client.read_api());
+        builder.build(program).await
     }
 
     // This function is used to split the input string into arguments. We decide when we have a new
@@ -332,14 +318,12 @@ impl PTB {
 
     pub fn parse_ptb_commands(
         &self,
-        commands: Vec<PTBCommand>,
-    ) -> Result<Vec<(Span, ParsedPTBCommand)>, Vec<PTBError>> {
-        // Build the PTB
-        let mut parser = PTBParser::new();
-        for command in commands {
-            parser.parse_command(command);
-        }
-        parser.finish()
+        arg_string: String,
+        file_table: &mut FileTable,
+    ) -> Result<ParsedProgram, Vec<PTBError>> {
+        ProgramParser::new(arg_string, file_table)
+            .map_err(|e| vec![e])?
+            .parse()
     }
 
     /// Parses and executes the PTB with the sender as the current active address
@@ -348,43 +332,13 @@ impl PTB {
         args: Vec<String>,
         context: &mut WalletContext,
     ) -> Result<(), Error> {
-        // we handle these flags separately
-        let s = self.args.join(" ");
-        println!("{}", s);
-        let x = ProgramParser::new(s).unwrap().parse();
-        println!("{:#?}", x);
-        todo!();
-        let mut json = false;
-        let mut summary_flag = false;
-        let mut gas_coin = false;
-        for a in args.iter() {
-            if a.as_str() == "--json" {
-                json = true;
-            }
-            if a.as_str() == "--gas-coin" {
-                gas_coin = true;
-            }
-            if a.as_str() == "--summary" {
-                summary_flag = true;
-            }
-        }
-        let cwd =
-            std::env::current_dir().map_err(|_| anyhow!("Cannot get the working directory."))?;
-        let mut commands = Vec::new();
-        self.parse_args(cwd, args, &mut BTreeMap::new(), &mut commands)?;
-        let gas_coin = gas_coin
-            .then_some({
-                commands
-                    .iter()
-                    .find(|x| x.name == "gas")
-                    .and_then(|x| x.values.first())
-            })
-            .flatten();
-
-        let parsed_ptb_commands = match self.parse_ptb_commands(commands.clone()) {
+        let arg_string = args.join(" ");
+        let mut file_table = BTreeMap::new();
+        let (program, program_metadata) = match self.parse_ptb_commands(arg_string, &mut file_table)
+        {
             Err(errors) => {
                 let suffix = if errors.len() > 1 { "s" } else { "" };
-                let rendered = render_errors(commands, errors);
+                let rendered = render_errors(&file_table, errors);
                 eprintln!("Encountered error{suffix} when parsing PTB:");
                 for e in rendered.iter() {
                     eprintln!("{:?}", e);
@@ -394,21 +348,19 @@ impl PTB {
             Ok(parsed) => parsed,
         };
 
-        if let Some(ptb_preview) = self.preview(&commands) {
-            println!("{}", ptb_preview);
+        if program_metadata.preview_set {
+            let p = &program;
+            println!("{}", PTBPreview { program: &p });
             return Ok(());
         }
 
-        // We need to resolve object IDs, so we need a fullnode to access
         let client = context.get_client().await?;
-        let (ptb, budget, _preview) = match self
-            .parse_and_build_ptb(parsed_ptb_commands, context, client)
-            .await
-        {
+
+        let (ptb, budget) = match self.build_ptb(program, context, client).await {
             Err(errors) => {
                 let suffix = if errors.len() > 1 { "s" } else { "" };
                 eprintln!("Encountered error{suffix} when building PTB:");
-                let rendered = render_errors(commands, errors);
+                let rendered = render_errors(&file_table, errors);
                 for e in rendered.iter() {
                     eprintln!("{:?}", e);
                 }
@@ -424,13 +376,8 @@ impl PTB {
         };
 
         // find the gas coins if we have no gas coin given
-        let coins = if let Some(gas) = gas_coin {
-            if !gas.starts_with("@0x") {
-                return Err(anyhow!("Gas input error: to distinguish it from a hex value, please use @ in front of addresses or object IDs: @{gas}"));
-            }
-            context
-                .get_object_ref(ObjectID::from_hex_literal(&gas[1..])?)
-                .await?
+        let coins = if let Some(gas) = program_metadata.gas_object_id {
+            context.get_object_ref(gas.value).await?
         } else {
             context
                 .gas_for_owner_budget(sender, budget, BTreeSet::new())
@@ -438,6 +385,7 @@ impl PTB {
                 .1
                 .object_ref()
         };
+
         // get the gas price
         let gas_price = context
             .get_client()
@@ -488,8 +436,8 @@ impl PTB {
             }
         };
 
-        if json {
-            let json_string = if summary_flag {
+        if program_metadata.json_set {
+            let json_string = if program_metadata.summary_set {
                 serde_json::to_string_pretty(&serde_json::json!(summary))
                     .map_err(|_| anyhow!("Cannot serialize PTB result to json"))?
             } else {
@@ -497,7 +445,7 @@ impl PTB {
                     .map_err(|_| anyhow!("Cannot serialize PTB result to json"))?
             };
             println!("{}", json_string);
-        } else if summary_flag {
+        } else if program_metadata.summary_set {
             println!("{}", Pretty(&summary));
         } else {
             println!("{}", transaction_response);

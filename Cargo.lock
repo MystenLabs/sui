@@ -11554,6 +11554,7 @@ dependencies = [
  "insta",
  "jemalloc-ctl",
  "json_to_table",
+ "linked-hash-map",
  "miette",
  "move-binary-format",
  "move-command-line-common",

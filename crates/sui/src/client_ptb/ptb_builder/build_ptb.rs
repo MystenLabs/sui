@@ -6,9 +6,8 @@ use crate::{
     client_commands::{compile_package, upgrade_package},
     client_ptb::ptb_builder::{
         argument::Argument as PTBArg,
-        command::{GasPicker, ModuleAccess as PTBModuleAccess, ParsedPTBCommand},
-        command_token::{ASSIGN, GAS_BUDGET, PICK_GAS_BUDGET},
         errors::{span, PTBError, PTBResult, Span, Spanned},
+        token::{ASSIGN, GAS_BUDGET, PICK_GAS_BUDGET},
         utils::{display_did_you_mean, find_did_you_means, to_ordinal_contraction},
     },
     err, error, sp,
@@ -41,6 +40,8 @@ use sui_types::{
     transaction::{self as Tx, ObjectArg},
     Identifier, TypeTag, SUI_FRAMEWORK_PACKAGE_ID,
 };
+
+use super::ast::{GasPicker, ModuleAccess as PTBModuleAccess, ParsedPTBCommand, Program};
 
 /// The gas budget is a list of gas budgets that can be used to set the gas budget for a PTB along
 /// with a gas picker that can be used to pick the budget from the list if it is set in a PTB.
@@ -232,10 +233,6 @@ pub struct PTBBuilder<'a> {
     ptb: ProgrammableTransactionBuilder,
     /// The gas budget for the transaction. Built-up as we go, and then finalized at the end.
     gas_budget: GasBudget,
-    /// Flag to say if we encountered a preview command.
-    preview_set: bool,
-    /// Flag to say if we encountered a warn_shadows command.
-    warn_on_shadowing: bool,
     /// The list of errors that we have built up while processing commands. We do not report errors
     /// eagerly but instead wait until we have processed all commands to report any errors.
     errors: Vec<PTBError>,
@@ -318,8 +315,6 @@ impl<'a> PTBBuilder<'a> {
             last_command: None,
             gas_budget: GasBudget::new(),
             errors: Vec::new(),
-            preview_set: false,
-            warn_on_shadowing: false,
         }
     }
 
@@ -328,8 +323,11 @@ impl<'a> PTBBuilder<'a> {
     /// if the preview flag was set.
     /// If the warn_on_shadowing flag was set, then we will print warnings for any shadowed
     /// variables that we encountered during the building of the PTB.
-    pub fn finish(mut self) -> Result<(Tx::ProgrammableTransaction, u64, bool), Vec<PTBError>> {
-        if self.warn_on_shadowing {
+    pub fn finish(
+        mut self,
+        warn_on_shadowing: bool,
+    ) -> Result<(Tx::ProgrammableTransaction, u64), Vec<PTBError>> {
+        if warn_on_shadowing {
             for (ident, commands) in self.identifiers.iter() {
                 if commands.len() == 1 {
                     continue;
@@ -416,12 +414,22 @@ impl<'a> PTBBuilder<'a> {
         }
 
         let ptb = self.ptb.finish();
-        Ok((ptb, budget, self.preview_set))
+        Ok((ptb, budget))
+    }
+
+    pub async fn build(
+        mut self,
+        program: Program,
+    ) -> Result<(Tx::ProgrammableTransaction, u64), Vec<PTBError>> {
+        for command in program.commands.into_iter() {
+            self.handle_command(command).await;
+        }
+        self.finish(program.warn_shadows_set)
     }
 
     /// Add a single PTB command to the PTB that we are building up.
     /// Errors are added to the `errors` field of the PTBBuilder.
-    pub async fn handle_command(&mut self, (span, command): (Span, ParsedPTBCommand)) {
+    async fn handle_command(&mut self, sp!(span, command): Spanned<ParsedPTBCommand>) {
         if let Err(e) = self.handle_command_(span, command).await {
             self.errors.push(e);
         }
@@ -1085,12 +1093,8 @@ impl<'a> PTBBuilder<'a> {
                         })));
                 self.last_command = Some(res);
             }
-            ParsedPTBCommand::WarnShadows(arg) => {
-                self.warn_on_shadowing = arg.value == PTBArg::Bool(true);
-            }
-            ParsedPTBCommand::Preview(arg) => {
-                self.preview_set = arg.value == PTBArg::Bool(true);
-            }
+            ParsedPTBCommand::WarnShadows => {}
+            ParsedPTBCommand::Preview => {}
         }
         Ok(())
     }

@@ -5,7 +5,7 @@ mod gas_cost_summary;
 mod status;
 mod summary;
 
-use crate::client_ptb::ptb::{PTBGas, PTBPreview};
+use crate::{client_ptb::ptb::{PTBGas, PTBPreview}, sp};
 use std::fmt::{Display, Formatter};
 use tabled::{
     builder::Builder as TableBuilder,
@@ -14,24 +14,15 @@ use tabled::{
 
 pub struct Pretty<'a, T>(pub &'a T);
 
-impl Display for PTBPreview {
+impl<'a> Display for PTBPreview<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut builder = TableBuilder::default();
-        let columns = vec!["command", "from", "value(s)"];
+        let columns = vec!["command", "from"];
         builder.set_header(columns);
-        let mut from = vec!["console"];
-        for cmd in &self.cmds {
-            if cmd.name == "file-include-start" {
-                from.push(cmd.values.first().unwrap());
-                continue;
-            } else if cmd.name == "file-include-end" {
-                from.pop();
-                continue;
-            }
+        for sp!(loc, cmd) in &self.program.commands {
             builder.push_record([
-                cmd.name.to_string(),
-                from.iter().peekable().last().unwrap_or(&"").to_string(),
-                cmd.values.join(" ").to_string(),
+                cmd.to_string(),
+                loc.file_scope.name.to_string(),
             ]);
         }
         let mut table = builder.build();
