@@ -2,22 +2,13 @@
 source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
- === PREVIEW === 
-╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                                               │
-├───────────────┬──────────────────────────────────────────────────────────────┬────────────────────────────────────────────┤
-│ command       │ from                                                         │ value(s)                                   │
-├───────────────┼──────────────────────────────────────────────────────────────┼────────────────────────────────────────────┤
-│ gas_budget    │ tests/ptb_files/make_move_vec/resolve_array_inside_array.ptb │ 10000                                      │
-│ make_move_vec │ tests/ptb_files/make_move_vec/resolve_array_inside_array.ptb │ <vector<address>> [[@0x1], [@0x2], [@0x3]] │
-│ preview       │ console                                                      │ true                                       │
-╰───────────────┴──────────────────────────────────────────────────────────────┴────────────────────────────────────────────╯
  === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error at command 1 in PTB file 'tests/ptb_files/make_move_vec/
   │ resolve_array_inside_array.ptb'
-   ╭────
- 1 │ make_move_vec <vector<address>> [[@0x1], [@0x2], [@0x3]] 
-   ·                                  ┬
-   ·                                  ╰── unexpected token '['
+   ╭─[5:36]
+ 4 │ # This is caught statically since from the shape of it we know this is wrong.
+ 5 │ --make-move-vec <vector<address>> [[@0x1], [@0x2], [@0x3]]
+   ·                                    ┬
+   ·                                    ╰── unexpected token '['
    ╰────
 

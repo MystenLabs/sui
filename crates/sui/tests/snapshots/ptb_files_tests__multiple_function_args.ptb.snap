@@ -3,25 +3,27 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                                                                     │
-├────────────┬────────────────────────────────────────────────────┬───────────────────────────────────────────────────────────────────────────────┤
-│ command    │ from                                               │ value(s)                                                                      │
-├────────────┼────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┤
-│ move_call  │ tests/ptb_files/parsing/multiple_function_args.ptb │ std::option::is_none <u64> 'a (this is an unmatched paren in a string' 'b)' c │
-│ gas_budget │ tests/ptb_files/parsing/multiple_function_args.ptb │ 111111                                                                        │
-│ preview    │ console                                            │ true                                                                          │
-╰────────────┴────────────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────╯
- === PARSED INPUT COMMANDS === 
-cmd: MoveCall(Spanned { span: Span { start: 0, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/parsing/multiple_function_args.ptb", name_index: 0 } }, value: ModuleAccess { address: Spanned { span: Span { start: 0, end: 3, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/parsing/multiple_function_args.ptb", name_index: 0 } }, value: Named("std") }, module_name: Spanned { span: Span { start: 5, end: 11, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/parsing/multiple_function_args.ptb", name_index: 0 } }, value: Identifier("option") }, function_name: Spanned { span: Span { start: 13, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/parsing/multiple_function_args.ptb", name_index: 0 } }, value: Identifier("is_none") } } }, Some(Spanned { span: Span { start: 0, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/parsing/multiple_function_args.ptb", name_index: 0 } }, value: [U64] }), [Spanned { span: Span { start: 0, end: 43, arg_idx: 2, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/parsing/multiple_function_args.ptb", name_index: 0 } }, value: String("'a (this is an unmatched paren in a string'") }, Spanned { span: Span { start: 44, end: 48, arg_idx: 2, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/parsing/multiple_function_args.ptb", name_index: 0 } }, value: String("'b)'") }, Spanned { span: Span { start: 49, end: 50, arg_idx: 2, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/parsing/multiple_function_args.ptb", name_index: 0 } }, value: Identifier("c") }])
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 6, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/parsing/multiple_function_args.ptb", name_index: 0 } }, value: 111111 })
-cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                                                                   │
+├──────────────────────────────────────────────────────────────────────────────────────────┬────────────────────────────────────────────────────┤
+│ command                                                                                  │ from                                               │
+├──────────────────────────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────┤
+│ --move-call std::option::is_none<u64> "a (this is an unmatched paren in a string" "b)" c │ tests/ptb_files/parsing/multiple_function_args.ptb │
+│ --gas-budget 111111                                                                      │ tests/ptb_files/parsing/multiple_function_args.ptb │
+╰──────────────────────────────────────────────────────────────────────────────────────────┴────────────────────────────────────────────────────╯
+ === PROGRAM META === 
+preview: false
+summary: false
+gas_object: none
+json: false
  === BUILDING PTB ERRORS === 
   × Error at command 0 in PTB file 'tests/ptb_files/parsing/
   │ multiple_function_args.ptb'
-   ╭────
- 1 │ move_call std::option::is_none <u64> 'a (this is an unmatched paren in a string' 'b)' c 
-   ·                                      ─────────────────────────┬────────────────────────
-   ·                                                               ╰── Expected 1 arguments, but got 3
+   ╭─[2:40]
+ 1 │ # Should result in an error complaining that three arguments were found
+ 2 │ --move-call std::option::is_none <u64> 'a (this is an unmatched paren in a string' "b)" c
+   ·                                        ─────────────────────────┬────────────────────────
+   ·                                                                 ╰── Expected 1 argument, but got 3
+ 3 │ --gas-budget 111111
    ╰────
 

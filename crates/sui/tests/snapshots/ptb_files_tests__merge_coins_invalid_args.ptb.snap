@@ -2,34 +2,14 @@
 source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
- === PREVIEW === 
-╭─────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                 │
-├─────────────┬──────────────────────────────────────────────────────────┬────────────────────┤
-│ command     │ from                                                     │ value(s)           │
-├─────────────┼──────────────────────────────────────────────────────────┼────────────────────┤
-│ gas_budget  │ tests/ptb_files/merge_coins/merge_coins_invalid_args.ptb │ 1000000            │
-│ merge_coins │ tests/ptb_files/merge_coins/merge_coins_invalid_args.ptb │ @0x1               │
-│ merge_coins │ tests/ptb_files/merge_coins/merge_coins_invalid_args.ptb │ @0x1 true          │
-│ merge_coins │ tests/ptb_files/merge_coins/merge_coins_invalid_args.ptb │ @0x1 [true, false] │
-│ merge_coins │ tests/ptb_files/merge_coins/merge_coins_invalid_args.ptb │ true [@0x1]        │
-│ merge_coins │ tests/ptb_files/merge_coins/merge_coins_invalid_args.ptb │ gas []             │
-│ preview     │ console                                                  │ true               │
-╰─────────────┴──────────────────────────────────────────────────────────┴────────────────────╯
  === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error at command 1 in PTB file 'tests/ptb_files/merge_coins/
   │ merge_coins_invalid_args.ptb'
-   ╭────
- 1 │ merge_coins @0x1 
-   · ─────┬─────
-   ·      ╰── Invalid number of arguments: 'merge_coins' expected 2 arguments but got 1
-   ╰────
-
-  × Error at command 2 in PTB file 'tests/ptb_files/merge_coins/
-  │ merge_coins_invalid_args.ptb'
-   ╭────
- 1 │ merge_coins @0x1 true 
-   ·                  ──┬─
-   ·                    ╰── expected token '[', but got '[ident]'
+   ╭─[7:1]
+ 6 │ # Non-array argument for coins
+ 7 │ --merge-coins @0x1 true
+   · ──────┬──────
+   ·       ╰── expected token '[', but got '--merge-coins'
+ 8 │ 
    ╰────
 

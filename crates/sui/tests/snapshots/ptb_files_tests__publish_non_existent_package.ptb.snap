@@ -3,25 +3,26 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭─────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                             │
-├────────────┬──────────────────────────────────────────────────────────┬─────────────────┤
-│ command    │ from                                                     │ value(s)        │
-├────────────┼──────────────────────────────────────────────────────────┼─────────────────┤
-│ gas_budget │ tests/ptb_files/publish/publish_non_existent_package.ptb │ 1000            │
-│ publish    │ tests/ptb_files/publish/publish_non_existent_package.ptb │ not_a_valid_pkg │
-│ preview    │ console                                                  │ true            │
-╰────────────┴──────────────────────────────────────────────────────────┴─────────────────╯
- === PARSED INPUT COMMANDS === 
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/publish/publish_non_existent_package.ptb", name_index: 0 } }, value: 1000 })
-cmd: Publish(Spanned { span: Span { start: 0, end: 15, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/publish/publish_non_existent_package.ptb", name_index: 0 } }, value: "not_a_valid_pkg" })
-cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
+╭──────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                          │
+├───────────────────────────┬──────────────────────────────────────────────────────────┤
+│ command                   │ from                                                     │
+├───────────────────────────┼──────────────────────────────────────────────────────────┤
+│ --gas-budget 1000         │ tests/ptb_files/publish/publish_non_existent_package.ptb │
+│ --publish not_a_valid_pkg │ tests/ptb_files/publish/publish_non_existent_package.ptb │
+╰───────────────────────────┴──────────────────────────────────────────────────────────╯
+ === PROGRAM META === 
+preview: false
+summary: false
+gas_object: none
+json: false
  === BUILDING PTB ERRORS === 
   × Error at command 1 in PTB file 'tests/ptb_files/publish/
   │ publish_non_existent_package.ptb'
-   ╭────
- 1 │ publish not_a_valid_pkg 
-   ·         ───────┬───────
-   ·                ╰── No such file or directory (os error 2)
+   ╭─[3:11]
+ 2 │ # Point to a non-existent package
+ 3 │ --publish not_a_valid_pkg
+   ·           ───────┬───────
+   ·                  ╰── No such file or directory (os error 2)
    ╰────
 

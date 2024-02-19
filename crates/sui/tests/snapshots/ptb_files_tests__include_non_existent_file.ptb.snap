@@ -1,6 +1,13 @@
 ---
 source: crates/sui/tests/ptb_files_tests.rs
-expression: "format!(\"=== FILE EXPANSION ERROR === \\n {:?}\", e)"
+expression: "results.join(\"\\n\")"
 ---
-=== FILE EXPANSION ERROR === 
- tests/ptb_files/file/include_non_existent_file.ptb includes file nope which does not exist.
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error at command 0 in PTB file 'tests/ptb_files/file/
+  │ include_non_existent_file.ptb'
+   ╭────
+ 1 │ --file nope
+   ·        ──┬─
+   ·          ╰── Unable to read file '"tests/ptb_files/file/nope"'
+   ╰────
+

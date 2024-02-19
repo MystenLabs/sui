@@ -2,21 +2,12 @@
 source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
- === PREVIEW === 
-╭────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                            │
-├────────────┬────────────────────────────────────────────────┬──────────┤
-│ command    │ from                                           │ value(s) │
-├────────────┼────────────────────────────────────────────────┼──────────┤
-│ gas_budget │ tests/ptb_files/gas/non_integer_gas_budget.ptb │ @0x1     │
-│ preview    │ console                                        │ true     │
-╰────────────┴────────────────────────────────────────────────┴──────────╯
  === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error at command 0 in PTB file 'tests/ptb_files/gas/
   │ non_integer_gas_budget.ptb'
    ╭────
- 1 │ gas_budget @0x1 
-   ·             ─┬─
-   ·              ╰── Expected a u64 value
+ 1 │ --gas-budget @0x1
+   ·               ─┬─
+   ·                ╰── Expected a u64 value
    ╰────
 

@@ -3,18 +3,18 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭───────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                       │
-├────────────┬───────────────────────────────────────────┬──────────┤
-│ command    │ from                                      │ value(s) │
-├────────────┼───────────────────────────────────────────┼──────────┤
-│ publish    │ tests/ptb_files/publish/publish_valid.ptb │ test_pkg │
-│ gas_budget │ tests/ptb_files/publish/publish_valid.ptb │ 1000000  │
-│ preview    │ console                                   │ true     │
-╰────────────┴───────────────────────────────────────────┴──────────╯
- === PARSED INPUT COMMANDS === 
-cmd: Publish(Spanned { span: Span { start: 0, end: 8, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/publish/publish_valid.ptb", name_index: 0 } }, value: "test_pkg" })
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 7, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/publish/publish_valid.ptb", name_index: 0 } }, value: 1000000 })
-cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
+╭──────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                      │
+├──────────────────────┬───────────────────────────────────────────┤
+│ command              │ from                                      │
+├──────────────────────┼───────────────────────────────────────────┤
+│ --publish test_pkg   │ tests/ptb_files/publish/publish_valid.ptb │
+│ --gas-budget 1000000 │ tests/ptb_files/publish/publish_valid.ptb │
+╰──────────────────────┴───────────────────────────────────────────╯
+ === PROGRAM META === 
+preview: false
+summary: false
+gas_object: none
+json: false
  === BUILT PTB === 
 Command 0: Publish(_,)

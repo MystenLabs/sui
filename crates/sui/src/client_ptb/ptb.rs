@@ -232,7 +232,6 @@ impl PTB {
     }
 
     pub async fn build_ptb(
-        &self,
         program: Program,
         context: &WalletContext,
         client: SuiClient,
@@ -317,7 +316,6 @@ impl PTB {
     }
 
     pub fn parse_ptb_commands(
-        &self,
         arg_string: String,
         file_table: &mut FileTable,
     ) -> Result<ParsedProgram, Vec<PTBError>> {
@@ -334,7 +332,7 @@ impl PTB {
     ) -> Result<(), Error> {
         let arg_string = args.join(" ");
         let mut file_table = BTreeMap::new();
-        let (program, program_metadata) = match self.parse_ptb_commands(arg_string, &mut file_table)
+        let (program, program_metadata) = match Self::parse_ptb_commands(arg_string, &mut file_table)
         {
             Err(errors) => {
                 let suffix = if errors.len() > 1 { "s" } else { "" };
@@ -356,7 +354,7 @@ impl PTB {
 
         let client = context.get_client().await?;
 
-        let (ptb, budget) = match self.build_ptb(program, context, client).await {
+        let (ptb, budget) = match Self::build_ptb(program, context, client).await {
             Err(errors) => {
                 let suffix = if errors.len() > 1 { "s" } else { "" };
                 eprintln!("Encountered error{suffix} when building PTB:");

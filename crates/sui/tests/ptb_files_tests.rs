@@ -11,6 +11,8 @@ const TEST_DIR: &str = "tests";
 #[cfg(not(msim))]
 #[tokio::main]
 async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    use sui::client_ptb::ptb::PTBPreview;
+
     let _ = miette::set_hook(Box::new(|_| {
         Box::new(
             miette::MietteHandlerOpts::new()
@@ -21,40 +23,16 @@ async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     }));
 
     let fname = || path.file_name().unwrap().to_string_lossy().to_string();
-    let file = path.to_str().unwrap().to_string();
-    let args = vec!["--file".to_string(), file, "--preview".to_string()];
-    let cwd = std::env::current_dir().unwrap();
-    let mut commands = Vec::new();
-    let ptb = PTB { args: args.clone() };
-    ptb.parse_args(cwd, args, &mut BTreeMap::new(), &mut commands)?;
+    let command = format!("--file '{}'", path.to_string_lossy());
+    let mut file_table = BTreeMap::new();
 
-    // === PREVIEW ===
-    let ptb_preview = ptb.preview(&commands.clone());
-    let mut results = vec![];
-    let preview_string = if let Some(ptb_preview) = ptb_preview {
-        ptb_preview.to_string()
-    } else {
-        "".to_string()
-    };
-    results.push(" === PREVIEW === ".to_string());
-    results.push(preview_string);
-
-    // === PARSE COMMANDS ===
-    let parsed_ptb_commands = ptb.parse_ptb_commands(commands.clone());
-    match parsed_ptb_commands {
-        Ok(ref commands) => commands,
-        Err(e) => {
-            // insta::assert_display_snapshot!(
-            //     fname(),
-            //     format!("=== FILE EXPANSION ERROR === \n {:?}", e)
-            // );
-            return Ok(());
-        }
-    };
-    let parsed_ptb_commands = match parsed_ptb_commands {
-        Ok(parsed) => parsed,
+    // Parsing
+    let program = PTB::parse_ptb_commands(command, &mut file_table);
+    let (program, program_meta) = match program {
+        Ok(program) => program,
         Err(errors) => {
-            let rendered = render_errors(&commands, errors);
+            let rendered = render_errors(&file_table, errors);
+            let mut results = vec![];
             results.push(" === ERRORS AFTER PARSING INPUT COMMANDS === ".to_string());
             for e in rendered.iter() {
                 results.push(format!("{:?}", e));
@@ -64,19 +42,29 @@ async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    results.push(" === PARSED INPUT COMMANDS === ".to_string());
+    // Preview (This is based on the parsed commands).
+    let mut results = vec![];
+    results.push(" === PREVIEW === ".to_string());
+    results.push(format!("{}", PTBPreview { program: &program }));
 
-    for (_, c) in &parsed_ptb_commands {
-        results.push(format!("cmd: {:?}", c));
-    }
+    results.push(" === PROGRAM META === ".to_string());
+    results.push(format!(
+        "preview: {}\nsummary: {}\ngas_object: {}\njson: {}",
+        program_meta.preview_set,
+        program_meta.summary_set,
+        program_meta
+            .gas_object_id
+            .map(|x| x.value.to_string())
+            .unwrap_or("none".to_string()),
+        program_meta.json_set
+    ));
 
     // === BUILD PTB ===
     let test_cluster = TestClusterBuilder::new().build().await;
     let context = test_cluster.wallet;
     let client = context.get_client().await?;
 
-    let built_ptb = ptb
-        .parse_and_build_ptb(parsed_ptb_commands, &context, client)
+    let built_ptb = PTB::build_ptb(program, &context, client)
         .await;
 
     if let Ok(ref ptb) = built_ptb {
@@ -91,7 +79,7 @@ async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 
     // === BUILDING PTB ERRORS ===
     if let Err(e) = built_ptb {
-        let rendered = render_errors(&commands, e);
+        let rendered = render_errors(&file_table, e);
 
         results.push(" === BUILDING PTB ERRORS === ".to_string());
         for e in rendered.iter() {

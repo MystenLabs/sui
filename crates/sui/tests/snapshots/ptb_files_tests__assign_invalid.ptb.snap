@@ -2,89 +2,118 @@
 source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
- === PREVIEW === 
-╭────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                        │
-├────────────┬───────────────────────────────────────────┬───────────┤
-│ command    │ from                                      │ value(s)  │
-├────────────┼───────────────────────────────────────────┼───────────┤
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ a         │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ b 3       │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ c         │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ d         │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ a b c     │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ a b c e f │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ gas 1     │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ none 2    │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ a         │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ b 3       │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ c         │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ d         │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ a b c     │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ a b c e f │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ gas 1     │
-│ assign     │ tests/ptb_files/assign/assign_invalid.ptb │ none 2    │
-│ gas_budget │ tests/ptb_files/assign/assign_invalid.ptb │ 1         │
-│ preview    │ console                                   │ true      │
-╰────────────┴───────────────────────────────────────────┴───────────╯
  === ERRORS AFTER PARSING INPUT COMMANDS === 
-  × Error at command 4 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
-   ╭────
- 1 │ assign a b c 
-   · ───┬──
-   ·    ╰── Invalid number of arguments: 'assign' expected 1 to 2 arguments but got 3
-   ╰────
-
   × Error at command 5 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
-   ╭────
- 1 │ assign a b c e f 
-   · ───┬──
-   ·    ╰── Invalid number of arguments: 'assign' expected 1 to 2 arguments but got 5
-   ╰────
+    ╭─[9:14]
+  8 │ # Too many args
+  9 │ --assign a b c
+    ·              ┬
+    ·              ╰── Unexpected token '[ident]'
+ 10 │ --assign a b c e f
+    ╰────
 
   × Error at command 6 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
-   ╭────
- 1 │ assign gas 1 
-   ·        ─┬─
-   ·         ╰── Expected variable binding
-   ╰────
+    ╭─[10:14]
+  9 │ --assign a b c
+ 10 │ --assign a b c e f
+    ·              ┬
+    ·              ╰── Unexpected token '[ident]'
+ 11 │ 
+    ╰────
+
+  × Error at command 6 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
+    ╭─[10:16]
+  9 │ --assign a b c
+ 10 │ --assign a b c e f
+    ·                ┬
+    ·                ╰── Unexpected token '[ident]'
+ 11 │ 
+    ╰────
+
+  × Error at command 6 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
+    ╭─[10:18]
+  9 │ --assign a b c
+ 10 │ --assign a b c e f
+    ·                  ┬
+    ·                  ╰── Unexpected token '[ident]'
+ 11 │ 
+    ╰────
+
+  × Error at command 6 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
+    ╭─[16:1]
+ 15 │ # Keywords
+ 16 │ --assign gas 1
+    · ────┬───
+    ·     ╰── unexpected token '--assign'
+ 17 │ --assign none 2
+    ╰────
 
   × Error at command 7 in PTB file 'tests/ptb_files/assign/assign_invalid.ptb'
-   ╭────
- 1 │ assign none 2 
-   ·        ──┬─
-   ·          ╰── Expected variable binding
-   ╰────
-
-  × Error at command 12 in PTB file 'tests/ptb_files/assign/
-  │ assign_invalid.ptb'
-   ╭────
- 1 │ assign a b c 
-   · ───┬──
-   ·    ╰── Invalid number of arguments: 'assign' expected 1 to 2 arguments but got 3
-   ╰────
+    ╭─[17:10]
+ 16 │ --assign gas 1
+ 17 │ --assign none 2
+    ·          ──┬─
+    ·            ╰── Expected variable binding
+ 18 │ 
+    ╰────
 
   × Error at command 13 in PTB file 'tests/ptb_files/assign/
   │ assign_invalid.ptb'
-   ╭────
- 1 │ assign a b c e f 
-   · ───┬──
-   ·    ╰── Invalid number of arguments: 'assign' expected 1 to 2 arguments but got 5
-   ╰────
+    ╭─[29:14]
+ 28 │ # Too many args
+ 29 │ --assign a b c
+    ·              ┬
+    ·              ╰── Unexpected token '[ident]'
+ 30 │ --assign a b c e f
+    ╰────
 
   × Error at command 14 in PTB file 'tests/ptb_files/assign/
   │ assign_invalid.ptb'
-   ╭────
- 1 │ assign gas 1 
-   ·        ─┬─
-   ·         ╰── Expected variable binding
-   ╰────
+    ╭─[30:14]
+ 29 │ --assign a b c
+ 30 │ --assign a b c e f
+    ·              ┬
+    ·              ╰── Unexpected token '[ident]'
+ 31 │ 
+    ╰────
+
+  × Error at command 14 in PTB file 'tests/ptb_files/assign/
+  │ assign_invalid.ptb'
+    ╭─[30:16]
+ 29 │ --assign a b c
+ 30 │ --assign a b c e f
+    ·                ┬
+    ·                ╰── Unexpected token '[ident]'
+ 31 │ 
+    ╰────
+
+  × Error at command 14 in PTB file 'tests/ptb_files/assign/
+  │ assign_invalid.ptb'
+    ╭─[30:18]
+ 29 │ --assign a b c
+ 30 │ --assign a b c e f
+    ·                  ┬
+    ·                  ╰── Unexpected token '[ident]'
+ 31 │ 
+    ╰────
+
+  × Error at command 14 in PTB file 'tests/ptb_files/assign/
+  │ assign_invalid.ptb'
+    ╭─[33:10]
+ 32 │ # Keywords
+ 33 │ --assign gas 1
+    ·          ─┬─
+    ·           ╰── Expected variable binding
+ 34 │ --assign none 2
+    ╰────
 
   × Error at command 15 in PTB file 'tests/ptb_files/assign/
   │ assign_invalid.ptb'
-   ╭────
- 1 │ assign none 2 
-   ·        ──┬─
-   ·          ╰── Expected variable binding
-   ╰────
+    ╭─[34:10]
+ 33 │ --assign gas 1
+ 34 │ --assign none 2
+    ·          ──┬─
+    ·            ╰── Expected variable binding
+ 35 │ 
+    ╰────
 

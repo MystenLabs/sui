@@ -1,6 +1,13 @@
 ---
 source: crates/sui/tests/ptb_files_tests.rs
-expression: "format!(\"=== FILE EXPANSION ERROR === \\n {:?}\", e)"
+expression: "results.join(\"\\n\")"
 ---
-=== FILE EXPANSION ERROR === 
- tests/ptb_files/file/self_include_circular.ptb includes file "self_include_circular.ptb" which does not exist.
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error at command 0 in PTB file 'tests/ptb_files/file/
+  │ self_include_circular.ptb'
+   ╭────
+ 1 │ --file self_include_circular.ptb
+   ·        ────────────┬────────────
+   ·                    ╰── Cyclic file dependency found with 'tests/ptb_files/file/self_include_circular.ptb'
+   ╰────
+

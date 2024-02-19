@@ -3,41 +3,29 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭───────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                               │
-├───────────────┬─────────────────────────────────────────┬─────────────────┤
-│ command       │ from                                    │ value(s)        │
-├───────────────┼─────────────────────────────────────────┼─────────────────┤
-│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ a @0x0          │
-│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ b a             │
-│ make_move_vec │ tests/ptb_files/assign/assign_valid.ptb │ <address> [a,b] │
-│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ c               │
-│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ c0 c.0          │
-│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ c1 c.1          │
-│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ a @0x0          │
-│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ b a             │
-│ make_move_vec │ tests/ptb_files/assign/assign_valid.ptb │ <address> [a,b] │
-│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ c               │
-│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ c0 c.0          │
-│ assign        │ tests/ptb_files/assign/assign_valid.ptb │ c1 c.1          │
-│ gas_budget    │ tests/ptb_files/assign/assign_valid.ptb │ 1               │
-│ preview       │ console                                 │ true            │
-╰───────────────┴─────────────────────────────────────────┴─────────────────╯
- === PARSED INPUT COMMANDS === 
-cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "a" }, Some(Spanned { span: Span { start: 1, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: Address(0x0) }))
-cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "b" }, Some(Spanned { span: Span { start: 0, end: 1, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: Identifier("a") }))
-cmd: MakeMoveVec(Spanned { span: Span { start: 0, end: 9, arg_idx: 0, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: Address }, Spanned { span: Span { start: 0, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: [Spanned { span: Span { start: 1, end: 2, arg_idx: 1, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: Identifier("a") }, Spanned { span: Span { start: 3, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: Identifier("b") }] })
-cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "c" }, None)
-cmd: Assign(Spanned { span: Span { start: 0, end: 2, arg_idx: 0, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "c0" }, Some(Spanned { span: Span { start: 0, end: 3, arg_idx: 1, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: VariableAccess(Spanned { span: Span { start: 0, end: 1, arg_idx: 1, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "c" }, [Spanned { span: Span { start: 2, end: 3, arg_idx: 1, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "0" }]) }))
-cmd: Assign(Spanned { span: Span { start: 0, end: 2, arg_idx: 0, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "c1" }, Some(Spanned { span: Span { start: 0, end: 3, arg_idx: 1, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: VariableAccess(Spanned { span: Span { start: 0, end: 1, arg_idx: 1, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "c" }, [Spanned { span: Span { start: 2, end: 3, arg_idx: 1, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "1" }]) }))
-cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "a" }, Some(Spanned { span: Span { start: 1, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: Address(0x0) }))
-cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "b" }, Some(Spanned { span: Span { start: 0, end: 1, arg_idx: 1, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: Identifier("a") }))
-cmd: MakeMoveVec(Spanned { span: Span { start: 0, end: 9, arg_idx: 0, file_scope: FileScope { file_command_index: 8, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: Address }, Spanned { span: Span { start: 0, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 8, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: [Spanned { span: Span { start: 1, end: 2, arg_idx: 1, file_scope: FileScope { file_command_index: 8, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: Identifier("a") }, Spanned { span: Span { start: 3, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 8, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: Identifier("b") }] })
-cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 9, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "c" }, None)
-cmd: Assign(Spanned { span: Span { start: 0, end: 2, arg_idx: 0, file_scope: FileScope { file_command_index: 10, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "c0" }, Some(Spanned { span: Span { start: 0, end: 3, arg_idx: 1, file_scope: FileScope { file_command_index: 10, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: VariableAccess(Spanned { span: Span { start: 0, end: 1, arg_idx: 1, file_scope: FileScope { file_command_index: 10, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "c" }, [Spanned { span: Span { start: 2, end: 3, arg_idx: 1, file_scope: FileScope { file_command_index: 10, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "0" }]) }))
-cmd: Assign(Spanned { span: Span { start: 0, end: 2, arg_idx: 0, file_scope: FileScope { file_command_index: 11, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "c1" }, Some(Spanned { span: Span { start: 0, end: 3, arg_idx: 1, file_scope: FileScope { file_command_index: 11, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: VariableAccess(Spanned { span: Span { start: 0, end: 1, arg_idx: 1, file_scope: FileScope { file_command_index: 11, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "c" }, [Spanned { span: Span { start: 2, end: 3, arg_idx: 1, file_scope: FileScope { file_command_index: 11, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: "1" }]) }))
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 12, name: "tests/ptb_files/assign/assign_valid.ptb", name_index: 0 } }, value: 1 })
-cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
+╭──────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                              │
+├────────────────────────────────┬─────────────────────────────────────────┤
+│ command                        │ from                                    │
+├────────────────────────────────┼─────────────────────────────────────────┤
+│ --assign a @0x0                │ tests/ptb_files/assign/assign_valid.ptb │
+│ --assign b a                   │ tests/ptb_files/assign/assign_valid.ptb │
+│ --make-move-vec address [a, b] │ tests/ptb_files/assign/assign_valid.ptb │
+│ --assign c                     │ tests/ptb_files/assign/assign_valid.ptb │
+│ --assign c0 c.0                │ tests/ptb_files/assign/assign_valid.ptb │
+│ --assign c1 c.1                │ tests/ptb_files/assign/assign_valid.ptb │
+│ --assign b a                   │ tests/ptb_files/assign/assign_valid.ptb │
+│ --make-move-vec address [a, b] │ tests/ptb_files/assign/assign_valid.ptb │
+│ --assign c                     │ tests/ptb_files/assign/assign_valid.ptb │
+│ --assign c0 c.0                │ tests/ptb_files/assign/assign_valid.ptb │
+│ --assign c1 c.1                │ tests/ptb_files/assign/assign_valid.ptb │
+│ --gas-budget 1                 │ tests/ptb_files/assign/assign_valid.ptb │
+╰────────────────────────────────┴─────────────────────────────────────────╯
+ === PROGRAM META === 
+preview: false
+summary: false
+gas_object: none
+json: false
  === BUILT PTB === 
 Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 Command 0: MakeMoveVec(Someaddress,[Input(0),Input(0)])

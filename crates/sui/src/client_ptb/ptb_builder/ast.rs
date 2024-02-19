@@ -207,18 +207,19 @@ impl<'a> Display for TyDisplay<'a> {
                     ParsedAddress::Named(n) => n.to_string(),
                     ParsedAddress::Numerical(n) => n.to_string(),
                 };
-                write!(
-                    f,
-                    "{}::{}::{}<{}>",
-                    address,
-                    name,
-                    struct_name,
-                    type_args
-                        .iter()
-                        .map(|x| TyDisplay(x).to_string())
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                )
+                let ty_str = if type_args.is_empty() {
+                    "".to_string()
+                } else {
+                    format!(
+                        "<{}>",
+                        type_args
+                            .iter()
+                            .map(|x| TyDisplay(x).to_string())
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    )
+                };
+                write!(f, "{}::{}::{}{}", address, name, struct_name, ty_str)
             }
             U16 => write!(f, "u16"),
             U32 => write!(f, "u32"),
@@ -227,23 +228,3 @@ impl<'a> Display for TyDisplay<'a> {
         }
     }
 }
-
-// impl ToString for ParsedPTBCommand {
-//     fn to_string(&self) -> String {
-//         match self {
-//             ParsedPTBCommand::TransferObjects(arg, args) => format!({TRANS
-//                 "transfer_objects".to_string(),
-//             ParsedPTBCommand::SplitCoins(_, _) => "split_coins".to_string(),
-//             ParsedPTBCommand::MergeCoins(_, _) => "merge_coins".to_string(),
-//             ParsedPTBCommand::MakeMoveVec(_, _) => "make_move_vec".to_string(),
-//             ParsedPTBCommand::MoveCall(_, _, _) => "move_call".to_string(),
-//             ParsedPTBCommand::Assign(_, _) => "assign".to_string(),
-//             ParsedPTBCommand::Publish(_) => "publish".to_string(),
-//             ParsedPTBCommand::Upgrade(_, _) => "upgrade".to_string(),
-//             ParsedPTBCommand::WarnShadows(_) => "warn_shadows".to_string(),
-//             ParsedPTBCommand::Preview(_) => "preview".to_string(),
-//             ParsedPTBCommand::PickGasBudget(_) => "pick_gas_budget".to_string(),
-//             ParsedPTBCommand::GasBudget(_) => "gas_budget".to_string(),
-//         }
-//     }
-// }

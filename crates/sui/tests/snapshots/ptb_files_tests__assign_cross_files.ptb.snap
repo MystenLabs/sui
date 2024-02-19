@@ -3,31 +3,25 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                │
-├─────────────┬───────────────────────────────────────────────┬──────────────┤
-│ command     │ from                                          │ value(s)     │
-├─────────────┼───────────────────────────────────────────────┼──────────────┤
-│ assign      │ tests/ptb_files/assign/assign_cross_files.ptb │ x 10         │
-│ assign      │ tests/ptb_files/assign/assign_cross_files.ptb │ y 11         │
-│ split_coins │ for_testing_assigns.ptb.include_only          │ gas [x, y]   │
-│ assign      │ tests/ptb_files/assign/assign_cross_files.ptb │ coins        │
-│ assign      │ tests/ptb_files/assign/assign_cross_files.ptb │ c0 coins.0   │
-│ assign      │ tests/ptb_files/assign/assign_cross_files.ptb │ c1 coins.1   │
-│ merge_coins │ tests/ptb_files/assign/assign_cross_files.ptb │ gas [c0, c1] │
-│ gas_budget  │ tests/ptb_files/assign/assign_cross_files.ptb │ 10000000     │
-│ preview     │ console                                       │ true         │
-╰─────────────┴───────────────────────────────────────────────┴──────────────╯
- === PARSED INPUT COMMANDS === 
-cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: "x" }, Some(Spanned { span: Span { start: 0, end: 2, arg_idx: 1, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: U64(10) }))
-cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: "y" }, Some(Spanned { span: Span { start: 0, end: 2, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: U64(11) }))
-cmd: SplitCoins(Spanned { span: Span { start: 0, end: 3, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "for_testing_assigns.ptb.include_only", name_index: 0 } }, value: Gas }, Spanned { span: Span { start: 0, end: 6, arg_idx: 1, file_scope: FileScope { file_command_index: 0, name: "for_testing_assigns.ptb.include_only", name_index: 0 } }, value: [Spanned { span: Span { start: 1, end: 2, arg_idx: 1, file_scope: FileScope { file_command_index: 0, name: "for_testing_assigns.ptb.include_only", name_index: 0 } }, value: Identifier("x") }, Spanned { span: Span { start: 4, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 0, name: "for_testing_assigns.ptb.include_only", name_index: 0 } }, value: Identifier("y") }] })
-cmd: Assign(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: "coins" }, None)
-cmd: Assign(Spanned { span: Span { start: 0, end: 2, arg_idx: 0, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: "c0" }, Some(Spanned { span: Span { start: 0, end: 7, arg_idx: 1, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: VariableAccess(Spanned { span: Span { start: 0, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: "coins" }, [Spanned { span: Span { start: 6, end: 7, arg_idx: 1, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: "0" }]) }))
-cmd: Assign(Spanned { span: Span { start: 0, end: 2, arg_idx: 0, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: "c1" }, Some(Spanned { span: Span { start: 0, end: 7, arg_idx: 1, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: VariableAccess(Spanned { span: Span { start: 0, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: "coins" }, [Spanned { span: Span { start: 6, end: 7, arg_idx: 1, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: "1" }]) }))
-cmd: MergeCoins(Spanned { span: Span { start: 0, end: 3, arg_idx: 0, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: Gas }, Spanned { span: Span { start: 0, end: 8, arg_idx: 1, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: [Spanned { span: Span { start: 1, end: 3, arg_idx: 1, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: Identifier("c0") }, Spanned { span: Span { start: 5, end: 7, arg_idx: 1, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: Identifier("c1") }] })
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 8, arg_idx: 0, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/assign/assign_cross_files.ptb", name_index: 0 } }, value: 10000000 })
-cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
+╭──────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                              │
+├────────────────────────────┬─────────────────────────────────────────────────────────────┤
+│ command                    │ from                                                        │
+├────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ --assign x 10u64           │ tests/ptb_files/assign/assign_cross_files.ptb               │
+│ --assign y 11u64           │ tests/ptb_files/assign/assign_cross_files.ptb               │
+│ --split-coins gas [x, y]   │ tests/ptb_files/assign/for_testing_assigns.ptb.include_only │
+│ --assign coins             │ tests/ptb_files/assign/assign_cross_files.ptb               │
+│ --assign c0 coins.0        │ tests/ptb_files/assign/assign_cross_files.ptb               │
+│ --assign c1 coins.1        │ tests/ptb_files/assign/assign_cross_files.ptb               │
+│ --merge-coins gas [c0, c1] │ tests/ptb_files/assign/assign_cross_files.ptb               │
+│ --gas-budget 10000000      │ tests/ptb_files/assign/assign_cross_files.ptb               │
+╰────────────────────────────┴─────────────────────────────────────────────────────────────╯
+ === PROGRAM META === 
+preview: false
+summary: false
+gas_object: none
+json: false
  === BUILT PTB === 
 Input 0: Pure([10, 0, 0, 0, 0, 0, 0, 0])
 Input 1: Pure([11, 0, 0, 0, 0, 0, 0, 0])

@@ -3,36 +3,36 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭───────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                   │
-├────────────┬───────────────────────────────────────┬──────────┤
-│ command    │ from                                  │ value(s) │
-├────────────┼───────────────────────────────────────┼──────────┤
-│ gas_budget │ tests/ptb_files/gas/no_gas_picker.ptb │ 1000     │
-│ assign     │ tests/ptb_files/gas/no_gas_picker.ptb │ X 1000   │
-│ gas_budget │ valid_gas.ptb                         │ 110000   │
-│ preview    │ console                               │ true     │
-╰────────────┴───────────────────────────────────────┴──────────╯
- === PARSED INPUT COMMANDS === 
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/gas/no_gas_picker.ptb", name_index: 0 } }, value: 1000 })
-cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/gas/no_gas_picker.ptb", name_index: 0 } }, value: "X" }, Some(Spanned { span: Span { start: 0, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/gas/no_gas_picker.ptb", name_index: 0 } }, value: U64(1000) }))
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 6, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "valid_gas.ptb", name_index: 0 } }, value: 110000 })
-cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
+╭─────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                 │
+├─────────────────────┬───────────────────────────────────────┤
+│ command             │ from                                  │
+├─────────────────────┼───────────────────────────────────────┤
+│ --gas-budget 1000   │ tests/ptb_files/gas/no_gas_picker.ptb │
+│ --assign X 1000u64  │ tests/ptb_files/gas/no_gas_picker.ptb │
+│ --gas-budget 110000 │ tests/ptb_files/gas/valid_gas.ptb     │
+╰─────────────────────┴───────────────────────────────────────╯
+ === PROGRAM META === 
+preview: false
+summary: false
+gas_object: none
+json: false
  === BUILDING PTB ERRORS === 
   × Error at command 0 in PTB file 'tests/ptb_files/gas/no_gas_picker.ptb'
-   ╭────
- 1 │ gas_budget 1000 
-   ·            ──┬─
-   ·              ╰── Multiple gas budgets set for transaction with no gas picker. Gas budget is set for the first time here.
+   ╭─[1:14]
+ 1 │ --gas-budget 1000
+   ·              ──┬─
+   ·                ╰── Multiple gas budgets set for transaction with no gas picker. Gas budget is set for the first time here.
+ 2 │ --assign X 1000
    ╰────
   help: You should either remove all but one usage of setting the gas
-        budget, or use the 'pick_gas_budget' command to handle multiple
+        budget, or use the '--pick-gas-budget' command to handle multiple
         gas budgets
 
-  × Error at command 0 in PTB file 'valid_gas.ptb'
+  × Error at command 0 in PTB file 'tests/ptb_files/gas/valid_gas.ptb'
    ╭────
- 1 │ gas_budget 110000 
-   ·            ───┬──
-   ·               ╰── Gas budget is set for the 2nd time here.
+ 1 │ --gas-budget 110000
+   ·              ───┬──
+   ·                 ╰── Gas budget is set for the 2nd time here.
    ╰────
 

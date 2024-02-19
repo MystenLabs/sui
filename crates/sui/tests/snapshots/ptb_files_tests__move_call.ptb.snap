@@ -3,31 +3,25 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭───────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                               │
-├───────────────┬─────────────────────────────────────────┬─────────────────────────────────┤
-│ command       │ from                                    │ value(s)                        │
-├───────────────┼─────────────────────────────────────────┼─────────────────────────────────┤
-│ gas_budget    │ tests/ptb_files/move_call/move_call.ptb │ 1000                            │
-│ assign        │ tests/ptb_files/move_call/move_call.ptb │ a none                          │
-│ make_move_vec │ tests/ptb_files/move_call/move_call.ptb │ <0x1::option::Option<u64>> [a]  │
-│ move_call     │ tests/ptb_files/move_call/move_call.ptb │ 0x1::option::is_none <u64> a    │
-│ assign        │ tests/ptb_files/move_call/move_call.ptb │ a none                          │
-│ move_call     │ tests/ptb_files/move_call/move_call.ptb │ 0x1::option::is_none <u64> none │
-│ assign        │ tests/ptb_files/move_call/move_call.ptb │ a none                          │
-│ move_call     │ tests/ptb_files/move_call/move_call.ptb │ 0x1::option::is_none <u64> a    │
-│ preview       │ console                                 │ true                            │
-╰───────────────┴─────────────────────────────────────────┴─────────────────────────────────╯
- === PARSED INPUT COMMANDS === 
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: 1000 })
-cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: "a" }, Some(Spanned { span: Span { start: 0, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Option(Spanned { span: Span { start: 0, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: None }) }))
-cmd: MakeMoveVec(Spanned { span: Span { start: 0, end: 26, arg_idx: 0, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Struct(ParsedStructType { fq_name: ParsedFqName { module: ParsedModuleId { address: Numerical(0x1), name: "option" }, name: "Option" }, type_args: [U64] }) }, Spanned { span: Span { start: 0, end: 3, arg_idx: 1, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: [Spanned { span: Span { start: 1, end: 2, arg_idx: 1, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Identifier("a") }] })
-cmd: MoveCall(Spanned { span: Span { start: 0, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: ModuleAccess { address: Spanned { span: Span { start: 0, end: 3, arg_idx: 0, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Numerical(0x1) }, module_name: Spanned { span: Span { start: 5, end: 11, arg_idx: 0, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Identifier("option") }, function_name: Spanned { span: Span { start: 13, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Identifier("is_none") } } }, Some(Spanned { span: Span { start: 0, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: [U64] }), [Spanned { span: Span { start: 0, end: 1, arg_idx: 2, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Identifier("a") }])
-cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: "a" }, Some(Spanned { span: Span { start: 0, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Option(Spanned { span: Span { start: 0, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 4, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: None }) }))
-cmd: MoveCall(Spanned { span: Span { start: 0, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: ModuleAccess { address: Spanned { span: Span { start: 0, end: 3, arg_idx: 0, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Numerical(0x1) }, module_name: Spanned { span: Span { start: 5, end: 11, arg_idx: 0, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Identifier("option") }, function_name: Spanned { span: Span { start: 13, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Identifier("is_none") } } }, Some(Spanned { span: Span { start: 0, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: [U64] }), [Spanned { span: Span { start: 0, end: 4, arg_idx: 2, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Option(Spanned { span: Span { start: 0, end: 4, arg_idx: 2, file_scope: FileScope { file_command_index: 5, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: None }) }])
-cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: "a" }, Some(Spanned { span: Span { start: 0, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Option(Spanned { span: Span { start: 0, end: 4, arg_idx: 1, file_scope: FileScope { file_command_index: 6, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: None }) }))
-cmd: MoveCall(Spanned { span: Span { start: 0, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: ModuleAccess { address: Spanned { span: Span { start: 0, end: 3, arg_idx: 0, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Numerical(0x1) }, module_name: Spanned { span: Span { start: 5, end: 11, arg_idx: 0, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Identifier("option") }, function_name: Spanned { span: Span { start: 13, end: 20, arg_idx: 0, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Identifier("is_none") } } }, Some(Spanned { span: Span { start: 0, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: [U64] }), [Spanned { span: Span { start: 0, end: 1, arg_idx: 2, file_scope: FileScope { file_command_index: 7, name: "tests/ptb_files/move_call/move_call.ptb", name_index: 0 } }, value: Identifier("a") }])
-cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
+╭────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                            │
+├──────────────────────────────────────────────┬─────────────────────────────────────────┤
+│ command                                      │ from                                    │
+├──────────────────────────────────────────────┼─────────────────────────────────────────┤
+│ --gas-budget 1000                            │ tests/ptb_files/move_call/move_call.ptb │
+│ --assign a none                              │ tests/ptb_files/move_call/move_call.ptb │
+│ --make-move-vec 0x1::option::Option<u64> [a] │ tests/ptb_files/move_call/move_call.ptb │
+│ --move-call 0x1::option::is_none<u64> a      │ tests/ptb_files/move_call/move_call.ptb │
+│ --assign a none                              │ tests/ptb_files/move_call/move_call.ptb │
+│ --move-call 0x1::option::is_none<u64> none   │ tests/ptb_files/move_call/move_call.ptb │
+│ --assign a none                              │ tests/ptb_files/move_call/move_call.ptb │
+│ --move-call 0x1::option::is_none<u64> a      │ tests/ptb_files/move_call/move_call.ptb │
+╰──────────────────────────────────────────────┴─────────────────────────────────────────╯
+ === PROGRAM META === 
+preview: false
+summary: false
+gas_object: none
+json: false
  === BUILT PTB === 
 Input 0: Pure([0])
 Command 0: MakeMoveVec(Some0x1::option::Option<u64>,[Input(0)])

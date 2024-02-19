@@ -2,42 +2,24 @@
 source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
- === PREVIEW === 
-╭───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                               │
-├──────────────────┬───────────────────────────────────────────────────────────────┬────────────────────────┤
-│ command          │ from                                                          │ value(s)               │
-├──────────────────┼───────────────────────────────────────────────────────────────┼────────────────────────┤
-│ transfer_objects │ tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb │ @0x1                   │
-│ transfer_objects │ tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb │ @0x1 [@0x1, @0x2] @0x2 │
-│ split_coins      │ tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb │ gas [1,2,3]            │
-│ assign           │ tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb │ s                      │
-│ transfer_objects │ tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb │ @0x1 s                 │
-│ gas_budget       │ tests/ptb_files/transfer_objects/transfer_objects_invalid.ptb │ 100                    │
-│ preview          │ console                                                       │ true                   │
-╰──────────────────┴───────────────────────────────────────────────────────────────┴────────────────────────╯
  === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error at command 0 in PTB file 'tests/ptb_files/transfer_objects/
   │ transfer_objects_invalid.ptb'
-   ╭────
- 1 │ transfer_objects @0x1 
-   · ────────┬───────
-   ·         ╰── Invalid number of arguments: 'transfer_objects' expected 2 arguments but got 1
+   ╭─[5:1]
+ 4 │ # Too many arguments
+ 5 │ --transfer-objects @0x1 [@0x1, @0x2] @0x2
+   · ─────────┬────────
+   ·          ╰── expected token '[', but got '--transfer-objects'
+ 6 │ 
    ╰────
 
-  × Error at command 1 in PTB file 'tests/ptb_files/transfer_objects/
+  × Error at command 3 in PTB file 'tests/ptb_files/transfer_objects/
   │ transfer_objects_invalid.ptb'
-   ╭────
- 1 │ transfer_objects @0x1 [@0x1, @0x2] @0x2 
-   · ────────┬───────
-   ·         ╰── Invalid number of arguments: 'transfer_objects' expected 2 arguments but got 3
-   ╰────
-
-  × Error at command 4 in PTB file 'tests/ptb_files/transfer_objects/
-  │ transfer_objects_invalid.ptb'
-   ╭────
- 1 │ transfer_objects @0x1 s 
-   ·                       ┬
-   ·                       ╰── expected token '[', but got '[ident]'
-   ╰────
+    ╭─[10:25]
+  9 │ --assign s
+ 10 │ --transfer-objects @0x1 s
+    ·                         ┬
+    ·                         ╰── expected token '[', but got '[ident]'
+ 11 │ 
+    ╰────
 

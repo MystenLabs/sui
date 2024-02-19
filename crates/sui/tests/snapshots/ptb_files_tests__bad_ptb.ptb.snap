@@ -2,56 +2,48 @@
 source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
- === PREVIEW === 
-╭────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                        │
-├──────────────────┬─────────────────────────────┬───────────────────────────────────┤
-│ command          │ from                        │ value(s)                          │
-├──────────────────┼─────────────────────────────┼───────────────────────────────────┤
-│ gas_budget       │ tests/ptb_files/bad_ptb.ptb │ @aa                               │
-│ split_coins      │ tests/ptb_files/bad_ptb.ptb │ @0x1 [0xfffffffffu8]              │
-│ split_coins      │ tests/ptb_files/bad_ptb.ptb │ 2x2 [1000]                        │
-│ assign           │ tests/ptb_files/bad_ptb.ptb │ X                                 │
-│ assign           │ tests/ptb_files/bad_ptb.ptb │ Y                                 │
-│ make_move_vec    │ tests/ptb_files/bad_ptb.ptb │ <vector<address>> [[@0x1],[@0x2]] │
-│ transfer_objects │ tests/ptb_files/bad_ptb.ptb │ @0x1 s                            │
-│ assign           │ tests/ptb_files/bad_ptb.ptb │ Z none                            │
-│ move_call        │ tests/ptb_files/bad_ptb.ptb │ 0x1::option::is_no <u64> Z        │
-│ preview          │ console                     │ true                              │
-╰──────────────────┴─────────────────────────────┴───────────────────────────────────╯
  === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error at command 0 in PTB file 'tests/ptb_files/bad_ptb.ptb'
-   ╭────
- 1 │ gas_budget @aa 
-   ·            ─┬─
-   ·             ╰── Expected a numerical address at this position but got a named address aa
+   ╭─[1:14]
+ 1 │ --gas-budget @aa
+   ·              ─┬─
+   ·               ╰── Expected a numerical address at this position but got a named address aa
+ 2 │ --split-coins @0x1 [0xfffffffffu8]
    ╰────
 
   × Error at command 1 in PTB file 'tests/ptb_files/bad_ptb.ptb'
-   ╭────
- 1 │ split_coins @0x1 [0xfffffffffu8] 
-   ·                   ──────┬──────
-   ·                         ╰── number too large to fit in target type
+   ╭─[2:21]
+ 1 │ --gas-budget @aa
+ 2 │ --split-coins @0x1 [0xfffffffffu8]
+   ·                     ──────┬──────
+   ·                           ╰── number too large to fit in target type
+ 3 │ --split-coins 2x2 [1000]
    ╰────
 
   × Error at command 2 in PTB file 'tests/ptb_files/bad_ptb.ptb'
-   ╭────
- 1 │ split_coins 2x2 [1000] 
-   ·              ─┬
-   ·               ╰── Unexpected token '[ident]'
+   ╭─[3:16]
+ 2 │ --split-coins @0x1 [0xfffffffffu8]
+ 3 │ --split-coins 2x2 [1000]
+   ·                ─┬
+   ·                 ╰── expected token '[', but got '[ident]'
+ 4 │ --assign X
    ╰────
 
   × Error at command 5 in PTB file 'tests/ptb_files/bad_ptb.ptb'
-   ╭────
- 1 │ make_move_vec <vector<address>> [[@0x1],[@0x2]] 
-   ·                                  ┬
-   ·                                  ╰── unexpected token '['
+   ╭─[6:36]
+ 5 │ --assign Y
+ 6 │ --make-move-vec <vector<address>> [[@0x1],[@0x2]]
+   ·                                    ┬
+   ·                                    ╰── unexpected token '['
+ 7 │ --transfer-objects @0x1 s
    ╰────
 
   × Error at command 6 in PTB file 'tests/ptb_files/bad_ptb.ptb'
-   ╭────
- 1 │ transfer_objects @0x1 s 
-   ·                       ┬
-   ·                       ╰── expected token '[', but got '[ident]'
+   ╭─[7:25]
+ 6 │ --make-move-vec <vector<address>> [[@0x1],[@0x2]]
+ 7 │ --transfer-objects @0x1 s
+   ·                         ┬
+   ·                         ╰── expected token '[', but got '[ident]'
+ 8 │ --assign Z none
    ╰────
 

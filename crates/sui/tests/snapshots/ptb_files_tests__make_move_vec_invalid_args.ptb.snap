@@ -2,67 +2,53 @@
 source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
- === PREVIEW === 
-╭───────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                   │
-├───────────────┬──────────────────────────────────────────────────────────────┬────────────────┤
-│ command       │ from                                                         │ value(s)       │
-├───────────────┼──────────────────────────────────────────────────────────────┼────────────────┤
-│ gas_budget    │ tests/ptb_files/make_move_vec/make_move_vec_invalid_args.ptb │ 10000000       │
-│ make_move_vec │ tests/ptb_files/make_move_vec/make_move_vec_invalid_args.ptb │ [100]          │
-│ make_move_vec │ tests/ptb_files/make_move_vec/make_move_vec_invalid_args.ptb │ <> [100]       │
-│ make_move_vec │ tests/ptb_files/make_move_vec/make_move_vec_invalid_args.ptb │ <u64>          │
-│ make_move_vec │ tests/ptb_files/make_move_vec/make_move_vec_invalid_args.ptb │ <u64, bool> [] │
-│ make_move_vec │ tests/ptb_files/make_move_vec/make_move_vec_invalid_args.ptb │ u64 []         │
-│ make_move_vec │ tests/ptb_files/make_move_vec/make_move_vec_invalid_args.ptb │ <u64> 10       │
-│ preview       │ console                                                      │ true           │
-╰───────────────┴──────────────────────────────────────────────────────────────┴────────────────╯
  === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error at command 1 in PTB file 'tests/ptb_files/make_move_vec/
   │ make_move_vec_invalid_args.ptb'
-   ╭────
- 1 │ make_move_vec [100] 
-   · ──────┬──────
-   ·       ╰── Invalid number of arguments: 'make_move_vec' expected 2 arguments but got 1
+   ╭─[4:17]
+ 3 │ # No type args
+ 4 │ --make-move-vec [100]
+   ·                 ┬
+   ·                 ╰── expected token '<...>', but got '['
+ 5 │ 
    ╰────
 
   × Error at command 2 in PTB file 'tests/ptb_files/make_move_vec/
   │ make_move_vec_invalid_args.ptb'
-   ╭────
- 1 │ make_move_vec <> [100] 
-   ·               ─┬
-   ·                ╰── Expected a single type argument
+   ╭─[7:17]
+ 6 │ # Include the type arg delimiters but no type args inside
+ 7 │ --make-move-vec <> [100]
+   ·                 ─┬
+   ·                  ╰── Expected a single type argument
+ 8 │ 
    ╰────
 
   × Error at command 3 in PTB file 'tests/ptb_files/make_move_vec/
   │ make_move_vec_invalid_args.ptb'
-   ╭────
- 1 │ make_move_vec <u64> 
-   · ──────┬──────
-   ·       ╰── Invalid number of arguments: 'make_move_vec' expected 2 arguments but got 1
-   ╰────
+    ╭─[13:1]
+ 12 │ # Too many type args
+ 13 │ --make-move-vec <u64, bool> []
+    · ───────┬───────
+    ·        ╰── expected token '[', but got '--make-move-vec'
+ 14 │ 
+    ╰────
 
   × Error at command 4 in PTB file 'tests/ptb_files/make_move_vec/
   │ make_move_vec_invalid_args.ptb'
-   ╭────
- 1 │ make_move_vec <u64, bool> [] 
-   ·               ─────┬─────
-   ·                    ╰── Expected a single type argument
-   ╰────
+    ╭─[16:17]
+ 15 │ # Invalid type args
+ 16 │ --make-move-vec u64 []
+    ·                 ─┬─
+    ·                  ╰── expected token '<...>', but got '[ident]'
+ 17 │ 
+    ╰────
 
   × Error at command 5 in PTB file 'tests/ptb_files/make_move_vec/
   │ make_move_vec_invalid_args.ptb'
-   ╭────
- 1 │ make_move_vec u64 [] 
-   ·               ─┬─
-   ·                ╰── expected token '<...>', but got '[ident]'
-   ╰────
-
-  × Error at command 6 in PTB file 'tests/ptb_files/make_move_vec/
-  │ make_move_vec_invalid_args.ptb'
-   ╭────
- 1 │ make_move_vec <u64> 10 
-   ·                     ─┬
-   ·                      ╰── expected token '[', but got '[number]'
-   ╰────
+    ╭─[19:23]
+ 18 │ # Invalid array
+ 19 │ --make-move-vec <u64> 10
+    ·                       ─┬
+    ·                        ╰── expected token '[', but got '[number]'
+    ╰────
 

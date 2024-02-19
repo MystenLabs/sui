@@ -2,24 +2,13 @@
 source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
- === PREVIEW === 
-╭───────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                       │
-├──────────────────┬────────────────────────────────────────────────┬───────────────┤
-│ command          │ from                                           │ value(s)      │
-├──────────────────┼────────────────────────────────────────────────┼───────────────┤
-│ gas_budget       │ tests/ptb_files/comments/ptb_with_comments.ptb │ 100000        │
-│ split_coins      │ tests/ptb_files/comments/ptb_with_comments.ptb │ @0x005 [1000] │
-│ assign           │ tests/ptb_files/comments/ptb_with_comments.ptb │ result        │
-│ transfer_objects │ tests/ptb_files/comments/ptb_with_comments.ptb │ @0x006 result │
-│ preview          │ console                                        │ true          │
-╰──────────────────┴────────────────────────────────────────────────┴───────────────╯
  === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error at command 3 in PTB file 'tests/ptb_files/comments/
   │ ptb_with_comments.ptb'
-   ╭────
- 1 │ transfer_objects @0x006 result 
-   ·                         ───┬──
-   ·                            ╰── expected token '[', but got '[ident]'
+   ╭─[9:27]
+ 8 │ # Now transfer the resulted coin
+ 9 │ --transfer-objects @0x006 result
+   ·                           ───┬──
+   ·                              ╰── expected token '[', but got '[ident]'
    ╰────
 

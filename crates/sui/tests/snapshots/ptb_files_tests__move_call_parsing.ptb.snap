@@ -2,22 +2,10 @@
 source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
- === PREVIEW === 
-╭───────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                   │
-├────────────┬─────────────────────────────────────────────────┬────────────────┤
-│ command    │ from                                            │ value(s)       │
-├────────────┼─────────────────────────────────────────────────┼────────────────┤
-│ gas_budget │ tests/ptb_files/move_call/move_call_parsing.ptb │ 1000           │
-│ move_call  │ tests/ptb_files/move_call/move_call_parsing.ptb │ invalid_access │
-│ preview    │ console                                         │ true           │
-╰────────────┴─────────────────────────────────────────────────┴────────────────╯
  === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error at command 1 in PTB file 'tests/ptb_files/move_call/
   │ move_call_parsing.ptb'
    ╭────
- 1 │ move_call invalid_access 
-   ·                         ▲
-   ·                         ╰── unexpected end of tokens
+ 3 │ --move-call invalid_access
    ╰────
 

@@ -3,23 +3,21 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                                              │
-├───────────────┬───────────────────────────────────────────────────────────────────────────────┬──────────────────────────┤
-│ command       │ from                                                                          │ value(s)                 │
-├───────────────┼───────────────────────────────────────────────────────────────────────────────┼──────────────────────────┤
-│ gas_budget    │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │ 1000000000               │
-│ make_move_vec │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │ <address> [@0x1]         │
-│ assign        │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │ a                        │
-│ make_move_vec │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │ <vector<address>> [a, a] │
-│ preview       │ console                                                                       │ true                     │
-╰───────────────┴───────────────────────────────────────────────────────────────────────────────┴──────────────────────────╯
- === PARSED INPUT COMMANDS === 
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 10, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: 1000000000 })
-cmd: MakeMoveVec(Spanned { span: Span { start: 0, end: 9, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: Address }, Spanned { span: Span { start: 0, end: 6, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: [Spanned { span: Span { start: 2, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: Address(0x1) }] })
-cmd: Assign(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: "a" }, None)
-cmd: MakeMoveVec(Spanned { span: Span { start: 0, end: 17, arg_idx: 0, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: Vector(Address) }, Spanned { span: Span { start: 0, end: 6, arg_idx: 1, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: [Spanned { span: Span { start: 1, end: 2, arg_idx: 1, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: Identifier("a") }, Spanned { span: Span { start: 4, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 3, name: "tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb", name_index: 0 } }, value: Identifier("a") }] })
-cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                                            │
+├────────────────────────────────────────┬───────────────────────────────────────────────────────────────────────────────┤
+│ command                                │ from                                                                          │
+├────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┤
+│ --gas-budget 1000000000                │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │
+│ --make-move-vec address [@0x1]         │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │
+│ --assign a                             │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │
+│ --make-move-vec vector<address> [a, a] │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │
+╰────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────╯
+ === PROGRAM META === 
+preview: false
+summary: false
+gas_object: none
+json: false
  === BUILT PTB === 
 Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
 Command 0: MakeMoveVec(Someaddress,[Input(0)])

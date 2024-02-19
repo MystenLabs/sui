@@ -3,21 +3,20 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                                    │
-├───────────────┬─────────────────────────────────────────────────────────┬──────────────────────────────────────┤
-│ command       │ from                                                    │ value(s)                             │
-├───────────────┼─────────────────────────────────────────────────────────┼──────────────────────────────────────┤
-│ gas_budget    │ tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb │ 10000                                │
-│ make_move_vec │ tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb │ <vector<address>> [@0x1, @0x2, @0x3] │
-│ make_move_vec │ tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb │ <address> [true, false]              │
-│ preview       │ console                                                 │ true                                 │
-╰───────────────┴─────────────────────────────────────────────────────────┴──────────────────────────────────────╯
- === PARSED INPUT COMMANDS === 
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 5, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb", name_index: 0 } }, value: 10000 })
-cmd: MakeMoveVec(Spanned { span: Span { start: 0, end: 17, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb", name_index: 0 } }, value: Vector(Address) }, Spanned { span: Span { start: 0, end: 18, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb", name_index: 0 } }, value: [Spanned { span: Span { start: 2, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb", name_index: 0 } }, value: Address(0x1) }, Spanned { span: Span { start: 8, end: 11, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb", name_index: 0 } }, value: Address(0x2) }, Spanned { span: Span { start: 14, end: 17, arg_idx: 1, file_scope: FileScope { file_command_index: 1, name: "tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb", name_index: 0 } }, value: Address(0x3) }] })
-cmd: MakeMoveVec(Spanned { span: Span { start: 0, end: 9, arg_idx: 0, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb", name_index: 0 } }, value: Address }, Spanned { span: Span { start: 0, end: 13, arg_idx: 1, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb", name_index: 0 } }, value: [Spanned { span: Span { start: 1, end: 5, arg_idx: 1, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb", name_index: 0 } }, value: Bool(true) }, Spanned { span: Span { start: 7, end: 12, arg_idx: 1, file_scope: FileScope { file_command_index: 2, name: "tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb", name_index: 0 } }, value: Bool(false) }] })
-cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                                                  │
+├────────────────────────────────────────────────────┬─────────────────────────────────────────────────────────┤
+│ command                                            │ from                                                    │
+├────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────┤
+│ --gas-budget 10000                                 │ tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb │
+│ --make-move-vec vector<address> [@0x1, @0x2, @0x3] │ tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb │
+│ --make-move-vec address [true, false]              │ tests/ptb_files/make_move_vec/make_move_vec_invalid.ptb │
+╰────────────────────────────────────────────────────┴─────────────────────────────────────────────────────────╯
+ === PROGRAM META === 
+preview: false
+summary: false
+gas_object: none
+json: false
  === BUILT PTB === 
 Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
 Input 1: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2])

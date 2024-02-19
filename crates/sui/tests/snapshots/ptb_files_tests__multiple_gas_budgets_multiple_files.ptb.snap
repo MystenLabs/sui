@@ -3,54 +3,53 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭──────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                          │
-├────────────┬──────────────────────────────────────────────────────────────┬──────────┤
-│ command    │ from                                                         │ value(s) │
-├────────────┼──────────────────────────────────────────────────────────────┼──────────┤
-│ gas_budget │ tests/ptb_files/file/multiple_gas_budgets_multiple_files.ptb │ 1        │
-│ gas_budget │ a.ptb.include_only                                           │ 2        │
-│ gas_budget │ b.ptb.include_only                                           │ 2        │
-│ gas_budget │ a.ptb.include_only                                           │ 2        │
-│ preview    │ console                                                      │ true     │
-╰────────────┴──────────────────────────────────────────────────────────────┴──────────╯
- === PARSED INPUT COMMANDS === 
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "tests/ptb_files/file/multiple_gas_budgets_multiple_files.ptb", name_index: 0 } }, value: 1 })
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "a.ptb.include_only", name_index: 0 } }, value: 2 })
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "b.ptb.include_only", name_index: 0 } }, value: 2 })
-cmd: GasBudget(Spanned { span: Span { start: 0, end: 1, arg_idx: 0, file_scope: FileScope { file_command_index: 0, name: "a.ptb.include_only", name_index: 1 } }, value: 2 })
-cmd: Preview(Spanned { span: Span { start: 0, end: 4, arg_idx: 0, file_scope: FileScope { file_command_index: 1, name: "console", name_index: 0 } }, value: Bool(true) })
+╭───────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                   │
+├────────────────┬──────────────────────────────────────────────────────────────┤
+│ command        │ from                                                         │
+├────────────────┼──────────────────────────────────────────────────────────────┤
+│ --gas-budget 1 │ tests/ptb_files/file/multiple_gas_budgets_multiple_files.ptb │
+│ --gas-budget 2 │ tests/ptb_files/file/a.ptb.include_only                      │
+│ --gas-budget 2 │ tests/ptb_files/file/b.ptb.include_only                      │
+│ --gas-budget 2 │ tests/ptb_files/file/a.ptb.include_only                      │
+╰────────────────┴──────────────────────────────────────────────────────────────╯
+ === PROGRAM META === 
+preview: false
+summary: false
+gas_object: none
+json: false
  === BUILDING PTB ERRORS === 
   × Error at command 0 in PTB file 'tests/ptb_files/file/
   │ multiple_gas_budgets_multiple_files.ptb'
-   ╭────
- 1 │ gas_budget 1 
-   ·            ┬
-   ·            ╰── Multiple gas budgets set for transaction with no gas picker. Gas budget is set for the first time here.
+   ╭─[1:14]
+ 1 │ --gas-budget 1
+   ·              ┬
+   ·              ╰── Multiple gas budgets set for transaction with no gas picker. Gas budget is set for the first time here.
+ 2 │ --file a.ptb.include_only
    ╰────
   help: You should either remove all but one usage of setting the gas
-        budget, or use the 'pick_gas_budget' command to handle multiple
+        budget, or use the '--pick-gas-budget' command to handle multiple
         gas budgets
 
-  × Error at command 0 in PTB file 'a.ptb.include_only'
+  × Error at command 0 in PTB file 'tests/ptb_files/file/a.ptb.include_only'
    ╭────
- 1 │ gas_budget 2 
-   ·            ┬
-   ·            ╰── Gas budget is set for the 2nd time here.
+ 1 │ --gas-budget 2
+   ·              ┬
+   ·              ╰── Gas budget is set for the 2nd time here.
    ╰────
 
-  × Error at command 0 in PTB file 'b.ptb.include_only'
+  × Error at command 0 in PTB file 'tests/ptb_files/file/b.ptb.include_only'
    ╭────
- 1 │ gas_budget 2 
-   ·            ┬
-   ·            ╰── Gas budget is set for the 3rd time here.
+ 1 │ --gas-budget 2
+   ·              ┬
+   ·              ╰── Gas budget is set for the 3rd time here.
    ╰────
 
-  × Error at command 0 in PTB file 'a.ptb.include_only' (2nd usage of the
-  │ file)
+  × Error at command 0 in PTB file 'tests/ptb_files/file/
+  │ a.ptb.include_only' (2nd usage of the file)
    ╭────
- 1 │ gas_budget 2 
-   ·            ┬
-   ·            ╰── Gas budget is set for the 4th time here.
+ 1 │ --gas-budget 2
+   ·              ┬
+   ·              ╰── Gas budget is set for the 4th time here.
    ╰────
 

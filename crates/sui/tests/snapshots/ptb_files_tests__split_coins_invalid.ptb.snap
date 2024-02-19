@@ -2,39 +2,23 @@
 source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
- === PREVIEW === 
-╭───────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                   │
-├─────────────┬─────────────────────────────────────────────────────┬───────────┤
-│ command     │ from                                                │ value(s)  │
-├─────────────┼─────────────────────────────────────────────────────┼───────────┤
-│ split_coins │ tests/ptb_files/split_coins/split_coins_invalid.ptb │ 1         │
-│ split_coins │ tests/ptb_files/split_coins/split_coins_invalid.ptb │ gas [0] 5 │
-│ split_coins │ tests/ptb_files/split_coins/split_coins_invalid.ptb │ [1] gas   │
-│ preview     │ console                                             │ true      │
-╰─────────────┴─────────────────────────────────────────────────────┴───────────╯
  === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error at command 0 in PTB file 'tests/ptb_files/split_coins/
   │ split_coins_invalid.ptb'
-   ╭────
- 1 │ split_coins 1 
-   · ─────┬─────
-   ·      ╰── Invalid number of arguments: 'split_coins' expected 2 arguments but got 1
+   ╭─[5:1]
+ 4 │ # Too many arguments
+ 5 │ --split-coins gas [0] 5
+   · ──────┬──────
+   ·       ╰── expected token '[', but got '--split-coins'
+ 6 │ 
    ╰────
 
   × Error at command 1 in PTB file 'tests/ptb_files/split_coins/
   │ split_coins_invalid.ptb'
-   ╭────
- 1 │ split_coins gas [0] 5 
-   · ─────┬─────
-   ·      ╰── Invalid number of arguments: 'split_coins' expected 2 arguments but got 3
-   ╰────
-
-  × Error at command 2 in PTB file 'tests/ptb_files/split_coins/
-  │ split_coins_invalid.ptb'
-   ╭────
- 1 │ split_coins [1] gas 
-   ·             ┬
-   ·             ╰── unexpected token '['
+   ╭─[8:15]
+ 7 │ # Non-array for splits (e.g., reversed args)
+ 8 │ --split-coins [1] gas
+   ·               ┬
+   ·               ╰── unexpected token '['
    ╰────
 
