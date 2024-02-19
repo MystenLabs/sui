@@ -10,14 +10,13 @@ module bridge::committee {
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set;
-    use bridge::crypto;
     use sui_system::sui_system;
     use sui_system::sui_system::SuiSystemState;
 
-    use bridge::message::{Self, BridgeMessage, Blocklist};
+    use bridge::crypto;
+    use bridge::message::{Self, Blocklist, BridgeMessage};
     use bridge::message_types;
-    #[test_only]
-    use bridge::chain_ids;
+
     #[test_only]
     use sui::hex;
     #[test_only]
@@ -26,10 +25,11 @@ module bridge::committee {
     use sui::test_utils;
     #[test_only]
     use sui::test_utils::assert_eq;
-
     #[test_only]
-    use sui_system::governance_test_utils::{create_sui_system_state_for_testing, create_validator_for_testing,
-        advance_epoch_with_reward_amounts
+    use bridge::chain_ids;
+    #[test_only]
+    use sui_system::governance_test_utils::{advance_epoch_with_reward_amounts, create_sui_system_state_for_testing,
+        create_validator_for_testing
     };
 
     friend bridge::bridge;
@@ -51,12 +51,12 @@ module bridge::committee {
     struct BridgeCommittee has store {
         // commitee pub key and weight
         members: VecMap<vector<u8>, CommitteeMember>,
-        // min stake threshold for each message type
-        stake_thresholds_percentage: VecMap<u8, u8>,
+        // min stake threshold for each message type, values are voting power (percentage), 2DP
+        stake_thresholds_percentage: VecMap<u8, u64>,
         // Committee member registrations for the next committee creation.
         member_registration: VecMap<address, CommitteeMemberRegistration>,
-        total_member_stake: u64,
-        update_epoch: u64
+        // Epoch when the current committee was updated
+        committee_update_epoch: u64
     }
 
     struct CommitteeMember has drop, store {
@@ -64,8 +64,8 @@ module bridge::committee {
         sui_address: address,
         /// The public key bytes of the bridge key
         bridge_pubkey_bytes: vector<u8>,
-        /// Voting power (stake amount)
-        stake_amount: u64,
+        /// Voting power percentage, 2DP
+        voting_power: u64,
         /// The HTTP REST URL the member's node listens to
         /// it looks like b'https://127.0.0.1:9191'
         http_rest_url: vector<u8>,
@@ -87,17 +87,16 @@ module bridge::committee {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         // Default signature threshold
         let thresholds = vec_map::empty();
-        vec_map::insert(&mut thresholds, message_types::token(), 50);
-        vec_map::insert(&mut thresholds, message_types::committee_blocklist(), 50);
-        vec_map::insert(&mut thresholds, message_types::emergency_op(), 50);
-        vec_map::insert(&mut thresholds, message_types::update_asset_price(), 50);
-        vec_map::insert(&mut thresholds, message_types::update_bridge_limit(), 50);
+        vec_map::insert(&mut thresholds, message_types::token(), 5000);
+        vec_map::insert(&mut thresholds, message_types::committee_blocklist(), 5000);
+        vec_map::insert(&mut thresholds, message_types::emergency_op(), 5000);
+        vec_map::insert(&mut thresholds, message_types::update_asset_price(), 5000);
+        vec_map::insert(&mut thresholds, message_types::update_bridge_limit(), 5000);
         BridgeCommittee {
             members: vec_map::empty(),
             stake_thresholds_percentage: thresholds,
             member_registration: vec_map::empty(),
-            total_member_stake: 0,
-            update_epoch: 0,
+            committee_update_epoch: 0,
         }
     }
 
@@ -108,11 +107,10 @@ module bridge::committee {
     ) {
         let (i, signature_counts) = (0, vector::length(&signatures));
         let seen_pub_key = vec_set::empty<vector<u8>>();
-        let required_stake_percentage = (*vec_map::get(
+        let required_voting_power = *vec_map::get(
             &self.stake_thresholds_percentage,
             &message::message_type(&message)
-        ) as u64);
-        let required_stake = required_stake_percentage * self.total_member_stake / 100;
+        ) ;
 
         // add prefix to the message bytes
         let message_bytes = SUI_MESSAGE_PREFIX;
@@ -129,12 +127,12 @@ module bridge::committee {
             // get committee signature weight and check pubkey is part of the committee
             let member = vec_map::get(&self.members, &pubkey);
             if (!member.blocklisted) {
-                threshold = threshold + member.stake_amount;
+                threshold = threshold + member.voting_power;
             };
             i = i + 1;
             vec_set::insert(&mut seen_pub_key, pubkey);
         };
-        assert!(threshold >= required_stake, ESignatureBelowThreshold);
+        assert!(threshold >= required_voting_power, ESignatureBelowThreshold);
     }
 
     public(friend) fun register(
@@ -173,10 +171,13 @@ module bridge::committee {
         self: &mut BridgeCommittee,
         system_state: &mut SuiSystemState,
         min_stake_participation_percentage: u8,
+        ctx: &TxContext
     ) {
         let validators = sui_system::active_validator_addresses(system_state);
         let total_member_stake = 0;
         let i = 0;
+
+        let total_stake_amount = (sui_system::total_stake_amount(system_state) as u128);
 
         let new_members = vec_map::empty();
 
@@ -188,11 +189,12 @@ module bridge::committee {
             // Process registration if it's active validator
             if (vector::contains(&validators, &registration.sui_address)) {
                 let stake_amount = sui_system::validator_stake_amount(system_state, registration.sui_address);
+                let voting_power = ((stake_amount as u128) * 10000) / total_stake_amount;
                 total_member_stake = total_member_stake + stake_amount;
                 let member = CommitteeMember {
                     sui_address: registration.sui_address,
                     bridge_pubkey_bytes: registration.bridge_pubkey_bytes,
-                    stake_amount,
+                    voting_power: (voting_power as u64),
                     http_rest_url: registration.http_rest_url,
                     blocklisted: false,
                 };
@@ -208,10 +210,11 @@ module bridge::committee {
 
         // Store new committee info
         if (stake_participation_percentage >= min_stake_participation_percentage) {
-            self.total_member_stake = total_member_stake;
             // Clear registrations
             self.member_registration = vec_map::empty();
-            self.members = new_members
+            self.members = new_members;
+            self.committee_update_epoch = tx_context::epoch(ctx);
+            // TODO: emit committee update event?
         }
     }
 
@@ -274,13 +277,7 @@ module bridge::committee {
         );
 
         // Clean up
-        let BridgeCommittee {
-            members: _,
-            stake_thresholds_percentage: _,
-            member_registration: _,
-            total_member_stake: _,
-            update_epoch: _
-        } = committee;
+        test_utils::destroy(committee)
     }
 
     #[test]
@@ -355,12 +352,11 @@ module bridge::committee {
 
         // Check committee before creation
         assert!(vec_map::is_empty(&committee.members), 0);
-        assert_eq(0, committee.total_member_stake);
 
-        try_create_next_committee(&mut committee, &mut system_state, 60);
+        let ctx = test_scenario::ctx(&mut scenario);
+        try_create_next_committee(&mut committee, &mut system_state, 60, ctx);
 
         assert_eq(2, vec_map::size(&committee.members));
-        assert_eq(100 * 2 * 1_000_000_000, committee.total_member_stake);
 
         test_utils::destroy(committee);
         test_scenario::return_shared(system_state);
@@ -413,13 +409,12 @@ module bridge::committee {
 
         // Check committee before creation
         assert!(vec_map::is_empty(&committee.members), 0);
-        assert_eq(0, committee.total_member_stake);
 
-        try_create_next_committee(&mut committee, &mut system_state, 60);
+        let ctx = test_scenario::ctx(&mut scenario);
+        try_create_next_committee(&mut committee, &mut system_state, 60, ctx);
 
         // committee should be empty because registration did not reach min stake threshold.
         assert!(vec_map::is_empty(&committee.members), 0);
-        assert_eq(0, committee.total_member_stake);
 
         test_utils::destroy(committee);
         test_scenario::return_shared(system_state);
@@ -565,7 +560,7 @@ module bridge::committee {
         vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
             sui_address: @validator1,
             bridge_pubkey_bytes,
-            stake_amount: 100,
+            voting_power: 5000,
             http_rest_url: b"https://127.0.0.1:9191",
             blocklisted: false
         });
@@ -574,20 +569,19 @@ module bridge::committee {
         vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
             sui_address: @validator2,
             bridge_pubkey_bytes,
-            stake_amount: 100,
+            voting_power: 5000,
             http_rest_url: b"https://127.0.0.1:9192",
             blocklisted: false
         });
 
-        let thresholds = vec_map::empty<u8, u8>();
-        vec_map::insert(&mut thresholds, message_types::token(), 60);
+        let thresholds = vec_map::empty();
+        vec_map::insert(&mut thresholds, message_types::token(), 6000);
 
         let committee = BridgeCommittee {
             members,
             stake_thresholds_percentage: thresholds,
             member_registration: vec_map::empty(),
-            total_member_stake: 200,
-            update_epoch: 1
+            committee_update_epoch: 1
         };
         committee
     }
