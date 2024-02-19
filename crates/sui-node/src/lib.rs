@@ -947,10 +947,11 @@ impl SuiNode {
             .config(config.p2p_config.clone())
             .build();
 
-        let (randomness, randomness_router) = randomness::Builder::new(randomness_tx)
-            .config(config.p2p_config.randomness.clone().unwrap_or_default())
-            .with_metrics(prometheus_registry)
-            .build();
+        let (randomness, randomness_router) =
+            randomness::Builder::new(config.protocol_public_key(), randomness_tx)
+                .config(config.p2p_config.randomness.clone().unwrap_or_default())
+                .with_metrics(prometheus_registry)
+                .build();
 
         let p2p_network = {
             let routes = anemo::Router::new()

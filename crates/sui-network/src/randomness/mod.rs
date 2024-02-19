@@ -128,6 +128,7 @@ enum RandomnessMessage {
 }
 
 struct RandomnessEventLoop {
+    name: AuthorityName,
     mailbox: mpsc::Receiver<RandomnessMessage>,
     network: anemo::Network,
     allowed_peers: AllowedPeersUpdatable,
@@ -184,9 +185,11 @@ impl RandomnessEventLoop {
                 }
             }
             RandomnessMessage::SendPartialSignatures(epoch, round) => {
-                self.send_partial_signatures(epoch, round)
+                self.send_partial_signatures(epoch, round).await
             }
-            RandomnessMessage::CompleteRound(epoch, round) => self.complete_round(epoch, round),
+            RandomnessMessage::CompleteRound(epoch, round) => {
+                self.complete_round(epoch, round).await
+            }
             RandomnessMessage::ReceivePartialSignatures(peer_id, epoch, round, sigs) => {
                 self.receive_partial_signatures(peer_id, epoch, round, sigs)
                     .await
@@ -240,7 +243,7 @@ impl RandomnessEventLoop {
             .split_off(&(new_epoch, RandomnessRound(0)));
 
         // Start any pending tasks for the new epoch.
-        self.maybe_start_pending_tasks();
+        self.maybe_start_pending_tasks().await;
 
         // Aggregate any sigs received early from the new epoch.
         // (We can't call `maybe_aggregate_partial_signatures` directly while iterating,
@@ -265,7 +268,7 @@ impl RandomnessEventLoop {
     }
 
     #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
-    fn send_partial_signatures(&mut self, epoch: EpochId, round: RandomnessRound) {
+    async fn send_partial_signatures(&mut self, epoch: EpochId, round: RandomnessRound) {
         if epoch < self.epoch {
             info!(
                 "skipping sending partial sigs, we are already up to epoch {}",
@@ -281,17 +284,17 @@ impl RandomnessEventLoop {
         self.pending_tasks.insert((epoch, round));
         self.round_request_time
             .insert((epoch, round), time::Instant::now());
-        self.maybe_start_pending_tasks();
+        self.maybe_start_pending_tasks().await;
     }
 
     #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
-    fn complete_round(&mut self, epoch: EpochId, round: RandomnessRound) {
+    async fn complete_round(&mut self, epoch: EpochId, round: RandomnessRound) {
         debug!("completing randomness generation");
         self.pending_tasks.remove(&(epoch, round));
         self.round_request_time.remove(&(epoch, round));
         if let Some(task) = self.send_tasks.remove(&(epoch, round)) {
             task.abort();
-            self.maybe_start_pending_tasks();
+            self.maybe_start_pending_tasks().await;
         } else {
             self.update_rounds_pending_metric();
         }
@@ -387,6 +390,11 @@ impl RandomnessEventLoop {
 
     #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
     async fn maybe_aggregate_partial_signatures(&mut self, epoch: EpochId, round: RandomnessRound) {
+        if self.completed_sigs.contains(&(epoch, round)) {
+            error!("BUG: called maybe_aggregate_partial_signatures for already-completed round");
+            return;
+        }
+
         let vss_pk = {
             let Some(dkg_output) = &self.dkg_output else {
                 debug!("called maybe_aggregate_partial_signatures before DKG completed");
@@ -491,7 +499,7 @@ impl RandomnessEventLoop {
             .expect("randomness_tx should never be closed");
     }
 
-    fn maybe_start_pending_tasks(&mut self) {
+    async fn maybe_start_pending_tasks(&mut self) {
         let dkg_output = if let Some(dkg_output) = &self.dkg_output {
             dkg_output
         } else {
@@ -504,6 +512,7 @@ impl RandomnessEventLoop {
         };
 
         let mut last_handled_key = None;
+        let mut rounds_to_aggregate = Vec::new();
         for (epoch, round) in &self.pending_tasks {
             if epoch > &self.epoch {
                 break; // wait for DKG in new epoch
@@ -525,6 +534,7 @@ impl RandomnessEventLoop {
             }
 
             self.send_tasks.entry((*epoch, *round)).or_insert_with(|| {
+                let name = self.name.clone();
                 let network = self.network.clone();
                 let metrics = self.metrics.clone();
                 let authority_info = self.authority_info.clone();
@@ -534,8 +544,17 @@ impl RandomnessEventLoop {
                     shares.iter(),
                     &round.signature_message(),
                 );
+
+                // Record own partial sigs.
+                // TODO-DNS test this behavior
+                // TODO-DNS is a completed_sigs check necessary here?
+                self.received_partial_sigs
+                    .insert((epoch, round, self.network.peer_id()), sigs.clone());
+                rounds_to_aggregate.push((epoch, round));
+
                 debug!("sending partial sigs for epoch {epoch}, round {round}");
                 spawn_monitored_task!(RandomnessEventLoop::send_partial_signatures_task(
+                    name,
                     network,
                     metrics,
                     authority_info,
@@ -561,9 +580,16 @@ impl RandomnessEventLoop {
             }
         }
         self.update_rounds_pending_metric();
+
+        // After starting a round we have generated our own partial sigs, check if that's
+        // enough for us to aggregate already.
+        for (epoch, round) in rounds_to_aggregate {
+            self.maybe_aggregate_partial_signatures(epoch, round).await;
+        }
     }
 
     async fn send_partial_signatures_task(
+        name: AuthorityName,
         network: anemo::Network,
         metrics: Metrics,
         authority_info: Arc<HashMap<AuthorityName, (PeerId, PartyId)>>,
@@ -585,10 +611,11 @@ impl RandomnessEventLoop {
             .collect();
 
         loop {
-            // TODO-DNS figure out errors about peers not being found-probably due to
-            // failed send-to-self?
             let mut requests = FuturesUnordered::new();
-            for (name, peer) in &peers {
+            for (peer_name, peer) in &peers {
+                if name == **peer_name {
+                    continue; // don't send partial sigs to self
+                }
                 let mut client = RandomnessClient::new(peer.clone());
                 const SEND_PARTIAL_SIGNATURES_TIMEOUT: Duration = Duration::from_secs(10);
                 let request = anemo::Request::new(SendPartialSignaturesRequest {
@@ -600,7 +627,7 @@ impl RandomnessEventLoop {
                 requests.push(async move {
                     let result = client.send_partial_signatures(request).await;
                     if let Err(e) = result {
-                        debug!("failed to send partial signatures to {name}: {e:?}");
+                        debug!("failed to send partial signatures to {peer_name}: {e:?}");
                     }
                 });
             }

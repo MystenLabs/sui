@@ -13,19 +13,24 @@ use super::{
 use anemo::codegen::InboundRequestLayer;
 use anemo_tower::{auth::RequireAuthorizationLayer, inflight_limit};
 use sui_config::p2p::RandomnessConfig;
-use sui_types::{committee::EpochId, crypto::RandomnessRound};
+use sui_types::{base_types::AuthorityName, committee::EpochId, crypto::RandomnessRound};
 use tokio::sync::mpsc;
 
 /// Randomness Service Builder.
 pub struct Builder {
+    name: AuthorityName,
     config: Option<RandomnessConfig>,
     metrics: Option<Metrics>,
     randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
 }
 
 impl Builder {
-    pub fn new(randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>) -> Self {
+    pub fn new(
+        name: AuthorityName,
+        randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
+    ) -> Self {
         Self {
+            name,
             config: None,
             metrics: None,
             randomness_tx,
@@ -44,6 +49,7 @@ impl Builder {
 
     pub fn build(self) -> (UnstartedRandomness, anemo::Router) {
         let Builder {
+            name,
             config,
             metrics,
             randomness_tx,
@@ -72,6 +78,7 @@ impl Builder {
 
         (
             UnstartedRandomness {
+                name,
                 handle,
                 mailbox,
                 allowed_peers,
@@ -85,6 +92,7 @@ impl Builder {
 
 /// Handle to an unstarted randomness network system
 pub struct UnstartedRandomness {
+    pub(super) name: AuthorityName,
     pub(super) handle: Handle,
     pub(super) mailbox: mpsc::Receiver<RandomnessMessage>,
     pub(super) allowed_peers: AllowedPeersUpdatable,
@@ -95,6 +103,7 @@ pub struct UnstartedRandomness {
 impl UnstartedRandomness {
     pub(super) fn build(self, network: anemo::Network) -> (RandomnessEventLoop, Handle) {
         let Self {
+            name,
             handle,
             mailbox,
             allowed_peers,
@@ -103,6 +112,7 @@ impl UnstartedRandomness {
         } = self;
         (
             RandomnessEventLoop {
+                name,
                 mailbox,
                 network,
                 allowed_peers,
