@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use prometheus::default_registry;
 use rand::{rngs::StdRng, SeedableRng};
 use std::{
     collections::BTreeMap,
@@ -76,7 +77,13 @@ struct Scenario {
 impl Scenario {
     async fn new(do_after: Option<(u32, ActionCb)>, action_count: Arc<AtomicU32>) -> Self {
         let store = init_authority_store().await;
-        let cache = Arc::new(WritebackCache::new_with_no_metrics(store.clone()));
+        static METRICS: once_cell::sync::Lazy<Arc<ExecutionCacheMetrics>> =
+            once_cell::sync::Lazy::new(|| Arc::new(ExecutionCacheMetrics::new(default_registry())));
+
+        let cache = Arc::new(WritebackCache::new_with_metrics(
+            store.clone(),
+            (*METRICS).clone(),
+        ));
         Self {
             store,
             cache,
@@ -363,7 +370,10 @@ impl Scenario {
     }
 
     fn reset_cache(&mut self) {
-        self.cache = Arc::new(WritebackCache::new_with_no_metrics(self.store.clone()));
+        self.cache = Arc::new(WritebackCache::new_with_metrics(
+            self.store.clone(),
+            self.cache.metrics.clone(),
+        ));
 
         // reset the scenario state to match the db
         let reverse_id_map: BTreeMap<_, _> = self.id_map.iter().map(|(k, v)| (*v, *k)).collect();
@@ -791,7 +801,7 @@ async fn test_concurrent_readers() {
     });
 
     let store = init_authority_store().await;
-    let cache = Arc::new(WritebackCache::new_with_no_metrics(store.clone()));
+    let cache = Arc::new(WritebackCache::new(store.clone(), default_registry()));
 
     let mut s = Scenario::new_with_store_and_cache(store.clone(), cache.clone());
     let mut txns = Vec::new();

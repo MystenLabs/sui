@@ -62,15 +62,6 @@ impl PassthroughCache {
         }
     }
 
-    pub fn new_with_no_metrics(store: Arc<AuthorityStore>) -> Self {
-        Self {
-            store,
-            metrics: None,
-            package_cache: PackageObjectCache::new(),
-            executed_effects_digests_notify_read: NotifyRead::new(),
-        }
-    }
-
     pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper<Self> {
         NotifyReadWrapper(self)
     }

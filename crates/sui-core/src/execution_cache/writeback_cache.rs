@@ -252,7 +252,7 @@ pub struct WritebackCache {
 
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
     store: Arc<AuthorityStore>,
-    metrics: Option<ExecutionCacheMetrics>,
+    metrics: Arc<ExecutionCacheMetrics>,
 }
 
 macro_rules! check_cache_entry_by_version {
@@ -287,14 +287,16 @@ macro_rules! check_cache_entry_by_latest {
 
 impl WritebackCache {
     pub fn new(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
-        Self::new_impl(store, Some(ExecutionCacheMetrics::new(registry)))
+        Self::new_with_metrics(store, ExecutionCacheMetrics::new(registry).into())
     }
 
-    pub fn new_with_no_metrics(store: Arc<AuthorityStore>) -> Self {
-        Self::new_impl(store, None)
+    #[cfg(test)]
+    pub fn reset_for_test(&mut self) {
+        let mut new = Self::new_with_metrics(self.store.clone(), self.metrics.clone());
+        std::mem::swap(self, &mut new);
     }
 
-    fn new_impl(store: Arc<AuthorityStore>, metrics: Option<ExecutionCacheMetrics>) -> Self {
+    fn new_with_metrics(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
         let packages = MokaCache::builder()
             .max_capacity(10000)
             .initial_capacity(10000)
@@ -1130,11 +1132,9 @@ impl ExecutionCacheWrite for WritebackCache {
             self.executed_effects_digests_notify_read
                 .notify(&tx_digest, &effects_digest);
 
-            if let Some(metrics) = &self.metrics {
-                metrics
-                    .pending_notify_read
-                    .set(self.executed_effects_digests_notify_read.num_pending() as i64);
-            }
+            self.metrics
+                .pending_notify_read
+                .set(self.executed_effects_digests_notify_read.num_pending() as i64);
 
             Ok(())
         }
