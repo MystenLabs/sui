@@ -16,7 +16,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::client_ptb::ptb::PTB;
+use crate::client_ptb::ptb::{ptb_description, PTB};
 
 use json_to_table::json_to_table;
 use move_core_types::language_storage::TypeTag;
@@ -1506,8 +1506,13 @@ impl SuiClientCommands {
             }
             SuiClientCommands::PTB(ptb) => {
                 let args = ptb.clone().args;
-                ptb.execute(args, context).await?;
-
+                if args.contains(&"--help".to_string()) {
+                    ptb_description().print_long_help().unwrap();
+                } else if args.contains(&"-h".to_string()) || args.is_empty() {
+                    ptb_description().print_help().unwrap();
+                } else {
+                    ptb.execute(args, context).await?;
+                }
                 SuiClientCommandResult::NoOutput
             }
         });

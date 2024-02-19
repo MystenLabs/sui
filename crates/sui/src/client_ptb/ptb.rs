@@ -11,7 +11,7 @@ use crate::client_ptb::{
 };
 
 use anyhow::{anyhow, Error};
-use clap::{arg, Args};
+use clap::{arg, Args, ValueHint};
 use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
 use shared_crypto::intent::Intent;
@@ -29,6 +29,7 @@ use sui_types::{
 };
 
 #[derive(Clone, Debug, Args)]
+#[clap(disable_help_flag = true)]
 pub struct PTB {
     #[clap(trailing_var_arg = true, allow_hyphen_values = true)]
     pub args: Vec<String>,
@@ -54,19 +55,19 @@ impl PTB {
     ) -> Result<(), Error> {
         let arg_string = args.join(" ");
         let mut file_table = BTreeMap::new();
-        let (program, program_metadata) = match Self::parse_ptb_commands(arg_string, &mut file_table)
-        {
-            Err(errors) => {
-                let suffix = if errors.len() > 1 { "s" } else { "" };
-                let rendered = render_errors(&file_table, errors);
-                eprintln!("Encountered error{suffix} when parsing PTB:");
-                for e in rendered.iter() {
-                    eprintln!("{:?}", e);
+        let (program, program_metadata) =
+            match Self::parse_ptb_commands(arg_string, &mut file_table) {
+                Err(errors) => {
+                    let suffix = if errors.len() > 1 { "s" } else { "" };
+                    let rendered = render_errors(&file_table, errors);
+                    eprintln!("Encountered error{suffix} when parsing PTB:");
+                    for e in rendered.iter() {
+                        eprintln!("{:?}", e);
+                    }
+                    anyhow::bail!("Could not build PTB due to previous error{suffix}");
                 }
-                anyhow::bail!("Could not build PTB due to previous error{suffix}");
-            }
-            Ok(parsed) => parsed,
-        };
+                Ok(parsed) => parsed,
+            };
 
         if program_metadata.preview_set {
             println!("{}", PTBPreview { program: &program });
@@ -201,64 +202,125 @@ impl PTB {
     }
 }
 
-fn _ptb_description() -> clap::Command {
-    clap::Command::new("ptb")
-        .about("Build, preview, and execute programmable transaction blocks.")
+pub fn ptb_description() -> clap::Command {
+    clap::Command::new("sui client ptb")
+        .about(
+            "Build, preview, and execute programmable transaction blocks. Depending on your \
+            shell you might have to use quotes around arrays or other passed values. \
+            Use --help to see examples for how to use the PTB core commands")
         .arg(arg!(
-            --file <FILE>
+                --"assign" <ASSIGN>
+                "Assign a value to a variable name to use later in the PTB."
+        )
+        .long_help(
+            "Assign a value to a variable name to use later in the PTB.\
+            If only a name is supplied, the result of \
+            the last transaction is binded to that name. If a name and value are \
+            supplied, then the name is binded to that value.\n\n\
+            Examples:\n --assign MYVAR 100\n --assign X [100,5000]\n --split-coins gas \
+            [1000, 5000, 75000]\
+            \n --assign new_coins # bind new_coins to the result of previous transaction"
+        )
+        .value_names(["NAME", "VALUE"]))
+        .arg(
+            arg!(
+                --file <FILE>
                 "Path to a file containing transactions to include in this PTB."
-        ))
-        .arg(arg!(
-            --assign <ASSIGN>...
-                "Assign a value to use later in the PTB. If only a name is supplied, the result of \
-                 the last transaction is binded to that name. If a name and value are \
-                 supplied, then the name is binded to that value."
-        ))
+            ).value_hint(ValueHint::FilePath))
         .arg(arg!(
             --gas <ID> ...
-                "The object ID of the gas coin to use."
+            "The object ID of the gas coin to use."
         ))
         .arg(arg!(
             --"gas-budget" <MIST>
-                "The gas budget for the transaction, in MIST."
+            "The gas budget for the transaction, in MIST."
         ))
         .arg(arg!(
             --"make-move-vec" <MAKE_MOVE_VEC>
-            r#"Given n-values of the same type, it constructs a vector. For non objects or an empty vector, the type tag must be specified: --make-move-vec "<u64>" "[1]" "#
+            "Given n-values of the same type, it constructs a vector. For non objects or an empty \
+            vector, the type tag must be specified."
+        )
+        .long_help(
+            "Given n-values of the same type, it constructs a vector. \
+            For non objects or an empty vector, the type tag must be specified.\
+            \n\nExamples:\
+            \n --make-move-vec <u64> []\
+            \n --make-move-vec <u64> [1, 2, 3, 4]\
+            \n --make-move-vec <std::option::Option<u64>> [none,none]\
+            \n --make-move-vec <sui::coin::Coin<sui::sui::SUI>> [gas]"
+        )
+        .value_names(["TYPE", "[VALUES]"]))
+        .arg(arg!(
+            --"merge-coins" <MERGE_COINS>
+            "Merge N coins into the provided coin."
+        ).long_help(
+            "Merge N coins into the provided coin.\
+            \n\nExamples:\
+            \n --merge-coins @coin_object_id [@coin_obj_id1, @coin_obj_id2]"
+            )
+        .value_names(["INTO_COIN", "[COIN OBJECTS]"]))
+        .arg(arg!(
+            --"move-call" <MOVE_CALL>
+            "Make a move call to a function."
+        )
+        .long_help(
+            "Make a move call to a function.\n\nExamples:\
+            \n --move-call 0x1::option::is_none <u64> none\
+            \n --assign a none\
+            \n --move-call 0x1::option::is_none <u64> a"
+        )
+        .value_names(["PACKAGE::MODULE::FUNCTION", "TYPE", "FUNCTION_ARGS"]))
+        .arg(arg!(
+            --"split-coins" <SPLIT_COINS>
+            "Split the coin into N coins as per the given array of amounts."
+        )
+        .long_help(
+            "Split the coin into N coins as per the given array of amounts.\n\nExamples:\
+            \n --split-coins gas [1000, 5000, 75000]\
+            \n --assign new_coins # binds the result of split-coins command to variable new_coins\
+            \n --split-coins @coin_object_id [100]"
+        )
+        .value_names(["COIN", "[AMMOUNT]"]))
+        .arg(arg!(
+            --"transfer-objects" <TRANSFER_OBJECTS>
+            "Transfer objects to the specified address."
+        )
+        .long_help(
+            "Transfer objects to the specified address.\n\nExamples:\
+            \n --transfer-objects @address [obj1, obj2, obj3]\
+            \n --split-coins gas [1000, 5000, 75000]\
+            \n --assign new_coins # bind new_coins to result of split-coins to use next\
+            \n --transfer-objects @to_address [new_coins.0, new_coins.1, new_coins.2]"
+        )
+        .value_names(["TO", "[OBJECTS]"]))
+        .arg(arg!(
+            --"publish" <MOVE_PACKAGE_PATH>
+            "Publish the move package. It takes as input the folder where the package exists."
+        ).value_hint(ValueHint::DirPath))
+        .arg(arg!(
+            --"upgrade" <MOVE_PACKAGE_PATH>
+            "Upgrade the move package. It takes as input the folder where the package exists."
+        ).value_hint(ValueHint::DirPath))
+        .arg(arg!(
+            --"pick-gas-budget" <PICK_GAS_BUDGET>
+            "Pick gas budget strategy if multiple gas-budgets are provided: \
+            max (take the highest gas budget found) or sum (adding all provided gas budgets)"
         ))
-    //     #[clap(long, num_args(1..))]
-    //     make_move_vec: Vec<String>,
-    //     /// Merge N coins into the provided coin: --merge-coins into_coin "[coin1,coin2,coin3]"
-    //     #[clap(long, num_args(1..))]
-    //     merge_coins: Vec<String>,
-    //     /// Make a move call to a function
-    //     #[clap(long, num_args(1..))]
-    //     move_call: Vec<String>,
-    //     /// Split the coin into N coins as per the given amount.
-    //     /// On zsh, the vector needs to be given in quotes: --split-coins coin_to_split "[amount1,amount2]"
-    //     #[clap(long, num_args(1..))]
-    //     split_coins: Vec<String>,
-    //     /// Transfer objects to the address. E.g., --transfer-objects to_address "[obj1, obj2]"
-    //     #[clap(long, num_args(1..))]
-    //     transfer_objects: Vec<String>,
-    //     /// Publish the move package. It takes as input the folder where the package exists.
-    //     #[clap(long, num_args(1..))]
-    //     publish: Vec<String>,
-    //     /// Upgrade the move package. It takes as input the folder where the package exists.
-    //     #[clap(long, num_args(1..))]
-    //     upgrade: Vec<String>,
-    //     /// Preview the PTB instead of executing it
-    //     #[clap(long)]
-    //     preview: bool,
-    //     /// Enable shadown warning when including other PTB files.
-    //     /// Off by default.
-    //     #[clap(long)]
-    //     warn_shadows: bool,
-    //     /// Pick gas budget strategy if multiple gas-budgets are provided.
-    //     #[clap(long)]
-    //     pick_gas_budget: Option<PTBGas>,
-    //     /// Show only a short summary (digest, execution status, gas cost).
-    //     /// Do not use this flag when you need all the transaction data and the execution effects.
-    //     #[clap(long)]
-    //     summary: bool,
+        .arg(arg!(
+            --"preview" 
+            "Preview the list of PTB transactions instead of executing them."
+        ))
+        .arg(arg!(
+            --"summary" 
+            "Show only a short summary (digest, execution status, gas cost). \
+            Do not use this flag when you need all the transaction data and the execution effects."
+        ))
+        .arg(arg!(
+            --"warn-shadows" 
+            "Enable shadow warning when including other PTB files. Off by default."
+        ))
+        .arg(arg!(
+            --"json" 
+            "Return command outputs in json format"
+        ))
 }
