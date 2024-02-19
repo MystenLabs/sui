@@ -14,6 +14,7 @@ expression: "results.join(\"\\n\")"
 │ --assign c                     │ tests/ptb_files/assign/assign_valid.ptb │
 │ --assign c0 c.0                │ tests/ptb_files/assign/assign_valid.ptb │
 │ --assign c1 c.1                │ tests/ptb_files/assign/assign_valid.ptb │
+│ --assign a @0x0                │ tests/ptb_files/assign/assign_valid.ptb │
 │ --assign b a                   │ tests/ptb_files/assign/assign_valid.ptb │
 │ --make-move-vec address [a, b] │ tests/ptb_files/assign/assign_valid.ptb │
 │ --assign c                     │ tests/ptb_files/assign/assign_valid.ptb │

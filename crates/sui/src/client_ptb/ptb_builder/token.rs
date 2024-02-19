@@ -261,7 +261,7 @@ impl PTBToken {
         }
 
         if s.starts_with('#') {
-            let len = extract_sub_parser_token_string(s, "#", "\n")?;
+            let len = s.find('\n').map_or(s.len(), |ix| ix + 1);
             return Ok(Some((Self::Comment, len)));
         }
 
