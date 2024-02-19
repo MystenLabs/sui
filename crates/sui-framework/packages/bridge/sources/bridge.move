@@ -26,16 +26,17 @@ module bridge::bridge {
     };
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury};
+
     #[test_only]
     use sui::object;
     #[test_only]
     use sui::test_scenario;
     #[test_only]
+    use sui::test_utils::{assert_eq, destroy};
+    #[test_only]
     use bridge::btc::BTC;
     #[test_only]
     use bridge::eth::ETH;
-    #[test_only]
-    use sui::test_utils::{destroy, assert_eq};
     #[test_only]
     use bridge::message::create_blocklist_message;
 
@@ -144,7 +145,7 @@ module bridge::bridge {
     }
 
     #[allow(unused_function)]
-    fun init_bridge_committee(
+    fun update_bridge_committee(
         self: &mut Bridge,
         system_state: &mut SuiSystemState,
         min_stake_participation_percentage: u8,
@@ -152,7 +153,12 @@ module bridge::bridge {
     ) {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         let inner = load_inner_mut(self);
-        committee::try_create_next_committee(&mut inner.committee, system_state, min_stake_participation_percentage)
+        committee::try_create_next_committee(
+            &mut inner.committee,
+            system_state,
+            min_stake_participation_percentage,
+            ctx
+        )
     }
 
     public fun committee_registration(self: &mut Bridge,
@@ -294,11 +300,8 @@ module bridge::bridge {
         transfer::public_transfer(option::destroy_some(token), owner)
     }
 
-    fun load_inner_mut(
-        self: &mut Bridge,
-    ): &mut BridgeInner {
+    fun load_inner_mut(self: &mut Bridge): &mut BridgeInner {
         let version = versioned::version(&self.inner);
-
         // TODO: Replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CURRENT_VERSION, EWrongInnerVersion);
         let inner: &mut BridgeInner = versioned::load_value_mut(&mut self.inner);
