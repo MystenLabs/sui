@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeMap,
+    collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
     path::PathBuf,
     str::FromStr,
@@ -894,44 +894,43 @@ impl SuiClientCommands {
                     }
                 }
 
-                let mut coins_by_type: BTreeMap<String, (Option<SuiCoinMetadata>, Vec<Coin>)> =
-                    BTreeMap::new();
+                fn canonicalize_type(type_: &str) -> Result<String, anyhow::Error> {
+                    Ok(TypeTag::from_str(type_)
+                        .context("Cannot parse coin type")?
+                        .to_canonical_string(/* with_prefix */ true))
+                }
+
+                let mut coins_by_type = BTreeMap::new();
                 for c in objects {
-                    let coin_type = c.coin_type.clone();
-                    coins_by_type
-                        .entry(coin_type.clone())
-                        .and_modify(|val| val.1.push(c.clone()))
-                        .or_insert({
-                            let coin_metadata = client
+                    let coins = match coins_by_type.entry(canonicalize_type(&c.coin_type)?) {
+                        Entry::Vacant(entry) => {
+                            let metadata = client
                                 .coin_read_api()
-                                .get_coin_metadata(coin_type.clone())
+                                .get_coin_metadata(c.coin_type.clone())
                                 .await
                                 .with_context(|| {
                                     format!(
                                         "Cannot fetch the coin metadata for coin {}",
-                                        coin_type.clone()
+                                        c.coin_type
                                     )
                                 })?;
 
-                            (coin_metadata, vec![c])
-                        });
-                }
-                let coin_type_tag = TypeTag::from_str(SUI_COIN_TYPE)
-                    .map_err(|e| anyhow!("Cannot parse the coin type: {e}"))?;
-                // show SUI first
-                let mut ordered_coins_sui_first = coins_by_type
-                    .clone()
-                    .into_iter()
-                    .filter(|x| x.0 == coin_type_tag.to_string())
-                    .map(|x| x.1)
-                    .collect::<Vec<_>>();
-                let other_coins = coins_by_type
-                    .into_iter()
-                    .filter(|x| x.0 != coin_type_tag.to_string())
-                    .map(|x| x.1)
-                    .collect::<Vec<_>>();
+                            &mut entry.insert((metadata, vec![])).1
+                        }
+                        Entry::Occupied(entry) => &mut entry.into_mut().1,
+                    };
 
-                ordered_coins_sui_first.extend(other_coins);
+                    coins.push(c);
+                }
+                let sui_type_tag = canonicalize_type(SUI_COIN_TYPE)?;
+
+                // show SUI first
+                let ordered_coins_sui_first = coins_by_type
+                    .remove(&sui_type_tag)
+                    .into_iter()
+                    .chain(coins_by_type.into_values())
+                    .collect();
+
                 SuiClientCommandResult::Balance(ordered_coins_sui_first, with_coins)
             }
 
