@@ -23,6 +23,10 @@ use sui_json_rpc_types::{
 };
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
+use sui_types::bridge::BridgeInnerDynamicField;
+use sui_types::bridge::BridgeRecordDyanmicField;
+use sui_types::bridge::MoveTypeBridgeCommittee;
+use sui_types::bridge::MoveTypeCommitteeMember;
 use sui_types::collection_types::LinkedTableNode;
 use sui_types::crypto::get_key_pair;
 use sui_types::dynamic_field::DynamicFieldName;
@@ -51,14 +55,7 @@ use crate::events::SuiBridgeEvent;
 use crate::retry_with_max_delay;
 use crate::sui_transaction_builder::get_bridge_package_id;
 use crate::types::BridgeActionStatus;
-use crate::types::BridgeInnerDynamicField;
-use crate::types::BridgeRecordDyanmicField;
-use crate::types::MoveTypeBridgeMessageKey;
-use crate::types::MoveTypeBridgeRecord;
-use crate::types::{
-    BridgeAction, BridgeAuthority, BridgeCommittee, MoveTypeBridgeCommittee, MoveTypeBridgeInner,
-    MoveTypeCommitteeMember,
-};
+use crate::types::{BridgeAction, BridgeAuthority, BridgeCommittee};
 
 // TODO: once we have bridge package on sui framework, we can hardcode the actual
 // bridge dynamic field object id (not 0x9 or dynamic field wrapper) and update
