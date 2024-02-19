@@ -8,6 +8,7 @@ use crate::object::Owner;
 use crate::storage::ObjectStore;
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
+use crate::versioned::Versioned;
 use crate::SUI_BRIDGE_OBJECT_ID;
 use enum_dispatch::enum_dispatch;
 use move_core_types::ident_str;
@@ -68,7 +69,7 @@ pub enum Bridge {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BridgeWrapper {
     pub id: UID,
-    pub version: u64,
+    pub version: Versioned,
 }
 
 /// This is the standard API that all bridge inner object type should implement.
@@ -104,6 +105,7 @@ pub struct BridgeSummary {
     /// Whether the bridge is currently frozen or not
     pub is_frozen: bool,
     // TODO: add treasury
+    // TODO: add limiter
 }
 
 pub fn get_bridge_wrapper(object_store: &dyn ObjectStore) -> Result<BridgeWrapper, SuiError> {
@@ -121,23 +123,22 @@ pub fn get_bridge_wrapper(object_store: &dyn ObjectStore) -> Result<BridgeWrappe
 
 pub fn get_bridge(object_store: &dyn ObjectStore) -> Result<Bridge, SuiError> {
     let wrapper = get_bridge_wrapper(object_store)?;
-    let id = wrapper.id.id.bytes;
-    match wrapper.version {
+    let id = wrapper.version.id.id.bytes;
+    let version = wrapper.version.version;
+    match version {
         1 => {
-            let result: BridgeInnerV1 =
-                get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
-                    |err| {
-                        SuiError::DynamicFieldReadError(format!(
-                    "Failed to load bridge inner object with ID {:?} and version {:?}: {:?}",
-                    id, wrapper.version, err
-                ))
-                    },
-                )?;
+            let result: BridgeInnerV1 = get_dynamic_field_from_store(object_store, id, &version)
+                .map_err(|err| {
+                    SuiError::DynamicFieldReadError(format!(
+                        "Failed to load bridge inner object with ID {:?} and version {:?}: {:?}",
+                        id, version, err
+                    ))
+                })?;
             Ok(Bridge::V1(result))
         }
         _ => Err(SuiError::SuiBridgeReadError(format!(
             "Unsupported SuiBridge version: {}",
-            wrapper.version
+            version
         ))),
     }
 }
@@ -151,6 +152,7 @@ pub struct BridgeInnerV1 {
     pub committee: MoveTypeBridgeCommittee,
     pub treasury: MoveTypeBridgeTreasury,
     pub bridge_records: LinkedTable<MoveTypeBridgeMessageKey>,
+    pub limiter: MoveTypeBridgeTransferLimiter,
     pub frozen: bool,
 }
 
@@ -254,6 +256,30 @@ pub struct MoveTypeBridgeMessageKey {
     pub source_chain: u8,
     pub message_type: u8,
     pub bridge_seq_num: u64,
+}
+
+/// Rust version of the Move limiter::TransferLimiter type.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MoveTypeBridgeTransferLimiter {
+    pub transfer_limit: VecMap<MoveTypeBridgeRoute, u64>,
+    pub notional_values: VecMap<u8, u64>,
+    pub transfer_records: VecMap<MoveTypeBridgeRoute, MoveTypeBridgeTransferRecord>,
+}
+
+/// Rust version of the Move chain_ids::BridgeRoute type.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MoveTypeBridgeRoute {
+    pub source: u8,
+    pub destination: u8,
+}
+
+/// Rust version of the Move limiter::TransferRecord type.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MoveTypeBridgeTransferRecord {
+    hour_head: u64,
+    hour_tail: u64,
+    per_hour_amounts: Vec<u64>,
+    total_amount: u64,
 }
 
 /// Rust version of the Move message::BridgeMessage type.
