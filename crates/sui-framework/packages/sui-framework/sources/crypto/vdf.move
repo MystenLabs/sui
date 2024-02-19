@@ -33,8 +33,8 @@ module sui::vdf {
     /// The `discriminant` defines what class group to use and should be the same as used in `hash_to_input`. The
     /// `discriminant` should be encoded as a big-endian encoding of the negation of the negative discriminant.
     /// 
-    /// Details: This uses Wesolowski's VDF construction over imaginary class groups as described in  Benjamin Wesolowski
-    /// (2020), 'Efficient Verifiable Delay Functions.', J. Cryptol. 33, and is compatible with the VDF implementation in 
+    /// This uses Wesolowski's VDF construction over imaginary class groups as described in Wesolowski (2020), 
+    /// 'Efficient Verifiable Delay Functions.', J. Cryptol. 33, and is compatible with the VDF implementation in 
     /// fastcrypto.
     public fun vdf_verify(discriminant: &vector<u8>, input: &vector<u8>, output: &vector<u8>, proof: &vector<u8>, iterations: u64): bool {
         // We allow up to 3072 bit discriminants
