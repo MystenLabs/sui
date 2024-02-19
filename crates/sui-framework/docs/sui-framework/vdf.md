@@ -109,7 +109,9 @@ Note that <code>c</code> is omitted because it may be computed from <code>a</cod
 The <code>discriminant</code> defines what class group to use and should be the same as used in <code>hash_to_input</code>. The
 <code>discriminant</code> should be encoded as a big-endian encoding of the negation of the negative discriminant.
 
-This uses Wesolowski's VDF construction over imaginary class groups
+Details: This uses Wesolowski's VDF construction over imaginary class groups as described in  Benjamin Wesolowski
+(2020), 'Efficient Verifiable Delay Functions.', J. Cryptol. 33, and is compatible with the VDF implementation in
+fastcrypto.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="vdf.md#0x2_vdf_vdf_verify">vdf_verify</a>(discriminant: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, input: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, output: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, iterations: u64): bool

@@ -111,16 +111,11 @@ pub fn vdf_verify_internal(
     let vdf = StrongVDF::new(discriminant, iterations);
     let fast_verifier = StrongVDFVerifier::new(vdf, input);
 
-    match fast_verifier.verify(&output, &proof) {
-        Ok(_) => Ok(NativeResult::ok(
-            context.gas_used(),
-            smallvec![Value::bool(true)],
-        )),
-        Err(_) => Ok(NativeResult::ok(
-            context.gas_used(),
-            smallvec![Value::bool(false)],
-        )),
-    }
+    let verified = fast_verifier.verify(&output, &proof).is_ok();
+    Ok(NativeResult::ok(
+        context.gas_used(),
+        smallvec![Value::bool(verified)],
+    ))
 }
 
 /***************************************************************************************************
@@ -180,7 +175,6 @@ pub fn hash_to_input_internal(
     };
 
     let output_bytes = output.to_bytes();
-
     Ok(NativeResult::ok(
         context.gas_used(),
         smallvec![Value::vector_u8(output_bytes)],
