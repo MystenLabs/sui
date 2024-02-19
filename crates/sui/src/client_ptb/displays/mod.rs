@@ -5,7 +5,7 @@ mod gas_cost_summary;
 mod status;
 mod summary;
 
-use crate::{client_ptb::ptb::{PTBGas, PTBPreview}, sp};
+use crate::{client_ptb::ptb::PTBPreview, sp};
 use std::fmt::{Display, Formatter};
 use tabled::{
     builder::Builder as TableBuilder,
@@ -35,15 +35,5 @@ impl<'a> Display for PTBPreview<'a> {
         table.with(tabled::settings::style::BorderSpanCorrection);
 
         write!(f, "{}", table)
-    }
-}
-
-impl Display for PTBGas {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let r = match self {
-            PTBGas::Max => "max",
-            PTBGas::Sum => "sum",
-        };
-        write!(f, "{}", r)
     }
 }
