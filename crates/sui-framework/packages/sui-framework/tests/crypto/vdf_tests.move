@@ -20,7 +20,7 @@ module sui::vdf_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::vdf::EINVALID_INPUT)]
+    #[expected_failure(abort_code = sui::vdf::EInvalidInput)]
     fun test_hash_to_input_invalid_input() {
         // Invalid mod 8
         let discriminant_bytes = x"c3811f4ad2f4a7bdf2ed89385866ad526c6dd3aa942e04c141d0562a8e7b014f08804f47b3c2ecbba0a5a0ad8f4d8e869a10cff13dbc522aea141f6d1c42913f2d3bff8d3e7656c72523a2e9d47f838234bd65f05ef3ca86c2f640bca6630ed8d1da21e30a67f83e25b89c32c2d0dc0bacb81bd971b0932a82d131b4a74bff36b60b66543105da2c3ecb1a4e8c2cb6d47c1e85942cce8f3fc50c27856e6dfbd15c0bd5017fea15ae0eb43dfb32b2d947c3131d1951f00bcc40352eeb65e364551e40d13768f443406760ee6b37a5b5819d3f630c034c7f42212ad49c803772aaafd4cd1f87697c68d5a6b0855f475b370b20058558993e76759caa38edbc82407b4e3559bade5f7479a860ebef62fed82d657765ebb8f7f375c2b78f73669760e4bd4932177087a49a0b68d9";
@@ -47,7 +47,7 @@ module sui::vdf_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::vdf::EINVALID_INPUT)]
+    #[expected_failure(abort_code = sui::vdf::EInvalidInput)]
     fun test_vdf_verify_invalid_discriminant() {
         // Invalid mod 8
         let discriminant_bytes = x"fdf4aa9b7f49b85fc71f6fbf31a3d51e6828afb9d06165f5814bb5142485853abb52f50b7c8a937bba09ce75b51a639886d997d561b7a654f1a9e6b66645d76fad093381d464eccf28d599fb5a938bb99101c30e374f5f786c9232f56d0118826d113400b080bb4737018b088af5203a18da25d106fffdad7e8f660e141dd11d";
@@ -59,7 +59,7 @@ module sui::vdf_tests {
     }
 
         #[test]
-    #[expected_failure(abort_code = sui::vdf::EINVALID_INPUT)]
+    #[expected_failure(abort_code = sui::vdf::EInvalidInput)]
     fun test_vdf_verify_invalid_input() {
         let discriminant_bytes = x"fdf4aa9b7f49b85fc71f6fbf31a3d51e6828afb9d06165f5814bb5142485853abb52f50b7c8a937bba09ce75b51a639886d997d561b7a654f1a9e6b66645d76fad093381d464eccf28d599fb5a938bb99101c30e374f5f786c9232f56d0118826d113400b080bb4737018b088af5203a18da25d106fffdad7e8f660e141dd11f";
 
