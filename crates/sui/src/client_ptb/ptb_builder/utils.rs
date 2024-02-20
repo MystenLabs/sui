@@ -107,7 +107,7 @@ pub fn to_ordinal_contraction(num: usize) -> String {
 pub fn read_ptb_file(path: &Path) -> Result<String, std::io::Error> {
     std::fs::read_to_string(path).map(|s| {
         s.replace("\\\"", "%__REPLACE_ME__%")
-            .replace("\"", "")
+            .replace('\"', "")
             .replace("%__REPLACE_ME__%", "\"")
     })
 }

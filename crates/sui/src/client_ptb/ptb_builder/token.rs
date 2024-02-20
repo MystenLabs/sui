@@ -126,25 +126,25 @@ pub const JSON: &str = "--json";
 
 impl PTBToken {
     pub fn is_command_token(&self) -> bool {
-        match self {
+        matches!(
+            self,
             PTBToken::CommandTransferObjects
-            | PTBToken::CommandSplitCoins
-            | PTBToken::CommandMergeCoins
-            | PTBToken::CommandMakeMoveVec
-            | PTBToken::CommandMoveCall
-            | PTBToken::CommandPublish
-            | PTBToken::CommandUpgrade
-            | PTBToken::CommandAssign
-            | PTBToken::CommandPreview
-            | PTBToken::CommandWarnShadows
-            | PTBToken::CommandPickGasBudget
-            | PTBToken::CommandGasBudget
-            | PTBToken::CommandFile
-            | PTBToken::CommandSummary
-            | PTBToken::CommandJson
-            | PTBToken::CommandGas => true,
-            _ => false,
-        }
+                | PTBToken::CommandSplitCoins
+                | PTBToken::CommandMergeCoins
+                | PTBToken::CommandMakeMoveVec
+                | PTBToken::CommandMoveCall
+                | PTBToken::CommandPublish
+                | PTBToken::CommandUpgrade
+                | PTBToken::CommandAssign
+                | PTBToken::CommandPreview
+                | PTBToken::CommandWarnShadows
+                | PTBToken::CommandPickGasBudget
+                | PTBToken::CommandGasBudget
+                | PTBToken::CommandFile
+                | PTBToken::CommandSummary
+                | PTBToken::CommandJson
+                | PTBToken::CommandGas
+        )
     }
 }
 
