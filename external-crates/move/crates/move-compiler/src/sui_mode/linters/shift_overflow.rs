@@ -1,3 +1,6 @@
+//! Detect potential overflow scenarios where the number of bits being shifted exceeds the bit width of
+//! the variable being shifted, which could lead to unintended behavior or loss of data. If such a
+//! potential overflow is detected, a warning is generated to alert the developer.
 use crate::{
     diag,
     diagnostics::{
