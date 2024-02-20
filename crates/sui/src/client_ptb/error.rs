@@ -14,8 +14,7 @@ pub struct Span {
 }
 
 /// A value that has an associated location in source code.
-#[derive(Clone)]
-pub struct Spanned<T: Clone> {
+pub struct Spanned<T> {
     pub span: Span,
     pub value: T,
 }
@@ -118,9 +117,9 @@ impl Span {
     }
 }
 
-impl<T: Clone> Spanned<T> {
+impl<T> Spanned<T> {
     /// Apply a function `f` to the underlying value, returning a new `Spanned` with the same span.
-    pub fn map<U: Clone>(self, f: impl FnOnce(T) -> U) -> Spanned<U> {
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Spanned<U> {
         Spanned {
             span: self.span,
             value: f(self.value),
@@ -129,7 +128,7 @@ impl<T: Clone> Spanned<T> {
 
     /// Widen the span to include another span. The resulting span will start at the minimum of the
     /// two start positions and end at the maximum of the two end positions.
-    pub fn widen<U: Clone>(self, other: Spanned<U>) -> Spanned<T> {
+    pub fn widen<U>(self, other: Spanned<U>) -> Spanned<T> {
         Spanned {
             span: Span {
                 start: self.span.start.min(other.span.start),
@@ -140,11 +139,20 @@ impl<T: Clone> Spanned<T> {
     }
 }
 
-impl<T: fmt::Debug + Clone> fmt::Debug for Spanned<T> {
+impl<T: fmt::Debug> fmt::Debug for Spanned<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Spanned")
             .field("span", &self.span)
             .field("value", &self.value)
             .finish()
+    }
+}
+
+impl<T: Clone> Clone for Spanned<T> {
+    fn clone(&self) -> Self {
+        Spanned {
+            span: self.span,
+            value: self.value.clone(),
+        }
     }
 }
