@@ -28,9 +28,10 @@ use std::{
 /// A mapping from identifiers (file names, potentially, but not necessarily) to their contents.
 #[derive(Debug, Default, Clone)]
 
-/// Virtual file system that serves the same version of the file each time it's queried,
-/// whether this file comes from the IDE message (file open or update notification) or
-/// it comes from the file system.
+/// Virtual file system that serves the same version of the file each time it's queried, whether
+/// this file comes from the IDE message (file open or update notification) or it comes from the
+/// file system. It supports writes (and writable file creation) , but these are never propagated to
+/// the physical file system.
 pub struct IDEVFS {
     /// Files pushed to the LSP server by the IDE via file open or update notifications
     /// (used concurrently hence using `CHashMap`)
@@ -70,7 +71,7 @@ impl VFS for IDEVFS {
             },
         }
         Ok(Box::new(IDEVFSFile {
-            writeable: false,
+            writable: false,
             path: fpath.to_path_buf(),
             vfs: Arc::new(self.clone()),
         }))
@@ -86,7 +87,7 @@ impl VFS for IDEVFS {
         }
         self.all_files.insert(tmp_path.clone(), vec![]);
         Ok(Box::new(IDEVFSFile {
-            writeable: true,
+            writable: true,
             path: tmp_path,
             vfs: Arc::new(self.clone()),
         }))
@@ -100,7 +101,7 @@ impl VFS for IDEVFS {
 
 pub struct IDEVFSFile {
     /// Opened for write (as well as read)?
-    writeable: bool,
+    writable: bool,
     path: PathBuf,
     vfs: Arc<IDEVFS>,
 }
@@ -153,10 +154,10 @@ impl VFSFile for IDEVFSFile {
     }
 
     fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
-        if !self.writeable {
+        if !self.writable {
             return Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,
-                "file was not writeable",
+                "file was not writable",
             ));
         }
         let Some(mut bytes) = self.vfs.all_files.get_mut(&self.path) else {
