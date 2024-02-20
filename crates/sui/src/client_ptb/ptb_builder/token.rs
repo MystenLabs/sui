@@ -105,7 +105,6 @@ pub enum PTBToken {
 
     // Comment start
     Comment,
-
 }
 
 pub const TRANSFER_OBJECTS: &str = "--transfer-objects";

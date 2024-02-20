@@ -64,8 +64,7 @@ async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let context = test_cluster.wallet;
     let client = context.get_client().await?;
 
-    let built_ptb = PTB::build_ptb(program, &context, client)
-        .await;
+    let built_ptb = PTB::build_ptb(program, &context, client).await;
 
     if let Ok(ref ptb) = built_ptb {
         results.push(" === BUILT PTB === ".to_string());
