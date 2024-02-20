@@ -238,7 +238,7 @@ export function useGenerateDemoData() {
 
 As we previously mentioned, we use `@tanstack/react-query` to query, cache and mutate server state. Server state is data only available on remote servers, and the only way to retrieve or update these data is by interacting with these remote servers. In our case, it could be from an API or directly from Sui blockchain RPC.
 
-When we execute a transaction call, we target to mutate the data remotely, specifically on Sui blockchain, hence, we want to use `useMutation()` hook. `useMutation()` hook accepts several inputs, however, in this example, we only need two of them. The first parameter `mutationFn` accepts the function to execute the main mutating logic while the second paramter `onSuccess` is a callback runs when the mutating logic succeeds.
+When we execute a transaction call, we target to mutate the data remotely, specifically on Sui blockchain, hence, we want to use `useMutation()` hook. `useMutation()` hook accepts several inputs, however, in this example, we only need two of them. The first parameter `mutationFn` accepts the function to execute the main mutating logic while the second parameter `onSuccess` is a callback runs when the mutating logic succeeds.
 
 Our main mutating logic is pretty simple, we execute a Move call of a package named `demo_bear::new` to create a dummy bear object and transfer it to the connected wallet account all within the same `TransactionBlock`. We reuse the `executeTransaction()` hook from the **Execute Transaction Hook** step to execute the transaction.
 
@@ -402,7 +402,7 @@ export function useCreateEscrowMutation() {
 
 #### Accept Escrows
 
-To accept the escrow, we create a mutation through `useAcceptEscrowMutation` hook in `src/mutations/escrow.ts`. The implementation should be fairly familiar to you now. The accept function accepts the escrow `ApiEscrowObject` and the locked object `ApiLockedObject`. The `{PACKAGE_ID}::shared::swap` Move call is generic, thus, requires the type parameters of the escrowed and locked objects. We can query the objects details by using `multiGetObjects` on Sui client instance. Lastly, we execute the `{PACKAGE_ID}::shared::swap` Move call and transfer the returned escrowed item to the the connected wallet account. When the mutation suceeds, we also invalidates the cache to allow automatic re-fetch of the data.
+To accept the escrow, we create a mutation through `useAcceptEscrowMutation` hook in `src/mutations/escrow.ts`. The implementation should be fairly familiar to you now. The accept function accepts the escrow `ApiEscrowObject` and the locked object `ApiLockedObject`. The `{PACKAGE_ID}::shared::swap` Move call is generic, thus, requires the type parameters of the escrowed and locked objects. We can query the objects details by using `multiGetObjects` on Sui client instance. Lastly, we execute the `{PACKAGE_ID}::shared::swap` Move call and transfer the returned escrowed item to the the connected wallet account. When the mutation succeeds, we also invalidates the cache to allow automatic re-fetch of the data.
 
 ```ts title='src/mutations/escrow.ts'
 import { ApiEscrowObject, ApiLockedObject } from '@/types/types';
@@ -773,7 +773,7 @@ At the last step, we just need to reuse the accept and cancel escrows mutations 
 
 #### Browse Locked Objects
 
-`src/components/locked/ApiLockedList.tsx` component renders all the on-chain locked objects based on the `LockedListingQuery` property. We will call the API service to fetch the `ApiLockedObject` data using provided query parameteres. There is one caveat around the API service is that the `creator` field of the `ApiLockedObject` could be stale since the `Locked` object has `store` ability, meaning that the object can be transferred freely, hence, the ownership may not be correctly tracked by the API service. That's why we still fetch from Sui blockchain as additional step to fulfill the object with latest on-chain information to ensure its data correctness in regards to ownership.
+`src/components/locked/ApiLockedList.tsx` component renders all the on-chain locked objects based on the `LockedListingQuery` property. We will call the API service to fetch the `ApiLockedObject` data using provided query parameters. There is one caveat around the API service is that the `creator` field of the `ApiLockedObject` could be stale since the `Locked` object has `store` ability, meaning that the object can be transferred freely, hence, the ownership may not be correctly tracked by the API service. That's why we still fetch from Sui blockchain as additional step to fulfill the object with latest on-chain information to ensure its data correctness in regards to ownership.
 
 ```ts title='src/components/locked/ApiLockedList.tsx'
 const { data, fetchNextPage, hasNextPage, isLoading, isFetchingNextPage } = useInfiniteQuery({
