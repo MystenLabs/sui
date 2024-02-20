@@ -236,6 +236,20 @@ impl Checkpoint {
             .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))
     }
 
+    /// Queries the database for the latest checkpoint by value.
+    /// This method takes a connection, so that it can be used in an execute_repeatable transaction.
+    pub(crate) fn latest_checkpoint(conn: &mut Conn) -> Result<Self, diesel::result::Error> {
+        use checkpoints::dsl;
+
+        let result: StoredCheckpoint =
+            conn.first(move || dsl::checkpoints.order_by(dsl::sequence_number.desc()))?;
+
+        Ok(Checkpoint {
+            stored: result,
+            checkpoint_viewed_at: None,
+        })
+    }
+
     /// Queries the database for the upper bound of the available range supported by the graphql
     /// server. This method takes a connection, so that it can be used in an execute_repeatable
     /// transaction.

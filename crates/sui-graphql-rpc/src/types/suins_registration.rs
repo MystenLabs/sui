@@ -7,6 +7,7 @@ use super::{
     balance::{self, Balance},
     base64::Base64,
     big_int::BigInt,
+    checkpoint::Checkpoint,
     coin::Coin,
     cursor::Page,
     display::DisplayEntry,
@@ -21,11 +22,18 @@ use super::{
     transaction_block::{self, TransactionBlock, TransactionBlockFilter},
     type_filter::ExactTypeFilter,
 };
-use crate::{data::Db, error::Error};
+use crate::{
+    consistency::{build_objects_query, consistent_range},
+    data::{Db, QueryExecutor},
+    error::Error,
+};
 use async_graphql::{connection::Connection, *};
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use serde::{Deserialize, Serialize};
-use sui_json_rpc::name_service::{Domain as NativeDomain, NameRecord, NameServiceConfig};
+use sui_indexer::models_v2::objects::StoredHistoryObject;
+use sui_json_rpc::name_service::{
+    Domain as NativeDomain, NameRecord, NameServiceConfig, NameServiceError,
+};
 use sui_types::{base_types::SuiAddress as NativeSuiAddress, dynamic_field::Field, id::UID};
 
 const MOD_REGISTRATION: &IdentStr = ident_str!("suins_registration");
@@ -55,6 +63,12 @@ pub(crate) struct SuinsRegistration {
 
     /// The deserialized representation of the Move object's contents.
     pub native: NativeSuinsRegistration,
+}
+
+pub(crate) struct NameServiceQuery {
+    pub parent_name_record: Option<NameRecord>,
+    pub name_record: Option<NameRecord>,
+    pub checkpoint_timestamp_ms: u64,
 }
 
 pub(crate) enum SuinsRegistrationDowncastError {
@@ -313,21 +327,56 @@ impl NameService {
     pub(crate) async fn resolve_to_record(
         db: &Db,
         config: &NameServiceConfig,
+        page: Page<object::Cursor>,
         domain: &Domain,
     ) -> Result<Option<NameRecord>, Error> {
-        let record_id = config.record_field_id(&domain.0);
+        let record_id: SuiAddress = config.record_field_id(&domain.0).into();
+        let parent_record_id: SuiAddress = config.record_field_id(&domain.0.parent()).into();
 
-        let Some(object) = MoveObject::query(db, record_id.into(), ObjectLookupKey::Latest).await?
+        let Some(query) = Self::resolve_name_record_query(
+            db,
+            page,
+            record_id,
+            if domain.0.is_subdomain() {
+                Some(parent_record_id)
+            } else {
+                None
+            },
+        )
+        .await?
         else {
             return Ok(None);
         };
 
-        let field: Field<NativeDomain, NameRecord> = object
-            .native
-            .to_rust()
-            .ok_or_else(|| Error::Internal("Malformed Suins NameRecord".to_string()))?;
+        // Get the name_record from the query.
+        // If we didn't find it, we return as it means that the requested name is not registered.
+        let Some(name_record) = query.name_record else {
+            return Ok(None);
+        };
 
-        Ok(Some(field.value))
+        // If name record is SLD, or Node subdomain, we can check the expiration and return the record if not expired.
+        if !name_record.is_leaf_record() {
+            return if !name_record.is_node_expired(query.checkpoint_timestamp_ms) {
+                Ok(Some(name_record))
+            } else {
+                Ok(None)
+            };
+        }
+
+        // If we cannot find the parent, then the name is expired.
+        let Some(parent_name_record) = query.parent_name_record else {
+            return Err(Error::NameService(NameServiceError::NameExpired));
+        };
+
+        // If the parent is valid for this leaf, and not expired, then we can return the name record.
+        // Otherwise, the name is expired.
+        if parent_name_record.is_valid_leaf_parent(&name_record)
+            && !parent_name_record.is_node_expired(query.checkpoint_timestamp_ms)
+        {
+            Ok(Some(name_record))
+        } else {
+            Err(Error::NameService(NameServiceError::NameExpired))
+        }
     }
 
     /// Lookup the SuiNS Domain for the given `address`. `config` specifies where to find the domain
@@ -351,6 +400,90 @@ impl NameService {
             .ok_or_else(|| Error::Internal("Malformed Suins Domain".to_string()))?;
 
         Ok(Some(field.value))
+    }
+
+    /// Queries for the NameRecord and its parent, if it is supplied.
+    /// Returns the NameServiceQuery, which contains the NameRecord (option), ParentNameRecord (option), and the
+    /// latest checkpoint's timestamp.
+    async fn resolve_name_record_query(
+        db: &Db,
+        page: Page<object::Cursor>,
+        record_id: SuiAddress,
+        parent_record_id: Option<SuiAddress>,
+    ) -> Result<Option<NameServiceQuery>, Error> {
+        let mut object_ids = vec![record_id];
+        let mut name_record = None;
+        let mut parent_name_record = None;
+
+        if let Some(id) = parent_record_id {
+            object_ids.push(id);
+        }
+
+        // prepare the filter for the query.
+        let filter = ObjectFilter {
+            object_ids: Some(object_ids),
+            ..Default::default()
+        };
+
+        let response = db
+            .execute_repeatable(move |conn| {
+                // get latest checkpoint.
+                let checkpoint = Checkpoint::latest_checkpoint(conn)?;
+
+                let Some((lhs, rhs)) =
+                    consistent_range(conn, Some(checkpoint.stored.sequence_number as u64))?
+                else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
+
+                let objects = page.paginate_raw_query::<StoredHistoryObject>(
+                    conn,
+                    rhs,
+                    build_objects_query(
+                        crate::consistency::View::Consistent,
+                        lhs as i64,
+                        rhs as i64,
+                        &page,
+                        move |query| filter.apply(query),
+                    ),
+                )?;
+
+                Ok(Some((checkpoint, objects)))
+            })
+            .await?;
+
+        let Some((checkpoint, (_, _, results))) = response else {
+            return Err(Error::Client(
+                "Requested data is outside the available range".to_string(),
+            ));
+        };
+
+        // Max size of results is 2.
+        // We loop through them, convert to objects + then parse name_record.
+        // We then assign it to the variable based on the address.
+        for result in results {
+            let object = Object::try_from_stored_history_object(result, None)?;
+            let move_object = MoveObject::try_from(&object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {0} to be a NameRecord, but it's not a Move Object.",
+                    object.address
+                ))
+            })?;
+
+            let record = NameRecord::try_from(move_object.native)?;
+
+            if object.address == record_id {
+                name_record = Some(record);
+            } else if Some(object.address) == parent_record_id {
+                parent_name_record = Some(record);
+            }
+        }
+
+        Ok(Some(NameServiceQuery {
+            parent_name_record,
+            name_record,
+            checkpoint_timestamp_ms: checkpoint.stored.timestamp_ms as u64,
+        }))
     }
 }
 
