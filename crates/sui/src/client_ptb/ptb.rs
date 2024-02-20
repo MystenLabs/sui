@@ -52,21 +52,27 @@ impl PTB {
         args: Vec<String>,
         context: &mut WalletContext,
     ) -> Result<(), Error> {
+        {
+            let parser =
+                crate::client_ptb::parser::ProgramParser::new(args.iter().map(|s| s.as_str()))
+                    .unwrap();
+            parser.parse().unwrap();
+        };
         let arg_string = args.join(" ");
         let mut file_table = BTreeMap::new();
-        let (program, program_metadata) = match Self::parse_ptb_commands(arg_string, &mut file_table)
-        {
-            Err(errors) => {
-                let suffix = if errors.len() > 1 { "s" } else { "" };
-                let rendered = render_errors(&file_table, errors);
-                eprintln!("Encountered error{suffix} when parsing PTB:");
-                for e in rendered.iter() {
-                    eprintln!("{:?}", e);
+        let (program, program_metadata) =
+            match Self::parse_ptb_commands(arg_string, &mut file_table) {
+                Err(errors) => {
+                    let suffix = if errors.len() > 1 { "s" } else { "" };
+                    let rendered = render_errors(&file_table, errors);
+                    eprintln!("Encountered error{suffix} when parsing PTB:");
+                    for e in rendered.iter() {
+                        eprintln!("{:?}", e);
+                    }
+                    anyhow::bail!("Could not build PTB due to previous error{suffix}");
                 }
-                anyhow::bail!("Could not build PTB due to previous error{suffix}");
-            }
-            Ok(parsed) => parsed,
-        };
+                Ok(parsed) => parsed,
+            };
 
         if program_metadata.preview_set {
             println!("{}", PTBPreview { program: &program });

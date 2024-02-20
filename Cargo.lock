@@ -11578,6 +11578,7 @@ dependencies = [
  "serde_yaml 0.8.26",
  "shared-crypto",
  "shell-words",
+ "shlex",
  "signature 1.6.4",
  "sui-config",
  "sui-execution",
