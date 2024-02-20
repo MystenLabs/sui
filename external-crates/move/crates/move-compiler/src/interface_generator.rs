@@ -37,7 +37,7 @@ pub fn write_file_to_string(
     compiled_module_file_input_path: &str,
     vfs: Option<Arc<Box<dyn VFS>>>,
 ) -> Result<(ModuleId, String)> {
-    let mut f = open_file(&vfs, &Path::new(compiled_module_file_input_path))?;
+    let mut f = open_file(&vfs, Path::new(compiled_module_file_input_path))?;
     let mut file_contents = vec![];
     f.read_to_end(&mut file_contents)?;
     let module = CompiledModule::deserialize_with_defaults(&file_contents).map_err(|e| {

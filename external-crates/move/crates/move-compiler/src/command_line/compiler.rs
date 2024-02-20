@@ -710,7 +710,7 @@ pub fn generate_interface_files(
         let mut v = vec![];
         let (mv_magic_files, other_file_locations): (Vec<_>, Vec<_>) =
             mv_file_locations.iter().cloned().partition(|s| {
-                is_file(&vfs, &Path::new(s.path.as_str()))
+                is_file(&vfs, Path::new(s.path.as_str()))
                     && has_compiled_module_magic_number(&s.path, vfs.clone())
             });
         v.extend(mv_magic_files);
@@ -783,7 +783,7 @@ pub fn generate_interface_files(
             named_address_map,
         });
         // it's possible some files exist but not others due to multithreaded environments
-        if separate_by_hash && is_file(&vfs, &Path::new(&file_path)) {
+        if separate_by_hash && is_file(&vfs, Path::new(&file_path)) {
             continue;
         }
 
@@ -795,7 +795,7 @@ pub fn generate_interface_files(
         // it's possible some files exist but not others due to multithreaded environments
         // Check for the file existing and then safely move the tmp file there if
         // it does not
-        if separate_by_hash && is_file(&vfs, &Path::new(&file_path)) {
+        if separate_by_hash && is_file(&vfs, Path::new(&file_path)) {
             continue;
         }
 
@@ -807,7 +807,7 @@ pub fn generate_interface_files(
 
 fn has_compiled_module_magic_number(path: &str, vfs: Option<Arc<Box<dyn VFS>>>) -> bool {
     use move_binary_format::file_format_common::BinaryConstants;
-    let mut file = match open_file(&vfs, &Path::new(path)) {
+    let mut file = match open_file(&vfs, Path::new(path)) {
         Err(_) => return false,
         Ok(f) => f,
     };
