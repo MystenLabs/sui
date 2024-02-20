@@ -578,7 +578,56 @@ Response: {
   "data": {
     "objects_at_version": {
       "objects": {
-        "nodes": []
+        "nodes": [
+          {
+            "version": 3,
+            "contents": {
+              "type": {
+                "repr": "0x1117e9d3a60d6f8bfbe143f17055208ec6fd6dec46e68f9d8d4db72087920780::M1::Object"
+              },
+              "json": {
+                "id": "0x3341cb1de65cc29b77d56d5b1df04a934271737cec63343d6e5fbadb39642820",
+                "value": "0"
+              }
+            }
+          },
+          {
+            "version": 5,
+            "contents": {
+              "type": {
+                "repr": "0x1117e9d3a60d6f8bfbe143f17055208ec6fd6dec46e68f9d8d4db72087920780::M1::Object"
+              },
+              "json": {
+                "id": "0x83687c7b7b6bae8188609218948fc817ee6c33c658f05c689891ab6bf670c490",
+                "value": "2"
+              }
+            }
+          },
+          {
+            "version": 6,
+            "contents": {
+              "type": {
+                "repr": "0x1117e9d3a60d6f8bfbe143f17055208ec6fd6dec46e68f9d8d4db72087920780::M1::Object"
+              },
+              "json": {
+                "id": "0xab6d4aa7478cf8bb1f4aaffb9174067322a3ceb3a2822fdffb0a5d61edef32d4",
+                "value": "3"
+              }
+            }
+          },
+          {
+            "version": 4,
+            "contents": {
+              "type": {
+                "repr": "0x1117e9d3a60d6f8bfbe143f17055208ec6fd6dec46e68f9d8d4db72087920780::M1::Object"
+              },
+              "json": {
+                "id": "0xea7c6f202a315d29331e501887ad5255a1be76ce1126578c8a3b0a5245f4daaa",
+                "value": "1"
+              }
+            }
+          }
+        ]
       }
     }
   }
