@@ -1,5 +1,6 @@
 ---
 title: Escrow Indexing and API Service
+draft: true
 ---
 
 This is a continuation of the Escrow smart contract guide to demonstrate how to implement a service responsible for indexing chain state in order to discover trades.
@@ -17,17 +18,13 @@ The full source code for the indexing service available at the [Trading API exam
 :::
 
 Before getting started, make sure you:
+
 - Understand [the mechanism behind the Escrow smart contract backend](/guides/developer/app-examples/escrow).
+- Install [`pnpm` through this guide](https://pnpm.io/installation) as we will use it as our package manager.
 - Check out the [indexer's README](https://github.com/MystenLabs/sui/examples/trading/api) to setup the development environment.
 - Check out [Prisma](https://www.prisma.io/) to have an overall sense on what it is as we will use it to facilitate all the database interactions.
-- Check out [Express](https://expressjs.com/) to learn how to quickly setup a Web server application in Node.js as we will use it to bootstrap our API service
-- Check out [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript) for its usage.
-
-:::note
-
-For technology that is fairly new you, don't worry, we will walk you through the basics of these along the way.
-
-:::
+- Check out [Express](https://expressjs.com/) to learn how to quickly setup a Web server application in Node.js as we will use it to bootstrap our API service.
+- Check out [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui with Typescript.
 
 ## Indexing Service
 
@@ -65,7 +62,7 @@ model Escrow {
   itemId String?
   swapped Boolean @default(false)
   cancelled Boolean @default(false)
-  
+
   @@index([recipient])
   @@index([sender])
 }
@@ -154,6 +151,7 @@ const EVENTS_TO_TRACK: EventTracker[] = [
 The `EVENTS_TO_TRACK` constant is an array of `EventTracker` objects. Each `EventTracker` specifies a type of event to track, a filter for the event, and a callback function to handle the event. In this case, the script tracks two types of events: lock events and shared events. The filter for each event specifies the module and package ID for the event. The callback function for each event is either `handleLockObjects` or `handleEscrowObjects`, depending on the type of event.
 
 #### Functions
+
 ```ts title='event-indexer.ts'
 const executeEventJob = async (
 	client: SuiClient,
@@ -251,6 +249,7 @@ export const setupListeners = async () => {
 	}
 };
 ```
+
 This function sets up all the listeners for the events to track. It iterates over the `EVENTS_TO_TRACK` array and calls `runEventJob` for each event tracker, passing the `SuiClient`, the event tracker, and the latest cursor for the event tracker as arguments.
 
 Now let’s take a look at `escrow-handler.ts`:
@@ -262,6 +261,7 @@ Now let’s take a look at `escrow-handler.ts`:
 ```ts title='escrow-handler.ts'
 import { SuiEvent } from '@mysten/sui.js/client';
 import { Prisma } from '@prisma/client';
+
 import { prisma } from '../db';
 ```
 
@@ -356,6 +356,7 @@ This function handles all events emitted by the `escrow` module. It takes an arr
 ```ts title='locked-handler.ts'
 import { SuiEvent } from '@mysten/sui.js/client';
 import { Prisma } from '@prisma/client';
+
 import { prisma } from '../db';
 ```
 
@@ -537,13 +538,15 @@ export const parsePaginationForQuery = (body: Record<string, any>) => {
 	return pagination;
 };
 ```
+
 ### API Endpoints
+
 All the endpoints are defined in `server.ts`, particularly, we have 2 endpoints:
+
 - `/locked` to query `Locked` objects.
 - `/escrows` to query `Escrow` objects.
 
 The implementation for both endpoints is pretty straightforward. We will define a list of valid query keys, such as `deleted`, `creator`, `keyId`, `objectId` for `Locked` data and `cancelled`, `swapped`, `recipient`, `sender` for `Escrow` data, and pass the URL query string into our pre-defined utilities which will output the correct parameters that we can use with Prisma.
-
 
 ```ts title='server.ts'
 import { prisma } from './db';
