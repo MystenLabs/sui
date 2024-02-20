@@ -32,6 +32,22 @@ The most straightforward stream source is to subscribe to a remote store of chec
 - Testnet: `https://checkpoints.testnet.sui.io`
 - Mainnet: `https://checkpoints.mainnet.sui.io`
 
+```mermaid
+flowchart LR
+  A("fa:fa-cloud Cloud storage (S3, GCP)");
+  B[("fa:fa-gears
+  Indexer
+  daemon")];
+  B-->A;
+  B<-->C("fa:fa-floppy-disk Progress store");
+  subgraph External
+    D("fa:fa-database Postgres");
+    E("fa:fa-database BigQuery");
+    F("fa:fa-database S3");
+  end
+  B-->External
+```
+
 ### Local reader
 
 Colocate the data ingestion daemon with a Full node and enable checkpoint dumping on the latter to set up a local stream source. After enabling, the Full node starts dumping executed checkpoints as files to a local directory, and the data ingestion daemon subscribes to changes in the directory through an inotify-like mechanism. This approach allows minimizing ingestion latency (checkpoint are processed immediately after a checkpoint executor on a Full node) and getting rid of dependency on an externally managed bucket.
@@ -45,7 +61,24 @@ checkpoint-executor-config:
   data-ingestion-dir: <path to a local directory>
 ```
 
-![Data ingestion flow](./images/custom-indexer.png)
+```mermaid
+flowchart LR
+  subgraph Sui
+    A("fa:fa-server Full node binary");
+    A-->B("fa:fa-folder Local directory");
+    B-->C[("fa:fa-gears
+    Indexer
+    daemon")];
+  end
+  subgraph cloud[Cloud storage]
+    pg(fa:fa-cloud Postgres);
+    bq(fa:fa-cloud BigQuery);
+    s1(fa:fa-cloud S3);
+  end
+  C-->cloud;
+  C<-->D("fa:fa-floppy-disk Progress store");
+```
+
 
 ### Hybrid mode
 
