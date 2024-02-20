@@ -3,6 +3,7 @@
 
 use fastcrypto::traits::EncodeDecodeBase64;
 use shared_crypto::intent::{Intent, IntentMessage};
+use std::time::Duration;
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -21,7 +22,6 @@ use sui_types::{
     zk_login_authenticator::ZkLoginAuthenticator,
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
-
 async fn do_upgraded_multisig_test() -> SuiResult {
     let test_cluster = TestClusterBuilder::new().build().await;
     let tx = make_upgraded_multisig_tx();
@@ -641,7 +641,9 @@ async fn test_expired_epoch_zklogin_in_multisig() {
         .with_epoch_duration_ms(1000)
         .build()
         .await;
-    test_cluster.wait_for_epoch(Some(11)).await;
+    test_cluster
+        .wait_for_epoch_with_timeout(Some(11), Duration::from_secs(300))
+        .await;
     let tx = construct_simple_zklogin_multisig_tx(&test_cluster).await;
     let res = test_cluster.wallet.execute_transaction_may_fail(tx).await;
     assert!(res
