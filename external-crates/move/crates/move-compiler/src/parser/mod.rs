@@ -13,7 +13,7 @@ pub(crate) mod verification_attribute_filter;
 use crate::{
     diagnostics::FilesSourceText,
     parser::{self, ast::PackageDefinition, syntax::parse_file_string},
-    shared::{CompilationEnv, IndexedPackagePath, NamedAddressMaps},
+    shared::{open_file, CompilationEnv, IndexedPackagePath, NamedAddressMaps},
 };
 use anyhow::anyhow;
 use comments::*;
@@ -149,7 +149,8 @@ fn parse_file(
     FileHash,
 )> {
     let mut source_buffer = String::new();
-    compilation_env.read_to_string(std::path::Path::new(fname.as_str()), &mut source_buffer)?;
+    let mut vfs_file = open_file(compilation_env.vfs(), std::path::Path::new(fname.as_str()))?;
+    vfs_file.read_to_string(&mut source_buffer)?;
     let file_hash = FileHash::new(&source_buffer);
     let buffer = match verify_string(file_hash, &source_buffer) {
         Err(ds) => {

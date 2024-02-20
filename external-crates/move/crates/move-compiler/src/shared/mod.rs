@@ -22,16 +22,18 @@ use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
-    fmt,
+    fmt, fs,
     hash::Hash,
     io::Read,
-    path::Path,
+    io::{self, Write},
+    path::{Path, PathBuf},
     rc::Rc,
     sync::{
         atomic::{AtomicUsize, Ordering as AtomicOrdering},
         Arc,
     },
 };
+use tempfile::NamedTempFile;
 
 pub mod ast_debug;
 pub mod known_attributes;
@@ -555,11 +557,8 @@ impl CompilationEnv {
         self.prim_definers.get(&t)
     }
 
-    pub fn read_to_string(&mut self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
-        match self.vfs.as_mut() {
-            Some(reader) => reader.read_to_string(fpath, buf),
-            None => FileSystemVFS.read_to_string(fpath, buf),
-        }
+    pub fn vfs(&self) -> &Option<Arc<Box<dyn VFS>>> {
+        &self.vfs
     }
 }
 
@@ -881,16 +880,138 @@ pub(crate) use process_binops;
 // Virtual file system
 //**************************************************************************************************
 
+/// Virtual file system trait
 pub trait VFS {
-    fn read_to_string(&self, fpath: &Path, buf: &mut String) -> std::io::Result<usize>;
+    fn is_file(&self, fpath: &Path) -> bool;
+
+    fn open_file(&self, fpath: &Path) -> io::Result<Box<dyn VFSFile>>;
+
+    fn create_tmp_file_in(&self, fpath: &Path) -> io::Result<Box<dyn VFSFile>>;
+
+    fn create_dir_all(&self, fpath: &Path) -> io::Result<()>;
 }
+
+/// Trait files in a virtual file system
+pub trait VFSFile {
+    fn read_to_string(&mut self, buf: &mut String) -> io::Result<usize>;
+
+    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> io::Result<usize>;
+
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()>;
+
+    fn rename(&mut self, dst_path: &Path) -> io::Result<()>;
+}
+
+//**************************************************************************************************
+// Virtual file system default implementation
+//**************************************************************************************************
 
 pub struct FileSystemVFS;
 
 impl VFS for FileSystemVFS {
-    fn read_to_string(&self, fpath: &Path, buf: &mut String) -> std::io::Result<usize> {
-        let mut f = std::fs::File::open(fpath)
-            .map_err(|err| std::io::Error::new(err.kind(), format!("{}: {:?}", err, fpath)))?;
-        f.read_to_string(buf)
+    fn is_file(&self, fpath: &Path) -> bool {
+        fpath.is_file()
+    }
+
+    fn open_file(&self, fpath: &Path) -> io::Result<Box<dyn VFSFile>> {
+        let f = fs::File::open(fpath)?;
+        Ok(Box::new(FileSystemVFSFile {
+            f,
+            path: fpath.to_path_buf(),
+            is_temp: false,
+        }))
+    }
+
+    fn create_tmp_file_in(&self, fpath: &Path) -> io::Result<Box<dyn VFSFile>> {
+        let temp = NamedTempFile::new_in(fpath)?;
+        let p = temp.path().to_path_buf();
+        let f = temp.into_file();
+        Ok(Box::new(FileSystemVFSFile {
+            f,
+            path: p,
+            is_temp: true,
+        }))
+    }
+
+    fn create_dir_all(&self, fpath: &Path) -> io::Result<()> {
+        fs::create_dir_all(fpath)
+    }
+}
+
+pub struct FileSystemVFSFile {
+    /// File handle
+    f: fs::File,
+    /// A path to the file
+    path: PathBuf,
+    /// Is this file temporary?
+    is_temp: bool,
+}
+
+impl VFSFile for FileSystemVFSFile {
+    fn read_to_string(&mut self, buf: &mut String) -> io::Result<usize> {
+        self.f.read_to_string(buf)
+    }
+
+    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
+        self.f.read_to_end(buf)
+    }
+
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.f.read(buf)
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.f.write_all(buf)
+    }
+
+    fn rename(&mut self, dst_path: &Path) -> io::Result<()> {
+        std::fs::rename(&self.path, dst_path)?;
+        self.path = dst_path.to_path_buf();
+        Ok(())
+    }
+}
+
+impl Drop for FileSystemVFSFile {
+    fn drop(&mut self) {
+        if self.is_temp {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+}
+
+//**************************************************************************************************
+// Virtual file system convenience access functions
+//**************************************************************************************************
+
+pub fn is_file(vfs: &Option<Arc<Box<dyn VFS>>>, fpath: &Path) -> bool {
+    match vfs {
+        Some(vfs) => vfs.is_file(fpath),
+        None => FileSystemVFS.is_file(fpath),
+    }
+}
+
+pub fn open_file(vfs: &Option<Arc<Box<dyn VFS>>>, fpath: &Path) -> io::Result<Box<dyn VFSFile>> {
+    match vfs {
+        Some(vfs) => vfs.open_file(fpath),
+        None => FileSystemVFS.open_file(fpath),
+    }
+}
+
+pub fn create_tmp_file_in(
+    vfs: &Option<Arc<Box<dyn VFS>>>,
+    fpath: &Path,
+) -> io::Result<Box<dyn VFSFile>> {
+    match vfs {
+        Some(vfs) => vfs.create_tmp_file_in(fpath),
+        None => FileSystemVFS.create_tmp_file_in(fpath),
+    }
+}
+
+pub fn create_dir_all(vfs: &Option<Arc<Box<dyn VFS>>>, fpath: &Path) -> io::Result<()> {
+    match vfs {
+        Some(vfs) => vfs.create_dir_all(fpath),
+        None => FileSystemVFS.create_dir_all(fpath),
     }
 }

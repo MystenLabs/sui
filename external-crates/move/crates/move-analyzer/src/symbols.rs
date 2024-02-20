@@ -58,7 +58,7 @@ use crate::{
     context::Context,
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
     utils::get_loc,
-    vfs::VirtualFileSystem,
+    vfs::IDEVFS,
 };
 use anyhow::{anyhow, Result};
 use chashmap::CHashMap;
@@ -657,7 +657,7 @@ impl SymbolicatorRunner {
 
     /// Create a new runner
     pub fn new(
-        files: Arc<CHashMap<PathBuf, String>>,
+        files: Arc<CHashMap<PathBuf, Vec<u8>>>,
         symbols: Arc<Mutex<Symbols>>,
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
         lint: bool,
@@ -955,7 +955,7 @@ impl Symbols {
 /// actually (re)computed and the diagnostics are returned, the old symbolic information should
 /// be retained even if it's getting out-of-date.
 pub fn get_symbols(
-    virtual_files: Arc<CHashMap<PathBuf, String>>,
+    virtual_files: Arc<CHashMap<PathBuf, Vec<u8>>>,
     pkg_path: &Path,
     lint: bool,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
@@ -973,7 +973,7 @@ pub fn get_symbols(
     // vector as the writer
     let resolution_graph = build_config.resolution_graph_for_package(pkg_path, &mut Vec::new())?;
 
-    let vfs: Arc<Box<dyn VFS>> = Arc::new(Box::new(VirtualFileSystem {
+    let vfs: Arc<Box<dyn VFS>> = Arc::new(Box::new(IDEVFS {
         ide_files: virtual_files.clone(),
         all_files: Arc::new(CHashMap::new()),
     }));
@@ -1208,7 +1208,8 @@ pub fn file_sources(
                 .iter()
                 .map(|fname| {
                     let mut contents = String::new();
-                    let _ = vfs.read_to_string(&PathBuf::from(fname.as_str()), &mut contents);
+                    let mut vfs_file = vfs.open_file(&PathBuf::from(fname.as_str())).unwrap();
+                    let _ = vfs_file.read_to_string(&mut contents);
                     let fhash = FileHash::new(&contents);
                     (fhash, (*fname, contents))
                 })

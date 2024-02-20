@@ -1580,6 +1580,7 @@ dependencies = [
  "move-ir-types",
  "move-package",
  "move-symbol-pool",
+ "rand 0.8.5",
  "serde_json",
  "tempfile",
  "url",

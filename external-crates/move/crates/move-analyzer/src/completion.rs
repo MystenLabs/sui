@@ -122,7 +122,11 @@ fn identifiers(buffer: &str, symbols: &Symbols, path: &PathBuf) -> Vec<Completio
 
 /// Returns the token corresponding to the "trigger character" that precedes the user's cursor,
 /// if it is one of `.`, `:`, or `::`. Otherwise, returns `None`.
-fn get_cursor_token(buffer: &str, position: &Position) -> Option<Tok> {
+fn get_cursor_token(buffer_opt: Option<&str>, position: &Position) -> Option<Tok> {
+    let Some(buffer) = buffer_opt else {
+        return None;
+    };
+
     // If the cursor is at the start of a new line, it cannot be preceded by a trigger character.
     if position.character == 0 {
         return None;
@@ -153,7 +157,7 @@ fn get_cursor_token(buffer: &str, position: &Position) -> Option<Tok> {
 pub fn on_completion_request(
     context: &Context,
     request: &Request,
-    files: Arc<CHashMap<PathBuf, String>>,
+    files: Arc<CHashMap<PathBuf, Vec<u8>>>,
     symbols: &Symbols,
 ) {
     eprintln!("handling completion request");
@@ -170,8 +174,8 @@ pub fn on_completion_request(
     let mut items = vec![];
     match files.get(&path) {
         Some(buffer) => {
-            let buf = buffer.as_str();
-            let cursor = get_cursor_token(buf, &parameters.text_document_position.position);
+            let buf_opt = std::str::from_utf8(&buffer).ok();
+            let cursor = get_cursor_token(buf_opt, &parameters.text_document_position.position);
             match cursor {
                 Some(Tok::Colon) => {
                     items.extend_from_slice(&primitive_types());
@@ -187,9 +191,10 @@ pub fn on_completion_request(
                     items.extend_from_slice(&builtins());
                 }
             }
-
-            let identifiers = identifiers(buf, symbols, &path);
-            items.extend_from_slice(&identifiers);
+            if let Some(buf) = buf_opt {
+                let identifiers = identifiers(buf, symbols, &path);
+                items.extend_from_slice(&identifiers);
+            }
         }
         None => {
             eprintln!(

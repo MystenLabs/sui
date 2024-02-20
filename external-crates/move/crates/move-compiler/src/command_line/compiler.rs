@@ -15,8 +15,9 @@ use crate::{
     expansion, hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
-        CompilationEnv, Flags, IndexedPackagePath, NamedAddressMap, NamedAddressMaps,
-        NumericalAddress, PackageConfig, PackagePaths, VFS,
+        create_dir_all, create_tmp_file_in, is_file, open_file, CompilationEnv, Flags,
+        IndexedPackagePath, NamedAddressMap, NamedAddressMaps, NumericalAddress, PackageConfig,
+        PackagePaths, VFS,
     },
     to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
@@ -30,12 +31,9 @@ use move_symbol_pool::Symbol;
 use std::{
     collections::BTreeMap,
     fs,
-    fs::File,
-    io::{Read, Write},
     path::{Path, PathBuf},
     sync::Arc,
 };
-use tempfile::NamedTempFile;
 
 //**************************************************************************************************
 // Definitions
@@ -294,6 +292,7 @@ impl<'a> Compiler<'a> {
             &mut deps,
             interface_files_dir_opt,
             &compiled_module_named_address_mapping,
+            vfs.clone(),
         )?;
         let mut compilation_env =
             CompilationEnv::new(flags, visitors, package_configs, default_config, vfs);
@@ -685,9 +684,15 @@ fn generate_interface_files_for_deps(
     deps: &mut Vec<IndexedPackagePath>,
     interface_files_dir_opt: Option<String>,
     module_to_named_address: &BTreeMap<CompiledModuleId, String>,
+    vfs: Option<Arc<Box<dyn VFS>>>,
 ) -> anyhow::Result<()> {
-    let interface_files_paths =
-        generate_interface_files(deps, interface_files_dir_opt, module_to_named_address, true)?;
+    let interface_files_paths = generate_interface_files(
+        deps,
+        interface_files_dir_opt,
+        module_to_named_address,
+        true,
+        vfs,
+    )?;
     deps.extend(interface_files_paths);
     // Remove bytecode files
     deps.retain(|p| !p.path.as_str().ends_with(MOVE_COMPILED_EXTENSION));
@@ -699,12 +704,14 @@ pub fn generate_interface_files(
     interface_files_dir_opt: Option<String>,
     module_to_named_address: &BTreeMap<CompiledModuleId, String>,
     separate_by_hash: bool,
+    vfs: Option<Arc<Box<dyn VFS>>>,
 ) -> anyhow::Result<Vec<IndexedPackagePath>> {
     let mv_files = {
         let mut v = vec![];
         let (mv_magic_files, other_file_locations): (Vec<_>, Vec<_>) =
             mv_file_locations.iter().cloned().partition(|s| {
-                Path::new(s.path.as_str()).is_file() && has_compiled_module_magic_number(&s.path)
+                is_file(&vfs, &Path::new(s.path.as_str()))
+                    && has_compiled_module_magic_number(&s.path, vfs.clone())
             });
         v.extend(mv_magic_files);
         for IndexedPackagePath {
@@ -745,7 +752,10 @@ pub fn generate_interface_files(
         mv_files.len().hash(&mut hasher);
         HASH_DELIM.hash(&mut hasher);
         for IndexedPackagePath { path, .. } in &mv_files {
-            std::fs::read(path.as_str())?.hash(&mut hasher);
+            let mut f = open_file(&vfs, Path::new(path.as_str()))?;
+            let mut buf = vec![];
+            f.read(&mut buf)?.hash(&mut hasher);
+            buf.hash(&mut hasher);
             HASH_DELIM.hash(&mut hasher);
         }
 
@@ -764,7 +774,7 @@ pub fn generate_interface_files(
     } in mv_files
     {
         let (id, interface_contents) =
-            interface_generator::write_file_to_string(module_to_named_address, &path)?;
+            interface_generator::write_file_to_string(module_to_named_address, &path, vfs.clone())?;
         let addr_dir = dir_path!(all_addr_dir.clone(), format!("{}", id.address()));
         let file_path = file_path!(addr_dir.clone(), format!("{}", id.name()), MOVE_EXTENSION);
         result.push(IndexedPackagePath {
@@ -773,30 +783,31 @@ pub fn generate_interface_files(
             named_address_map,
         });
         // it's possible some files exist but not others due to multithreaded environments
-        if separate_by_hash && Path::new(&file_path).is_file() {
+        if separate_by_hash && is_file(&vfs, &Path::new(&file_path)) {
             continue;
         }
 
-        std::fs::create_dir_all(&addr_dir)?;
+        create_dir_all(&vfs, &addr_dir)?;
 
-        let mut tmp = NamedTempFile::new_in(addr_dir)?;
+        let mut tmp = create_tmp_file_in(&vfs, &addr_dir)?;
         tmp.write_all(interface_contents.as_bytes())?;
 
         // it's possible some files exist but not others due to multithreaded environments
         // Check for the file existing and then safely move the tmp file there if
         // it does not
-        if separate_by_hash && Path::new(&file_path).is_file() {
+        if separate_by_hash && is_file(&vfs, &Path::new(&file_path)) {
             continue;
         }
-        std::fs::rename(tmp.path(), file_path)?;
+
+        tmp.rename(&file_path)?;
     }
 
     Ok(result)
 }
 
-fn has_compiled_module_magic_number(path: &str) -> bool {
+fn has_compiled_module_magic_number(path: &str, vfs: Option<Arc<Box<dyn VFS>>>) -> bool {
     use move_binary_format::file_format_common::BinaryConstants;
-    let mut file = match File::open(path) {
+    let mut file = match open_file(&vfs, &Path::new(path)) {
         Err(_) => return false,
         Ok(f) => f,
     };

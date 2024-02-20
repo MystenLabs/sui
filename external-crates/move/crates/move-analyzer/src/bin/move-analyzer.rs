@@ -234,7 +234,7 @@ fn main() {
 /// should respond with a particular type of error.
 fn on_request(
     context: &Context,
-    files: Arc<CHashMap<PathBuf, String>>,
+    files: Arc<CHashMap<PathBuf, Vec<u8>>>,
     request: &Request,
     shutdown_request_received: bool,
 ) -> bool {
@@ -300,7 +300,7 @@ fn on_response(_context: &Context, _response: &Response) {
 }
 
 fn on_notification(
-    files: Arc<CHashMap<PathBuf, String>>,
+    files: Arc<CHashMap<PathBuf, Vec<u8>>>,
     symbolicator_runner: &symbols::SymbolicatorRunner,
     notification: &Notification,
 ) {

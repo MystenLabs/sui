@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::shared::{NumberFormat, NumericalAddress};
+use crate::shared::{open_file, NumberFormat, NumericalAddress, VFS};
 use anyhow::{anyhow, Result};
 use move_binary_format::{
     access::ModuleAccess,
@@ -13,7 +13,7 @@ use move_binary_format::{
     },
 };
 use move_core_types::language_storage::ModuleId;
-use std::{collections::BTreeMap, fs};
+use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 pub const NATIVE_INTERFACE: &str = "native_interface";
 
@@ -35,8 +35,11 @@ macro_rules! push {
 pub fn write_file_to_string(
     named_address_mapping: &BTreeMap<ModuleId, impl AsRef<str>>,
     compiled_module_file_input_path: &str,
+    vfs: Option<Arc<Box<dyn VFS>>>,
 ) -> Result<(ModuleId, String)> {
-    let file_contents = fs::read(compiled_module_file_input_path)?;
+    let mut f = open_file(&vfs, &Path::new(compiled_module_file_input_path))?;
+    let mut file_contents = vec![];
+    f.read_to_end(&mut file_contents)?;
     let module = CompiledModule::deserialize_with_defaults(&file_contents).map_err(|e| {
         anyhow!(
             "Unable to deserialize module at '{}': {}",
