@@ -4653,7 +4653,7 @@ impl AuthorityState {
 }
 
 pub struct RandomnessRoundReceiver {
-    authority_state: Arc<AuthorityState>, // TODO-DNS is this safe or does it need to be `Weak`?
+    authority_state: Arc<AuthorityState>,
     randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
 }
 
@@ -4677,7 +4677,7 @@ impl RandomnessRoundReceiver {
                 tokio::select! {
                     maybe_recv = self.randomness_rx.recv() => {
                         if let Some((epoch, round, bytes)) = maybe_recv {
-                            self.handle_new_randomness(epoch, round, bytes).await;
+                            self.handle_new_randomness(epoch, round, bytes);
                         } else {
                             break;
                         }
@@ -4690,7 +4690,7 @@ impl RandomnessRoundReceiver {
     }
 
     #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
-    async fn handle_new_randomness(&self, epoch: EpochId, round: RandomnessRound, bytes: Vec<u8>) {
+    fn handle_new_randomness(&self, epoch: EpochId, round: RandomnessRound, bytes: Vec<u8>) {
         let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
         if epoch_store.epoch() != epoch {
             error!(
@@ -4739,20 +4739,25 @@ impl RandomnessRoundReceiver {
             error!("BUG: failed to enqueue randomness state update transaction: {e:?}",);
         }
 
-        let Ok(mut effects) = self
-            .authority_state
-            .execution_cache
-            .notify_read_executed_effects(&[key])
-            .await
-        else {
-            error!("BUG: failed to get effects for randomness state update transaction at epoch {epoch}, round {round}");
-            return;
-        };
-        let effects = effects.pop().expect("should return effects");
-        if *effects.status() != ExecutionStatus::Success {
-            panic!("BUG: failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
-        }
-        debug!("sucessfully executed randomness state update transaction");
+        let authority_state = self.authority_state.clone();
+        spawn_monitored_task!(async move {
+            // Wait for transaction execution in a separate task, to avoid deadlock in case of
+            // out-of-order randomness generation. (Each RandomnessStateUpdate depends on the
+            // output of the RandomnessStateUpdate from the previous round.)
+            let Ok(mut effects) = authority_state
+                .execution_cache
+                .notify_read_executed_effects(&[key])
+                .await
+            else {
+                error!("BUG: failed to get effects for randomness state update transaction at epoch {epoch}, round {round}");
+                return;
+            };
+            let effects = effects.pop().expect("should return effects");
+            if *effects.status() != ExecutionStatus::Success {
+                panic!("BUG: failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
+            }
+            debug!("sucessfully executed randomness state update transaction");
+        });
     }
 }
 
