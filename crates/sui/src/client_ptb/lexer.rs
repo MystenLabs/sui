@@ -5,7 +5,7 @@ use crate::sp_;
 
 use super::{
     error::{Span, Spanned},
-    token::{Lexeme, Token},
+    token::{Lexeme, Token as T},
 };
 
 pub struct Lexer<'l, I: Iterator<Item = &'l str>> {
@@ -148,7 +148,7 @@ impl<'l, I: Iterator<Item = &'l str>> Lexer<'l, I> {
     /// `UnfinishedString`, even if it would have been terminated in a following shell token.
     fn string(&mut self, start: Spanned<&'l str>) -> Spanned<Lexeme<'l>> {
         self.bump();
-        let sp_!(sp, quote) = &start;
+        let sp_!(sp, quote) = start;
 
         let mut escaped = false;
         let content = self
@@ -169,29 +169,21 @@ impl<'l, I: Iterator<Item = &'l str>> Lexer<'l, I> {
                     end: sp.end,
                 },
                 value: "",
-            });
+            })
+            .widen(start);
 
         let Some(end) = self.eat_prefix(quote) else {
-            return content.widen(start).map(|src| Lexeme {
-                token: Token::UnfinishedString,
-                src,
-            });
+            return content.map(|src| Lexeme(T::UnfinishedString, src));
         };
 
-        content.widen(start).widen(end).map(|src| Lexeme {
-            token: Token::String,
-            src,
-        })
+        content.widen(end).map(|src| Lexeme(T::String, src))
     }
 
     /// Signal that `c` is an unexpected token, and trigger the lexer's error flag, to prevent
     /// further iteration.
     fn unexpected(&mut self, c: Spanned<&'l str>) -> Spanned<Lexeme<'l>> {
         self.errored = true;
-        c.map(|src| Lexeme {
-            token: Token::Unexpected,
-            src,
-        })
+        c.map(|src| Lexeme(T::Unexpected, src))
     }
 
     /// Signal that the lexer has experienced an unexpected, early end-of-file, and trigger the
@@ -203,10 +195,7 @@ impl<'l, I: Iterator<Item = &'l str>> Lexer<'l, I> {
                 start: self.offset,
                 end: self.offset,
             },
-            value: Lexeme {
-                token: Token::EarlyEof,
-                src: "",
-            },
+            value: Lexeme(T::EarlyEof, ""),
         }
     }
 }
@@ -215,8 +204,6 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
     type Item = Spanned<Lexeme<'l>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        use Token as T;
-
         // Lexer cannot be restarted after hitting an error.
         if self.errored {
             return None;
@@ -231,7 +218,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
         macro_rules! token {
             ($t:expr) => {{
                 self.bump();
-                c.map(|src| Lexeme { token: $t, src })
+                c.map(|src| Lexeme($t, src))
             }};
         }
 
@@ -254,10 +241,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                     break 'colon self.unexpected(c);
                 };
 
-                sp.map(|src| Lexeme {
-                    token: T::ColonColon,
-                    src,
-                })
+                sp.map(|src| Lexeme(T::ColonColon, src))
             }
 
             sp_!(_, c) if c.chars().next().is_some_and(is_ident_start) => {
@@ -265,10 +249,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                     unreachable!("is_ident_start implies is_ident_continue");
                 };
 
-                ident.map(|src| Lexeme {
-                    token: T::Ident,
-                    src,
-                })
+                ident.map(|src| Lexeme(T::Ident, src))
             }
 
             sp_!(_, "0") => 'zero: {
@@ -280,10 +261,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                     break 'zero self.unexpected(prefix);
                 };
 
-                digits.widen(prefix).map(|src| Lexeme {
-                    token: T::HexNumber,
-                    src,
-                })
+                digits.widen(prefix).map(|src| Lexeme(T::HexNumber, src))
             }
 
             sp_!(_, n) if n.chars().next().is_some_and(is_number_start) => {
@@ -291,10 +269,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                     unreachable!("is_number_start implies is_number_continue");
                 };
 
-                num.map(|src| Lexeme {
-                    token: T::Number,
-                    src,
-                })
+                num.map(|src| Lexeme(T::Number, src))
             }
 
             sp_!(_, "-") => 'command: {
@@ -316,10 +291,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                             break 'command self.early_eof();
                         };
 
-                        file.widen(prefix).map(|src| Lexeme {
-                            token: T::Publish,
-                            src,
-                        })
+                        file.widen(prefix).map(|src| Lexeme(T::Publish, src))
                     }
 
                     sp_!(_, "upgrade") => {
@@ -331,16 +303,10 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                             break 'command self.early_eof();
                         };
 
-                        file.widen(prefix).map(|src| Lexeme {
-                            token: T::Upgrade,
-                            src,
-                        })
+                        file.widen(prefix).map(|src| Lexeme(T::Upgrade, src))
                     }
 
-                    sp_!(_, _) => ident.widen(prefix).map(|src| Lexeme {
-                        token: T::Command,
-                        src,
-                    }),
+                    sp_!(_, _) => ident.widen(prefix).map(|src| Lexeme(T::Command, src)),
                 }
             }
 

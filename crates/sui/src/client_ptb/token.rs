@@ -4,12 +4,12 @@
 use std::fmt;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Lexeme<'t> {
+pub struct Lexeme<'t>(
     /// The kind of lexeme.
-    pub token: Token,
+    pub Token,
     /// Slice from source that identifies this lexeme (among other instances of this token).
-    pub src: &'t str,
-}
+    pub &'t str,
+);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Token {
@@ -61,12 +61,12 @@ impl<'a> fmt::Display for Lexeme<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Token as T;
 
-        match self.token {
-            T::Command => write!(f, "command '--{}'", self.src),
-            T::Ident => write!(f, "identifier '{}'", self.src),
-            T::Number => write!(f, "number '{}'", self.src),
-            T::HexNumber => write!(f, "hexadecimal number '0x{}'", self.src),
-            T::String => write!(f, "string {:?}", self.src),
+        match self.0 {
+            T::Command => write!(f, "command '--{}'", self.1),
+            T::Ident => write!(f, "identifier '{}'", self.1),
+            T::Number => write!(f, "number '{}'", self.1),
+            T::HexNumber => write!(f, "hexadecimal number '0x{}'", self.1),
+            T::String => write!(f, "string {:?}", self.1),
             T::ColonColon => write!(f, "'::'"),
             T::Comma => write!(f, "','"),
             T::LBracket => write!(f, "'['"),
@@ -77,11 +77,11 @@ impl<'a> fmt::Display for Lexeme<'a> {
             T::RAngle => write!(f, "'>'"),
             T::At => write!(f, "'@'"),
             T::Dot => write!(f, "'.'"),
-            T::Unexpected => write!(f, "unexpected input {:?}", self.src),
-            T::UnfinishedString => write!(f, "unfinished string {:?}", format!("{}...", self.src)),
+            T::Unexpected => write!(f, "unexpected input {:?}", self.1),
+            T::UnfinishedString => write!(f, "unfinished string {:?}", format!("{}...", self.1)),
             T::EarlyEof => write!(f, "unexpected end of file"),
-            T::Publish => write!(f, "command '--publish {:?}'", self.src),
-            T::Upgrade => write!(f, "command '--upgrade {:?}'", self.src),
+            T::Publish => write!(f, "command '--publish {:?}'", self.1),
+            T::Upgrade => write!(f, "command '--upgrade {:?}'", self.1),
         }
     }
 }
