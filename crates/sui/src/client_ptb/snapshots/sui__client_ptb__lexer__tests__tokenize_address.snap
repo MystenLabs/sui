@@ -1,0 +1,156 @@
+---
+source: crates/sui/src/client_ptb/lexer.rs
+expression: tokens
+---
+[
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 1,
+        },
+        value: Lexeme {
+            token: At,
+            src: "@",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 1,
+            end: 4,
+        },
+        value: Lexeme {
+            token: HexNumber,
+            src: "1",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 5,
+            end: 6,
+        },
+        value: Lexeme {
+            token: At,
+            src: "@",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 6,
+            end: 13,
+        },
+        value: Lexeme {
+            token: HexNumber,
+            src: "1_000",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 14,
+            end: 15,
+        },
+        value: Lexeme {
+            token: At,
+            src: "@",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 15,
+            end: 28,
+        },
+        value: Lexeme {
+            token: HexNumber,
+            src: "100_000_000",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 29,
+            end: 30,
+        },
+        value: Lexeme {
+            token: At,
+            src: "@",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 30,
+            end: 39,
+        },
+        value: Lexeme {
+            token: HexNumber,
+            src: "100_000",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 39,
+            end: 42,
+        },
+        value: Lexeme {
+            token: Ident,
+            src: "u64",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 43,
+            end: 44,
+        },
+        value: Lexeme {
+            token: At,
+            src: "@",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 44,
+            end: 47,
+        },
+        value: Lexeme {
+            token: HexNumber,
+            src: "1",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 47,
+            end: 49,
+        },
+        value: Lexeme {
+            token: Ident,
+            src: "u8",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 50,
+            end: 51,
+        },
+        value: Lexeme {
+            token: At,
+            src: "@",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 51,
+            end: 55,
+        },
+        value: Lexeme {
+            token: HexNumber,
+            src: "1_",
+        },
+    },
+    Spanned {
+        span: Span {
+            start: 55,
+            end: 59,
+        },
+        value: Lexeme {
+            token: Ident,
+            src: "u128",
+        },
+    },
+]
