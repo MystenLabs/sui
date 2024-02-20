@@ -12,7 +12,7 @@ pub struct Lexer<'l, I: Iterator<Item = &'l str>> {
     pub buf: &'l str,
     pub tokens: I,
     pub offset: usize,
-    pub errored: bool,
+    pub done: Option<Spanned<Lexeme<'l>>>,
 }
 
 impl<'l, I: Iterator<Item = &'l str>> Lexer<'l, I> {
@@ -25,7 +25,7 @@ impl<'l, I: Iterator<Item = &'l str>> Lexer<'l, I> {
             buf,
             tokens,
             offset: 0,
-            errored: false,
+            done: None,
         })
     }
 
@@ -173,7 +173,9 @@ impl<'l, I: Iterator<Item = &'l str>> Lexer<'l, I> {
             .widen(start);
 
         let Some(end) = self.eat_prefix(quote) else {
-            return content.map(|src| Lexeme(T::UnfinishedString, src));
+            let error  = content.map(|src| Lexeme(T::UnfinishedString, src));
+            self.done = Some(error);
+            return error
         };
 
         content.widen(end).map(|src| Lexeme(T::String, src))
@@ -182,20 +184,24 @@ impl<'l, I: Iterator<Item = &'l str>> Lexer<'l, I> {
     /// Signal that `c` is an unexpected token, and trigger the lexer's error flag, to prevent
     /// further iteration.
     fn unexpected(&mut self, c: Spanned<&'l str>) -> Spanned<Lexeme<'l>> {
-        self.errored = true;
-        c.map(|src| Lexeme(T::Unexpected, src))
+        let error = c.map(|src| Lexeme(T::Unexpected, src));
+        self.done = Some(error);
+        error
     }
 
     /// Signal that the lexer has experienced an unexpected, early end-of-file, and trigger the
     /// lexer's error flag, to prevent further iteration.
-    fn early_eof(&mut self) -> Spanned<Lexeme<'l>> {
-        self.errored = true;
-        Spanned {
-            span: Span {
-                start: self.offset,
-                end: self.offset,
-            },
-            value: Lexeme(T::EarlyEof, ""),
+    fn done(&mut self, token: T) -> Spanned<Lexeme<'l>> {
+        let error = self.offset().wrap(Lexeme(token, ""));
+        self.done = Some(error);
+        error
+    }
+
+    /// Span pointing to the current offset in the input.
+    fn offset(&self) -> Span {
+        Span {
+            start: self.offset,
+            end: self.offset,
         }
     }
 }
@@ -204,15 +210,15 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
     type Item = Spanned<Lexeme<'l>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Lexer cannot be restarted after hitting an error.
-        if self.errored {
-            return None;
+        // Lexer has been expended, repeatedly return the terminal token.
+        if let Some(done) = self.done {
+            return Some(done);
         }
 
         self.eat_whitespace();
 
         let Some(c) = self.peek() else {
-            return None;
+            return Some(self.done(T::Eof));
         };
 
         macro_rules! token {
@@ -288,7 +294,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                         }
 
                         let Some(file) = self.eat_token() else {
-                            break 'command self.early_eof();
+                            break 'command self.done(T::EarlyEof);
                         };
 
                         file.widen(prefix).map(|src| Lexeme(T::Publish, src))
@@ -300,7 +306,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                         }
 
                         let Some(file) = self.eat_token() else {
-                            break 'command self.early_eof();
+                            break 'command self.done(T::EarlyEof);
                         };
 
                         file.widen(prefix).map(|src| Lexeme(T::Upgrade, src))
@@ -339,6 +345,16 @@ fn is_hex_continue(c: char) -> bool {
 mod tests {
     use super::*;
 
+    /// Tokenize the input up to and including the first terminal token.
+    fn lex(input: Vec<&str>) -> Vec<Spanned<Lexeme>> {
+        let mut lexer = Lexer::new(input.into_iter()).unwrap();
+        let mut lexemes: Vec<_> = (&mut lexer)
+            .take_while(|sp_!(_, lex)| !lex.is_terminal())
+            .collect();
+        lexemes.push(lexer.next().unwrap());
+        lexemes
+    }
+
     #[test]
     fn tokenize_vector() {
         let vecs = vec![
@@ -349,16 +365,13 @@ mod tests {
             "vector[1,]",
         ];
 
-        let tokens: Vec<_> = Lexer::new(vecs.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(vecs));
     }
 
     #[test]
     fn tokenize_array() {
         let arrays = vec!["[1,2,3]", "[1, 2, 3]", "[]", "[1]", "[1,]"];
-
-        let tokens: Vec<_> = Lexer::new(arrays.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(arrays));
     }
 
     #[test]
@@ -378,8 +391,7 @@ mod tests {
             "0x1_u128",
         ];
 
-        let tokens: Vec<_> = Lexer::new(nums.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(nums));
     }
 
     #[test]
@@ -393,8 +405,7 @@ mod tests {
             "@0x1_u128",
         ];
 
-        let tokens: Vec<_> = Lexer::new(addrs.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(addrs));
     }
 
     #[test]
@@ -411,24 +422,19 @@ mod tests {
             "package-b",
         ];
 
-        let tokens: Vec<_> = Lexer::new(args.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(args));
     }
 
     #[test]
     fn dotted_idents() {
         let idents = vec!["a", "a.b", "a.b.c", "a.b.c.d", "a.b.c.d.e"];
-
-        let tokens: Vec<_> = Lexer::new(idents.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(idents));
     }
 
     #[test]
     fn gas() {
         let gas = vec!["gas"];
-
-        let tokens: Vec<_> = Lexer::new(gas.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(gas));
     }
 
     #[test]
@@ -441,63 +447,48 @@ mod tests {
             "<u64>",
         ];
 
-        let tokens: Vec<_> = Lexer::new(funs.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(funs));
     }
 
     #[test]
     fn unexpected_colon() {
         let unexpected = vec!["hello: world"];
-
-        let tokens: Vec<_> = Lexer::new(unexpected.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(unexpected));
     }
 
     #[test]
     fn unexpected_0x() {
         let unexpected = vec!["0x forgot my train of thought"];
-
-        let tokens: Vec<_> = Lexer::new(unexpected.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(unexpected));
     }
 
     #[test]
     fn unexpected_dash() {
         let unexpected = vec!["-"];
-
-        let tokens: Vec<_> = Lexer::new(unexpected.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(unexpected));
     }
 
     #[test]
     fn unexpected_dash_dash() {
         let unexpected = vec!["--"];
-
-        let tokens: Vec<_> = Lexer::new(unexpected.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(unexpected));
     }
 
     #[test]
     fn unexpected_publish_trailing() {
         let unexpected = vec!["--publish needs a token break"];
-
-        let tokens: Vec<_> = Lexer::new(unexpected.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(unexpected));
     }
 
     #[test]
     fn unexpected_upgrade_eof() {
         let unexpected = vec!["--upgrade"]; // needs a next token
-
-        let tokens: Vec<_> = Lexer::new(unexpected.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(unexpected));
     }
 
     #[test]
     fn unexpected_random_chars() {
         let unexpected = vec!["4 * 5"];
-
-        let tokens: Vec<_> = Lexer::new(unexpected.into_iter()).unwrap().collect();
-        insta::assert_debug_snapshot!(tokens);
+        insta::assert_debug_snapshot!(lex(unexpected));
     }
 }
