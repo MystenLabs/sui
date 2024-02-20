@@ -109,8 +109,8 @@ Note that <code>c</code> is omitted because it may be computed from <code>a</cod
 The <code>discriminant</code> defines what class group to use and should be the same as used in <code>hash_to_input</code>. The
 <code>discriminant</code> should be encoded as a big-endian encoding of the negation of the negative discriminant.
 
-Details: This uses Wesolowski's VDF construction over imaginary class groups as described in  Benjamin Wesolowski
-(2020), 'Efficient Verifiable Delay Functions.', J. Cryptol. 33, and is compatible with the VDF implementation in
+This uses Wesolowski's VDF construction over imaginary class groups as described in Wesolowski (2020),
+'Efficient Verifiable Delay Functions.', J. Cryptol. 33, and is compatible with the VDF implementation in
 fastcrypto.
 
 
