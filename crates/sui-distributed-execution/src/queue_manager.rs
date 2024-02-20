@@ -66,7 +66,7 @@ impl QueuesManager {
         let mut wait_ctr = 0;
 
         // Add tx to wait lists
-        r_set.union(&w_set).for_each(|obj| {
+        for obj in r_set.union(&w_set) {
             let prev_write = self.writing_tx.insert(*obj, *txid);
             if let Some(other_txid) = prev_write {
                 self.wait_table.entry(*txid).or_default().insert(other_txid);
@@ -76,12 +76,12 @@ impl QueuesManager {
                     .insert(*txid);
                 wait_ctr += 1;
             }
-        });
+        }
 
         // Set this transaction as the current writer
-        w_set.iter().for_each(|obj| {
+        for obj in &w_set {
             self.writing_tx.insert(*obj, *txid);
-        });
+        }
 
         // Store tx
         self.tx_store.insert(*txid, full_tx.clone());
@@ -107,22 +107,23 @@ impl QueuesManager {
             }
         }
 
-        if let Some(waiting_txs) = self.reverse_wait_table.remove(txid) {
-            for other_txid in waiting_txs {
-                if let Some(waiting_tx_set) = self.wait_table.get_mut(&other_txid) {
-                    waiting_tx_set.remove(txid);
+        if let Some(_waiting_txs) = self.reverse_wait_table.remove(txid) {
+            unreachable!("We should not have any txs waiting on a completed tx");
+            // for other_txid in waiting_txs {
+            //     if let Some(waiting_tx_set) = self.wait_table.get_mut(&other_txid) {
+            //         waiting_tx_set.remove(txid);
 
-                    if waiting_tx_set.is_empty() {
-                        self.wait_table.remove(&other_txid);
-                        let ready_tx = self.get_tx(&other_txid).clone();
-                        self.ready.send(ready_tx).expect("send failed");
-                    }
-                }
-            }
+            //         if waiting_tx_set.is_empty() {
+            //             self.wait_table.remove(&other_txid);
+            //             let ready_tx = self.get_tx(&other_txid).clone();
+            //             self.ready.send(ready_tx).await.expect("send failed");
+            //         }
+            //     }
+            // }
         }
     }
 
-    fn get_tx(&self, txid: &TransactionDigest) -> &TransactionWithEffects {
+    pub fn get_tx(&self, txid: &TransactionDigest) -> &TransactionWithEffects {
         self.tx_store.get(txid).unwrap()
     }
 }
