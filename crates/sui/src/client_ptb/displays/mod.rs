@@ -20,10 +20,7 @@ impl<'a> Display for PTBPreview<'a> {
         let columns = vec!["command", "from"];
         builder.set_header(columns);
         for sp!(loc, cmd) in &self.program.commands {
-            builder.push_record([
-                cmd.to_string(),
-                loc.file_scope.name.to_string(),
-            ]);
+            builder.push_record([cmd.to_string(), loc.file_scope.name.to_string()]);
         }
         let mut table = builder.build();
         table.with(TablePanel::header("PTB Preview"));

@@ -25,7 +25,8 @@ use sui_types::base_types::ObjectID;
 
 use super::{
     ast::{GasPicker, ModuleAccess, ParsedPTBCommand, ParsedProgram, Program, ProgramMetadata},
-    errors::PTBResult, utils::read_ptb_file,
+    errors::PTBResult,
+    utils::read_ptb_file,
 };
 
 /// Parse a program
