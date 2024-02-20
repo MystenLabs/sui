@@ -890,7 +890,12 @@ impl TestClusterBuilder {
             .accounts
             .extend(addresses.into_iter().map(|address| AccountConfig {
                 address: Some(address),
-                gas_amounts: vec![DEFAULT_GAS_AMOUNT, MIN_VALIDATOR_JOINING_STAKE_MIST],
+                gas_amounts: vec![
+                    DEFAULT_GAS_AMOUNT * 3,
+                    MIN_VALIDATOR_JOINING_STAKE_MIST,
+                    MIN_VALIDATOR_JOINING_STAKE_MIST,
+                    MIN_VALIDATOR_JOINING_STAKE_MIST,
+                ],
             }));
         self
     }

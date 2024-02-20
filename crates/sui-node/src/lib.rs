@@ -738,7 +738,11 @@ impl SuiNode {
         info!("SuiNode started!");
         let node = Arc::new(node);
         let node_copy = node.clone();
-        spawn_monitored_task!(async move { Self::monitor_reconfiguration(node_copy).await });
+        spawn_monitored_task!(async move {
+            let rrr = Self::monitor_reconfiguration(node_copy).await;
+            println!("ZZZZZZ reconfigure result {:?}", rrr);
+            debug_assert!(rrr.is_ok(), "Reconfiguration failed {:?}", rrr);
+        });
 
         Ok(node)
     }
@@ -1021,12 +1025,13 @@ impl SuiNode {
         state_sync_handle: state_sync::Handle,
         accumulator: Arc<StateAccumulator>,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
-        registry_service: &RegistryService,
+        _registry_service: &RegistryService,
         sui_node_metrics: Arc<SuiNodeMetrics>,
     ) -> Result<ValidatorComponents> {
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
+        let registry_service = RegistryService::new(Registry::new());
 
         let (consensus_adapter, consensus_manager) = match consensus_config.protocol {
             ConsensusProtocol::Narwhal => {
@@ -1042,7 +1047,7 @@ impl SuiNode {
                     )),
                 ));
                 let consensus_manager =
-                    ConsensusManager::new_narwhal(config, consensus_config, registry_service);
+                    ConsensusManager::new_narwhal(config, consensus_config, &registry_service);
                 (consensus_adapter, consensus_manager)
             }
             ConsensusProtocol::Mysticeti => {
@@ -1060,7 +1065,7 @@ impl SuiNode {
                 let consensus_manager = ConsensusManager::new_mysticeti(
                     config,
                     consensus_config,
-                    registry_service,
+                    &registry_service,
                     client,
                 );
                 (consensus_adapter, consensus_manager)
@@ -1077,13 +1082,18 @@ impl SuiNode {
         let sui_tx_validator_metrics =
             SuiTxValidatorMetrics::new(&registry_service.default_registry());
 
-        let validator_server_handle = Self::start_grpc_validator_service(
+        let validator_server_handle_result = Self::start_grpc_validator_service(
             config,
             state.clone(),
             consensus_adapter.clone(),
             &registry_service.default_registry(),
         )
-        .await?;
+        .await;
+        println!(
+            "ZZZZZZZ validator server handle result {:?}",
+            validator_server_handle_result
+        );
+        let validator_server_handle = validator_server_handle_result?;
 
         Self::start_epoch_specific_validator_components(
             config,
@@ -1531,7 +1541,10 @@ impl SuiNode {
                         .await?,
                     )
                 } else {
-                    info!("This node is no longer a validator after reconfiguration");
+                    info!("This node is no longer a validator after reconfiguration 1111");
+                    validator_server_handle.abort();
+                    let result = validator_server_handle.await;
+                    info!("ZZZZZZ stop validator server handle {:?}", result);
                     None
                 }
             } else {

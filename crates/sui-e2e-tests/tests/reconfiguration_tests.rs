@@ -7,6 +7,7 @@ use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::consensus_adapter::position_submit_certificate;
+use sui_genesis_builder::validator_info::GenesisValidatorInfo;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
@@ -14,6 +15,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_swarm_config::genesis_config::{ValidatorGenesisConfig, ValidatorGenesisConfigBuilder};
 use sui_test_transaction_builder::{make_transfer_sui_transaction, TestTransactionBuilder};
 use sui_types::base_types::SuiAddress;
+use sui_types::crypto::SuiKeyPair;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
@@ -441,7 +443,13 @@ async fn test_validator_candidate_pool_read() {
         .with_validator_candidates([address])
         .build()
         .await;
-    add_validator_candidate(&test_cluster, &new_validator).await;
+    add_validator_candidate(
+        &test_cluster,
+        (&new_validator.account_key_pair.public().clone()).into(),
+        new_validator.to_validator_info_with_random_name().clone(),
+        &new_validator.account_key_pair,
+    )
+    .await;
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let system_state = node
             .state()
@@ -545,7 +553,9 @@ async fn test_reconfig_with_committee_change_basic() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.
 
     let new_validator = ValidatorGenesisConfigBuilder::new().build(&mut OsRng);
+    let keypairzzz = SuiKeyPair::decode(&new_validator.account_key_pair.encode().unwrap()).unwrap();
     let address = (&new_validator.account_key_pair.public()).into();
+    let validator_info_zzz = new_validator.to_validator_info_with_random_name().clone();
     let mut test_cluster = TestClusterBuilder::new()
         .with_validator_candidates([address])
         .build()
@@ -585,6 +595,36 @@ async fn test_reconfig_with_committee_change_basic() {
             4
         );
     });
+
+    println!("ZZZZZZ 1");
+    add_validator_candidate(
+        &test_cluster,
+        (&keypairzzz.public().clone()).into(),
+        validator_info_zzz,
+        &keypairzzz,
+    )
+    .await;
+    println!("ZZZZZZ 1.1");
+
+    //execute_actual_add_validator_transactions(&test_cluster, &keypairzzz).await;
+    // execute_request_add_validator(&test_cluster, &keypairzzz).await;
+    execute_actual_add_validator_transactions(&test_cluster, &keypairzzz).await;
+    println!("ZZZZZZ 2");
+
+    test_cluster.trigger_reconfiguration().await;
+    println!("ZZZZZZ 3");
+
+    // Check that a new validator has joined the committee.
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        assert_eq!(
+            node.state()
+                .epoch_store_for_testing()
+                .committee()
+                .num_members(),
+            5
+        );
+    });
+    println!("ZZZZZZ 4");
 }
 
 #[sim_test]
@@ -716,7 +756,10 @@ async fn safe_mode_reconfig_test() {
 
 async fn add_validator_candidate(
     test_cluster: &TestCluster,
-    new_validator: &ValidatorGenesisConfig,
+    // new_validator: &ValidatorGenesisConfig,
+    address: SuiAddress,
+    validator_info: GenesisValidatorInfo,
+    keypairaaa: &SuiKeyPair,
 ) {
     let cur_validator_candidate_count = test_cluster.fullnode_handle.sui_node.with(|node| {
         node.state()
@@ -725,7 +768,7 @@ async fn add_validator_candidate(
             .into_sui_system_state_summary()
             .validator_candidates_size
     });
-    let address = (&new_validator.account_key_pair.public()).into();
+    // let address = (&new_validator.account_key_pair.public()).into();
     let gas = test_cluster
         .wallet
         .get_one_gas_object_owned_by_address(address)
@@ -736,9 +779,11 @@ async fn add_validator_candidate(
     let tx =
         TestTransactionBuilder::new(address, gas, test_cluster.get_reference_gas_price().await)
             .call_request_add_validator_candidate(
-                &new_validator.to_validator_info_with_random_name().into(),
+                &validator_info.into(),
+                //&new_validator.to_validator_info_with_random_name().into(),
             )
-            .build_and_sign(&new_validator.account_key_pair);
+            //.build_and_sign(&new_validator.account_key_pair);
+            .build_and_sign(keypairaaa);
     test_cluster.execute_transaction(tx).await;
 
     // Check that the candidate can be found in the candidate table now.
@@ -780,19 +825,21 @@ async fn execute_add_validator_transactions(
     test_cluster: &TestCluster,
     new_validator: &ValidatorGenesisConfig,
 ) {
-    let pending_active_count = test_cluster.fullnode_handle.sui_node.with(|node| {
-        let system_state = node
-            .state()
-            .get_sui_system_state_object_for_testing()
-            .unwrap();
-        system_state
-            .get_pending_active_validators(node.state().get_object_store().as_ref())
-            .unwrap()
-            .len()
-    });
-    add_validator_candidate(test_cluster, new_validator).await;
+    add_validator_candidate(
+        test_cluster,
+        (&new_validator.account_key_pair.public().clone()).into(),
+        new_validator.to_validator_info_with_random_name().clone(),
+        &new_validator.account_key_pair,
+    )
+    .await;
+    execute_actual_add_validator_transactions(test_cluster, &new_validator.account_key_pair).await;
+}
 
-    let address = (&new_validator.account_key_pair.public()).into();
+async fn execute_actual_add_validator_transactions(
+    test_cluster: &TestCluster,
+    account_key_pair: &SuiKeyPair,
+) {
+    let address = (&account_key_pair.public()).into();
     let stake_coin = test_cluster
         .wallet
         .gas_for_owner_budget(
@@ -812,17 +859,60 @@ async fn execute_add_validator_transactions(
         .1
         .object_ref();
 
+    println!("ZZZZZ add validator 1");
+
     let rgp = test_cluster.get_reference_gas_price().await;
     let stake_tx = TestTransactionBuilder::new(address, gas, rgp)
         .call_staking(stake_coin, address)
-        .build_and_sign(&new_validator.account_key_pair);
+        .build_and_sign(account_key_pair);
     test_cluster.execute_transaction(stake_tx).await;
+
+    execute_request_add_validator(test_cluster, account_key_pair).await;
+}
+
+async fn execute_request_add_validator(test_cluster: &TestCluster, account_key_pair: &SuiKeyPair) {
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let system_state = node
+            .state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap();
+        let system_state_summary = system_state.into_sui_system_state_summary();
+        println!("ZZZZZZZZ state\n{:?}", system_state_summary);
+    });
+
+    let pending_active_count = test_cluster.fullnode_handle.sui_node.with(|node| {
+        let system_state = node
+            .state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap();
+        system_state
+            .get_pending_active_validators(node.state().get_object_store().as_ref())
+            .unwrap()
+            .len()
+    });
+
+    println!("ZZZZZ add validator 2");
+    let address = (&account_key_pair.public()).into();
+    println!("ZZZZZ new validator address {:?}", address);
+
+    let gas = test_cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(address)
+        .await
+        .unwrap()
+        .unwrap();
+
+    println!("ZZZZZ add validator 2.1");
+
+    let rgp = test_cluster.get_reference_gas_price().await;
 
     let gas = test_cluster.wallet.get_object_ref(gas.0).await.unwrap();
     let tx = TestTransactionBuilder::new(address, gas, rgp)
         .call_request_add_validator()
-        .build_and_sign(&new_validator.account_key_pair);
+        .build_and_sign(account_key_pair);
     test_cluster.execute_transaction(tx).await;
+
+    println!("ZZZZZ add validator 3");
 
     // Check that we can get the pending validator from 0x5.
     test_cluster.fullnode_handle.sui_node.with(|node| {
