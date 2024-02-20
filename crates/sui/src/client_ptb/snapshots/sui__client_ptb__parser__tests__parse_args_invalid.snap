@@ -1,0 +1,102 @@
+---
+source: crates/sui/src/client_ptb/parser.rs
+expression: parsed
+---
+[
+    PTBError {
+        message: "number too large to fit in target type",
+        span: Span {
+            start: 0,
+            end: 7,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Expected a numerical address at this position but got a named address 'n'",
+        span: Span {
+            start: 0,
+            end: 2,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Unexpected end of tokens",
+        span: Span {
+            start: 0,
+            end: 4,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Unexpected end of tokens",
+        span: Span {
+            start: 4,
+            end: 5,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Unexpected end of tokens",
+        span: Span {
+            start: 5,
+            end: 6,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Unexpected end of tokens",
+        span: Span {
+            start: 0,
+            end: 6,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Unexpected end of tokens: Expected an array",
+        span: Span {
+            start: 6,
+            end: 7,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Unexpected end of tokens",
+        span: Span {
+            start: 8,
+            end: 9,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Expected token 'Comma' but found 'Number'",
+        span: Span {
+            start: 9,
+            end: 10,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Unexpected token: ','",
+        span: Span {
+            start: 7,
+            end: 8,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Expected a field name after '.'",
+        span: Span {
+            start: 3,
+            end: 4,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Unexpected token: '.'",
+        span: Span {
+            start: 0,
+            end: 1,
+        },
+        help: None,
+    },
+]

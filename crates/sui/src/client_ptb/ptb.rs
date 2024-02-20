@@ -53,6 +53,12 @@ impl PTB {
         args: Vec<String>,
         context: &mut WalletContext,
     ) -> Result<(), Error> {
+        {
+            let parser =
+                crate::client_ptb::parser::ProgramParser::new(args.iter().map(|s| s.as_str()))
+                    .unwrap();
+            parser.parse().unwrap();
+        };
         let arg_string = args.join(" ");
         let mut file_table = BTreeMap::new();
         let (program, program_metadata) =

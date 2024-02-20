@@ -1,0 +1,334 @@
+---
+source: crates/sui/src/client_ptb/parser.rs
+expression: parsed
+---
+[
+    [
+        PTBError {
+            message: "Unexpected end of tokens",
+            span: Span {
+                start: 9,
+                end: 9,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of tokens",
+            span: Span {
+                start: 9,
+                end: 9,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of tokens",
+            span: Span {
+                start: 0,
+                end: 11,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of tokens",
+            span: Span {
+                start: 19,
+                end: 20,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected token: '['",
+            span: Span {
+                start: 19,
+                end: 20,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of tokens",
+            span: Span {
+                start: 0,
+                end: 18,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of tokens",
+            span: Span {
+                start: 14,
+                end: 15,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected token: '['",
+            span: Span {
+                start: 14,
+                end: 15,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of tokens",
+            span: Span {
+                start: 0,
+                end: 13,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected token 'LBracket' but found 'Ident'",
+            span: Span {
+                start: 16,
+                end: 17,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected token: Ident",
+            span: Span {
+                start: 20,
+                end: 21,
+            },
+            help: Some(
+                "Expected to find a command here",
+            ),
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of tokens",
+            span: Span {
+                start: 14,
+                end: 15,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected token: '['",
+            span: Span {
+                start: 14,
+                end: 15,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of tokens",
+            span: Span {
+                start: 0,
+                end: 13,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected token 'LBracket' but found 'Ident'",
+            span: Span {
+                start: 16,
+                end: 17,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected token: Ident",
+            span: Span {
+                start: 20,
+                end: 21,
+            },
+            help: Some(
+                "Expected to find a command here",
+            ),
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of tokens",
+            span: Span {
+                start: 0,
+                end: 8,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected token: Ident",
+            span: Span {
+                start: 13,
+                end: 14,
+            },
+            help: Some(
+                "Expected to find a command here",
+            ),
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected variable binding",
+            span: Span {
+                start: 9,
+                end: 13,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected token 'LParen' but found 'Ident'",
+            span: Span {
+                start: 14,
+                end: 18,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected variable binding",
+            span: Span {
+                start: 9,
+                end: 12,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "number too large to fit in target type",
+            span: Span {
+                start: 13,
+                end: 75,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected token: '['",
+            span: Span {
+                start: 13,
+                end: 14,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected a u64 value",
+            span: Span {
+                start: 13,
+                end: 17,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected a u64 value",
+            span: Span {
+                start: 13,
+                end: 17,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Invalid gas picker: nope",
+            span: Span {
+                start: 18,
+                end: 22,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of tokens",
+            span: Span {
+                start: 0,
+                end: 17,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Invalid gas picker: too",
+            span: Span {
+                start: 18,
+                end: 21,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected an address",
+            span: Span {
+                start: 11,
+                end: 15,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of tokens",
+            span: Span {
+                start: 0,
+                end: 10,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected token: At",
+            span: Span {
+                start: 16,
+                end: 17,
+            },
+            help: Some(
+                "Expected to find a command here",
+            ),
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected an address",
+            span: Span {
+                start: 11,
+                end: 12,
+            },
+            help: None,
+        },
+    ],
+]

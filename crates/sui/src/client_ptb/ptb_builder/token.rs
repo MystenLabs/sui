@@ -385,7 +385,6 @@ fn extract_sub_parser_token_string(mut s: &str, start: &str, end: &str) -> anyho
 
 #[cfg(test)]
 mod tests {
-    use move_command_line_common::parser::Token;
 
     use crate::client_ptb::ptb_builder::token::PTBToken;
 
