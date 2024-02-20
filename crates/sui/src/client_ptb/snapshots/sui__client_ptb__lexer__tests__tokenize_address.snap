@@ -1,6 +1,6 @@
 ---
 source: crates/sui/src/client_ptb/lexer.rs
-expression: tokens
+expression: lex(addrs)
 ---
 [
     Spanned {
@@ -151,6 +151,16 @@ expression: tokens
         value: Lexeme(
             Ident,
             "u128",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 59,
+            end: 59,
+        },
+        value: Lexeme(
+            Eof,
+            "",
         ),
     },
 ]

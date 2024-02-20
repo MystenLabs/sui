@@ -44,6 +44,9 @@ pub enum Token {
     /// .
     Dot,
 
+    /// End of input.
+    Eof,
+
     /// Special tokens for unexpected lexer states that the parser should error on.
     Unexpected,
     UnfinishedString,
@@ -55,6 +58,18 @@ pub enum Token {
     Publish,
     /// --upgraded <shell-token>
     Upgrade,
+}
+
+impl<'l> Lexeme<'l> {
+    /// Returns true if this lexeme corresponds to a special error token.
+    pub fn is_error(&self) -> bool {
+        use Token as T;
+        matches!(self.0, T::Unexpected | T::UnfinishedString | T::EarlyEof)
+    }
+
+    pub fn is_terminal(&self) -> bool {
+        self.is_error() || self.0 == Token::Eof
+    }
 }
 
 impl<'a> fmt::Display for Lexeme<'a> {
@@ -77,9 +92,9 @@ impl<'a> fmt::Display for Lexeme<'a> {
             T::RAngle => write!(f, "'>'"),
             T::At => write!(f, "'@'"),
             T::Dot => write!(f, "'.'"),
-            T::Unexpected => write!(f, "unexpected input {:?}", self.1),
+            T::Unexpected => write!(f, "input {:?}", self.1),
             T::UnfinishedString => write!(f, "unfinished string {:?}", format!("{}...", self.1)),
-            T::EarlyEof => write!(f, "unexpected end of file"),
+            T::EarlyEof | T::Eof => write!(f, "end of input"),
             T::Publish => write!(f, "command '--publish {:?}'", self.1),
             T::Upgrade => write!(f, "command '--upgrade {:?}'", self.1),
         }
