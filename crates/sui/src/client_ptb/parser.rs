@@ -70,10 +70,10 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 }
             };
         }
-        while let Some(sp_!(lspan, lexeme)) = self.tokens.next() {
-            match lexeme.token {
+        while let Some(sp_!(lspan, Lexeme(token, src))) = self.tokens.next() {
+            match token {
                 Token::Command => {
-                    let parsed = match lexeme.src {
+                    let parsed = match src {
                         A::TRANSFER_OBJECTS => self.parse_transfer_objects(lspan),
                         A::SPLIT_COINS => self.parse_split_coins(lspan),
                         A::MERGE_COINS => self.parse_merge_coins(lspan),
@@ -108,11 +108,9 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                         A::PUBLISH => unreachable!(),
                         A::UPGRADE => unreachable!(),
                         _ => {
-                            self.state.errors.push(err_!(
-                                lspan,
-                                "Unknown command: '{}'",
-                                lexeme.src
-                            ));
+                            self.state
+                                .errors
+                                .push(err_!(lspan, "Unknown command: '{}'", src));
                             self.fast_forward_to_next_command();
                             continue;
                         }
@@ -122,15 +120,13 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 }
                 Token::Publish => {
                     let spanned_command =
-                        lspan.wrap(ParsedPTBCommand::Publish(lspan.wrap(lexeme.src.to_owned())));
+                        lspan.wrap(ParsedPTBCommand::Publish(lspan.wrap(src.to_owned())));
                     self.state.parsed.push(spanned_command);
                 }
                 Token::Upgrade => {
                     let arg = handle!(self.parse_argument(lspan));
-                    let spanned_command = lspan.wrap(ParsedPTBCommand::Upgrade(
-                        lspan.wrap(lexeme.src.to_owned()),
-                        arg,
-                    ));
+                    let spanned_command =
+                        lspan.wrap(ParsedPTBCommand::Upgrade(lspan.wrap(src.to_owned()), arg));
                     self.state.parsed.push(spanned_command);
                 }
 
@@ -149,7 +145,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 | Token::At
                 | Token::Dot => {
                     self.state.errors.push(PTBError {
-                        message: format!("Unexpected token: {:?}", lexeme.token),
+                        message: format!("Unexpected token: {:?}", token),
                         span: lspan,
                         help: Some("Expected to find a command here".to_string()),
                     });
@@ -158,7 +154,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 Token::Unexpected => {
                     self.state
                         .errors
-                        .push(err_!(lspan, "Unexpected token '{}'", lexeme.src));
+                        .push(err_!(lspan, "Unexpected token '{}'", src));
                     break;
                 }
                 Token::UnfinishedString => todo!(),
@@ -195,13 +191,13 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     /// Advance the iterator and return the next token. If the next token is not the expected one,
     /// return an error.
     fn advance(&mut self, current_loc: Span, expected: Token) -> PTBResult<Spanned<Lexeme<'a>>> {
-        let sp_!(sp, lxm) = self.advance_any(current_loc)?;
-        if lxm.token != expected {
+        let sp_!(sp, lxm@Lexeme(token, _)) = self.advance_any(current_loc)?;
+        if token != expected {
             error_!(
                 sp,
                 "Expected token '{:?}' but found '{:?}'",
                 expected,
-                lxm.token
+                token
             )
         }
         Ok(sp.wrap(lxm))
@@ -217,7 +213,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 
     /// Peek at the next token without advancing the iterator.
     fn peek_tok(&mut self) -> Option<Token> {
-        self.tokens.peek().map(|sp_!(_, lxm)| lxm.token)
+        self.tokens.peek().map(|sp_!(_, lxm)| lxm.0)
     }
 
     /// Fast forward to the next command token (if any).
@@ -333,14 +329,15 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     // Parse a single PTB argument and allow trailing characters possibly.
     fn parse_argument(&mut self, current_span: Span) -> PTBResult<Spanned<Argument>> {
-        use super::token::Token as Tok;
+        use super::token::Token as T;
         use Argument as V;
+        use Lexeme as L;
         let sp_!(tl_loc, arg) = self.advance_any(current_span)?;
-        Ok(match (arg.token, arg.src) {
-            (Tok::Ident, "true") => tl_loc.wrap(V::Bool(true)),
-            (Tok::Ident, "false") => tl_loc.wrap(V::Bool(false)),
-            (Tok::HexNumber | Tok::Number, num_contents) => {
-                let num_contents = if arg.token == Tok::HexNumber {
+        Ok(match arg {
+            L(T::Ident, "true") => tl_loc.wrap(V::Bool(true)),
+            L(T::Ident, "false") => tl_loc.wrap(V::Bool(false)),
+            L(T::HexNumber | T::Number, num_contents) => {
+                let num_contents = if arg.0 == T::HexNumber {
                     format!("0x{}", num_contents)
                 } else {
                     num_contents.to_owned()
@@ -354,27 +351,23 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                         }
                     }};
                 }
-                match self
-                    .tokens
-                    .peek()
-                    .map(|lxm| (lxm.span, lxm.value.token, lxm.value.src))
-                {
-                    Some((sp, Tok::Ident, A::U8)) => {
+                match self.tokens.peek().map(|lxm| (lxm.span, lxm.value)) {
+                    Some((sp, L(T::Ident, A::U8))) => {
                         parse_num!(parse_u8, V::U8, sp)
                     }
-                    Some((sp, Tok::Ident, A::U16)) => {
+                    Some((sp, L(T::Ident, A::U16))) => {
                         parse_num!(parse_u16, V::U16, sp)
                     }
-                    Some((sp, Tok::Ident, A::U32)) => {
+                    Some((sp, L(T::Ident, A::U32))) => {
                         parse_num!(parse_u32, V::U32, sp)
                     }
-                    Some((sp, Tok::Ident, A::U64)) => {
+                    Some((sp, L(T::Ident, A::U64))) => {
                         parse_num!(parse_u64, V::U64, sp)
                     }
-                    Some((sp, Tok::Ident, A::U128)) => {
+                    Some((sp, L(T::Ident, A::U128))) => {
                         parse_num!(parse_u128, V::U128, sp)
                     }
-                    Some((sp, Tok::Ident, A::U256)) => {
+                    Some((sp, L(T::Ident, A::U256))) => {
                         parse_num!(parse_u256, V::U256, sp)
                     }
                     Some(_) | None => parse_u64(&num_contents)
@@ -382,7 +375,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                         .map_err(|e| err_!(tl_loc, "{}", e))?,
                 }
             }
-            (Tok::At, _) => {
+            L(T::At, _) => {
                 let Some(sp_!(addr_span, lxm)) = self.tokens.next() else {
                     error_!(
                         tl_loc,
@@ -398,29 +391,29 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     ParsedAddress::Numerical(addr) => sp.wrap(V::Address(addr)),
                 }
             }
-            (Tok::Ident, A::NONE) => tl_loc.wrap(V::Option(tl_loc.wrap(None))),
-            (Tok::Ident, A::SOME) => {
-                let sp_!(aloc, _) = self.advance(tl_loc, Tok::LParen)?;
+            L(T::Ident, A::NONE) => tl_loc.wrap(V::Option(tl_loc.wrap(None))),
+            L(T::Ident, A::SOME) => {
+                let sp_!(aloc, _) = self.advance(tl_loc, T::LParen)?;
                 let sp_!(arg_span, arg) = self.parse_argument(aloc)?;
-                let sp_!(end_span, _) = self.advance(arg_span, Tok::RParen)?;
+                let sp_!(end_span, _) = self.advance(arg_span, T::RParen)?;
                 let sp = tl_loc.widen(end_span);
                 sp.wrap(V::Option(arg_span.wrap(Some(Box::new(arg)))))
             }
-            (Tok::String, contents) => tl_loc.wrap(V::String(contents.to_owned())),
-            (Tok::Ident, A::VECTOR) => self.parse_array(tl_loc)?.map(V::Vector),
+            L(T::String, contents) => tl_loc.wrap(V::String(contents.to_owned())),
+            L(T::Ident, A::VECTOR) => self.parse_array(tl_loc)?.map(V::Vector),
 
-            (Tok::Ident, contents) if self.peek_tok() == Some(Tok::Dot) => {
+            L(T::Ident, contents) if self.peek_tok() == Some(T::Dot) => {
                 let mut fields = vec![];
-                let sp_!(mut l, _) = self.advance(tl_loc, Tok::Dot)?;
+                let sp_!(mut l, _) = self.advance(tl_loc, T::Dot)?;
                 if self.peek_tok().is_none() {
                     error_!(l, "Expected a field name after '.'")
                 }
-                while let Ok(sp_!(sp, lxm)) = self.advance_any(l) {
-                    fields.push(sp.wrap(lxm.src.to_string()));
-                    if self.peek_tok() != Some(Tok::Dot) {
+                while let Ok(sp_!(sp, L(_, src))) = self.advance_any(l) {
+                    fields.push(sp.wrap(src.to_string()));
+                    if self.peek_tok() != Some(T::Dot) {
                         break;
                     }
-                    let sp_!(loc, _) = self.advance(sp, Tok::Dot)?;
+                    let sp_!(loc, _) = self.advance(sp, T::Dot)?;
                     l = loc;
                 }
                 let sp = fields
@@ -429,19 +422,21 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     .unwrap_or(tl_loc);
                 sp.wrap(V::VariableAccess(tl_loc.wrap(contents.to_string()), fields))
             }
-            (Tok::Ident, A::GAS) => tl_loc.wrap(V::Gas),
-            (Tok::Ident, contents) => tl_loc.wrap(V::Identifier(contents.to_string())),
-            (_, src) => error_!(tl_loc, "Unexpected token: '{}'", src),
+            L(T::Ident, A::GAS) => tl_loc.wrap(V::Gas),
+            L(T::Ident, contents) => tl_loc.wrap(V::Identifier(contents.to_string())),
+            L(_, src) => error_!(tl_loc, "Unexpected token: '{}'", src),
         })
     }
 
     /// Parse a numerical or named address.
     fn parse_address(sp: Span, lxm: Lexeme<'a>) -> PTBResult<Spanned<ParsedAddress>> {
-        use super::token::Token as Tok;
-        let p_address = match lxm.token {
-            Tok::Ident => Ok(ParsedAddress::Named(lxm.src.to_owned())),
-            Tok::Number | Tok::HexNumber => NumericalAddress::parse_str(lxm.src)
-                .map_err(|s| err_!(sp, "Failed to parse address '{}' {}", lxm.src, s))
+        use super::token::Token as T;
+        use Lexeme as L;
+
+        let p_address = match lxm {
+            L(T::Ident, src) => Ok(ParsedAddress::Named(src.to_owned())),
+            L(T::Number | T::HexNumber, src) => NumericalAddress::parse_str(src)
+                .map_err(|s| err_!(sp, "Failed to parse address {src:?} {s}"))
                 .map(ParsedAddress::Numerical),
             _ => error_!(sp => help: {
                     "Valid addresses can either be a variable in-scope, or a numerical address, e.g., 0xc0ffee"
@@ -458,27 +453,27 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 
     // Parse an array of arguments. Each element of the array is separated by a comma.
     fn parse_array(&mut self, mut current_loc: Span) -> PTBResult<Spanned<Vec<Spanned<Argument>>>> {
-        use super::token::Token as Tok;
-        let sp_!(start_loc, _) = self.advance(current_loc, Tok::LBracket)?;
+        use super::token::Token as T;
+        let sp_!(start_loc, _) = self.advance(current_loc, T::LBracket)?;
 
         let mut values = vec![];
         if self.peek_tok().is_none() {
             error_!(start_loc, "Unexpected end of tokens: Expected an array")
         }
-        while self.peek_tok() != Some(Tok::RBracket) {
+        while self.peek_tok() != Some(T::RBracket) {
             let sp_!(sp, arg) = self.parse_argument(current_loc)?;
             values.push(sp.wrap(arg));
             current_loc = sp;
-            if self.peek_tok() == Some(Tok::RBracket) {
+            if self.peek_tok() == Some(T::RBracket) {
                 break;
             }
-            let sp_!(l, _) = self.advance(current_loc, Tok::Comma)?;
+            let sp_!(l, _) = self.advance(current_loc, T::Comma)?;
             current_loc = l;
-            if self.peek_tok() == Some(Tok::RBracket) {
+            if self.peek_tok() == Some(T::RBracket) {
                 break;
             }
         }
-        let sp_!(end_span, _) = self.advance(current_loc, Tok::RBracket)?;
+        let sp_!(end_span, _) = self.advance(current_loc, T::RBracket)?;
         let total_span = start_loc.widen(end_span);
 
         Ok(total_span.wrap(values))

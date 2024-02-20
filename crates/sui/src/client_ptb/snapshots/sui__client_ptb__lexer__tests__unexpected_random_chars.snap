@@ -8,19 +8,19 @@ expression: tokens
             start: 0,
             end: 1,
         },
-        value: Lexeme {
-            token: Number,
-            src: "4",
-        },
+        value: Lexeme(
+            Number,
+            "4",
+        ),
     },
     Spanned {
         span: Span {
             start: 2,
             end: 3,
         },
-        value: Lexeme {
-            token: Unexpected,
-            src: "*",
-        },
+        value: Lexeme(
+            Unexpected,
+            "*",
+        ),
     },
 ]

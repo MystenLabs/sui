@@ -8,9 +8,9 @@ expression: tokens
             start: 0,
             end: 3,
         },
-        value: Lexeme {
-            token: Ident,
-            src: "gas",
-        },
+        value: Lexeme(
+            Ident,
+            "gas",
+        ),
     },
 ]

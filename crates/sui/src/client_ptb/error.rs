@@ -156,3 +156,5 @@ impl<T: Clone> Clone for Spanned<T> {
         }
     }
 }
+
+impl<T: Copy> Copy for Spanned<T> {}

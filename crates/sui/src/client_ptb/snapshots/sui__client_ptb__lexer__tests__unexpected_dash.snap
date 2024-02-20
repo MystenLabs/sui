@@ -8,9 +8,9 @@ expression: tokens
             start: 0,
             end: 1,
         },
-        value: Lexeme {
-            token: Unexpected,
-            src: "-",
-        },
+        value: Lexeme(
+            Unexpected,
+            "-",
+        ),
     },
 ]

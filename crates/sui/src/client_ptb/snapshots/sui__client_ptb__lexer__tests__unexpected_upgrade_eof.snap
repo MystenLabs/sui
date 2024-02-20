@@ -8,9 +8,9 @@ expression: tokens
             start: 9,
             end: 9,
         },
-        value: Lexeme {
-            token: EarlyEof,
-            src: "",
-        },
+        value: Lexeme(
+            EarlyEof,
+            "",
+        ),
     },
 ]
