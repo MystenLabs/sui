@@ -4,7 +4,8 @@
 
 use crate::{
     expansion::{
-        aliases::{AliasMapBuilder, AliasSet},
+        alias_map_builder::AliasMapBuilder,
+        aliases::AliasSet,
         ast::{ModuleIdent, ModuleIdent_},
     },
     parser::ast::ModuleName,

@@ -7,9 +7,10 @@ use crate::{
     diagnostics::{codes::WarningFilter, Diagnostic, WarningFilters},
     editions::{create_feature_error, FeatureGate},
     expansion::{
-        aliases::{
-            AliasEntry, AliasMap, AliasMapBuilder, AliasSet, ParserExplicitUseFun, UseFunsBuilder,
+        alias_map_builder::{
+            AliasEntry, AliasMapBuilder, NameSpace, ParserExplicitUseFun, UseFunsBuilder,
         },
+        aliases::{AliasMap, AliasSet},
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_},
         byte_string, hex_string, legacy_aliases,
         translate::known_attributes::KnownAttribute,
@@ -32,8 +33,6 @@ use std::{
 };
 
 use self::known_attributes::DiagnosticAttribute;
-
-use super::aliases::NameSpace;
 
 //**************************************************************************************************
 // Context
