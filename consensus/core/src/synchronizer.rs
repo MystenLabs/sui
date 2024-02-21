@@ -20,7 +20,7 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::{error::Elapsed, sleep_until, timeout, Instant};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 /// The number of concurrent fetch blocks requests per authority
 const FETCH_BLOCKS_CONCURRENCY: usize = 5;
@@ -42,11 +42,11 @@ pub(crate) struct SynchronizerHandle {
 impl SynchronizerHandle {
     /// Explicitly asks from the synchronizer to fetch the blocks - provided the block_refs set - from
     /// the peer authority.
-    pub async fn fetch_blocks(
+    pub(crate) async fn fetch_blocks(
         &self,
         block_refs: BTreeSet<BlockRef>,
         peer_index: AuthorityIndex,
-    ) -> Result<(), ConsensusError> {
+    ) -> ConsensusResult<()> {
         let (sender, receiver) = oneshot::channel();
         self.commands_sender
             .send(Command::FetchBlocks {
@@ -59,7 +59,7 @@ impl SynchronizerHandle {
         receiver.await.map_err(|_err| ConsensusError::Shutdown)?
     }
 
-    pub async fn stop(&self) {
+    pub(crate) async fn stop(&self) {
         let mut tasks = self.tasks.lock();
         tasks.abort_all();
     }
@@ -128,7 +128,7 @@ impl Synchronizer {
         core_dispatcher: Arc<D>,
         mut receiver: Receiver<BTreeSet<BlockRef>>,
     ) {
-        const REQUEST_TIMEOUT: Duration = Duration::from_millis(500);
+        const REQUEST_TIMEOUT: Duration = Duration::from_millis(2_000);
         const MAX_RETRIES: u32 = 5;
 
         let mut requests = FuturesUnordered::new();
@@ -147,7 +147,7 @@ impl Synchronizer {
                                 core_dispatcher.clone(),
                                 block_verifier.clone(),
                                 context.clone()).await {
-                                error!("Error while processing fetched blocks from peer {peer_index}: {err}");
+                                warn!("Error while processing fetched blocks from peer {peer_index}: {err}");
                             }
                         },
                         Ok(Err(_)) | Err(Elapsed {..}) => {
@@ -186,7 +186,7 @@ impl Synchronizer {
                     .metrics
                     .node_metrics
                     .invalid_blocks
-                    .with_label_values(&[&peer_index.to_string()])
+                    .with_label_values(&[&peer_index.to_string(), "synchronizer"])
                     .inc();
                 info!("Invalid block from {}: {}", peer_index, e);
                 return Err(e);
@@ -285,7 +285,7 @@ mod tests {
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
-    use std::collections::{BTreeMap, BTreeSet, HashSet};
+    use std::collections::{BTreeMap, BTreeSet};
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::time::sleep;
@@ -318,7 +318,7 @@ mod tests {
             todo!()
         }
 
-        async fn get_missing_blocks(&self) -> Result<Vec<HashSet<BlockRef>>, CoreError> {
+        async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
             todo!()
         }
     }

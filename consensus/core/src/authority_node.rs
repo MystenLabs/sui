@@ -79,11 +79,11 @@ where
     context: Arc<Context>,
     start_time: Instant,
     transaction_client: Arc<TransactionClient>,
+    synchronizer: Arc<SynchronizerHandle>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
     broadcaster: Broadcaster,
     network_manager: N,
-    synchronizer: Arc<SynchronizerHandle>,
 }
 
 impl<N> AuthorityNode<N>
@@ -152,7 +152,8 @@ where
         let network_client = network_manager.client();
 
         // Create Broadcaster.
-        let broadcaster = Broadcaster::new(context.clone(), network_client.clone(), &signals_receivers);
+        let broadcaster =
+            Broadcaster::new(context.clone(), network_client.clone(), &signals_receivers);
 
         // Start network service.
         let block_verifier = Arc::new(SignedBlockVerifier::new(
@@ -177,11 +178,11 @@ where
             context,
             start_time,
             transaction_client: Arc::new(tx_client),
+            synchronizer,
             leader_timeout_handle,
             core_thread_handle,
             broadcaster,
             network_manager,
-            synchronizer,
         }
     }
 
@@ -213,7 +214,7 @@ where
 pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     context: Arc<Context>,
     block_verifier: Arc<dyn BlockVerifier>,
-    core_dispatcher: C,
+    core_dispatcher: Arc<C>,
     synchronizer: Arc<SynchronizerHandle>,
 }
 
@@ -234,7 +235,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[&peer.to_string()])
+                .with_label_values(&[&peer.to_string(), "send_block"])
                 .inc();
             let e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
             info!("Block with wrong authority from {}: {}", peer, e);
@@ -247,7 +248,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .metrics
                 .node_metrics
                 .invalid_blocks
-                .with_label_values(&[&peer.to_string()])
+                .with_label_values(&[&peer.to_string(), "send_block"])
                 .inc();
             info!("Invalid block from {}: {}", peer, e);
             return Err(e);
@@ -328,7 +329,7 @@ mod tests {
     use crate::block_verifier::NoopBlockVerifier;
     use crate::context::Context;
     use crate::core_thread::{CoreError, CoreThreadDispatcher};
-    use crate::network::NetworkService;
+    use crate::network::NetworkClient;
     use crate::transaction::NoopTransactionVerifier;
 
     struct FakeCoreThreadDispatcher {
@@ -348,8 +349,11 @@ mod tests {
     }
 
     #[async_trait]
-    impl CoreThreadDispatcher for Arc<FakeCoreThreadDispatcher> {
-        async fn add_blocks(&self, blocks: Vec<VerifiedBlock>) -> Result<Vec<BlockRef>, CoreError> {
+    impl CoreThreadDispatcher for FakeCoreThreadDispatcher {
+        async fn add_blocks(
+            &self,
+            blocks: Vec<VerifiedBlock>,
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
             let block_refs = blocks.iter().map(|b| b.reference()).collect();
             self.blocks.lock().extend(blocks);
             Ok(block_refs)
@@ -359,8 +363,30 @@ mod tests {
             unimplemented!()
         }
 
-        async fn get_missing_blocks(&self) -> Result<Vec<BTreeSet<BlockRef>>, CoreError> {
+        async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
             unimplemented!()
+        }
+    }
+
+    #[derive(Default)]
+    struct FakeNetworkClient {}
+
+    #[async_trait]
+    impl NetworkClient for FakeNetworkClient {
+        async fn send_block(
+            &self,
+            _peer: AuthorityIndex,
+            _serialized_block: &Bytes,
+        ) -> ConsensusResult<()> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn fetch_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _block_refs: Vec<BlockRef>,
+        ) -> ConsensusResult<Vec<Bytes>> {
+            unimplemented!("Unimplemented")
         }
     }
 
@@ -409,16 +435,20 @@ mod tests {
     async fn test_authority_service() {
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
-        let block_verifier = NoopBlockVerifier {};
+        let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
-        let network_manager = AnemoManager::new(context.clone());
-        let network_client = network_manager.client();
-        let synchronizer = Synchronizer::start(network_client, context.clone(), core_dispatcher.clone());
+        let network_client = Arc::new(FakeNetworkClient::default());
+        let synchronizer = Synchronizer::start(
+            network_client,
+            context.clone(),
+            core_dispatcher.clone(),
+            block_verifier.clone(),
+        );
         let authority_service = Arc::new(AuthorityService {
             context: context.clone(),
-            block_verifier: Arc::new(block_verifier),
+            block_verifier,
             core_dispatcher: core_dispatcher.clone(),
-            synchronizer
+            synchronizer,
         });
 
         // Test delaying blocks with time drift.

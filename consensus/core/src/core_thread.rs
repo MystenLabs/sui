@@ -24,7 +24,7 @@ enum CoreThreadCommand {
     /// Called when a leader timeout occurs and a block should be produced
     ForceNewBlock(Round, oneshot::Sender<()>),
     /// Request missing blocks that need to be synced.
-    GetMissing(oneshot::Sender<Vec<BTreeSet<BlockRef>>>),
+    GetMissing(oneshot::Sender<BTreeSet<BlockRef>>),
 }
 
 #[derive(Error, Debug)]
@@ -42,7 +42,7 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
 
     async fn force_new_block(&self, round: Round) -> Result<(), CoreError>;
 
-    async fn get_missing_blocks(&self) -> Result<Vec<BTreeSet<BlockRef>>, CoreError>;
+    async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError>;
 }
 
 #[allow(unused)]
@@ -85,7 +85,7 @@ impl CoreThread {
                 }
                 CoreThreadCommand::GetMissing(sender) => {
                     // TODO: implement the logic to fetch the missing blocks.
-                    sender.send(vec![]).ok();
+                    sender.send(BTreeSet::new()).ok();
                 }
             }
         }
@@ -159,7 +159,7 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         receiver.await.map_err(Shutdown)
     }
 
-    async fn get_missing_blocks(&self) -> Result<Vec<BTreeSet<BlockRef>>, CoreError> {
+    async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
         let (sender, receiver) = oneshot::channel();
         self.send(CoreThreadCommand::GetMissing(sender)).await;
         receiver.await.map_err(Shutdown)

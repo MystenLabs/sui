@@ -21,12 +21,12 @@ mod metrics;
 mod network;
 mod stake_aggregator;
 mod storage;
-mod threshold_clock;
-mod transaction;
-mod universal_committer;
 mod synchronizer;
 #[cfg(test)]
 mod test_dag;
+mod threshold_clock;
+mod transaction;
+mod universal_committer;
 
 pub use authority_node::ConsensusAuthority;
 pub use block::BlockAPI;

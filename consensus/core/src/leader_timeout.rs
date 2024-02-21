@@ -140,7 +140,7 @@ mod tests {
             Ok(())
         }
 
-        async fn get_missing_blocks(&self) -> Result<Vec<BTreeSet<BlockRef>>, CoreError> {
+        async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
             todo!()
         }
     }

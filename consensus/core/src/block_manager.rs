@@ -84,6 +84,8 @@ impl BlockManager {
         accepted_blocks.sort_by_key(|b| b.reference());
 
         // Newly missed blocks
+        // TODO: make sure that the computation here is bounded either in the byzantine or node fall
+        // back scenario.
         let missing_blocks_after = self
             .missing_blocks
             .difference(&missing_blocks_before)
@@ -133,7 +135,7 @@ impl BlockManager {
         }
 
         // Remove the block ref from the `missing_blocks` - if exists - since we now have received the block. The block
-        // might still get suspended, but we won't report it as missing in order to re-fetch.
+        // might still get suspended, but we won't report it as missing in order to not re-fetch.
         self.missing_blocks.remove(&block.reference());
 
         if !missing_ancestors.is_empty() {
