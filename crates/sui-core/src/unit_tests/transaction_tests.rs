@@ -7,8 +7,6 @@ use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
 use mysten_network::Multiaddr;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::ops::Deref;
-use std::str::FromStr;
-use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::{
     authenticator_state::ActiveJwk,
@@ -1009,18 +1007,8 @@ async fn test_allowed_pbt_with_random_txn() {
             .unwrap()
             .unwrap();
 
-    // Publish the two packages we will call
-    let random_pkg = build_and_publish_test_package(
-        &authority_state,
-        &sender,
-        &sender_key,
-        &obj_ids[0],
-        "random",
-        /* with_unpublished_deps */ false,
-    )
-    .await
-    .0;
-    let object_basics_pkg = build_and_publish_test_package(
+    // Publish the package we will call
+    let pkg = build_and_publish_test_package(
         &authority_state,
         &sender,
         &sender_key,
@@ -1044,26 +1032,23 @@ async fn test_allowed_pbt_with_random_txn() {
         .unwrap();
 
     let obj_basics_id = Identifier::new("object_basics").unwrap();
-    let share_id = Identifier::new("share").unwrap();
-    let random_id = Identifier::new("random").unwrap();
-    let no_op_id = Identifier::new("no_op").unwrap();
-    let random_tag =
-        TypeTag::from_str(format!("{}::random::Random", SUI_FRAMEWORK_PACKAGE_ID).as_str())
-            .unwrap();
+    let use_clock_id = Identifier::new("use_clock").unwrap();
+    let use_random_id = Identifier::new("use_random").unwrap();
+    let clock_arg = CallArg::CLOCK_IMM;
     let random_arg = CallArg::Object(ObjectArg::SharedObject {
         id: SUI_RANDOMNESS_STATE_OBJECT_ID,
         initial_shared_version,
         mutable: false,
     });
 
-    // good tx - random.no_op
+    // good tx - use_random
     let mut builder = ProgrammableTransactionBuilder::new();
     builder
         .move_call(
-            random_pkg,
-            random_id.clone(),
-            no_op_id.clone(),
-            vec![random_tag.clone()],
+            pkg,
+            obj_basics_id.clone(),
+            use_random_id.clone(),
+            vec![],
             vec![random_arg.clone()],
         )
         .unwrap();
@@ -1079,23 +1064,23 @@ async fn test_allowed_pbt_with_random_txn() {
     );
     assert!(client.handle_transaction(tx).await.is_ok());
 
-    // good tx - object_basics.share, random.no_op, transfer, merge (via pay without destinations)
+    // good tx - use_clock, use_random, transfer, merge (via pay without destinations)
     let mut builder = ProgrammableTransactionBuilder::new();
     builder
         .move_call(
-            object_basics_pkg,
+            pkg,
             obj_basics_id.clone(),
-            share_id.clone(),
+            use_clock_id.clone(),
             vec![],
-            vec![],
+            vec![clock_arg.clone()],
         )
         .unwrap();
     builder
         .move_call(
-            random_pkg,
-            random_id.clone(),
-            no_op_id.clone(),
-            vec![random_tag.clone()],
+            pkg,
+            obj_basics_id.clone(),
+            use_random_id.clone(),
+            vec![],
             vec![random_arg.clone()],
         )
         .unwrap();
@@ -1124,24 +1109,24 @@ async fn test_allowed_pbt_with_random_txn() {
     );
     assert!(client.handle_transaction(tx).await.is_ok());
 
-    // bad tx - random.no_op, object_basics.share
+    // bad tx - use_random, use_clock
     let mut builder = ProgrammableTransactionBuilder::new();
     builder
         .move_call(
-            random_pkg,
-            random_id.clone(),
-            no_op_id.clone(),
-            vec![random_tag.clone()],
+            pkg,
+            obj_basics_id.clone(),
+            use_random_id.clone(),
+            vec![],
             vec![random_arg.clone()],
         )
         .unwrap();
     builder
         .move_call(
-            object_basics_pkg,
+            pkg,
             obj_basics_id.clone(),
-            share_id.clone(),
+            use_clock_id.clone(),
             vec![],
-            vec![],
+            vec![clock_arg.clone()],
         )
         .unwrap();
     let tx = to_sender_signed_transaction(
@@ -1161,14 +1146,14 @@ async fn test_allowed_pbt_with_random_txn() {
         }
     );
 
-    // bad tx - random.no_op, transfer objects, object_basics.share
+    // bad tx - use_random, transfer objects, use_clock
     let mut builder = ProgrammableTransactionBuilder::new();
     builder
         .move_call(
-            random_pkg,
-            random_id.clone(),
-            no_op_id.clone(),
-            vec![random_tag.clone()],
+            pkg,
+            obj_basics_id.clone(),
+            use_random_id.clone(),
+            vec![],
             vec![random_arg.clone()],
         )
         .unwrap();
@@ -1177,11 +1162,11 @@ async fn test_allowed_pbt_with_random_txn() {
         .unwrap();
     builder
         .move_call(
-            object_basics_pkg,
+            pkg,
             obj_basics_id.clone(),
-            share_id.clone(),
+            use_clock_id.clone(),
             vec![],
-            vec![],
+            vec![clock_arg.clone()],
         )
         .unwrap();
     let tx = to_sender_signed_transaction(
