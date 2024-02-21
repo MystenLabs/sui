@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Install Teleport
-        uses: teleport-actions/setup@8d23169da0f80ce14d25ed791272faa1c07f4f1e # pin@v1
+        uses: teleport-actions/setup@176c25dfcd19cd31a252f275d579822b243e7b9c # pin@v1.0.6
         with:
           version: 11.3.1
       - name: Authorize against Teleport
@@ -77,10 +77,10 @@ jobs:
     if: failure()
 
     steps:
-    - uses: technote-space/workflow-conclusion-action@v3
+    - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
 
     - name: Checkout sui repo main branch
-      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
     
     - name: Get sui commit
       env:
@@ -104,7 +104,7 @@ jobs:
         schedule-id: PGCQ3YS # sui-core
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838 # pin@v1
+      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
