@@ -5,39 +5,45 @@ expression: parsed
 [
     [
         PTBError {
-            message: "Unexpected end of tokens",
+            message: "Unexpected end of input",
             span: Span {
                 start: 9,
                 end: 9,
             },
-            help: None,
+            help: Some(
+                "Expected to find a command here",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Unexpected end of tokens",
+            message: "Unexpected end of input",
             span: Span {
                 start: 9,
                 end: 9,
             },
-            help: None,
+            help: Some(
+                "Expected to find a command here",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Unexpected end of tokens",
+            message: "Unexpected end of input",
             span: Span {
-                start: 0,
+                start: 11,
                 end: 11,
             },
-            help: None,
+            help: Some(
+                "Expected an argument here",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Unexpected end of tokens",
+            message: "Expected '[' but found end of input",
             span: Span {
-                start: 19,
+                start: 20,
                 end: 20,
             },
             help: None,
@@ -45,29 +51,33 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Unexpected token: '['",
+            message: "Unexpected '['",
             span: Span {
                 start: 19,
                 end: 20,
             },
-            help: None,
+            help: Some(
+                "Expected an argument here",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Unexpected end of tokens",
+            message: "Unexpected end of input",
             span: Span {
-                start: 0,
+                start: 18,
                 end: 18,
             },
-            help: None,
+            help: Some(
+                "Expected an argument here",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Unexpected end of tokens",
+            message: "Expected '[' but found end of input",
             span: Span {
-                start: 14,
+                start: 15,
                 end: 15,
             },
             help: None,
@@ -75,27 +85,31 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Unexpected token: '['",
+            message: "Unexpected '['",
             span: Span {
                 start: 14,
                 end: 15,
             },
-            help: None,
+            help: Some(
+                "Expected an argument here",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Unexpected end of tokens",
+            message: "Unexpected end of input",
             span: Span {
-                start: 0,
+                start: 13,
                 end: 13,
             },
-            help: None,
+            help: Some(
+                "Expected an argument here",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Expected token 'LBracket' but found 'Ident'",
+            message: "Expected '[' but found identifier 'b'",
             span: Span {
                 start: 16,
                 end: 17,
@@ -105,7 +119,7 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Unexpected token: Ident",
+            message: "Unexpected identifier 'c'",
             span: Span {
                 start: 20,
                 end: 21,
@@ -117,9 +131,9 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Unexpected end of tokens",
+            message: "Expected '[' but found end of input",
             span: Span {
-                start: 14,
+                start: 15,
                 end: 15,
             },
             help: None,
@@ -127,27 +141,31 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Unexpected token: '['",
+            message: "Unexpected '['",
             span: Span {
                 start: 14,
                 end: 15,
             },
-            help: None,
+            help: Some(
+                "Expected an argument here",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Unexpected end of tokens",
+            message: "Unexpected end of input",
             span: Span {
-                start: 0,
+                start: 13,
                 end: 13,
             },
-            help: None,
+            help: Some(
+                "Expected an argument here",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Expected token 'LBracket' but found 'Ident'",
+            message: "Expected '[' but found identifier 'b'",
             span: Span {
                 start: 16,
                 end: 17,
@@ -157,7 +175,7 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Unexpected token: Ident",
+            message: "Unexpected identifier 'c'",
             span: Span {
                 start: 20,
                 end: 21,
@@ -169,17 +187,19 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Unexpected end of tokens",
+            message: "Unexpected end of input",
             span: Span {
-                start: 0,
+                start: 8,
                 end: 8,
             },
-            help: None,
+            help: Some(
+                "Expected an argument here",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Unexpected token: Ident",
+            message: "Unexpected identifier 'c'",
             span: Span {
                 start: 13,
                 end: 14,
@@ -201,7 +221,7 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Expected token 'LParen' but found 'Ident'",
+            message: "Expected '(' but found identifier 'none'",
             span: Span {
                 start: 14,
                 end: 18,
@@ -231,12 +251,14 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Unexpected token: '['",
+            message: "Unexpected '['",
             span: Span {
                 start: 13,
                 end: 14,
             },
-            help: None,
+            help: Some(
+                "Expected an argument here",
+            ),
         },
     ],
     [
@@ -261,32 +283,38 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Invalid gas picker: nope",
+            message: "Unexpected identifier 'nope'",
             span: Span {
                 start: 18,
                 end: 22,
             },
-            help: None,
+            help: Some(
+                "Expected 'max' or 'sum' here",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Unexpected end of tokens",
+            message: "Unexpected end of input",
             span: Span {
-                start: 0,
+                start: 17,
                 end: 17,
             },
-            help: None,
+            help: Some(
+                "Expected 'max' or 'sum' here",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Invalid gas picker: too",
+            message: "Unexpected identifier 'too'",
             span: Span {
                 start: 18,
                 end: 21,
             },
-            help: None,
+            help: Some(
+                "Expected 'max' or 'sum' here",
+            ),
         },
     ],
     [
@@ -301,17 +329,19 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Unexpected end of tokens",
+            message: "Unexpected end of input",
             span: Span {
-                start: 0,
+                start: 10,
                 end: 10,
             },
-            help: None,
+            help: Some(
+                "Expected an argument here",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Unexpected token: At",
+            message: "Unexpected '@'",
             span: Span {
                 start: 16,
                 end: 17,

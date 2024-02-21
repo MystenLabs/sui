@@ -173,9 +173,9 @@ impl<'l, I: Iterator<Item = &'l str>> Lexer<'l, I> {
             .widen(start);
 
         let Some(end) = self.eat_prefix(quote) else {
-            let error  = content.map(|src| Lexeme(T::UnfinishedString, src));
+            let error = content.map(|src| Lexeme(T::UnfinishedString, src));
             self.done = Some(error);
-            return error
+            return error;
         };
 
         content.widen(end).map(|src| Lexeme(T::String, src))
