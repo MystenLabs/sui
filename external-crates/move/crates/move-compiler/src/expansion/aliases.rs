@@ -2,8 +2,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_ir_types::location::Loc;
+
 use crate::{
+    diagnostics::Diagnostic,
     expansion::alias_map_builder::*,
+    ice,
     shared::{unique_map::UniqueMap, unique_set::UniqueSet, *},
 };
 use std::{collections::BTreeSet, fmt};
@@ -76,7 +80,8 @@ impl AliasMap {
             LeadingAccessEntry::Module(_)
             | LeadingAccessEntry::Address(_)
             | LeadingAccessEntry::Member(_, _) => Some((name, entry)),
-            // For legacy reasons, don't resolve type parameters
+            // For code legacy reasons, don't resolve type parameters, they are just here for
+            // shadowing
             LeadingAccessEntry::TypeParam => None,
         }
     }
@@ -85,7 +90,8 @@ impl AliasMap {
         let (name, entry) = resolve_alias!(self, .module_members, name)?;
         match &entry {
             MemberEntry::Member(_, _) => Some((name, entry)),
-            // For legacy reasons, don't resolve type parameters
+            // For code legacy reasons, don't resolve type parameters, they are just here for
+            // shadowing
             MemberEntry::TypeParam => None,
         }
     }
@@ -111,13 +117,20 @@ impl AliasMap {
     /// Pushes a new scope, adding all of the new items to it (shadowing the outer one).
     /// Returns any name collisions that occur between addresses, members, and modules in the map
     /// builder.
-    pub fn push_alias_scope(&mut self, new_aliases: AliasMapBuilder) {
+    pub fn push_alias_scope(
+        &mut self,
+        loc: Loc,
+        new_aliases: AliasMapBuilder,
+    ) -> Result<(), Box<Diagnostic>> {
         let AliasMapBuilder::Namespaced {
             leading_access: new_leading_access,
             module_members: new_module_members,
         } = new_aliases
         else {
-            panic!("ICE alias map builder should be namespaced for 2024 paths")
+            return Err(Box::new(ice!((
+                loc,
+                "ICE alias map builder should be namespaced for 2024 paths"
+            ))));
         };
 
         let mut unused = BTreeSet::new();
@@ -145,6 +158,7 @@ impl AliasMap {
         // set the previous scope
         let previous = std::mem::replace(self, new_map);
         self.previous = Some(Box::new(previous));
+        Ok(())
     }
 
     /// Similar to add_and_shadow but just hides aliases now shadowed by a type parameter.

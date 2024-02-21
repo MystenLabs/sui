@@ -523,13 +523,14 @@ pub const ICE_BUG_REPORT_MESSAGE: &str =
 macro_rules! ice {
     ($primary: expr $(,)?) => {{
         $crate::diagnostics::print_stack_trace();
-        let mut diag = diag!($crate::diagnostics::codes::Bug::ICE, $primary);
+        let mut diag = $crate::diag!($crate::diagnostics::codes::Bug::ICE, $primary);
         diag.add_note($crate::diagnostics::ICE_BUG_REPORT_MESSAGE.to_string());
         diag
     }};
     ($primary: expr, $($secondary: expr),+ $(,)?) => {{
         $crate::diagnostics::print_stack_trace();
-        let mut diag = diag!($crate::diagnostics::codes::Bug::ICE, $primary, $($secondary, )*);
+        let mut diag =
+            $crate::diag!($crate::diagnostics::codes::Bug::ICE, $primary, $($secondary, )*);
         diag.add_note($crate::diagnostics::ICE_BUG_REPORT_MESSAGE.to_string());
         diag
     }}

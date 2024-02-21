@@ -112,11 +112,15 @@ impl<'env, 'map> Context<'env, 'map> {
     }
 
     /// Pushes a new alias map onto the alias information in the pash expander.
-    pub fn push_alias_scope(&mut self, new_scope: AliasMapBuilder) {
-        self.path_expander
+    pub fn push_alias_scope(&mut self, loc: Loc, new_scope: AliasMapBuilder) {
+        let res = self
+            .path_expander
             .as_mut()
             .unwrap()
-            .push_alias_scope(new_scope);
+            .push_alias_scope(loc, new_scope);
+        if let Err(diag) = res {
+            self.env().add_diag(*diag);
+        }
     }
 
     // Push a number of type parameters onto the alias information in the path expander.
@@ -322,7 +326,11 @@ pub fn program(
             let mut path_expander = Move2024PathExpander::new();
 
             let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
-            path_expander.push_alias_scope(aliases);
+
+            // should never fail
+            if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
+                context.env().add_diag(*diag);
+            }
 
             context.defn_context.named_address_mapping = Some(named_address_map);
             context.path_expander = Some(Box::new(path_expander));
@@ -353,8 +361,10 @@ pub fn program(
             let mut path_expander = Move2024PathExpander::new();
 
             let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
-            path_expander.push_alias_scope(aliases);
-
+            // should never fail
+            if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
+                context.env().add_diag(*diag);
+            }
             context.defn_context.named_address_mapping = Some(named_address_map);
             context.path_expander = Some(Box::new(path_expander));
             definition(&mut context, &mut lib_module_map, package, def);
@@ -648,7 +658,7 @@ fn module_(
             )
         })
         .collect::<Vec<_>>();
-    context.push_alias_scope(new_scope);
+    context.push_alias_scope(loc, new_scope);
 
     let mut friends = UniqueMap::new();
     let mut functions = UniqueMap::new();
@@ -1066,7 +1076,11 @@ enum Access {
 
 trait PathExpander {
     // Push a new innermost alias scope
-    fn push_alias_scope(&mut self, new_scope: AliasMapBuilder);
+    fn push_alias_scope(
+        &mut self,
+        loc: Loc,
+        new_scope: AliasMapBuilder,
+    ) -> Result<(), Box<Diagnostic>>;
 
     // Push a number of type parameters onto the alias information in the path expander. They are
     // never resolved, but are tracked to apply appropriate shadowing.
@@ -1113,9 +1127,14 @@ impl LegacyPathExpander {
 }
 
 impl PathExpander for LegacyPathExpander {
-    fn push_alias_scope(&mut self, new_scope: AliasMapBuilder) {
+    fn push_alias_scope(
+        &mut self,
+        loc: Loc,
+        new_scope: AliasMapBuilder,
+    ) -> Result<(), Box<Diagnostic>> {
         self.old_alias_maps
-            .push(self.aliases.add_and_shadow_all(new_scope));
+            .push(self.aliases.add_and_shadow_all(loc, new_scope)?);
+        Ok(())
     }
 
     fn push_type_parameters(&mut self, tparams: Vec<&Name>) {
@@ -1534,8 +1553,12 @@ impl Move2024PathExpander {
 }
 
 impl PathExpander for Move2024PathExpander {
-    fn push_alias_scope(&mut self, new_scope: AliasMapBuilder) {
-        self.aliases.push_alias_scope(new_scope);
+    fn push_alias_scope(
+        &mut self,
+        loc: Loc,
+        new_scope: AliasMapBuilder,
+    ) -> Result<(), Box<Diagnostic>> {
+        self.aliases.push_alias_scope(loc, new_scope)
     }
 
     fn push_type_parameters(&mut self, tparams: Vec<&Name>) {
@@ -2700,7 +2723,7 @@ fn sequence(context: &mut Context, loc: Loc, seq: P::Sequence) -> E::Sequence {
     let (puses, pitems, maybe_last_semicolon_loc, pfinal_item) = seq;
 
     let (new_scope, use_funs_builder) = uses(context, puses);
-    context.push_alias_scope(new_scope);
+    context.push_alias_scope(loc, new_scope);
     let mut use_funs = use_funs(context, use_funs_builder);
     let mut items: VecDeque<E::SequenceItem> = pitems
         .into_iter()

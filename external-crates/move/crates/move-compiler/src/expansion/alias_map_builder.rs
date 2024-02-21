@@ -41,6 +41,7 @@ pub enum LeadingAccessEntry {
 }
 
 #[derive(Clone, Copy)]
+#[allow(clippy::large_enum_variant)]
 pub enum MemberEntry {
     Member(ModuleIdent, Name),
     TypeParam,
@@ -120,29 +121,24 @@ impl AliasMapBuilder {
     }
 
     fn remove_member_alias(&mut self, alias: &Name, kind: ModuleMemberKind) -> Result<(), Loc> {
-        match (self, kind) {
-            (AliasMapBuilder::Legacy { members, .. }, _) => remove_dup(members, alias),
-            // constants and functions are not in the leading access namespace
-            (
-                AliasMapBuilder::Namespaced {
-                    leading_access: _,
-                    module_members,
-                },
-                ModuleMemberKind::Constant | ModuleMemberKind::Function | ModuleMemberKind::Schema,
-            ) => remove_dup(module_members, alias),
-            // structs are in the leading access namespace in addition to the module members
-            // namespace
-            (
-                AliasMapBuilder::Namespaced {
-                    leading_access,
-                    module_members,
-                },
-                ModuleMemberKind::Struct,
-            ) => {
-                let r1 = remove_dup(module_members, alias);
-                let r2 = remove_dup(leading_access, alias);
-                r1.and(r2)
-            }
+        match self {
+            AliasMapBuilder::Legacy { members, .. } => remove_dup(members, alias),
+            AliasMapBuilder::Namespaced {
+                leading_access,
+                module_members,
+            } => match kind {
+                // constants and functions are not in the leading access namespace
+                ModuleMemberKind::Constant
+                | ModuleMemberKind::Function
+                | ModuleMemberKind::Schema => remove_dup(module_members, alias),
+                // structs are in the leading access namespace in addition to the module members
+                // namespace
+                ModuleMemberKind::Struct => {
+                    let r1 = remove_dup(module_members, alias);
+                    let r2 = remove_dup(leading_access, alias);
+                    r1.and(r2)
+                }
+            },
         }
     }
 
@@ -181,35 +177,32 @@ impl AliasMapBuilder {
         is_implicit: bool,
     ) -> Result<(), Loc> {
         let result = self.remove_member_alias(&alias, kind);
-        match (self, kind) {
-            (AliasMapBuilder::Legacy { members, .. }, _) => members
+        match self {
+            AliasMapBuilder::Legacy { members, .. } => members
                 .add(alias, ((ident, member, kind), is_implicit))
                 .unwrap(),
-            // constants and functions are not in the leading access namespace
-            (
-                AliasMapBuilder::Namespaced {
-                    leading_access: _,
-                    module_members,
-                },
-                ModuleMemberKind::Constant | ModuleMemberKind::Function | ModuleMemberKind::Schema,
-            ) => {
-                let entry = (MemberEntry::Member(ident, member), is_implicit);
-                module_members.add(alias, entry).unwrap();
-            }
-            // structs are in the leading access namespace in addition to the module members
-            // namespace
-            (
-                AliasMapBuilder::Namespaced {
-                    leading_access,
-                    module_members,
-                },
-                ModuleMemberKind::Struct,
-            ) => {
-                let member_entry = (MemberEntry::Member(ident, member), is_implicit);
-                module_members.add(alias, member_entry).unwrap();
-                let leading_access_entry = (LeadingAccessEntry::Member(ident, member), is_implicit);
-                leading_access.add(alias, leading_access_entry).unwrap();
-            }
+
+            AliasMapBuilder::Namespaced {
+                leading_access,
+                module_members,
+            } => match kind {
+                // constants and functions are not in the leading access namespace
+                ModuleMemberKind::Constant
+                | ModuleMemberKind::Function
+                | ModuleMemberKind::Schema => {
+                    let entry = (MemberEntry::Member(ident, member), is_implicit);
+                    module_members.add(alias, entry).unwrap();
+                }
+                // structs are in the leading access namespace in addition to the module members
+                // namespace
+                ModuleMemberKind::Struct => {
+                    let member_entry = (MemberEntry::Member(ident, member), is_implicit);
+                    module_members.add(alias, member_entry).unwrap();
+                    let leading_access_entry =
+                        (LeadingAccessEntry::Member(ident, member), is_implicit);
+                    leading_access.add(alias, leading_access_entry).unwrap();
+                }
+            },
         }
         result
     }

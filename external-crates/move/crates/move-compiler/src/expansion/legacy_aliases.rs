@@ -3,11 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    diagnostics::Diagnostic,
     expansion::{
         alias_map_builder::AliasMapBuilder,
         aliases::AliasSet,
         ast::{ModuleIdent, ModuleIdent_},
     },
+    ice,
     parser::ast::ModuleName,
     shared::{unique_map::UniqueMap, *},
 };
@@ -83,9 +85,13 @@ impl AliasMap {
 
     /// Adds all of the new items in the new inner scope as shadowing the outer one.
     /// Gives back the outer scope
-    pub fn add_and_shadow_all(&mut self, shadowing: AliasMapBuilder) -> OldAliasMap {
+    pub fn add_and_shadow_all(
+        &mut self,
+        loc: Loc,
+        shadowing: AliasMapBuilder,
+    ) -> Result<OldAliasMap, Box<Diagnostic>> {
         if shadowing.is_empty() {
-            return OldAliasMap(None);
+            return Ok(OldAliasMap(None));
         }
 
         let outer_scope = OldAliasMap(Some(self.clone()));
@@ -95,7 +101,10 @@ impl AliasMap {
             ..
         } = shadowing
         else {
-            panic!("ICE alias map builder should be legacy for legacy")
+            return Err(Box::new(ice!((
+                loc,
+                "ICE alias map builder should be legacy for legacy"
+            ))));
         };
 
         let next_depth = self.current_depth();
@@ -117,7 +126,7 @@ impl AliasMap {
                 .unwrap();
         }
         self.unused.push(current_scope);
-        outer_scope
+        Ok(outer_scope)
     }
 
     /// Similar to add_and_shadow but just removes aliases now shadowed by a type parameter
