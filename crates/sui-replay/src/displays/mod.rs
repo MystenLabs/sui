@@ -4,5 +4,4 @@
 mod gas_status_displays;
 pub mod transaction_displays;
 
-pub mod html_formatter;
 pub struct Pretty<'a, T>(pub &'a T);

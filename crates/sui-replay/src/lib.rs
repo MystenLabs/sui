@@ -13,7 +13,6 @@ use sui_types::message_envelope::Message;
 use tracing::warn;
 use transaction_provider::{FuzzStartPoint, TransactionSource};
 
-use crate::displays::html_formatter;
 use crate::replay::ExecutionSandboxState;
 use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
@@ -26,6 +25,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_protocol_config::Chain;
+use sui_replay_frontend::generate_html_from_json;
 use sui_types::digests::TransactionDigest;
 use tracing::{error, info};
 pub mod config;
@@ -385,7 +385,7 @@ pub async fn execute_replay_command(
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let _sandbox_state = LocalExec::replay_with_network_config(
-                rpc_url,
+                rpc_url.clone(),
                 cfg_path.map(|p| p.to_str().unwrap().to_string()),
                 tx_digest,
                 safety,
@@ -412,7 +412,7 @@ pub async fn execute_replay_command(
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let sandbox_state = LocalExec::replay_with_network_config(
-                rpc_url,
+                rpc_url.clone(),
                 cfg_path.map(|p| p.to_str().unwrap().to_string()),
                 tx_digest,
                 safety,
@@ -431,12 +431,16 @@ pub async fn execute_replay_command(
             }
 
             if json {
-                write_to_file(tx_digest, &sandbox_state.json, "json");
+                write_to_file(tx_digest, &sandbox_state.output, "json");
             }
 
             if html {
-                let html_content = html_formatter::generate_html_from_json(&sandbox_state.json);
-                write_to_file(tx_digest, &html_content, "html");
+                let network = network_from_url(rpc_url);
+                generate_html_from_json(
+                    &sandbox_state.output,
+                    get_filepath(tx_digest, "html"),
+                    &network,
+                );
             }
 
             sandbox_state.check_effects()?;
@@ -604,7 +608,7 @@ pub async fn execute_replay_command(
     })
 }
 
-fn write_to_file(tx_digest: TransactionDigest, content: &String, extension: &str) {
+fn get_filepath(tx_digest: TransactionDigest, extension: &str) -> PathBuf {
     let mut filename = OsString::new();
     filename.push("replay_output_");
     filename.push(tx_digest.to_string());
@@ -612,8 +616,13 @@ fn write_to_file(tx_digest: TransactionDigest, content: &String, extension: &str
     filename.push(extension);
     let mut output_path = std::path::PathBuf::from(".");
     output_path.set_file_name(filename);
-    let mut html_file = File::create(&output_path).expect("Unable to create file");
-    html_file
+    output_path
+}
+
+fn write_to_file(tx_digest: TransactionDigest, content: &String, extension: &str) {
+    let output_path = get_filepath(tx_digest, extension);
+    let mut out_file = File::create(&output_path).expect("Unable to create file");
+    out_file
         .write_all(content.as_bytes())
         .expect("Unable to write file");
     info!("Wrote file to {:?}", output_path);
@@ -632,4 +641,19 @@ pub(crate) fn chain_from_chain_id(chain: &str) -> Chain {
     } else {
         Chain::Unknown
     }
+}
+
+fn network_from_url(url: Option<String>) -> String {
+    if let Some(url_str) = url {
+        if url_str.contains("mainnet") {
+            return "mainnet".into();
+        } else if url_str.contains("testnet") {
+            return "testnet".into();
+        } else if url_str.contains("devnet") {
+            return "devnet".into();
+        } else {
+            return "local".into();
+        }
+    }
+    "local".into()
 }

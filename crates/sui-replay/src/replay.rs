@@ -90,8 +90,8 @@ pub struct ExecutionSandboxState {
     pub local_exec_status: Option<Result<(), ExecutionError>>,
     /// Pre exec diag info
     pub pre_exec_diag: DiagInfo,
-    /// Json data of transaction output
-    pub json: String,
+    /// Json data of all transaction information collected during execution
+    pub output: String,
 }
 
 impl ExecutionSandboxState {
@@ -723,7 +723,7 @@ impl LocalExec {
                 local_exec_effects: effects,
                 local_exec_status: Some(Ok(())),
                 pre_exec_diag: self.diag.clone(),
-                json: "".to_string(),
+                output: "".to_string(),
             });
         }
         // Initialize the state necessary for execution
@@ -831,7 +831,7 @@ impl LocalExec {
             local_exec_effects: effects,
             local_exec_status: Some(result),
             pre_exec_diag: self.diag.clone(),
-            json: combined_json,
+            output: combined_json,
         })
     }
 
@@ -986,7 +986,7 @@ impl LocalExec {
             local_exec_effects: effects,
             local_exec_status: Some(exec_res),
             pre_exec_diag: pre_exec_diag.clone(),
-            json: "".to_string(),
+            output: "".to_string(),
         })
     }
 

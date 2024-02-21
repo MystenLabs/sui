@@ -48,3 +48,5 @@ sui-protocol-config.workspace = true
 sui-sdk.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
+sui-replay-frontend.workspace = true
+
