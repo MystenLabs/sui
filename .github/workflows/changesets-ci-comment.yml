@@ -16,7 +16,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
     steps:
       - name: Get workflow run information
-        uses: potiuk/get-workflow-origin@08219db9dbbbec802d571eaf0e14ece0bc005f72 # pin@v1_6
+        uses: potiuk/get-workflow-origin@e3ba776faee1134e17551924b852bfb374e1703d # pin@v1_1
         id: source-run-info
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
