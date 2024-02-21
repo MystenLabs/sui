@@ -4,7 +4,7 @@
 use tracing::info;
 
 use crate::types::IndexerResult;
-use crate::{metrics::IndexerMetrics, store::IndexerStoreV2};
+use crate::{metrics::IndexerMetrics, store::IndexerStore};
 
 const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: usize = 900;
 const OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG: usize = 300;
@@ -59,7 +59,7 @@ impl Default for SnapshotLagConfig {
 
 impl<S> ObjectsSnapshotProcessor<S>
 where
-    S: IndexerStoreV2 + Clone + Sync + Send + 'static,
+    S: IndexerStore + Clone + Sync + Send + 'static,
 {
     pub fn new(store: S, metrics: IndexerMetrics) -> ObjectsSnapshotProcessor<S> {
         Self {

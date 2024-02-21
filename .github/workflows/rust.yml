@@ -423,7 +423,7 @@ jobs:
      - uses: taiki-e/install-action@nextest
      - name: Setup db
        run: |
-         PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer_v2;' -c 'ALTER SYSTEM SET max_connections = 500;'
+         PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer;' -c 'ALTER SYSTEM SET max_connections = 500;'
        env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgrespw

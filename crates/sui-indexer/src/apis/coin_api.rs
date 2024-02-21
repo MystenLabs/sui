@@ -14,18 +14,18 @@ use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::{GAS, TOTAL_SUPPLY_MIST};
 
-pub(crate) struct CoinReadApiV2 {
+pub(crate) struct CoinReadApi {
     inner: IndexerReader,
 }
 
-impl CoinReadApiV2 {
+impl CoinReadApi {
     pub fn new(inner: IndexerReader) -> Self {
         Self { inner }
     }
 }
 
 #[async_trait]
-impl CoinReadApiServer for CoinReadApiV2 {
+impl CoinReadApiServer for CoinReadApi {
     async fn get_coins(
         &self,
         owner: SuiAddress,
@@ -142,7 +142,7 @@ impl CoinReadApiServer for CoinReadApiV2 {
     }
 }
 
-impl SuiRpcModule for CoinReadApiV2 {
+impl SuiRpcModule for CoinReadApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

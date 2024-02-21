@@ -25,7 +25,7 @@ use super::type_filter::ExactTypeFilter;
 use async_graphql::*;
 
 use async_graphql::connection::{Connection, CursorType, Edge};
-use sui_indexer::models_v2::objects::StoredHistoryObject;
+use sui_indexer::models::objects::StoredHistoryObject;
 use sui_indexer::types::OwnerType;
 use sui_types::coin::Coin as NativeCoin;
 use sui_types::TypeTag;

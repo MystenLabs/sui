@@ -36,7 +36,7 @@ pub struct ObjectRefColumn {
     pub object_digest: Vec<u8>,
 }
 
-// NOTE: please add updating statement like below in pg_indexer_store_v2.rs,
+// NOTE: please add updating statement like below in pg_indexer_store.rs,
 // if new columns are added here:
 // objects::epoch.eq(excluded(objects::epoch))
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]

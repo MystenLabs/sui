@@ -30,25 +30,25 @@ use crate::handlers::TransactionObjectChangesToCommit;
 use crate::metrics::IndexerMetrics;
 
 use crate::db::PgConnectionPool;
-use crate::models_v2::checkpoints::StoredCheckpoint;
-use crate::models_v2::display::StoredDisplay;
-use crate::models_v2::epoch::StoredEpochInfo;
-use crate::models_v2::events::StoredEvent;
-use crate::models_v2::objects::{
+use crate::models::checkpoints::StoredCheckpoint;
+use crate::models::display::StoredDisplay;
+use crate::models::epoch::StoredEpochInfo;
+use crate::models::events::StoredEvent;
+use crate::models::objects::{
     StoredDeletedHistoryObject, StoredDeletedObject, StoredHistoryObject, StoredObject,
 };
-use crate::models_v2::packages::StoredPackage;
-use crate::models_v2::transactions::StoredTransaction;
+use crate::models::packages::StoredPackage;
+use crate::models::transactions::StoredTransaction;
 use crate::schema::{
     checkpoints, display, epochs, events, objects, objects_history, objects_snapshot, packages,
     transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
 };
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
-use crate::store::module_resolver_v2::IndexerStorePackageModuleResolver;
+use crate::store::module_resolver::IndexerStorePackageModuleResolver;
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 
 use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
-use super::IndexerStoreV2;
+use super::IndexerStore;
 use super::ObjectChangeToCommit;
 
 #[macro_export]
@@ -105,7 +105,7 @@ SET object_version = EXCLUDED.object_version,
 ";
 
 #[derive(Clone)]
-pub struct PgIndexerStoreV2 {
+pub struct PgIndexerStore {
     blocking_cp: PgConnectionPool,
     module_cache: Arc<SyncModuleCache<IndexerStorePackageModuleResolver>>,
     metrics: IndexerMetrics,
@@ -114,7 +114,7 @@ pub struct PgIndexerStoreV2 {
     partition_manager: PgPartitionManager,
 }
 
-impl PgIndexerStoreV2 {
+impl PgIndexerStore {
     pub fn new(blocking_cp: PgConnectionPool, metrics: IndexerMetrics) -> Self {
         let module_cache: Arc<SyncModuleCache<IndexerStorePackageModuleResolver>> = Arc::new(
             SyncModuleCache::new(IndexerStorePackageModuleResolver::new(blocking_cp.clone())),
@@ -848,7 +848,7 @@ impl PgIndexerStoreV2 {
 }
 
 #[async_trait]
-impl IndexerStoreV2 for PgIndexerStoreV2 {
+impl IndexerStore for PgIndexerStore {
     type ModuleCache = SyncModuleCache<IndexerStorePackageModuleResolver>;
 
     async fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {

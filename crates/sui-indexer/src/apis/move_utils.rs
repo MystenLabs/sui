@@ -22,18 +22,18 @@ use sui_types::move_package::normalize_modules;
 
 use crate::indexer_reader::IndexerReader;
 
-pub struct MoveUtilsApiV2 {
+pub struct MoveUtilsApi {
     inner: IndexerReader,
 }
 
-impl MoveUtilsApiV2 {
+impl MoveUtilsApi {
     pub fn new(inner: IndexerReader) -> Self {
         Self { inner }
     }
 }
 
 #[async_trait]
-impl MoveUtilsServer for MoveUtilsApiV2 {
+impl MoveUtilsServer for MoveUtilsApi {
     async fn get_normalized_move_modules_by_package(
         &self,
         package_id: ObjectID,
@@ -149,7 +149,7 @@ impl MoveUtilsServer for MoveUtilsApiV2 {
     }
 }
 
-impl SuiRpcModule for MoveUtilsApiV2 {
+impl SuiRpcModule for MoveUtilsApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }
