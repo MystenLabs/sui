@@ -3,22 +3,26 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === ERRORS AFTER PARSING INPUT COMMANDS === 
-  × Error at command 0 in PTB file 'tests/ptb_files/split_coins/
-  │ split_coins_invalid.ptb'
-   ╭─[5:1]
- 4 │ # Too many arguments
- 5 │ --split-coins gas [0] 5
-   · ──────┬──────
-   ·       ╰── expected token '[', but got '--split-coins'
- 6 │ 
+  × Error when processing PTB
+   ╭────
+ 1 │ --split-coins 1 --split-coins gas [0] 5 --split-coins [1] gas 
+   ·                 ──────┬──────
+   ·                       ╰── Expected '[' but found command '--split-coins'
    ╰────
 
-  × Error at command 1 in PTB file 'tests/ptb_files/split_coins/
-  │ split_coins_invalid.ptb'
-   ╭─[8:15]
- 7 │ # Non-array for splits (e.g., reversed args)
- 8 │ --split-coins [1] gas
-   ·               ┬
-   ·               ╰── unexpected token '['
+  × Error when processing PTB
+   ╭────
+ 1 │ --split-coins 1 --split-coins gas [0] 5 --split-coins [1] gas 
+   ·                                       ┬
+   ·                                       ╰── Unexpected number '5'
    ╰────
+  help: Expected to find a command here
+
+  × Error when processing PTB
+   ╭────
+ 1 │ --split-coins 1 --split-coins gas [0] 5 --split-coins [1] gas 
+   ·                                                       ┬
+   ·                                                       ╰── Unexpected '['
+   ╰────
+  help: Expected an argument here
 

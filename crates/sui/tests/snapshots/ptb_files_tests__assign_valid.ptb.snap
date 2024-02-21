@@ -3,25 +3,25 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭──────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                              │
-├────────────────────────────────┬─────────────────────────────────────────┤
-│ command                        │ from                                    │
-├────────────────────────────────┼─────────────────────────────────────────┤
-│ --assign a @0x0                │ tests/ptb_files/assign/assign_valid.ptb │
-│ --assign b a                   │ tests/ptb_files/assign/assign_valid.ptb │
-│ --make-move-vec address [a, b] │ tests/ptb_files/assign/assign_valid.ptb │
-│ --assign c                     │ tests/ptb_files/assign/assign_valid.ptb │
-│ --assign c0 c.0                │ tests/ptb_files/assign/assign_valid.ptb │
-│ --assign c1 c.1                │ tests/ptb_files/assign/assign_valid.ptb │
-│ --assign a @0x0                │ tests/ptb_files/assign/assign_valid.ptb │
-│ --assign b a                   │ tests/ptb_files/assign/assign_valid.ptb │
-│ --make-move-vec address [a, b] │ tests/ptb_files/assign/assign_valid.ptb │
-│ --assign c                     │ tests/ptb_files/assign/assign_valid.ptb │
-│ --assign c0 c.0                │ tests/ptb_files/assign/assign_valid.ptb │
-│ --assign c1 c.1                │ tests/ptb_files/assign/assign_valid.ptb │
-│ --gas-budget 1                 │ tests/ptb_files/assign/assign_valid.ptb │
-╰────────────────────────────────┴─────────────────────────────────────────╯
+╭──────────────────────────────╮
+│ PTB Preview                  │
+├──────────────────────────────┤
+│ command                      │
+├──────────────────────────────┤
+│ assign a @0x0                │
+│ assign b a                   │
+│ make-move-vec address [a, b] │
+│ assign c                     │
+│ assign c0 c.0                │
+│ assign c1 c.1                │
+│ assign a @0x0                │
+│ assign b a                   │
+│ make-move-vec address [a, b] │
+│ assign c                     │
+│ assign c0 c.0                │
+│ assign c1 c.1                │
+│ gas-budget 1                 │
+╰──────────────────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false

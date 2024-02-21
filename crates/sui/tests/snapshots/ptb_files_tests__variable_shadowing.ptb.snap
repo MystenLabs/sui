@@ -3,17 +3,17 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                              │
-├──────────────────────────────────────────────────────┬───────────────────────────────────────────────────┤
-│ command                                              │ from                                              │
-├──────────────────────────────────────────────────────┼───────────────────────────────────────────────────┤
-│ --assign s @0x1                                      │ tests/ptb_files/resolution/variable_shadowing.ptb │
-│ --move-call sui::coin::destroy_zero<sui::sui::SUI> s │ tests/ptb_files/resolution/variable_shadowing.ptb │
-│ --assign s @0x2                                      │ tests/ptb_files/resolution/variable_shadowing.ptb │
-│ --make-move-vec address [s]                          │ tests/ptb_files/resolution/variable_shadowing.ptb │
-│ --gas-budget 100000                                  │ tests/ptb_files/resolution/variable_shadowing.ptb │
-╰──────────────────────────────────────────────────────┴───────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────╮
+│ PTB Preview                                        │
+├────────────────────────────────────────────────────┤
+│ command                                            │
+├────────────────────────────────────────────────────┤
+│ assign s @0x1                                      │
+│ move-call sui::coin::destroy_zero<sui::sui::SUI> s │
+│ assign s @0x2                                      │
+│ make-move-vec address [s]                          │
+│ gas-budget 100000                                  │
+╰────────────────────────────────────────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false

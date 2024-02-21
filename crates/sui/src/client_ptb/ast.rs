@@ -10,7 +10,7 @@ use move_command_line_common::{
 use move_core_types::runtime_value::MoveValue;
 use sui_types::{base_types::ObjectID, Identifier};
 
-use crate::{error_, sp_};
+use crate::{error, sp};
 
 use super::error::{PTBResult, Span, Spanned};
 
@@ -138,7 +138,7 @@ impl Argument {
             Argument::Address(a) => MoveValue::Address(a.into_inner()),
             Argument::Vector(vs) => MoveValue::Vector(
                 vs.iter()
-                    .map(|sp_!(loc, v)| v.to_move_value_opt(*loc))
+                    .map(|sp!(loc, v)| v.to_move_value_opt(*loc))
                     .collect::<PTBResult<Vec<_>>>()
                     .map_err(|e| e.with_help(
                             format!("Was unable to parse '{self}' as a pure PTB value. This is most likely because \
@@ -149,7 +149,7 @@ impl Argument {
             Argument::String(s) => {
                 MoveValue::Vector(s.bytes().map(MoveValue::U8).collect::<Vec<_>>())
             }
-            Argument::Option(sp_!(loc, o)) => {
+            Argument::Option(sp!(loc, o)) => {
                 if let Some(v) = o {
                     let v = v.as_ref().to_move_value_opt(*loc).map_err(|e| e.with_help(
                             format!(
@@ -165,7 +165,7 @@ impl Argument {
             }
             Argument::Identifier(_)
             | Argument::VariableAccess(_, _)
-            | Argument::Gas => error_!(loc, "Was unable to convert '{self}' to primitive value (i.e., non-object value)"),
+            | Argument::Gas => error!(loc, "Was unable to convert '{self}' to primitive value (i.e., non-object value)"),
         })
     }
 }
@@ -182,9 +182,9 @@ impl fmt::Display for Argument {
             Argument::U256(u) => write!(f, "{}u256", u),
             Argument::Gas => write!(f, "gas"),
             Argument::Identifier(i) => write!(f, "{}", i),
-            Argument::VariableAccess(sp_!(_, head), accesses) => {
+            Argument::VariableAccess(sp!(_, head), accesses) => {
                 write!(f, "{}", head)?;
-                for sp_!(_, access) in accesses {
+                for sp!(_, access) in accesses {
                     write!(f, ".{}", access)?;
                 }
                 Ok(())
@@ -193,7 +193,7 @@ impl fmt::Display for Argument {
             Argument::String(s) => write!(f, "\"{}\"", s),
             Argument::Vector(v) => {
                 write!(f, "vector[")?;
-                for (i, sp_!(_, arg)) in v.iter().enumerate() {
+                for (i, sp!(_, arg)) in v.iter().enumerate() {
                     write!(f, "{}", arg)?;
                     if i != v.len() - 1 {
                         write!(f, ", ")?;
@@ -201,7 +201,7 @@ impl fmt::Display for Argument {
                 }
                 write!(f, "]")
             }
-            Argument::Option(sp_!(_, o)) => match o {
+            Argument::Option(sp!(_, o)) => match o {
                 Some(v) => write!(f, "some({})", v),
                 None => write!(f, "none"),
             },
@@ -281,7 +281,7 @@ impl fmt::Display for ParsedPTBCommand {
                     .join(", ")
             ),
             ParsedPTBCommand::MoveCall(
-                sp_!(
+                sp!(
                     _,
                     ModuleAccess {
                         address,

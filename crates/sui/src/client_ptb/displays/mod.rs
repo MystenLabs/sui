@@ -17,10 +17,10 @@ pub struct Pretty<'a, T>(pub &'a T);
 impl<'a> Display for PTBPreview<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut builder = TableBuilder::default();
-        let columns = vec!["command", "from"];
+        let columns = vec!["command"];
         builder.set_header(columns);
-        for sp!(loc, cmd) in &self.program.commands {
-            builder.push_record([cmd.to_string(), loc.file_scope.name.to_string()]);
+        for sp!(_, cmd) in &self.program.commands {
+            builder.push_record([cmd.to_string()]);
         }
         let mut table = builder.build();
         table.with(TablePanel::header("PTB Preview"));

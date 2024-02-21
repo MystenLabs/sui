@@ -3,172 +3,129 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === ERRORS AFTER PARSING INPUT COMMANDS === 
-  × Error at command 0 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
-   ╭─[3:12]
- 2 │ # Out-of-bounds integers
- 3 │ --assign a 0xfffu8
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
    ·            ───┬───
    ·               ╰── number too large to fit in target type
- 4 │ --assign b 0xffffffffu16
    ╰────
 
-  × Error at command 1 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
-   ╭─[4:12]
- 3 │ --assign a 0xfffu8
- 4 │ --assign b 0xffffffffu16
-   ·            ──────┬──────
-   ·                  ╰── number too large to fit in target type
- 5 │ --assign c 0xfffffffffffffu32
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                               ──────┬──────
+   ·                                     ╰── number too large to fit in target type
    ╰────
 
-  × Error at command 2 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
-   ╭─[5:12]
- 4 │ --assign b 0xffffffffu16
- 5 │ --assign c 0xfffffffffffffu32
-   ·            ─────────┬────────
-   ·                     ╰── number too large to fit in target type
- 6 │ --assign d 0xffffffffffffffffffffffffffffffu64
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                        ─────────┬────────
+   ·                                                                 ╰── number too large to fit in target type
    ╰────
 
-  × Error at command 3 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
-   ╭─[6:12]
- 5 │ --assign c 0xfffffffffffffu32
- 6 │ --assign d 0xffffffffffffffffffffffffffffffu64
-   ·            ─────────────────┬─────────────────
-   ·                             ╰── number too large to fit in target type
- 7 │ --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                      ─────────────────┬─────────────────
+   ·                                                                                                       ╰── number too large to fit in target type
    ╰────
 
-  × Error at command 4 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
-   ╭─[7:12]
- 6 │ --assign d 0xffffffffffffffffffffffffffffffu64
- 7 │ --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128
-   ·            ────────────────────────────────┬───────────────────────────────
-   ·                                            ╰── number too large to fit in target type
- 8 │ --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                     ────────────────────────────────┬───────────────────────────────
+   ·                                                                                                                                                                     ╰── number too large to fit in target type
    ╰────
 
-  × Error at command 5 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
-   ╭─[8:12]
- 7 │ --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128
- 8 │ --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256
-   ·            ───────────────────────────────────────────┬──────────────────────────────────────────
-   ·                                                       ╰── Invalid string length
- 9 │ 
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                                                                                                 ───────────────────────────────────────────┬──────────────────────────────────────────
+   ·                                                                                                                                                                                                                                                            ╰── Invalid string length
    ╰────
 
-  × Error at command 6 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
-    ╭─[11:17]
- 10 │ # invalid integer types 
- 11 │ --make-move-vec <string> ['foo']
-    ·                 ────┬───
-    ·                     ╰── expected token ::, got >
- 12 │ --make-move-vec <String> ['foo']
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                                                                                                                                                                                                               ┬
+   ·                                                                                                                                                                                                                                                                                                                               ╰── Expected '::' but found '>'
+   ╰────
 
-  × Error at command 7 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
-    ╭─[12:17]
- 11 │ --make-move-vec <string> ['foo']
- 12 │ --make-move-vec <String> ['foo']
-    ·                 ────┬───
-    ·                     ╰── expected token ::, got >
- 13 │ --make-move-vec <Bool> [true, false]
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                                                                                                                                                                                                                                              ┬
+   ·                                                                                                                                                                                                                                                                                                                                                              ╰── Expected '::' but found '>'
+   ╰────
 
-  × Error at command 8 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
-    ╭─[13:17]
- 12 │ --make-move-vec <String> ['foo']
- 13 │ --make-move-vec <Bool> [true, false]
-    ·                 ───┬──
-    ·                    ╰── expected token ::, got >
- 14 │ --make-move-vec <i8> [0]
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                                                                                                                                                                                                                                                                           ┬
+   ·                                                                                                                                                                                                                                                                                                                                                                                           ╰── Expected '::' but found '>'
+   ╰────
 
-  × Error at command 9 in PTB file 'tests/ptb_files/parsing/invalid_types.ptb'
-    ╭─[14:17]
- 13 │ --make-move-vec <Bool> [true, false]
- 14 │ --make-move-vec <i8> [0]
-    ·                 ──┬─
-    ·                   ╰── expected token ::, got >
- 15 │ --make-move-vec <i16> [0]
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                              ┬
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                              ╰── Expected '::' but found '>'
+   ╰────
 
-  × Error at command 10 in PTB file 'tests/ptb_files/parsing/
-  │ invalid_types.ptb'
-    ╭─[15:17]
- 14 │ --make-move-vec <i8> [0]
- 15 │ --make-move-vec <i16> [0]
-    ·                 ──┬──
-    ·                   ╰── expected token ::, got >
- 16 │ --make-move-vec <i32> [0]
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                        ┬
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                        ╰── Expected '::' but found '>'
+   ╰────
 
-  × Error at command 11 in PTB file 'tests/ptb_files/parsing/
-  │ invalid_types.ptb'
-    ╭─[16:17]
- 15 │ --make-move-vec <i16> [0]
- 16 │ --make-move-vec <i32> [0]
-    ·                 ──┬──
-    ·                   ╰── expected token ::, got >
- 17 │ --make-move-vec <i64> [0]
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  ┬
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  ╰── Expected '::' but found '>'
+   ╰────
 
-  × Error at command 12 in PTB file 'tests/ptb_files/parsing/
-  │ invalid_types.ptb'
-    ╭─[17:17]
- 16 │ --make-move-vec <i32> [0]
- 17 │ --make-move-vec <i64> [0]
-    ·                 ──┬──
-    ·                   ╰── expected token ::, got >
- 18 │ --make-move-vec <i128> [0]
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            ┬
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            ╰── Expected '::' but found '>'
+   ╰────
 
-  × Error at command 13 in PTB file 'tests/ptb_files/parsing/
-  │ invalid_types.ptb'
-    ╭─[18:17]
- 17 │ --make-move-vec <i64> [0]
- 18 │ --make-move-vec <i128> [0]
-    ·                 ───┬──
-    ·                    ╰── expected token ::, got >
- 19 │ --make-move-vec <i256> [0]
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ┬
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ╰── Expected '::' but found '>'
+   ╰────
 
-  × Error at command 14 in PTB file 'tests/ptb_files/parsing/
-  │ invalid_types.ptb'
-    ╭─[19:17]
- 18 │ --make-move-vec <i128> [0]
- 19 │ --make-move-vec <i256> [0]
-    ·                 ───┬──
-    ·                    ╰── expected token ::, got >
- 20 │ --make-move-vec <Vector<u8>> [vector[0]]
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  ┬
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  ╰── Expected '::' but found '>'
+   ╰────
 
-  × Error at command 15 in PTB file 'tests/ptb_files/parsing/
-  │ invalid_types.ptb'
-    ╭─[20:17]
- 19 │ --make-move-vec <i256> [0]
- 20 │ --make-move-vec <Vector<u8>> [vector[0]]
-    ·                 ──────┬─────
-    ·                       ╰── expected token ::, got <
- 21 │ --make-move-vec <vector<U256>> [vector[0]]
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               ┬
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               ╰── Expected '::' but found '<'
+   ╰────
 
-  × Error at command 16 in PTB file 'tests/ptb_files/parsing/
-  │ invalid_types.ptb'
-    ╭─[21:17]
- 20 │ --make-move-vec <Vector<u8>> [vector[0]]
- 21 │ --make-move-vec <vector<U256>> [vector[0]]
-    ·                 ───────┬──────
-    ·                        ╰── expected token ::, got >
- 22 │ --make-move-vec <vector<i256>> [vector[0]]
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             ┬
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             ╰── Expected '::' but found '>'
+   ╰────
 
-  × Error at command 17 in PTB file 'tests/ptb_files/parsing/
-  │ invalid_types.ptb'
-    ╭─[22:17]
- 21 │ --make-move-vec <vector<U256>> [vector[0]]
- 22 │ --make-move-vec <vector<i256>> [vector[0]]
-    ·                 ───────┬──────
-    ·                        ╰── expected token ::, got >
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign a 0xfffu8 --assign b 0xffffffffu16 --assign c 0xfffffffffffffu32 --assign d 0xffffffffffffffffffffffffffffffu64 --assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128 --assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256 --make-move-vec <string> [foo] --make-move-vec <String> [foo] --make-move-vec <Bool> [true, false] --make-move-vec <i8> [0] --make-move-vec <i16> [0] --make-move-vec <i32> [0] --make-move-vec <i64> [0] --make-move-vec <i128> [0] --make-move-vec <i256> [0] --make-move-vec <Vector<u8>> [vector[0]] --make-move-vec <vector<U256>> [vector[0]] --make-move-vec <vector<i256>> [vector[0]] 
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        ┬
+   ·                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        ╰── Expected '::' but found '>'
+   ╰────
 

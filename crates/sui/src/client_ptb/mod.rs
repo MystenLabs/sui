@@ -7,5 +7,6 @@ pub mod error;
 pub mod lexer;
 pub mod parser;
 pub mod ptb;
-pub mod ptb_builder;
 pub mod token;
+pub mod builder;
+pub mod utils;

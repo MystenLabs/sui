@@ -3,16 +3,16 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭───────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                           │
-├─────────────────────────────────────────┬─────────────────────────────────────────────────────────────┤
-│ command                                 │ from                                                        │
-├─────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
-│ --gas-budget 10000000                   │ tests/ptb_files/transfer_objects/transfer_objects_valid.ptb │
-│ --split-coins gas [1u64, 2u64, 3u64]    │ tests/ptb_files/transfer_objects/transfer_objects_valid.ptb │
-│ --assign s                              │ tests/ptb_files/transfer_objects/transfer_objects_valid.ptb │
-│ --transfer-objects @0x1 [s.0, s.1, s.2] │ tests/ptb_files/transfer_objects/transfer_objects_valid.ptb │
-╰─────────────────────────────────────────┴─────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────╮
+│ PTB Preview                           │
+├───────────────────────────────────────┤
+│ command                               │
+├───────────────────────────────────────┤
+│ gas-budget 10000000                   │
+│ split-coins gas [1u64, 2u64, 3u64]    │
+│ assign s                              │
+│ transfer-objects @0x1 [s.0, s.1, s.2] │
+╰───────────────────────────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false

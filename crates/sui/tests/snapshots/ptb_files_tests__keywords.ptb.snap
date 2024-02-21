@@ -3,38 +3,31 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === ERRORS AFTER PARSING INPUT COMMANDS === 
-  × Error at command 0 in PTB file 'tests/ptb_files/parsing/keywords.ptb'
-   ╭─[1:15]
- 1 │ --assign some @0x1
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign some @0x1 --assign vector @0x1 --assign none @0x1 --assign gas @0x1 --gas-budget 11 
    ·               ┬
-   ·               ╰── expected token '(', but got '@'
- 2 │ --assign vector @0x1
+   ·               ╰── Expected '(' but found '@'
    ╰────
 
-  × Error at command 1 in PTB file 'tests/ptb_files/parsing/keywords.ptb'
-   ╭─[2:17]
- 1 │ --assign some @0x1
- 2 │ --assign vector @0x1
-   ·                 ┬
-   ·                 ╰── expected token '[', but got '@'
- 3 │ 
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign some @0x1 --assign vector @0x1 --assign none @0x1 --assign gas @0x1 --gas-budget 11 
+   ·                                    ┬
+   ·                                    ╰── Expected '[' but found '@'
    ╰────
 
-  × Error at command 2 in PTB file 'tests/ptb_files/parsing/keywords.ptb'
-   ╭─[4:10]
- 3 │ 
- 4 │ --assign none @0x1
-   ·          ──┬─
-   ·            ╰── Expected variable binding
- 5 │ --assign gas @0x1
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign some @0x1 --assign vector @0x1 --assign none @0x1 --assign gas @0x1 --gas-budget 11 
+   ·                                                  ──┬─
+   ·                                                    ╰── Expected variable binding
    ╰────
 
-  × Error at command 3 in PTB file 'tests/ptb_files/parsing/keywords.ptb'
-   ╭─[5:10]
- 4 │ --assign none @0x1
- 5 │ --assign gas @0x1
-   ·          ─┬─
-   ·           ╰── Expected variable binding
- 6 │ 
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign some @0x1 --assign vector @0x1 --assign none @0x1 --assign gas @0x1 --gas-budget 11 
+   ·                                                                     ─┬─
+   ·                                                                      ╰── Expected variable binding
    ╰────
 

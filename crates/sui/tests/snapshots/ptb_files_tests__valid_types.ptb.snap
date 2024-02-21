@@ -3,37 +3,37 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                                           │
-├─────────────────────────────────────────────────────────────────────────────┬─────────────────────────────────────────┤
-│ command                                                                     │ from                                    │
-├─────────────────────────────────────────────────────────────────────────────┼─────────────────────────────────────────┤
-│ --make-move-vec address [@0x1]                                              │ tests/ptb_files/parsing/valid_types.ptb │
-│ --make-move-vec bool [true, false]                                          │ tests/ptb_files/parsing/valid_types.ptb │
-│ --make-move-vec u8 [0u64]                                                   │ tests/ptb_files/parsing/valid_types.ptb │
-│ --make-move-vec u16 [0u64]                                                  │ tests/ptb_files/parsing/valid_types.ptb │
-│ --make-move-vec u32 [0u64]                                                  │ tests/ptb_files/parsing/valid_types.ptb │
-│ --make-move-vec u64 [0u64]                                                  │ tests/ptb_files/parsing/valid_types.ptb │
-│ --make-move-vec u128 [0u64]                                                 │ tests/ptb_files/parsing/valid_types.ptb │
-│ --make-move-vec u256 [0u64]                                                 │ tests/ptb_files/parsing/valid_types.ptb │
-│ --make-move-vec vector<u8> [vector[0u64]]                                   │ tests/ptb_files/parsing/valid_types.ptb │
-│ --make-move-vec vector<u256> [vector[0u64]]                                 │ tests/ptb_files/parsing/valid_types.ptb │
-│ --assign a 0u8                                                              │ tests/ptb_files/parsing/valid_types.ptb │
-│ --assign b 0u16                                                             │ tests/ptb_files/parsing/valid_types.ptb │
-│ --assign c 0u32                                                             │ tests/ptb_files/parsing/valid_types.ptb │
-│ --assign d 0u64                                                             │ tests/ptb_files/parsing/valid_types.ptb │
-│ --assign e 0u128                                                            │ tests/ptb_files/parsing/valid_types.ptb │
-│ --assign f 0u256                                                            │ tests/ptb_files/parsing/valid_types.ptb │
-│ --assign a 0u8                                                              │ tests/ptb_files/parsing/valid_types.ptb │
-│ --assign b 0u16                                                             │ tests/ptb_files/parsing/valid_types.ptb │
-│ --assign c 0u32                                                             │ tests/ptb_files/parsing/valid_types.ptb │
-│ --assign d 0u64                                                             │ tests/ptb_files/parsing/valid_types.ptb │
-│ --assign e 0u128                                                            │ tests/ptb_files/parsing/valid_types.ptb │
-│ --assign f 0u256                                                            │ tests/ptb_files/parsing/valid_types.ptb │
-│ --make-move-vec std::option::Option<std::option::Option<vector<u8>>> [none] │ tests/ptb_files/parsing/valid_types.ptb │
-│ --make-move-vec std::option::Option<vector<u256>> [vector[]]                │ tests/ptb_files/parsing/valid_types.ptb │
-│ --gas-budget 1                                                              │ tests/ptb_files/parsing/valid_types.ptb │
-╰─────────────────────────────────────────────────────────────────────────────┴─────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                               │
+├───────────────────────────────────────────────────────────────────────────┤
+│ command                                                                   │
+├───────────────────────────────────────────────────────────────────────────┤
+│ make-move-vec address [@0x1]                                              │
+│ make-move-vec bool [true, false]                                          │
+│ make-move-vec u8 [0u64]                                                   │
+│ make-move-vec u16 [0u64]                                                  │
+│ make-move-vec u32 [0u64]                                                  │
+│ make-move-vec u64 [0u64]                                                  │
+│ make-move-vec u128 [0u64]                                                 │
+│ make-move-vec u256 [0u64]                                                 │
+│ make-move-vec vector<u8> [vector[0u64]]                                   │
+│ make-move-vec vector<u256> [vector[0u64]]                                 │
+│ assign a 0u8                                                              │
+│ assign b 0u16                                                             │
+│ assign c 0u32                                                             │
+│ assign d 0u64                                                             │
+│ assign e 0u128                                                            │
+│ assign f 0u256                                                            │
+│ assign a 0u8                                                              │
+│ assign b 0u16                                                             │
+│ assign c 0u32                                                             │
+│ assign d 0u64                                                             │
+│ assign e 0u128                                                            │
+│ assign f 0u256                                                            │
+│ make-move-vec std::option::Option<std::option::Option<vector<u8>>> [none] │
+│ make-move-vec std::option::Option<vector<u256>> [vector[]]                │
+│ gas-budget 1                                                              │
+╰───────────────────────────────────────────────────────────────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false

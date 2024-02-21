@@ -3,16 +3,16 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                               │
-├───────────────────────────────────────────────┬───────────────────────────────────────────────────────────┤
-│ command                                       │ from                                                      │
-├───────────────────────────────────────────────┼───────────────────────────────────────────────────────────┤
-│ --assign s @0x1                               │ tests/ptb_files/resolution/variable_resolution_fixing.ptb │
-│ --move-call sui::coin::value<sui::sui::SUI> s │ tests/ptb_files/resolution/variable_resolution_fixing.ptb │
-│ --make-move-vec address [s]                   │ tests/ptb_files/resolution/variable_resolution_fixing.ptb │
-│ --gas-budget 100000                           │ tests/ptb_files/resolution/variable_resolution_fixing.ptb │
-╰───────────────────────────────────────────────┴───────────────────────────────────────────────────────────╯
+╭─────────────────────────────────────────────╮
+│ PTB Preview                                 │
+├─────────────────────────────────────────────┤
+│ command                                     │
+├─────────────────────────────────────────────┤
+│ assign s @0x1                               │
+│ move-call sui::coin::value<sui::sui::SUI> s │
+│ make-move-vec address [s]                   │
+│ gas-budget 100000                           │
+╰─────────────────────────────────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false

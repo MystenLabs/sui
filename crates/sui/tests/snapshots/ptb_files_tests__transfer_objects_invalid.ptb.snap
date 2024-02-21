@@ -3,23 +3,25 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === ERRORS AFTER PARSING INPUT COMMANDS === 
-  × Error at command 0 in PTB file 'tests/ptb_files/transfer_objects/
-  │ transfer_objects_invalid.ptb'
-   ╭─[5:1]
- 4 │ # Too many arguments
- 5 │ --transfer-objects @0x1 [@0x1, @0x2] @0x2
-   · ─────────┬────────
-   ·          ╰── expected token '[', but got '--transfer-objects'
- 6 │ 
+  × Error when processing PTB
+   ╭────
+ 1 │ --transfer-objects @0x1 --transfer-objects @0x1 [@0x1, @0x2] @0x2 --split-coins gas [1,2,3] --assign s --transfer-objects @0x1 s --gas-budget 100 
+   ·                         ─────────┬────────
+   ·                                  ╰── Expected '[' but found command '--transfer-objects'
    ╰────
 
-  × Error at command 3 in PTB file 'tests/ptb_files/transfer_objects/
-  │ transfer_objects_invalid.ptb'
-    ╭─[10:25]
-  9 │ --assign s
- 10 │ --transfer-objects @0x1 s
-    ·                         ┬
-    ·                         ╰── expected token '[', but got '[ident]'
- 11 │ 
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --transfer-objects @0x1 --transfer-objects @0x1 [@0x1, @0x2] @0x2 --split-coins gas [1,2,3] --assign s --transfer-objects @0x1 s --gas-budget 100 
+   ·                                                              ┬
+   ·                                                              ╰── Unexpected '@'
+   ╰────
+  help: Expected to find a command here
+
+  × Error when processing PTB
+   ╭────
+ 1 │ --transfer-objects @0x1 --transfer-objects @0x1 [@0x1, @0x2] @0x2 --split-coins gas [1,2,3] --assign s --transfer-objects @0x1 s --gas-budget 100 
+   ·                                                                                                                                ┬
+   ·                                                                                                                                ╰── Expected '[' but found identifier 's'
+   ╰────
 

@@ -3,101 +3,80 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                                 │
-├────────────────────────────────────────────────────┬────────────────────────────────────────────────────────┤
-│ command                                            │ from                                                   │
-├────────────────────────────────────────────────────┼────────────────────────────────────────────────────────┤
-│ --gas-budget 1000                                  │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │
-│ --move-call zero_x_zero::option::is_none<u64> none │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │
-│ --assign a none                                    │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │
-│ --assign zero_x_zero @0x0                          │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │
-│ --move-call zero_x_zero::option::is_none<u64> a    │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │
-│ --move-call std::Option::is_none<u64> a            │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │
-│ --move-call std::option::isnone<u64> a             │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │
-│ --move-call std::option::is_none<u64>              │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │
-│ --move-call std::option::is_none<u64> a b          │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │
-│ --move-call sui::coin::destroy_zero @0x1           │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │
-│ --move-call std::option::is_none<u64, bool> a      │ tests/ptb_files/move_call/move_call_fun_resolution.ptb │
-╰────────────────────────────────────────────────────┴────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────╮
+│ PTB Preview                                      │
+├──────────────────────────────────────────────────┤
+│ command                                          │
+├──────────────────────────────────────────────────┤
+│ gas-budget 1000                                  │
+│ move-call zero_x_zero::option::is_none<u64> none │
+│ assign a none                                    │
+│ assign zero_x_zero @0x0                          │
+│ move-call zero_x_zero::option::is_none<u64> a    │
+│ move-call std::Option::is_none<u64> a            │
+│ move-call std::option::isnone<u64> a             │
+│ move-call std::option::is_none<u64>              │
+│ move-call std::option::is_none<u64> a b          │
+│ move-call sui::coin::destroy_zero @0x1           │
+│ move-call std::option::is_none<u64, bool> a      │
+╰──────────────────────────────────────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false
 gas_object: none
 json: false
  === BUILDING PTB ERRORS === 
-  × Error at command 1 in PTB file 'tests/ptb_files/move_call/
-  │ move_call_fun_resolution.ptb'
-   ╭─[3:13]
- 2 │ # Try to use identifier/address that is not in scope
- 3 │ --move-call zero_x_zero::option::is_none<u64> none
-   ·             ─────┬─────
-   ·                  ╰── Unbound named address: 'zero_x_zero'
- 4 │ --assign a none 
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 1000 --move-call zero_x_zero::option::is_none<u64> none --assign a none --assign zero_x_zero @0x0 --move-call zero_x_zero::option::is_none<u64> a --move-call std::Option::is_none<u64> a --move-call std::option::isnone<u64> a --move-call std::option::is_none<u64> --move-call std::option::is_none<u64> a b --move-call sui::coin::destroy_zero @0x1 --move-call std::option::is_none<u64, bool> a 
+   ·                               ─────┬─────
+   ·                                    ╰── Unbound named address: 'zero_x_zero'
    ╰────
   help: This is most likely because the named address 'zero_x_zero' is not
         in scope. You can either bind a variable to the address that you
         want to use or use the address in the command.
 
-  × Error at command 4 in PTB file 'tests/ptb_files/move_call/
-  │ move_call_fun_resolution.ptb'
-   ╭─[7:13]
- 6 │ # Invalid package ID (and test that we resolve zero_x_zero to 0x0)
- 7 │ --move-call zero_x_zero::option::is_none<u64> a
-   ·             ─────┬─────
-   ·                  ╰── Object 0x0000000000000000000000000000000000000000000000000000000000000000 does not exist.
- 8 │ # Valid package ID, but invalid/misspelled module name
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 1000 --move-call zero_x_zero::option::is_none<u64> none --assign a none --assign zero_x_zero @0x0 --move-call zero_x_zero::option::is_none<u64> a --move-call std::Option::is_none<u64> a --move-call std::option::isnone<u64> a --move-call std::option::is_none<u64> --move-call std::option::is_none<u64> a b --move-call sui::coin::destroy_zero @0x1 --move-call std::option::is_none<u64, bool> a 
+   ·                                                                                                                            ─────┬─────
+   ·                                                                                                                                 ╰── Object 0x0000000000000000000000000000000000000000000000000000000000000000 does not exist.
    ╰────
 
-  × Error at command 5 in PTB file 'tests/ptb_files/move_call/
-  │ move_call_fun_resolution.ptb'
-    ╭─[9:18]
-  8 │ # Valid package ID, but invalid/misspelled module name
-  9 │ --move-call std::Option::is_none<u64> a
-    ·                  ───┬──
-    ·                     ╰── Module not found in package: "Option".
- 10 │ # Valid package ID and module name, but fn name misspelled
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 1000 --move-call zero_x_zero::option::is_none<u64> none --assign a none --assign zero_x_zero @0x0 --move-call zero_x_zero::option::is_none<u64> a --move-call std::Option::is_none<u64> a --move-call std::option::isnone<u64> a --move-call std::option::is_none<u64> --move-call std::option::is_none<u64> a b --move-call sui::coin::destroy_zero @0x1 --move-call std::option::is_none<u64, bool> a 
+   ·                                                                                                                                                                                 ───┬──
+   ·                                                                                                                                                                                    ╰── Module not found in package: "Option".
+   ╰────
   help: Did you mean 'option'?
 
-  × Error at command 6 in PTB file 'tests/ptb_files/move_call/
-  │ move_call_fun_resolution.ptb'
-    ╭─[11:26]
- 10 │ # Valid package ID and module name, but fn name misspelled
- 11 │ --move-call std::option::isnone<u64> a
-    ·                          ───┬──
-    ·                             ╰── Could not resolve function 'isnone' in module 'option'
- 12 │ # Missing argument
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 1000 --move-call zero_x_zero::option::is_none<u64> none --assign a none --assign zero_x_zero @0x0 --move-call zero_x_zero::option::is_none<u64> a --move-call std::Option::is_none<u64> a --move-call std::option::isnone<u64> a --move-call std::option::is_none<u64> --move-call std::option::is_none<u64> a b --move-call sui::coin::destroy_zero @0x1 --move-call std::option::is_none<u64, bool> a 
+   ·                                                                                                                                                                                                                                 ───┬──
+   ·                                                                                                                                                                                                                                    ╰── Could not resolve function 'isnone' in module 'option'
+   ╰────
   help: Did you mean 'is_none'?
 
-  × Error at command 7 in PTB file 'tests/ptb_files/move_call/
-  │ move_call_fun_resolution.ptb'
-    ╭─[13:13]
- 12 │ # Missing argument
- 13 │ --move-call std::option::is_none<u64>
-    ·             ──────────┬─────────
-    ·                       ╰── Expected 1 argument, but got 0
- 14 │ # Too many arguments
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 1000 --move-call zero_x_zero::option::is_none<u64> none --assign a none --assign zero_x_zero @0x0 --move-call zero_x_zero::option::is_none<u64> a --move-call std::Option::is_none<u64> a --move-call std::option::isnone<u64> a --move-call std::option::is_none<u64> --move-call std::option::is_none<u64> a b --move-call sui::coin::destroy_zero @0x1 --move-call std::option::is_none<u64, bool> a 
+   ·                                                                                                                                                                                                                                                           ──────────┬─────────
+   ·                                                                                                                                                                                                                                                                     ╰── Expected 1 argument, but got 0
+   ╰────
 
-  × Error at command 8 in PTB file 'tests/ptb_files/move_call/
-  │ move_call_fun_resolution.ptb'
-    ╭─[15:39]
- 14 │ # Too many arguments
- 15 │ --move-call std::option::is_none<u64> a b
-    ·                                       ─┬─
-    ·                                        ╰── Expected 1 argument, but got 2
- 16 │ # Missing type argument -- we 
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 1000 --move-call zero_x_zero::option::is_none<u64> none --assign a none --assign zero_x_zero @0x0 --move-call zero_x_zero::option::is_none<u64> a --move-call std::Option::is_none<u64> a --move-call std::option::isnone<u64> a --move-call std::option::is_none<u64> --move-call std::option::is_none<u64> a b --move-call sui::coin::destroy_zero @0x1 --move-call std::option::is_none<u64, bool> a 
+   ·                                                                                                                                                                                                                                                                                                                           ─┬─
+   ·                                                                                                                                                                                                                                                                                                                            ╰── Expected 1 argument, but got 2
+   ╰────
 
-  × Error at command 9 in PTB file 'tests/ptb_files/move_call/
-  │ move_call_fun_resolution.ptb'
-    ╭─[17:38]
- 16 │ # Missing type argument -- we 
- 17 │ --move-call sui::coin::destroy_zero @0x1
-    ·                                      ─┬─
-    ·                                       ╰── Not enough type parameters supplied for Move call
- 18 │ # Too many type args -- won't catch this until we run
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 1000 --move-call zero_x_zero::option::is_none<u64> none --assign a none --assign zero_x_zero @0x0 --move-call zero_x_zero::option::is_none<u64> a --move-call std::Option::is_none<u64> a --move-call std::option::isnone<u64> a --move-call std::option::is_none<u64> --move-call std::option::is_none<u64> a b --move-call sui::coin::destroy_zero @0x1 --move-call std::option::is_none<u64, bool> a 
+   ·                                                                                                                                                                                                                                                                                                                                                                   ──┬─
+   ·                                                                                                                                                                                                                                                                                                                                                                     ╰── Not enough type parameters supplied for Move call
+   ╰────
 

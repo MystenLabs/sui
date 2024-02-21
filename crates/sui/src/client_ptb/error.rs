@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use miette::{miette, LabeledSpan};
 use std::fmt;
 use thiserror::Error;
 
@@ -29,7 +30,7 @@ pub struct PTBError {
 }
 
 #[macro_export]
-macro_rules! sp_ {
+macro_rules! sp {
     (_, $value:pat) => {
         $crate::client_ptb::error::Spanned { value: $value, .. }
     };
@@ -45,17 +46,17 @@ macro_rules! sp_ {
 }
 
 #[macro_export]
-macro_rules! error_ {
+macro_rules! error {
     ($l:expr, $($arg:tt)*) => {
-        return Err($crate::err_!($l, $($arg)*))
+        return Err($crate::err!($l, $($arg)*))
     };
     ($l:expr => help: { $($h:expr),* }, $($arg:tt)*) => {
-        return Err($crate::err_!($l => help: { $($h),* }, $($arg)*))
+        return Err($crate::err!($l => help: { $($h),* }, $($arg)*))
     };
 }
 
 #[macro_export]
-macro_rules! err_ {
+macro_rules! err {
     ($l:expr, $($arg:tt)*) => {
         $crate::client_ptb::error::PTBError {
             message: format!($($arg)*),
@@ -72,7 +73,7 @@ macro_rules! err_ {
     };
 }
 
-pub use sp_;
+pub use sp;
 
 impl PTBError {
     /// Add a help message to an error.
@@ -102,6 +103,17 @@ impl Span {
         Span {
             start: self.start.min(other.start),
             end: self.end.max(other.end),
+        }
+    }
+
+    pub fn widen_opt(self, other: Option<Span>) -> Span {
+        other.map_or(self, |other| self.widen(other))
+    }
+
+    pub fn eof_span() -> Span {
+        Self {
+            start: usize::MAX,
+            end: usize::MAX,
         }
     }
 }
@@ -150,3 +162,26 @@ impl<T: Clone> Clone for Spanned<T> {
 }
 
 impl<T: Copy> Copy for Spanned<T> {}
+
+fn build_error_report(file_string: &str, error: PTBError) -> miette::Report {
+    let PTBError {
+        span,
+        message,
+        help,
+    } = error;
+    let clamp = |x: usize| x.min(file_string.len() - 1);
+    let label = LabeledSpan::at(clamp(span.start)..clamp(span.end), message.clone());
+    let error_string = "Error when processing PTB".to_string();
+    match help {
+        Some(help_msg) => miette!(labels = vec![label], help = help_msg, "{}", error_string),
+        None => miette!(labels = vec![label], "{}", error_string),
+    }
+    .with_source_code(file_string.to_string())
+}
+
+pub fn build_error_reports(source_string: &str, errors: Vec<PTBError>) -> Vec<miette::Report> {
+    errors
+        .into_iter()
+        .map(|e| build_error_report(source_string, e))
+        .collect()
+}

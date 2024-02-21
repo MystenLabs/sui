@@ -3,36 +3,35 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭─────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                 │
-├─────────────────────┬───────────────────────────────────────┤
-│ command             │ from                                  │
-├─────────────────────┼───────────────────────────────────────┤
-│ --gas-budget 1000   │ tests/ptb_files/gas/no_gas_picker.ptb │
-│ --assign X 1000u64  │ tests/ptb_files/gas/no_gas_picker.ptb │
-│ --gas-budget 110000 │ tests/ptb_files/gas/valid_gas.ptb     │
-╰─────────────────────┴───────────────────────────────────────╯
+╭───────────────────╮
+│ PTB Preview       │
+├───────────────────┤
+│ command           │
+├───────────────────┤
+│ gas-budget 1000   │
+│ gas-budget 110000 │
+│ assign X 1000u64  │
+╰───────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false
 gas_object: none
 json: false
  === BUILDING PTB ERRORS === 
-  × Error at command 0 in PTB file 'tests/ptb_files/gas/no_gas_picker.ptb'
-   ╭─[1:14]
- 1 │ --gas-budget 1000
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 1000 --gas-budget 110000 --assign X 1000 
    ·              ──┬─
    ·                ╰── Multiple gas budgets set for transaction with no gas picker. Gas budget is set for the first time here.
- 2 │ --assign X 1000
    ╰────
   help: You should either remove all but one usage of setting the gas
-        budget, or use the '--pick-gas-budget' command to handle multiple
+        budget, or use the 'pick-gas-budget' command to handle multiple
         gas budgets
 
-  × Error at command 0 in PTB file 'tests/ptb_files/gas/valid_gas.ptb'
+  × Error when processing PTB
    ╭────
- 1 │ --gas-budget 110000
-   ·              ───┬──
-   ·                 ╰── Gas budget is set for the 2nd time here.
+ 1 │ --gas-budget 1000 --gas-budget 110000 --assign X 1000 
+   ·                                ───┬──
+   ·                                   ╰── Gas budget is set for the 2nd time here.
    ╰────
 
