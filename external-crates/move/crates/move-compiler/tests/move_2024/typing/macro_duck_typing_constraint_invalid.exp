@@ -41,6 +41,15 @@ error[E05001]: ability constraint not satisfied
 16 │         needs_copy!<None, None, None>(X(), None(), None());
    │                                 ---- The type 'a::m::None' does not have the ability 'copy'
 
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/typing/macro_duck_typing_constraint_invalid.move:10:17
+   │
+10 │         mycopy(&$v);
+   │                 ^^ Macro parameters are not allowed to appear in paths
+   │
+   = Macro parameters are always treated as value expressions, and are not modified by path operations.
+     Path operations include 'move', 'copy', '&', '&mut', and field references
+
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_duck_typing_constraint_invalid.move:11:9
    │

@@ -4,9 +4,27 @@ error[E04026]: invalid 'copy' usage
 4 │         copy $x;
   │         ^^^^ Invalid 'copy'. Expected a variable or path.
 
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/typing/macro_arg_by_name_invalid_usage_var.move:4:14
+  │
+4 │         copy $x;
+  │              ^^ Macro parameters are not allowed to appear in paths
+  │
+  = Macro parameters are always treated as value expressions, and are not modified by path operations.
+    Path operations include 'move', 'copy', '&', '&mut', and field references
+
 error[E04027]: invalid 'move' usage
   ┌─ tests/move_2024/typing/macro_arg_by_name_invalid_usage_var.move:5:9
   │
 5 │         move $x;
   │         ^^^^ Invalid 'move'. Expected a variable or path.
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/typing/macro_arg_by_name_invalid_usage_var.move:5:14
+  │
+5 │         move $x;
+  │              ^^ Macro parameters are not allowed to appear in paths
+  │
+  = Macro parameters are always treated as value expressions, and are not modified by path operations.
+    Path operations include 'move', 'copy', '&', '&mut', and field references
 

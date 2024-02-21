@@ -1817,6 +1817,19 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
             let ne = exp(context, e);
             match &ne.value {
                 N::Exp_::UnresolvedError => return None,
+                N::Exp_::Var(n) if n.value.is_syntax_identifier() => {
+                    let mut diag = diag!(
+                        NameResolution::NamePositionMismatch,
+                        (n.loc, "Macro parameters are not allowed to appear in paths")
+                    );
+                    diag.add_note(
+                        "Macro parameters are always treated as value expressions, and are not \
+                        modified by path operations.\n\
+                        Path operations include 'move', 'copy', '&', '&mut', and field references",
+                    );
+                    context.env.add_diag(diag);
+                    N::ExpDotted_::Exp(ne)
+                }
                 _ => N::ExpDotted_::Exp(ne),
             }
         }

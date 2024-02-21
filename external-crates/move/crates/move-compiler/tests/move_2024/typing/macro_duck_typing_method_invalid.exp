@@ -1,3 +1,12 @@
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/typing/macro_duck_typing_method_invalid.move:4:9
+  │
+4 │         $x.foo()
+  │         ^^ Macro parameters are not allowed to appear in paths
+  │
+  = Macro parameters are always treated as value expressions, and are not modified by path operations.
+    Path operations include 'move', 'copy', '&', '&mut', and field references
+
 error[E04023]: invalid method call
   ┌─ tests/move_2024/typing/macro_duck_typing_method_invalid.move:4:9
   │
