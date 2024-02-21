@@ -1,17 +1,16 @@
 # Trading e2e demo - Frontend
 
-This dApp was created using `@mysten/create-dapp` that sets up a simple React
+This dApp was created using `@mysten/create-dapp` that sets up a basic React
 Client dApp.
 
 ## First Steps
 
 Before running the frontend, it's recommended that you follow the API setup to
-publish the contracts (or re-use the published ones)
-[by clicking here](../api/README.md).
+[publish the contracts](../api/README.md) (or re-use the published ones).
 
 ### Demo Contracts
 
-The following packages were published & used for our demo purposes, on testnet.
+The following packages are published and used for demo purposes on Testnet.
 
 For `escrow-contract.json` file:
 
@@ -39,7 +38,7 @@ file.
 To install dependencies you can run
 
 ```bash
-pnpm install
+pnpm install --ignore-workspace
 ```
 
 To start your dApp in development mode run

@@ -6,7 +6,6 @@ import { Tabs } from "@radix-ui/themes";
 import { LockOwnedObjects } from "../components/locked/LockOwnedObjects";
 import { OwnedLockedList } from "@/components/locked/OwnedLockedList";
 
-// SPDX-License-Identifier: Apache-2.0
 export function LockedDashboard() {
   const tabs = [
     {

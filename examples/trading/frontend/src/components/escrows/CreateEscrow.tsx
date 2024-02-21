@@ -31,6 +31,8 @@ export function CreateEscrow({ locked }: { locked: ApiLockedObject }) {
           data.pages
             .flatMap((page) => page.data)
             .filter(
+              // we're filtering out objects that don't have Display or image_url
+              // for demo purposes. The Escrow contract works with all objects.
               (x) => !!x.data?.display && !!x.data?.display?.data?.image_url,
             ),
       },
@@ -46,7 +48,7 @@ export function CreateEscrow({ locked }: { locked: ApiLockedObject }) {
   };
 
   return (
-    <div className="px-3 py-3 grid grid-cols-1 gap-5  mt-3 rounded">
+    <div className="px-3 py-3 grid grid-cols-1 gap-5 mt-3 rounded">
       <div>
         <label className="text-xs">The recipient will be:</label>
         <ObjectLink id={locked.creator!} isAddress />

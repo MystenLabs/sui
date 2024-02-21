@@ -29,6 +29,8 @@ export function LockOwnedObjects() {
           data.pages
             .flatMap((page) => page.data)
             .filter(
+              // we're filtering out objects that don't have Display or image_url
+              // for demo purposes. The Escrow contract works with all objects.
               (x) => !!x.data?.display && !!x.data?.display?.data?.image_url,
             ),
       },

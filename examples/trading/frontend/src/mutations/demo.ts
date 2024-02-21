@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CONSTANTS } from "@/constants";
+import { CONSTANTS, QueryKey } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-// SPDX-License-Identifier: Apache-2.0
+/**
+ * A mutation to generate demo data as part of our demo.
+ */
 export function useGenerateDemoData() {
   const account = useCurrentAccount();
   const executeTransaction = useTransactionExecution();
@@ -30,7 +32,7 @@ export function useGenerateDemoData() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["getOwnedObjects"],
+        queryKey: [QueryKey.GetOwnedObjects],
       });
     },
   });

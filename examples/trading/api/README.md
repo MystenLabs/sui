@@ -13,30 +13,24 @@ You can easily change the network by creating a `.env` file with the variable `N
 1. Install dependencies by running
 
 ```
-pnpm install
+pnpm install --ignore-workspace
 ```
 
-2. Build BCS & TS SDK in the repo:
-
-```
-pnpm -w bcs build && pnpm -w sdk build
-```
-
-3. Setup the database by running
+2. Setup the database by running
 
 ```
 pnpm db:setup:dev
 ```
 
-4. [Publish the contract & demo data](#demo-data)
+3. [Publish the contract & demo data](#demo-data)
 
-5. Run both the API and the indexer
+4. Run both the API and the indexer
 
 ```
 pnpm dev
 ```
 
-6. Visit [http://localhost:3000/escrows](http://localhost:3000/escrows) or [http://localhost:3000/locked](http://localhost:3000/locked)
+5. Visit [http://localhost:3000/escrows](http://localhost:3000/escrows) or [http://localhost:3000/locked](http://localhost:3000/locked)
 
 ## Demo Data<a name="demo-data"></a>
 

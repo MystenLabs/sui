@@ -8,6 +8,7 @@ import escrowContract from "../../api/escrow-contract.json";
 export enum QueryKey {
   Locked = "locked",
   Escrow = "escrow",
+  GetOwnedObjects = "getOwnedObjects",
 }
 
 export const CONSTANTS = {
