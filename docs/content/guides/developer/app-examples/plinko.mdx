@@ -8,7 +8,7 @@ Building an on-chain Plinko game shares a lot of similarities with the [Coin Fli
 
 ## Gameplay
 
-In Plinko, the game begins with the player selecting the number of balls to play and determining the bet size for each one. This strategic choice allows the player to influence their potential rewards and mitigate their risk. After making their selection, the player initiates the game, which then employs blockchain technology to ensure the randomness and fairness of each ball's drop through a pegged board. The goal is to land the balls in slots at the bottom of the board, each offering different prize multipliers. The outcome of the game, dictated by where the balls land, is calculated automatically, with the smart contract assessing the results to determine the player's total winnings.
+In the Plinko game, players start by choosing how many Plinko balls to play and setting their stake for each one. This decision strategically influences the potential payout and risk level. When the game starts, blockchain technology ensures each ball's path is randomly determined as it descends through a pegged board. The objective is to guide the balls into slots at the board's base, each associated with different reward multipliers. The smart contract automatically computes the game's outcome, which evaluates the final positions of the balls to calculate the player's total earnings. This process involves cryptographic techniques, such as BLS signatures for randomness and verifiable random function (VRF) inputs for unique game rounds, ensuring transparency and integrity in the game's execution.
 
 ## Backend
 
@@ -16,7 +16,7 @@ Follow the comments in each module's code to understand the logic each creates.
 
 ### plinko::plinko
 
-The `plinko::plinko` module combines various Sui blockchain features, such as coin handling, event emissions, and dynamic object fields, to create on-chain Plinko games. The module emphasizes secure and fair gameplay through mechanisms like verifiable random functions (VRF) and Boneh-Lynn-Shacham (BLS) signature verification, ensuring the integrity of game outcomes.
+The `plinko::plinko` module combines various Sui blockchain features, such as coin handling, event emissions, and dynamic object fields, to create on-chain Plinko games.
 
 ```move title="plinko.move"
 module plinko::plinko {
