@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 error[E13003]: feature is under active development
+=======
+error[E13002]: feature is under active development
+>>>>>>> 0053e64fb3 (Add a few missing exp files)
   ┌─ tests/move_2024/parser/enum.move:2:17
   │
 2 │     public enum Temperature {
@@ -6,7 +10,11 @@ error[E13003]: feature is under active development
   │
   = This feature is currently in development.
 
+<<<<<<< HEAD
 error[E13003]: feature is under active development
+=======
+error[E13002]: feature is under active development
+>>>>>>> 0053e64fb3 (Add a few missing exp files)
   ┌─ tests/move_2024/parser/enum.move:8:17
   │
 8 │     public enum EnumWithPhantom<phantom T> {
@@ -14,7 +22,11 @@ error[E13003]: feature is under active development
   │
   = This feature is currently in development.
 
+<<<<<<< HEAD
 error[E13003]: feature is under active development
+=======
+error[E13002]: feature is under active development
+>>>>>>> 0053e64fb3 (Add a few missing exp files)
    ┌─ tests/move_2024/parser/enum.move:12:17
    │
 12 │     public enum Action<NextAction> has copy, drop {
@@ -22,7 +34,11 @@ error[E13003]: feature is under active development
    │
    = This feature is currently in development.
 
+<<<<<<< HEAD
 error[E13003]: feature is under active development
+=======
+error[E13002]: feature is under active development
+>>>>>>> 0053e64fb3 (Add a few missing exp files)
    ┌─ tests/move_2024/parser/enum.move:19:17
    │
 19 │     public enum Expression {
