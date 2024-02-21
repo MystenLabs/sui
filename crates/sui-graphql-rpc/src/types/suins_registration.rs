@@ -398,6 +398,7 @@ impl NameService {
             .ok_or_else(|| Error::Internal("Malformed Suins Domain".to_string()))?;
 
         let domain = Domain(field.value);
+
         // We attempt to resolve the domain to a record, and if it fails, we return None.
         // That way we can validate that the name has not expired and is still valid.
         let Some(_) = Self::resolve_to_record(db, config, &domain).await? else {
