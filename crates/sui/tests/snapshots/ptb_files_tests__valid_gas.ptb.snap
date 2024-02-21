@@ -3,13 +3,11 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭───────────────────╮
-│ PTB Preview       │
-├───────────────────┤
-│ command           │
-├───────────────────┤
-│ gas-budget 110000 │
-╰───────────────────╯
+╭─────────────╮
+│ PTB Preview │
+├─────────────┤
+│ command     │
+├─────────────┤
  === PROGRAM META === 
 preview: false
 summary: false

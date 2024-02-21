@@ -10,10 +10,10 @@ use move_command_line_common::{
 };
 use sui_types::{base_types::ObjectID, Identifier};
 
-use crate::{client_ptb::ast::GasPicker, err, error, sp};
+use crate::{client_ptb::ast::all_keywords, err, error, sp};
 
 use super::{
-    ast::{self as A, Argument, ModuleAccess, ParsedPTBCommand, ParsedProgram},
+    ast::{self as A, is_keyword, Argument, ModuleAccess, ParsedPTBCommand, ParsedProgram},
     error::{PTBError, PTBResult, Span, Spanned},
     lexer::Lexer,
     token::{Lexeme, Token},
@@ -33,6 +33,7 @@ struct ProgramParsingState {
     warn_shadows_set: bool,
     json_set: bool,
     gas_object_id: Option<Spanned<ObjectID>>,
+    gas_budget: Option<Spanned<u64>>,
 }
 
 impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
@@ -51,6 +52,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 warn_shadows_set: false,
                 json_set: false,
                 gas_object_id: None,
+                gas_budget: None,
             },
         })
     }
@@ -99,13 +101,26 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     let specifier = try_!(self.parse_gas_specifier());
                     self.state.gas_object_id = Some(specifier);
                 }
+                L(T::Command, A::GAS_BUDGET) => {
+                    let budget = try_!(self.parse_gas_budget()).widen_span(sp);
+                    if let Some(other) = self.state.gas_budget.replace(budget) {
+                        self.state.errors.extend([
+                            err!(
+                                other.span,
+                                "Multiple gas budgets found. Gas budget first set here.",
+                            ),
+                            err!(budget.span => help: {
+                                "PTBs must have exactly one gas budget set."
+                            },"Budget set again here."),
+                        ]);
+                        self.fast_forward_to_next_command();
+                    }
+                }
 
                 L(T::Command, A::TRANSFER_OBJECTS) => command!(self.parse_transfer_objects()),
                 L(T::Command, A::SPLIT_COINS) => command!(self.parse_split_coins()),
                 L(T::Command, A::MERGE_COINS) => command!(self.parse_merge_coins()),
                 L(T::Command, A::ASSIGN) => command!(self.parse_assign()),
-                L(T::Command, A::GAS_BUDGET) => command!(self.parse_gas_budget()),
-                L(T::Command, A::PICK_GAS_BUDGET) => command!(self.parse_pick_gas_budget()),
                 L(T::Command, A::MAKE_MOVE_VEC) => command!(self.parse_make_move_vec()),
                 L(T::Command, A::MOVE_CALL) => command!(self.parse_move_call()),
 
@@ -144,6 +159,22 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
             }
         }
 
+        let sp!(sp, tok) = self.peek();
+
+        if !tok.is_terminal() {
+            self.state
+                .errors
+                .push(err!(sp, "Trailing {tok} found after the last command",));
+        }
+
+        let Some(gas_budget) = self.state.gas_budget else {
+            self.state.errors.push(err!(
+                sp => help: { "Use --gas-budget <u64> to set a gas budget" },
+                "Gas budget not set."
+            ));
+            return Err(self.state.errors);
+        };
+
         if self.state.errors.is_empty() {
             Ok((
                 A::Program {
@@ -155,6 +186,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     summary_set: self.state.summary_set,
                     gas_object_id: self.state.gas_object_id,
                     json_set: self.state.json_set,
+                    gas_budget,
                 },
             ))
         } else {
@@ -238,10 +270,17 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     /// Parse an assign command.
     /// The expected format is: `--assign <variable> (<value>)?`
     fn parse_assign(&mut self) -> PTBResult<Spanned<ParsedPTBCommand>> {
-        let ident = match self.parse_argument()? {
-            sp!(sp, Argument::Identifier(i)) => sp.wrap(i),
-            sp!(sp, _) => error!(sp, "Expected variable binding"),
-        };
+        use Lexeme as L;
+        let sp!(sp, L(_, contents)) = self.expect(Token::Ident)?;
+        if is_keyword(contents) {
+            error!(sp => help: {
+                "Variable names cannot be {}.",
+                all_keywords()
+            },
+            "Expected a variable name but found reserved word '{contents}'.");
+        }
+
+        let ident = sp.wrap(contents.to_owned());
 
         Ok(if self.peek().value.is_command_end() {
             ident.span.wrap(ParsedPTBCommand::Assign(ident, None))
@@ -250,33 +289,6 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
             let sp = ident.span.widen(value.span);
             sp.wrap(ParsedPTBCommand::Assign(ident, Some(value)))
         })
-    }
-
-    /// Parse a pick-gas-budget command.
-    /// The expected format is: `--pick-gas-budget <picker>` where picker is either `max` or `sum`.
-    fn parse_pick_gas_budget(&mut self) -> PTBResult<Spanned<ParsedPTBCommand>> {
-        use Lexeme as L;
-        use Token as T;
-
-        let sp!(sp, lexeme) = self.peek();
-        let picker = match lexeme {
-            L(T::Ident, "max") => {
-                self.bump();
-                sp.wrap(GasPicker::Max)
-            }
-
-            L(T::Ident, "sum") => {
-                self.bump();
-                sp.wrap(GasPicker::Sum)
-            }
-
-            unexpected => error!(
-                sp => help: { "Expected 'max' or 'sum' here" },
-                "Unexpected {unexpected}",
-            ),
-        };
-
-        Ok(sp.wrap(ParsedPTBCommand::PickGasBudget(picker)))
     }
 
     /// Parse a make-move-vec command
@@ -324,9 +336,9 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 
     /// Parse a gas-budget command.
     /// The expected format is: `--gas-budget <u64>`
-    fn parse_gas_budget(&mut self) -> PTBResult<Spanned<ParsedPTBCommand>> {
+    fn parse_gas_budget(&mut self) -> PTBResult<Spanned<u64>> {
         Ok(match self.parse_argument()? {
-            sp!(sp, Argument::U64(u)) => sp.wrap(ParsedPTBCommand::GasBudget(sp.wrap(u))),
+            sp!(sp, Argument::U64(u)) => sp.wrap(u),
             sp!(sp, _) => error!(sp, "Expected a u64 value"),
         })
     }
@@ -437,16 +449,16 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         }
 
         Ok(match lexeme {
-            L(T::Ident, "u8") => type_!(ParsedType::U8),
-            L(T::Ident, "u16") => type_!(ParsedType::U16),
-            L(T::Ident, "u32") => type_!(ParsedType::U32),
-            L(T::Ident, "u64") => type_!(ParsedType::U64),
-            L(T::Ident, "u128") => type_!(ParsedType::U128),
-            L(T::Ident, "u256") => type_!(ParsedType::U256),
-            L(T::Ident, "bool") => type_!(ParsedType::Bool),
-            L(T::Ident, "address") => type_!(ParsedType::Address),
+            L(T::Ident, A::U8) => type_!(ParsedType::U8),
+            L(T::Ident, A::U16) => type_!(ParsedType::U16),
+            L(T::Ident, A::U32) => type_!(ParsedType::U32),
+            L(T::Ident, A::U64) => type_!(ParsedType::U64),
+            L(T::Ident, A::U128) => type_!(ParsedType::U128),
+            L(T::Ident, A::U256) => type_!(ParsedType::U256),
+            L(T::Ident, A::BOOL) => type_!(ParsedType::Bool),
+            L(T::Ident, A::ADDRESS) => type_!(ParsedType::Address),
 
-            L(T::Ident, "vector") => {
+            L(T::Ident, A::VECTOR) => {
                 self.bump();
                 self.expect(T::LAngle)?;
                 let sp!(_, ty) = self.parse_type()?;
@@ -561,10 +573,10 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
             let sp!(sp, lexeme@L(_, field)) = self.peek();
             if lexeme.is_terminal() {
                 error!(sp, "Expected a field name after '.'");
-            } else {
-                self.bump();
-                fields.push(sp.wrap(field.to_owned()));
             }
+
+            self.bump();
+            fields.push(sp.wrap(field.to_owned()));
 
             if let sp!(_, L(T::Dot, _)) = self.peek() {
                 self.bump();
@@ -695,7 +707,8 @@ mod tests {
     #[test]
     fn test_parse() {
         let input = "--transfer-objects a [b, c]";
-        let x = shlex::split(input).unwrap();
+        let mut x = shlex::split(input).unwrap();
+        x.push("--gas-budget 1".to_owned());
         let parser = ProgramParser::new(x.iter().map(|x| x.as_str())).unwrap();
         let result = parser.parse();
         assert!(result.is_ok());
@@ -715,7 +728,8 @@ mod tests {
         let inputs = vec!["--publish \"foo/bar\"", "--publish foo/bar"];
         let mut parsed = Vec::new();
         for input in inputs {
-            let x = shlex::split(input).unwrap();
+            let mut x = shlex::split(input).unwrap();
+            x.push("--gas-budget 1".to_owned());
             let parser = ProgramParser::new(x.iter().map(|x| x.as_str())).unwrap();
             let result = parser.parse().unwrap();
             parsed.push(result);
@@ -767,7 +781,8 @@ mod tests {
         ];
         let mut parsed = Vec::new();
         for input in inputs {
-            let x = shlex::split(input).unwrap();
+            let mut x = shlex::split(input).unwrap();
+            x.push("--gas-budget 1".to_owned());
             let mut parser = ProgramParser::new(x.iter().map(|x| x.as_str())).unwrap();
             let result = parser
                 .parse_argument()
@@ -829,7 +844,8 @@ mod tests {
         ];
         let mut parsed = Vec::new();
         for input in inputs {
-            let x = shlex::split(input).unwrap();
+            let mut x = shlex::split(input).unwrap();
+            x.push("--gas-budget 1".to_owned());
             let mut parser = ProgramParser::new(x.iter().map(|x| x.as_str())).unwrap();
             let result = parser
                 .parse_type()
@@ -894,11 +910,6 @@ mod tests {
             "--assign a vector[1, 2, 3]",
             "--assign a none",
             "--assign a some(1)",
-            // Gas budget
-            "--gas-budget 1",
-            // Pick gas budget
-            "--pick-gas-budget max",
-            "--pick-gas-budget sum",
             // Gas-coin
             "--gas-coin @0x1",
             "--summary",
@@ -908,7 +919,8 @@ mod tests {
         ];
         let mut parsed = Vec::new();
         for input in inputs {
-            let x = shlex::split(input).unwrap();
+            let mut x = shlex::split(input).unwrap();
+            x.push("--gas-budget 1".to_owned());
             let parser = ProgramParser::new(x.iter().map(|x| x.as_str())).unwrap();
             let result = parser
                 .parse()
@@ -960,10 +972,6 @@ mod tests {
             "--gas-budget [1]",
             "--gas-budget @0x1",
             "--gas-budget woah",
-            // Pick gas budget
-            "--pick-gas-budget nope",
-            "--pick-gas-budget",
-            "--pick-gas-budget too many",
             // Gas-coin
             "--gas-coin nope",
             "--gas-coin",

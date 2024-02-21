@@ -29,6 +29,13 @@ expression: parsed
             summary_set: false,
             gas_object_id: None,
             json_set: false,
+            gas_budget: Spanned {
+                span: Span {
+                    start: 18,
+                    end: 32,
+                },
+                value: 1,
+            },
         },
     ),
     (
@@ -57,6 +64,13 @@ expression: parsed
             summary_set: false,
             gas_object_id: None,
             json_set: false,
+            gas_budget: Spanned {
+                span: Span {
+                    start: 18,
+                    end: 32,
+                },
+                value: 1,
+            },
         },
     ),
 ]

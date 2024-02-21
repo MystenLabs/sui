@@ -8,7 +8,6 @@ expression: "results.join(\"\\n\")"
 ├────────────────────────────────────────┤
 │ command                                │
 ├────────────────────────────────────────┤
-│ gas-budget 100000000                   │
 │ split-coins gas [1u64, 2u64, 3u64]     │
 │ assign coins                           │
 │ assign c0 coins.0                      │

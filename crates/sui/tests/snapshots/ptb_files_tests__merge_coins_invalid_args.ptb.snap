@@ -4,16 +4,20 @@ expression: "results.join(\"\\n\")"
 ---
  === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error when processing PTB
-   ╭────
- 1 │ --gas-budget 1000000 --merge-coins @0x1 --merge-coins @0x1 true --merge-coins @0x1 [true, false] --merge-coins true [@0x1] --merge-coins gas [] 
-   ·                                         ──────┬──────
-   ·                                               ╰── Expected '[' but found command '--merge-coins'
+   ╭─[3:1]
+ 2 │ --merge-coins @0x1
+ 3 │ --merge-coins @0x1 true
+   · ──────┬──────
+   ·       ╰── Expected '[' but found command '--merge-coins'
+ 4 │ --merge-coins @0x1 [true, false]
    ╰────
 
   × Error when processing PTB
-   ╭────
- 1 │ --gas-budget 1000000 --merge-coins @0x1 --merge-coins @0x1 true --merge-coins @0x1 [true, false] --merge-coins true [@0x1] --merge-coins gas [] 
-   ·                                                            ──┬─
-   ·                                                              ╰── Expected '[' but found identifier 'true'
+   ╭─[3:20]
+ 2 │ --merge-coins @0x1
+ 3 │ --merge-coins @0x1 true
+   ·                    ──┬─
+   ·                      ╰── Expected '[' but found identifier 'true'
+ 4 │ --merge-coins @0x1 [true, false]
    ╰────
 

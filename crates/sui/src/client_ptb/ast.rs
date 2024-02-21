@@ -27,7 +27,6 @@ pub const UPGRADE: &str = "upgrade";
 pub const ASSIGN: &str = "assign";
 pub const PREVIEW: &str = "preview";
 pub const WARN_SHADOWS: &str = "warn-shadows";
-pub const PICK_GAS_BUDGET: &str = "pick-gas-budget";
 pub const GAS_BUDGET: &str = "gas-budget";
 pub const SUMMARY: &str = "summary";
 pub const GAS_COIN: &str = "gas-coin";
@@ -49,6 +48,23 @@ pub const SOME: &str = "some";
 pub const NONE: &str = "none";
 pub const GAS: &str = "gas";
 
+pub const KEYWORDS: &[&str] = &[
+    ADDRESS, BOOL, VECTOR, SOME, NONE, GAS, U8, U16, U32, U64, U128, U256,
+];
+
+pub fn is_keyword(s: &str) -> bool {
+    KEYWORDS.contains(&s)
+}
+
+pub fn all_keywords() -> String {
+    KEYWORDS[..KEYWORDS.len() - 1]
+        .iter()
+        .map(|x| format!("'{}'", x))
+        .collect::<Vec<_>>()
+        .join(", ")
+        + &format!(", or '{}'", KEYWORDS[KEYWORDS.len() - 1])
+}
+
 /// A PTB Program consisting of a list of commands and a flag indicating if the preview
 /// warn-shadows command was present.
 #[derive(Debug, Clone)]
@@ -66,13 +82,7 @@ pub struct ProgramMetadata {
     pub summary_set: bool,
     pub gas_object_id: Option<Spanned<ObjectID>>,
     pub json_set: bool,
-}
-
-/// Types of gas pickers that can be used to pick a gas budget from a list of gas budgets.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GasPicker {
-    Max,
-    Sum,
+    pub gas_budget: Spanned<u64>,
 }
 
 /// A parsed module access consisting of the address, module name, and function name.
@@ -98,8 +108,6 @@ pub enum ParsedPTBCommand {
     Assign(Spanned<String>, Option<Spanned<Argument>>),
     Publish(Spanned<String>),
     Upgrade(Spanned<String>, Spanned<Argument>),
-    PickGasBudget(Spanned<GasPicker>),
-    GasBudget(Spanned<u64>),
     WarnShadows,
     Preview,
 }
@@ -209,16 +217,6 @@ impl fmt::Display for Argument {
     }
 }
 
-impl fmt::Display for GasPicker {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use GasPicker::*;
-        match self {
-            Max => write!(f, "max"),
-            Sum => write!(f, "sum"),
-        }
-    }
-}
-
 impl fmt::Display for ParsedPTBCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -266,10 +264,6 @@ impl fmt::Display for ParsedPTBCommand {
             ParsedPTBCommand::Upgrade(s, a) => write!(f, "{UPGRADE} {} {}", s.value, a.value),
             ParsedPTBCommand::WarnShadows => write!(f, "{WARN_SHADOWS}"),
             ParsedPTBCommand::Preview => write!(f, "{PREVIEW}"),
-            ParsedPTBCommand::PickGasBudget(picker) => {
-                write!(f, "{PICK_GAS_BUDGET} {}", picker.value)
-            }
-            ParsedPTBCommand::GasBudget(b) => write!(f, "{GAS_BUDGET} {}", b.value),
             ParsedPTBCommand::MakeMoveVec(ty, args) => write!(
                 f,
                 "{MAKE_MOVE_VEC} {} [{}]",

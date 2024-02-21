@@ -97,3 +97,29 @@ pub fn to_ordinal_contraction(num: usize) -> String {
     };
     format!("{}{}", num, suffix)
 }
+
+/// Convert a vector of shell tokens into a single string, with each shell token separated by a
+/// space with each command starting on a new line.
+/// NB: we add a space to the end of the source string to ensure that for unexpected EOF
+/// errors we have a location to point to.
+pub fn to_source_string(strings: Vec<String>) -> String {
+    let mut strings = strings.into_iter();
+    let mut string = String::new();
+
+    let Some(first) = strings.next() else {
+        return string;
+    };
+    string.push_str(&first);
+
+    for s in strings {
+        if s.starts_with("--") {
+            string.push('\n');
+            string.push_str(&s);
+        } else {
+            string.push(' ');
+            string.push_str(&s);
+        }
+    }
+    string.push(' ');
+    string
+}

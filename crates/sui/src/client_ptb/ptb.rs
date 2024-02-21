@@ -26,7 +26,7 @@ use sui_types::{
     transaction::{ProgrammableTransaction, Transaction, TransactionData},
 };
 
-use super::parser::ProgramParser;
+use super::{parser::ProgramParser, utils::to_source_string};
 
 #[derive(Clone, Debug, Args)]
 #[clap(disable_help_flag = true)]
@@ -53,9 +53,7 @@ impl PTB {
         args: Vec<String>,
         context: &mut WalletContext,
     ) -> Result<(), Error> {
-        // NB: we add a space to the end of the source string to ensure that for unexpected EOF
-        // errors we have a location to point to.
-        let source_string = args.clone().join(" ") + " ";
+        let source_string = to_source_string(args.clone());
 
         let (program, program_metadata) =
             match crate::client_ptb::parser::ProgramParser::new(args.iter().map(|s| s.as_str()))
@@ -81,7 +79,7 @@ impl PTB {
 
         let client = context.get_client().await?;
 
-        let (ptb, budget) = match Self::build_ptb(program, context, client).await {
+        let ptb = match Self::build_ptb(program, context, client).await {
             Err(errors) => {
                 let suffix = if errors.len() > 1 { "s" } else { "" };
                 eprintln!("Encountered error{suffix} when building PTB:");
@@ -105,7 +103,7 @@ impl PTB {
             context.get_object_ref(gas.value).await?
         } else {
             context
-                .gas_for_owner_budget(sender, budget, BTreeSet::new())
+                .gas_for_owner_budget(sender, program_metadata.gas_budget.value, BTreeSet::new())
                 .await?
                 .1
                 .object_ref()
@@ -119,8 +117,13 @@ impl PTB {
             .get_reference_gas_price()
             .await?;
         // create the transaction data that will be sent to the network
-        let tx_data =
-            TransactionData::new_programmable(sender, vec![coins], ptb, budget, gas_price);
+        let tx_data = TransactionData::new_programmable(
+            sender,
+            vec![coins],
+            ptb,
+            program_metadata.gas_budget.value,
+            gas_price,
+        );
         // sign the tx
         let signature =
             context
@@ -184,7 +187,7 @@ impl PTB {
         program: Program,
         context: &WalletContext,
         client: SuiClient,
-    ) -> Result<(ProgrammableTransaction, u64), Vec<PTBError>> {
+    ) -> Result<ProgrammableTransaction, Vec<PTBError>> {
         let starting_addresses = context
             .config
             .keystore

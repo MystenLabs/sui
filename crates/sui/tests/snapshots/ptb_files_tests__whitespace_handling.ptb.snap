@@ -18,7 +18,6 @@ expression: "results.join(\"\\n\")"
 │ make-move-vec sui::string::String ["1", "2,       3", "", "4                        "] │
 │ make-move-vec sui::string::String ["1", "2,       3", "", "4                           │
 │             "]                                                                         │
-│ gas-budget 100                                                                         │
 ╰────────────────────────────────────────────────────────────────────────────────────────╯
  === PROGRAM META === 
 preview: false

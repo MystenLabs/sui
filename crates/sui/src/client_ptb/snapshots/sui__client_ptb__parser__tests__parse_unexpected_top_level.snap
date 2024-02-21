@@ -13,4 +13,14 @@ expression: result.unwrap_err()
             "Expected to find a command here",
         ),
     },
+    PTBError {
+        message: "Gas budget not set.",
+        span: Span {
+            start: 0,
+            end: 2,
+        },
+        help: Some(
+            "Use --gas-budget <u64> to set a gas budget",
+        ),
+    },
 ]
