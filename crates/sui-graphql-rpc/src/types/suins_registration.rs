@@ -24,7 +24,7 @@ use super::{
 };
 use crate::{
     consistency::{build_objects_query, consistent_range},
-    data::{Db, QueryExecutor},
+    data::{Db, DbConnection, QueryExecutor},
     error::Error,
 };
 use async_graphql::{connection::Connection, *};
@@ -327,7 +327,6 @@ impl NameService {
     pub(crate) async fn resolve_to_record(
         db: &Db,
         config: &NameServiceConfig,
-        page: Page<object::Cursor>,
         domain: &Domain,
     ) -> Result<Option<NameRecord>, Error> {
         let record_id: SuiAddress = config.record_field_id(&domain.0).into();
@@ -335,7 +334,6 @@ impl NameService {
 
         let Some(query) = Self::resolve_name_record_query(
             db,
-            page,
             record_id,
             if domain.0.is_subdomain() {
                 Some(parent_record_id)
@@ -399,7 +397,14 @@ impl NameService {
             .to_rust()
             .ok_or_else(|| Error::Internal("Malformed Suins Domain".to_string()))?;
 
-        Ok(Some(field.value))
+        let domain = Domain(field.value);
+        // We attempt to resolve the domain to a record, and if it fails, we return None.
+        // That way we can validate that the name has not expired and is still valid.
+        let Some(_) = Self::resolve_to_record(db, config, &domain).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(domain.0))
     }
 
     /// Queries for the NameRecord and its parent, if it is supplied.
@@ -407,7 +412,6 @@ impl NameService {
     /// latest checkpoint's timestamp.
     async fn resolve_name_record_query(
         db: &Db,
-        page: Page<object::Cursor>,
         record_id: SuiAddress,
         parent_record_id: Option<SuiAddress>,
     ) -> Result<Option<NameServiceQuery>, Error> {
@@ -436,23 +440,22 @@ impl NameService {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
-                let objects = page.paginate_raw_query::<StoredHistoryObject>(
-                    conn,
-                    rhs,
-                    build_objects_query(
-                        crate::consistency::View::Consistent,
-                        lhs as i64,
-                        rhs as i64,
-                        &page,
-                        move |query| filter.apply(query),
-                    ),
-                )?;
+                let sql = build_objects_query(
+                    crate::consistency::View::Consistent,
+                    lhs as i64,
+                    rhs as i64,
+                    None,
+                    move |query| filter.apply(query),
+                );
+
+                let objects: Vec<StoredHistoryObject> =
+                    conn.results(move || sql.clone().into_boxed())?;
 
                 Ok(Some((checkpoint, objects)))
             })
             .await?;
 
-        let Some((checkpoint, (_, _, results))) = response else {
+        let Some((checkpoint, results)) = response else {
             return Err(Error::Client(
                 "Requested data is outside the available range".to_string(),
             ));

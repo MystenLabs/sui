@@ -369,11 +369,9 @@ impl Query {
         ctx: &Context<'_>,
         domain: Domain,
     ) -> Result<Option<Address>> {
-        let page = Page::from_params(ctx.data_unchecked(), None, None, None, None)?;
         Ok(NameService::resolve_to_record(
             ctx.data_unchecked::<Db>(),
             ctx.data_unchecked::<NameServiceConfig>(),
-            page,
             &domain,
         )
         .await
