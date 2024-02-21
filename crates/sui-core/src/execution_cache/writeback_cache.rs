@@ -1036,7 +1036,11 @@ impl ExecutionCacheRead for WritebackCache {
         }
     }
 
-    fn get_lock(&self, _obj_ref: ObjectRef, _epoch_id: EpochId) -> SuiLockResult {
+    fn get_lock(
+        &self,
+        _obj_ref: ObjectRef,
+        _epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiLockResult {
         todo!()
     }
 
@@ -1053,7 +1057,7 @@ impl ExecutionCacheWrite for WritebackCache {
     #[instrument(level = "trace", skip_all)]
     fn acquire_transaction_locks<'a>(
         &'a self,
-        _epoch_id: EpochId,
+        _epoch_store: &AuthorityPerEpochStore,
         _owned_input_objects: &'a [ObjectRef],
         _tx_digest: TransactionDigest,
     ) -> BoxFuture<'a, SuiResult> {
