@@ -1,15 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::ObjectID;
-use crate::base_types::SequenceNumber;
-use crate::error::SuiResult;
-use crate::object::Owner;
-use crate::storage::ObjectStore;
-use crate::sui_serde::BigInt;
-use crate::sui_serde::Readable;
-use crate::versioned::Versioned;
-use crate::SUI_BRIDGE_OBJECT_ID;
 use enum_dispatch::enum_dispatch;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -17,8 +8,17 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
+use crate::base_types::ObjectID;
+use crate::base_types::SequenceNumber;
 use crate::collection_types::LinkedTableNode;
 use crate::dynamic_field::{get_dynamic_field_from_store, Field};
+use crate::error::SuiResult;
+use crate::object::Owner;
+use crate::storage::ObjectStore;
+use crate::sui_serde::BigInt;
+use crate::sui_serde::Readable;
+use crate::versioned::Versioned;
+use crate::SUI_BRIDGE_OBJECT_ID;
 use crate::{
     base_types::SuiAddress,
     collection_types::{Bag, LinkedTable, VecMap},
@@ -34,6 +34,7 @@ pub type BridgeRecordDyanmicField = Field<
 
 pub const BRIDGE_MODULE_NAME: &IdentStr = ident_str!("bridge");
 pub const BRIDGE_CREATE_FUNCTION_NAME: &IdentStr = ident_str!("create");
+pub const BRIDGE_INIT_COMMITTEE_FUNCTION_NAME: &IdentStr = ident_str!("init_bridge_committee");
 
 pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];
 
@@ -298,4 +299,9 @@ pub struct MoveTypeBridgeRecord {
     pub message: MoveTypeBridgeMessage,
     pub verified_signatures: Option<Vec<Vec<u8>>>,
     pub claimed: bool,
+}
+
+pub fn is_bridge_committee_initiated(object_store: &dyn ObjectStore) -> SuiResult<bool> {
+    let bridge = get_bridge(object_store)?;
+    Ok(!bridge.committee().members.contents.is_empty())
 }

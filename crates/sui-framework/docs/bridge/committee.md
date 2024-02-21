@@ -15,6 +15,7 @@
 -  [Function `register`](#0xb_committee_register)
 -  [Function `try_create_next_committee`](#0xb_committee_try_create_next_committee)
 -  [Function `execute_blocklist`](#0xb_committee_execute_blocklist)
+-  [Function `committee_members`](#0xb_committee_committee_members)
 
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
@@ -87,7 +88,7 @@
 
 </dd>
 <dt>
-<code>stake_thresholds_percentage: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;u8, u8&gt;</code>
+<code>stake_thresholds_percentage: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;u8, u64&gt;</code>
 </dt>
 <dd>
 
@@ -99,13 +100,7 @@
 
 </dd>
 <dt>
-<code>total_member_stake: u64</code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>update_epoch: u64</code>
+<code>last_committee_update_epoch: u64</code>
 </dt>
 <dd>
 
@@ -144,10 +139,10 @@
  The public key bytes of the bridge key
 </dd>
 <dt>
-<code>stake_amount: u64</code>
+<code><a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a>: u64</code>
 </dt>
 <dd>
- Voting power (stake amount)
+ Voting power percentage, 2DP
 </dd>
 <dt>
 <code>http_rest_url: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;</code>
@@ -294,17 +289,16 @@
     <b>assert</b>!(<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="committee.md#0xb_committee_ENotSystemAddress">ENotSystemAddress</a>);
     // Default signature threshold
     <b>let</b> thresholds = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), 50);
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_committee_blocklist">message_types::committee_blocklist</a>(), 50);
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_emergency_op">message_types::emergency_op</a>(), 50);
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_update_asset_price">message_types::update_asset_price</a>(), 50);
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_update_bridge_limit">message_types::update_bridge_limit</a>(), 50);
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), 5000);
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_committee_blocklist">message_types::committee_blocklist</a>(), 5000);
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_emergency_op">message_types::emergency_op</a>(), 5000);
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_update_asset_price">message_types::update_asset_price</a>(), 5000);
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_update_bridge_limit">message_types::update_bridge_limit</a>(), 5000);
     <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a> {
         members: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
         stake_thresholds_percentage: thresholds,
         member_registration: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
-        total_member_stake: 0,
-        update_epoch: 0,
+        last_committee_update_epoch: 0,
     }
 }
 </code></pre>
@@ -335,11 +329,10 @@
 ) {
     <b>let</b> (i, signature_counts) = (0, <a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&signatures));
     <b>let</b> seen_pub_key = <a href="dependencies/sui-framework/vec_set.md#0x2_vec_set_empty">vec_set::empty</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;();
-    <b>let</b> required_stake_percentage = (*<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get">vec_map::get</a>(
+    <b>let</b> required_voting_power = *<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get">vec_map::get</a>(
         &self.stake_thresholds_percentage,
         &<a href="message.md#0xb_message_message_type">message::message_type</a>(&<a href="message.md#0xb_message">message</a>)
-    ) <b>as</b> u64);
-    <b>let</b> required_stake = required_stake_percentage * self.total_member_stake / 100;
+    ) ;
 
     // add prefix <b>to</b> the <a href="message.md#0xb_message">message</a> bytes
     <b>let</b> message_bytes = <a href="committee.md#0xb_committee_SUI_MESSAGE_PREFIX">SUI_MESSAGE_PREFIX</a>;
@@ -356,12 +349,12 @@
         // get <a href="committee.md#0xb_committee">committee</a> signature weight and check pubkey is part of the <a href="committee.md#0xb_committee">committee</a>
         <b>let</b> member = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get">vec_map::get</a>(&self.members, &pubkey);
         <b>if</b> (!member.blocklisted) {
-            threshold = threshold + member.stake_amount;
+            threshold = threshold + member.<a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a>;
         };
         i = i + 1;
         <a href="dependencies/sui-framework/vec_set.md#0x2_vec_set_insert">vec_set::insert</a>(&<b>mut</b> seen_pub_key, pubkey);
     };
-    <b>assert</b>!(threshold &gt;= required_stake, <a href="committee.md#0xb_committee_ESignatureBelowThreshold">ESignatureBelowThreshold</a>);
+    <b>assert</b>!(threshold &gt;= required_voting_power, <a href="committee.md#0xb_committee_ESignatureBelowThreshold">ESignatureBelowThreshold</a>);
 }
 </code></pre>
 
@@ -424,7 +417,7 @@
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, system_state: &<b>mut</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, min_stake_participation_percentage: u8)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, system_state: &<b>mut</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, min_stake_participation_percentage: u64, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -436,11 +429,14 @@
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(
     self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>,
     system_state: &<b>mut</b> SuiSystemState,
-    min_stake_participation_percentage: u8,
+    min_stake_participation_percentage: u64,
+    ctx: &TxContext
 ) {
     <b>let</b> validators = <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_active_validator_addresses">sui_system::active_validator_addresses</a>(system_state);
     <b>let</b> total_member_stake = 0;
     <b>let</b> i = 0;
+
+    <b>let</b> total_stake_amount = (<a href="dependencies/sui-system/sui_system.md#0x3_sui_system_total_stake_amount">sui_system::total_stake_amount</a>(system_state) <b>as</b> u128);
 
     <b>let</b> new_members = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
 
@@ -452,11 +448,12 @@
         // Process registration <b>if</b> it's active <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a>
         <b>if</b> (<a href="dependencies/move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&validators, &registration.sui_address)) {
             <b>let</b> stake_amount = <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_validator_stake_amount">sui_system::validator_stake_amount</a>(system_state, registration.sui_address);
-            total_member_stake = total_member_stake + stake_amount;
+            <b>let</b> <a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a> = ((stake_amount <b>as</b> u128) * 10000) / total_stake_amount;
+            total_member_stake = total_member_stake + (stake_amount <b>as</b> u128);
             <b>let</b> member = <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a> {
                 sui_address: registration.sui_address,
                 bridge_pubkey_bytes: registration.bridge_pubkey_bytes,
-                stake_amount,
+                <a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a>: (<a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a> <b>as</b> u64),
                 http_rest_url: registration.http_rest_url,
                 blocklisted: <b>false</b>,
             };
@@ -465,17 +462,18 @@
         i = i + 1;
     };
 
-    // Make sure the new <a href="committee.md#0xb_committee">committee</a> represent enough stakes
-    <b>let</b> stake_participation_percentage = ((total_member_stake * 100 / <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_total_stake_amount">sui_system::total_stake_amount</a>(
+    // Make sure the new <a href="committee.md#0xb_committee">committee</a> represent enough stakes, percentage are accurate <b>to</b> 2DP
+    <b>let</b> stake_participation_percentage = ((total_member_stake * 10000 / (<a href="dependencies/sui-system/sui_system.md#0x3_sui_system_total_stake_amount">sui_system::total_stake_amount</a>(
         system_state
-    )) <b>as</b> u8);
+    ) <b>as</b> u128)) <b>as</b> u64);
 
     // Store new <a href="committee.md#0xb_committee">committee</a> info
     <b>if</b> (stake_participation_percentage &gt;= min_stake_participation_percentage) {
-        self.total_member_stake = total_member_stake;
         // Clear registrations
         self.member_registration = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
-        self.members = new_members
+        self.members = new_members;
+        self.last_committee_update_epoch = <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx);
+        // TODO: emit <a href="committee.md#0xb_committee">committee</a> <b>update</b> <a href="dependencies/sui-framework/event.md#0x2_event">event</a>?
     }
 }
 </code></pre>
@@ -527,6 +525,30 @@
         blocklisted,
         public_keys: pub_keys,
     })
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_committee_committee_members"></a>
+
+## Function `committee_members`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_committee_members">committee_members</a>(self: &<a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>): &<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="committee.md#0xb_committee_CommitteeMember">committee::CommitteeMember</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_committee_members">committee_members</a>(self: &<a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>): &VecMap&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a>&gt; {
+    &self.members
 }
 </code></pre>
 
