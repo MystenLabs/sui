@@ -3,24 +3,24 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭──────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                  │
-├──────────────────────────────────────────┬───────────────────────────────────────────────────┤
-│ command                                  │ from                                              │
-├──────────────────────────────────────────┼───────────────────────────────────────────────────┤
-│ --gas-budget 100000000                   │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │
-│ --split-coins gas [1u64, 2u64, 3u64]     │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │
-│ --assign coins                           │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │
-│ --assign c0 coins.0                      │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │
-│ --assign c1 coins.1                      │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │
-│ --assign c2 coins.2                      │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │
-│ --merge-coins c0 [c1, c2]                │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │
-│ --merge-coins gas [c0]                   │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │
-│ --split-coins gas [1u64, 2u64, 3u64]     │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │
-│ --assign coins                           │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │
-│ --merge-coins coins.0 [coins.1, coins.2] │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │
-│ --merge-coins gas [coins.0]              │ tests/ptb_files/merge_coins/merge_coins_valid.ptb │
-╰──────────────────────────────────────────┴───────────────────────────────────────────────────╯
+╭────────────────────────────────────────╮
+│ PTB Preview                            │
+├────────────────────────────────────────┤
+│ command                                │
+├────────────────────────────────────────┤
+│ gas-budget 100000000                   │
+│ split-coins gas [1u64, 2u64, 3u64]     │
+│ assign coins                           │
+│ assign c0 coins.0                      │
+│ assign c1 coins.1                      │
+│ assign c2 coins.2                      │
+│ merge-coins c0 [c1, c2]                │
+│ merge-coins gas [c0]                   │
+│ split-coins gas [1u64, 2u64, 3u64]     │
+│ assign coins                           │
+│ merge-coins coins.0 [coins.1, coins.2] │
+│ merge-coins gas [coins.0]              │
+╰────────────────────────────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false

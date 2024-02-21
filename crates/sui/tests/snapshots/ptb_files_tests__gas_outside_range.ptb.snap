@@ -3,9 +3,9 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === ERRORS AFTER PARSING INPUT COMMANDS === 
-  × Error at command 0 in PTB file 'tests/ptb_files/gas/gas_outside_range.ptb'
+  × Error when processing PTB
    ╭────
- 1 │ --gas-budget 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+ 1 │ --gas-budget 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF 
    ·              ─────────────────────────────────────┬────────────────────────────────────
    ·                                                   ╰── number too large to fit in target type
    ╰────

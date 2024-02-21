@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::sp_;
+use crate::sp;
 
 use super::{
     error::{Span, Spanned},
@@ -148,7 +148,7 @@ impl<'l, I: Iterator<Item = &'l str>> Lexer<'l, I> {
     /// `UnfinishedString`, even if it would have been terminated in a following shell token.
     fn string(&mut self, start: Spanned<&'l str>) -> Spanned<Lexeme<'l>> {
         self.bump();
-        let sp_!(sp, quote) = start;
+        let sp!(sp, quote) = start;
 
         let mut escaped = false;
         let content = self
@@ -230,19 +230,19 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
 
         Some(match c {
             // Single character tokens
-            sp_!(_, ",") => token!(T::Comma),
-            sp_!(_, "[") => token!(T::LBracket),
-            sp_!(_, "]") => token!(T::RBracket),
-            sp_!(_, "(") => token!(T::LParen),
-            sp_!(_, ")") => token!(T::RParen),
-            sp_!(_, "<") => token!(T::LAngle),
-            sp_!(_, ">") => token!(T::RAngle),
-            sp_!(_, "@") => token!(T::At),
-            sp_!(_, ".") => token!(T::Dot),
+            sp!(_, ",") => token!(T::Comma),
+            sp!(_, "[") => token!(T::LBracket),
+            sp!(_, "]") => token!(T::RBracket),
+            sp!(_, "(") => token!(T::LParen),
+            sp!(_, ")") => token!(T::RParen),
+            sp!(_, "<") => token!(T::LAngle),
+            sp!(_, ">") => token!(T::RAngle),
+            sp!(_, "@") => token!(T::At),
+            sp!(_, ".") => token!(T::Dot),
 
-            sp_!(_, "'" | "\"") => self.string(c),
+            sp!(_, "'" | "\"") => self.string(c),
 
-            sp_!(_, ":") => 'colon: {
+            sp!(_, ":") => 'colon: {
                 let Some(sp) = self.eat_prefix("::") else {
                     break 'colon self.unexpected(c);
                 };
@@ -250,7 +250,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                 sp.map(|src| Lexeme(T::ColonColon, src))
             }
 
-            sp_!(_, c) if c.chars().next().is_some_and(is_ident_start) => {
+            sp!(_, c) if c.chars().next().is_some_and(is_ident_start) => {
                 let Some(ident) = self.eat_while(is_ident_continue) else {
                     unreachable!("is_ident_start implies is_ident_continue");
                 };
@@ -258,7 +258,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                 ident.map(|src| Lexeme(T::Ident, src))
             }
 
-            sp_!(_, "0") => 'zero: {
+            sp!(_, "0") => 'zero: {
                 let Some(prefix) = self.eat_prefix("0x") else {
                     break 'zero token!(T::Number);
                 };
@@ -270,7 +270,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                 digits.widen(prefix).map(|src| Lexeme(T::HexNumber, src))
             }
 
-            sp_!(_, n) if n.chars().next().is_some_and(is_number_start) => {
+            sp!(_, n) if n.chars().next().is_some_and(is_number_start) => {
                 let Some(num) = self.eat_while(is_number_continue) else {
                     unreachable!("is_number_start implies is_number_continue");
                 };
@@ -278,7 +278,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                 num.map(|src| Lexeme(T::Number, src))
             }
 
-            sp_!(_, "-") => 'command: {
+            sp!(_, "-") => 'command: {
                 let Some(prefix) = self.eat_prefix("--") else {
                     break 'command self.unexpected(c);
                 };
@@ -288,7 +288,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                 };
 
                 match ident {
-                    sp_!(_, "publish") => {
+                    sp!(_, "publish") => {
                         if let Some(next) = self.peek() {
                             break 'command self.unexpected(next);
                         }
@@ -300,7 +300,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                         file.widen(prefix).map(|src| Lexeme(T::Publish, src))
                     }
 
-                    sp_!(_, "upgrade") => {
+                    sp!(_, "upgrade") => {
                         if let Some(next) = self.peek() {
                             break 'command self.unexpected(next);
                         }
@@ -312,11 +312,11 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                         file.widen(prefix).map(|src| Lexeme(T::Upgrade, src))
                     }
 
-                    sp_!(_, _) => ident.widen(prefix).map(|src| Lexeme(T::Command, src)),
+                    sp!(_, _) => ident.widen(prefix).map(|src| Lexeme(T::Command, src)),
                 }
             }
 
-            sp_!(_, _) => self.unexpected(c),
+            sp!(_, _) => self.unexpected(c),
         })
     }
 }
@@ -349,7 +349,7 @@ mod tests {
     fn lex(input: Vec<&str>) -> Vec<Spanned<Lexeme>> {
         let mut lexer = Lexer::new(input.into_iter()).unwrap();
         let mut lexemes: Vec<_> = (&mut lexer)
-            .take_while(|sp_!(_, lex)| !lex.is_terminal())
+            .take_while(|sp!(_, lex)| !lex.is_terminal())
             .collect();
         lexemes.push(lexer.next().unwrap());
         lexemes

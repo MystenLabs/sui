@@ -3,47 +3,39 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === ERRORS AFTER PARSING INPUT COMMANDS === 
-  × Error at command 0 in PTB file 'tests/ptb_files/bad_ptb.ptb'
-   ╭─[1:14]
- 1 │ --gas-budget @aa
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget @aa --split-coins @0x1 [0xfffffffffu8] --split-coins 2x2 [1000] --assign X --assign Y --make-move-vec <vector<address>> [[@0x1],[@0x2]] --transfer-objects @0x1 s --assign Z none --move-call 0x1::option::is_no <u64> Z 
    ·              ─┬─
-   ·               ╰── Expected a numerical address at this position but got a named address aa
- 2 │ --split-coins @0x1 [0xfffffffffu8]
+   ·               ╰── Expected a numerical address but got a named address 'aa'
    ╰────
 
-  × Error at command 1 in PTB file 'tests/ptb_files/bad_ptb.ptb'
-   ╭─[2:21]
- 1 │ --gas-budget @aa
- 2 │ --split-coins @0x1 [0xfffffffffu8]
-   ·                     ──────┬──────
-   ·                           ╰── number too large to fit in target type
- 3 │ --split-coins 2x2 [1000]
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget @aa --split-coins @0x1 [0xfffffffffu8] --split-coins 2x2 [1000] --assign X --assign Y --make-move-vec <vector<address>> [[@0x1],[@0x2]] --transfer-objects @0x1 s --assign Z none --move-call 0x1::option::is_no <u64> Z 
+   ·                                      ──────┬──────
+   ·                                            ╰── number too large to fit in target type
    ╰────
 
-  × Error at command 2 in PTB file 'tests/ptb_files/bad_ptb.ptb'
-   ╭─[3:16]
- 2 │ --split-coins @0x1 [0xfffffffffu8]
- 3 │ --split-coins 2x2 [1000]
-   ·                ─┬
-   ·                 ╰── expected token '[', but got '[ident]'
- 4 │ --assign X
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget @aa --split-coins @0x1 [0xfffffffffu8] --split-coins 2x2 [1000] --assign X --assign Y --make-move-vec <vector<address>> [[@0x1],[@0x2]] --transfer-objects @0x1 s --assign Z none --move-call 0x1::option::is_no <u64> Z 
+   ·                                                                    ─┬
+   ·                                                                     ╰── Expected '[' but found identifier 'x2'
    ╰────
 
-  × Error at command 5 in PTB file 'tests/ptb_files/bad_ptb.ptb'
-   ╭─[6:36]
- 5 │ --assign Y
- 6 │ --make-move-vec <vector<address>> [[@0x1],[@0x2]]
-   ·                                    ┬
-   ·                                    ╰── unexpected token '['
- 7 │ --transfer-objects @0x1 s
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget @aa --split-coins @0x1 [0xfffffffffu8] --split-coins 2x2 [1000] --assign X --assign Y --make-move-vec <vector<address>> [[@0x1],[@0x2]] --transfer-objects @0x1 s --assign Z none --move-call 0x1::option::is_no <u64> Z 
+   ·                                                                                                                                       ┬
+   ·                                                                                                                                       ╰── Unexpected '['
    ╰────
+  help: Expected an argument here
 
-  × Error at command 6 in PTB file 'tests/ptb_files/bad_ptb.ptb'
-   ╭─[7:25]
- 6 │ --make-move-vec <vector<address>> [[@0x1],[@0x2]]
- 7 │ --transfer-objects @0x1 s
-   ·                         ┬
-   ·                         ╰── expected token '[', but got '[ident]'
- 8 │ --assign Z none
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget @aa --split-coins @0x1 [0xfffffffffu8] --split-coins 2x2 [1000] --assign X --assign Y --make-move-vec <vector<address>> [[@0x1],[@0x2]] --transfer-objects @0x1 s --assign Z none --move-call 0x1::option::is_no <u64> Z 
+   ·                                                                                                                                                                              ┬
+   ·                                                                                                                                                                              ╰── Expected '[' but found identifier 's'
    ╰────
 

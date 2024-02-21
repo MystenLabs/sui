@@ -3,27 +3,24 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                                                                   │
-├──────────────────────────────────────────────────────────────────────────────────────────┬────────────────────────────────────────────────────┤
-│ command                                                                                  │ from                                               │
-├──────────────────────────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────┤
-│ --move-call std::option::is_none<u64> "a (this is an unmatched paren in a string" "b)" c │ tests/ptb_files/parsing/multiple_function_args.ptb │
-│ --gas-budget 111111                                                                      │ tests/ptb_files/parsing/multiple_function_args.ptb │
-╰──────────────────────────────────────────────────────────────────────────────────────────┴────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                                            │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│ command                                                                                │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│ move-call std::option::is_none<u64> "a (this is an unmatched paren in a string" "b)" c │
+│ gas-budget 111111                                                                      │
+╰────────────────────────────────────────────────────────────────────────────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false
 gas_object: none
 json: false
  === BUILDING PTB ERRORS === 
-  × Error at command 0 in PTB file 'tests/ptb_files/parsing/
-  │ multiple_function_args.ptb'
-   ╭─[2:40]
- 1 │ # Should result in an error complaining that three arguments were found
- 2 │ --move-call std::option::is_none <u64> 'a (this is an unmatched paren in a string' "b)" c
+  × Error when processing PTB
+   ╭────
+ 1 │ --move-call std::option::is_none <u64> 'a (this is an unmatched paren in a string' "b)" c --gas-budget 111111 
    ·                                        ─────────────────────────┬────────────────────────
    ·                                                                 ╰── Expected 1 argument, but got 3
- 3 │ --gas-budget 111111
    ╰────
 

@@ -3,25 +3,21 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭──────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                  │
-├──────────────────┬───────────────────────────────────────────┤
-│ command          │ from                                      │
-├──────────────────┼───────────────────────────────────────────┤
-│ --assign bar "(" │ tests/ptb_files/parsing/quote_escapes.ptb │
-│ --assign bar "(" │ tests/ptb_files/parsing/quote_escapes.ptb │
-│ --assign bar "(" │ tests/ptb_files/parsing/quote_escapes.ptb │
-│ --assign bar ")" │ tests/ptb_files/parsing/quote_escapes.ptb │
-│ --assign bar ")" │ tests/ptb_files/parsing/quote_escapes.ptb │
-│ --assign bar ")" │ tests/ptb_files/parsing/quote_escapes.ptb │
-│ --assign bar "[" │ tests/ptb_files/parsing/quote_escapes.ptb │
-│ --assign bar "[" │ tests/ptb_files/parsing/quote_escapes.ptb │
-│ --assign bar "[" │ tests/ptb_files/parsing/quote_escapes.ptb │
-│ --assign bar "]" │ tests/ptb_files/parsing/quote_escapes.ptb │
-│ --assign bar "]" │ tests/ptb_files/parsing/quote_escapes.ptb │
-│ --assign bar "]" │ tests/ptb_files/parsing/quote_escapes.ptb │
-│ --gas-budget 11  │ tests/ptb_files/parsing/quote_escapes.ptb │
-╰──────────────────┴───────────────────────────────────────────╯
+╭────────────────╮
+│ PTB Preview    │
+├────────────────┤
+│ command        │
+├────────────────┤
+│ assign bar "(" │
+│ assign bar "(" │
+│ assign bar ")" │
+│ assign bar ")" │
+│ assign bar "[" │
+│ assign bar "[" │
+│ assign bar "]" │
+│ assign bar "]" │
+│ gas-budget 11  │
+╰────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false

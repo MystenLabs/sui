@@ -10,7 +10,7 @@ use move_command_line_common::{
 };
 use sui_types::{base_types::ObjectID, Identifier};
 
-use crate::{client_ptb::ast::GasPicker, err_, error_, sp_};
+use crate::{client_ptb::ast::GasPicker, err, error, sp};
 
 use super::{
     ast::{self as A, Argument, ModuleAccess, ParsedPTBCommand, ParsedProgram},
@@ -39,7 +39,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     /// Create a PTB program parser from a sequence of string.
     pub fn new(tokens: I) -> PTBResult<Self> {
         let Some(tokens) = Lexer::new(tokens) else {
-            error_!(Span { start: 0, end: 0 }, "No tokens")
+            error!(Span { start: 0, end: 0 }, "No tokens")
         };
         Ok(Self {
             tokens: tokens.peekable(),
@@ -62,7 +62,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         use Lexeme as L;
         use Token as T;
 
-        while let Some(sp_!(sp, lexeme)) = self.tokens.next() {
+        while let Some(sp!(sp, lexeme)) = self.tokens.next() {
             macro_rules! try_ {
                 ($expr: expr) => {
                     match $expr {
@@ -78,7 +78,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 
             macro_rules! command {
                 ($args:expr) => {{
-                    let sp_!(sp_args, value) = try_!($args);
+                    let sp!(sp_args, value) = try_!($args);
                     let cmd = sp.widen(sp_args).wrap(value);
                     self.state.parsed.push(cmd);
                 }};
@@ -121,7 +121,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 }),
 
                 L(T::Command, _) => {
-                    let err = err_!(sp, "Unknown {lexeme}");
+                    let err = err!(sp, "Unknown {lexeme}");
                     self.state.errors.push(err);
                     self.fast_forward_to_next_command();
                 }
@@ -129,7 +129,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 L(T::Eof, _) => break,
 
                 unexpected => {
-                    let err = err_!(
+                    let err = err!(
                         sp => help: { "Expected to find a command here" },
                         "Unexpected {unexpected}",
                     );
@@ -168,12 +168,12 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     /// Advance the iterator and return the next lexeme. If the next lexeme's token is not the
     /// expected one, return an error, and don't advance the token stream.
     fn expect(&mut self, expected: Token) -> PTBResult<Spanned<Lexeme<'a>>> {
-        let result @ sp_!(sp, lexeme@Lexeme(token, _)) = self.peek();
+        let result @ sp!(sp, lexeme@Lexeme(token, _)) = self.peek();
         Ok(if token == expected {
             self.bump();
             result
         } else {
-            error_!(sp, "Expected {expected} but found {lexeme}");
+            error!(sp, "Expected {expected} but found {lexeme}");
         })
     }
 
@@ -194,12 +194,11 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     /// Fast forward to the next command token (if any).
     fn fast_forward_to_next_command(&mut self) {
         loop {
-            let sp_!(_, lexeme) = self.peek();
+            let sp!(_, lexeme) = self.peek();
             if lexeme.is_command_end() {
                 break;
-            } else {
-                self.bump();
             }
+            self.bump();
         }
     }
 }
@@ -240,8 +239,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     /// The expected format is: `--assign <variable> (<value>)?`
     fn parse_assign(&mut self) -> PTBResult<Spanned<ParsedPTBCommand>> {
         let ident = match self.parse_argument()? {
-            sp_!(sp, Argument::Identifier(i)) => sp.wrap(i),
-            sp_!(sp, _) => error_!(sp, "Expected variable binding"),
+            sp!(sp, Argument::Identifier(i)) => sp.wrap(i),
+            sp!(sp, _) => error!(sp, "Expected variable binding"),
         };
 
         Ok(if self.peek().value.is_command_end() {
@@ -259,7 +258,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         use Lexeme as L;
         use Token as T;
 
-        let sp_!(sp, lexeme) = self.peek();
+        let sp!(sp, lexeme) = self.peek();
         let picker = match lexeme {
             L(T::Ident, "max") => {
                 self.bump();
@@ -271,7 +270,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 sp.wrap(GasPicker::Sum)
             }
 
-            unexpected => error_!(
+            unexpected => error!(
                 sp => help: { "Expected 'max' or 'sum' here" },
                 "Unexpected {unexpected}",
             ),
@@ -285,7 +284,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     fn parse_make_move_vec(&mut self) -> PTBResult<Spanned<ParsedPTBCommand>> {
         use Token as T;
 
-        let sp_!(start_sp, _) = self.expect(T::LAngle)?;
+        let sp!(start_sp, _) = self.expect(T::LAngle)?;
         let type_ = self.parse_type()?;
         self.expect(T::RAngle)?;
 
@@ -304,7 +303,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         let function = self.parse_module_access()?;
         let mut end_sp = function.span;
 
-        let ty_args = if let sp_!(_, L(T::LAngle, _)) = self.peek() {
+        let ty_args = if let sp!(_, L(T::LAngle, _)) = self.peek() {
             let type_args = self.parse_type_args()?;
             end_sp = type_args.span;
             Some(type_args)
@@ -327,8 +326,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     /// The expected format is: `--gas-budget <u64>`
     fn parse_gas_budget(&mut self) -> PTBResult<Spanned<ParsedPTBCommand>> {
         Ok(match self.parse_argument()? {
-            sp_!(sp, Argument::U64(u)) => sp.wrap(ParsedPTBCommand::GasBudget(sp.wrap(u))),
-            sp_!(sp, _) => error_!(sp, "Expected a u64 value"),
+            sp!(sp, Argument::U64(u)) => sp.wrap(ParsedPTBCommand::GasBudget(sp.wrap(u))),
+            sp!(sp, _) => error!(sp, "Expected a u64 value"),
         })
     }
 
@@ -336,8 +335,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     /// The expected format is: `--gas-coin <address>`
     fn parse_gas_specifier(&mut self) -> PTBResult<Spanned<ObjectID>> {
         Ok(match self.parse_argument()? {
-            sp_!(sp, Argument::Address(a)) => sp.wrap(ObjectID::from(a.into_inner())),
-            sp_!(sp, _) => error_!(sp, "Expected an address"),
+            sp!(sp, Argument::Address(a)) => sp.wrap(ObjectID::from(a.into_inner())),
+            sp!(sp, _) => error!(sp, "Expected an address"),
         })
     }
 }
@@ -350,7 +349,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         use Lexeme as L;
         use Token as T;
 
-        let sp_!(sp, lexeme) = self.peek();
+        let sp!(sp, lexeme) = self.peek();
         Ok(match lexeme {
             L(T::Ident, "true") => {
                 self.bump();
@@ -381,8 +380,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
             L(T::At, _) => {
                 self.bump();
                 match self.parse_address()?.widen_span(sp) {
-                    sp_!(sp, ParsedAddress::Numerical(n)) => sp.wrap(V::Address(n)),
-                    sp_!(sp, ParsedAddress::Named(n)) => error_!(
+                    sp!(sp, ParsedAddress::Numerical(n)) => sp.wrap(V::Address(n)),
+                    sp!(sp, ParsedAddress::Named(n)) => error!(
                         sp,
                         "Expected a numerical address but got a named address '{n}'",
                     ),
@@ -397,8 +396,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
             L(T::Ident, A::SOME) => {
                 self.bump();
                 self.expect(T::LParen)?;
-                let sp_!(arg_sp, arg) = self.parse_argument()?;
-                let sp_!(end_sp, _) = self.expect(T::RParen)?;
+                let sp!(arg_sp, arg) = self.parse_argument()?;
+                let sp!(end_sp, _) = self.expect(T::RParen)?;
 
                 let sp = sp.widen(end_sp);
                 sp.wrap(V::Option(arg_sp.wrap(Some(Box::new(arg)))))
@@ -416,7 +415,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 sp.wrap(V::String(contents.to_owned()))
             }
 
-            unexpected => error_!(
+            unexpected => error!(
                 sp => help: { "Expected an argument here" },
                 "Unexpected {unexpected}",
             ),
@@ -428,7 +427,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         use Lexeme as L;
         use Token as T;
 
-        let sp_!(sp, lexeme) = self.peek();
+        let sp!(sp, lexeme) = self.peek();
 
         macro_rules! type_ {
             ($ty: expr) => {{
@@ -450,18 +449,18 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
             L(T::Ident, "vector") => {
                 self.bump();
                 self.expect(T::LAngle)?;
-                let sp_!(_, ty) = self.parse_type()?;
-                let sp_!(end_sp, _) = self.expect(T::RAngle)?;
+                let sp!(_, ty) = self.parse_type()?;
+                let sp!(end_sp, _) = self.expect(T::RAngle)?;
 
                 let sp = sp.widen(end_sp);
                 sp.wrap(ParsedType::Vector(Box::new(ty)))
             }
 
             L(T::Ident | T::Number | T::HexNumber, _) => 'fq: {
-                let sp_!(_, module_access) = self.parse_module_access()?;
-                let sp_!(_, address) = module_access.address;
-                let sp_!(_, module_name) = module_access.module_name;
-                let sp_!(fun_sp, function_name) = module_access.function_name;
+                let sp!(_, module_access) = self.parse_module_access()?;
+                let sp!(_, address) = module_access.address;
+                let sp!(_, module_name) = module_access.module_name;
+                let sp!(fun_sp, function_name) = module_access.function_name;
 
                 let module = ParsedModuleId {
                     address,
@@ -471,7 +470,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 let name = function_name.to_string();
                 let fq_name = ParsedFqName { module, name };
 
-                let sp_!(_, L(T::LAngle, _)) = self.peek() else {
+                let sp!(_, L(T::LAngle, _)) = self.peek() else {
                     let sp = sp.widen(fun_sp);
                     break 'fq sp.wrap(ParsedType::Struct(ParsedStructType {
                         fq_name,
@@ -479,13 +478,13 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     }));
                 };
 
-                let sp_!(tys_sp, type_args) = self.parse_type_args()?;
+                let sp!(tys_sp, type_args) = self.parse_type_args()?;
 
                 let sp = sp.widen(tys_sp);
                 sp.wrap(ParsedType::Struct(ParsedStructType { fq_name, type_args }))
             }
 
-            unexpected => error_!(
+            unexpected => error!(
                 sp => help: { "Expected a type here" },
                 "Unexpected {unexpected}",
             ),
@@ -500,14 +499,14 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         let address = self.parse_address()?;
 
         self.expect(T::ColonColon)?;
-        let sp_!(mod_sp, L(_, module_name)) = self.expect(T::Ident)?;
+        let sp!(mod_sp, L(_, module_name)) = self.expect(T::Ident)?;
         let module_name = Identifier::new(module_name)
-            .map_err(|_| err_!(mod_sp, "Invalid module name {module_name:?}"))?;
+            .map_err(|_| err!(mod_sp, "Invalid module name {module_name:?}"))?;
 
         self.expect(T::ColonColon)?;
-        let sp_!(fun_sp, L(_, function_name)) = self.expect(T::Ident)?;
+        let sp!(fun_sp, L(_, function_name)) = self.expect(T::Ident)?;
         let function_name = Identifier::new(function_name)
-            .map_err(|_| err_!(fun_sp, "Invalid function name {function_name:?}"))?;
+            .map_err(|_| err!(fun_sp, "Invalid function name {function_name:?}"))?;
 
         let sp = address.span.widen(fun_sp);
         Ok(sp.wrap(ModuleAccess {
@@ -522,24 +521,24 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         use Lexeme as L;
         use Token as T;
 
-        let sp_!(start_sp, _) = self.expect(T::LAngle)?;
+        let sp!(start_sp, _) = self.expect(T::LAngle)?;
 
         let mut type_args = vec![];
         loop {
             type_args.push(self.parse_type()?.value);
 
-            let sp_!(sp, lexeme) = self.peek();
+            let sp!(sp, lexeme) = self.peek();
             match lexeme {
                 L(T::Comma, _) => self.bump(),
                 L(T::RAngle, _) => break,
-                unexpected => error_!(
+                unexpected => error!(
                     sp => help: { "Expected {} or {}", T::Comma, T::RAngle },
                     "Unexpected {unexpected}",
                 ),
             }
         }
 
-        let sp_!(end_sp, _) = self.expect(T::RAngle)?;
+        let sp!(end_sp, _) = self.expect(T::RAngle)?;
         Ok(start_sp.widen(end_sp).wrap(type_args))
     }
 
@@ -548,10 +547,10 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         use Lexeme as L;
         use Token as T;
 
-        let sp_!(start_sp, L(_, ident)) = self.expect(T::Ident)?;
+        let sp!(start_sp, L(_, ident)) = self.expect(T::Ident)?;
         let ident = start_sp.wrap(ident.to_owned());
 
-        let sp_!(_, L(T::Dot, _)) = self.peek() else {
+        let sp!(_, L(T::Dot, _)) = self.peek() else {
             return Ok(start_sp.wrap(Argument::Identifier(ident.value)));
         };
 
@@ -559,15 +558,15 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         let mut fields = vec![];
         loop {
             // A field can be any non-terminal token (identifier, number, etc).
-            let sp_!(sp, lexeme@L(_, field)) = self.peek();
+            let sp!(sp, lexeme@L(_, field)) = self.peek();
             if lexeme.is_terminal() {
-                error_!(sp, "Expected a field name after '.'");
+                error!(sp, "Expected a field name after '.'");
             } else {
                 self.bump();
                 fields.push(sp.wrap(field.to_owned()));
             }
 
-            if let sp_!(_, L(T::Dot, _)) = self.peek() {
+            if let sp!(_, L(T::Dot, _)) = self.peek() {
                 self.bump();
             } else {
                 break;
@@ -585,7 +584,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         use Lexeme as L;
         use Token as T;
 
-        let sp_!(sp, suffix) = self.peek();
+        let sp!(sp, suffix) = self.peek();
 
         macro_rules! parse_num {
             ($fn: ident, $ty: expr) => {{
@@ -593,7 +592,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 let sp = sp.widen(contents.span);
                 match $fn(contents.value) {
                     Ok((value, _)) => sp.wrap($ty(value)),
-                    Err(e) => error_!(sp, "{e}"),
+                    Err(e) => error!(sp, "{e}"),
                 }
             }};
         }
@@ -609,7 +608,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
             // If there's no suffix, assume u64, and don't consume the peeked character.
             _ => match parse_u64(contents.value) {
                 Ok((value, _)) => contents.span.wrap(V::U64(value)),
-                Err(e) => error_!(contents.span, "{e}"),
+                Err(e) => error!(contents.span, "{e}"),
             },
         })
     }
@@ -619,7 +618,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         use Lexeme as L;
         use Token as T;
 
-        let sp_!(sp, lexeme) = self.peek();
+        let sp!(sp, lexeme) = self.peek();
         let addr = match lexeme {
             L(T::Ident, name) => {
                 self.bump();
@@ -629,7 +628,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
             L(T::Number, number) => {
                 self.bump();
                 NumericalAddress::parse_str(number)
-                    .map_err(|e| err_!(sp, "Failed to parse address {number:?}: {e}"))
+                    .map_err(|e| err!(sp, "Failed to parse address {number:?}: {e}"))
                     .map(ParsedAddress::Numerical)?
             }
 
@@ -637,11 +636,11 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 self.bump();
                 let number = format!("0x{number}");
                 NumericalAddress::parse_str(&number)
-                    .map_err(|e| err_!(sp, "Failed to parse address {number:?}: {e}"))
+                    .map_err(|e| err!(sp, "Failed to parse address {number:?}: {e}"))
                     .map(ParsedAddress::Numerical)?
             }
 
-            unexpected => error_!(
+            unexpected => error!(
                 sp => help: {
                     "Value addresses can either be a variable in-scope, or a numerical address, \
                      e.g., 0xc0ffee"
@@ -657,13 +656,13 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     fn parse_array(&mut self) -> PTBResult<Spanned<Vec<Spanned<Argument>>>> {
         use Lexeme as L;
         use Token as T;
-        let sp_!(start_sp, _) = self.expect(T::LBracket)?;
+        let sp!(start_sp, _) = self.expect(T::LBracket)?;
 
         let mut values = vec![];
         loop {
-            let sp_!(sp, lexeme) = self.peek();
+            let sp!(sp, lexeme) = self.peek();
             if lexeme.is_terminal() {
-                error_!(
+                error!(
                     sp => help: { "Expected an array here" },
                     "Unexpected {lexeme}"
                 );
@@ -673,18 +672,18 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 
             values.push(self.parse_argument()?);
 
-            let sp_!(sp, lexeme) = self.peek();
+            let sp!(sp, lexeme) = self.peek();
             match lexeme {
                 L(T::RBracket, _) => break,
                 L(T::Comma, _) => self.bump(),
-                unexpected => error_!(
+                unexpected => error!(
                     sp => help: { "Expected {} or {}", T::RBracket, T::Comma },
                     "Unexpected {unexpected}",
                 ),
             }
         }
 
-        let sp_!(end_sp, _) = self.expect(T::RBracket)?;
+        let sp!(end_sp, _) = self.expect(T::RBracket)?;
         Ok(start_sp.widen(end_sp).wrap(values))
     }
 }

@@ -3,52 +3,46 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === ERRORS AFTER PARSING INPUT COMMANDS === 
-  × Error at command 1 in PTB file 'tests/ptb_files/make_move_vec/
-  │ make_move_vec_invalid_args.ptb'
-   ╭─[4:17]
- 3 │ # No type args
- 4 │ --make-move-vec [100]
-   ·                 ┬
-   ·                 ╰── expected token '<...>', but got '['
- 5 │ 
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 10000000 --make-move-vec [100] --make-move-vec <> [100] --make-move-vec <u64> --make-move-vec <u64, bool> [] --make-move-vec u64 [] --make-move-vec <u64> 10 
+   ·                                       ┬
+   ·                                       ╰── Expected '<' but found '['
    ╰────
 
-  × Error at command 2 in PTB file 'tests/ptb_files/make_move_vec/
-  │ make_move_vec_invalid_args.ptb'
-   ╭─[7:17]
- 6 │ # Include the type arg delimiters but no type args inside
- 7 │ --make-move-vec <> [100]
-   ·                 ─┬
-   ·                  ╰── Expected a single type argument
- 8 │ 
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 10000000 --make-move-vec [100] --make-move-vec <> [100] --make-move-vec <u64> --make-move-vec <u64, bool> [] --make-move-vec u64 [] --make-move-vec <u64> 10 
+   ·                                                              ┬
+   ·                                                              ╰── Unexpected '>'
+   ╰────
+  help: Expected a type here
+
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 10000000 --make-move-vec [100] --make-move-vec <> [100] --make-move-vec <u64> --make-move-vec <u64, bool> [] --make-move-vec u64 [] --make-move-vec <u64> 10 
+   ·                                                                                            ───────┬───────
+   ·                                                                                                   ╰── Expected '[' but found command '--make-move-vec'
    ╰────
 
-  × Error at command 3 in PTB file 'tests/ptb_files/make_move_vec/
-  │ make_move_vec_invalid_args.ptb'
-    ╭─[13:1]
- 12 │ # Too many type args
- 13 │ --make-move-vec <u64, bool> []
-    · ───────┬───────
-    ·        ╰── expected token '[', but got '--make-move-vec'
- 14 │ 
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 10000000 --make-move-vec [100] --make-move-vec <> [100] --make-move-vec <u64> --make-move-vec <u64, bool> [] --make-move-vec u64 [] --make-move-vec <u64> 10 
+   ·                                                                                                                ┬
+   ·                                                                                                                ╰── Expected '>' but found ','
+   ╰────
 
-  × Error at command 4 in PTB file 'tests/ptb_files/make_move_vec/
-  │ make_move_vec_invalid_args.ptb'
-    ╭─[16:17]
- 15 │ # Invalid type args
- 16 │ --make-move-vec u64 []
-    ·                 ─┬─
-    ·                  ╰── expected token '<...>', but got '[ident]'
- 17 │ 
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 10000000 --make-move-vec [100] --make-move-vec <> [100] --make-move-vec <u64> --make-move-vec <u64, bool> [] --make-move-vec u64 [] --make-move-vec <u64> 10 
+   ·                                                                                                                                           ─┬─
+   ·                                                                                                                                            ╰── Expected '<' but found identifier 'u64'
+   ╰────
 
-  × Error at command 5 in PTB file 'tests/ptb_files/make_move_vec/
-  │ make_move_vec_invalid_args.ptb'
-    ╭─[19:23]
- 18 │ # Invalid array
- 19 │ --make-move-vec <u64> 10
-    ·                       ─┬
-    ·                        ╰── expected token '[', but got '[number]'
-    ╰────
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 10000000 --make-move-vec [100] --make-move-vec <> [100] --make-move-vec <u64> --make-move-vec <u64, bool> [] --make-move-vec u64 [] --make-move-vec <u64> 10 
+   ·                                                                                                                                                                        ─┬
+   ·                                                                                                                                                                         ╰── Expected '[' but found number '10'
+   ╰────
 

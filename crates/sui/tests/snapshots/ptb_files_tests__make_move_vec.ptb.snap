@@ -3,23 +3,23 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                                         │
-├───────────────────────────────────────────────────────────────────┬─────────────────────────────────────────────────┤
-│ command                                                           │ from                                            │
-├───────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────┤
-│ --gas-budget 1000                                                 │ tests/ptb_files/make_move_vec/make_move_vec.ptb │
-│ --make-move-vec u64 [1u64, 2u64, 3u64, 4u64]                      │ tests/ptb_files/make_move_vec/make_move_vec.ptb │
-│ --make-move-vec u64 []                                            │ tests/ptb_files/make_move_vec/make_move_vec.ptb │
-│ --make-move-vec 0x1::a::b [@0x1, @0x2]                            │ tests/ptb_files/make_move_vec/make_move_vec.ptb │
-│ --make-move-vec address [@0x1, @0x2]                              │ tests/ptb_files/make_move_vec/make_move_vec.ptb │
-│ --make-move-vec vector<address> [vector[@0x1], vector[@0x2]]      │ tests/ptb_files/make_move_vec/make_move_vec.ptb │
-│ --make-move-vec std::option::Option<u64> [none, none]             │ tests/ptb_files/make_move_vec/make_move_vec.ptb │
-│ --make-move-vec std::option::Option<u64> [none, none]             │ tests/ptb_files/make_move_vec/make_move_vec.ptb │
-│ --make-move-vec std::option::Option<u64> [none, some(1u64)]       │ tests/ptb_files/make_move_vec/make_move_vec.ptb │
-│ --make-move-vec std::option::Option<u64> [none, some(some(1u64))] │ tests/ptb_files/make_move_vec/make_move_vec.ptb │
-│ --make-move-vec sui::coin::Coin<sui::sui::SUI> [gas]              │ tests/ptb_files/make_move_vec/make_move_vec.ptb │
-╰───────────────────────────────────────────────────────────────────┴─────────────────────────────────────────────────╯
+╭─────────────────────────────────────────────────────────────────╮
+│ PTB Preview                                                     │
+├─────────────────────────────────────────────────────────────────┤
+│ command                                                         │
+├─────────────────────────────────────────────────────────────────┤
+│ gas-budget 1000                                                 │
+│ make-move-vec u64 [1u64, 2u64, 3u64, 4u64]                      │
+│ make-move-vec u64 []                                            │
+│ make-move-vec 0x1::a::b [@0x1, @0x2]                            │
+│ make-move-vec address [@0x1, @0x2]                              │
+│ make-move-vec vector<address> [vector[@0x1], vector[@0x2]]      │
+│ make-move-vec std::option::Option<u64> [none, none]             │
+│ make-move-vec std::option::Option<u64> [none, none]             │
+│ make-move-vec std::option::Option<u64> [none, some(1u64)]       │
+│ make-move-vec std::option::Option<u64> [none, some(some(1u64))] │
+│ make-move-vec sui::coin::Coin<sui::sui::SUI> [gas]              │
+╰─────────────────────────────────────────────────────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false

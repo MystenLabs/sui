@@ -3,16 +3,16 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                                                            │
-├────────────────────────────────────────┬───────────────────────────────────────────────────────────────────────────────┤
-│ command                                │ from                                                                          │
-├────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────┤
-│ --gas-budget 1000000000                │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │
-│ --make-move-vec address [@0x1]         │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │
-│ --assign a                             │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │
-│ --make-move-vec vector<address> [a, a] │ tests/ptb_files/make_move_vec/resolve_array_inside_array_through_bindings.ptb │
-╰────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────╮
+│ PTB Preview                          │
+├──────────────────────────────────────┤
+│ command                              │
+├──────────────────────────────────────┤
+│ gas-budget 1000000000                │
+│ make-move-vec address [@0x1]         │
+│ assign a                             │
+│ make-move-vec vector<address> [a, a] │
+╰──────────────────────────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false

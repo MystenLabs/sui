@@ -3,22 +3,17 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === ERRORS AFTER PARSING INPUT COMMANDS === 
-  × Error at command 0 in PTB file 'tests/ptb_files/resolution/
-  │ keyword_resolution.ptb'
-   ╭─[1:10]
- 1 │ --assign gas @0x1
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign gas @0x1 --assign none @0x1 --gas-budget 11 
    ·          ─┬─
    ·           ╰── Expected variable binding
- 2 │ --assign none @0x1
    ╰────
 
-  × Error at command 1 in PTB file 'tests/ptb_files/resolution/
-  │ keyword_resolution.ptb'
-   ╭─[2:10]
- 1 │ --assign gas @0x1
- 2 │ --assign none @0x1
-   ·          ──┬─
-   ·            ╰── Expected variable binding
- 3 │ 
+  × Error when processing PTB
+   ╭────
+ 1 │ --assign gas @0x1 --assign none @0x1 --gas-budget 11 
+   ·                            ──┬─
+   ·                              ╰── Expected variable binding
    ╰────
 

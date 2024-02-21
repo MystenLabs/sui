@@ -3,26 +3,24 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭──────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                          │
-├───────────────────────────┬──────────────────────────────────────────────────────────┤
-│ command                   │ from                                                     │
-├───────────────────────────┼──────────────────────────────────────────────────────────┤
-│ --gas-budget 1000         │ tests/ptb_files/publish/publish_non_existent_package.ptb │
-│ --publish not_a_valid_pkg │ tests/ptb_files/publish/publish_non_existent_package.ptb │
-╰───────────────────────────┴──────────────────────────────────────────────────────────╯
+╭─────────────────────────╮
+│ PTB Preview             │
+├─────────────────────────┤
+│ command                 │
+├─────────────────────────┤
+│ gas-budget 1000         │
+│ publish not_a_valid_pkg │
+╰─────────────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false
 gas_object: none
 json: false
  === BUILDING PTB ERRORS === 
-  × Error at command 1 in PTB file 'tests/ptb_files/publish/
-  │ publish_non_existent_package.ptb'
-   ╭─[3:11]
- 2 │ # Point to a non-existent package
- 3 │ --publish not_a_valid_pkg
-   ·           ───────┬───────
-   ·                  ╰── No such file or directory (os error 2)
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 1000 --publish not_a_valid_pkg 
+   ·                   ────────────┬────────────
+   ·                               ╰── No such file or directory (os error 2)
    ╰────
 

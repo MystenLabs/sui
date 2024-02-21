@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::ptb_builder::{
-    ast::{ParsedProgram, Program},
-    errors::{FileTable, PTBError},
-};
 use crate::client_ptb::{
+    ast::{ParsedProgram, Program},
+    builder::PTBBuilder,
     displays::Pretty,
-    ptb_builder::{build_ptb::PTBBuilder, errors::render_errors, parser::ProgramParser},
+    error::{build_error_reports, PTBError},
 };
 
 use anyhow::{anyhow, Error};
@@ -15,7 +13,7 @@ use clap::{arg, Args, ValueHint};
 use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
 use shared_crypto::intent::Intent;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
@@ -27,6 +25,8 @@ use sui_types::{
     quorum_driver_types::ExecuteTransactionRequestType,
     transaction::{ProgrammableTransaction, Transaction, TransactionData},
 };
+
+use super::parser::ProgramParser;
 
 #[derive(Clone, Debug, Args)]
 #[clap(disable_help_flag = true)]
@@ -53,19 +53,18 @@ impl PTB {
         args: Vec<String>,
         context: &mut WalletContext,
     ) -> Result<(), Error> {
-        {
-            let parser =
-                crate::client_ptb::parser::ProgramParser::new(args.iter().map(|s| s.as_str()))
-                    .unwrap();
-            parser.parse().unwrap();
-        };
-        let arg_string = args.join(" ");
-        let mut file_table = BTreeMap::new();
+        // NB: we add a space to the end of the source string to ensure that for unexpected EOF
+        // errors we have a location to point to.
+        let source_string = args.clone().join(" ") + " ";
+
         let (program, program_metadata) =
-            match Self::parse_ptb_commands(arg_string, &mut file_table) {
+            match crate::client_ptb::parser::ProgramParser::new(args.iter().map(|s| s.as_str()))
+                .map_err(|e| vec![e])
+                .and_then(|parser| parser.parse())
+            {
                 Err(errors) => {
                     let suffix = if errors.len() > 1 { "s" } else { "" };
-                    let rendered = render_errors(&file_table, errors);
+                    let rendered = build_error_reports(&source_string, errors);
                     eprintln!("Encountered error{suffix} when parsing PTB:");
                     for e in rendered.iter() {
                         eprintln!("{:?}", e);
@@ -86,7 +85,7 @@ impl PTB {
             Err(errors) => {
                 let suffix = if errors.len() > 1 { "s" } else { "" };
                 eprintln!("Encountered error{suffix} when building PTB:");
-                let rendered = render_errors(&file_table, errors);
+                let rendered = build_error_reports(&source_string, errors);
                 for e in rendered.iter() {
                     eprintln!("{:?}", e);
                 }
@@ -198,13 +197,10 @@ impl PTB {
     }
 
     /// Exposed for testing
-    pub fn parse_ptb_commands(
-        arg_string: String,
-        file_table: &mut FileTable,
-    ) -> Result<ParsedProgram, Vec<PTBError>> {
-        ProgramParser::new(arg_string, file_table)
-            .map_err(|e| vec![e])?
-            .parse()
+    pub fn parse_ptb_commands(args: Vec<String>) -> Result<ParsedProgram, Vec<PTBError>> {
+        ProgramParser::new(args.iter().map(|s| s.as_str()))
+            .map_err(|e| vec![e])
+            .and_then(|parser| parser.parse())
     }
 }
 

@@ -3,16 +3,16 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === PREVIEW === 
-╭─────────────────────────────────────────────────────────────────────────────────────╮
-│ PTB Preview                                                                         │
-├────────────────────────────────────┬────────────────────────────────────────────────┤
-│ command                            │ from                                           │
-├────────────────────────────────────┼────────────────────────────────────────────────┤
-│ --gas-budget 100000                │ tests/ptb_files/comments/ptb_with_comments.ptb │
-│ --split-coins @0x5 [1000u64]       │ tests/ptb_files/comments/ptb_with_comments.ptb │
-│ --assign result                    │ tests/ptb_files/comments/ptb_with_comments.ptb │
-│ --transfer-objects @0x6 [result.0] │ tests/ptb_files/comments/ptb_with_comments.ptb │
-╰────────────────────────────────────┴────────────────────────────────────────────────╯
+╭──────────────────────────────────╮
+│ PTB Preview                      │
+├──────────────────────────────────┤
+│ command                          │
+├──────────────────────────────────┤
+│ gas-budget 100000                │
+│ split-coins @0x5 [1000u64]       │
+│ assign result                    │
+│ transfer-objects @0x6 [result.0] │
+╰──────────────────────────────────╯
  === PROGRAM META === 
 preview: false
 summary: false

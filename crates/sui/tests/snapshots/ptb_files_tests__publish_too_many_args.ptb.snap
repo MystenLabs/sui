@@ -3,21 +3,11 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === ERRORS AFTER PARSING INPUT COMMANDS === 
-  × Error at command 2 in PTB file 'tests/ptb_files/publish/
-  │ publish_too_many_args.ptb'
-   ╭─[3:15]
- 2 │ # too many args
- 3 │ --publish too many args
-   ·               ──┬─
-   ·                 ╰── Unexpected token '[ident]'
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 1000 --publish too many args 
+   ·                                 ──┬─
+   ·                                   ╰── Unexpected identifier 'many'
    ╰────
-
-  × Error at command 2 in PTB file 'tests/ptb_files/publish/
-  │ publish_too_many_args.ptb'
-   ╭─[3:20]
- 2 │ # too many args
- 3 │ --publish too many args
-   ·                    ──┬─
-   ·                      ╰── Unexpected token '[ident]'
-   ╰────
+  help: Expected to find a command here
 

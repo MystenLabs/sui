@@ -3,13 +3,17 @@ source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
  === ERRORS AFTER PARSING INPUT COMMANDS === 
-  × Error at command 1 in PTB file 'tests/ptb_files/merge_coins/
-  │ merge_coins_invalid_args.ptb'
-   ╭─[7:1]
- 6 │ # Non-array argument for coins
- 7 │ --merge-coins @0x1 true
-   · ──────┬──────
-   ·       ╰── expected token '[', but got '--merge-coins'
- 8 │ 
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 1000000 --merge-coins @0x1 --merge-coins @0x1 true --merge-coins @0x1 [true, false] --merge-coins true [@0x1] --merge-coins gas [] 
+   ·                                         ──────┬──────
+   ·                                               ╰── Expected '[' but found command '--merge-coins'
+   ╰────
+
+  × Error when processing PTB
+   ╭────
+ 1 │ --gas-budget 1000000 --merge-coins @0x1 --merge-coins @0x1 true --merge-coins @0x1 [true, false] --merge-coins true [@0x1] --merge-coins gas [] 
+   ·                                                            ──┬─
+   ·                                                              ╰── Expected '[' but found identifier 'true'
    ╰────
 

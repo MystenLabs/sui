@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    bind,
     client_commands::{compile_package, upgrade_package},
-    client_ptb::ptb_builder::{
-        argument::Argument as PTBArg,
-        errors::{span, PTBError, PTBResult, Span, Spanned},
-        token::{ASSIGN, GAS_BUDGET, PICK_GAS_BUDGET},
+    client_ptb::{
+        ast::{Argument as PTBArg, ASSIGN, GAS_BUDGET, PICK_GAS_BUDGET},
+        error::{PTBError, PTBResult, Span, Spanned},
         utils::{display_did_you_mean, find_did_you_means, to_ordinal_contraction},
     },
     err, error, sp,
@@ -26,7 +24,10 @@ use move_command_line_common::{
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
 use serde::Serialize;
-use std::collections::{BTreeMap, HashSet};
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::PathBuf,
+};
 use sui_json::is_receiving_argument;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
 use sui_protocol_config::ProtocolConfig;
@@ -52,7 +53,7 @@ struct GasBudget {
 }
 
 /// The type of error that can occur when dealing with gas budgets.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 enum GasBudgetError {
     /// No gas budget provided for the transaction.
     NoGasBudget,
@@ -277,12 +278,12 @@ impl GasBudget {
     }
 
     fn add_gas_budget(&mut self, budget: u64, sp: Span) {
-        self.gas_budgets.push(span(sp, budget));
+        self.gas_budgets.push(sp.wrap(budget));
     }
 
     /// Set the gas picker. This will return an error if the gas picker has already been set.
     fn set_gas_picker(&mut self, picker: GasPicker, sp: Span) {
-        self.picker.push(span(sp, picker));
+        self.picker.push(sp.wrap(picker));
     }
 }
 
@@ -337,13 +338,13 @@ impl<'a> PTBBuilder<'a> {
                     // NB: We use the file scope of the command, and _not_ the current file
                     // scope for these errors!
                     if i == 0 {
-                        self.errors.push(PTBError::WithSource {
+                        self.errors.push(PTBError {
                             message: format!("Variable '{}' first declared here", ident),
                             span: *command_loc,
                             help: None,
                         });
                     } else {
-                        self.errors.push(PTBError::WithSource {
+                        self.errors.push(PTBError {
                             message: format!(
                                 "Variable '{}' used again here (shadowed) for the {} time.",
                                 ident, to_ordinal_contraction(i + 1)
@@ -358,13 +359,13 @@ impl<'a> PTBBuilder<'a> {
         }
 
         let budget = match self.gas_budget.finalize().map_err(|e| match e {
-            GasBudgetError::NoGasBudget => self.errors.push(err!(Span::out_of_band_span(), "No gas budget set for transaction")),
+            GasBudgetError::NoGasBudget => self.errors.push(err!(Span::eof_span(), "No gas budget set for transaction")),
             GasBudgetError::NoGasPicker(budgets) => {
                 for (i, sp!(bsp, _)) in budgets.into_iter().enumerate() {
                     let err_msg = if i == 0 {
                         // NB: this could span multiple files, so we use the filescope saved with
                         // the budget.
-                        PTBError::WithSource {
+                        PTBError {
                             message: "Multiple gas budgets set for transaction with no gas picker. \
                                 Gas budget is set for the first time here.".to_string(),
                             span: bsp,
@@ -372,7 +373,7 @@ impl<'a> PTBBuilder<'a> {
                                 '{PICK_GAS_BUDGET}' command to handle multiple gas budgets")),
                         }
                     } else {
-                        PTBError::WithSource {
+                        PTBError {
                             message: format!("Gas budget is set for the {} time here.", to_ordinal_contraction(i + 1)),
                             span: bsp,
                             help: None,
@@ -386,14 +387,14 @@ impl<'a> PTBBuilder<'a> {
                     let err_msg = if i == 0 {
                         // NB: this could span multiple files, so we use the filescope saved with
                         // the picker.
-                        PTBError::WithSource {
+                        PTBError {
                             message: "Multiple gas pickers set for transaction. \
                                 First usage of the 'gas-picker' command here.".to_string(),
                             span: bsp,
                             help: Some(format!("You should either remove all but one usage of '{PICK_GAS_BUDGET}'.")),
                         }
                     } else {
-                        PTBError::WithSource {
+                        PTBError {
                             message: format!("'{PICK_GAS_BUDGET}' used here for the {} time.", to_ordinal_contraction(i + 1)),
                             span: bsp,
                             help: None,
@@ -497,7 +498,8 @@ impl<'a> PTBBuilder<'a> {
         let Some(SuiRawData::Package(package)) = object.bcs else {
             error!(
                 loc,
-                "BCS field in object '{}' is missing or not a package.", package_id
+                "BCS field in object '{}' is missing or not a package.",
+                package_id
             );
         };
         let package: MovePackage = MovePackage::new(
@@ -522,7 +524,7 @@ impl<'a> PTBBuilder<'a> {
         param: &SignatureToken,
     ) -> PTBResult<Tx::Argument> {
         // See if we've already resolved this argument or if it's an unambiguously pure value
-        if let Ok(res) = self.resolve(span(loc, arg.clone()), NoResolution).await {
+        if let Ok(res) = self.resolve(loc.wrap(arg.clone()), NoResolution).await {
             return Ok(res);
         }
 
@@ -571,10 +573,10 @@ impl<'a> PTBBuilder<'a> {
         // If the argument is an object argument resolve it to an object argument, otherwise
         // resolve it to a receiving object argument.
         if is_object_arg {
-            self.resolve(span(loc, arg), ToObject::new(is_receiving))
+            self.resolve(loc.wrap(arg), ToObject::new(is_receiving))
                 .await
         } else {
-            self.resolve(span(loc, arg), ToPure).await
+            self.resolve(loc.wrap(arg), ToPure).await
         }
     }
 
@@ -649,9 +651,9 @@ impl<'a> PTBBuilder<'a> {
 
         if parameters.len() != args.len() {
             let loc = if args.is_empty() {
-                package_name_loc.union_with([*mloc, *floc])
+                package_name_loc.widen(*mloc).widen(*floc)
             } else {
-                args[0].span.union_with(args[1..].iter().map(|x| x.span))
+                args[0].span.widen_opt(args.last().map(|x| x.span))
             };
             error!(
                 loc,
@@ -682,22 +684,19 @@ impl<'a> PTBBuilder<'a> {
             // length above. Since the length is 1, we know that the field is non-empty.
             let sp!(field_loc, field) = &fields[0];
             if let Ok(n) = field.parse::<u16>() {
-                return span(*field_loc, ResolvedAccess::ResultAccess(n));
+                return field_loc.wrap(ResolvedAccess::ResultAccess(n));
             }
         }
-        let tl_loc = head.span.union_with(fields.iter().map(|x| x.span));
-        span(
-            tl_loc,
-            ResolvedAccess::DottedString(format!(
-                "{}.{}",
-                head.value,
-                fields
-                    .into_iter()
-                    .map(|f| f.value)
-                    .collect::<Vec<_>>()
-                    .join(".")
-            )),
-        )
+        let tl_loc = head.span.widen_opt(fields.last().map(|x| x.span));
+        tl_loc.wrap(ResolvedAccess::DottedString(format!(
+            "{}.{}",
+            head.value,
+            fields
+                .into_iter()
+                .map(|f| f.value)
+                .collect::<Vec<_>>()
+                .join(".")
+        )))
     }
 
     /// Resolve an argument based on the argument value, and the `resolver` that is passed in.
@@ -742,16 +741,12 @@ impl<'a> PTBBuilder<'a> {
                 let addr = self.addresses[&i];
                 self.arguments_to_resolve.insert(
                     i.clone(),
-                    span(
-                        arg_loc,
-                        PTBArg::Address(NumericalAddress::new(
-                            addr.into_bytes(),
-                            NumberFormat::Hex,
-                        )),
-                    ),
+                    arg_loc.wrap(PTBArg::Address(NumericalAddress::new(
+                        addr.into_bytes(),
+                        NumberFormat::Hex,
+                    ))),
                 );
-                self.resolve(span(arg_loc, PTBArg::Identifier(i)), ctx)
-                    .await
+                self.resolve(arg_loc.wrap(PTBArg::Identifier(i)), ctx).await
             }
             x @ PTBArg::Option(_) => ctx.pure(self, arg_loc, x.to_move_value_opt(arg_loc)?).await,
             x @ PTBArg::Vector(_) => ctx.pure(self, arg_loc, x.to_move_value_opt(arg_loc)?).await,
@@ -767,7 +762,7 @@ impl<'a> PTBBuilder<'a> {
                 // if the field(s) are not all numbers, then we assume it's a alias.
                 match self.resolve_variable_access(&head, fields) {
                     sp!(l, ResolvedAccess::DottedString(string)) => {
-                        self.resolve(span(l, PTBArg::Identifier(string)), ctx).await
+                        self.resolve(l.wrap(PTBArg::Identifier(string)), ctx).await
                     }
                     sp!(_, ResolvedAccess::ResultAccess(access)) => match self
                         .resolved_arguments
@@ -815,7 +810,7 @@ impl<'a> PTBBuilder<'a> {
                                 }
                             }
                             self.resolve(
-                                span(arg_loc, PTBArg::Identifier(formatted_access.clone())),
+                                arg_loc.wrap(PTBArg::Identifier(formatted_access.clone())),
                                 ctx,
                             )
                             .await
@@ -1009,11 +1004,10 @@ impl<'a> PTBBuilder<'a> {
                 self.last_command = Some(res);
             }
             ParsedPTBCommand::Publish(sp!(pkg_loc, package_path)) => {
-                let qual_package_path = cmd_span.file_scope.qualify_path(&package_path);
                 let (dependencies, compiled_modules, _, _) = compile_package(
                     self.reader,
                     BuildConfig::default(),
-                    qual_package_path,
+                    PathBuf::from(package_path),
                     false, /* with_unpublished_dependencies */
                     false, /* skip_dependency_verification */
                 )
@@ -1035,14 +1029,16 @@ impl<'a> PTBBuilder<'a> {
                         .ok_or_else(|| err!(loc, "Unable to find object ID argument"))?
                         .clone();
                 }
-                bind!(cap_loc, PTBArg::Address(upgrade_cap_id) = arg, |loc| {
-                    error!(loc, "Expected upgrade capability object ID");
-                });
-                let qual_package_path = cmd_span.file_scope.qualify_path(&package_path);
+                let (cap_loc, upgrade_cap_id) = match arg {
+                    sp!(loc, PTBArg::Address(id)) => (loc, id),
+                    sp!(loc, _) => {
+                        error!(loc, "Expected upgrade capability object ID");
+                    }
+                };
 
                 let upgrade_cap_arg = self
                     .resolve(
-                        span(cap_loc, PTBArg::Address(upgrade_cap_id)),
+                        cap_loc.wrap(PTBArg::Address(upgrade_cap_id)),
                         ToObject::default(),
                     )
                     .await?;
@@ -1051,7 +1047,7 @@ impl<'a> PTBBuilder<'a> {
                     upgrade_package(
                         self.reader,
                         BuildConfig::default(),
-                        qual_package_path,
+                        PathBuf::from(package_path),
                         ObjectID::from_address(upgrade_cap_id.into_inner()),
                         false, /* with_unpublished_dependencies */
                         false, /* skip_dependency_verification */
@@ -1099,3 +1095,4 @@ impl<'a> PTBBuilder<'a> {
         Ok(())
     }
 }
+
