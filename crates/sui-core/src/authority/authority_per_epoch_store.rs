@@ -2529,6 +2529,7 @@ impl AuthorityPerEpochStore {
                 let version = shared_input_next_versions
                     .get_mut(&SUI_RANDOMNESS_STATE_OBJECT_ID)
                     .expect("added randomness state object to lookup above");
+                debug!("assigning shared object versions for randomness: epoch {}, round {round:?} -> version {version:?}", self.epoch());
                 batch.insert_batch(
                     &self.tables()?.assigned_shared_object_versions_v2,
                     iter::once((

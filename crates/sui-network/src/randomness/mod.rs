@@ -395,6 +395,17 @@ impl RandomnessEventLoop {
             return;
         }
 
+        if !(self.send_tasks.contains_key(&(epoch, round))
+            || self.pending_tasks.contains(&(epoch, round)))
+        {
+            // We have to wait here, because even if we have enough information from other nodes to complete
+            // the round, local shared object versions are not set until consensus finishes processing the
+            // corresponding commit. This function will be called again after maybe_start_pending_tasks
+            // begins this round locally.
+            debug!("waiting to aggregate randomness partial signatures until local consensus catches up");
+            return;
+        }
+
         let vss_pk = {
             let Some(dkg_output) = &self.dkg_output else {
                 debug!("called maybe_aggregate_partial_signatures before DKG completed");
