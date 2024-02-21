@@ -1898,7 +1898,7 @@ impl AstDebug for MatchPattern_ {
             Binder(mut_, name) => {
                 mut_.ast_debug(w);
                 name.ast_debug(w)
-            },
+            }
             Literal(v) => v.ast_debug(w),
             Wildcard => w.write("_"),
             Or(lhs, rhs) => {

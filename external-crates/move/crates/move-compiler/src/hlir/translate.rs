@@ -282,7 +282,13 @@ impl<'env> Context<'env> {
         // We may reuse a name if it appears on both sides of an `or` pattern
         if let Some((cur_mut, cur_t)) = self.function_locals.get(&symbol) {
             assert!(cur_t == &t);
-            assert!(cur_mut == &mut_, "{:?} changed mutability from {:?} to {:?}", v, cur_mut, mut_);
+            assert!(
+                cur_mut == &mut_,
+                "{:?} changed mutability from {:?} to {:?}",
+                v,
+                cur_mut,
+                mut_
+            );
         } else {
             self.function_locals.add(symbol, (mut_, t)).unwrap();
         }

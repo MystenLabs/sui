@@ -669,7 +669,10 @@ pub enum MatchPattern_ {
     // T<t1, ..., tn>(pat1, ..., patn)
     PositionalConstructor(NameAccessChain, Spanned<Vec<Ellipsis<MatchPattern>>>),
     // T<t1, ..., tn> { x1: pat1, ..., xn: patn }
-    FieldConstructor(NameAccessChain, Spanned<Vec<Ellipsis<(Field, MatchPattern)>>>),
+    FieldConstructor(
+        NameAccessChain,
+        Spanned<Vec<Ellipsis<(Field, MatchPattern)>>>,
+    ),
     // T<t1, ..., tn>
     Name(Mutability, NameAccessChain),
     // 0 | true | ...

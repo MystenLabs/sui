@@ -1204,7 +1204,12 @@ fn make_arm_unpack(
             TP::At(x, inner) => {
                 if rhs_binders.contains(&x) {
                     let bind_entry = entry.clone();
-                    seq.push_back(make_move_binding(x, Mutability::Imm, bind_entry.ty.clone(), bind_entry));
+                    seq.push_back(make_move_binding(
+                        x,
+                        Mutability::Imm,
+                        bind_entry.ty.clone(),
+                        bind_entry,
+                    ));
                 }
                 queue.push_front((entry, *inner));
             }

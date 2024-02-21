@@ -16,6 +16,14 @@ error[E03010]: unbound field
 10 │         let Y(x, ..) = x;
    │             ^^^^^^^^ Unbound field '0' in '0x42::m::Y'
 
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:10:15
+   │
+10 │         let Y(x, ..) = x;
+   │               ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:14:13
    │
@@ -39,6 +47,14 @@ error[E03010]: unbound field
    │
 22 │         let X{x, ..} = x;
    │             ^^^^^^^^ Unbound field 'x' in '0x42::m::X'
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:22:15
+   │
+22 │         let X{x, ..} = x;
+   │               ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:26:13

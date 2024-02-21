@@ -1821,8 +1821,6 @@ fn parse_match_arm(context: &mut Context) -> Result<MatchArm, Box<Diagnostic>> {
 //   <PatField> = <Field> ( ":" <MatchPat> )?
 
 fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagnostic>> {
-    const INVALID_MUT_ERROR_MSG: &str =
-        "Can't use 'mut' as a modifier outside of variable bindings";
     const INVALID_PAT_ERROR_MSG: &str = "Invalid pattern";
     const WILDCARD_AT_ERROR_MSG: &str = "Cannot use '_' as an at-pattern";
 
@@ -1845,17 +1843,14 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                     || "a pattern entry",
                 )?;
 
-                match mut_ {
-                    Some(loc)
-                        if !matches!(name_access_chain.value, NameAccessChain_::Single(_))
-                            || name_access_chain.value.has_tyargs() =>
-                    {
-                        return Err(Box::new(diag!(
+                fn report_invalid_mut(context: &mut Context, mut_: Option<Loc>) {
+                    if let Some(loc) = mut_ {
+                        let diag = diag!(
                             Syntax::UnexpectedToken,
-                            (loc, INVALID_MUT_ERROR_MSG)
-                        )));
+                            (loc, "Invalid 'mut' keyword on non-variable pattern")
+                        );
+                        context.env.add_diag(diag);
                     }
-                    _ => (),
                 }
 
                 match context.tokens.peek() {
@@ -1870,6 +1865,7 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                                 "a pattern",
                             )?
                         );
+                        report_invalid_mut(context, mut_);
                         MP::PositionalConstructor(name_access_chain, sp(loc, patterns))
                     }
                     Tok::LBrace => {
@@ -1883,6 +1879,7 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                                 "a field pattern",
                             )?
                         );
+                        report_invalid_mut(context, mut_);
                         MP::FieldConstructor(name_access_chain, sp(loc, patterns))
                     }
                     _ => MP::Name(mut_, name_access_chain),
@@ -3970,7 +3967,7 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                                 format_oxford_list!(
                                     "or",
                                     "'{}'",
-                                    vec![
+                                    [
                                         Tok::Spec,
                                         Tok::Use,
                                         Tok::Friend,
@@ -3990,7 +3987,7 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                                 format_oxford_list!(
                                     "or",
                                     "'{}'",
-                                    vec![
+                                    [
                                         Tok::Spec,
                                         Tok::Use,
                                         Tok::Friend,

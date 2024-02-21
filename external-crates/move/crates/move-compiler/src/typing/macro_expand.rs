@@ -518,14 +518,14 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
                     rhs,
                 } = &mut arm.value;
                 for (_, var) in binders.iter_mut() {
-                    ctx.add_var(&var);
+                    ctx.add_var(var);
                     recolor_var(ctx, var);
                 }
                 let mut old_guard_binders = std::mem::take(guard_binders)
                     .into_iter()
                     .collect::<Vec<_>>();
                 for (pv, gv) in old_guard_binders.iter_mut() {
-                    ctx.add_var(&gv);
+                    ctx.add_var(gv);
                     recolor_var(ctx, pv);
                     recolor_var(ctx, gv);
                 }
@@ -642,9 +642,7 @@ fn recolor_exp_dotted(ctx: &mut Recolor, sp!(_, ed_): &mut N::ExpDotted) {
 
 fn recolor_pat(ctx: &mut Recolor, sp!(_, p_): &mut N::MatchPattern) {
     match p_ {
-        N::MatchPattern_::Literal(_) | N::MatchPattern_::Wildcard | N::MatchPattern_::ErrorPat => {
-            ()
-        }
+        N::MatchPattern_::Literal(_) | N::MatchPattern_::Wildcard | N::MatchPattern_::ErrorPat => {}
         N::MatchPattern_::Constructor(_, _, _, _, fields) => {
             for (_, _, (_, p)) in fields {
                 recolor_pat(ctx, p)
@@ -800,24 +798,20 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                     rhs,
                 } = &mut arm.value;
                 take_and_mut_replace!(binders, valid_binders, {
-                    valid_binders = valid_binders
-                        .clone()
-                        .into_iter()
-                        .filter(|(_, sp!(_, var_))| {
-                            if context.all_params.contains_key(var_) {
-                                assert!(
-                                    context.core.env.has_errors(),
-                                    "ICE cannot use macro parameter in pattern"
-                                );
-                                false
-                            } else {
-                                true
-                            }
-                        })
-                        .collect::<Vec<_>>();
+                    valid_binders.retain(|(_, sp!(_, var_))| {
+                        if context.all_params.contains_key(var_) {
+                            assert!(
+                                context.core.env.has_errors(),
+                                "ICE cannot use macro parameter in pattern"
+                            );
+                            false
+                        } else {
+                            true
+                        }
+                    });
                     let valid_binders_set = valid_binders
                         .iter()
-                        .map(|(_, var)| var.clone())
+                        .map(|(_, var)| *var)
                         .collect::<BTreeSet<_>>();
                     take_and_mut_replace!(guard_binders, cur_guard_binders, {
                         cur_guard_binders = cur_guard_binders.filter_map(|k, v| {
@@ -829,14 +823,13 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                         });
                     });
                     take_and_mut_replace!(rhs_binders, valid_rhs_binders, {
-                        valid_rhs_binders = valid_rhs_binders
-                            .into_iter()
-                            .filter(|v| valid_binders_set.contains(&v))
-                            .collect();
+                        valid_rhs_binders.retain(|v| valid_binders_set.contains(v));
                     });
                 });
                 pat(context, pattern);
-                guard.as_mut().map(|guard| exp(context, guard));
+                if let Some(guard) = guard.as_mut() {
+                    exp(context, guard)
+                }
                 exp(context, rhs);
             }
         }
@@ -1113,9 +1106,7 @@ fn exps(context: &mut Context, es: &mut [N::Exp]) {
 
 fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
     match p_ {
-        N::MatchPattern_::Literal(_) | N::MatchPattern_::Wildcard | N::MatchPattern_::ErrorPat => {
-            ()
-        }
+        N::MatchPattern_::Literal(_) | N::MatchPattern_::Wildcard | N::MatchPattern_::ErrorPat => {}
         N::MatchPattern_::Constructor(_, _, _, tys_opt, fields) => {
             if let Some(tys) = tys_opt {
                 types(context, tys)

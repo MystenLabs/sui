@@ -316,11 +316,7 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
     let mut b_ = match nb_ {
         N::FunctionBody_::Native => T::FunctionBody_::Native,
         N::FunctionBody_::Defined(es) => {
-            println!("---------------------------");
-            es.print_verbose();
             let seq = sequence(context, es);
-            println!("------------");
-            seq.print_verbose();
             let ety = sequence_type(&seq);
             let ret_ty = context.return_type.clone().unwrap();
             let (_, seq_items) = &seq;

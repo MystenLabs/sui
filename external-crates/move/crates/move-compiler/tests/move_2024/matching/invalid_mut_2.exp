@@ -1,0 +1,20 @@
+error[E02010]: invalid name
+   ┌─ tests/move_2024/matching/invalid_mut_2.move:10:13
+   │
+10 │             mut Maybe::Nothing => (),
+   │             ^^^ -------------- This refers to a variant, not a variable binding
+   │             │    
+   │             'mut' can only be used with variable bindings in patterns
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/invalid_mut_2.move:11:13
+   │
+11 │             mut Maybe::Just<u64>(_) => (),
+   │             ^^^ Invalid 'mut' keyword on non-variable pattern
+
+error[E03018]: invalid type parameter
+   ┌─ tests/move_2024/matching/invalid_mut_2.move:11:28
+   │
+11 │             mut Maybe::Just<u64>(_) => (),
+   │                            ^^^^^ Cannot use type parameters on an enum variant
+
