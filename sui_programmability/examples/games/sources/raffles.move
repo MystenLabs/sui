@@ -193,8 +193,8 @@ module games::small_raffle {
         };
 
         // TODO: will this work with 10K objects?
-        let i = 0;
-        while (i < participants) {
+        let i = 1;
+        while (i <= participants) {
             table::remove(&mut participants_table, i);
             i = i + 1;
         };
