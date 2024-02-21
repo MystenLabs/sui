@@ -5,7 +5,7 @@ use consensus_config::{AuthorityIndex, Committee, Stake};
 use std::collections::HashSet;
 use std::marker::PhantomData;
 
-pub trait CommitteeThreshold {
+pub(crate) trait CommitteeThreshold {
     fn is_threshold(committee: &Committee, amount: Stake) -> bool;
 }
 
@@ -27,7 +27,7 @@ impl CommitteeThreshold for ValidityThreshold {
 
 #[allow(unused)]
 
-pub struct StakeAggregator<T> {
+pub(crate) struct StakeAggregator<T> {
     votes: HashSet<AuthorityIndex>,
     stake: Stake,
     _phantom: PhantomData<T>,
@@ -36,7 +36,7 @@ pub struct StakeAggregator<T> {
 #[allow(unused)]
 
 impl<T: CommitteeThreshold> StakeAggregator<T> {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             votes: Default::default(),
             stake: 0,
@@ -47,14 +47,14 @@ impl<T: CommitteeThreshold> StakeAggregator<T> {
     /// Adds a vote for the specified authority index to the aggregator. It is guaranteed to count
     /// the vote only once for an authority. The method returns true when the required threshold has
     /// been reached.
-    pub fn add(&mut self, vote: AuthorityIndex, committee: &Committee) -> bool {
+    pub(crate) fn add(&mut self, vote: AuthorityIndex, committee: &Committee) -> bool {
         if self.votes.insert(vote) {
             self.stake += committee.stake(vote);
         }
         T::is_threshold(committee, self.stake)
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.votes.clear();
         self.stake = 0;
     }

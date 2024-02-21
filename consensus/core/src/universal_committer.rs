@@ -16,11 +16,11 @@ use crate::{
 
 #[cfg(test)]
 #[path = "tests/universal_committer_tests.rs"]
-pub mod universal_committer_tests;
+mod universal_committer_tests;
 
 #[cfg(test)]
 #[path = "tests/pipelined_committer_tests.rs"]
-pub mod pipelined_committer_tests;
+mod pipelined_committer_tests;
 
 /// A universal committer uses a collection of committers to commit a sequence of leaders.
 /// It can be configured to use a combination of different commit strategies, including
@@ -39,7 +39,7 @@ impl UniversalCommitter {
     /// Try to commit part of the dag. This function is idempotent and returns a list of
     /// ordered decided leaders.
     #[tracing::instrument(skip_all, fields(last_decided = %last_decided))]
-    pub fn try_commit(&self, last_decided: Slot) -> Vec<LeaderStatus> {
+    pub(crate) fn try_commit(&self, last_decided: Slot) -> Vec<LeaderStatus> {
         let highest_accepted_round = self.dag_state.read().highest_accepted_round();
 
         // Try to decide as many leaders as possible, starting with the highest round.
@@ -97,7 +97,7 @@ impl UniversalCommitter {
 
     /// Return list of leaders for the round.
     /// Can return empty vec if round does not have a designated leader.
-    pub fn get_leaders(&self, round: Round) -> Vec<AuthorityIndex> {
+    pub(crate) fn get_leaders(&self, round: Round) -> Vec<AuthorityIndex> {
         self.committers
             .iter()
             .filter_map(|committer| committer.elect_leader(round))
@@ -121,7 +121,7 @@ impl UniversalCommitter {
         self.context
             .metrics
             .node_metrics
-            .committed_leaders_total
+            .decided_leaders_total
             .with_label_values(&[&authority, &status])
             .inc();
     }
@@ -130,9 +130,8 @@ impl UniversalCommitter {
 /// A builder for a universal committer. By default, the builder creates a single
 /// base committer, that is, a single leader and no pipeline.
 #[allow(unused)]
-mod universal_committer_builder {
+pub(crate) mod universal_committer_builder {
     use super::*;
-
     use crate::{
         base_committer::BaseCommitterOptions, commit::DEFAULT_WAVE_LENGTH,
         leader_schedule::LeaderSchedule,
@@ -148,7 +147,7 @@ mod universal_committer_builder {
     }
 
     impl UniversalCommitterBuilder {
-        pub fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
+        pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
             let leader_schedule = LeaderSchedule::new(context.clone());
             Self {
                 context,
@@ -160,22 +159,22 @@ mod universal_committer_builder {
             }
         }
 
-        pub fn with_wave_length(mut self, wave_length: Round) -> Self {
+        pub(crate) fn with_wave_length(mut self, wave_length: Round) -> Self {
             self.wave_length = wave_length;
             self
         }
 
-        pub fn with_number_of_leaders(mut self, number_of_leaders: usize) -> Self {
+        pub(crate) fn with_number_of_leaders(mut self, number_of_leaders: usize) -> Self {
             self.number_of_leaders = number_of_leaders;
             self
         }
 
-        pub fn with_pipeline(mut self, pipeline: bool) -> Self {
+        pub(crate) fn with_pipeline(mut self, pipeline: bool) -> Self {
             self.pipeline = pipeline;
             self
         }
 
-        pub fn build(self) -> UniversalCommitter {
+        pub(crate) fn build(self) -> UniversalCommitter {
             let mut committers = Vec::new();
             let pipeline_stages = if self.pipeline { self.wave_length } else { 1 };
             for round_offset in 0..pipeline_stages {

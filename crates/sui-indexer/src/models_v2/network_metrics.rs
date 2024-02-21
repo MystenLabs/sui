@@ -6,7 +6,7 @@ use diesel::sql_types::{BigInt, Double, Float8};
 
 use sui_json_rpc_types::NetworkMetrics;
 
-use crate::schema_v2::epoch_peak_tps;
+use crate::schema::epoch_peak_tps;
 
 #[derive(Clone, Debug, Queryable, Insertable)]
 #[diesel(table_name = epoch_peak_tps)]

@@ -12,17 +12,17 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[clap(name = "disassemble")]
 pub struct Disassemble {
-    /// Start a disassembled bytecode-to-source explorer
     #[clap(long = "interactive")]
+    /// Start a disassembled bytecode-to-source explorer
     pub interactive: bool,
-    /// The package name. If not provided defaults to current package modules only
     #[clap(long = "package")]
+    /// The package name. If not provided defaults to current package modules only
     pub package_name: Option<String>,
-    /// The name of the module or script in the package to disassemble
     #[clap(long = "name")]
+    /// The name of the module or script in the package to disassemble
     pub module_or_script_name: String,
-    /// Also print the raw disassembly using Rust's Debug output, at the end.
     #[clap(long = "Xdebug")]
+    /// Also print the raw disassembly using Rust's Debug output, at the end.
     pub debug: bool,
 }
 

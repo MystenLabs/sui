@@ -3,7 +3,7 @@
 
 use tracing::info;
 
-use crate::types_v2::IndexerResult;
+use crate::types::IndexerResult;
 use crate::{metrics::IndexerMetrics, store::IndexerStoreV2};
 
 const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: usize = 900;

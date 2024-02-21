@@ -12,7 +12,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig, RunWithRange};
+use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
@@ -630,6 +630,31 @@ impl TestCluster {
         ))
     }
 
+    /// This call sends some funds from the seeded address to the funding
+    /// address for the given amount and returns the gas object ref. This
+    /// is useful to construct transactions from the funding address.
+    pub async fn fund_address_and_return_gas(
+        &self,
+        rgp: u64,
+        amount: Option<u64>,
+        funding_address: SuiAddress,
+    ) -> ObjectRef {
+        let context = &self.wallet;
+        let (sender, gas) = context.get_one_gas_object().await.unwrap().unwrap();
+        let tx = context.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas, rgp)
+                .transfer_sui(amount, funding_address)
+                .build(),
+        );
+        context.execute_transaction_must_succeed(tx).await;
+
+        context
+            .get_one_gas_object_owned_by_address(funding_address)
+            .await
+            .unwrap()
+            .unwrap()
+    }
+
     #[cfg(msim)]
     pub fn set_safe_mode_expected(&self, value: bool) {
         for n in self.all_node_handles() {
@@ -720,7 +745,7 @@ pub struct TestClusterBuilder {
     jwk_fetch_interval: Option<Duration>,
     config_dir: Option<PathBuf>,
     default_jwks: bool,
-    overload_threshold_config: Option<OverloadThresholdConfig>,
+    authority_overload_config: Option<AuthorityOverloadConfig>,
     data_ingestion_dir: Option<PathBuf>,
     fullnode_run_with_range: Option<RunWithRange>,
 }
@@ -742,7 +767,7 @@ impl TestClusterBuilder {
             jwk_fetch_interval: None,
             config_dir: None,
             default_jwks: false,
-            overload_threshold_config: None,
+            authority_overload_config: None,
             data_ingestion_dir: None,
             fullnode_run_with_range: None,
         }
@@ -890,9 +915,9 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_overload_threshold_config(mut self, config: OverloadThresholdConfig) -> Self {
+    pub fn with_authority_overload_config(mut self, config: AuthorityOverloadConfig) -> Self {
         assert!(self.network_config.is_none());
-        self.overload_threshold_config = Some(config);
+        self.authority_overload_config = Some(config);
         self
     }
 
@@ -992,8 +1017,8 @@ impl TestClusterBuilder {
             builder = builder.with_network_config(network_config);
         }
 
-        if let Some(overload_threshold_config) = self.overload_threshold_config.take() {
-            builder = builder.with_overload_threshold_config(overload_threshold_config);
+        if let Some(authority_overload_config) = self.authority_overload_config.take() {
+            builder = builder.with_authority_overload_config(authority_overload_config);
         }
 
         if let Some(fullnode_rpc_port) = self.fullnode_rpc_port {

@@ -9,15 +9,16 @@ mod ingestion_tests {
     use std::net::SocketAddr;
     use std::sync::Arc;
     use std::time::Duration;
+    use sui_indexer::db::get_pg_pool_connection;
     use sui_indexer::errors::Context;
     use sui_indexer::errors::IndexerError;
-    use sui_indexer::get_pg_pool_connection;
     use sui_indexer::models_v2::transactions::StoredTransaction;
-    use sui_indexer::schema_v2::transactions;
+    use sui_indexer::schema::transactions;
     use sui_indexer::store::{indexer_store_v2::IndexerStoreV2, PgIndexerStoreV2};
-    use sui_indexer::test_utils::{start_test_indexer_v2, ReaderWriterConfig};
+    use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
     use sui_types::base_types::SuiAddress;
     use sui_types::effects::TransactionEffectsAPI;
+    use sui_types::storage::ReadStore;
     use tokio::task::JoinHandle;
 
     macro_rules! read_only_blocking {
@@ -47,13 +48,21 @@ mod ingestion_tests {
             .unwrap();
 
         let server_handle = tokio::spawn(async move {
-            sui_rest_api::start_service(server_url, sim, Some("/rest".to_owned())).await;
+            let chain_id = (*sim
+                .get_checkpoint_by_sequence_number(0)
+                .unwrap()
+                .unwrap()
+                .digest())
+            .into();
+
+            sui_rest_api::RestService::new_without_version(sim, chain_id)
+                .start_service(server_url, Some("/rest".to_owned()))
+                .await;
         });
         // Starts indexer
-        let (pg_store, pg_handle) = start_test_indexer_v2(
+        let (pg_store, pg_handle) = start_test_indexer(
             Some(DEFAULT_DB_URL.to_owned()),
             format!("http://{}", server_url),
-            true,
             ReaderWriterConfig::writer_mode(None),
         )
         .await;

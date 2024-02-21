@@ -29,7 +29,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use itertools::Itertools;
-use sui_config::node::OverloadThresholdConfig;
+use sui_config::node::AuthorityOverloadConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
@@ -597,7 +597,7 @@ async fn test_txn_age_overload() {
         init_local_authorities_with_overload_thresholds(
             4,
             gas_objects.clone(),
-            OverloadThresholdConfig {
+            AuthorityOverloadConfig {
                 max_txn_age_in_queue: Duration::from_secs(5),
                 ..Default::default()
             },
@@ -726,13 +726,13 @@ async fn test_authority_txn_signing_pushback() {
 
     // Initialize an AuthorityState. Disable overload monitor by setting max_load_shedding_percentage to 0;
     // Set check_system_overload_at_signing to true.
-    let overload_config = OverloadThresholdConfig {
+    let overload_config = AuthorityOverloadConfig {
         check_system_overload_at_signing: true,
         max_load_shedding_percentage: 0,
         ..Default::default()
     };
     let authority_state = TestAuthorityBuilder::new()
-        .with_overload_threshold_config(overload_config)
+        .with_authority_overload_config(overload_config)
         .build()
         .await;
     authority_state
@@ -853,13 +853,13 @@ async fn test_authority_txn_execution_pushback() {
 
     // Initialize an AuthorityState. Disable overload monitor by setting max_load_shedding_percentage to 0;
     // Set check_system_overload_at_execution to true.
-    let overload_config = OverloadThresholdConfig {
+    let overload_config = AuthorityOverloadConfig {
         check_system_overload_at_execution: true,
         max_load_shedding_percentage: 0,
         ..Default::default()
     };
     let authority_state = TestAuthorityBuilder::new()
-        .with_overload_threshold_config(overload_config)
+        .with_authority_overload_config(overload_config)
         .build()
         .await;
     authority_state

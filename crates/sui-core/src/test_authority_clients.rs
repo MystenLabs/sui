@@ -35,6 +35,7 @@ pub struct LocalAuthorityClientFaultConfig {
     pub fail_after_handle_transaction: bool,
     pub fail_before_handle_confirmation: bool,
     pub fail_after_handle_confirmation: bool,
+    pub overload_retry_after_handle_transaction: bool,
 }
 
 impl LocalAuthorityClientFaultConfig {
@@ -68,6 +69,11 @@ impl AuthorityAPI for LocalAuthorityClient {
         if self.fault_config.fail_after_handle_transaction {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_transaction".to_owned(),
+            });
+        }
+        if self.fault_config.overload_retry_after_handle_transaction {
+            return Err(SuiError::ValidatorOverloadedRetryAfter {
+                retry_after_secs: 0,
             });
         }
         result

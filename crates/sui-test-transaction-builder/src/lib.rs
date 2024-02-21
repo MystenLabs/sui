@@ -13,7 +13,7 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair, Signature, Signer};
 use sui_types::digests::TransactionDigest;
-use sui_types::multisig::{MultiSig, MultiSigPublicKey};
+use sui_types::multisig::{BitmapUnit, MultiSig, MultiSigPublicKey};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::object::Owner;
 use sui_types::signature::GenericSignature;
@@ -343,17 +343,22 @@ impl TestTransactionBuilder {
         self,
         multisig_pk: MultiSigPublicKey,
         signers: &[&dyn Signer<Signature>],
+        bitmap: BitmapUnit,
     ) -> Transaction {
         let data = self.build();
         let intent_msg = IntentMessage::new(Intent::sui_transaction(), data.clone());
 
         let mut signatures = Vec::with_capacity(signers.len());
         for signer in signers {
-            signatures.push(Signature::new_secure(&intent_msg, *signer).into());
+            signatures.push(
+                GenericSignature::from(Signature::new_secure(&intent_msg, *signer))
+                    .to_compressed()
+                    .unwrap(),
+            );
         }
 
         let multisig =
-            GenericSignature::MultiSig(MultiSig::combine(signatures, multisig_pk).unwrap());
+            GenericSignature::MultiSig(MultiSig::insecure_new(signatures, bitmap, multisig_pk));
 
         Transaction::from_generic_sig_data(data, vec![multisig])
     }

@@ -124,7 +124,7 @@ impl GenericSignature {
                     SignatureScheme::ED25519 => Ok(CompressedSignature::Ed25519(
                         (&Ed25519Signature::from_bytes(bytes).map_err(|_| {
                             SuiError::InvalidSignature {
-                                error: "Cannot parse sig".to_string(),
+                                error: "Cannot parse ed25519 sig".to_string(),
                             }
                         })?)
                             .into(),
@@ -132,7 +132,7 @@ impl GenericSignature {
                     SignatureScheme::Secp256k1 => Ok(CompressedSignature::Secp256k1(
                         (&Secp256k1Signature::from_bytes(bytes).map_err(|_| {
                             SuiError::InvalidSignature {
-                                error: "Cannot parse sig".to_string(),
+                                error: "Cannot parse secp256k1 sig".to_string(),
                             }
                         })?)
                             .into(),
@@ -140,7 +140,7 @@ impl GenericSignature {
                     SignatureScheme::Secp256r1 => Ok(CompressedSignature::Secp256r1(
                         (&Secp256r1Signature::from_bytes(bytes).map_err(|_| {
                             SuiError::InvalidSignature {
-                                error: "Cannot parse sig".to_string(),
+                                error: "Cannot parse secp256r1 sig".to_string(),
                             }
                         })?)
                             .into(),
@@ -168,19 +168,19 @@ impl GenericSignature {
                 match s.scheme() {
                     SignatureScheme::ED25519 => Ok(PublicKey::Ed25519(
                         (&Ed25519PublicKey::from_bytes(bytes).map_err(|_| {
-                            SuiError::KeyConversionError("Cannot parse pk".to_string())
+                            SuiError::KeyConversionError("Cannot parse ed25519 pk".to_string())
                         })?)
                             .into(),
                     )),
                     SignatureScheme::Secp256k1 => Ok(PublicKey::Secp256k1(
                         (&Secp256k1PublicKey::from_bytes(bytes).map_err(|_| {
-                            SuiError::KeyConversionError("Cannot parse pk".to_string())
+                            SuiError::KeyConversionError("Cannot parse secp256k1 pk".to_string())
                         })?)
                             .into(),
                     )),
                     SignatureScheme::Secp256r1 => Ok(PublicKey::Secp256r1(
                         (&Secp256r1PublicKey::from_bytes(bytes).map_err(|_| {
-                            SuiError::KeyConversionError("Cannot parse pk".to_string())
+                            SuiError::KeyConversionError("Cannot parse secp256r1 pk".to_string())
                         })?)
                             .into(),
                     )),

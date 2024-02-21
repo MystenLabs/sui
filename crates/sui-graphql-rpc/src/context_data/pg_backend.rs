@@ -19,8 +19,8 @@ use diesel::{
 };
 use std::str::FromStr;
 use sui_indexer::{
-    schema_v2::{display, objects},
-    types_v2::OwnerType,
+    schema::{display, objects},
+    types::OwnerType,
 };
 use sui_types::parse_sui_struct_tag;
 use tap::TapFallible;

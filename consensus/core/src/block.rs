@@ -437,7 +437,7 @@ impl Deref for SignedBlock {
 /// VerifiedBlock allows full access to its content.
 /// It should be relatively cheap to copy.
 #[derive(Clone)]
-pub(crate) struct VerifiedBlock {
+pub struct VerifiedBlock {
     block: Arc<SignedBlock>,
 
     // Cached Block digest and serialized SignedBlock, to avoid re-computing these values.

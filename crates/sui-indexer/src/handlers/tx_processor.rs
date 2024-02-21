@@ -33,8 +33,8 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
 
-use crate::types_v2::IndexedPackage;
-use crate::types_v2::{IndexedObjectChange, IndexerResult};
+use crate::types::IndexedPackage;
+use crate::types::{IndexedObjectChange, IndexerResult};
 
 // GC the buffer every 300 checkpoints, or 5 minutes
 pub const BUFFER_GC_INTERVAL: Duration = Duration::from_secs(300);

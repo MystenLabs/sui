@@ -4,14 +4,14 @@
 use clap::Parser;
 use tracing::{error, info};
 
+use sui_indexer::db::{get_pg_pool_connection, new_pg_connection_pool, reset_database};
 use sui_indexer::errors::IndexerError;
-use sui_indexer::indexer_v2::IndexerV2;
+use sui_indexer::indexer::Indexer;
+use sui_indexer::metrics::start_prometheus_server;
 use sui_indexer::metrics::IndexerMetrics;
-use sui_indexer::start_prometheus_server;
 use sui_indexer::store::PgIndexerAnalyticalStore;
 use sui_indexer::store::PgIndexerStoreV2;
-use sui_indexer::utils::reset_database;
-use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, IndexerConfig};
+use sui_indexer::IndexerConfig;
 
 #[tokio::main]
 async fn main() -> Result<(), IndexerError> {
@@ -66,7 +66,6 @@ async fn main() -> Result<(), IndexerError> {
         indexer_config.rpc_client_url.as_str(),
     )?;
     let indexer_metrics = IndexerMetrics::new(&registry);
-
     mysten_metrics::init_metrics(&registry);
 
     let report_cp = blocking_cp.clone();
@@ -88,17 +87,14 @@ async fn main() -> Result<(), IndexerError> {
         }
     });
 
-    if indexer_config.use_v2 {
-        info!("Use v2");
-        if indexer_config.fullnode_sync_worker {
-            let store = PgIndexerStoreV2::new(blocking_cp, indexer_metrics.clone());
-            return IndexerV2::start_writer(&indexer_config, store, indexer_metrics).await;
-        } else if indexer_config.rpc_server_worker {
-            return IndexerV2::start_reader(&indexer_config, &registry, db_url).await;
-        } else if indexer_config.analytical_worker {
-            let store = PgIndexerAnalyticalStore::new(blocking_cp);
-            return IndexerV2::start_analytical_worker(store, indexer_metrics.clone()).await;
-        }
+    if indexer_config.fullnode_sync_worker {
+        let store = PgIndexerStoreV2::new(blocking_cp, indexer_metrics.clone());
+        return Indexer::start_writer(&indexer_config, store, indexer_metrics).await;
+    } else if indexer_config.rpc_server_worker {
+        return Indexer::start_reader(&indexer_config, &registry, db_url).await;
+    } else if indexer_config.analytical_worker {
+        let store = PgIndexerAnalyticalStore::new(blocking_cp);
+        return Indexer::start_analytical_worker(store, indexer_metrics.clone()).await;
     }
     Ok(())
 }

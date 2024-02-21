@@ -2624,6 +2624,7 @@ dependencies = [
  "consensus-config",
  "enum_dispatch",
  "fastcrypto",
+ "futures",
  "mockall",
  "mysten-metrics",
  "mysten-network",
@@ -6454,9 +6455,9 @@ dependencies = [
 
 [[package]]
 name = "mime"
-version = "0.3.16"
+version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a60c7ce501c71e03a9c9c0d35b861413ae925bd979cc7a4e30d060069aaac8d"
+checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
 name = "mime_guess"
@@ -11490,7 +11491,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -11652,7 +11653,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -11706,7 +11707,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
@@ -11850,6 +11851,7 @@ dependencies = [
  "arc-swap",
  "async-trait",
  "axum",
+ "backoff",
  "bcs",
  "clap",
  "const-str",
@@ -11883,7 +11885,6 @@ dependencies = [
  "tempfile",
  "test-cluster",
  "tokio",
- "tokio-retry",
  "tracing",
  "typed-store",
  "typed-store-derive",
@@ -11984,6 +11985,8 @@ dependencies = [
  "bytes",
  "chrono",
  "clap",
+ "consensus-config",
+ "consensus-core",
  "criterion",
  "dashmap",
  "diffy",
@@ -12180,6 +12183,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "shared-crypto",
  "sui",
  "sui-config",
  "sui-core",
@@ -12260,7 +12264,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -12485,7 +12489,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12776,7 +12780,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -12818,7 +12822,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -12943,7 +12947,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -12994,7 +12998,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13032,7 +13036,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13218,10 +13222,16 @@ dependencies = [
  "anyhow",
  "axum",
  "bcs",
+ "fastcrypto",
+ "mime",
  "rand 0.8.5",
  "reqwest",
  "serde",
+ "serde_json",
+ "serde_with",
  "sui-types",
+ "tap",
+ "thiserror",
  "tokio",
  "workspace-hack",
 ]
@@ -13271,7 +13281,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13301,7 +13311,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -13341,12 +13351,14 @@ version = "0.7.0"
 dependencies = [
  "anemo",
  "anemo-tower",
+ "bcs",
  "fastcrypto",
  "lru 0.10.0",
  "move-package",
  "msim",
  "narwhal-network",
  "rand 0.8.5",
+ "serde",
  "sui-framework",
  "sui-move-build",
  "sui-types",
@@ -13423,7 +13435,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -13552,7 +13564,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -13700,7 +13712,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anemo",
  "anemo-cli",
@@ -13838,6 +13850,7 @@ dependencies = [
  "bcs",
  "bincode",
  "byteorder",
+ "consensus-config",
  "criterion",
  "derivative",
  "derive_more",
@@ -13966,9 +13979,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "aws-config",
- "aws-sdk-dynamodb",
- "aws-sdk-s3",
  "backoff",
  "base64-url",
  "bcs",
@@ -13999,7 +14009,7 @@ dependencies = [
 
 [[package]]
 name = "suiop-cli"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "chrono",

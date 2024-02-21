@@ -11,7 +11,7 @@ use fastcrypto::encoding::{Base58, Encoding};
 use serde::{Deserialize, Serialize};
 use sui_indexer::{
     models_v2::transactions::StoredTransaction,
-    schema_v2::{
+    schema::{
         transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
     },
 };

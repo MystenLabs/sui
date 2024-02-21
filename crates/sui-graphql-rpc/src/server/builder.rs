@@ -449,7 +449,7 @@ pub mod tests {
         context_data::db_data_provider::PgManager,
         extensions::query_limits_checker::QueryLimitsChecker,
         extensions::timeout::Timeout,
-        test_infra::cluster::{serve_executor, ExecutorCluster, DEFAULT_INTERNAL_DATA_SOURCE_PORT},
+        test_infra::cluster::{serve_executor, DEFAULT_INTERNAL_DATA_SOURCE_PORT},
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
@@ -461,24 +461,27 @@ pub mod tests {
     use std::time::Duration;
     use uuid::Uuid;
 
-    async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {
+    async fn prep_cluster() -> ConnectionConfig {
         let rng = StdRng::from_seed([12; 32]);
         let mut sim = Simulacrum::new_with_rng(rng);
 
         sim.create_checkpoint();
+        sim.create_checkpoint();
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
-
-        (
+        let cluster = serve_executor(
             connection_config.clone(),
-            serve_executor(
-                connection_config,
-                DEFAULT_INTERNAL_DATA_SOURCE_PORT,
-                Arc::new(sim),
-                None,
-            )
-            .await,
+            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
+            Arc::new(sim),
+            None,
         )
+        .await;
+
+        cluster
+            .wait_for_checkpoint_catchup(2, Duration::from_secs(10))
+            .await;
+
+        connection_config
     }
 
     fn metrics() -> Metrics {
@@ -497,7 +500,7 @@ pub mod tests {
     }
 
     pub async fn test_timeout_impl() {
-        let (connection_config, _cluster) = prep_cluster().await;
+        let connection_config = prep_cluster().await;
 
         struct TimedExecuteExt {
             pub min_req_delay: Duration,
@@ -556,9 +559,10 @@ pub mod tests {
         let timeout = Duration::from_millis(1000);
         let delay = Duration::from_millis(100);
 
-        // Should complete successfully
-        let resp = test_timeout(delay, timeout, &connection_config).await;
-        assert!(resp.is_ok());
+        test_timeout(delay, timeout, &connection_config)
+            .await
+            .into_result()
+            .expect("Should complete successfully");
 
         // Should timeout
         let errs: Vec<_> = test_timeout(timeout, timeout, &connection_config)
@@ -573,7 +577,7 @@ pub mod tests {
     }
 
     pub async fn test_query_depth_limit_impl() {
-        let (connection_config, cluster) = prep_cluster().await;
+        let connection_config = prep_cluster().await;
 
         async fn exec_query_depth_limit(
             depth: u32,
@@ -605,19 +609,19 @@ pub mod tests {
             schema.execute(query).await
         }
 
-        // Should complete successfully
-        cluster
-            .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
-            .await;
-        let resp = exec_query_depth_limit(1, "{ chainIdentifier }", &connection_config).await;
-        assert!(resp.is_ok());
-        let resp = exec_query_depth_limit(
+        exec_query_depth_limit(1, "{ chainIdentifier }", &connection_config)
+            .await
+            .into_result()
+            .expect("Should complete successfully");
+
+        exec_query_depth_limit(
             5,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
             &connection_config,
         )
-        .await;
-        assert!(resp.is_ok());
+        .await
+        .into_result()
+        .expect("Should complete successfully");
 
         // Should fail
         let errs: Vec<_> = exec_query_depth_limit(0, "{ chainIdentifier }", &connection_config)
@@ -650,7 +654,7 @@ pub mod tests {
     }
 
     pub async fn test_query_node_limit_impl() {
-        let (connection_config, _cluster) = prep_cluster().await;
+        let connection_config = prep_cluster().await;
 
         async fn exec_query_node_limit(
             nodes: u32,
@@ -682,16 +686,19 @@ pub mod tests {
             schema.execute(query).await
         }
 
-        // Should complete successfully
-        let resp = exec_query_node_limit(1, "{ chainIdentifier }", &connection_config).await;
-        assert!(resp.is_ok());
-        let resp = exec_query_node_limit(
+        exec_query_node_limit(1, "{ chainIdentifier }", &connection_config)
+            .await
+            .into_result()
+            .expect("Should complete successfully");
+
+        exec_query_node_limit(
             5,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
             &connection_config,
         )
-        .await;
-        assert!(resp.is_ok());
+        .await
+        .into_result()
+        .expect("Should complete successfully");
 
         // Should fail
         let err: Vec<_> = exec_query_node_limit(0, "{ chainIdentifier }", &connection_config)
@@ -789,7 +796,7 @@ pub mod tests {
     }
 
     pub async fn test_query_max_page_limit_impl() {
-        let (connection_config, _cluster) = prep_cluster().await;
+        let connection_config = prep_cluster().await;
 
         let service_config = ServiceConfig::default();
         let db_url: String = connection_config.db_url.clone();
@@ -807,11 +814,11 @@ pub mod tests {
             .context_data(metrics.clone())
             .build_schema();
 
-        // Should complete successfully
-        let resp = schema
+        schema
             .execute("{ objects(first: 1) { nodes { version } } }")
-            .await;
-        assert!(resp.is_ok());
+            .await
+            .into_result()
+            .expect("Should complete successfully");
 
         // Should fail
         let err: Vec<_> = schema
@@ -829,7 +836,7 @@ pub mod tests {
     }
 
     pub async fn test_query_complexity_metrics_impl() {
-        let (connection_config, _cluster) = prep_cluster().await;
+        let connection_config = prep_cluster().await;
 
         let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
         let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
@@ -850,23 +857,32 @@ pub mod tests {
             .context_data(metrics.clone())
             .extension(QueryLimitsChecker::default())
             .build_schema();
-        let _ = schema.execute("{ chainIdentifier }").await;
-        let metrics2 = metrics.request_metrics;
-        assert_eq!(metrics2.input_nodes.get_sample_count(), 1);
-        assert_eq!(metrics2.output_nodes.get_sample_count(), 1);
-        assert_eq!(metrics2.query_depth.get_sample_count(), 1);
-        assert_eq!(metrics2.input_nodes.get_sample_sum(), 1.);
-        assert_eq!(metrics2.output_nodes.get_sample_sum(), 1.);
-        assert_eq!(metrics2.query_depth.get_sample_sum(), 1.);
 
-        let _ = schema
+        schema
+            .execute("{ chainIdentifier }")
+            .await
+            .into_result()
+            .expect("Should complete successfully");
+
+        let req_metrics = metrics.request_metrics;
+        assert_eq!(req_metrics.input_nodes.get_sample_count(), 1);
+        assert_eq!(req_metrics.output_nodes.get_sample_count(), 1);
+        assert_eq!(req_metrics.query_depth.get_sample_count(), 1);
+        assert_eq!(req_metrics.input_nodes.get_sample_sum(), 1.);
+        assert_eq!(req_metrics.output_nodes.get_sample_sum(), 1.);
+        assert_eq!(req_metrics.query_depth.get_sample_sum(), 1.);
+
+        schema
             .execute("{ chainIdentifier protocolConfig { configs { value key }} }")
-            .await;
-        assert_eq!(metrics2.input_nodes.get_sample_count(), 2);
-        assert_eq!(metrics2.output_nodes.get_sample_count(), 2);
-        assert_eq!(metrics2.query_depth.get_sample_count(), 2);
-        assert_eq!(metrics2.input_nodes.get_sample_sum(), 2. + 4.);
-        assert_eq!(metrics2.output_nodes.get_sample_sum(), 2. + 4.);
-        assert_eq!(metrics2.query_depth.get_sample_sum(), 1. + 3.);
+            .await
+            .into_result()
+            .expect("Should complete successfully");
+
+        assert_eq!(req_metrics.input_nodes.get_sample_count(), 2);
+        assert_eq!(req_metrics.output_nodes.get_sample_count(), 2);
+        assert_eq!(req_metrics.query_depth.get_sample_count(), 2);
+        assert_eq!(req_metrics.input_nodes.get_sample_sum(), 2. + 4.);
+        assert_eq!(req_metrics.output_nodes.get_sample_sum(), 2. + 4.);
+        assert_eq!(req_metrics.query_depth.get_sample_sum(), 1. + 3.);
     }
 }

@@ -603,7 +603,7 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
     fn get_lowest_available_checkpoint(
         &self,
     ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
-        todo!()
+        Ok(0)
     }
 
     fn get_checkpoint_by_digest(

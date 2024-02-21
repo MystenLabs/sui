@@ -13,6 +13,8 @@ async-trait.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 chrono.workspace = true
+consensus-core.workspace = true
+consensus-config.workspace = true
 dashmap.workspace = true
 diffy = { version = "0.3", default-features = false }
 either.workspace = true
