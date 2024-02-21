@@ -56,7 +56,7 @@ module bridge::committee {
         // Committee member registrations for the next committee creation.
         member_registration: VecMap<address, CommitteeMemberRegistration>,
         // Epoch when the current committee was updated
-        committee_update_epoch: u64
+        last_committee_update_epoch: u64,
     }
 
     struct CommitteeMember has drop, store {
@@ -96,7 +96,7 @@ module bridge::committee {
             members: vec_map::empty(),
             stake_thresholds_percentage: thresholds,
             member_registration: vec_map::empty(),
-            committee_update_epoch: 0,
+            last_committee_update_epoch: 0,
         }
     }
 
@@ -170,7 +170,7 @@ module bridge::committee {
     public(friend) fun try_create_next_committee(
         self: &mut BridgeCommittee,
         system_state: &mut SuiSystemState,
-        min_stake_participation_percentage: u8,
+        min_stake_participation_percentage: u64,
         ctx: &TxContext
     ) {
         let validators = sui_system::active_validator_addresses(system_state);
@@ -190,7 +190,7 @@ module bridge::committee {
             if (vector::contains(&validators, &registration.sui_address)) {
                 let stake_amount = sui_system::validator_stake_amount(system_state, registration.sui_address);
                 let voting_power = ((stake_amount as u128) * 10000) / total_stake_amount;
-                total_member_stake = total_member_stake + stake_amount;
+                total_member_stake = total_member_stake + (stake_amount as u128);
                 let member = CommitteeMember {
                     sui_address: registration.sui_address,
                     bridge_pubkey_bytes: registration.bridge_pubkey_bytes,
@@ -203,17 +203,17 @@ module bridge::committee {
             i = i + 1;
         };
 
-        // Make sure the new committee represent enough stakes
-        let stake_participation_percentage = ((total_member_stake * 100 / sui_system::total_stake_amount(
+        // Make sure the new committee represent enough stakes, percentage are accurate to 2DP
+        let stake_participation_percentage = ((total_member_stake * 10000 / (sui_system::total_stake_amount(
             system_state
-        )) as u8);
+        ) as u128)) as u64);
 
         // Store new committee info
         if (stake_participation_percentage >= min_stake_participation_percentage) {
             // Clear registrations
             self.member_registration = vec_map::empty();
             self.members = new_members;
-            self.committee_update_epoch = tx_context::epoch(ctx);
+            self.last_committee_update_epoch = tx_context::epoch(ctx);
             // TODO: emit committee update event?
         }
     }
@@ -248,6 +248,10 @@ module bridge::committee {
             blocklisted,
             public_keys: pub_keys,
         })
+    }
+
+    public(friend) fun committee_members(self: &BridgeCommittee): &VecMap<vector<u8>, CommitteeMember> {
+        &self.members
     }
 
     #[test_only]
@@ -581,7 +585,7 @@ module bridge::committee {
             members,
             stake_thresholds_percentage: thresholds,
             member_registration: vec_map::empty(),
-            committee_update_epoch: 1
+            last_committee_update_epoch: 1,
         };
         committee
     }

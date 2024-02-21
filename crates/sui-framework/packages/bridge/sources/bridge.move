@@ -105,6 +105,7 @@ module bridge::bridge {
     const EBridgeAlreadyFrozen: u64 = 13;
     const EBridgeNotFrozen: u64 = 14;
     const ETokenAlreadyClaimed: u64 = 15;
+    const ECommitteeAlreadyInitiated: u64 = 16;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -146,14 +147,15 @@ module bridge::bridge {
     }
 
     #[allow(unused_function)]
-    fun update_bridge_committee(
+    fun init_bridge_committee(
         self: &mut Bridge,
         system_state: &mut SuiSystemState,
-        min_stake_participation_percentage: u8,
+        min_stake_participation_percentage: u64,
         ctx: &TxContext
     ) {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         let inner = load_inner_mut(self);
+        assert!(vec_map::is_empty(committee::committee_members(&inner.committee)), ECommitteeAlreadyInitiated);
         committee::try_create_next_committee(
             &mut inner.committee,
             system_state,

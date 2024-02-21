@@ -468,6 +468,15 @@
 
 
 
+<a name="0xb_bridge_ECommitteeAlreadyInitiated"></a>
+
+
+
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>: u64 = 16;
+</code></pre>
+
+
+
 <a name="0xb_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed"></a>
 
 
@@ -630,7 +639,7 @@
 
 
 
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_init_bridge_committee">init_bridge_committee</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, system_state: &<b>mut</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, min_stake_participation_percentage: u8, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_init_bridge_committee">init_bridge_committee</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, system_state: &<b>mut</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, min_stake_participation_percentage: u64, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -642,12 +651,18 @@
 <pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_init_bridge_committee">init_bridge_committee</a>(
     self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
     system_state: &<b>mut</b> SuiSystemState,
-    min_stake_participation_percentage: u8,
+    min_stake_participation_percentage: u64,
     ctx: &TxContext
 ) {
     <b>assert</b>!(<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="bridge.md#0xb_bridge_ENotSystemAddress">ENotSystemAddress</a>);
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
-    <a href="committee.md#0xb_committee_try_create_next_committee">committee::try_create_next_committee</a>(&<b>mut</b> inner.<a href="committee.md#0xb_committee">committee</a>, system_state, min_stake_participation_percentage)
+    <b>assert</b>!(<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_is_empty">vec_map::is_empty</a>(<a href="committee.md#0xb_committee_committee_members">committee::committee_members</a>(&inner.<a href="committee.md#0xb_committee">committee</a>)), <a href="bridge.md#0xb_bridge_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>);
+    <a href="committee.md#0xb_committee_try_create_next_committee">committee::try_create_next_committee</a>(
+        &<b>mut</b> inner.<a href="committee.md#0xb_committee">committee</a>,
+        system_state,
+        min_stake_participation_percentage,
+        ctx
+    )
 }
 </code></pre>
 
@@ -901,11 +916,8 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(
-    self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
-): &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>): &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
     <b>let</b> version = <a href="dependencies/sui-framework/versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner);
-
     // TODO: Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="dependencies/sui-framework/object.md#0x2_object">object</a>.
     <b>assert</b>!(version == <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
     <b>let</b> inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> = <a href="dependencies/sui-framework/versioned.md#0x2_versioned_load_value_mut">versioned::load_value_mut</a>(&<b>mut</b> self.inner);
