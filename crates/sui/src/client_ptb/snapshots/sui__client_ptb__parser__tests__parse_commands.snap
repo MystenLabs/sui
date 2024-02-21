@@ -473,6 +473,352 @@ expression: parsed
                 Spanned {
                     span: Span {
                         start: 0,
+                        end: 24,
+                    },
+                    value: MakeMoveVec(
+                        Spanned {
+                            span: Span {
+                                start: 17,
+                                end: 20,
+                            },
+                            value: U64,
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 22,
+                                end: 24,
+                            },
+                            value: [],
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            gas_object_id: None,
+            json_set: false,
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 31,
+                    },
+                    value: MakeMoveVec(
+                        Spanned {
+                            span: Span {
+                                start: 17,
+                                end: 19,
+                            },
+                            value: U8,
+                        },
+                        Spanned {
+                            span: Span {
+                                start: 21,
+                                end: 31,
+                            },
+                            value: [
+                                Spanned {
+                                    span: Span {
+                                        start: 22,
+                                        end: 25,
+                                    },
+                                    value: U8(
+                                        1,
+                                    ),
+                                },
+                                Spanned {
+                                    span: Span {
+                                        start: 27,
+                                        end: 30,
+                                    },
+                                    value: U8(
+                                        2,
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            gas_object_id: None,
+            json_set: false,
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 71,
+                    },
+                    value: MoveCall(
+                        Spanned {
+                            span: Span {
+                                start: 12,
+                                end: 46,
+                            },
+                            value: ModuleAccess {
+                                address: Spanned {
+                                    span: Span {
+                                        start: 12,
+                                        end: 15,
+                                    },
+                                    value: Numerical(
+                                        0x3,
+                                    ),
+                                },
+                                module_name: Spanned {
+                                    span: Span {
+                                        start: 17,
+                                        end: 27,
+                                    },
+                                    value: Identifier(
+                                        "sui_system",
+                                    ),
+                                },
+                                function_name: Spanned {
+                                    span: Span {
+                                        start: 29,
+                                        end: 46,
+                                    },
+                                    value: Identifier(
+                                        "request_add_stake",
+                                    ),
+                                },
+                            },
+                        },
+                        None,
+                        [
+                            Spanned {
+                                span: Span {
+                                    start: 47,
+                                    end: 53,
+                                },
+                                value: Identifier(
+                                    "system",
+                                ),
+                            },
+                            Spanned {
+                                span: Span {
+                                    start: 54,
+                                    end: 61,
+                                },
+                                value: VariableAccess(
+                                    Spanned {
+                                        span: Span {
+                                            start: 54,
+                                            end: 59,
+                                        },
+                                        value: "coins",
+                                    },
+                                    [
+                                        Spanned {
+                                            span: Span {
+                                                start: 60,
+                                                end: 61,
+                                            },
+                                            value: "0",
+                                        },
+                                    ],
+                                ),
+                            },
+                            Spanned {
+                                span: Span {
+                                    start: 62,
+                                    end: 71,
+                                },
+                                value: Identifier(
+                                    "validator",
+                                ),
+                            },
+                        ],
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            gas_object_id: None,
+            json_set: false,
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 40,
+                    },
+                    value: MoveCall(
+                        Spanned {
+                            span: Span {
+                                start: 12,
+                                end: 32,
+                            },
+                            value: ModuleAccess {
+                                address: Spanned {
+                                    span: Span {
+                                        start: 12,
+                                        end: 15,
+                                    },
+                                    value: Named(
+                                        "std",
+                                    ),
+                                },
+                                module_name: Spanned {
+                                    span: Span {
+                                        start: 17,
+                                        end: 23,
+                                    },
+                                    value: Identifier(
+                                        "option",
+                                    ),
+                                },
+                                function_name: Spanned {
+                                    span: Span {
+                                        start: 25,
+                                        end: 32,
+                                    },
+                                    value: Identifier(
+                                        "is_none",
+                                    ),
+                                },
+                            },
+                        },
+                        Some(
+                            Spanned {
+                                span: Span {
+                                    start: 33,
+                                    end: 38,
+                                },
+                                value: [
+                                    U64,
+                                ],
+                            },
+                        ),
+                        [
+                            Spanned {
+                                span: Span {
+                                    start: 39,
+                                    end: 40,
+                                },
+                                value: Identifier(
+                                    "p",
+                                ),
+                            },
+                        ],
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            gas_object_id: None,
+            json_set: false,
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
+                        end: 39,
+                    },
+                    value: MoveCall(
+                        Spanned {
+                            span: Span {
+                                start: 12,
+                                end: 32,
+                            },
+                            value: ModuleAccess {
+                                address: Spanned {
+                                    span: Span {
+                                        start: 12,
+                                        end: 15,
+                                    },
+                                    value: Named(
+                                        "std",
+                                    ),
+                                },
+                                module_name: Spanned {
+                                    span: Span {
+                                        start: 17,
+                                        end: 23,
+                                    },
+                                    value: Identifier(
+                                        "option",
+                                    ),
+                                },
+                                function_name: Spanned {
+                                    span: Span {
+                                        start: 25,
+                                        end: 32,
+                                    },
+                                    value: Identifier(
+                                        "is_some",
+                                    ),
+                                },
+                            },
+                        },
+                        Some(
+                            Spanned {
+                                span: Span {
+                                    start: 32,
+                                    end: 37,
+                                },
+                                value: [
+                                    U32,
+                                ],
+                            },
+                        ),
+                        [
+                            Spanned {
+                                span: Span {
+                                    start: 38,
+                                    end: 39,
+                                },
+                                value: Identifier(
+                                    "q",
+                                ),
+                            },
+                        ],
+                    ),
+                },
+            ],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            gas_object_id: None,
+            json_set: false,
+        },
+    ),
+    (
+        Program {
+            commands: [
+                Spanned {
+                    span: Span {
+                        start: 0,
                         end: 10,
                     },
                     value: Assign(

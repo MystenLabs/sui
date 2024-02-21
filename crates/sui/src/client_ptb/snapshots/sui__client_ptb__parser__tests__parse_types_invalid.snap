@@ -1,0 +1,76 @@
+---
+source: crates/sui/src/client_ptb/parser.rs
+expression: parsed
+---
+[
+    PTBError {
+        message: "Expected '::' but found end of input",
+        span: Span {
+            start: 6,
+            end: 6,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Expected '::' but found end of input",
+        span: Span {
+            start: 17,
+            end: 17,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Expected '>' but found ','",
+        span: Span {
+            start: 9,
+            end: 10,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Expected an identifier but found end of input",
+        span: Span {
+            start: 5,
+            end: 5,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Expected '::' but found end of input",
+        span: Span {
+            start: 8,
+            end: 8,
+        },
+        help: None,
+    },
+    PTBError {
+        message: "Unexpected end of input",
+        span: Span {
+            start: 14,
+            end: 14,
+        },
+        help: Some(
+            "Expected a type here",
+        ),
+    },
+    PTBError {
+        message: "Unexpected end of input",
+        span: Span {
+            start: 16,
+            end: 16,
+        },
+        help: Some(
+            "Expected ',' or '>'",
+        ),
+    },
+    PTBError {
+        message: "Unexpected end of input",
+        span: Span {
+            start: 17,
+            end: 17,
+        },
+        help: Some(
+            "Expected a type here",
+        ),
+    },
+]
