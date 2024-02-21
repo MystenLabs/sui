@@ -772,7 +772,6 @@ pub fn generate_interface_files(
         v
     };
     if mv_files.is_empty() {
-        eprintln!("EMPTY");
         return Ok(vec![]);
     }
 
@@ -814,12 +813,10 @@ pub fn generate_interface_files(
         let (id, interface_contents) =
             interface_generator::write_file_to_string(vfs.clone(), module_to_named_address, &path)?;
         let addr_dir = dir_path!(all_addr_dir.clone(), format!("{}", id.address()));
-        eprintln!("ADDR DIR {:?}", addr_dir);
         let file_path = file_path!(addr_dir.clone(), format!("{}", id.name()), MOVE_EXTENSION)
             .into_os_string()
             .into_string()
             .unwrap();
-        eprintln!("FILE PATH {}", file_path);
         let mut out_file = deps_out_vfs.create_file(&file_path)?;
         out_file.write_all(interface_contents.as_bytes())?;
 
