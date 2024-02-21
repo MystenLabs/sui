@@ -356,7 +356,7 @@ impl AuthorityStore {
         );
         // Combine provided digests with the ones we had to look up from secondary keys.
         let digests: Vec<_> = keys
-            .into_iter()
+            .iter()
             .map(|key| match key {
                 TransactionKey::Digest(digest) => *digest,
                 _ => secondary_key_digests

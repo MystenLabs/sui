@@ -116,10 +116,9 @@ impl RandomnessManager {
         let authority_info = authority_ids
             .into_iter()
             .map(|(name, id)| {
-                let peer_id = authority_peer_ids
+                let peer_id = *authority_peer_ids
                     .get(&name)
-                    .expect("authority name should be in peer_ids")
-                    .clone();
+                    .expect("authority name should be in peer_ids");
                 (name, (peer_id, id))
             })
             .collect();
@@ -364,7 +363,7 @@ impl RandomnessManager {
                 .expect("should work to convert BLS key to G2Element");
                 (
                     index,
-                    name.clone(),
+                    *name,
                     fastcrypto_tbls::ecies::PublicKey::from(pk),
                     *stake,
                 )

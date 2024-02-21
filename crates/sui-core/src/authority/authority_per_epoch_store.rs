@@ -2250,7 +2250,7 @@ impl AuthorityPerEpochStore {
                     .0
                     .transaction
                     .executable_transaction_digest()
-                    .map(|digest| TransactionKey::Digest(digest))
+                    .map(TransactionKey::Digest)
             })
             .collect();
         let mut randomness_roots: BTreeSet<_> = sequenced_randomness_transactions
@@ -2260,7 +2260,7 @@ impl AuthorityPerEpochStore {
                     .0
                     .transaction
                     .executable_transaction_digest()
-                    .map(|digest| TransactionKey::Digest(digest))
+                    .map(TransactionKey::Digest)
             })
             .collect();
 
@@ -3268,7 +3268,7 @@ impl GetSharedLocks for AuthorityPerEpochStore {
             Ok(self
                 .tables()?
                 .assigned_shared_object_versions_v2
-                .get(&key)?
+                .get(key)?
                 .unwrap_or_default())
         } else {
             Ok(self

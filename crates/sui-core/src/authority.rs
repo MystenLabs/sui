@@ -4677,23 +4677,21 @@ impl RandomnessRoundReceiver {
     }
 
     async fn run(mut self) {
+        info!("RandomnessRoundReceiver event loop started");
+
         loop {
-            info!("RandomnessRoundReceiver event loop started");
-
-            loop {
-                tokio::select! {
-                    maybe_recv = self.randomness_rx.recv() => {
-                        if let Some((epoch, round, bytes)) = maybe_recv {
-                            self.handle_new_randomness(epoch, round, bytes);
-                        } else {
-                            break;
-                        }
-                    },
-                }
+            tokio::select! {
+                maybe_recv = self.randomness_rx.recv() => {
+                    if let Some((epoch, round, bytes)) = maybe_recv {
+                        self.handle_new_randomness(epoch, round, bytes);
+                    } else {
+                        break;
+                    }
+                },
             }
-
-            panic!("RandomnessRoundReceiver event loop should never end");
         }
+
+        panic!("RandomnessRoundReceiver event loop should never end");
     }
 
     #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]

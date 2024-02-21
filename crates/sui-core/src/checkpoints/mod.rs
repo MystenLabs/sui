@@ -1902,7 +1902,7 @@ impl From<PendingCheckpoint> for PendingCheckpointV2 {
             roots: value
                 .roots
                 .into_iter()
-                .map(|root| TransactionKey::Digest(root))
+                .map(TransactionKey::Digest)
                 .collect(),
             details: value.details,
         }
