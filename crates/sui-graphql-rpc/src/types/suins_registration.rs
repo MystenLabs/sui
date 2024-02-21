@@ -67,7 +67,7 @@ pub(crate) struct SuinsRegistration {
 
 /// Represents the results of a query for a domain's `NameRecord` and its parent's `NameRecord`. The
 /// `expiration_timestamp_ms` on the name records are compared to the checkpoint's timestamp to
-/// check that TODO
+/// check that the domain is not expired.
 pub(crate) struct DomainExpiration {
     pub parent_name_record: Option<NameRecord>,
     pub name_record: Option<NameRecord>,
