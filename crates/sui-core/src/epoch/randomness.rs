@@ -208,15 +208,6 @@ impl RandomnessManager {
                 .dkg_output
                 .set(dkg_output.clone())
                 .expect("setting new OnceCell should succeed");
-
-            // Load randomness generation state.
-            inner.next_randomness_round = tables
-                .randomness_next_round
-                .get(&SINGLETON_KEY)
-                .expect("typed_store should not fail")
-                .unwrap_or(RandomnessRound(0));
-
-            // Resume randomness generation from where we left off.
             inner
                 .network_handle
                 .update_epoch(
@@ -226,13 +217,6 @@ impl RandomnessManager {
                     inner.party.t(),
                 )
                 .await;
-            for result in tables.randomness_rounds_pending.safe_iter() {
-                let (round, _) = result.expect("typed_store should not fail");
-                inner
-                    .network_handle
-                    .send_partial_signatures(committee.epoch(), round)
-                    .await;
-            }
         } else {
             info!(
                 "random beacon: no existing DKG output found for epoch {}",
@@ -261,6 +245,31 @@ impl RandomnessManager {
                     .safe_iter()
                     .map(|result| result.expect("typed_store should not fail")),
             );
+        }
+
+        // Resume randomness generation from where we left off.
+        // This must be loaded regardless of whether DKG has finished yet, since the
+        // RandomnessEventLoop and commit-handling logic in AuthorityPerEpochStore both depend on
+        // this state.
+        inner.next_randomness_round = tables
+            .randomness_next_round
+            .get(&SINGLETON_KEY)
+            .expect("typed_store should not fail")
+            .unwrap_or(RandomnessRound(0));
+        info!(
+            "random beacon: starting from next_randomness_round={}",
+            inner.next_randomness_round.0
+        );
+        for result in tables.randomness_rounds_pending.safe_iter() {
+            let (round, _) = result.expect("typed_store should not fail");
+            info!(
+                "random beacon: resuming generation for randomness round {}",
+                round.0
+            );
+            inner
+                .network_handle
+                .send_partial_signatures(committee.epoch(), round)
+                .await;
         }
 
         Some(RandomnessManager {
@@ -302,7 +311,8 @@ impl RandomnessManager {
     }
 
     /// Reserves the next available round number for randomness generation. Once the given
-    /// batch is written, it's considered safe to begin generation for the returned round.
+    /// batch is written, `generate_randomness` must be called to start the process. On restart,
+    /// any reserved rounds for which the batch was written will automatically be resumed.
     pub async fn reserve_next_randomness(&self, batch: &mut DBBatch) -> SuiResult<RandomnessRound> {
         self.inner.lock().await.reserve_next_randomness(batch).await
     }

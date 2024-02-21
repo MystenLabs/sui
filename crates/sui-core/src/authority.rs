@@ -4756,14 +4756,13 @@ impl RandomnessRoundReceiver {
                 .notify_read_executed_effects(&[key])
                 .await
             else {
-                error!("BUG: failed to get effects for randomness state update transaction at epoch {epoch}, round {round}");
-                return;
+                panic!("failed to get effects for randomness state update transaction at epoch {epoch}, round {round}");
             };
             let effects = effects.pop().expect("should return effects");
             if *effects.status() != ExecutionStatus::Success {
-                panic!("BUG: failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
+                panic!("failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
             }
-            debug!("sucessfully executed randomness state update transaction");
+            debug!("successfully executed randomness state update transaction at epoch {epoch}, round {round}");
         });
     }
 }
