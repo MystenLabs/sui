@@ -365,29 +365,40 @@ impl TransactionBlock {
                         }
 
                         if let Some(c) = &filter.after_checkpoint {
-                            // Translate bound on checkpoint number into a bound on transaction sequence
-                            // number to make better use of indices. Experimentally, postgres struggles
-                            // to use the index on checkpoint sequence number to handle inequality
-                            // constraints -- it still uses the index on transaction sequence number --
-                            // but it's fine to use that index on an equality query.
+                            // Translate bound on checkpoint number into a bound on transaction
+                            // sequence number to make better use of indices. Experimentally,
+                            // postgres struggles to use the index on checkpoint sequence number to
+                            // handle inequality constraints -- it still uses the index on
+                            // transaction sequence number -- but it's fine to use that index on an
+                            // equality query.
                             //
-                            // Diesel also does not like the same table appearing multiple times in a
-                            // single query, so we create an alias of the `transactions` table to query
-                            // for the transaction sequence number bound.
-                            let tx_ = alias!(tx as tx_after);
-                            let sub_query = tx_
-                                .select(tx_.field(tx::dsl::tx_sequence_number))
-                                .filter(
-                                    tx_.field(tx::dsl::checkpoint_sequence_number).eq(*c as i64),
-                                )
-                                .order(tx_.field(tx::dsl::tx_sequence_number).desc())
-                                .limit(1);
+                            // Diesel also does not like the same table appearing multiple times in
+                            // a single query, so we create an alias of the `transactions` table to
+                            // query for the transaction sequence number bound.
+                            //
+                            // If a sparse filter (explain) is provided, this actually ends up doing
+                            // more work, so instead just bound by checkpoint_sequence_number
+                            // directly.
+                            if filter.has_sparse_filter() {
+                                query =
+                                    query.filter(tx::dsl::checkpoint_sequence_number.gt(*c as i64));
+                            } else {
+                                let tx_ = alias!(tx as tx_after);
+                                let sub_query = tx_
+                                    .select(tx_.field(tx::dsl::tx_sequence_number))
+                                    .filter(
+                                        tx_.field(tx::dsl::checkpoint_sequence_number)
+                                            .eq(*c as i64),
+                                    )
+                                    .order(tx_.field(tx::dsl::tx_sequence_number).desc())
+                                    .limit(1);
 
-                            query = query.filter(
-                                tx::dsl::tx_sequence_number
-                                    .nullable()
-                                    .gt(sub_query.single_value()),
-                            );
+                                query = query.filter(
+                                    tx::dsl::tx_sequence_number
+                                        .nullable()
+                                        .gt(sub_query.single_value()),
+                                );
+                            }
                         }
 
                         if let Some(c) = &filter.at_checkpoint {
@@ -400,46 +411,59 @@ impl TransactionBlock {
                         // the two. The difference is that filtering on `checkpoint_viewed_at`
                         // should include the tx_sequence_number, while filtering on
                         // `before_checkpoint` should exclude it.
-                        let tx_ = alias!(tx as tx_before);
-                        let sub_query = tx_
-                            .select(tx_.field(tx::dsl::tx_sequence_number))
-                            .limit(1)
-                            .into_boxed();
-
-                        // Exclude `checkpoint_viewed_at` if it is equal to `before_checkpoint` -
-                        // the latter sets an exclusive bound that should take precedence if it is
-                        // less than `checkpoint_viewed_at`, otherwise `checkpoint_viewed_at` is
-                        // more restrictive.
-                        if filter
-                            .before_checkpoint
-                            .map_or(true, |cp| cp > checkpoint_viewed_at)
-                        {
-                            // Note that this has to be <=, not strict equality!
-                            let sub_query = sub_query
-                                .filter(
-                                    tx_.field(tx::dsl::checkpoint_sequence_number)
-                                        .le(checkpoint_viewed_at as i64),
-                                )
-                                .order(tx_.field(tx::dsl::tx_sequence_number).desc())
-                                .limit(1);
-
+                        if filter.has_sparse_filter() {
+                            // checkpoint_viewed_at + 1 so we can apply strict inequality
+                            let before_checkpoint = filter
+                                .before_checkpoint
+                                .map_or(checkpoint_viewed_at + 1, |c| {
+                                    c.min(checkpoint_viewed_at + 1)
+                                });
                             query = query.filter(
-                                tx::dsl::tx_sequence_number
-                                    .nullable()
-                                    .le(sub_query.single_value()),
+                                tx::dsl::checkpoint_sequence_number.lt(before_checkpoint as i64),
                             );
-                        } else if let Some(c) = &filter.before_checkpoint {
-                            let sub_query = sub_query
-                                .filter(
-                                    tx_.field(tx::dsl::checkpoint_sequence_number).eq(*c as i64),
-                                )
-                                .order(tx_.field(tx::dsl::tx_sequence_number).asc());
+                        } else {
+                            let tx_ = alias!(tx as tx_before);
+                            let sub_query = tx_
+                                .select(tx_.field(tx::dsl::tx_sequence_number))
+                                .limit(1)
+                                .into_boxed();
 
-                            query = query.filter(
-                                tx::dsl::tx_sequence_number
-                                    .nullable()
-                                    .lt(sub_query.single_value()),
-                            );
+                            // Exclude `checkpoint_viewed_at` if it is equal to `before_checkpoint` -
+                            // the latter sets an exclusive bound that should take precedence if it is
+                            // less than `checkpoint_viewed_at`, otherwise `checkpoint_viewed_at` is
+                            // more restrictive.
+                            if filter
+                                .before_checkpoint
+                                .map_or(true, |cp| cp > checkpoint_viewed_at)
+                            {
+                                // Note that this has to be <=, not strict equality!
+                                let sub_query = sub_query
+                                    .filter(
+                                        tx_.field(tx::dsl::checkpoint_sequence_number)
+                                            .le(checkpoint_viewed_at as i64),
+                                    )
+                                    .order(tx_.field(tx::dsl::tx_sequence_number).desc())
+                                    .limit(1);
+
+                                query = query.filter(
+                                    tx::dsl::tx_sequence_number
+                                        .nullable()
+                                        .le(sub_query.single_value()),
+                                );
+                            } else if let Some(c) = &filter.before_checkpoint {
+                                let sub_query = sub_query
+                                    .filter(
+                                        tx_.field(tx::dsl::checkpoint_sequence_number)
+                                            .eq(*c as i64),
+                                    )
+                                    .order(tx_.field(tx::dsl::tx_sequence_number).asc());
+
+                                query = query.filter(
+                                    tx::dsl::tx_sequence_number
+                                        .nullable()
+                                        .lt(sub_query.single_value()),
+                                );
+                            }
                         }
 
                         if let Some(a) = &filter.sign_address {
@@ -534,6 +558,14 @@ impl TransactionBlockFilter {
                 Some(a.intersection(&b).cloned().collect())
             })?,
         })
+    }
+
+    pub(crate) fn has_sparse_filter(&self) -> bool {
+        self.function.is_some()
+            || self.sign_address.is_some()
+            || self.recv_address.is_some()
+            || self.input_object.is_some()
+            || self.changed_object.is_some()
     }
 }
 
