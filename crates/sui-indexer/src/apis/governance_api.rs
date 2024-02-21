@@ -23,11 +23,11 @@ use sui_types::{
 };
 
 #[derive(Clone)]
-pub struct GovernanceReadApiV2 {
+pub struct GovernanceReadApi {
     inner: IndexerReader,
 }
 
-impl GovernanceReadApiV2 {
+impl GovernanceReadApi {
     pub fn new(inner: IndexerReader) -> Self {
         Self { inner }
     }
@@ -200,7 +200,7 @@ impl GovernanceReadApiV2 {
     result = true
 )]
 async fn exchange_rates(
-    state: &GovernanceReadApiV2,
+    state: &GovernanceReadApi,
     system_state_summary: SuiSystemStateSummary,
 ) -> Result<Vec<ValidatorExchangeRates>, IndexerError> {
     // Get validator rate tables
@@ -296,7 +296,7 @@ fn validators_apys_map(apys: ValidatorApys) -> BTreeMap<SuiAddress, f64> {
 }
 
 #[async_trait]
-impl GovernanceReadApiServer for GovernanceReadApiV2 {
+impl GovernanceReadApiServer for GovernanceReadApi {
     async fn get_stakes_by_ids(
         &self,
         staked_sui_ids: Vec<ObjectID>,
@@ -335,7 +335,7 @@ impl GovernanceReadApiServer for GovernanceReadApiV2 {
     }
 }
 
-impl SuiRpcModule for GovernanceReadApiV2 {
+impl SuiRpcModule for GovernanceReadApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

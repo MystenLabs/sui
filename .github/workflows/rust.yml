@@ -59,9 +59,6 @@ jobs:
           crate: cargo-hakari
           locked: true
       - run: cargo xlint
-      - run: |
-          cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
-          cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
 
   release-notes-description-check:
     name: release-notes-check
@@ -365,6 +362,7 @@ jobs:
         with:
           crate: cargo-hakari
           locked: true
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Make cut
         run: ./scripts/execution_layer.py cut for_ci_test
       - name: Check execution builds
@@ -423,7 +421,7 @@ jobs:
      - uses: taiki-e/install-action@nextest
      - name: Setup db
        run: |
-         PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer_v2;' -c 'ALTER SYSTEM SET max_connections = 500;'
+         PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer;' -c 'ALTER SYSTEM SET max_connections = 500;'
        env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgrespw

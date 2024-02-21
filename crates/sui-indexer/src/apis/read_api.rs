@@ -26,11 +26,11 @@ use sui_types::sui_serde::BigInt;
 use sui_json_rpc_types::SuiLoadedChildObjectsResponse;
 
 #[derive(Clone)]
-pub(crate) struct ReadApiV2 {
+pub(crate) struct ReadApi {
     inner: IndexerReader,
 }
 
-impl ReadApiV2 {
+impl ReadApi {
     pub fn new(inner: IndexerReader) -> Self {
         Self { inner }
     }
@@ -62,7 +62,7 @@ impl ReadApiV2 {
 }
 
 #[async_trait]
-impl ReadApiServer for ReadApiV2 {
+impl ReadApiServer for ReadApi {
     async fn get_object(
         &self,
         object_id: ObjectID,
@@ -296,7 +296,7 @@ impl ReadApiServer for ReadApiV2 {
     }
 }
 
-impl SuiRpcModule for ReadApiV2 {
+impl SuiRpcModule for ReadApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

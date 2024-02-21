@@ -18,8 +18,8 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_json_rpc_api::CLIENT_SDK_TYPE_HEADER;
 
 use crate::apis::{
-    CoinReadApiV2, ExtendedApiV2, GovernanceReadApiV2, IndexerApiV2, MoveUtilsApiV2, ReadApiV2,
-    TransactionBuilderApiV2, WriteApi,
+    CoinReadApi, ExtendedApi, GovernanceReadApi, IndexerApi, MoveUtilsApi, ReadApi,
+    TransactionBuilderApi, WriteApi,
 };
 use crate::indexer_reader::IndexerReader;
 use errors::IndexerError;
@@ -32,8 +32,8 @@ mod handlers;
 pub mod indexer;
 pub mod indexer_reader;
 pub mod metrics;
-pub mod models_v2;
-pub mod processors_v2;
+pub mod models;
+pub mod processors;
 pub mod schema;
 pub mod store;
 pub mod test_utils;
@@ -139,13 +139,13 @@ pub async fn build_json_rpc_server(
     let http_client = crate::get_http_client(config.rpc_client_url.as_str())?;
 
     builder.register_module(WriteApi::new(http_client.clone()))?;
-    builder.register_module(IndexerApiV2::new(reader.clone()))?;
-    builder.register_module(TransactionBuilderApiV2::new(reader.clone()))?;
-    builder.register_module(MoveUtilsApiV2::new(reader.clone()))?;
-    builder.register_module(GovernanceReadApiV2::new(reader.clone()))?;
-    builder.register_module(ReadApiV2::new(reader.clone()))?;
-    builder.register_module(CoinReadApiV2::new(reader.clone()))?;
-    builder.register_module(ExtendedApiV2::new(reader.clone()))?;
+    builder.register_module(IndexerApi::new(reader.clone()))?;
+    builder.register_module(TransactionBuilderApi::new(reader.clone()))?;
+    builder.register_module(MoveUtilsApi::new(reader.clone()))?;
+    builder.register_module(GovernanceReadApi::new(reader.clone()))?;
+    builder.register_module(ReadApi::new(reader.clone()))?;
+    builder.register_module(CoinReadApi::new(reader.clone()))?;
+    builder.register_module(ExtendedApi::new(reader.clone()))?;
 
     let default_socket_addr: SocketAddr = SocketAddr::new(
         // unwrap() here is safe b/c the address is a static config.

@@ -35,7 +35,6 @@ fn test_encapsulation() {
     exec_crates.remove("move-bytecode-utils");
     exec_crates.remove("move-core-types");
     exec_crates.remove("move-vm-config");
-    exec_crates.remove("workspace-hack");
 
     // Capture problematic paths from roots to execution crates
     let mut examples = vec![];
@@ -46,7 +45,6 @@ fn test_encapsulation() {
         // If we can still create a path from `root` to an execution crate after removing these
         // nodes then we know that we can potential bypass "sui-execution".
         graph.remove_node("sui-execution");
-        graph.remove_node("workspace-hack");
 
         for exec_crate in &exec_crates {
             let paths = all_simple_paths::<Vec<&str>, &PackageGraph>(

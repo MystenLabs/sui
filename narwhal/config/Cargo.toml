@@ -19,7 +19,6 @@ mysten-util-mem.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 mysten-network.workspace = true
 rand.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

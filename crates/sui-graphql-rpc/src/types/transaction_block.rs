@@ -10,7 +10,7 @@ use diesel::{alias, ExpressionMethods, NullableExpressionMethods, OptionalExtens
 use fastcrypto::encoding::{Base58, Encoding};
 use serde::{Deserialize, Serialize};
 use sui_indexer::{
-    models_v2::transactions::StoredTransaction,
+    models::transactions::StoredTransaction,
     schema::{
         transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
     },

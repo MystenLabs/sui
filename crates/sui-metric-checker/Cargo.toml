@@ -22,4 +22,3 @@ strum_macros.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
-workspace-hack.workspace = true

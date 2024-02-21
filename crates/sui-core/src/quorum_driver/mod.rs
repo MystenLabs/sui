@@ -46,13 +46,13 @@ mod tests;
 
 const TASK_QUEUE_SIZE: usize = 2000;
 const EFFECTS_QUEUE_SIZE: usize = 10000;
-const TX_MAX_RETRY_TIMES: u8 = 10;
+const TX_MAX_RETRY_TIMES: u32 = 10;
 
 #[derive(Clone)]
 pub struct QuorumDriverTask {
     pub transaction: Transaction,
     pub tx_cert: Option<CertifiedTransaction>,
-    pub retry_times: u8,
+    pub retry_times: u32,
     pub next_retry_after: Instant,
 }
 
@@ -73,7 +73,7 @@ pub struct QuorumDriver<A: Clone> {
     effects_subscribe_sender: tokio::sync::broadcast::Sender<QuorumDriverEffectsQueueResult>,
     notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
     metrics: Arc<QuorumDriverMetrics>,
-    max_retry_times: u8,
+    max_retry_times: u32,
 }
 
 impl<A: Clone> QuorumDriver<A> {
@@ -83,7 +83,7 @@ impl<A: Clone> QuorumDriver<A> {
         effects_subscribe_sender: tokio::sync::broadcast::Sender<QuorumDriverEffectsQueueResult>,
         notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
         metrics: Arc<QuorumDriverMetrics>,
-        max_retry_times: u8,
+        max_retry_times: u32,
     ) -> Self {
         Self {
             validators,
@@ -128,7 +128,7 @@ impl<A: Clone> QuorumDriver<A> {
         &self,
         transaction: Transaction,
         tx_cert: Option<CertifiedTransaction>,
-        old_retry_times: u8,
+        old_retry_times: u32,
     ) -> SuiResult<()> {
         if old_retry_times >= self.max_retry_times {
             // max out the retry times, notify failure
@@ -153,10 +153,10 @@ impl<A: Clone> QuorumDriver<A> {
         &self,
         transaction: Transaction,
         tx_cert: Option<CertifiedTransaction>,
-        old_retry_times: u8,
+        old_retry_times: u32,
     ) -> SuiResult<()> {
         let next_retry_after =
-            Instant::now() + Duration::from_millis(200 * u64::pow(2, old_retry_times.into()));
+            Instant::now() + Duration::from_millis(200 * u64::pow(2, old_retry_times));
         sleep_until(next_retry_after).await;
 
         let tx_cert = match tx_cert {
@@ -180,7 +180,7 @@ impl<A: Clone> QuorumDriver<A> {
         &self,
         transaction: &Transaction,
         response: &QuorumDriverResult,
-        total_attempts: u8,
+        total_attempts: u32,
     ) {
         let tx_digest = transaction.digest();
         let effects_queue_result = match &response {
@@ -577,7 +577,7 @@ where
         notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
         reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
         metrics: Arc<QuorumDriverMetrics>,
-        max_retry_times: u8,
+        max_retry_times: u32,
     ) -> Self {
         let (task_tx, task_rx) = mpsc::channel::<QuorumDriverTask>(TASK_QUEUE_SIZE);
         let (subscriber_tx, subscriber_rx) =
@@ -787,7 +787,7 @@ where
         transaction: Transaction,
         err: Option<QuorumDriverError>,
         tx_cert: Option<CertifiedTransaction>,
-        old_retry_times: u8,
+        old_retry_times: u32,
         action: &'static str,
     ) {
         let tx_digest = *transaction.digest();
@@ -859,7 +859,7 @@ pub struct QuorumDriverHandlerBuilder<A: Clone> {
     metrics: Arc<QuorumDriverMetrics>,
     notifier: Option<Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>>,
     reconfig_observer: Option<Arc<dyn ReconfigObserver<A> + Sync + Send>>,
-    max_retry_times: u8,
+    max_retry_times: u32,
 }
 
 impl<A> QuorumDriverHandlerBuilder<A>
@@ -893,7 +893,7 @@ where
     }
 
     /// Used in tests when smaller number of retries is desired
-    pub fn with_max_retry_times(mut self, max_retry_times: u8) -> Self {
+    pub fn with_max_retry_times(mut self, max_retry_times: u32) -> Self {
         self.max_retry_times = max_retry_times;
         self
     }

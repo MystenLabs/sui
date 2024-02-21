@@ -51,7 +51,6 @@ sui-framework-snapshot.workspace = true
 sui-storage.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true
-workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true

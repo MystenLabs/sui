@@ -42,7 +42,6 @@ tokio = { workspace = true, features = ["full"] }
 toml_edit.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

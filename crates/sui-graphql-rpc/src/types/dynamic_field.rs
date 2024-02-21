@@ -4,7 +4,7 @@
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use move_core_types::annotated_value::{self as A, MoveStruct};
-use sui_indexer::models_v2::objects::StoredHistoryObject;
+use sui_indexer::models::objects::StoredHistoryObject;
 use sui_indexer::types::{ObjectStatus, OwnerType};
 use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};

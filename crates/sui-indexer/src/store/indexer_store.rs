@@ -14,8 +14,8 @@ use sui_types::object::ObjectRead;
 use crate::errors::IndexerError;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
 
-use crate::models_v2::display::StoredDisplay;
-use crate::models_v2::objects::{StoredDeletedObject, StoredObject};
+use crate::models::display::StoredDisplay;
+use crate::models::objects::{StoredDeletedObject, StoredObject};
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 
 #[allow(clippy::large_enum_variant)]
@@ -25,7 +25,7 @@ pub enum ObjectChangeToCommit {
 }
 
 #[async_trait]
-pub trait IndexerStoreV2: Any + Clone + Sync + Send + 'static {
+pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
     type ModuleCache: GetModule<Item = Arc<CompiledModule>, Error = anyhow::Error>
         + Send
         + Sync

@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(crate) use indexer_analytical_store::*;
-pub(crate) use indexer_store_v2::*;
+pub(crate) use indexer_store::*;
 pub use pg_indexer_analytical_store::PgIndexerAnalyticalStore;
-pub use pg_indexer_store_v2::PgIndexerStoreV2;
+pub use pg_indexer_store::PgIndexerStore;
 
 mod indexer_analytical_store;
-pub mod indexer_store_v2;
-pub mod module_resolver_v2;
+pub mod indexer_store;
+pub mod module_resolver;
 mod pg_indexer_analytical_store;
-mod pg_indexer_store_v2;
+mod pg_indexer_store;
 mod pg_partition_manager;
 mod query;
 

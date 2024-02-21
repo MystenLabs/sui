@@ -24,7 +24,6 @@ lru.workspace = true
 rand.workspace = true
 serde.workspace = true
 bcs.workspace = true
-workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true
