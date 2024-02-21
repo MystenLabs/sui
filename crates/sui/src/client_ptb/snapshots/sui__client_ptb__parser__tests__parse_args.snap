@@ -135,7 +135,7 @@ expression: parsed
             end: 4,
         },
         value: Address(
-            1,
+            0x1,
         ),
     },
     Spanned {
@@ -144,7 +144,7 @@ expression: parsed
             end: 8,
         },
         value: Address(
-            1000,
+            0x1000,
         ),
     },
     Spanned {
@@ -153,7 +153,7 @@ expression: parsed
             end: 14,
         },
         value: Address(
-            100000000,
+            0x100000000,
         ),
     },
     Spanned {
@@ -162,7 +162,7 @@ expression: parsed
             end: 10,
         },
         value: Address(
-            100000,
+            0x100000,
         ),
     },
     Spanned {
@@ -171,7 +171,7 @@ expression: parsed
             end: 4,
         },
         value: Address(
-            1,
+            0x1,
         ),
     },
     Spanned {
@@ -180,7 +180,7 @@ expression: parsed
             end: 5,
         },
         value: Address(
-            1,
+            0x1,
         ),
     },
     Spanned {
@@ -287,7 +287,7 @@ expression: parsed
     },
     Spanned {
         span: Span {
-            start: 6,
+            start: 0,
             end: 8,
         },
         value: Vector(
@@ -296,7 +296,7 @@ expression: parsed
     },
     Spanned {
         span: Span {
-            start: 6,
+            start: 0,
             end: 15,
         },
         value: Vector(
@@ -333,7 +333,7 @@ expression: parsed
     },
     Spanned {
         span: Span {
-            start: 6,
+            start: 0,
             end: 16,
         },
         value: Vector(

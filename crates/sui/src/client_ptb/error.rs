@@ -72,17 +72,6 @@ macro_rules! err_ {
     };
 }
 
-#[macro_export]
-macro_rules! bind_ {
-    ($loc:pat, $value:pat = $rhs:expr, $err:expr) => {
-        let x = $rhs;
-        let loc = x.span;
-        let ($loc, $value) = (loc.clone(), x.value) else {
-            return $err(loc);
-        };
-    };
-}
-
 pub use sp_;
 
 impl PTBError {
@@ -129,11 +118,14 @@ impl<T> Spanned<T> {
     /// Widen the span to include another span. The resulting span will start at the minimum of the
     /// two start positions and end at the maximum of the two end positions.
     pub fn widen<U>(self, other: Spanned<U>) -> Spanned<T> {
+        self.widen_span(other.span)
+    }
+
+    /// Widen the span to include another span. The resulting span will start at the minimum of the
+    /// two start positions and end at the maximum of the two end positions.
+    pub fn widen_span(self, other: Span) -> Spanned<T> {
         Spanned {
-            span: Span {
-                start: self.span.start.min(other.span.start),
-                end: self.span.end.max(other.span.end),
-            },
+            span: self.span.widen(other),
             value: self.value,
         }
     }

@@ -65,7 +65,7 @@ expression: parsed
                 Spanned {
                     span: Span {
                         start: 0,
-                        end: 13,
+                        end: 18,
                     },
                     value: Upgrade(
                         Spanned {
@@ -81,7 +81,7 @@ expression: parsed
                                 end: 18,
                             },
                             value: Address(
-                                1,
+                                0x1,
                             ),
                         },
                     ),
@@ -612,7 +612,7 @@ expression: parsed
                                     end: 15,
                                 },
                                 value: Address(
-                                    1,
+                                    0x1,
                                 ),
                             },
                         ),
@@ -647,7 +647,7 @@ expression: parsed
                         Some(
                             Spanned {
                                 span: Span {
-                                    start: 17,
+                                    start: 11,
                                     end: 26,
                                 },
                                 value: Vector(

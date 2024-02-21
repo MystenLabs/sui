@@ -4,11 +4,13 @@ expression: result.unwrap_err()
 ---
 [
     PTBError {
-        message: "Unexpected token '0x'",
+        message: "Unexpected input \"0x\"",
         span: Span {
             start: 0,
             end: 2,
         },
-        help: None,
+        help: Some(
+            "Expected to find a command here",
+        ),
     },
 ]

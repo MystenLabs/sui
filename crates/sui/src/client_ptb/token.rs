@@ -67,8 +67,14 @@ impl<'l> Lexeme<'l> {
         matches!(self.0, T::Unexpected | T::UnfinishedString | T::EarlyEof)
     }
 
+    /// Returns true if this is the kind of lexeme that finishes the token stream.
     pub fn is_terminal(&self) -> bool {
         self.is_error() || self.0 == Token::Eof
+    }
+
+    /// Returns true if this lexeme signifies the end of the current command.
+    pub fn is_command_end(&self) -> bool {
+        self.is_terminal() || self.0 == Token::Command
     }
 }
 
@@ -97,6 +103,35 @@ impl<'a> fmt::Display for Lexeme<'a> {
             T::EarlyEof | T::Eof => write!(f, "end of input"),
             T::Publish => write!(f, "command '--publish {:?}'", self.1),
             T::Upgrade => write!(f, "command '--upgrade {:?}'", self.1),
+        }
+    }
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use Token as T;
+        match self {
+            T::Command => write!(f, "a command"),
+            T::Ident => write!(f, "an identifier"),
+            T::Number => write!(f, "a number"),
+            T::HexNumber => write!(f, "a hexadecimal number"),
+            T::String => write!(f, "a string"),
+            T::ColonColon => write!(f, "'::'"),
+            T::Comma => write!(f, "','"),
+            T::LBracket => write!(f, "'['"),
+            T::RBracket => write!(f, "']'"),
+            T::LParen => write!(f, "'('"),
+            T::RParen => write!(f, "')'"),
+            T::LAngle => write!(f, "'<'"),
+            T::RAngle => write!(f, "'>'"),
+            T::At => write!(f, "'@'"),
+            T::Dot => write!(f, "'.'"),
+            T::Eof => write!(f, "end of input"),
+            T::Unexpected => write!(f, "unexpected input"),
+            T::UnfinishedString => write!(f, "an unfinished string"),
+            T::EarlyEof => write!(f, "unexpected end of input"),
+            T::Publish => write!(f, "a '--publish' command"),
+            T::Upgrade => write!(f, "an '--upgrade' command"),
         }
     }
 }
