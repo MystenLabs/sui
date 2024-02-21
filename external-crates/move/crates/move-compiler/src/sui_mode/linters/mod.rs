@@ -15,6 +15,7 @@ use move_symbol_pool::Symbol;
 
 pub mod coin_field;
 pub mod collection_equality;
+pub mod constant_naming;
 pub mod custom_state_change;
 pub mod freeze_wrapped;
 pub mod self_transfer;
@@ -68,6 +69,7 @@ pub const CUSTOM_STATE_CHANGE_FILTER_NAME: &str = "custom_state_change";
 pub const COIN_FIELD_FILTER_NAME: &str = "coin_field";
 pub const FREEZE_WRAPPED_FILTER_NAME: &str = "freeze_wrapped";
 pub const COLLECTION_EQUALITY_FILTER_NAME: &str = "collection_equality";
+pub const CONSTANT_NAMING_FILTER_NAME: &str = "constant_naming";
 
 pub const INVALID_LOC: Loc = Loc::invalid();
 
@@ -78,6 +80,7 @@ pub enum LinterDiagCategory {
     CoinField,
     FreezeWrapped,
     CollectionEquality,
+    ConstantNaming,
 }
 
 /// A default code for each linter category (as long as only one code per category is used, no other
@@ -123,6 +126,12 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
             LINTER_DEFAULT_DIAG_CODE,
             Some(COLLECTION_EQUALITY_FILTER_NAME),
         ),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagCategory::ConstantNaming as u8,
+            LINTER_DEFAULT_DIAG_CODE,
+            Some(CONSTANT_NAMING_FILTER_NAME),
+        ),
     ];
     (Some(ALLOW_ATTR_CATEGORY.into()), filters)
 }
@@ -135,6 +144,7 @@ pub fn linter_visitors() -> Vec<Visitor> {
         coin_field::CoinFieldVisitor.visitor(),
         freeze_wrapped::FreezeWrappedVisitor.visitor(),
         collection_equality::CollectionEqualityVisitor.visitor(),
+        constant_naming::ConstantNamingVisitor.visitor(),
     ]
 }
 
