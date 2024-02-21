@@ -30,11 +30,15 @@ use move_symbol_pool::Symbol;
 use std::{
     collections::BTreeMap,
     fs,
-    fs::File,
     io::{Read, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
+    sync::Arc,
 };
-use tempfile::NamedTempFile;
+use vfs::{
+    filesystem::FileSystem,
+    impls::{memory::MemoryFS, physical::PhysicalFS},
+    path::VfsFileType,
+};
 
 //**************************************************************************************************
 // Definitions
@@ -54,6 +58,8 @@ pub struct Compiler<'a> {
     known_warning_filters: Vec<(/* Prefix */ Option<Symbol>, Vec<WarningFilter>)>,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
+    /// Virtual file system
+    vfs: Option<Arc<Box<dyn FileSystem>>>,
 }
 
 pub struct SteppedCompiler<'a, const P: Pass> {
@@ -161,6 +167,7 @@ impl<'a> Compiler<'a> {
             known_warning_filters: vec![],
             package_configs,
             default_config: None,
+            vfs: None,
         })
     }
 
@@ -259,6 +266,12 @@ impl<'a> Compiler<'a> {
         self
     }
 
+    pub fn set_vfs(mut self, vfs: Arc<Box<dyn FileSystem>>) -> Self {
+        assert!(self.vfs.is_none());
+        self.vfs = Some(vfs);
+        self
+    }
+
     pub fn run<const TARGET: Pass>(
         self,
     ) -> anyhow::Result<(
@@ -267,7 +280,7 @@ impl<'a> Compiler<'a> {
     )> {
         let Self {
             maps,
-            targets,
+            mut targets,
             mut deps,
             interface_files_dir_opt,
             pre_compiled_lib,
@@ -278,8 +291,22 @@ impl<'a> Compiler<'a> {
             known_warning_filters,
             package_configs,
             default_config,
+            vfs,
         } = self;
+        canonicalize_source_paths(&mut targets);
+        canonicalize_source_paths(&mut deps);
+        let vfs = match vfs {
+            Some(vfs) => vfs,
+            None => {
+                let physical_fs: Box<dyn FileSystem> = Box::new(PhysicalFS::new("/"));
+                Arc::new(physical_fs)
+            }
+        };
+        let memory_vfs: Box<dyn FileSystem> = Box::new(MemoryFS::new());
+        let deps_out_vfs = Arc::new(memory_vfs);
         generate_interface_files_for_deps(
+            vfs.clone(),
+            deps_out_vfs.clone(),
             &mut deps,
             interface_files_dir_opt,
             &compiled_module_named_address_mapping,
@@ -293,8 +320,14 @@ impl<'a> Compiler<'a> {
             compilation_env.add_custom_known_filters(prefix, filters)?;
         }
 
-        let (source_text, pprog, comments) =
-            with_large_stack!(parse_program(&mut compilation_env, maps, targets, deps))?;
+        let (source_text, pprog, comments) = with_large_stack!(parse_program(
+            vfs.clone(),
+            vfs,
+            &mut compilation_env,
+            maps,
+            targets,
+            deps
+        ))?;
 
         let res: Result<_, Diagnostics> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
@@ -347,6 +380,14 @@ impl<'a> Compiler<'a> {
         let (units, warnings) = unwrap_or_report_diagnostics(&files, units_res);
         report_warnings(&files, warnings);
         Ok((files, units))
+    }
+}
+
+fn canonicalize_source_paths(paths: &mut Vec<IndexedPackagePath>) {
+    for p in paths {
+        if let Some(new_path) = std::fs::canonicalize(p.path.as_str()).ok() {
+            p.path = Symbol::from(new_path.to_string_lossy().to_string());
+        } // else keep the path the same
     }
 }
 
@@ -671,12 +712,20 @@ pub fn output_compiled_units(
 }
 
 fn generate_interface_files_for_deps(
+    vfs: Arc<Box<dyn FileSystem>>,
+    deps_out_vfs: Arc<Box<dyn FileSystem>>,
     deps: &mut Vec<IndexedPackagePath>,
     interface_files_dir_opt: Option<String>,
     module_to_named_address: &BTreeMap<CompiledModuleId, String>,
 ) -> anyhow::Result<()> {
-    let interface_files_paths =
-        generate_interface_files(deps, interface_files_dir_opt, module_to_named_address, true)?;
+    let interface_files_paths = generate_interface_files(
+        vfs,
+        deps_out_vfs,
+        deps,
+        interface_files_dir_opt,
+        module_to_named_address,
+        true,
+    )?;
     deps.extend(interface_files_paths);
     // Remove bytecode files
     deps.retain(|p| !p.path.as_str().ends_with(MOVE_COMPILED_EXTENSION));
@@ -684,6 +733,8 @@ fn generate_interface_files_for_deps(
 }
 
 pub fn generate_interface_files(
+    vfs: Arc<Box<dyn FileSystem>>,
+    deps_out_vfs: Arc<Box<dyn FileSystem>>,
     mv_file_locations: &mut [IndexedPackagePath],
     interface_files_dir_opt: Option<String>,
     module_to_named_address: &BTreeMap<CompiledModuleId, String>,
@@ -693,7 +744,11 @@ pub fn generate_interface_files(
         let mut v = vec![];
         let (mv_magic_files, other_file_locations): (Vec<_>, Vec<_>) =
             mv_file_locations.iter().cloned().partition(|s| {
-                Path::new(s.path.as_str()).is_file() && has_compiled_module_magic_number(&s.path)
+                let is_file = vfs
+                    .metadata(s.path.as_str())
+                    .map(|d| d.file_type == VfsFileType::File)
+                    .unwrap_or(false);
+                is_file && has_compiled_module_magic_number(vfs.clone(), &s.path)
             });
         v.extend(mv_magic_files);
         for IndexedPackagePath {
@@ -717,6 +772,7 @@ pub fn generate_interface_files(
         v
     };
     if mv_files.is_empty() {
+        eprintln!("EMPTY");
         return Ok(vec![]);
     }
 
@@ -734,7 +790,10 @@ pub fn generate_interface_files(
         mv_files.len().hash(&mut hasher);
         HASH_DELIM.hash(&mut hasher);
         for IndexedPackagePath { path, .. } in &mv_files {
-            std::fs::read(path.as_str())?.hash(&mut hasher);
+            let mut f = vfs.open_file(path.as_str())?;
+            let mut buf = vec![];
+            f.read_to_end(&mut buf)?;
+            buf.hash(&mut hasher);
             HASH_DELIM.hash(&mut hasher);
         }
 
@@ -753,39 +812,30 @@ pub fn generate_interface_files(
     } in mv_files
     {
         let (id, interface_contents) =
-            interface_generator::write_file_to_string(module_to_named_address, &path)?;
+            interface_generator::write_file_to_string(vfs.clone(), module_to_named_address, &path)?;
         let addr_dir = dir_path!(all_addr_dir.clone(), format!("{}", id.address()));
-        let file_path = file_path!(addr_dir.clone(), format!("{}", id.name()), MOVE_EXTENSION);
+        eprintln!("ADDR DIR {:?}", addr_dir);
+        let file_path = file_path!(addr_dir.clone(), format!("{}", id.name()), MOVE_EXTENSION)
+            .into_os_string()
+            .into_string()
+            .unwrap();
+        eprintln!("FILE PATH {}", file_path);
+        let mut out_file = deps_out_vfs.create_file(&file_path)?;
+        out_file.write_all(interface_contents.as_bytes())?;
+
         result.push(IndexedPackagePath {
-            path: Symbol::from(file_path.clone().into_os_string().into_string().unwrap()),
+            path: Symbol::from(file_path),
             package,
             named_address_map,
         });
-        // it's possible some files exist but not others due to multithreaded environments
-        if separate_by_hash && Path::new(&file_path).is_file() {
-            continue;
-        }
-
-        std::fs::create_dir_all(&addr_dir)?;
-
-        let mut tmp = NamedTempFile::new_in(addr_dir)?;
-        tmp.write_all(interface_contents.as_bytes())?;
-
-        // it's possible some files exist but not others due to multithreaded environments
-        // Check for the file existing and then safely move the tmp file there if
-        // it does not
-        if separate_by_hash && Path::new(&file_path).is_file() {
-            continue;
-        }
-        std::fs::rename(tmp.path(), file_path)?;
     }
 
     Ok(result)
 }
 
-fn has_compiled_module_magic_number(path: &str) -> bool {
+fn has_compiled_module_magic_number(vfs: Arc<Box<dyn FileSystem>>, path: &str) -> bool {
     use move_binary_format::file_format_common::BinaryConstants;
-    let mut file = match File::open(path) {
+    let mut file = match vfs.open_file(path) {
         Err(_) => return false,
         Ok(f) => f,
     };

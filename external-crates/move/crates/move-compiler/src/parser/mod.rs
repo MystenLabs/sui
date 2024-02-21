@@ -21,11 +21,13 @@ use move_command_line_common::files::{find_move_filenames, FileHash};
 use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeSet, HashMap},
-    fs::File,
-    io::Read,
+    sync::Arc,
 };
+use vfs::filesystem::FileSystem;
 
 pub(crate) fn parse_program(
+    vfs: Arc<Box<dyn FileSystem>>,
+    deps_out_vfs: Arc<Box<dyn FileSystem>>,
     compilation_env: &mut CompilationEnv,
     named_address_maps: NamedAddressMaps,
     targets: Vec<IndexedPackagePath>,
@@ -71,7 +73,8 @@ pub(crate) fn parse_program(
         named_address_map,
     } in targets
     {
-        let (defs, comments, file_hash) = parse_file(compilation_env, &mut files, path, package)?;
+        let (defs, comments, file_hash) =
+            parse_file(&vfs, compilation_env, &mut files, path, package)?;
         source_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
             package,
             named_address_map,
@@ -86,7 +89,7 @@ pub(crate) fn parse_program(
         named_address_map,
     } in deps
     {
-        let (defs, _, _) = parse_file(compilation_env, &mut files, path, package)?;
+        let (defs, _, _) = parse_file(&deps_out_vfs, compilation_env, &mut files, path, package)?;
         lib_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
             package,
             named_address_map,
@@ -143,6 +146,7 @@ fn ensure_targets_deps_dont_intersect(
 }
 
 fn parse_file(
+    vfs: &Arc<Box<dyn FileSystem>>,
     compilation_env: &mut CompilationEnv,
     files: &mut FilesSourceText,
     fname: Symbol,
@@ -152,8 +156,7 @@ fn parse_file(
     MatchedFileCommentMap,
     FileHash,
 )> {
-    let mut f = File::open(fname.as_str())
-        .map_err(|err| std::io::Error::new(err.kind(), format!("{}: {}", err, fname)))?;
+    let mut f = vfs.open_file(fname.as_str())?;
     let mut source_buffer = String::new();
     f.read_to_string(&mut source_buffer)?;
     let file_hash = FileHash::new(&source_buffer);

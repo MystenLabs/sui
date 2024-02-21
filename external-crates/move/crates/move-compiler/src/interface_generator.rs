@@ -13,7 +13,8 @@ use move_binary_format::{
     },
 };
 use move_core_types::language_storage::ModuleId;
-use std::{collections::BTreeMap, fs};
+use std::{collections::BTreeMap, sync::Arc};
+use vfs::filesystem::FileSystem;
 
 pub const NATIVE_INTERFACE: &str = "native_interface";
 
@@ -33,10 +34,13 @@ macro_rules! push {
 /// publically visible contents of the CompiledModule, represented in source language syntax
 /// Additionally, it returns the module id (address+name) of the module that was deserialized
 pub fn write_file_to_string(
+    vfs: Arc<Box<dyn FileSystem>>,
     named_address_mapping: &BTreeMap<ModuleId, impl AsRef<str>>,
     compiled_module_file_input_path: &str,
 ) -> Result<(ModuleId, String)> {
-    let file_contents = fs::read(compiled_module_file_input_path)?;
+    let mut f = vfs.open_file(compiled_module_file_input_path)?;
+    let mut file_contents = vec![];
+    f.read(&mut file_contents)?;
     let module = CompiledModule::deserialize_with_defaults(&file_contents).map_err(|e| {
         anyhow!(
             "Unable to deserialize module at '{}': {}",
