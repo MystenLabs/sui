@@ -10,7 +10,8 @@ use crate::{
     parser::ast::{BinOp_, DatatypeName, Field, VariantName},
     shared::{
         ast_debug::{AstDebug, AstWriter},
-        unique_map::UniqueMap, format_oxford_list,
+        format_oxford_list,
+        unique_map::UniqueMap,
     },
     typing::ast::{self as T, MatchArm_, MatchPattern, UnannotatedPat_ as TP},
 };
@@ -1599,7 +1600,8 @@ fn find_counterexample(
             } else {
                 let n_id = format!("_{}", ndx);
                 *ndx += 1;
-                let lit_str = format_oxford_list!("or", "{}", literals.into_iter().collect::<Vec<_>>());
+                let lit_str =
+                    format_oxford_list!("or", "{}", literals.into_iter().collect::<Vec<_>>());
                 let lit_msg = format!("When '{}' is not {}", n_id, lit_str);
                 let lit_ce = CounterExample::Note(lit_msg, Box::new(CounterExample::Literal(n_id)));
                 let result = [lit_ce].into_iter().chain(counterexample).collect();

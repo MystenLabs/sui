@@ -1516,16 +1516,10 @@ impl AstDebug for EnumDefinition {
         w.write(&format!(" enum {}", name));
         type_parameters.ast_debug(w);
         w.block(|w| {
-            if let Some(v) = variants.first() {
-                v.ast_debug(w)
-            };
-            w.write(",");
-            if variants.len() > 1 {
-                w.comma(variants.iter().skip(1), |w, v| {
-                    w.write("\n    ");
-                    v.ast_debug(w);
-                })
-            }
+            w.list(variants, ",", |w, variant| {
+                variant.ast_debug(w);
+                true
+            })
         });
     }
 }
