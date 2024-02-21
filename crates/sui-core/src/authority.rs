@@ -3871,7 +3871,7 @@ impl AuthorityState {
 
         // Acquire the lock on input objects
         self.execution_cache
-            .acquire_transaction_locks(epoch_store.epoch(), owned_input_objects, tx_digest)
+            .acquire_transaction_locks(epoch_store, owned_input_objects, tx_digest)
             .await?;
 
         // Write transactions after because if we write before, there is a chance the lock can fail
@@ -3934,7 +3934,7 @@ impl AuthorityState {
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         let lock_info = self
             .execution_cache
-            .get_lock(*object_ref, epoch_store.epoch())
+            .get_lock(*object_ref, epoch_store)
             .map_err(SuiError::from)?;
         let lock_info = match lock_info {
             ObjectLockStatus::LockedAtDifferentVersion { locked_ref } => {

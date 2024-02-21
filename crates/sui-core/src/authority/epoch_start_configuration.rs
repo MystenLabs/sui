@@ -31,6 +31,7 @@ pub trait EpochStartConfigTrait {
 pub enum EpochFlag {
     InMemoryCheckpointRoots,
     PerEpochFinalizedTransactions,
+    ObjectLockSplitTables,
 }
 
 /// Parameters of the epoch fixed at epoch start.
@@ -270,6 +271,7 @@ impl EpochFlag {
         vec![
             EpochFlag::InMemoryCheckpointRoots,
             EpochFlag::PerEpochFinalizedTransactions,
+            EpochFlag::ObjectLockSplitTables,
         ]
     }
 }
@@ -280,6 +282,7 @@ impl fmt::Display for EpochFlag {
         match self {
             EpochFlag::InMemoryCheckpointRoots => write!(f, "InMemoryCheckpointRoots"),
             EpochFlag::PerEpochFinalizedTransactions => write!(f, "PerEpochFinalizedTransactions"),
+            EpochFlag::ObjectLockSplitTables => write!(f, "ObjectLockSplitTables"),
         }
     }
 }

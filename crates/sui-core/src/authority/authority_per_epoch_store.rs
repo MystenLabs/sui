@@ -1299,6 +1299,12 @@ impl AuthorityPerEpochStore {
             .contains(&EpochFlag::PerEpochFinalizedTransactions)
     }
 
+    pub fn object_lock_split_tables_enabled(&self) -> bool {
+        self.epoch_start_configuration
+            .flags()
+            .contains(&EpochFlag::ObjectLockSplitTables)
+    }
+
     // For each id in objects_to_init, return the next version for that id as recorded in the
     // next_shared_object_versions table.
     //

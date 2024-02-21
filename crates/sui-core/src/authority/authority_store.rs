@@ -16,6 +16,7 @@ use crate::transaction_outputs::TransactionOutputs;
 use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
+use itertools::izip;
 use move_core_types::resolver::ModuleResolver;
 use serde::{Deserialize, Serialize};
 use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
@@ -707,6 +708,7 @@ impl AuthorityStore {
                     if !object.is_child_object() {
                         Self::initialize_locks(
                             &perpetual_db.owned_object_transaction_locks,
+                            &perpetual_db.owned_object_locked_transactions,
                             &mut batch,
                             &[object.compute_object_reference()],
                             false, // is_force_reset
@@ -921,13 +923,29 @@ impl AuthorityStore {
         Ok(())
     }
 
-    /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
     pub(crate) async fn acquire_transaction_locks(
         &self,
-        epoch: EpochId,
+        epoch_store: &AuthorityPerEpochStore,
         owned_input_objects: &[ObjectRef],
         tx_digest: TransactionDigest,
     ) -> SuiResult {
+        if epoch_store.object_lock_split_tables_enabled() {
+            self.acquire_transaction_locks_v2(epoch_store, owned_input_objects, tx_digest)
+                .await
+        } else {
+            self.acquire_transaction_locks_v1(epoch_store, owned_input_objects, tx_digest)
+                .await
+        }
+    }
+
+    /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
+    async fn acquire_transaction_locks_v1(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        owned_input_objects: &[ObjectRef],
+        tx_digest: TransactionDigest,
+    ) -> SuiResult {
+        let epoch = epoch_store.epoch();
         // Other writers may be attempting to acquire locks on the same objects, so a mutex is
         // required.
         // TODO: replace with optimistic db_transactions (i.e. set lock to tx if none)
@@ -944,7 +962,7 @@ impl AuthorityStore {
         for ((i, lock), obj_ref) in locks.into_iter().enumerate().zip(owned_input_objects) {
             // The object / version must exist, and therefore lock initialized.
             if lock.is_none() {
-                let latest_lock = self.get_latest_lock_for_object_id(obj_ref.0)?;
+                let latest_lock = self.get_latest_live_version_for_object_id(obj_ref.0)?;
                 fp_bail!(UserInputError::ObjectVersionUnavailableForConsumption {
                     provided_obj_ref: *obj_ref,
                     current_version: latest_lock.1
@@ -1006,9 +1024,174 @@ impl AuthorityStore {
         Ok(())
     }
 
+    async fn acquire_transaction_locks_v2(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        owned_input_objects: &[ObjectRef],
+        tx_digest: TransactionDigest,
+    ) -> SuiResult {
+        let epoch = epoch_store.epoch();
+        // Other writers may be attempting to acquire locks on the same objects, so a mutex is
+        // required.
+        // TODO: replace with optimistic db_transactions (i.e. set lock to tx if none)
+        let _mutexes = self.acquire_locks(owned_input_objects).await;
+
+        trace!(?owned_input_objects, "acquire_locks");
+        let mut locks_to_write = Vec::new();
+
+        let live_object_markers = self
+            .perpetual_tables
+            .owned_object_transaction_locks
+            .multi_get(owned_input_objects)?;
+
+        let locks = self
+            .perpetual_tables
+            .owned_object_locked_transactions
+            .multi_get(owned_input_objects)?;
+
+        assert_eq!(locks.len(), live_object_markers.len());
+
+        for (live_marker, lock, obj_ref) in izip!(
+            live_object_markers.into_iter(),
+            locks.into_iter(),
+            owned_input_objects
+        ) {
+            let Some(live_marker) = live_marker else {
+                let latest_lock = self.get_latest_live_version_for_object_id(obj_ref.0)?;
+                fp_bail!(UserInputError::ObjectVersionUnavailableForConsumption {
+                    provided_obj_ref: *obj_ref,
+                    current_version: latest_lock.1
+                }
+                .into());
+            };
+
+            let live_marker = live_marker.map(|l| l.migrate().into_inner());
+
+            if let Some(LockDetails {
+                epoch: previous_epoch,
+                ..
+            }) = &live_marker
+            {
+                // this must be from a prior epoch, because we no longer write LockDetails to
+                // owned_object_transaction_locks
+                assert!(
+                    previous_epoch < &epoch,
+                    "lock for {:?} should be from a prior epoch",
+                    obj_ref
+                );
+            }
+
+            let lock = lock.map(|l| l.migrate().into_inner());
+
+            if let Some(LockDetails {
+                epoch: previous_epoch,
+                tx_digest: previous_tx_digest,
+            }) = &lock
+            {
+                fp_ensure!(
+                    &epoch >= previous_epoch,
+                    SuiError::ObjectLockedAtFutureEpoch {
+                        obj_refs: owned_input_objects.to_vec(),
+                        locked_epoch: *previous_epoch,
+                        new_epoch: epoch,
+                        locked_by_tx: *previous_tx_digest,
+                    }
+                );
+                // Lock already set to different transaction from the same epoch.
+                // If the lock is set in a previous epoch, it's ok to override it.
+                if previous_epoch == &epoch && previous_tx_digest != &tx_digest {
+                    // TODO: add metrics here
+                    info!(prev_tx_digest = ?previous_tx_digest,
+                          cur_tx_digest = ?tx_digest,
+                          "Cannot acquire lock: conflicting transaction!");
+                    return Err(SuiError::ObjectLockConflict {
+                        obj_ref: *obj_ref,
+                        pending_transaction: *previous_tx_digest,
+                    });
+                }
+                if &epoch == previous_epoch {
+                    // Exactly the same epoch and same transaction, nothing to lock here.
+                    continue;
+                } else {
+                    info!(prev_epoch =? previous_epoch, cur_epoch =? epoch, "Overriding an old lock from previous epoch");
+                    // Fall through and override the old lock.
+                }
+            }
+
+            let lock_details = LockDetails { epoch, tx_digest };
+            locks_to_write.push((obj_ref, LockDetailsWrapper::from(lock_details)));
+        }
+
+        if !locks_to_write.is_empty() {
+            trace!(?locks_to_write, "Writing locks");
+            let mut batch = self
+                .perpetual_tables
+                .owned_object_locked_transactions
+                .batch();
+            batch.insert_batch(
+                &self.perpetual_tables.owned_object_locked_transactions,
+                locks_to_write,
+            )?;
+            batch.write()?;
+        }
+
+        Ok(())
+    }
+
     /// Gets ObjectLockInfo that represents state of lock on an object.
     /// Returns UserInputError::ObjectNotFound if cannot find lock record for this object
-    pub(crate) fn get_lock(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult {
+    pub(crate) fn get_lock(
+        &self,
+        obj_ref: ObjectRef,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiLockResult {
+        if epoch_store.object_lock_split_tables_enabled() {
+            self.get_lock_v2(obj_ref, epoch_store.epoch())
+        } else {
+            self.get_lock_v1(obj_ref, epoch_store.epoch())
+        }
+    }
+
+    fn get_lock_v2(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult {
+        if self
+            .perpetual_tables
+            .owned_object_transaction_locks
+            .get(&obj_ref)?
+            .is_none()
+        {
+            return Ok(ObjectLockStatus::LockedAtDifferentVersion {
+                locked_ref: self.get_latest_live_version_for_object_id(obj_ref.0)?,
+            });
+        }
+
+        if let Some(lock_info) = self
+            .perpetual_tables
+            .owned_object_locked_transactions
+            .get(&obj_ref)?
+        {
+            let lock_info = lock_info.migrate().into_inner();
+            Ok(match Ord::cmp(&lock_info.epoch, &epoch_id) {
+                // If the object was locked in a previous epoch, we can say that it's
+                // no longer locked and is considered as just Initialized.
+                Ordering::Less => ObjectLockStatus::Initialized,
+                Ordering::Equal => ObjectLockStatus::LockedToTx {
+                    locked_by_tx: lock_info,
+                },
+                Ordering::Greater => {
+                    return Err(SuiError::ObjectLockedAtFutureEpoch {
+                        obj_refs: vec![obj_ref],
+                        locked_epoch: lock_info.epoch,
+                        new_epoch: epoch_id,
+                        locked_by_tx: lock_info.tx_digest,
+                    });
+                }
+            })
+        } else {
+            Ok(ObjectLockStatus::Initialized)
+        }
+    }
+
+    fn get_lock_v1(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult {
         Ok(
             if let Some(lock_info) = self
                 .perpetual_tables
@@ -1039,14 +1222,14 @@ impl AuthorityStore {
                 }
             } else {
                 ObjectLockStatus::LockedAtDifferentVersion {
-                    locked_ref: self.get_latest_lock_for_object_id(obj_ref.0)?,
+                    locked_ref: self.get_latest_live_version_for_object_id(obj_ref.0)?,
                 }
             },
         )
     }
 
     /// Returns UserInputError::ObjectNotFound if no lock records found for this object.
-    pub(crate) fn get_latest_lock_for_object_id(
+    pub(crate) fn get_latest_live_version_for_object_id(
         &self,
         object_id: ObjectID,
     ) -> SuiResult<ObjectRef> {
@@ -1085,7 +1268,7 @@ impl AuthorityStore {
             .multi_get(objects)?;
         for (lock, obj_ref) in locks.into_iter().zip(objects) {
             if lock.is_none() {
-                let latest_lock = self.get_latest_lock_for_object_id(obj_ref.0)?;
+                let latest_lock = self.get_latest_live_version_for_object_id(obj_ref.0)?;
                 fp_bail!(UserInputError::ObjectVersionUnavailableForConsumption {
                     provided_obj_ref: *obj_ref,
                     current_version: latest_lock.1
@@ -1107,6 +1290,7 @@ impl AuthorityStore {
         trace!(?objects, "initialize_locks");
         AuthorityStore::initialize_locks(
             &self.perpetual_tables.owned_object_transaction_locks,
+            &self.perpetual_tables.owned_object_locked_transactions,
             write_batch,
             objects,
             is_force_reset,
@@ -1114,24 +1298,35 @@ impl AuthorityStore {
     }
 
     pub fn initialize_locks(
-        locks_table: &DBMap<ObjectRef, Option<LockDetailsWrapper>>,
+        live_object_table: &DBMap<ObjectRef, Option<LockDetailsWrapper>>,
+        locks_table: &DBMap<ObjectRef, LockDetailsWrapper>,
         write_batch: &mut DBBatch,
         objects: &[ObjectRef],
         is_force_reset: bool,
     ) -> SuiResult {
         trace!(?objects, "initialize_locks");
 
+        let live_objects = live_object_table.multi_get(objects)?;
         let locks = locks_table.multi_get(objects)?;
 
         if !is_force_reset {
             // If any locks exist and are not None, return errors for them
-            let existing_locks: Vec<ObjectRef> = locks
-                .iter()
-                .zip(objects)
-                .filter_map(|(lock_opt, objref)| {
-                    lock_opt.clone().flatten().map(|_tx_digest| *objref)
-                })
-                .collect();
+            let existing_locks: Vec<ObjectRef> =
+                izip!(live_objects.into_iter(), locks.into_iter(), objects)
+                    .filter_map(|(live_object_opt, lock_opt, objref)| {
+                        match (live_object_opt, lock_opt) {
+                            // v1 lock: tx lock is in live_objects
+                            (Some(Some(_)), _) |
+                            // v2 lock: live object marker exists, lock details are in locks_table
+                            (Some(_), Some(_)) => Some(*objref),
+                            // v2 lock or v1 lock: live object marker exists, but lock is not set
+                            (Some(None), None) |
+                            // no live object marker. if v2 lock somehow exists, we still cannot
+                            // equivocate, so initializing is okay
+                            (None, _) => None,
+                        }
+                    })
+                    .collect();
             if !existing_locks.is_empty() {
                 info!(
                     ?existing_locks,
@@ -1143,7 +1338,10 @@ impl AuthorityStore {
             }
         }
 
-        write_batch.insert_batch(locks_table, objects.iter().map(|obj_ref| (obj_ref, None)))?;
+        write_batch.insert_batch(
+            live_object_table,
+            objects.iter().map(|obj_ref| (obj_ref, None)),
+        )?;
         Ok(())
     }
 
@@ -1156,6 +1354,10 @@ impl AuthorityStore {
         trace!(?objects, "delete_locks");
         write_batch.delete_batch(
             &self.perpetual_tables.owned_object_transaction_locks,
+            objects.iter(),
+        )?;
+        write_batch.delete_batch(
+            &self.perpetual_tables.owned_object_locked_transactions,
             objects.iter(),
         )?;
         Ok(())
@@ -1176,6 +1378,12 @@ impl AuthorityStore {
         batch
             .delete_batch(
                 &self.perpetual_tables.owned_object_transaction_locks,
+                objects.iter(),
+            )
+            .unwrap();
+        batch
+            .delete_batch(
+                &self.perpetual_tables.owned_object_locked_transactions,
                 objects.iter(),
             )
             .unwrap();

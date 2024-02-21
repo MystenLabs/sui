@@ -63,6 +63,9 @@ pub struct AuthorityPerpetualTables {
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
     pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetailsWrapper>>,
 
+    #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
+    pub(crate) owned_object_locked_transactions: DBMap<ObjectRef, LockDetailsWrapper>,
+
     /// This is a map between the transaction digest and the corresponding transaction that's known to be
     /// executable. This means that it may have been executed locally, or it may have been synced through
     /// state-sync but hasn't been executed yet.
@@ -403,6 +406,7 @@ impl AuthorityPerpetualTables {
         self.objects.unsafe_clear()?;
         self.indirect_move_objects.unsafe_clear()?;
         self.owned_object_transaction_locks.unsafe_clear()?;
+        self.owned_object_locked_transactions.unsafe_clear()?;
         self.executed_effects.unsafe_clear()?;
         self.events.unsafe_clear()?;
         self.executed_transactions_to_checkpoint.unsafe_clear()?;
