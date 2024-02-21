@@ -8,6 +8,7 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_bytecode_utils::format_signature_token;
+use move_vm_config::verifier::VerifierConfig;
 use sui_types::randomness_state::is_mutable_random;
 use sui_types::{
     base_types::{TxContext, TxContextKind, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
@@ -18,7 +19,6 @@ use sui_types::{
     transfer::Receiving,
     SUI_FRAMEWORK_ADDRESS,
 };
-use move_vm_config::verifier::VerifierConfig;
 
 use crate::{verification_failure, INIT_FN_NAME};
 
@@ -66,7 +66,8 @@ pub fn verify_module(
             // it's not an entry function
             continue;
         }
-        verify_entry_function_impl(module, func_def, verifier_config).map_err(verification_failure)?;
+        verify_entry_function_impl(module, func_def, verifier_config)
+            .map_err(verification_failure)?;
     }
     Ok(())
 }
