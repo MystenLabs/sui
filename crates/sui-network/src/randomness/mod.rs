@@ -146,6 +146,7 @@ struct RandomnessEventLoop {
     received_partial_sigs:
         BTreeMap<(EpochId, RandomnessRound, PeerId), Vec<RandomnessPartialSignature>>,
     completed_sigs: BTreeSet<(EpochId, RandomnessRound)>,
+    completed_rounds: BTreeSet<(EpochId, RandomnessRound)>,
 }
 
 impl RandomnessEventLoop {
@@ -241,6 +242,9 @@ impl RandomnessEventLoop {
         self.completed_sigs = self
             .completed_sigs
             .split_off(&(new_epoch, RandomnessRound(0)));
+        self.completed_rounds = self
+            .completed_rounds
+            .split_off(&(new_epoch, RandomnessRound(0)));
 
         // Start any pending tasks for the new epoch.
         self.maybe_start_pending_tasks().await;
@@ -254,7 +258,8 @@ impl RandomnessEventLoop {
             if *epoch != new_epoch {
                 break;
             }
-            if round.0 >= next_eligible_round {
+            if round.0 >= next_eligible_round && !self.completed_sigs.contains(&(*epoch, *round)) {
+                // de-dupe same round from multiple PeerIds
                 aggregate_rounds.push(*round);
                 next_eligible_round = round.0 + 1;
             }
@@ -276,8 +281,8 @@ impl RandomnessEventLoop {
             );
             return;
         }
-        if self.completed_sigs.contains(&(epoch, round)) {
-            info!("skipping sending partial sigs, we already have completed this sig");
+        if self.completed_rounds.contains(&(epoch, round)) {
+            info!("skipping sending partial sigs, we already have completed this round");
             return;
         }
 
@@ -292,14 +297,14 @@ impl RandomnessEventLoop {
         debug!("completing randomness generation");
         self.pending_tasks.remove(&(epoch, round));
         self.round_request_time.remove(&(epoch, round));
+        self.completed_sigs.insert((epoch, round)); // in case we got it from a checkpoint
+        self.completed_rounds.insert((epoch, round));
         if let Some(task) = self.send_tasks.remove(&(epoch, round)) {
             task.abort();
             self.maybe_start_pending_tasks().await;
         } else {
             self.update_rounds_pending_metric();
         }
-        // Add to completed_sigs in case we are seeing it for the first time from a checkpoint.
-        self.completed_sigs.insert((epoch, round));
     }
 
     #[instrument(level = "debug", skip_all, fields(?peer_id, ?epoch, ?round))]
@@ -542,6 +547,13 @@ impl RandomnessEventLoop {
                 continue;
             }
 
+            if self.completed_rounds.contains(&(*epoch, *round)) {
+                info!(
+                    "skipping sending partial sigs for epoch {epoch} round {round}, we already have completed this round",
+                );
+                continue;
+            }
+
             self.send_tasks.entry((*epoch, *round)).or_insert_with(|| {
                 let name = self.name;
                 let network = self.network.clone();
@@ -556,10 +568,11 @@ impl RandomnessEventLoop {
 
                 // Record own partial sigs.
                 // TODO-DNS test this behavior
-                // TODO-DNS is a completed_sigs check necessary here?
-                self.received_partial_sigs
-                    .insert((epoch, round, self.network.peer_id()), sigs.clone());
-                rounds_to_aggregate.push((epoch, round));
+                if !self.completed_sigs.contains(&(epoch, round)) {
+                    self.received_partial_sigs
+                        .insert((epoch, round, self.network.peer_id()), sigs.clone());
+                    rounds_to_aggregate.push((epoch, round));
+                }
 
                 debug!("sending partial sigs for epoch {epoch}, round {round}");
                 spawn_monitored_task!(RandomnessEventLoop::send_partial_signatures_task(

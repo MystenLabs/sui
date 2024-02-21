@@ -129,6 +129,7 @@ impl UnstartedRandomness {
                 round_request_time: BTreeMap::new(),
                 received_partial_sigs: BTreeMap::new(),
                 completed_sigs: BTreeSet::new(),
+                completed_rounds: BTreeSet::new(),
             },
             handle,
         )

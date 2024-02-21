@@ -634,6 +634,9 @@ async fn execute_checkpoint(
 
     // Once execution is complete, we know that any randomness contained in this checkpoint has
     // been successfully included in a checkpoint certified by quorum of validators.
+    // TODO-DNS: What if binary crashes at this point, after execution but before we notified the
+    // randomness manager? I think this okay because checkpoint execution should be retried on
+    // restart? But need to verify.
     if let Some(round) = randomness_round {
         // RandomnessManager is only present on validators.
         if let Some(randomness_manager) = epoch_store.randomness_manager() {
