@@ -9,6 +9,11 @@ import { useState } from "react";
 import { ExplorerLink } from "../ExplorerLink";
 import { useCreateEscrowMutation } from "@/mutations/escrow";
 
+/**
+ * A component that allows the user to create an escrow for a locked object.
+ * It fetches all the objects owned by the connected wallet address and allows the user to
+ * select one to put on escrow.
+ */
 export function CreateEscrow({ locked }: { locked: ApiLockedObject }) {
   const [objectId, setObjectId] = useState<string | undefined>(undefined);
   const account = useCurrentAccount();

@@ -7,6 +7,10 @@ import { CheckIcon, CopyIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import toast from "react-hot-toast";
 
+/**
+ * A re-usable component for explorer links that offers
+ * a copy to clipboard functionality.
+ */
 export function ExplorerLink({
   id,
   isAddress,

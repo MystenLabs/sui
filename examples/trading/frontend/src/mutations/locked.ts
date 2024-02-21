@@ -9,6 +9,9 @@ import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
+/**
+ * Builds and executes the PTB to lock an object.
+ */
 export function useLockObjectMutation() {
   const account = useCurrentAccount();
   const executeTransaction = useTransactionExecution();
@@ -32,6 +35,9 @@ export function useLockObjectMutation() {
   });
 }
 
+/**
+ * Builds and executes the PTB to unlock an object.
+ */
 export function useUnlockMutation() {
   const account = useCurrentAccount();
   const executeTransaction = useTransactionExecution();

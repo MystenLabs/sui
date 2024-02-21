@@ -22,6 +22,10 @@ import {
 import { useGetLockedObject } from "@/hooks/useGetLockedObject";
 import { LockedObject } from "../locked/LockedObject";
 
+/**
+ * A component that displays an escrow and allows the user to accept or cancel it.
+ * Accepts an `escrow` object as returned from the API.
+ */
 export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
   const account = useCurrentAccount();
   const [isToggled, setIsToggled] = useState(true);

@@ -9,6 +9,9 @@ import { SuiObjectData } from "@mysten/sui.js/client";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+/**
+ * Builds and executes the PTB to accept an escrow.
+ */
 export function useAcceptEscrowMutation() {
   const currentAccount = useCurrentAccount();
   const client = useSuiClient();
@@ -69,6 +72,9 @@ export function useAcceptEscrowMutation() {
   });
 }
 
+/**
+ * Builds and executes the PTB to cancel an escrow.
+ */
 export function useCancelEscrowMutation() {
   const currentAccount = useCurrentAccount();
   const executeTransaction = useTransactionExecution();
@@ -105,6 +111,9 @@ export function useCancelEscrowMutation() {
   });
 }
 
+/**
+ * Builds and executes the PTB to create an escrow.
+ */
 export function useCreateEscrowMutation() {
   const currentAccount = useCurrentAccount();
   const executeTransaction = useTransactionExecution();

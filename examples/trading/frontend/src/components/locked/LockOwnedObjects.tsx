@@ -8,6 +8,10 @@ import { LockClosedIcon } from "@radix-ui/react-icons";
 import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { useLockObjectMutation } from "@/mutations/locked";
 
+/**
+ * A component that fetches all the objects owned by the connected wallet address
+ * and allows the user to lock them, so they can be used in escrow.
+ */
 export function LockOwnedObjects() {
   const account = useCurrentAccount();
 

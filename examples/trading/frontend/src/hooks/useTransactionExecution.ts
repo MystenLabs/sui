@@ -5,6 +5,12 @@ import { SuiTransactionBlockResponse } from "@mysten/sui.js/client";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import toast from "react-hot-toast";
 
+/**
+ * A hook to execute transactions.
+ * It signs the transaction using the wallet and executes it through the RPC.
+ *
+ * That allows read-after-write consistency and is generally considered a best practice.
+ */
 export function useTransactionExecution() {
   const client = useSuiClient();
   const { mutateAsync: signTransactionBlock } = useSignTransactionBlock();

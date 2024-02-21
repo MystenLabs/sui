@@ -10,6 +10,11 @@ import { ApiEscrowObject, EscrowListingQuery } from "@/types/types";
 import { useState } from "react";
 import { TextField } from "@radix-ui/themes";
 
+/**
+ * A component that fetches and displays a list of escrows.
+ * It works by using the API to fetch them, and can be re-used with different
+ * API params, as well as an optional search by escrow ID functionality.
+ */
 export function EscrowList({
   params,
   enableSearch,

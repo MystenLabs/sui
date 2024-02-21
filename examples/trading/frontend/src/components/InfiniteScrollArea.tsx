@@ -4,6 +4,10 @@ import { Button } from "@radix-ui/themes";
 import { ReactNode, useEffect, useRef } from "react";
 import { Loading } from "./Loading";
 
+/**
+ * An infinite scroll area that calls `loadMore()` when the user scrolls to the bottom.
+ * Helps build easy infinite scroll areas for paginated data.
+ */
 export function InfiniteScrollArea({
   children,
   loadMore,

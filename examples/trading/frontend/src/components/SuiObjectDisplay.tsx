@@ -5,6 +5,14 @@ import { Avatar, Box, Card, Flex, Inset, Text } from "@radix-ui/themes";
 import { ReactNode } from "react";
 import { ExplorerLink } from "./ExplorerLink";
 
+/**
+ * A Card component to view an object's Display (from on-chain data).
+ * It includes a label on the top right of the card that can be styled.
+ *
+ * It also allows for children to be passed in, which will be displayed
+ * below the object's display in a footer-like design.
+ *
+ */
 export function SuiObjectDisplay({
   object,
   children,

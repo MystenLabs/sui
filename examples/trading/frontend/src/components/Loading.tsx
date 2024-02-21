@@ -1,5 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+/**
+ * A loading spinner that can be re-used across the app.
+ */
 export function Loading() {
   return (
     <div role="status" className="text-center ">
