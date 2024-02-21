@@ -280,7 +280,7 @@ pub struct AuthorityPerEpochStore {
     /// The moment when the current epoch started locally on this validator. Note that this
     /// value could be skewed if the node crashed and restarted in the middle of the epoch. That's
     /// ok because this is used for metric purposes and we could tolerate some skews occasionally.
-    epoch_open_time: Instant,
+    pub(crate) epoch_open_time: Instant,
 
     /// The moment when epoch is closed. We don't care much about crash recovery because it's
     /// a metric that doesn't have to be available for each epoch, and it's only used during

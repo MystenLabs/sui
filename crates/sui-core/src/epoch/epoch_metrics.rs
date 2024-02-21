@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
+use prometheus::{
+    register_histogram_with_registry, register_int_gauge_with_registry, Histogram, IntGauge,
+    Registry,
+};
 use std::sync::Arc;
 
 pub struct EpochMetrics {
@@ -79,7 +82,15 @@ pub struct EpochMetrics {
 
     /// The number of shares held by this node after the random beacon DKG protocol completed.
     pub epoch_random_beacon_dkg_num_shares: IntGauge,
+
+    /// The amount of time taken from epoch start to completion of random beacon DKG protocol.
+    pub epoch_random_beacon_dkg_completion_time: Histogram,
 }
+
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5,
+    10., 12.5, 15., 17.5, 20., 25., 30., 60., 90., 120., 180., 300.,
+];
 
 impl EpochMetrics {
     pub fn new(registry: &Registry) -> Arc<Self> {
@@ -164,6 +175,13 @@ impl EpochMetrics {
             epoch_random_beacon_dkg_num_shares: register_int_gauge_with_registry!(
                 "epoch_random_beacon_dkg_num_shares",
                 "The number of shares held by this node after the random beacon DKG protocol completed",
+                registry
+            )
+            .unwrap(),
+            epoch_random_beacon_dkg_completion_time: register_histogram_with_registry!(
+                "epoch_random_beacon_dkg_completion_time",
+                "The amount of time taken from epoch start to completion of random beacon DKG protocol",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),

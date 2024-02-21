@@ -449,6 +449,10 @@ impl Inner {
                         .metrics
                         .epoch_random_beacon_dkg_num_shares
                         .set(output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
+                    epoch_store
+                        .metrics
+                        .epoch_random_beacon_dkg_completion_time
+                        .observe(epoch_store.epoch_open_time.elapsed().as_secs_f64());
                     self.dkg_output
                         .set(output.clone())
                         .expect("checked above that `dkg_output` is uninitialized");
