@@ -2123,7 +2123,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                             (eloc, msg),
                             (dloc, defn_msg)
                         );
-                        diag.add_note("Remove '{}' after the variant name");
+                        diag.add_note("Remove '{ }' after the variant name");
                         context.env.add_diag(diag);
                     } else if is_positional {
                         let msg = "Invalid variant instantiation. Positional variant fields \
@@ -2237,11 +2237,13 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                         let msg = "Invalid variant instantiation. Named variant fields \
                                    require named instantiations.";
                         let defn_msg = "Variant is defined here.";
-                        context.env.add_diag(diag!(
+                        let mut diag = diag!(
                             NameResolution::PositionalCallMismatch,
                             (eloc, msg),
                             (dloc, defn_msg)
-                        ));
+                        );
+                        diag.add_note("Pass arguments to named variant fields using '{ .. }'");
+                        context.env.add_diag(diag);
                     }
 
                     NE::PackVariant(

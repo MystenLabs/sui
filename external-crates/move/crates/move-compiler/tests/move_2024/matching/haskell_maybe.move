@@ -64,10 +64,10 @@ module 0x42::maybe {
         reverse(output)
     }
 
-    macro fun map_maybe<$A, $B>($f: |$A| -> Maybe<$B>, $ls: vector<$A>): vector<$B> {
+    macro fun map_maybe<$A, $B>($f: |$A| -> Maybe<$B>, $ls: &mut vector<$A>): vector<$B> {
         let mut output = vector[];
-        while (!is_empty(&$ls)) {
-            match ($f(pop(&mut $ls))) {
+        while (!is_empty($ls)) {
+            match ($f(pop($ls))) {
                 Maybe::Just(a) => push(&mut output, a),
                 Maybe::Nothing => (),
             }
@@ -75,7 +75,7 @@ module 0x42::maybe {
         reverse(output)
     }
 
-    fun macro_map_maybe_call(va: vector<u64>): vector<u64> {
+    fun macro_map_maybe_call(va: &mut vector<u64>): vector<u64> {
         map_maybe!(
             |a| { if (a % 2 == 0) { Maybe::Just(a) } else { Maybe::Nothing }},
             va
