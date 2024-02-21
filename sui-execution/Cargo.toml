@@ -34,6 +34,7 @@ move-bytecode-verifier-v1 = { path = "../external-crates/move/move-execution/v1/
 move-vm-runtime-latest = { path = "../external-crates/move/crates/move-vm-runtime", package = "move-vm-runtime" }
 move-vm-runtime-v0 = { path = "../external-crates/move/move-execution/v0/move-vm/runtime" }
 move-vm-runtime-v1 = { path = "../external-crates/move/move-execution/v1/crates/move-vm-runtime" }
+# move-vm-runtime-$CUT = { path = "../external-crates/move/move-execution/$CUT/crates/move-vm-runtime" }
 
 [dev-dependencies]
 cargo_metadata = "0.15.4"

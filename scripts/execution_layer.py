@@ -153,7 +153,6 @@ def do_cut(args):
 
     clean_up_cut(args.feature)
     update_toml(args.feature, Path() / "sui-execution" / "Cargo.toml")
-    update_toml(args.feature, Path() / ".config" / "hakari.toml")
     generate_impls(args.feature, impl_module)
 
     with open(Path() / "sui-execution" / "src" / "lib.rs", mode="w") as lib:
