@@ -35,8 +35,8 @@ use sui_types::signature::GenericSignature;
 use sui_types::storage::InputKey;
 use sui_types::transaction::{
     AuthenticatorStateUpdate, CertifiedTransaction, InputObjectKind, SenderSignedData,
-    SharedInputObject, Transaction, TransactionDataAPI, TransactionKey, VerifiedCertificate,
-    VerifiedSignedTransaction, VerifiedTransaction,
+    SharedInputObject, Transaction, TransactionDataAPI, TransactionKey, TransactionKind,
+    VerifiedCertificate, VerifiedSignedTransaction, VerifiedTransaction,
 };
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use tokio::sync::OnceCell;
@@ -1986,11 +1986,19 @@ impl AuthorityPerEpochStore {
             [(*certificate.digest(), certificate.clone().serializable())],
         )?;
         // User signatures are written in the same batch as consensus certificate processed flag,
-        // which means we won't attempt to insert this twice for the same tx digest
-        debug_assert!(!self
-            .tables()?
-            .user_signatures_for_checkpoints
-            .contains_key(certificate.digest())?);
+        // which means we won't attempt to insert this twice for the same tx digest.
+        // (This does not apply to RandomnessStateUpdate transactions for which user signatures are
+        // written separately, only after the digest becomes known, and so we may generate and write
+        // signatures for the same transaction again after crash recovery.)
+        if !matches!(
+            certificate.data().transaction_data().kind(),
+            TransactionKind::RandomnessStateUpdate(_)
+        ) {
+            debug_assert!(!self
+                .tables()?
+                .user_signatures_for_checkpoints
+                .contains_key(certificate.digest())?);
+        }
         batch.insert_batch(
             &self.tables()?.user_signatures_for_checkpoints,
             [(*certificate.digest(), certificate.tx_signatures().to_vec())],
