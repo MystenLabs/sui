@@ -2924,7 +2924,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                     Syntax::UnexpectedToken,
                     (
                         name.loc,
-                        "Unexpected name access.\
+                        "Unexpected name access. \
                         Expected an '<enum>::<variant>' form."
                     )
                 ));
@@ -2935,7 +2935,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                     Syntax::UnexpectedToken,
                     (
                         name.loc,
-                        "Unexpected module member access.\
+                        "Unexpected module member access. \
                         Expected an identifier or enum variant."
                     )
                 ));

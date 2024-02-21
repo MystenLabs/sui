@@ -2714,7 +2714,7 @@ fn pat(context: &mut Context, in_pat: Box<E::MatchPattern>) -> Box<N::MatchPatte
                     let msg = "Invalid variant pattern. Empty variants \
                                are not matched with variant field syntax";
                     let mut diag = diag!(NameResolution::PositionalCallMismatch, (ploc, msg));
-                    diag.add_note("Remove '{}' after the variant name");
+                    diag.add_note("Remove '{ }' after the variant name");
                     context.env.add_diag(diag);
                 } else if is_positional {
                     let msg = "Invalid variant pattern. Positional variant declarations \

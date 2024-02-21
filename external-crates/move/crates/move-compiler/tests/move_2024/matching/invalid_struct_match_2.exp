@@ -1,0 +1,12 @@
+error[E04033]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/invalid_struct_match_2.move:6:16
+  │
+6 │         match (opt) {
+  │                ^^^ Pattern '_' not covered
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/matching/invalid_struct_match_2.move:7:13
+  │
+7 │             Box(x) => (),
+  │             ^^^ Unexpected name access. Expected an '<enum>::<variant>' form.
+
