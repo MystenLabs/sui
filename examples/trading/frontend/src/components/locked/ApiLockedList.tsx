@@ -14,8 +14,8 @@ import { useGetLockedObject } from "@/hooks/useGetLockedObject";
 
 /**
  * Fetches all the non-deleted system `Locked` objects from the API in a paginated fashion.
- * Then, it proceeds into fetching the on-chain state,
- * so we can better trust the latest state of the object in regards to ownership.
+ * Then, it proceeds into fetching the on-chain state, so we can better trust the latest
+ * state of the object in regards to ownership.
  *
  * We do this because `Locked` object has `store` ability, so that means that the `creator` field
  * from the API could be stale.
