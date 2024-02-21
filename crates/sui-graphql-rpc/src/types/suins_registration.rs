@@ -65,7 +65,10 @@ pub(crate) struct SuinsRegistration {
     pub native: NativeSuinsRegistration,
 }
 
-pub(crate) struct NameServiceQuery {
+/// Represents the results of a query for a domain's `NameRecord` and its parent's `NameRecord`. The
+/// `expiration_timestamp_ms` on the name records are compared to the checkpoint's timestamp to
+/// check that TODO
+pub(crate) struct DomainExpiration {
     pub parent_name_record: Option<NameRecord>,
     pub name_record: Option<NameRecord>,
     pub checkpoint_timestamp_ms: u64,
@@ -324,15 +327,26 @@ impl SuinsRegistration {
 impl NameService {
     /// Lookup the SuiNS NameRecord for the given `domain` name. `config` specifies where to find
     /// the domain name registry, and its type.
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this was queried
+    /// for, or `None` if the data was requested at the latest checkpoint.
+    ///
+    /// The `NameRecord` is returned only if it has not expired as of the `checkpoint_viewed_at` or
+    /// latest checkpoint's timestamp.
+    ///
+    /// For leaf domains, the `NameRecord` is returned only if its parent is valid and not expired.
     pub(crate) async fn resolve_to_record(
         db: &Db,
         config: &NameServiceConfig,
         domain: &Domain,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<NameRecord>, Error> {
         let record_id: SuiAddress = config.record_field_id(&domain.0).into();
         let parent_record_id: SuiAddress = config.record_field_id(&domain.0.parent()).into();
 
-        let Some(query) = Self::resolve_name_record_query(
+        // Query for the domain's NameRecord and parent NameRecord if applicable. The checkpoint's
+        // timestamp is also fetched. These values are used to determine if the domain is expired.
+        let Some(query) = Self::query_domain_expiration(
             db,
             record_id,
             if domain.0.is_subdomain() {
@@ -340,19 +354,21 @@ impl NameService {
             } else {
                 None
             },
+            checkpoint_viewed_at,
         )
         .await?
         else {
             return Ok(None);
         };
 
-        // Get the name_record from the query.
-        // If we didn't find it, we return as it means that the requested name is not registered.
+        // Get the name_record from the query. If we didn't find it, we return as it means that the
+        // requested name is not registered.
         let Some(name_record) = query.name_record else {
             return Ok(None);
         };
 
-        // If name record is SLD, or Node subdomain, we can check the expiration and return the record if not expired.
+        // If name record is SLD, or Node subdomain, we can check the expiration and return the
+        // record if not expired.
         if !name_record.is_leaf_record() {
             return if !name_record.is_node_expired(query.checkpoint_timestamp_ms) {
                 Ok(Some(name_record))
@@ -366,8 +382,8 @@ impl NameService {
             return Err(Error::NameService(NameServiceError::NameExpired));
         };
 
-        // If the parent is valid for this leaf, and not expired, then we can return the name record.
-        // Otherwise, the name is expired.
+        // If the parent is valid for this leaf, and not expired, then we can return the name
+        // record. Otherwise, the name is expired.
         if parent_name_record.is_valid_leaf_parent(&name_record)
             && !parent_name_record.is_node_expired(query.checkpoint_timestamp_ms)
         {
@@ -379,10 +395,14 @@ impl NameService {
 
     /// Lookup the SuiNS Domain for the given `address`. `config` specifies where to find the domain
     /// name registry, and its type.
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this was queried
+    /// for, or `None` if the data was requested at the latest checkpoint.
     pub(crate) async fn reverse_resolve_to_name(
         db: &Db,
         config: &NameServiceConfig,
         address: SuiAddress,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<NativeDomain>, Error> {
         let reverse_record_id = config.reverse_record_field_id(address.as_slice());
 
@@ -399,23 +419,24 @@ impl NameService {
 
         let domain = Domain(field.value);
 
-        // We attempt to resolve the domain to a record, and if it fails, we return None.
-        // That way we can validate that the name has not expired and is still valid.
-        let Some(_) = Self::resolve_to_record(db, config, &domain).await? else {
+        // We attempt to resolve the domain to a record, and if it fails, we return None. That way
+        // we can validate that the name has not expired and is still valid.
+        let Some(_) = Self::resolve_to_record(db, config, &domain, checkpoint_viewed_at).await?
+        else {
             return Ok(None);
         };
 
         Ok(Some(domain.0))
     }
 
-    /// Queries for the NameRecord and its parent, if it is supplied.
-    /// Returns the NameServiceQuery, which contains the NameRecord (option), ParentNameRecord (option), and the
-    /// latest checkpoint's timestamp.
-    async fn resolve_name_record_query(
+    /// Query for a domain's NameRecord, its parent's NameRecord if supplied, and the timestamp of
+    /// the checkpoint bound.
+    async fn query_domain_expiration(
         db: &Db,
         record_id: SuiAddress,
         parent_record_id: Option<SuiAddress>,
-    ) -> Result<Option<NameServiceQuery>, Error> {
+        checkpoint_viewed_at: Option<u64>,
+    ) -> Result<Option<DomainExpiration>, Error> {
         let mut object_ids = vec![record_id];
         let mut name_record = None;
         let mut parent_name_record = None;
@@ -432,14 +453,11 @@ impl NameService {
 
         let response = db
             .execute_repeatable(move |conn| {
-                // get latest checkpoint.
-                let checkpoint = Checkpoint::latest_checkpoint(conn)?;
-
-                let Some((lhs, rhs)) =
-                    consistent_range(conn, Some(checkpoint.stored.sequence_number as u64))?
-                else {
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
+
+                let checkpoint = Checkpoint::query_stored(conn, Some(rhs as i64))?;
 
                 let sql = build_objects_query(
                     crate::consistency::View::Consistent,
@@ -462,9 +480,8 @@ impl NameService {
             ));
         };
 
-        // Max size of results is 2.
-        // We loop through them, convert to objects + then parse name_record.
-        // We then assign it to the variable based on the address.
+        // Max size of results is 2. We loop through them, convert to objects, and then parse
+        // name_record. We then assign it to the variable based on the address.
         for result in results {
             let object = Object::try_from_stored_history_object(result, None)?;
             let move_object = MoveObject::try_from(&object).map_err(|_| {
@@ -483,10 +500,10 @@ impl NameService {
             }
         }
 
-        Ok(Some(NameServiceQuery {
+        Ok(Some(DomainExpiration {
             parent_name_record,
             name_record,
-            checkpoint_timestamp_ms: checkpoint.stored.timestamp_ms as u64,
+            checkpoint_timestamp_ms: checkpoint.timestamp_ms as u64,
         }))
     }
 }

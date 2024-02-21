@@ -230,24 +230,34 @@ impl Checkpoint {
         }))
     }
 
+    /// Look up a `Checkpoint` in the database, optionally filtered by sequence number. Otherwise,
+    /// the latest checkpoint is fetched. This method takes a connection, so that it can be used in
+    /// an execute_repeatable transaction.
+    pub(crate) fn query_stored(
+        conn: &mut Conn,
+        seq_num: Option<i64>,
+    ) -> Result<StoredCheckpoint, diesel::result::Error> {
+        use checkpoints::dsl;
+
+        let stored: StoredCheckpoint = conn.first(move || {
+            let mut query = dsl::checkpoints
+                .order_by(dsl::sequence_number.desc())
+                .into_boxed();
+
+            if let Some(seq_num) = seq_num {
+                query = query.filter(dsl::sequence_number.eq(seq_num));
+            }
+
+            query
+        })?;
+
+        Ok(stored)
+    }
+
     pub(crate) async fn query_latest_checkpoint_sequence_number(db: &Db) -> Result<u64, Error> {
         db.execute(move |conn| Checkpoint::latest_checkpoint_sequence_number(conn))
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))
-    }
-
-    /// Queries the database for the latest checkpoint by value.
-    /// This method takes a connection, so that it can be used in an execute_repeatable transaction.
-    pub(crate) fn latest_checkpoint(conn: &mut Conn) -> Result<Self, diesel::result::Error> {
-        use checkpoints::dsl;
-
-        let result: StoredCheckpoint =
-            conn.first(move || dsl::checkpoints.order_by(dsl::sequence_number.desc()))?;
-
-        Ok(Checkpoint {
-            stored: result,
-            checkpoint_viewed_at: None,
-        })
     }
 
     /// Queries the database for the upper bound of the available range supported by the graphql

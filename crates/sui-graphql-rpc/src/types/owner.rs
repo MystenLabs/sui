@@ -408,6 +408,7 @@ impl OwnerImpl {
             ctx.data_unchecked::<Db>(),
             ctx.data_unchecked::<NameServiceConfig>(),
             self.address,
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()?

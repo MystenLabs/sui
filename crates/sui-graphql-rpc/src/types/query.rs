@@ -373,6 +373,7 @@ impl Query {
             ctx.data_unchecked::<Db>(),
             ctx.data_unchecked::<NameServiceConfig>(),
             &domain,
+            /* checkpoint_viewed_at */ None,
         )
         .await
         .extend()?
