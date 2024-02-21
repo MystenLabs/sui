@@ -11,7 +11,7 @@ import {
   Cross1Icon,
 } from "@radix-ui/react-icons";
 import { CONSTANTS, QueryKey } from "@/constants";
-import { ObjectLink } from "../ObjectLink";
+import { ExplorerLink } from "../ExplorerLink";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { ApiEscrowObject } from "@/types/types";
@@ -79,7 +79,7 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
       <div className="flex gap-3 flex-wrap">
         {
           <p className="text-sm flex-shrink-0 flex items-center gap-2">
-            <ObjectLink id={escrow.objectId} isAddress={false} />
+            <ExplorerLink id={escrow.objectId} isAddress={false} />
           </p>
         }
         <Button

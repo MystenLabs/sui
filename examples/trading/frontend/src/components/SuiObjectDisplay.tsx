@@ -3,7 +3,7 @@
 import { SuiObjectData } from "@mysten/sui.js/client";
 import { Avatar, Box, Card, Flex, Inset, Text } from "@radix-ui/themes";
 import { ReactNode } from "react";
-import { ObjectLink } from "./ObjectLink";
+import { ExplorerLink } from "./ExplorerLink";
 
 export function SuiObjectDisplay({
   object,
@@ -28,7 +28,7 @@ export function SuiObjectDisplay({
         <Avatar size="6" src={display?.image_url} radius="full" fallback="O" />
         <Box className="grid grid-cols-1">
           <Text className="text-xs">
-            <ObjectLink id={object?.objectId || ""} isAddress={false} />
+            <ExplorerLink id={object?.objectId || ""} isAddress={false} />
           </Text>
           <Text as="div" size="2" weight="bold">
             {display?.name || display?.title || "-"}

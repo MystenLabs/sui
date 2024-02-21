@@ -6,7 +6,7 @@ import { formatAddress } from "@mysten/sui.js/utils";
 import { Avatar, Button, Select } from "@radix-ui/themes";
 import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 import { useState } from "react";
-import { ObjectLink } from "../ObjectLink";
+import { ExplorerLink } from "../ExplorerLink";
 import { useCreateEscrowMutation } from "@/mutations/escrow";
 
 export function CreateEscrow({ locked }: { locked: ApiLockedObject }) {
@@ -51,7 +51,7 @@ export function CreateEscrow({ locked }: { locked: ApiLockedObject }) {
     <div className="px-3 py-3 grid grid-cols-1 gap-5 mt-3 rounded">
       <div>
         <label className="text-xs">The recipient will be:</label>
-        <ObjectLink id={locked.creator!} isAddress />
+        <ExplorerLink id={locked.creator!} isAddress />
       </div>
       <div>
         <label className="text-xs">Select which object to put on escrow:</label>
@@ -106,7 +106,7 @@ export function CreateEscrow({ locked }: { locked: ApiLockedObject }) {
       {objectId && (
         <div>
           <label className="text-xs">You'll be offering:</label>
-          <ObjectLink id={objectId} />
+          <ExplorerLink id={objectId} />
         </div>
       )}
       <div className="text-right">

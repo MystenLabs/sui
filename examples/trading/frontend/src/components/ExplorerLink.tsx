@@ -7,7 +7,7 @@ import { CheckIcon, CopyIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import toast from "react-hot-toast";
 
-export function ObjectLink({
+export function ExplorerLink({
   id,
   isAddress,
 }: {

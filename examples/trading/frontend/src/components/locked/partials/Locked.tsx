@@ -9,7 +9,7 @@ import {
   ArrowUpIcon,
   LockOpen1Icon,
 } from "@radix-ui/react-icons";
-import { ObjectLink } from "../../ObjectLink";
+import { ExplorerLink } from "../../ExplorerLink";
 import { useState } from "react";
 import { ApiLockedObject } from "@/types/types";
 import { CreateEscrow } from "../../escrows/CreateEscrow";
@@ -81,7 +81,7 @@ export function Locked({
       <div className="text-right flex flex-wrap items-center justify-between">
         {
           <p className="text-sm flex-shrink-0 flex items-center gap-2">
-            <ObjectLink id={locked.objectId} isAddress={false} />
+            <ExplorerLink id={locked.objectId} isAddress={false} />
           </p>
         }
         {!hideControls && isOwner() && (
