@@ -1,22 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::test_authority_builder::TestAuthorityBuilder;
-use crate::checkpoints::CheckpointServiceNoop;
-use crate::consensus_handler::ConsensusHandlerInitializer;
-use crate::consensus_manager::mysticeti_manager::MysticetiManager;
-use crate::consensus_manager::narwhal_manager::narwhal_manager_tests::checkpoint_service_for_testing;
-use crate::consensus_manager::ConsensusManagerMetrics;
-use crate::consensus_manager::ConsensusManagerTrait;
-use crate::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
-use crate::mysticeti_adapter::LazyMysticetiClient;
+use std::{sync::Arc, time::Duration};
+
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
-use std::sync::Arc;
-use std::time::Duration;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use tokio::time::sleep;
+
+use crate::{
+    authority::test_authority_builder::TestAuthorityBuilder,
+    checkpoints::CheckpointServiceNoop,
+    consensus_handler::ConsensusHandlerInitializer,
+    consensus_manager::{
+        mysticeti_manager::MysticetiManager,
+        narwhal_manager::narwhal_manager_tests::checkpoint_service_for_testing,
+        ConsensusManagerMetrics, ConsensusManagerTrait,
+    },
+    consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
+    mysticeti_adapter::LazyMysticetiClient,
+};
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_mysticeti_manager() {

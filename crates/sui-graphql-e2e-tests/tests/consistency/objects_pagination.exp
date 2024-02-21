@@ -580,7 +580,56 @@ Response: {
   "data": {
     "objects_at_version": {
       "objects": {
-        "nodes": []
+        "nodes": [
+          {
+            "version": 3,
+            "contents": {
+              "type": {
+                "repr": "0x7fa8cc064aa9d56a46411e3e0e5878a6cd740a4edabe2cb3c28ec32d6e314db4::M1::Object"
+              },
+              "json": {
+                "id": "0x5cbc81679b7c3fe2763d6129f752abacd0787935b4a081c341e1cebc571446d5",
+                "value": "0"
+              }
+            }
+          },
+          {
+            "version": 6,
+            "contents": {
+              "type": {
+                "repr": "0x7fa8cc064aa9d56a46411e3e0e5878a6cd740a4edabe2cb3c28ec32d6e314db4::M1::Object"
+              },
+              "json": {
+                "id": "0x81b0f4f8040edbdd1778dac36f4a6c7ebd4d2689c5f9e28ea916ab3542ea6c5e",
+                "value": "3"
+              }
+            }
+          },
+          {
+            "version": 5,
+            "contents": {
+              "type": {
+                "repr": "0x7fa8cc064aa9d56a46411e3e0e5878a6cd740a4edabe2cb3c28ec32d6e314db4::M1::Object"
+              },
+              "json": {
+                "id": "0xb94dc19e08bf7ea2999f22ae8db6ef903d2ace4a08e99d40867064ca10abdf07",
+                "value": "2"
+              }
+            }
+          },
+          {
+            "version": 4,
+            "contents": {
+              "type": {
+                "repr": "0x7fa8cc064aa9d56a46411e3e0e5878a6cd740a4edabe2cb3c28ec32d6e314db4::M1::Object"
+              },
+              "json": {
+                "id": "0xcf941059092fa42fb8bc3c184adaf83083856daa002de4f4aaadfc1e79cfa26a",
+                "value": "1"
+              }
+            }
+          }
+        ]
       }
     }
   }

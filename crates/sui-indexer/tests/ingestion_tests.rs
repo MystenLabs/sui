@@ -9,13 +9,13 @@ mod ingestion_tests {
     use std::net::SocketAddr;
     use std::sync::Arc;
     use std::time::Duration;
+    use sui_indexer::db::get_pg_pool_connection;
     use sui_indexer::errors::Context;
     use sui_indexer::errors::IndexerError;
-    use sui_indexer::get_pg_pool_connection;
     use sui_indexer::models_v2::transactions::StoredTransaction;
     use sui_indexer::schema::transactions;
     use sui_indexer::store::{indexer_store_v2::IndexerStoreV2, PgIndexerStoreV2};
-    use sui_indexer::test_utils::{start_test_indexer_v2, ReaderWriterConfig};
+    use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
     use sui_types::base_types::SuiAddress;
     use sui_types::effects::TransactionEffectsAPI;
     use sui_types::storage::ReadStore;
@@ -60,10 +60,9 @@ mod ingestion_tests {
                 .await;
         });
         // Starts indexer
-        let (pg_store, pg_handle) = start_test_indexer_v2(
+        let (pg_store, pg_handle) = start_test_indexer(
             Some(DEFAULT_DB_URL.to_owned()),
             format!("http://{}", server_url),
-            true,
             ReaderWriterConfig::writer_mode(None),
         )
         .await;

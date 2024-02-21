@@ -6,7 +6,7 @@
 
 use crate::{
     error::BridgeResult,
-    retry_with_max_delay,
+    retry_with_max_elapsed_time,
     sui_client::{SuiClient, SuiClientInner},
     sui_transaction_builder::get_bridge_package_id,
 };
@@ -18,8 +18,6 @@ use tokio::{
     task::JoinHandle,
     time::{self, Duration},
 };
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
-use tokio_retry::Retry;
 
 // TODO: use the right package id
 // const PACKAGE_ID: ObjectID = SUI_SYSTEM_PACKAGE_ID;
@@ -92,9 +90,9 @@ where
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
-            let Ok(events) = retry_with_max_delay!(
+            let Ok(Ok(events)) = retry_with_max_elapsed_time!(
                 sui_client.query_events_by_module(*get_bridge_package_id(), module.clone(), cursor),
-                Duration::from_secs(600)
+                Duration::from_secs(10)
             ) else {
                 tracing::error!("Failed to query events from sui client after retry");
                 continue;

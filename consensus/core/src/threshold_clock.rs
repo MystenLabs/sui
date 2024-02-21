@@ -30,13 +30,13 @@ impl ThresholdClock {
         }
     }
 
-    pub fn last_quorum_ts(&self) -> Instant {
+    pub(crate) fn last_quorum_ts(&self) -> Instant {
         self.last_quorum_ts
     }
 
     /// Add the block references that have been successfully processed and advance the round accordingly. If the round
     /// has indeed advanced then the new round is returned, otherwise None is returned.
-    pub fn add_blocks(&mut self, mut blocks: Vec<BlockRef>) -> Option<Round> {
+    pub(crate) fn add_blocks(&mut self, mut blocks: Vec<BlockRef>) -> Option<Round> {
         let previous_round = self.round;
         for block_ref in blocks {
             self.add_block(block_ref);
@@ -44,7 +44,7 @@ impl ThresholdClock {
         (self.round > previous_round).then_some(self.round)
     }
 
-    pub fn add_block(&mut self, block: BlockRef) {
+    pub(crate) fn add_block(&mut self, block: BlockRef) {
         match block.round.cmp(&self.round) {
             // Blocks with round less then what we currently build are irrelevant here
             Ordering::Less => {}
@@ -73,7 +73,7 @@ impl ThresholdClock {
         }
     }
 
-    pub fn get_round(&self) -> Round {
+    pub(crate) fn get_round(&self) -> Round {
         self.round
     }
 }

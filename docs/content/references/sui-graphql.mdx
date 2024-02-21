@@ -5,8 +5,14 @@ description: The Sui GraphQL RPC is a public service that enables interacting wi
 
 The Sui GraphQL RPC is a public service that enables interacting with the Sui [network](https://sui.io/networkinfo).
 
-To get started with the GraphQL RPC, check out the [Getting Started](/guides/developer/getting-started/graphql-rpc.mdx) guide. If you'd like to learn more about the concepts used in the GraphQL RPC service, check out the [GraphQL RPC](/concepts/graphql-rpc.mdx) concepts page.
+To get started with the GraphQL RPC, check out the [Getting Started](/guides/developer/getting-started/graphql-rpc.mdx) guide. If you'd like to learn more about the concepts used in the GraphQL RPC service, check out the [GraphQL RPC concepts](/concepts/graphql-rpc.mdx) page.
 
-Check out the `Queries` reference page on the left sidebar for the root types related to querying the service (e.g., doing a `dryRun`). If you'd like to execute a transaction on the network, check out the `Mutations` page in the left sidebar.
+## Key Types
 
-As Sui uses an object-centric model, it might be of interest to explore the [Object](/references/sui-graphql/reference/objects/object.mdx) and [Address](/references/sui-graphql/reference/objects/address.mdx) types too. For other types and reference API, consult the pages under GraphQL RPC API shown in the left sidebar.
+All GraphQL API elements are accessible via the left sidebar, the following are good starting points to explore from.
+
+- "Queries" lists all top-level queries for reading the chain state, from reading details about addresses and objects to [dryRunTransactionBlock](/references/sui-graphql/reference/queries/dry-run-transaction-block), which has an execution-like interface but does not modify the chain.
+- "Mutations" lists operations that can modify chain state, like [executeTransactionBlock](/references/sui-graphql/reference/mutations/execute-transaction-block).
+- [Object](/references/sui-graphql/reference/objects/object) is the type representing all on-chain objects (Move values and packages)
+- [Address](/references/sui-graphql/reference/objects/address) corresponds to account addresses (derived from the public keys of signatures that sign transactions) and can be used to query the objects owned by these accounts and the transactions they have signed or been affected by.
+- [Owner](/references/sui-graphql/reference/objects/owner) represents any entity that can own a [MoveObject](/references/sui-graphql/reference/objects/move-object) to handle cases where it is not known whether the owner is an [Object](/references/sui-graphql/reference/objects/object) or an [Address](/references/sui-graphql/reference/objects/address) (for example, from the perspective of a Move object looking at its owner).

@@ -10,13 +10,12 @@ use std::net::SocketAddr;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use tracing::info;
 
+use crate::db::{new_pg_connection_pool, reset_database};
 use crate::errors::IndexerError;
-use crate::indexer_v2::IndexerV2;
+use crate::indexer::Indexer;
 use crate::processors_v2::objects_snapshot_processor::SnapshotLagConfig;
 use crate::store::PgIndexerStoreV2;
-use crate::utils::reset_database;
-use crate::IndexerConfig;
-use crate::{new_pg_connection_pool, IndexerMetrics};
+use crate::{IndexerConfig, IndexerMetrics};
 
 pub enum ReaderWriterConfig {
     Reader { reader_mode_rpc_url: String },
@@ -37,26 +36,17 @@ impl ReaderWriterConfig {
     }
 }
 
-pub async fn start_test_indexer_v2(
+pub async fn start_test_indexer(
     db_url: Option<String>,
     rpc_url: String,
-    use_indexer_experimental_methods: bool,
     reader_writer_config: ReaderWriterConfig,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
-    start_test_indexer_v2_impl(
-        db_url,
-        rpc_url,
-        use_indexer_experimental_methods,
-        reader_writer_config,
-        None,
-    )
-    .await
+    start_test_indexer_impl(db_url, rpc_url, reader_writer_config, None).await
 }
 
-pub async fn start_test_indexer_v2_impl(
+pub async fn start_test_indexer_impl(
     db_url: Option<String>,
     rpc_url: String,
-    use_indexer_experimental_methods: bool,
     reader_writer_config: ReaderWriterConfig,
     new_database: Option<String>,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
@@ -72,21 +62,13 @@ pub async fn start_test_indexer_v2_impl(
         format!("postgres://postgres:{pw}@{pg_host}:{pg_port}")
     });
 
-    let migrated_methods = if use_indexer_experimental_methods {
-        IndexerConfig::all_implemented_methods()
-    } else {
-        vec![]
-    };
-
     // Default writer mode
     let mut config = IndexerConfig {
         db_url: Some(db_url.clone()),
         rpc_client_url: rpc_url,
-        migrated_methods,
         reset_db: true,
         fullnode_sync_worker: true,
         rpc_server_worker: false,
-        use_v2: true,
         ..Default::default()
     };
 
@@ -132,8 +114,7 @@ pub async fn start_test_indexer_v2_impl(
             config.rpc_server_worker = true;
             config.rpc_server_url = reader_mode_rpc_url.ip().to_string();
             config.rpc_server_port = reader_mode_rpc_url.port();
-
-            tokio::spawn(async move { IndexerV2::start_reader(&config, &registry, db_url).await })
+            tokio::spawn(async move { Indexer::start_reader(&config, &registry, db_url).await })
         }
         ReaderWriterConfig::Writer { snapshot_config } => {
             if config.reset_db {
@@ -142,7 +123,7 @@ pub async fn start_test_indexer_v2_impl(
             let store_clone = store.clone();
 
             tokio::spawn(async move {
-                IndexerV2::start_writer_with_config(
+                Indexer::start_writer_with_config(
                     &config,
                     store_clone,
                     indexer_metrics,

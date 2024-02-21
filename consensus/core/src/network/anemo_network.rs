@@ -415,7 +415,7 @@ mod test {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_basics() {
         let (context, keys) = Context::new_for_test(4);
 

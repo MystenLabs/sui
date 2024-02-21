@@ -22,7 +22,6 @@ prometheus.workspace = true
 async-trait.workspace = true
 typed-store-derive.workspace = true
 rocksdb.workspace = true
-tokio-retry.workspace = true
 typed-store.workspace = true
 mysten-metrics.workspace = true
 sui-sdk.workspace = true
@@ -47,6 +46,9 @@ rand.workspace = true
 workspace-hack.workspace = true
 lru.workspace = true
 shared-crypto.workspace = true
+backoff = { version = "0.4.0", features = [
+  "futures",
+] }
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }

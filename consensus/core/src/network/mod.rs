@@ -46,7 +46,7 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.
 /// Dropping `NetworkManager` will shutdown the network service.
-pub(crate) trait NetworkManager<S>
+pub(crate) trait NetworkManager<S>: Send + Sync
 where
     S: NetworkService,
 {

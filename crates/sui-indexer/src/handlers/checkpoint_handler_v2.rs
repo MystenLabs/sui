@@ -42,14 +42,13 @@ use crate::errors::IndexerError;
 use crate::framework::interface::Handler;
 use crate::metrics::IndexerMetrics;
 
+use crate::db::PgConnectionPool;
 use crate::store::module_resolver_v2::{IndexerStorePackageModuleResolver, InterimPackageResolver};
 use crate::store::{IndexerStoreV2, PgIndexerStoreV2};
-use crate::types::IndexedEpochInfo;
 use crate::types::{
-    IndexedCheckpoint, IndexedEvent, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
+    IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
+    IndexedPackage, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
 };
-use crate::types::{IndexedDeletedObject, IndexedObject, IndexedPackage};
-use crate::{IndexerConfig, PgConnectionPool};
 
 use super::tx_processor::EpochEndIndexingObjectStore;
 use super::tx_processor::TxChangesProcessor;
@@ -62,7 +61,6 @@ const CHECKPOINT_QUEUE_SIZE: usize = 1000;
 pub async fn new_handlers<S>(
     state: S,
     metrics: IndexerMetrics,
-    config: &IndexerConfig,
 ) -> Result<CheckpointHandler<S>, IndexerError>
 where
     S: IndexerStoreV2 + Clone + Sync + Send + 'static,
@@ -82,12 +80,10 @@ where
 
     let state_clone = state.clone();
     let metrics_clone = metrics.clone();
-    let config_clone = config.clone();
     let (tx, package_tx) = watch::channel(None);
     spawn_monitored_task!(start_tx_checkpoint_commit_task(
         state_clone,
         metrics_clone,
-        config_clone,
         indexed_checkpoint_receiver,
         tx,
     ));

@@ -37,11 +37,12 @@ use crate::handlers::object_handler::ObjectHandler;
 use crate::handlers::package_handler::PackageHandler;
 use crate::handlers::transaction_handler::TransactionHandler;
 use crate::handlers::transaction_objects_handler::TransactionObjectsHandler;
+use crate::handlers::wrapped_object_handler::WrappedObjectHandler;
 use crate::handlers::AnalyticsHandler;
 use crate::tables::{
     CheckpointEntry, DynamicFieldEntry, EventEntry, InputObjectKind, MoveCallEntry,
     MovePackageEntry, ObjectEntry, ObjectStatus, OwnerType, TransactionEntry,
-    TransactionObjectEntry,
+    TransactionObjectEntry, WrappedObjectEntry,
 };
 use crate::writers::csv_writer::CSVWriter;
 use crate::writers::parquet_writer::ParquetWriter;
@@ -64,6 +65,8 @@ const TRANSACTION_OBJECT_DIR_PREFIX: &str = "transaction_objects";
 const MOVE_CALL_PREFIX: &str = "move_call";
 const MOVE_PACKAGE_PREFIX: &str = "move_package";
 const DYNAMIC_FIELD_PREFIX: &str = "dynamic_field";
+
+const WRAPPED_OBJECT_PREFIX: &str = "wrapped_object";
 
 #[derive(Parser, Clone, Debug)]
 #[clap(
@@ -317,6 +320,7 @@ pub enum FileType {
     MoveCall,
     MovePackage,
     DynamicField,
+    WrappedObject,
 }
 
 impl FileType {
@@ -330,6 +334,7 @@ impl FileType {
             FileType::MoveCall => Path::from(MOVE_CALL_PREFIX),
             FileType::MovePackage => Path::from(MOVE_PACKAGE_PREFIX),
             FileType::DynamicField => Path::from(DYNAMIC_FIELD_PREFIX),
+            FileType::WrappedObject => Path::from(WRAPPED_OBJECT_PREFIX),
         }
     }
 
@@ -817,6 +822,32 @@ pub async fn make_dynamic_field_processor(
     .await
 }
 
+pub async fn make_wrapped_object_processor(
+    config: AnalyticsIndexerConfig,
+    metrics: AnalyticsMetrics,
+) -> Result<Processor> {
+    let starting_checkpoint_seq_num =
+        get_starting_checkpoint_seq_num(config.clone(), FileType::WrappedObject).await?;
+    let handler: Box<dyn AnalyticsHandler<WrappedObjectEntry>> = Box::new(
+        WrappedObjectHandler::new(&config.package_cache_path, &config.rest_url),
+    );
+    let writer = make_writer::<WrappedObjectEntry>(
+        config.clone(),
+        FileType::WrappedObject,
+        starting_checkpoint_seq_num,
+    )?;
+    let max_checkpoint_reader = make_max_checkpoint_reader(&config).await?;
+    Processor::new::<WrappedObjectEntry>(
+        handler,
+        writer,
+        max_checkpoint_reader,
+        starting_checkpoint_seq_num,
+        metrics,
+        config,
+    )
+    .await
+}
+
 pub fn make_writer<S: Serialize + ParquetSchema>(
     config: AnalyticsIndexerConfig,
     file_type: FileType,
@@ -861,5 +892,6 @@ pub async fn make_analytics_processor(
         FileType::MoveCall => make_move_call_processor(config, metrics).await,
         FileType::MovePackage => make_move_package_processor(config, metrics).await,
         FileType::DynamicField => make_dynamic_field_processor(config, metrics).await,
+        FileType::WrappedObject => make_wrapped_object_processor(config, metrics).await,
     }
 }
