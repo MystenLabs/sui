@@ -43,7 +43,7 @@ pub mod writeback_cache;
 use passthrough_cache::PassthroughCache;
 use writeback_cache::WritebackCache;
 
-struct ExecutionCacheMetrics {
+pub struct ExecutionCacheMetrics {
     pending_notify_read: IntGauge,
 }
 

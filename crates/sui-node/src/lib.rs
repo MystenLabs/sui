@@ -25,6 +25,7 @@ use std::time::Duration;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_core::epoch::randomness::RandomnessManager;
+use sui_core::execution_cache::ExecutionCacheMetrics;
 use sui_core::execution_cache::NotifyReadWrapper;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_types::base_types::ConciseableName;
@@ -444,7 +445,8 @@ impl SuiNode {
             &prometheus_registry,
         )
         .await?;
-        let execution_cache = Arc::new(ExecutionCache::new(store.clone(), &prometheus_registry));
+        let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(&prometheus_registry));
+        let execution_cache = Arc::new(ExecutionCache::new(store.clone(), execution_cache_metrics));
 
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store

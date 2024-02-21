@@ -47,19 +47,24 @@ use super::{
 
 pub struct PassthroughCache {
     store: Arc<AuthorityStore>,
-    metrics: Option<ExecutionCacheMetrics>,
+    metrics: Arc<ExecutionCacheMetrics>,
     package_cache: Arc<PackageObjectCache>,
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
 }
 
 impl PassthroughCache {
-    pub fn new(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
+    pub fn new(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
         Self {
             store,
-            metrics: Some(ExecutionCacheMetrics::new(registry)),
+            metrics,
             package_cache: PackageObjectCache::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
         }
+    }
+
+    pub fn new_for_tests(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
+        let metrics = Arc::new(ExecutionCacheMetrics::new(registry));
+        Self::new(store, metrics)
     }
 
     pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper<Self> {
@@ -277,11 +282,9 @@ impl ExecutionCacheWrite for PassthroughCache {
             self.executed_effects_digests_notify_read
                 .notify(&tx_digest, &effects_digest);
 
-            if let Some(metrics) = &self.metrics {
-                metrics
-                    .pending_notify_read
-                    .set(self.executed_effects_digests_notify_read.num_pending() as i64);
-            }
+            self.metrics
+                .pending_notify_read
+                .set(self.executed_effects_digests_notify_read.num_pending() as i64);
 
             Ok(())
         }

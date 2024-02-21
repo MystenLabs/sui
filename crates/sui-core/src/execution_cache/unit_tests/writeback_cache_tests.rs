@@ -80,10 +80,7 @@ impl Scenario {
         static METRICS: once_cell::sync::Lazy<Arc<ExecutionCacheMetrics>> =
             once_cell::sync::Lazy::new(|| Arc::new(ExecutionCacheMetrics::new(default_registry())));
 
-        let cache = Arc::new(WritebackCache::new_with_metrics(
-            store.clone(),
-            (*METRICS).clone(),
-        ));
+        let cache = Arc::new(WritebackCache::new(store.clone(), (*METRICS).clone()));
         Self {
             store,
             cache,
@@ -370,7 +367,7 @@ impl Scenario {
     }
 
     fn reset_cache(&mut self) {
-        self.cache = Arc::new(WritebackCache::new_with_metrics(
+        self.cache = Arc::new(WritebackCache::new(
             self.store.clone(),
             self.cache.metrics.clone(),
         ));
@@ -801,7 +798,10 @@ async fn test_concurrent_readers() {
     });
 
     let store = init_authority_store().await;
-    let cache = Arc::new(WritebackCache::new(store.clone(), default_registry()));
+    let cache = Arc::new(WritebackCache::new_for_tests(
+        store.clone(),
+        default_registry(),
+    ));
 
     let mut s = Scenario::new_with_store_and_cache(store.clone(), cache.clone());
     let mut txns = Vec::new();

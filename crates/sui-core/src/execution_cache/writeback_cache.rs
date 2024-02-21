@@ -248,6 +248,7 @@ pub struct WritebackCache {
     // - when packages are written (in which case they will also be present in the dirty set)
     // - after a cache miss. Because package IDs are unique (only one version exists for each ID)
     //   we do not need to worry about the contiguous version property.
+    // - note that we removed any unfinalized packages from the cache during revert_state_update().
     packages: MokaCache<ObjectID, PackageObject>,
 
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
@@ -286,17 +287,7 @@ macro_rules! check_cache_entry_by_latest {
 }
 
 impl WritebackCache {
-    pub fn new(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
-        Self::new_with_metrics(store, ExecutionCacheMetrics::new(registry).into())
-    }
-
-    #[cfg(test)]
-    pub fn reset_for_test(&mut self) {
-        let mut new = Self::new_with_metrics(self.store.clone(), self.metrics.clone());
-        std::mem::swap(self, &mut new);
-    }
-
-    fn new_with_metrics(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
+    fn new(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
         let packages = MokaCache::builder()
             .max_capacity(10000)
             .initial_capacity(10000)
@@ -309,6 +300,16 @@ impl WritebackCache {
             store,
             metrics,
         }
+    }
+
+    pub fn new_for_tests(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
+        Self::new(store, ExecutionCacheMetrics::new(registry).into())
+    }
+
+    #[cfg(test)]
+    pub fn reset_for_test(&mut self) {
+        let mut new = Self::new(self.store.clone(), self.metrics.clone());
+        std::mem::swap(self, &mut new);
     }
 
     async fn write_object_entry(
@@ -481,7 +482,7 @@ impl WritebackCache {
         digest: TransactionDigest,
     ) -> SuiResult {
         let Some((_, outputs)) = self.dirty.pending_transaction_writes.remove(&digest) else {
-            return Err(SuiError::TransactionNotFound { digest });
+            panic!("Attempt to commit unknown transaction {:?}", digest);
         };
 
         // Flush writes to disk
@@ -588,9 +589,9 @@ impl WritebackCache {
 
         // IMPORTANT: lock both the dirty set entry and the cache entry before modifying either.
         // this ensures that readers cannot see a value temporarily disappear.
+        let dirty_entry = dirty.entry(key);
         let cache_entry = cache.entry(key).or_default();
         let mut cache_map = cache_entry.value().lock();
-        let dirty_entry = dirty.entry(key);
 
         // insert into cache and drop old versions.
         cache_map.insert(version, value.clone());
@@ -724,6 +725,7 @@ impl ExecutionCacheRead for WritebackCache {
         }
     }
 
+    // TOOO: we may not need this function now that all writes go through the cache
     fn force_reload_system_packages(&self, system_package_ids: &[ObjectID]) {
         for package_id in system_package_ids {
             if let Some(p) = self
@@ -1142,6 +1144,13 @@ impl ExecutionCacheWrite for WritebackCache {
     }
 }
 
+/// do_fallback_lookup is a helper function for multi-get operations.
+/// It takes a list of keys and first attempts to look up each key in the cache.
+/// The cache can return a hit, a miss, or a negative hit (if the object is known to not exist).
+/// Any keys that result in a miss are then looked up in the store.
+///
+/// The "get from cache" and "get from store" behavior are implemented by the caller and provided
+/// via the get_cached_key and multiget_fallback functions.
 fn do_fallback_lookup<K: Copy, V: Default + Clone>(
     keys: &[K],
     get_cached_key: impl Fn(&K) -> CacheResult<V>,
