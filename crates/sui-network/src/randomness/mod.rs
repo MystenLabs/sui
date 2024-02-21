@@ -423,8 +423,7 @@ impl RandomnessEventLoop {
         let sig_range = self
             .received_partial_sigs
             .range(sig_bounds)
-            .map(|(_, sigs)| sigs)
-            .flatten();
+            .flat_map(|(_, sigs)| sigs);
         let mut sig =
             match ThresholdBls12381MinSig::aggregate(self.aggregation_threshold, sig_range) {
                 Ok(sig) => sig,
@@ -463,8 +462,7 @@ impl RandomnessEventLoop {
             let sig_range = self
                 .received_partial_sigs
                 .range(sig_bounds)
-                .map(|(_, sigs)| sigs)
-                .flatten();
+                .flat_map(|(_, sigs)| sigs);
             sig = match ThresholdBls12381MinSig::aggregate(self.aggregation_threshold, sig_range) {
                 Ok(sig) => sig,
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => return, // wait for more input
@@ -497,7 +495,7 @@ impl RandomnessEventLoop {
         let keys_to_remove: Vec<_> = self
             .received_partial_sigs
             .range(sig_bounds)
-            .map(|(key, _)| key.clone())
+            .map(|(key, _)| *key)
             .collect();
         for key in keys_to_remove {
             self.received_partial_sigs.remove(&key);
@@ -545,7 +543,7 @@ impl RandomnessEventLoop {
             }
 
             self.send_tasks.entry((*epoch, *round)).or_insert_with(|| {
-                let name = self.name.clone();
+                let name = self.name;
                 let network = self.network.clone();
                 let metrics = self.metrics.clone();
                 let authority_info = self.authority_info.clone();
@@ -614,7 +612,7 @@ impl RandomnessEventLoop {
 
         let peers: HashMap<_, _> = authority_info
             .iter()
-            .map(|(name, (peer_id, _party_id))| (name, network.waiting_peer(peer_id.clone())))
+            .map(|(name, (peer_id, _party_id))| (name, network.waiting_peer(*peer_id)))
             .collect();
         let sigs: Vec<_> = sigs
             .iter()
@@ -643,7 +641,7 @@ impl RandomnessEventLoop {
                 });
             }
 
-            while let Some(_) = requests.next().await {
+            while requests.next().await.is_some() {
                 // Process all requests.
             }
 
