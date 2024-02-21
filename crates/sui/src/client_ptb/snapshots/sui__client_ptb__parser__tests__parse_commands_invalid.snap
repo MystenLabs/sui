@@ -14,6 +14,16 @@ expression: parsed
                 "Expected to find a command here",
             ),
         },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 9,
+                end: 9,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+        },
     ],
     [
         PTBError {
@@ -24,6 +34,16 @@ expression: parsed
             },
             help: Some(
                 "Expected to find a command here",
+            ),
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 9,
+                end: 9,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
             ),
         },
     ],
@@ -38,6 +58,16 @@ expression: parsed
                 "Expected an argument here",
             ),
         },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 11,
+                end: 11,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+        },
     ],
     [
         PTBError {
@@ -47,6 +77,16 @@ expression: parsed
                 end: 20,
             },
             help: None,
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 20,
+                end: 20,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
         },
     ],
     [
@@ -58,6 +98,16 @@ expression: parsed
             },
             help: Some(
                 "Expected an argument here",
+            ),
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 22,
+                end: 22,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
             ),
         },
     ],
@@ -72,6 +122,16 @@ expression: parsed
                 "Expected an argument here",
             ),
         },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 18,
+                end: 18,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+        },
     ],
     [
         PTBError {
@@ -81,6 +141,16 @@ expression: parsed
                 end: 15,
             },
             help: None,
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 15,
+                end: 15,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
         },
     ],
     [
@@ -92,6 +162,16 @@ expression: parsed
             },
             help: Some(
                 "Expected an argument here",
+            ),
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 17,
+                end: 17,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
             ),
         },
     ],
@@ -106,6 +186,16 @@ expression: parsed
                 "Expected an argument here",
             ),
         },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 13,
+                end: 13,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+        },
     ],
     [
         PTBError {
@@ -115,6 +205,16 @@ expression: parsed
                 end: 17,
             },
             help: None,
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 19,
+                end: 19,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
         },
     ],
     [
@@ -128,6 +228,16 @@ expression: parsed
                 "Expected to find a command here",
             ),
         },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 21,
+                end: 21,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+        },
     ],
     [
         PTBError {
@@ -137,6 +247,16 @@ expression: parsed
                 end: 15,
             },
             help: None,
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 15,
+                end: 15,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
         },
     ],
     [
@@ -148,6 +268,16 @@ expression: parsed
             },
             help: Some(
                 "Expected an argument here",
+            ),
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 17,
+                end: 17,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
             ),
         },
     ],
@@ -162,6 +292,16 @@ expression: parsed
                 "Expected an argument here",
             ),
         },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 13,
+                end: 13,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+        },
     ],
     [
         PTBError {
@@ -171,6 +311,16 @@ expression: parsed
                 end: 17,
             },
             help: None,
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 19,
+                end: 19,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
         },
     ],
     [
@@ -182,6 +332,16 @@ expression: parsed
             },
             help: Some(
                 "Expected to find a command here",
+            ),
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 21,
+                end: 21,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
             ),
         },
     ],
@@ -194,6 +354,16 @@ expression: parsed
             },
             help: None,
         },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 15,
+                end: 15,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+        },
     ],
     [
         PTBError {
@@ -203,6 +373,16 @@ expression: parsed
                 end: 17,
             },
             help: None,
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 25,
+                end: 25,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
         },
     ],
     [
@@ -214,6 +394,16 @@ expression: parsed
             },
             help: None,
         },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 21,
+                end: 21,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+        },
     ],
     [
         PTBError {
@@ -224,6 +414,16 @@ expression: parsed
             },
             help: Some(
                 "Value addresses can either be a variable in-scope, or a numerical address, e.g., 0xc0ffee",
+            ),
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 11,
+                end: 11,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
             ),
         },
     ],
@@ -238,16 +438,34 @@ expression: parsed
                 "Expected an argument here",
             ),
         },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 39,
+                end: 39,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+        },
     ],
     [
         PTBError {
-            message: "Unexpected end of input",
+            message: "Expected an identifier but found end of input",
+            span: Span {
+                start: 8,
+                end: 8,
+            },
+            help: None,
+        },
+        PTBError {
+            message: "Gas budget not set.",
             span: Span {
                 start: 8,
                 end: 8,
             },
             help: Some(
-                "Expected an argument here",
+                "Use --gas-budget <u64> to set a gas budget",
             ),
         },
     ],
@@ -262,35 +480,81 @@ expression: parsed
                 "Expected to find a command here",
             ),
         },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 14,
+                end: 14,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+        },
     ],
     [
         PTBError {
-            message: "Expected variable binding",
+            message: "Expected a variable name but found reserved word 'none'.",
             span: Span {
                 start: 9,
                 end: 13,
             },
-            help: None,
+            help: Some(
+                "Variable names cannot be 'address', 'bool', 'vector', 'some', 'none', 'gas', 'u8', 'u16', 'u32', 'u64', 'u128', or 'u256'.",
+            ),
         },
-    ],
-    [
         PTBError {
-            message: "Expected '(' but found identifier 'none'",
+            message: "Gas budget not set.",
             span: Span {
-                start: 14,
-                end: 18,
+                start: 15,
+                end: 15,
             },
-            help: None,
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
         },
     ],
     [
         PTBError {
-            message: "Expected variable binding",
+            message: "Expected a variable name but found reserved word 'some'.",
             span: Span {
                 start: 9,
-                end: 12,
+                end: 13,
             },
-            help: None,
+            help: Some(
+                "Variable names cannot be 'address', 'bool', 'vector', 'some', 'none', 'gas', 'u8', 'u16', 'u32', 'u64', 'u128', or 'u256'.",
+            ),
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 18,
+                end: 18,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected '.'",
+            span: Span {
+                start: 10,
+                end: 11,
+            },
+            help: Some(
+                "Expected an argument here",
+            ),
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 16,
+                end: 16,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
         },
     ],
     [
@@ -301,6 +565,16 @@ expression: parsed
                 end: 75,
             },
             help: None,
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 75,
+                end: 75,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
         },
     ],
     [
@@ -314,60 +588,54 @@ expression: parsed
                 "Expected an argument here",
             ),
         },
-    ],
-    [
         PTBError {
-            message: "Expected a u64 value",
+            message: "Gas budget not set.",
             span: Span {
-                start: 13,
-                end: 17,
-            },
-            help: None,
-        },
-    ],
-    [
-        PTBError {
-            message: "Expected a u64 value",
-            span: Span {
-                start: 13,
-                end: 17,
-            },
-            help: None,
-        },
-    ],
-    [
-        PTBError {
-            message: "Unexpected identifier 'nope'",
-            span: Span {
-                start: 18,
-                end: 22,
+                start: 16,
+                end: 16,
             },
             help: Some(
-                "Expected 'max' or 'sum' here",
+                "Use --gas-budget <u64> to set a gas budget",
             ),
         },
     ],
     [
         PTBError {
-            message: "Unexpected end of input",
+            message: "Expected a u64 value",
+            span: Span {
+                start: 13,
+                end: 17,
+            },
+            help: None,
+        },
+        PTBError {
+            message: "Gas budget not set.",
             span: Span {
                 start: 17,
                 end: 17,
             },
             help: Some(
-                "Expected 'max' or 'sum' here",
+                "Use --gas-budget <u64> to set a gas budget",
             ),
         },
     ],
     [
         PTBError {
-            message: "Unexpected identifier 'too'",
+            message: "Expected a u64 value",
             span: Span {
-                start: 18,
-                end: 21,
+                start: 13,
+                end: 17,
+            },
+            help: None,
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 17,
+                end: 17,
             },
             help: Some(
-                "Expected 'max' or 'sum' here",
+                "Use --gas-budget <u64> to set a gas budget",
             ),
         },
     ],
@@ -380,6 +648,16 @@ expression: parsed
             },
             help: None,
         },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 15,
+                end: 15,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+        },
     ],
     [
         PTBError {
@@ -390,6 +668,16 @@ expression: parsed
             },
             help: Some(
                 "Expected an argument here",
+            ),
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 10,
+                end: 10,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
             ),
         },
     ],
@@ -404,6 +692,16 @@ expression: parsed
                 "Expected to find a command here",
             ),
         },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 20,
+                end: 20,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+        },
     ],
     [
         PTBError {
@@ -413,6 +711,16 @@ expression: parsed
                 end: 12,
             },
             help: None,
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 12,
+                end: 12,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
         },
     ],
 ]

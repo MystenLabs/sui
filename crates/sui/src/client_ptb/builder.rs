@@ -4,7 +4,7 @@
 use crate::{
     client_commands::{compile_package, upgrade_package},
     client_ptb::{
-        ast::{Argument as PTBArg, ASSIGN, GAS_BUDGET, PICK_GAS_BUDGET},
+        ast::{Argument as PTBArg, ASSIGN, GAS_BUDGET},
         error::{PTBError, PTBResult, Span, Spanned},
         utils::{display_did_you_mean, find_did_you_means, to_ordinal_contraction},
     },
@@ -42,26 +42,7 @@ use sui_types::{
     Identifier, TypeTag, SUI_FRAMEWORK_PACKAGE_ID,
 };
 
-use super::ast::{GasPicker, ModuleAccess as PTBModuleAccess, ParsedPTBCommand, Program};
-
-/// The gas budget is a list of gas budgets that can be used to set the gas budget for a PTB along
-/// with a gas picker that can be used to pick the budget from the list if it is set in a PTB.
-/// A PTB may have multiple gas budgets but the gas picker can only be set once.
-struct GasBudget {
-    gas_budgets: Vec<Spanned<u64>>,
-    picker: Vec<Spanned<GasPicker>>,
-}
-
-/// The type of error that can occur when dealing with gas budgets.
-#[derive(Debug, Clone)]
-enum GasBudgetError {
-    /// No gas budget provided for the transaction.
-    NoGasBudget,
-    /// Multiple gas budgets provided, but no gas picker given.
-    NoGasPicker(Vec<Spanned<u64>>),
-    /// Multiple gas pickers defined.
-    MultipleGasPickers(Vec<Spanned<GasPicker>>),
-}
+use super::ast::{ModuleAccess as PTBModuleAccess, ParsedPTBCommand, Program};
 
 // ===========================================================================
 // Object Resolution
@@ -209,9 +190,6 @@ impl<'a> Resolver<'a> for NoResolution {
 /// - A way to resolve arguments -- this is done by calling `resolve` on a `PTBArg` and passing in
 ///   appropriate context. The context is used to determine how to resolve the argument -- e.g., if
 ///   an object ID should be resolved to a pure value or an object argument.
-/// - A way to handle gas budgets -- this is done by adding gas budgets to the gas budget list and
-///   setting the gas picker. The gas picker is used to determine how to pick a gas budget from the
-///   list of gas budgets.
 /// - A way to bind the result of a command to an identifier.
 pub struct PTBBuilder<'a> {
     /// A map from identifiers to addresses. This is used to support address resolution, and also
@@ -232,8 +210,6 @@ pub struct PTBBuilder<'a> {
     last_command: Option<Tx::Argument>,
     /// The actual PTB that we are building up.
     ptb: ProgrammableTransactionBuilder,
-    /// The gas budget for the transaction. Built-up as we go, and then finalized at the end.
-    gas_budget: GasBudget,
     /// The list of errors that we have built up while processing commands. We do not report errors
     /// eagerly but instead wait until we have processed all commands to report any errors.
     errors: Vec<PTBError>,
@@ -243,48 +219,6 @@ pub struct PTBBuilder<'a> {
 enum ResolvedAccess {
     ResultAccess(u16),
     DottedString(String),
-}
-
-impl GasBudget {
-    fn new() -> Self {
-        Self {
-            gas_budgets: vec![],
-            picker: vec![],
-        }
-    }
-
-    /// Finalize the gas budget. This will return an error if there are no gas budgets or if the
-    /// gas budget is set to 0.
-    fn finalize(self) -> Result<u64, GasBudgetError> {
-        if self.gas_budgets.is_empty() {
-            return Err(GasBudgetError::NoGasBudget);
-        }
-
-        if self.picker.len() > 1 {
-            return Err(GasBudgetError::MultipleGasPickers(self.picker));
-        }
-
-        let budget = if self.gas_budgets.len() == 1 {
-            self.gas_budgets[0].value
-        } else {
-            match self.picker.first().map(|x| &x.value) {
-                Some(GasPicker::Max) => self.gas_budgets.iter().map(|x| x.value).max().unwrap(),
-                Some(GasPicker::Sum) => self.gas_budgets.iter().map(|x| x.value).sum(),
-                None => return Err(GasBudgetError::NoGasPicker(self.gas_budgets)),
-            }
-        };
-
-        Ok(budget)
-    }
-
-    fn add_gas_budget(&mut self, budget: u64, sp: Span) {
-        self.gas_budgets.push(sp.wrap(budget));
-    }
-
-    /// Set the gas picker. This will return an error if the gas picker has already been set.
-    fn set_gas_picker(&mut self, picker: GasPicker, sp: Span) {
-        self.picker.push(sp.wrap(picker));
-    }
 }
 
 /// Check if a type tag resolves to a pure value or not.
@@ -314,20 +248,18 @@ impl<'a> PTBBuilder<'a> {
             ptb: ProgrammableTransactionBuilder::new(),
             reader,
             last_command: None,
-            gas_budget: GasBudget::new(),
             errors: Vec::new(),
         }
     }
 
     /// Finalize a PTB. If there were errors during the construction of the PTB these are returned
-    /// now. Otherwise, the PTB is finalized and returned along with the finalized gas budget, and
-    /// if the preview flag was set.
+    /// now. Otherwise, the PTB is finalized and returned.
     /// If the warn_on_shadowing flag was set, then we will print warnings for any shadowed
     /// variables that we encountered during the building of the PTB.
     pub fn finish(
         mut self,
         warn_on_shadowing: bool,
-    ) -> Result<(Tx::ProgrammableTransaction, u64), Vec<PTBError>> {
+    ) -> Result<Tx::ProgrammableTransaction, Vec<PTBError>> {
         if warn_on_shadowing {
             for (ident, commands) in self.identifiers.iter() {
                 if commands.len() == 1 {
@@ -358,70 +290,18 @@ impl<'a> PTBBuilder<'a> {
             }
         }
 
-        let budget = match self.gas_budget.finalize().map_err(|e| match e {
-            GasBudgetError::NoGasBudget => self.errors.push(err!(Span::eof_span(), "No gas budget set for transaction")),
-            GasBudgetError::NoGasPicker(budgets) => {
-                for (i, sp!(bsp, _)) in budgets.into_iter().enumerate() {
-                    let err_msg = if i == 0 {
-                        // NB: this could span multiple files, so we use the filescope saved with
-                        // the budget.
-                        PTBError {
-                            message: "Multiple gas budgets set for transaction with no gas picker. \
-                                Gas budget is set for the first time here.".to_string(),
-                            span: bsp,
-                            help: Some(format!("You should either remove all but one usage of setting the gas budget, or use the \
-                                '{PICK_GAS_BUDGET}' command to handle multiple gas budgets")),
-                        }
-                    } else {
-                        PTBError {
-                            message: format!("Gas budget is set for the {} time here.", to_ordinal_contraction(i + 1)),
-                            span: bsp,
-                            help: None,
-                        }
-                    };
-                self.errors.push(err_msg);
-                }
-            }
-            GasBudgetError::MultipleGasPickers(pickers) => {
-                for (i, sp!(bsp, _)) in pickers.into_iter().enumerate() {
-                    let err_msg = if i == 0 {
-                        // NB: this could span multiple files, so we use the filescope saved with
-                        // the picker.
-                        PTBError {
-                            message: "Multiple gas pickers set for transaction. \
-                                First usage of the 'gas-picker' command here.".to_string(),
-                            span: bsp,
-                            help: Some(format!("You should either remove all but one usage of '{PICK_GAS_BUDGET}'.")),
-                        }
-                    } else {
-                        PTBError {
-                            message: format!("'{PICK_GAS_BUDGET}' used here for the {} time.", to_ordinal_contraction(i + 1)),
-                            span: bsp,
-                            help: None,
-                        }
-                    };
-                self.errors.push(err_msg);
-                }
-            },
-        }) {
-            Ok(b) => b,
-            Err(_) => {
-                return Err(self.errors);
-            }
-        };
-
         if !self.errors.is_empty() {
             return Err(self.errors);
         }
 
         let ptb = self.ptb.finish();
-        Ok((ptb, budget))
+        Ok(ptb)
     }
 
     pub async fn build(
         mut self,
         program: Program,
-    ) -> Result<(Tx::ProgrammableTransaction, u64), Vec<PTBError>> {
+    ) -> Result<Tx::ProgrammableTransaction, Vec<PTBError>> {
         for command in program.commands.into_iter() {
             self.handle_command(command).await;
         }
@@ -498,8 +378,7 @@ impl<'a> PTBBuilder<'a> {
         let Some(SuiRawData::Package(package)) = object.bcs else {
             error!(
                 loc,
-                "BCS field in object '{}' is missing or not a package.",
-                package_id
+                "BCS field in object '{}' is missing or not a package.", package_id
             );
         };
         let package: MovePackage = MovePackage::new(
@@ -939,12 +818,6 @@ impl<'a> PTBBuilder<'a> {
                 let res = self.ptb.command(Tx::Command::MergeCoins(coin, args));
                 self.last_command = Some(res);
             }
-            ParsedPTBCommand::PickGasBudget(sp!(loc, picker)) => {
-                self.gas_budget.set_gas_picker(picker, loc);
-            }
-            ParsedPTBCommand::GasBudget(sp!(budget_loc, budget)) => {
-                self.gas_budget.add_gas_budget(budget, budget_loc);
-            }
             ParsedPTBCommand::MoveCall(
                 sp!(
                     mod_access_loc,
@@ -1095,4 +968,3 @@ impl<'a> PTBBuilder<'a> {
         Ok(())
     }
 }
-

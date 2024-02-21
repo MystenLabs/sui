@@ -9,7 +9,6 @@ expression: "results.join(\"\\n\")"
 │ command                                  │
 ├──────────────────────────────────────────┤
 │ publish tests/ptb_files/publish/test_pkg │
-│ gas-budget 1000000                       │
 ╰──────────────────────────────────────────╯
  === PROGRAM META === 
 preview: false

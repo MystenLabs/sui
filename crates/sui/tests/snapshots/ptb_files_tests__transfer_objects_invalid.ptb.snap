@@ -4,24 +4,30 @@ expression: "results.join(\"\\n\")"
 ---
  === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error when processing PTB
-   ╭────
- 1 │ --transfer-objects @0x1 --transfer-objects @0x1 [@0x1, @0x2] @0x2 --split-coins gas [1,2,3] --assign s --transfer-objects @0x1 s --gas-budget 100 
-   ·                         ─────────┬────────
-   ·                                  ╰── Expected '[' but found command '--transfer-objects'
+   ╭─[2:1]
+ 1 │ --transfer-objects @0x1
+ 2 │ --transfer-objects @0x1 [@0x1, @0x2] @0x2
+   · ─────────┬────────
+   ·          ╰── Expected '[' but found command '--transfer-objects'
+ 3 │ --split-coins gas [1,2,3]
    ╰────
 
   × Error when processing PTB
-   ╭────
- 1 │ --transfer-objects @0x1 --transfer-objects @0x1 [@0x1, @0x2] @0x2 --split-coins gas [1,2,3] --assign s --transfer-objects @0x1 s --gas-budget 100 
-   ·                                                              ┬
-   ·                                                              ╰── Unexpected '@'
+   ╭─[2:38]
+ 1 │ --transfer-objects @0x1
+ 2 │ --transfer-objects @0x1 [@0x1, @0x2] @0x2
+   ·                                      ┬
+   ·                                      ╰── Unexpected '@'
+ 3 │ --split-coins gas [1,2,3]
    ╰────
   help: Expected to find a command here
 
   × Error when processing PTB
-   ╭────
- 1 │ --transfer-objects @0x1 --transfer-objects @0x1 [@0x1, @0x2] @0x2 --split-coins gas [1,2,3] --assign s --transfer-objects @0x1 s --gas-budget 100 
-   ·                                                                                                                                ┬
-   ·                                                                                                                                ╰── Expected '[' but found identifier 's'
+   ╭─[5:25]
+ 4 │ --assign s
+ 5 │ --transfer-objects @0x1 s
+   ·                         ┬
+   ·                         ╰── Expected '[' but found identifier 's'
+ 6 │ --gas-budget 100 
    ╰────
 

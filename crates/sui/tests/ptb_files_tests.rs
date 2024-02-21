@@ -11,7 +11,7 @@ const TEST_DIR: &str = "tests";
 #[cfg(not(msim))]
 #[tokio::main]
 async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    use sui::client_ptb::{error::build_error_reports, ptb::PTBPreview};
+    use sui::client_ptb::{error::build_error_reports, ptb::PTBPreview, utils::to_source_string};
     use test_cluster::TestCluster;
     use tokio::sync::OnceCell;
 
@@ -29,7 +29,7 @@ async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let fname = || path.file_name().unwrap().to_string_lossy().to_string();
     let file_contents = std::fs::read_to_string(path).unwrap();
     let shlexed = shlex::split(&file_contents).unwrap();
-    let file_contents = shlexed.clone().join(" ") + " ";
+    let file_contents = to_source_string(shlexed.clone());
 
     // Parsing
     let program = PTB::parse_ptb_commands(shlexed);
@@ -72,14 +72,14 @@ async fn test_ptb_files(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let context = &test_cluster.wallet;
     let client = context.get_client().await?;
 
-    let built_ptb = PTB::build_ptb(program, &context, client).await;
+    let built_ptb = PTB::build_ptb(program, context, client).await;
 
     if let Ok(ref ptb) = built_ptb {
         results.push(" === BUILT PTB === ".to_string());
-        for (i, ca) in ptb.0.inputs.iter().enumerate() {
+        for (i, ca) in ptb.inputs.iter().enumerate() {
             results.push(format!("Input {}: {}", i, stable_call_arg_display(ca)));
         }
-        for (i, c) in ptb.0.commands.iter().enumerate() {
+        for (i, c) in ptb.commands.iter().enumerate() {
             results.push(format!("Command {}: {}", i, c));
         }
     }

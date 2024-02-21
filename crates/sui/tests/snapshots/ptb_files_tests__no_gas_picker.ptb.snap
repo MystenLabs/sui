@@ -2,36 +2,22 @@
 source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
- === PREVIEW === 
-╭───────────────────╮
-│ PTB Preview       │
-├───────────────────┤
-│ command           │
-├───────────────────┤
-│ gas-budget 1000   │
-│ gas-budget 110000 │
-│ assign X 1000u64  │
-╰───────────────────╯
- === PROGRAM META === 
-preview: false
-summary: false
-gas_object: none
-json: false
- === BUILDING PTB ERRORS === 
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error when processing PTB
-   ╭────
- 1 │ --gas-budget 1000 --gas-budget 110000 --assign X 1000 
-   ·              ──┬─
-   ·                ╰── Multiple gas budgets set for transaction with no gas picker. Gas budget is set for the first time here.
+   ╭─[1:1]
+ 1 │ --gas-budget 1000
+   · ────────┬────────
+   ·         ╰── Multiple gas budgets found. Gas budget first set here.
+ 2 │ --gas-budget 110000
    ╰────
-  help: You should either remove all but one usage of setting the gas
-        budget, or use the 'pick-gas-budget' command to handle multiple
-        gas budgets
 
   × Error when processing PTB
-   ╭────
- 1 │ --gas-budget 1000 --gas-budget 110000 --assign X 1000 
-   ·                                ───┬──
-   ·                                   ╰── Gas budget is set for the 2nd time here.
+   ╭─[2:1]
+ 1 │ --gas-budget 1000
+ 2 │ --gas-budget 110000
+   · ─────────┬─────────
+   ·          ╰── Budget set again here.
+ 3 │ --assign X 1000 
    ╰────
+  help: PTBs must have exactly one gas budget set.
 

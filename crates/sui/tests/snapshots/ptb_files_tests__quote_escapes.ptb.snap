@@ -16,7 +16,6 @@ expression: "results.join(\"\\n\")"
 │ assign bar "[" │
 │ assign bar "]" │
 │ assign bar "]" │
-│ gas-budget 11  │
 ╰────────────────╯
  === PROGRAM META === 
 preview: false

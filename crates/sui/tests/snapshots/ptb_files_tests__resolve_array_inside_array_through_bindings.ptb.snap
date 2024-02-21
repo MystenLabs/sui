@@ -8,7 +8,6 @@ expression: "results.join(\"\\n\")"
 ├──────────────────────────────────────┤
 │ command                              │
 ├──────────────────────────────────────┤
-│ gas-budget 1000000000                │
 │ make-move-vec address [@0x1]         │
 │ assign a                             │
 │ make-move-vec vector<address> [a, a] │
