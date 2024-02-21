@@ -27,16 +27,22 @@
 ///
 ///    - The key supplied in the swap unlocks the `Locked<U>`.
 module escrow::shared {
-    use std::option::{Self, Option};
-
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
+    use sui::event;
+    use sui::dynamic_object_field::{Self as dof};
 
     use escrow::lock::{Self, Locked, Key};
 
+    /// The `name` of the DOF that holds the Escrowed object.
+    /// Allows easy discoverability for the escrowed object.
+    struct EscrowedObjectKey has copy, store, drop {}
+
     /// An object held in escrow
-    struct Escrow<T: key + store> has key, store {
+    /// 
+    /// The escrowed object is added as a Dynamic Object Field so it can still be looked-up.
+    struct Escrow<phantom T: key + store> has key, store {
         id: UID,
 
         /// Owner of `escrowed`
@@ -48,10 +54,6 @@ module escrow::shared {
         /// ID of the key that opens the lock on the object sender wants from
         /// recipient.
         exchange_key: ID,
-
-        /// the escrowed object that we store into an option because it could
-        /// already be taken
-        escrowed: Option<T>,
     }
 
     // === Error codes ===
@@ -62,9 +64,6 @@ module escrow::shared {
     /// The `exchange_for` fields of the two escrowed objects do not match
     const EMismatchedExchangeObject: u64 = 1;
 
-    /// The escrow has already been exchanged or returned to the original sender
-    const EAlreadyExchangedOrReturned: u64 = 2;
-
     // === Public Functions ===
 
     public fun create<T: key + store>(
@@ -73,44 +72,101 @@ module escrow::shared {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        let escrow = Escrow {
+        let escrow = Escrow<T> {
             id: object::new(ctx),
             sender: tx_context::sender(ctx),
             recipient,
             exchange_key,
-            escrowed: option::some(escrowed),
         };
+
+        event::emit(EscrowCreated {
+            escrow_id: object::id(&escrow),
+            key_id: exchange_key,
+            sender: escrow.sender,
+            recipient,
+            item_id: object::id(&escrowed),
+        });
+
+        dof::add(&mut escrow.id, EscrowedObjectKey {}, escrowed);
 
         transfer::public_share_object(escrow);
     }
 
     /// The `recipient` of the escrow can exchange `obj` with the escrowed item
     public fun swap<T: key + store, U: key + store>(
-        escrow: &mut Escrow<T>,
+        escrow: Escrow<T>,
         key: Key,
         locked: Locked<U>,
         ctx: &TxContext,
     ): T {
-        assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrReturned);
-        assert!(escrow.recipient == tx_context::sender(ctx), EMismatchedSenderRecipient);
-        assert!(escrow.exchange_key == object::id(&key), EMismatchedExchangeObject);
+        let escrowed = dof::remove<EscrowedObjectKey, T>(&mut escrow.id, EscrowedObjectKey {});
 
-        let escrowed1 = option::extract<T>(&mut escrow.escrowed);
-        let escrowed2 = lock::unlock(locked, key);
+        let Escrow {
+            id,
+            sender,
+            recipient,
+            exchange_key,
+        } = escrow;
+
+        assert!(recipient == tx_context::sender(ctx), EMismatchedSenderRecipient);
+        assert!(exchange_key == object::id(&key), EMismatchedExchangeObject);
 
         // Do the actual swap
-        transfer::public_transfer(escrowed2, escrow.sender);
-        escrowed1
+        transfer::public_transfer(lock::unlock(locked, key), sender);
+
+        event::emit(EscrowSwapped {
+            escrow_id: object::uid_to_inner(&id),
+        });
+
+        object::delete(id);
+
+        escrowed
     }
 
     /// The `creator` can cancel the escrow and get back the escrowed item
     public fun return_to_sender<T: key + store>(
-        escrow: &mut Escrow<T>,
+        escrow: Escrow<T>,
         ctx: &TxContext
     ): T {
-        assert!(escrow.sender == tx_context::sender(ctx), EMismatchedSenderRecipient);
-        assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrReturned);
-        option::extract<T>(&mut escrow.escrowed)
+
+        event::emit(EscrowCancelled {
+            escrow_id: object::id(&escrow)
+        });
+
+        let escrowed = dof::remove<EscrowedObjectKey, T>(&mut escrow.id, EscrowedObjectKey {});
+
+        let Escrow {
+            id,
+            sender,
+            recipient: _,
+            exchange_key: _,
+        } = escrow;
+
+        assert!(sender == tx_context::sender(ctx), EMismatchedSenderRecipient);
+        object::delete(id);
+        escrowed
+    }
+
+    // === Events ===
+    struct EscrowCreated has copy, drop {
+        /// the ID of the escrow that was created
+        escrow_id: ID,
+        /// The ID of the `Key` that unlocks the requested object.
+        key_id: ID,
+        /// The id of the sender who'll receive `T` upon swap
+        sender: address,
+        /// The (original) recipient of the escrowed object
+        recipient: address,
+        /// The ID of the escrowed item
+        item_id: ID,
+    }
+
+    struct EscrowSwapped has copy, drop {
+        escrow_id: ID
+    }
+
+    struct EscrowCancelled has copy, drop {
+        escrow_id: ID
     }
 
     // === Tests ===
@@ -161,14 +217,13 @@ module escrow::shared {
             let k2: Key = ts::take_from_sender(&ts);
             let l2: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
             let c = swap<Coin<SUI>, Coin<SUI>>(
-                &mut escrow,
+                escrow,
                 k2,
                 l2,
                 ts::ctx(&mut ts),
             );
 
             transfer::public_transfer(c, BOB);
-            ts::return_shared(escrow);
         };
 
         // Commit effects from the swap
@@ -218,7 +273,7 @@ module escrow::shared {
             let k2: Key = ts::take_from_sender(&ts);
             let l2: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
             let c = swap<Coin<SUI>, Coin<SUI>>(
-                &mut escrow,
+                escrow,
                 k2,
                 l2,
                 ts::ctx(&mut ts),
@@ -261,7 +316,7 @@ module escrow::shared {
             let k2: Key = ts::take_from_sender(&ts);
             let l2: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
             let c = swap<Coin<SUI>, Coin<SUI>>(
-                &mut escrow,
+                escrow,
                 k2,
                 l2,
                 ts::ctx(&mut ts),
@@ -310,7 +365,7 @@ module escrow::shared {
 
             let escrow = ts::take_shared(&ts);
             let c = swap<Coin<SUI>, Coin<SUI>>(
-                &mut escrow,
+                escrow,
                 k,
                 l,
                 ts::ctx(&mut ts),
@@ -340,10 +395,9 @@ module escrow::shared {
         {
             ts::next_tx(&mut ts, ALICE);
             let escrow = ts::take_shared(&ts);
-            let c = return_to_sender<Coin<SUI>>(&mut escrow, ts::ctx(&mut ts));
+            let c = return_to_sender<Coin<SUI>>(escrow, ts::ctx(&mut ts));
 
             transfer::public_transfer(c, ALICE);
-            ts::return_shared(escrow);
         };
 
         ts::next_tx(&mut ts, @0x0);
@@ -358,7 +412,7 @@ module escrow::shared {
     }
 
     #[test]
-    #[expected_failure(abort_code = EAlreadyExchangedOrReturned)]
+    #[expected_failure]
     fun test_return_to_sender_failed_swap() {
         let ts = ts::begin(@0x0);
 
@@ -385,9 +439,8 @@ module escrow::shared {
         {
             ts::next_tx(&mut ts, ALICE);
             let escrow = ts::take_shared(&ts);
-            let c = return_to_sender<Coin<SUI>>(&mut escrow, ts::ctx(&mut ts));
+            let c = return_to_sender<Coin<SUI>>(escrow, ts::ctx(&mut ts));
             transfer::public_transfer(c, ALICE);
-            ts::return_shared(escrow);
         };
 
         // Bob's attempt to complete the swap will now fail.
@@ -397,7 +450,7 @@ module escrow::shared {
             let k2: Key = ts::take_from_sender(&ts);
             let l2: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
             let c = swap<Coin<SUI>, Coin<SUI>>(
-                &mut escrow,
+                escrow,
                 k2,
                 l2,
                 ts::ctx(&mut ts),
