@@ -187,6 +187,60 @@ expression: parsed
     ],
     [
         PTBError {
+            message: "Expected '<' but found end of input",
+            span: Span {
+                start: 15,
+                end: 15,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected '<' but found '['",
+            span: Span {
+                start: 16,
+                end: 17,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected '[' but found end of input",
+            span: Span {
+                start: 21,
+                end: 21,
+            },
+            help: None,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected end of input",
+            span: Span {
+                start: 11,
+                end: 11,
+            },
+            help: Some(
+                "Value addresses can either be a variable in-scope, or a numerical address, e.g., 0xc0ffee",
+            ),
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected '['",
+            span: Span {
+                start: 37,
+                end: 38,
+            },
+            help: Some(
+                "Expected an argument here",
+            ),
+        },
+    ],
+    [
+        PTBError {
             message: "Unexpected end of input",
             span: Span {
                 start: 8,

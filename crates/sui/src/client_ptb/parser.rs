@@ -6,13 +6,14 @@ use std::iter::Peekable;
 use move_command_line_common::{
     address::{NumericalAddress, ParsedAddress},
     parser::{parse_u128, parse_u16, parse_u256, parse_u32, parse_u64, parse_u8},
+    types::{ParsedFqName, ParsedModuleId, ParsedStructType, ParsedType},
 };
-use sui_types::base_types::ObjectID;
+use sui_types::{base_types::ObjectID, Identifier};
 
 use crate::{client_ptb::ast::GasPicker, err_, error_, sp_};
 
 use super::{
-    ast::{self as A, Argument, ParsedPTBCommand, ParsedProgram},
+    ast::{self as A, Argument, ModuleAccess, ParsedPTBCommand, ParsedProgram},
     error::{PTBError, PTBResult, Span, Spanned},
     lexer::Lexer,
     token::{Lexeme, Token},
@@ -105,8 +106,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 L(T::Command, A::ASSIGN) => command!(self.parse_assign()),
                 L(T::Command, A::GAS_BUDGET) => command!(self.parse_gas_budget()),
                 L(T::Command, A::PICK_GAS_BUDGET) => command!(self.parse_pick_gas_budget()),
-                L(T::Command, A::MAKE_MOVE_VEC) => todo!(),
-                L(T::Command, A::MOVE_CALL) => todo!(),
+                L(T::Command, A::MAKE_MOVE_VEC) => command!(self.parse_make_move_vec()),
+                L(T::Command, A::MOVE_CALL) => command!(self.parse_move_call()),
 
                 L(T::Publish, src) => command!({
                     let src = sp.wrap(src.to_owned());
@@ -279,6 +280,49 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         Ok(sp.wrap(ParsedPTBCommand::PickGasBudget(picker)))
     }
 
+    /// Parse a make-move-vec command
+    /// The expected format is: `--make-move-vec <type> [<elem>, ...]`
+    fn parse_make_move_vec(&mut self) -> PTBResult<Spanned<ParsedPTBCommand>> {
+        use Token as T;
+
+        let sp_!(start_sp, _) = self.expect(T::LAngle)?;
+        let type_ = self.parse_type()?;
+        self.expect(T::RAngle)?;
+
+        let elems = self.parse_array()?;
+
+        let sp = start_sp.widen(elems.span);
+        Ok(sp.wrap(ParsedPTBCommand::MakeMoveVec(type_, elems)))
+    }
+
+    /// Parse a move-call command
+    /// The expected format is: `--move-call <address>::<module>::<name> (<<type>, ...>)? <arg> ...`
+    fn parse_move_call(&mut self) -> PTBResult<Spanned<ParsedPTBCommand>> {
+        use Lexeme as L;
+        use Token as T;
+
+        let function = self.parse_module_access()?;
+        let mut end_sp = function.span;
+
+        let ty_args = if let sp_!(_, L(T::LAngle, _)) = self.peek() {
+            let type_args = self.parse_type_args()?;
+            end_sp = type_args.span;
+            Some(type_args)
+        } else {
+            None
+        };
+
+        let mut args = vec![];
+        while !self.peek().value.is_command_end() {
+            let arg = self.parse_argument()?;
+            end_sp = arg.span;
+            args.push(arg);
+        }
+
+        let sp = function.span.widen(end_sp);
+        Ok(sp.wrap(ParsedPTBCommand::MoveCall(function, ty_args, args)))
+    }
+
     /// Parse a gas-budget command.
     /// The expected format is: `--gas-budget <u64>`
     fn parse_gas_budget(&mut self) -> PTBResult<Spanned<ParsedPTBCommand>> {
@@ -377,6 +421,126 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 "Unexpected {unexpected}",
             ),
         })
+    }
+
+    /// Parse a type.
+    fn parse_type(&mut self) -> PTBResult<Spanned<ParsedType>> {
+        use Lexeme as L;
+        use Token as T;
+
+        let sp_!(sp, lexeme) = self.peek();
+
+        macro_rules! type_ {
+            ($ty: expr) => {{
+                self.bump();
+                sp.wrap($ty)
+            }};
+        }
+
+        Ok(match lexeme {
+            L(T::Ident, "u8") => type_!(ParsedType::U8),
+            L(T::Ident, "u16") => type_!(ParsedType::U16),
+            L(T::Ident, "u32") => type_!(ParsedType::U32),
+            L(T::Ident, "u64") => type_!(ParsedType::U64),
+            L(T::Ident, "u128") => type_!(ParsedType::U128),
+            L(T::Ident, "u256") => type_!(ParsedType::U256),
+            L(T::Ident, "bool") => type_!(ParsedType::Bool),
+            L(T::Ident, "address") => type_!(ParsedType::Address),
+
+            L(T::Ident, "vector") => {
+                self.bump();
+                self.expect(T::LAngle)?;
+                let sp_!(_, ty) = self.parse_type()?;
+                let sp_!(end_sp, _) = self.expect(T::RAngle)?;
+
+                let sp = sp.widen(end_sp);
+                sp.wrap(ParsedType::Vector(Box::new(ty)))
+            }
+
+            L(T::Ident | T::Number | T::HexNumber, _) => 'fq: {
+                let sp_!(_, module_access) = self.parse_module_access()?;
+                let sp_!(_, address) = module_access.address;
+                let sp_!(_, module_name) = module_access.module_name;
+                let sp_!(fun_sp, function_name) = module_access.function_name;
+
+                let module = ParsedModuleId {
+                    address,
+                    name: module_name.to_string(),
+                };
+
+                let name = function_name.to_string();
+                let fq_name = ParsedFqName { module, name };
+
+                let sp_!(_, L(T::LAngle, _)) = self.peek() else {
+                    let sp = sp.widen(fun_sp);
+                    break 'fq sp.wrap(ParsedType::Struct(ParsedStructType {
+                        fq_name,
+                        type_args: vec![],
+                    }));
+                };
+
+                let sp_!(tys_sp, type_args) = self.parse_type_args()?;
+
+                let sp = sp.widen(tys_sp);
+                sp.wrap(ParsedType::Struct(ParsedStructType { fq_name, type_args }))
+            }
+
+            unexpected => error_!(
+                sp => help: { "Expected a type here" },
+                "Unexpected {unexpected}",
+            ),
+        })
+    }
+
+    /// Parse a fully-qualified name, corresponding to accessing a function or type from a module.
+    fn parse_module_access(&mut self) -> PTBResult<Spanned<ModuleAccess>> {
+        use Lexeme as L;
+        use Token as T;
+
+        let address = self.parse_address()?;
+
+        self.expect(T::ColonColon)?;
+        let sp_!(mod_sp, L(_, module_name)) = self.expect(T::Ident)?;
+        let module_name = Identifier::new(module_name)
+            .map_err(|_| err_!(mod_sp, "Invalid module name {module_name:?}"))?;
+
+        self.expect(T::ColonColon)?;
+        let sp_!(fun_sp, L(_, function_name)) = self.expect(T::Ident)?;
+        let function_name = Identifier::new(function_name)
+            .map_err(|_| err_!(fun_sp, "Invalid function name {function_name:?}"))?;
+
+        let sp = address.span.widen(fun_sp);
+        Ok(sp.wrap(ModuleAccess {
+            address,
+            module_name: mod_sp.wrap(module_name),
+            function_name: fun_sp.wrap(function_name),
+        }))
+    }
+
+    /// Parse a list of type arguments, surrounded by angle brackets, and separated by commas.
+    fn parse_type_args(&mut self) -> PTBResult<Spanned<Vec<ParsedType>>> {
+        use Lexeme as L;
+        use Token as T;
+
+        let sp_!(start_sp, _) = self.expect(T::LAngle)?;
+
+        let mut type_args = vec![];
+        loop {
+            type_args.push(self.parse_type()?.value);
+
+            let sp_!(sp, lexeme) = self.peek();
+            match lexeme {
+                L(T::Comma, _) => self.bump(),
+                L(T::RAngle, _) => break,
+                unexpected => error_!(
+                    sp => help: { "Expected {} or {}", T::Comma, T::RAngle },
+                    "Unexpected {unexpected}",
+                ),
+            }
+        }
+
+        let sp_!(end_sp, _) = self.expect(T::RAngle)?;
+        Ok(start_sp.widen(end_sp).wrap(type_args))
     }
 
     /// Parse a variable access (a non-empty chain of identifiers, separated by '.')
@@ -644,6 +808,61 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_types() {
+        let inputs = vec![
+            // Primitives
+            "u8",
+            "u16",
+            "u32",
+            "u64",
+            "u128",
+            "u256",
+            "bool",
+            "address",
+            "vector<u8>",
+            // Structs
+            "sui::object::ID",
+            "0x2::object::UID",
+            "3::staking_pool::StakedSui",
+            // Generic types
+            "0x2::coin::Coin<2::sui::SUI>",
+            "sui::table::Table<sui::object::ID, vector<0x1::option::Option<u32>>>",
+        ];
+        let mut parsed = Vec::new();
+        for input in inputs {
+            let x = shlex::split(input).unwrap();
+            let mut parser = ProgramParser::new(x.iter().map(|x| x.as_str())).unwrap();
+            let result = parser
+                .parse_type()
+                .unwrap_or_else(|e| panic!("Failed on {input:?}: {e:?}"));
+            parsed.push(result);
+        }
+        insta::assert_debug_snapshot!(parsed);
+    }
+
+    #[test]
+    fn test_parse_types_invalid() {
+        let inputs = vec![
+            "signer",
+            "not-an-identifier",
+            "vector<u8, u16>",
+            "foo::",
+            "foo::bar",
+            "foo::bar::Baz<",
+            "foo::bar::Baz<u8",
+            "foo::bar::Baz<u8,",
+        ];
+        let mut parsed = Vec::new();
+        for input in inputs {
+            let x = shlex::split(input).unwrap();
+            let mut parser = ProgramParser::new(x.iter().map(|x| x.as_str())).unwrap();
+            let result = parser.parse_type().unwrap_err();
+            parsed.push(result);
+        }
+        insta::assert_debug_snapshot!(parsed);
+    }
+
+    #[test]
     fn test_parse_commands() {
         let inputs = vec![
             // Publish
@@ -661,6 +880,13 @@ mod tests {
             // Merge coins
             "--merge-coins a [b, c]",
             "--merge-coins a [c]",
+            // Make Move Vec
+            "--make-move-vec <u64> []",
+            "--make-move-vec <u8> [1u8, 2u8]",
+            // Move Call
+            "--move-call 0x3::sui_system::request_add_stake system coins.0 validator",
+            "--move-call std::option::is_none <u64> p",
+            "--move-call std::option::is_some<u32> q",
             // Assign
             "--assign a",
             "--assign a b.1",
@@ -717,6 +943,13 @@ mod tests {
             "--merge-coins",
             "--merge-coins a b c",
             "--merge-coins a [b] c",
+            // Make Move Vec
+            "--make-move-vec",
+            "--make-move-vec [1, 2, 3]",
+            "--make-move-vec <u64>",
+            // Move Call
+            "--move-call",
+            "--move-call 0x1::option::is_none<u8> []",
             // Assign
             "--assign",
             "--assign a b c",
