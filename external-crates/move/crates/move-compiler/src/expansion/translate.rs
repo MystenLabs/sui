@@ -1823,7 +1823,7 @@ fn struct_def_(
     context
         .env()
         .add_warning_filter_scope(warning_filter.clone());
-    let type_parameters = struct_type_parameters(context, pty_params);
+    let type_parameters = datatype_type_parameters(context, pty_params);
     context.push_type_parameters(type_parameters.iter().map(|tp| &tp.name));
     let abilities = ability_set(context, "modifier", abilities_vec);
     let fields = struct_fields(context, &name, pfields);
@@ -1907,7 +1907,7 @@ fn enum_def_(
     context
         .env()
         .add_warning_filter_scope(warning_filter.clone());
-    let type_parameters = enum_type_parameters(context, pty_params);
+    let type_parameters = datatype_type_parameters(context, pty_params);
     context.push_type_parameters(type_parameters.iter().map(|tp| &tp.name));
     let abilities = ability_set(context, "modifier", abilities_vec);
     let variants = enum_variants(context, &name, pvariants);
@@ -2269,24 +2269,7 @@ fn function_type_parameters(
         .collect()
 }
 
-fn struct_type_parameters(
-    context: &mut Context,
-    pty_params: Vec<P::DatatypeTypeParameter>,
-) -> Vec<E::DatatypeTypeParameter> {
-    pty_params
-        .into_iter()
-        .map(|param| {
-            let _ = check_valid_type_parameter_name(context, None, &param.name);
-            E::DatatypeTypeParameter {
-                is_phantom: param.is_phantom,
-                name: param.name,
-                constraints: ability_set(context, "constraint", param.constraints),
-            }
-        })
-        .collect()
-}
-
-fn enum_type_parameters(
+fn datatype_type_parameters(
     context: &mut Context,
     pty_params: Vec<P::DatatypeTypeParameter>,
 ) -> Vec<E::DatatypeTypeParameter> {

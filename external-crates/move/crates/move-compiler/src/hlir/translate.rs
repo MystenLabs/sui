@@ -2508,12 +2508,10 @@ fn assign_variant_fields(
                 (ndx, f, single_ty, tfa)
             })
             .collect(),
-
     };
     tfields_vec.sort_by(|(idx1, _, _, _), (idx2, _, _, _)| idx1.cmp(idx2));
     tfields_vec
 }
-
 
 //**************************************************************************************************
 // Commands

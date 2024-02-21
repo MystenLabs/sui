@@ -2863,16 +2863,6 @@ fn parse_enum_decl(
     check_no_modifier(context, NATIVE_MODIFIER, native, "enum");
     check_enum_visibility(visibility, context);
 
-    if let Some(loc) = entry {
-        let msg = format!(
-            "Invalid enum declaration. '{}' is used only on functions",
-            ENTRY_MODIFIER
-        );
-        context
-            .env
-            .add_diag(diag!(Syntax::InvalidModifier, (loc, msg)));
-    }
-
     consume_token(context.tokens, Tok::Enum)?;
 
     // <EnumDefName>
@@ -3154,7 +3144,7 @@ fn parse_positional_field(context: &mut Context) -> Result<Type, Box<Diagnostic>
             Syntax::UnexpectedToken,
             (
                 context.tokens.current_token_loc(),
-                "Cannot use named fields here"
+                "Cannot use named fields in a positional definition"
             )
         )));
     }
@@ -3895,27 +3885,39 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                         unexpected_token_error(
                             context.tokens,
                             &format!(
-                                "a module member: '{}', '{}', '{}', '{}', '{}', '{}', or '{}'",
-                                Tok::Spec,
-                                Tok::Use,
-                                Tok::Friend,
-                                Tok::Const,
-                                Tok::Fun,
-                                Tok::Struct,
-                                Tok::Enum,
+                                "a module member: {}",
+                                format_oxford_list!(
+                                    "or",
+                                    "'{}'",
+                                    vec![
+                                        Tok::Spec,
+                                        Tok::Use,
+                                        Tok::Friend,
+                                        Tok::Const,
+                                        Tok::Fun,
+                                        Tok::Struct,
+                                        Tok::Enum
+                                    ]
+                                )
                             ),
                         )
                     } else {
                         unexpected_token_error(
                             context.tokens,
                             &format!(
-                                "a module member: '{}', '{}', '{}', '{}', '{}', or '{}'",
-                                Tok::Spec,
-                                Tok::Use,
-                                Tok::Friend,
-                                Tok::Const,
-                                Tok::Fun,
-                                Tok::Struct,
+                                "a module member: {}",
+                                format_oxford_list!(
+                                    "or",
+                                    "'{}'",
+                                    vec![
+                                        Tok::Spec,
+                                        Tok::Use,
+                                        Tok::Friend,
+                                        Tok::Const,
+                                        Tok::Fun,
+                                        Tok::Struct
+                                    ]
+                                )
                             ),
                         )
                     };

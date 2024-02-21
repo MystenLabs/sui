@@ -1,4 +1,4 @@
-error[E13002]: feature is under active development
+error[E13003]: feature is under active development
   ┌─ tests/move_2024/matching/empty_match.move:3:17
   │
 3 │     public enum Empty {

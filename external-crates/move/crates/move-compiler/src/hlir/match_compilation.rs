@@ -3,7 +3,6 @@
 
 use crate::{
     diag,
-    diagnostics::or_list_string,
     // diag,
     expansion::ast::{Fields, ModuleIdent, Value, Value_, Mutability},
     hlir::translate::Context,
@@ -11,7 +10,7 @@ use crate::{
     parser::ast::{BinOp_, DatatypeName, Field, VariantName},
     shared::{
         ast_debug::{AstDebug, AstWriter},
-        unique_map::UniqueMap,
+        unique_map::UniqueMap, format_oxford_list,
     },
     typing::ast::{self as T, MatchArm_, MatchPattern, UnannotatedPat_ as TP},
 };
@@ -1534,66 +1533,24 @@ fn find_counterexample(
         arity: u32,
         ndx: &mut u32,
     ) -> Option<Vec<CounterExample>> {
-            let literals = matrix.first_lits();
-            assert!(literals.len() <= 2, "ICE match exhaustiveness failure");
-            if literals.len() == 2 {
-                // Saturated
-                for lit in literals {
-                    if let Some(counterexample) = find_counterexample(
-                        context,
-                        matrix.specialize_literal(&lit).1,
-                        arity - 1,
-                        ndx,
-                    ) {
-                        let lit_str = format!("{}", lit);
-                        let result = [CounterExample::Literal(lit_str)]
-                            .into_iter()
-                            .chain(counterexample)
-                            .collect();
-                        return Some(result);
-                    }
-                }
-                None
-            } else {
-                let (_, default) = matrix.default();
-                if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx)
+        let literals = matrix.first_lits();
+        assert!(literals.len() <= 2, "ICE match exhaustiveness failure");
+        if literals.len() == 2 {
+            // Saturated
+            for lit in literals {
+                if let Some(counterexample) =
+                    find_counterexample(context, matrix.specialize_literal(&lit).1, arity - 1, ndx)
                 {
-                    if literals.is_empty() {
-                        let result = [CounterExample::Wildcard]
-                            .into_iter()
-                            .chain(counterexample)
-                            .collect();
-                        Some(result)
-                    } else {
-                        let mut unused = BTreeSet::from([Value_::Bool(true), Value_::Bool(false)]);
-                        for lit in literals {
-                            unused.remove(&lit.value);
-                        }
-                        let result = [CounterExample::Literal(format!(
-                            "{}",
-                            unused.first().unwrap()
-                        ))]
+                    let lit_str = format!("{}", lit);
+                    let result = [CounterExample::Literal(lit_str)]
                         .into_iter()
                         .chain(counterexample)
                         .collect();
-                        Some(result)
-                    }
-                } else {
-                    None
+                    return Some(result);
                 }
             }
-        }
-
-
-    fn find_counterexample_builtin(
-        context: &mut Context,
-        matrix: PatternMatrix,
-        arity: u32,
-        ndx: &mut u32,
-    ) -> Option<Vec<CounterExample>> {
-            // For all other non-literals, we don't consider a case where the constructors are
-            // saturated.
-            let literals = matrix.first_lits();
+            None
+        } else {
             let (_, default) = matrix.default();
             if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx) {
                 if literals.is_empty() {
@@ -1603,23 +1560,55 @@ fn find_counterexample(
                         .collect();
                     Some(result)
                 } else {
-                    let n_id = format!("_{}", ndx);
-                    *ndx += 1;
-                    let lit_strs = literals
-                        .into_iter()
-                        .map(|lit| format!("{}", lit))
-                        .collect::<Vec<_>>();
-                    let lit_str = or_list_string(lit_strs);
-                    let lit_msg = format!("When '{}' is not {}", n_id, lit_str);
-                    let lit_ce =
-                        CounterExample::Note(lit_msg, Box::new(CounterExample::Literal(n_id)));
-                    let result = [lit_ce].into_iter().chain(counterexample).collect();
+                    let mut unused = BTreeSet::from([Value_::Bool(true), Value_::Bool(false)]);
+                    for lit in literals {
+                        unused.remove(&lit.value);
+                    }
+                    let result = [CounterExample::Literal(format!(
+                        "{}",
+                        unused.first().unwrap()
+                    ))]
+                    .into_iter()
+                    .chain(counterexample)
+                    .collect();
                     Some(result)
                 }
             } else {
                 None
             }
         }
+    }
+
+    fn find_counterexample_builtin(
+        context: &mut Context,
+        matrix: PatternMatrix,
+        arity: u32,
+        ndx: &mut u32,
+    ) -> Option<Vec<CounterExample>> {
+        // For all other non-literals, we don't consider a case where the constructors are
+        // saturated.
+        let literals = matrix.first_lits();
+        let (_, default) = matrix.default();
+        if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx) {
+            if literals.is_empty() {
+                let result = [CounterExample::Wildcard]
+                    .into_iter()
+                    .chain(counterexample)
+                    .collect();
+                Some(result)
+            } else {
+                let n_id = format!("_{}", ndx);
+                *ndx += 1;
+                let lit_str = format_oxford_list!("or", "{}", literals.into_iter().collect::<Vec<_>>());
+                let lit_msg = format!("When '{}' is not {}", n_id, lit_str);
+                let lit_ce = CounterExample::Note(lit_msg, Box::new(CounterExample::Literal(n_id)));
+                let result = [lit_ce].into_iter().chain(counterexample).collect();
+                Some(result)
+            }
+        } else {
+            None
+        }
+    }
 
     fn find_counterexample_datatype(
         context: &mut Context,
@@ -1629,92 +1618,90 @@ fn find_counterexample(
         mident: ModuleIdent,
         datatype_name: DatatypeName,
     ) -> Option<Vec<CounterExample>> {
-            // println!("matrix types:");
-            // for ty in &matrix.tys {
-            //     ty.print_verbose();
-            // }
+        // println!("matrix types:");
+        // for ty in &matrix.tys {
+        //     ty.print_verbose();
+        // }
 
-            // TODO: if we ever want to match against structs, this needs to behave differently
-            if context.is_struct(&mident, &datatype_name) {
-                let (_, default) = matrix.default();
-                if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx)
-                {
-                    let result = [CounterExample::Wildcard]
-                        .into_iter()
-                        .chain(counterexample)
-                        .collect();
-                    return Some(result);
-                } else {
-                    return None;
-                }
-            }
-
-            let mut unmatched_variants = context
-                .enum_variants(&mident, &datatype_name)
-                .into_iter()
-                .collect::<BTreeSet<_>>();
-
-            let ctors = matrix.first_head_ctors();
-            for ctor in ctors.keys() {
-                unmatched_variants.remove(ctor);
-            }
-            if unmatched_variants.is_empty() {
-                for (ctor, (ploc, arg_types)) in ctors {
-                    let ctor_arity = arg_types.len() as u32;
-                    let fringe_binders = context.make_imm_ref_match_binders(ploc, arg_types);
-                    let bind_tys = fringe_binders
-                        .iter()
-                        .map(|(_, _, ty)| ty)
-                        .collect::<Vec<_>>();
-                    let (_, inner_matrix) = matrix.specialize(context, &ctor, bind_tys);
-                    if let Some(mut counterexample) =
-                        find_counterexample(context, inner_matrix, ctor_arity + arity - 1, ndx)
-                    {
-                        let ctor_args = counterexample
-                            .drain(0..(ctor_arity as usize))
-                            .collect::<Vec<_>>();
-                        let output = [CounterExample::Constructor(datatype_name, ctor, ctor_args)]
-                            .into_iter()
-                            .chain(counterexample)
-                            .collect();
-                        return Some(output);
-                    }
-                }
-                None
+        // TODO: if we ever want to match against structs, this needs to behave differently
+        if context.is_struct(&mident, &datatype_name) {
+            let (_, default) = matrix.default();
+            if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx) {
+                let result = [CounterExample::Wildcard]
+                    .into_iter()
+                    .chain(counterexample)
+                    .collect();
+                return Some(result);
             } else {
-                let (_, default) = matrix.default();
-                if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx)
-                {
-                    if ctors.is_empty() {
-                        // If we didn't match any head constructor, `_` is a reasonable
-                        // counter-example entry.
-                        let mut result = vec![CounterExample::Wildcard];
-                        result.extend(&mut counterexample.into_iter());
-                        Some(result)
-                    } else {
-                        let variant_name = unmatched_variants.first().unwrap();
-                        let ctor_arity = context
-                            .enum_variant_fields(&mident, &datatype_name, variant_name)
-                            .unwrap()
-                            .iter()
-                            .count();
-                        let args = make_wildcards(ctor_arity);
-                        let result = [CounterExample::Constructor(
-                            datatype_name,
-                            *variant_name,
-                            args,
-                        )]
-                        .into_iter()
-                        .chain(counterexample)
-                        .collect();
-                        Some(result)
-                    }
-                } else {
-                    // If we are missing a variant but everything else is fine, we're done.
-                    None
-                }
+                return None;
             }
         }
+
+        let mut unmatched_variants = context
+            .enum_variants(&mident, &datatype_name)
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+
+        let ctors = matrix.first_head_ctors();
+        for ctor in ctors.keys() {
+            unmatched_variants.remove(ctor);
+        }
+        if unmatched_variants.is_empty() {
+            for (ctor, (ploc, arg_types)) in ctors {
+                let ctor_arity = arg_types.len() as u32;
+                let fringe_binders = context.make_imm_ref_match_binders(ploc, arg_types);
+                let bind_tys = fringe_binders
+                    .iter()
+                    .map(|(_, _, ty)| ty)
+                    .collect::<Vec<_>>();
+                let (_, inner_matrix) = matrix.specialize(context, &ctor, bind_tys);
+                if let Some(mut counterexample) =
+                    find_counterexample(context, inner_matrix, ctor_arity + arity - 1, ndx)
+                {
+                    let ctor_args = counterexample
+                        .drain(0..(ctor_arity as usize))
+                        .collect::<Vec<_>>();
+                    let output = [CounterExample::Constructor(datatype_name, ctor, ctor_args)]
+                        .into_iter()
+                        .chain(counterexample)
+                        .collect();
+                    return Some(output);
+                }
+            }
+            None
+        } else {
+            let (_, default) = matrix.default();
+            if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx) {
+                if ctors.is_empty() {
+                    // If we didn't match any head constructor, `_` is a reasonable
+                    // counter-example entry.
+                    let mut result = vec![CounterExample::Wildcard];
+                    result.extend(&mut counterexample.into_iter());
+                    Some(result)
+                } else {
+                    let variant_name = unmatched_variants.first().unwrap();
+                    let ctor_arity = context
+                        .enum_variant_fields(&mident, &datatype_name, variant_name)
+                        .unwrap()
+                        .iter()
+                        .count();
+                    let args = make_wildcards(ctor_arity);
+                    let result = [CounterExample::Constructor(
+                        datatype_name,
+                        *variant_name,
+                        args,
+                    )]
+                    .into_iter()
+                    .chain(counterexample)
+                    .collect();
+                    Some(result)
+                }
+            } else {
+                // If we are missing a variant but everything else is fine, we're done.
+                None
+            }
+        }
+    }
 
     // \mathcal{I} from Maranget. Warning for pattern matching. 1992.
     fn find_counterexample(
@@ -1732,7 +1719,11 @@ fn find_counterexample(
                 find_counterexample_bool(context, matrix, arity, ndx)
             } else if let Some(_builtin) = ty.value.unfold_to_builtin_type_name() {
                 find_counterexample_builtin(context, matrix, arity, ndx)
-            } else if let Some((mident, datatype_name)) = ty.value.unfold_to_type_name().and_then(|sp!(_, name)| name.datatype_name()) {
+            } else if let Some((mident, datatype_name)) = ty
+                .value
+                .unfold_to_type_name()
+                .and_then(|sp!(_, name)| name.datatype_name())
+            {
                 // This will need to also support structs if and when we add matching for them.
                 find_counterexample_datatype(context, matrix, arity, ndx, mident, datatype_name)
             } else {

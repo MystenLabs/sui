@@ -1,4 +1,4 @@
-error[E04033]: non-exhaustive pattern
+error[E04036]: non-exhaustive pattern
   ┌─ tests/move_2024/matching/invalid_literal.move:8:16
   │
 8 │         match (opt) {

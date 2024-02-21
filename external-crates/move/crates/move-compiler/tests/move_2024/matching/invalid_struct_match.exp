@@ -1,12 +1,6 @@
-error[E04033]: non-exhaustive pattern
-  ┌─ tests/move_2024/matching/invalid_struct_match.move:6:16
-  │
-6 │         match (opt) {
-  │                ^^^ Pattern '_' not covered
-
-error[E01002]: unexpected token
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/matching/invalid_struct_match.move:7:13
   │
 7 │             Box { x: T } => (),
-  │             ^^^ Unexpected name access. Expected an '<enum>::<variant>' form.
+  │             ^^^ Unexpected module member identifier. A module member identifier is not a valid variant
 

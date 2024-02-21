@@ -940,7 +940,7 @@ impl IndexedPhysicalPackagePath {
 }
 
 //**************************************************************************************************
-// Format a comma list correctly for error reporting and other messages.
+// String Construction Helpers
 //**************************************************************************************************
 
 macro_rules! format_oxford_list {

@@ -1,6 +1,6 @@
-error[E03018]: invalud pattern
+error[E01002]: unexpected token
   ┌─ tests/move_2024/matching/invalid_at.move:9:13
   │
 9 │             _ @ Option::Some(128u8) => (),
-  │             ^ Can't use '_' as a binder in an '@' pattern
+  │             ^ Cannot use '_' as an at-pattern
 

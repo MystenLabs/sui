@@ -1,34 +1,8 @@
-error[E04010]: cannot infer type
-   ┌─ tests/move_2024/matching/haskell_maybe.move:69:17
-   │
-69 │         while (!is_empty(&$ls)) {
-   │                 ^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
-
-error[E03006]: unexpected name in this position
-   ┌─ tests/move_2024/matching/haskell_maybe.move:69:27
-   │
-69 │         while (!is_empty(&$ls)) {
-   │                           ^^^ Macro parameters are not allowed to appear in paths
-   │
-   = To use a macro parameter as a value in a path expression, first bind it to a local variable, e.g. 'let ls = $ls;'
-   = Macro parameters are always treated as value expressions, and are not modified by path operations.
-     Path operations include 'move', 'copy', '&', '&mut', and field references
-
-error[E03006]: unexpected name in this position
-   ┌─ tests/move_2024/matching/haskell_maybe.move:70:32
-   │
-70 │             match ($f(pop(&mut $ls))) {
-   │                                ^^^ Macro parameters are not allowed to appear in paths
-   │
-   = To use a macro parameter as a value in a path expression, first bind it to a local variable, e.g. 'let ls = $ls;'
-   = Macro parameters are always treated as value expressions, and are not modified by path operations.
-     Path operations include 'move', 'copy', '&', '&mut', and field references
-
-warning[W09005]: dead or unreachable code
-   ┌─ tests/move_2024/matching/haskell_maybe.move:81:13
-   │
-81 │             va
-   │             ^^ Unused macro argument. Its expression will not be type checked and it will not evaluated
-   │
-   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+error[E13003]: feature is under active development
+  ┌─ tests/move_2024/matching/haskell_maybe.move:3:17
+  │
+3 │     public enum Maybe<T> has drop {
+  │                 ^^^^^ Enums are not supported in bytecode.
+  │
+  = This feature is currently in development.
 

@@ -341,7 +341,6 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             exp(context, ef);
         }
         N::Exp_::Match(esubject, arms) => {
-            // TODO: account for and remove unused pattern bindings
             exp(context, esubject);
             for arm in &mut arms.value {
                 if let Some(guard) = arm.value.guard.as_mut() {
