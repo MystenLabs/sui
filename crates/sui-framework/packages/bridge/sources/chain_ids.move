@@ -78,10 +78,7 @@ module bridge::chain_ids {
     // Checks and return BridgeRoute if the route is supported by the bridge.
     public fun get_route(source: u8, destination: u8): BridgeRoute {
         let route = BridgeRoute { source, destination };
-        return if (vector::contains(&valid_routes(), &route)) {
-            route
-        } else {
-            abort EInvalidBridgeRoute
-        }
+        assert!(vector::contains(&valid_routes(), &route), EInvalidBridgeRoute);
+        route
     }
 }

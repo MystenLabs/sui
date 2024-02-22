@@ -214,10 +214,9 @@ module bridge::bridge {
         emit(TokenTransferApproved { message_key: key });
     }
 
-
     // This function can only be called by the token recipient
     // Abort if the token has already been claimed.
-    public fun claim_token<T>(clock: &Clock, self: &mut Bridge, source_chain: u8, bridge_seq_num: u64, ctx: &mut TxContext): Coin<T> {
+    public fun claim_token<T>(self: &mut Bridge, clock: &Clock, source_chain: u8, bridge_seq_num: u64, ctx: &mut TxContext): Coin<T> {
         let (maybe_token, owner) = claim_token_internal<T>(clock, self, source_chain, bridge_seq_num, ctx);
         // Only token owner can claim the token
         assert!(tx_context::sender(ctx) == owner, EUnauthorisedClaim);
@@ -228,8 +227,8 @@ module bridge::bridge {
     // This function can be called by anyone to claim and transfer the token to the recipient
     // If the token has already been claimed, it will return instead of aborting.
     public fun claim_and_transfer_token<T>(
-        clock: &Clock,
         self: &mut Bridge,
+        clock: &Clock,
         source_chain: u8,
         bridge_seq_num: u64,
         ctx: &mut TxContext
