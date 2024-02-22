@@ -4409,6 +4409,9 @@ impl AuthorityState {
         if let Some(tx) = self.create_bridge_tx(epoch_store) {
             txns.push(tx);
         }
+        if let Some(tx) = self.init_bridge_committee_tx(epoch_store) {
+            txns.push(tx);
+        }
         if let Some(tx) = self.create_deny_list_state_tx(epoch_store) {
             txns.push(tx);
         }
