@@ -345,8 +345,8 @@ impl Core {
             .flat_map(|block| block.ancestors())
             .collect();
 
-        // Keep block refs to propose to a map, so even if somehow a byzantine node managed to provide blocks that don't
-        // form a valid chains we can still pick one block per author.
+        // Keep block refs to propose in a map, so even if somehow a byzantine node managed to provide blocks that don't
+        // form a valid chain we can still pick one block per author.
         let mut to_propose = BTreeMap::new();
         for block in ancestors.into_iter() {
             if !all_ancestors_parents.contains(&block.reference()) {
@@ -354,16 +354,22 @@ impl Core {
             }
         }
 
-        // always include our last block to ensure that is not somehow excluded by the DAG compression
-        to_propose.insert(self.context.own_index, self.last_proposed_block.reference());
-
         assert!(!to_propose.is_empty());
 
         // Now clean up the pending ancestors
         self.pending_ancestors
             .retain(|round, _blocks| *round >= clock_round);
 
-        to_propose.values().cloned().collect()
+        // always include our last proposed block in front of the vector and make sure that we do not
+        // double insert.
+        let mut result = vec![self.last_proposed_block.reference()];
+        for (authority_index, block_ref) in to_propose {
+            if authority_index != self.context.own_index {
+                result.push(block_ref);
+            }
+        }
+
+        result
     }
 
     /// Checks whether all the leaders of the previous quorum exist.
