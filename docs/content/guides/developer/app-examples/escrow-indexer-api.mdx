@@ -3,6 +3,12 @@ title: Escrow Indexing and API Service
 sidebar_label: Indexing and API Service
 ---
 
+:::note
+
+This is the second in a three-part guide on [how to build a trustless atomic swap on Sui](/guides/developer/app-examples/escrow).
+
+:::
+
 This is a continuation of the Escrow smart contract guide to demonstrate how to implement a service responsible for indexing chain state in order to discover trades.
 
 In most cases where we want to enhance our dApp and ensure it is production ready, we need to have an indexing service (indexer) listening to the blockchain for on-chain data, shaping the data to fit our application needs, storing the transformed data into the local off-chain database so we can query them in the most efficient way. Joining hands with an indexer, we will expose an API allowing frontend to query the indexed data and update the screen as escrows are made and swaps are fulfilled.

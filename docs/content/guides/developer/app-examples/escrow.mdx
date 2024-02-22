@@ -4,10 +4,11 @@ title: Escrow
 
 This guide demonstrates an atomic swap, which does not require a trusted third party, by utilizing a [shared object](/concepts/object-ownership/shared) as an escrow. Shared objects are a unique concept to Sui. They are able to be modified by any transaction and by any signer, given they meet the requirements set forth by the transaction. For more information on shared objects versus owned objects, see [here](/guides/developer/sui-101/shared-owned).
 
-In addition to the smart contract, this example also includes:
+The guide is split into three parts:
 
-- A frontend for people to list object for sale and to accept trades
-- A service that indexes chain state in order to discover trades
+1. [Backend](/guides/developer/app-examples/escrow-backend): The smart contracts that hold the state and perform the swaps.
+1. [Indexing and API Service](/guides/developer/app-examples/escrow-indexer-api): A service that indexes chain state in order to discover trades, and an API service to read this data.
+1. [Frontend](/guides/developer/app-examples/escrow-frontend): Enables users to list objects for sale and to accept trades.
 
 ## Prerequisites
 

@@ -3,6 +3,12 @@ title: Escrow Backend
 sidebar_label: Backend
 ---
 
+:::note
+
+This is the first in a three-part guide on [how to build a trustless atomic swap on Sui](/guides/developer/app-examples/escrow).
+
+:::
+
 This particular protocol consists of three phases:
 
 1. One party `lock`s their object, obtaining a `Locked` object and its `Key`. This party can `unlock` their object to preserve liveness if the other party stalls before completing the second stage.
