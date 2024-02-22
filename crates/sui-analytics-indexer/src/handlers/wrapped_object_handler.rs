@@ -103,7 +103,7 @@ impl WrappedObjectHandler {
         };
         let mut wrapped_structs = BTreeMap::new();
         if let Some(move_struct) = move_struct {
-            parse_struct("$", move_struct.into(), &mut wrapped_structs);
+            parse_struct("$", move_struct, &mut wrapped_structs);
         }
         for (json_path, wrapped_struct) in wrapped_structs.iter() {
             let entry = WrappedObjectEntry {
