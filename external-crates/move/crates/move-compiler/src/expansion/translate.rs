@@ -5,7 +5,7 @@
 use crate::{
     diag,
     diagnostics::{codes::WarningFilter, Diagnostic, WarningFilters},
-    editions::{create_feature_error, FeatureGate},
+    editions::{self, create_feature_error, FeatureGate},
     expansion::{
         aliases::{
             AliasEntry, AliasMap, AliasMapBuilder, AliasSet, ParserExplicitUseFun, UseFunsBuilder,
@@ -197,14 +197,19 @@ impl<'env, 'map> Context<'env, 'map> {
     }
 
     pub fn spec_deprecated(&mut self, loc: Loc, is_error: bool) {
-        self.env().add_diag(diag!(
+        let diag = self.spec_deprecated_diag(loc, is_error);
+        self.env().add_diag(diag);
+    }
+
+    pub fn spec_deprecated_diag(&mut self, loc: Loc, is_error: bool) -> Diagnostic {
+        diag!(
             if is_error {
                 Uncategorized::DeprecatedSpecItem
             } else {
                 Uncategorized::DeprecatedWillBeRemoved
             },
             (loc, "Specification blocks are deprecated")
-        ));
+        )
     }
 }
 
@@ -2911,8 +2916,19 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 .env()
                 .supports_feature(cur_pkg, FeatureGate::SyntaxMethods);
             if !supports_paths || !supports_syntax_methods {
-                context.spec_deprecated(loc, /* is_error */ true);
-                assert!(context.env().has_errors());
+                let mut diag = context.spec_deprecated_diag(loc, /* is_error */ true);
+                let valid_editions =
+                    editions::valid_editions_for_feature(FeatureGate::SyntaxMethods)
+                        .into_iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                diag.add_note(format!(
+                    "If this was intended to be a 'syntax' index call, \
+                    consider updating your Move edition to '{valid_editions}'"
+                ));
+                diag.add_note(editions::UPGRADE_NOTE);
+                context.env().add_diag(diag);
                 EE::UnresolvedError
             } else {
                 match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
@@ -3298,7 +3314,10 @@ fn lvalues(context: &mut Context, e: Box<P::Exp>) -> Option<LValue> {
         PE::Index(_, _) => {
             context.env().add_diag(diag!(
                 Syntax::InvalidLValue,
-                (loc, "Cannot use index in left-hand positions")
+                (
+                    loc,
+                    "Index syntax it not yet supported in left-hand positions"
+                )
             ));
             return None;
         }

@@ -2077,7 +2077,6 @@ fn add_field_types<T>(
 
 // Assumes tvars have already been readied
 fn find_index_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<IndexSyntaxMethods> {
-    use TypeName_ as TN;
     use Type_ as T;
     const UNINFERRED_MSG: &str =
         "Could not infer the type before index access. Try annotating here";
@@ -2090,6 +2089,7 @@ fn find_index_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<IndexSy
             ty_str
         )
     };
+
     match ty {
         sp!(_, T::UnresolvedError) => None,
         sp!(tloc, T::Anything) => {
@@ -2100,7 +2100,7 @@ fn find_index_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<IndexSy
             ));
             None
         }
-        sp!(tloc, T::Var(i)) if !context.subst.is_num_var(*i) => {
+        sp!(tloc, T::Var(_)) => {
             context.env.add_diag(diag!(
                 TypeSafety::UninferredType,
                 (loc, msg()),
@@ -2108,8 +2108,8 @@ fn find_index_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<IndexSy
             ));
             None
         }
-        sp!(_, T::Apply(_, sp!(_, TN::ModuleType(m, n)), _)) => {
-            let index_opt = core::find_struct_index_funs(context, loc, m, n);
+        sp!(_, T::Apply(_, type_name, _)) => {
+            let index_opt = core::find_index_funs(context, type_name);
             if index_opt.is_none() {
                 context
                     .env
@@ -2117,30 +2117,24 @@ fn find_index_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<IndexSy
             }
             index_opt
         }
-        sp!(_, T::Apply(_, sp!(_, TN::Builtin(bt_name)), _)) => {
-            let index_opt = core::find_builtin_index_funs(context, loc, bt_name);
-            if index_opt.is_none() {
-                context
-                    .env
-                    .add_diag(diag!(Declarations::MissingSyntaxMethod, (loc, msg()),));
-            }
-            index_opt
-        }
-        t => {
+        sp!(_, T::Unit | T::Ref(_, _) | T::Param(_) | T::Fun(_, _)) => {
             let smsg = format!(
                 "Expected a struct or builtin type but got: {}",
-                core::error_format(t, &context.subst)
+                core::error_format(ty, &context.subst)
             );
             context.env.add_diag(diag!(
                 TypeSafety::ExpectedSpecificType,
                 (loc, msg()),
-                (t.loc, smsg),
+                (ty.loc, smsg),
             ));
             None
         }
     }
 }
 
+// Returns an optional IndexSyntexMethod entry (if one exits) and the base return type for the
+// index method (with refs discarded), using the argumnets to instantiate the method to determine
+// that return type.
 fn resolve_index_funs_and_type(
     context: &mut Context,
     loc: Loc,
@@ -2482,7 +2476,7 @@ fn resolve_exp_dotted(
 //      mut |- base : t ~> borrow(base, mut) : Ref(mut, t)
 //
 //        if base is a ref
-//     ------------------------------------------------[base-reborrow]
+//     ------------------------------------------------[base-ref-identity]
 //      mut |- base : Ref(_, t)  ~> base : Ref(mut, t)
 //
 //     Note that if `E` was a borrow expression (like `&x`), we constraint the base type to a

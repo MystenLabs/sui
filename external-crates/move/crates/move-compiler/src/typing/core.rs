@@ -11,9 +11,9 @@ use crate::{
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
     ice,
     naming::ast::{
-        self as N, BlockLabel, BuiltinTypeName, BuiltinTypeName_, Color, IndexSyntaxMethods,
-        ResolvedUseFuns, StructDefinition, StructTypeParameter, TParam, TParamID, TVar, Type,
-        TypeName, TypeName_, Type_, UseFunKind, Var,
+        self as N, BlockLabel, BuiltinTypeName_, Color, IndexSyntaxMethods, ResolvedUseFuns,
+        StructDefinition, StructTypeParameter, TParam, TParamID, TVar, Type, TypeName, TypeName_,
+        Type_, UseFunKind, Var,
     },
     parser::ast::{
         Ability_, ConstantName, Field, FunctionName, Mutability, StructName, ENTRY_MODIFIER,
@@ -999,40 +999,16 @@ pub fn make_field_type(
     }
 }
 
-pub fn find_struct_index_funs(
-    context: &mut Context,
-    loc: Loc,
-    module_name: &ModuleIdent,
-    struct_name: &StructName,
-) -> Option<IndexSyntaxMethods> {
-    let module_defn = context.module_info(module_name);
-    let type_name = sp(loc, N::TypeName_::ModuleType(*module_name, *struct_name));
-    let Some(entry) = module_defn.syntax_methods.get(&type_name) else {
-        return None;
+pub fn find_index_funs(context: &mut Context, type_name: &TypeName) -> Option<IndexSyntaxMethods> {
+    let module_ident = match &type_name.value {
+        TypeName_::Multiple(_) => return None,
+        TypeName_::Builtin(builtin_name) => context.env.primitive_definer(builtin_name.value)?,
+        TypeName_::ModuleType(m, _) => m,
     };
-    let Some(index) = &entry.index else {
-        return None;
-    };
-    Some(*index.clone())
-}
-
-pub fn find_builtin_index_funs(
-    context: &mut Context,
-    loc: Loc,
-    builtin_name: &BuiltinTypeName,
-) -> Option<IndexSyntaxMethods> {
-    let Some(module_name) = context.env.primitive_definer(builtin_name.value) else {
-        return None;
-    };
-    let module_defn = context.module_info(module_name);
-    let type_name = sp(loc, N::TypeName_::Builtin(*builtin_name));
-    let Some(entry) = module_defn.syntax_methods.get(&type_name) else {
-        return None;
-    };
-    let Some(index) = &entry.index else {
-        return None;
-    };
-    Some(*index.clone())
+    let module_defn = context.module_info(module_ident);
+    let entry = module_defn.syntax_methods.get(type_name)?;
+    let index = entry.index.clone()?;
+    Some(*index)
 }
 
 //**************************************************************************************************

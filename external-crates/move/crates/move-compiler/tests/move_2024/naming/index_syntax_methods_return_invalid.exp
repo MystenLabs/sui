@@ -1,4 +1,4 @@
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:22:14
    │
 22 │     #[syntax(index)]
@@ -6,7 +6,7 @@ error[E02019]: invalid syntax method type
 23 │     public fun borrow_t(s: &S, i: u64): &mut u64 { abort 0 }
    │                                         -------- This syntax method must return an immutable reference to match its subject type
 
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:27:14
    │
 27 │     #[syntax(index)]
@@ -14,7 +14,7 @@ error[E02019]: invalid syntax method type
 28 │     public fun borrow_t2(s: &S2, i: u64): u64 {
    │                                           --- This is not an immutable reference
 
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:34:14
    │
 34 │     #[syntax(index)]
@@ -22,7 +22,7 @@ error[E02019]: invalid syntax method type
 35 │     public fun borrow_t3(s: &S3, i: u64): bool {
    │                                           ---- This is not an immutable reference
 
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:47:14
    │
 47 │     #[syntax(index)]
@@ -30,7 +30,7 @@ error[E02019]: invalid syntax method type
 48 │     public fun borrow_t(s: &mut S, i: u64): &u64 {
    │                                             ---- This syntax method must return a mutable reference to match its subject type
 
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:54:14
    │
 54 │     #[syntax(index)]
@@ -38,7 +38,7 @@ error[E02019]: invalid syntax method type
 55 │     public fun borrow_t2(s: &mut S2, i: u64): u64 {
    │                                               --- This is not a mutable reference
 
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:61:14
    │
 61 │     #[syntax(index)]
@@ -46,7 +46,7 @@ error[E02019]: invalid syntax method type
 62 │     public fun borrow_t3(s: &mut S3, i: u64): bool {
    │                                               ---- This is not a mutable reference
 
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:73:14
    │
 73 │     #[syntax(index)]
@@ -54,7 +54,7 @@ error[E02019]: invalid syntax method type
 74 │     public fun borrow_t<T>(s: &S<T>, i: u64): &mut u64 { abort 0 }
    │                                               -------- This syntax method must return an immutable reference to match its subject type
 
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:79:14
    │
 79 │     #[syntax(index)]
@@ -62,7 +62,7 @@ error[E02019]: invalid syntax method type
 80 │     public fun borrow_t2<T>(s: &S2<T>, i: u64): T { abort 0 }
    │                                                 - This is not an immutable reference
 
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:85:14
    │
 85 │     #[syntax(index)]
@@ -70,7 +70,7 @@ error[E02019]: invalid syntax method type
 86 │     public fun borrow_t3<T>(s: &S3<T>, i: u64): bool { abort 0 }
    │                                                 ---- This is not an immutable reference
 
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:95:14
    │
 95 │     #[syntax(index)]
@@ -78,7 +78,7 @@ error[E02019]: invalid syntax method type
 96 │     public fun borrow_t<T>(s: &mut S<T>, i: u64): &u64 { abort 0 }
    │                                                   ---- This syntax method must return a mutable reference to match its subject type
 
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
     ┌─ tests/move_2024/naming/index_syntax_methods_return_invalid.move:101:14
     │
 101 │     #[syntax(index)]

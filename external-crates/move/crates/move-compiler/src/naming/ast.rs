@@ -838,16 +838,19 @@ impl Type_ {
         }
     }
 
-    pub fn is_ref(&self) -> bool {
+    // Returns an option holding the ref's mutability (or None, if it is not a reference type).
+    // Also return None for `Anything`, `Var`, or other values that might be compatible wifh `Ref`
+    // types.
+    pub fn is_ref(&self) -> Option<bool> {
         match self {
-            Type_::Ref(_, _) => true,
+            Type_::Ref(mut_, _) => Some(*mut_),
             Type_::Unit
             | Type_::Param(_)
             | Type_::Apply(_, _, _)
             | Type_::Fun(_, _)
             | Type_::Var(_)
             | Type_::Anything
-            | Type_::UnresolvedError => false,
+            | Type_::UnresolvedError => None,
         }
     }
 }

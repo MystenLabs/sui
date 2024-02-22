@@ -32,7 +32,7 @@ type SyntaxMethodPrekind = Spanned<SyntaxMethodPrekind_>;
 //-------------------------------------------------------------------------------------------------
 
 /// validate and record syntax methods
-pub(in crate::naming) fn resolve_syntax_attributes(
+pub(super) fn resolve_syntax_attributes(
     context: &mut Context,
     syntax_methods: &mut SyntaxMethods,
     module_name: &ModuleIdent,
@@ -100,19 +100,20 @@ pub(in crate::naming) fn resolve_syntax_attributes(
         if !valid_return_type(context, &kind, &function.signature.return_type) {
             assert!(context.env.has_errors());
             continue;
-        }
-        let new_syntax_method = SyntaxMethod {
-            loc: function_name.0.loc,
-            public_visibility,
-            kind,
-            tname: type_name.clone(),
-            target_function: (*module_name, *function_name),
-        };
-        let kind_loc: &mut Option<Box<SyntaxMethod>> = method_entry.lookup_kind_entry(&kind);
-        if let Some(previous) = kind_loc {
-            prev_syntax_defn_error(context, previous, kind, &type_name)
         } else {
-            *kind_loc = Some(Box::new(new_syntax_method));
+            let new_syntax_method = SyntaxMethod {
+                loc: function_name.0.loc,
+                public_visibility,
+                kind,
+                tname: type_name.clone(),
+                target_function: (*module_name, *function_name),
+            };
+            let method_opt: &mut Option<Box<SyntaxMethod>> = method_entry.lookup_kind_entry(&kind);
+            if let Some(previous) = method_opt {
+                prev_syntax_defn_error(context, previous, kind, &type_name)
+            } else {
+                *method_opt = Some(Box::new(new_syntax_method));
+            }
         }
     }
     Some(())
@@ -287,46 +288,26 @@ fn determine_subject_type_name(
 ) -> Option<TypeName> {
     match ty_ {
         N::Type_::Apply(_, type_name, _) => {
-            match &type_name.value {
+            let defining_module = match &type_name.value {
                 N::TypeName_::Multiple(_) => {
                     let msg = "Invalid type for syntax method definition";
                     let mut diag = diag!(Declarations::InvalidSyntaxMethod, (*loc, msg));
                     diag.add_note("Syntax methods may only be defined for single base types");
                     context.env.add_diag(diag);
-                    None
+                    return None;
                 }
-                N::TypeName_::Builtin(builtin_type_name) => {
-                    if let Some(definer) = context.env.primitive_definer(builtin_type_name.value) {
-                        if cur_module == definer {
-                            Some(type_name.clone())
-                        } else {
-                            context.env.add_diag(diag!(
-                                Declarations::InvalidSyntaxMethod,
-                                (*ann_loc, INVALID_MODULE_MSG),
-                                (*loc, INVALID_MODULE_TYPE_MSG)
-                            ));
-                            None
-                        }
-                    } else {
-                        context.env.add_diag(diag!(
-                            Declarations::InvalidSyntaxMethod,
-                            (*ann_loc, "The subject type is a Move builtin type"),
-                        ));
-                        None
-                    }
-                } // something like fake_natives?
-                N::TypeName_::ModuleType(defining_module, _n) => {
-                    if cur_module == defining_module {
-                        Some(type_name.clone())
-                    } else {
-                        context.env.add_diag(diag!(
-                            Declarations::InvalidSyntaxMethod,
-                            (*ann_loc, INVALID_MODULE_MSG),
-                            (*loc, INVALID_MODULE_TYPE_MSG)
-                        ));
-                        None
-                    }
-                }
+                N::TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
+                N::TypeName_::ModuleType(m, _) => Some(m),
+            };
+            if Some(cur_module) == defining_module {
+                Some(type_name.clone())
+            } else {
+                context.env.add_diag(diag!(
+                    Declarations::InvalidSyntaxMethod,
+                    (*ann_loc, INVALID_MODULE_MSG),
+                    (*loc, INVALID_MODULE_TYPE_MSG)
+                ));
+                None
             }
         }
         N::Type_::Ref(_, inner) => determine_subject_type_name(context, cur_module, ann_loc, inner),
@@ -366,90 +347,70 @@ fn valid_return_type(
     ty: &N::Type,
 ) -> bool {
     match kind_ {
-        SyntaxMethodKind_::Index if valid_imm_ref(ty) => valid_index_return_type(context, loc, ty),
-        SyntaxMethodKind_::Index if valid_mut_ref(ty) => {
-            let msg = format!("Invalid {} annotation", SyntaxAttribute::SYNTAX);
-            let tmsg =
-                "This syntax method must return an immutable reference to match its subject type";
-            context.env.add_diag(diag!(
-                Declarations::InvalidSyntaxMethod,
-                (*loc, msg),
-                (ty.loc, tmsg)
-            ));
-            false
-        }
         SyntaxMethodKind_::Index => {
-            let msg = format!(
-                "Invalid {} annotation. This syntax method must return an immutable reference",
-                SyntaxAttribute::SYNTAX
-            );
-            let tmsg = "This is not an immutable reference";
-            context.env.add_diag(diag!(
-                Declarations::InvalidSyntaxMethod,
-                (*loc, msg),
-                (ty.loc, tmsg)
-            ));
-            false
+            if valid_imm_ref(ty) {
+                valid_index_return_type(context, loc, ty)
+            } else if valid_mut_ref(ty) {
+                let msg = format!("Invalid {} annotation", SyntaxAttribute::SYNTAX);
+                let tmsg =
+                    "This syntax method must return an immutable reference to match its subject type";
+                context.env.add_diag(diag!(
+                    Declarations::InvalidSyntaxMethod,
+                    (*loc, msg),
+                    (ty.loc, tmsg)
+                ));
+                false
+            } else {
+                let msg = format!(
+                    "Invalid {} annotation. This syntax method must return an immutable reference",
+                    SyntaxAttribute::SYNTAX
+                );
+                let tmsg = "This is not an immutable reference";
+                context.env.add_diag(diag!(
+                    Declarations::InvalidSyntaxMethod,
+                    (*loc, msg),
+                    (ty.loc, tmsg)
+                ));
+                false
+            }
         }
 
-        SyntaxMethodKind_::IndexMut if valid_mut_ref(ty) => {
-            valid_index_return_type(context, loc, ty)
-        }
-        SyntaxMethodKind_::IndexMut if valid_imm_ref(ty) => {
-            let msg = format!("Invalid {} annotation", SyntaxAttribute::SYNTAX);
-            let tmsg =
-                "This syntax method must return a mutable reference to match its subject type";
-            context.env.add_diag(diag!(
-                Declarations::InvalidSyntaxMethod,
-                (*loc, msg),
-                (ty.loc, tmsg)
-            ));
-            false
-        }
         SyntaxMethodKind_::IndexMut => {
-            let msg = format!(
-                "Invalid {} annotation. This syntax method must return a mutable reference",
-                SyntaxAttribute::SYNTAX
-            );
-            let tmsg = "This is not a mutable reference";
-            context.env.add_diag(diag!(
-                Declarations::InvalidSyntaxMethod,
-                (*loc, msg),
-                (ty.loc, tmsg)
-            ));
-            false
+            if valid_mut_ref(ty) {
+                valid_index_return_type(context, loc, ty)
+            } else if valid_imm_ref(ty) {
+                let msg = format!("Invalid {} annotation", SyntaxAttribute::SYNTAX);
+                let tmsg =
+                    "This syntax method must return a mutable reference to match its subject type";
+                context.env.add_diag(diag!(
+                    Declarations::InvalidSyntaxMethod,
+                    (*loc, msg),
+                    (ty.loc, tmsg)
+                ));
+                false
+            } else {
+                let msg = format!(
+                    "Invalid {} annotation. This syntax method must return a mutable reference",
+                    SyntaxAttribute::SYNTAX
+                );
+                let tmsg = "This is not a mutable reference";
+                context.env.add_diag(diag!(
+                    Declarations::InvalidSyntaxMethod,
+                    (*loc, msg),
+                    (ty.loc, tmsg)
+                ));
+                false
+            }
         }
     }
 }
 
 fn valid_imm_ref(sp!(_, type_): &N::Type) -> bool {
-    use N::Type_ as T;
-    match type_ {
-        T::Ref(false, _) => true,
-        T::Ref(true, _) => false,
-        T::Unit
-        | T::Param(_)
-        | T::Apply(_, _, _)
-        | T::Fun(_, _)
-        | T::Var(_)
-        | T::Anything
-        | T::UnresolvedError => false,
-    }
+    matches!(type_.is_ref(), Some(false))
 }
 
 fn valid_mut_ref(sp!(_, type_): &N::Type) -> bool {
-    use N::Type_ as T;
-    match type_ {
-        T::Ref(true, _) => true,
-        T::Ref(false, _) => false,
-        T::Unit
-        | T::Param(_)
-        | T::Apply(_, _, _)
-        | T::Fun(_, _)
-        | T::Var(_)
-        | T::Anything
-        | T::UnresolvedError => false,
-    }
+    matches!(type_.is_ref(), Some(true))
 }
 
 fn valid_index_return_type(

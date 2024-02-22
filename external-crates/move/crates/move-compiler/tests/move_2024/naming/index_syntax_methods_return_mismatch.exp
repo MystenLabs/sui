@@ -1,4 +1,4 @@
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:21:14
    │
 21 │     #[syntax(index)]
@@ -17,7 +17,7 @@ error[E04006]: invalid subtype
 23 │         vector::borrow(&s.t, i)
    │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid return expression
 
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:44:14
    │
 44 │     #[syntax(index)]
@@ -25,7 +25,7 @@ error[E02019]: invalid syntax method type
 45 │     public fun borrow_t_mut(s: &mut S, i: u64): &u64 {
    │                                                 ---- This syntax method must return a mutable reference to match its subject type
 
-error[E04034]: syntax method types differ
+error[E04034]: 'syntax' method types differ
    ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:57:41
    │
 57 │     public fun borrow_t(s: &S, i: u64): &u64 {
@@ -36,7 +36,7 @@ error[E04034]: syntax method types differ
    │
    = These functions must return the same type, differing only by mutability.
 
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:78:14
    │
 78 │     #[syntax(index)]
@@ -44,7 +44,7 @@ error[E02019]: invalid syntax method type
 79 │     public fun borrow_q_mut(s: &mut S, i: u64): u64 {
    │                                                 --- This is not a mutable reference
 
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:91:14
    │
 91 │     #[syntax(index)]

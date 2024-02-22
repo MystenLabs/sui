@@ -50,6 +50,10 @@ pub enum Flavor {
     Sui,
 }
 
+pub const UPGRADE_NOTE: &str =
+    "You can update the edition in the 'Move.toml', or via command line flag if invoking the \
+    compiler directly.";
+
 //**************************************************************************************************
 // Entry
 //**************************************************************************************************
@@ -85,10 +89,7 @@ pub fn create_feature_error(edition: Edition, feature: FeatureGate, loc: Loc) ->
             )
         )
     );
-    diag.add_note(
-        "You can update the edition in the 'Move.toml', \
-        or via command line flag if invoking the compiler directly.",
-    );
+    diag.add_note(UPGRADE_NOTE);
     diag
 }
 
@@ -215,7 +216,7 @@ impl FeatureGate {
             FeatureGate::Move2024Paths => "Move 2024 paths are",
             FeatureGate::MacroFuns => "'macro' functions are",
             FeatureGate::Move2024Migration => "Move 2024 migration is",
-            FeatureGate::SyntaxMethods => "syntax methods are",
+            FeatureGate::SyntaxMethods => "'syntax' methods are",
         }
     }
 }

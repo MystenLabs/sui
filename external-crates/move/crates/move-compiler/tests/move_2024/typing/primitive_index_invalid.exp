@@ -1,4 +1,4 @@
-error[E02019]: invalid syntax method type
+error[E02019]: invalid 'syntax' method type
   ┌─ tests/move_2024/typing/primitive_index_invalid.move:4:14
   │
 4 │     #[syntax(index)]

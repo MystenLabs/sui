@@ -29,7 +29,7 @@ use std::collections::{BTreeMap, BTreeSet};
 //**************************************************************************************************
 
 #[derive(Debug, Clone)]
-pub(in crate::naming) enum ResolvedType {
+pub(super) enum ResolvedType {
     Module(Box<ResolvedModuleType>),
     TParam(Loc, N::TParam),
     BuiltinType(N::BuiltinTypeName_),
@@ -37,7 +37,7 @@ pub(in crate::naming) enum ResolvedType {
 }
 
 #[derive(Debug, Clone)]
-pub(in crate::naming) struct ResolvedModuleType {
+pub(super) struct ResolvedModuleType {
     // original names/locs are provided to preserve loc information if needed
     pub original_loc: Loc,
     pub original_type_name: Name,
@@ -45,7 +45,7 @@ pub(in crate::naming) struct ResolvedModuleType {
 }
 
 #[derive(Debug, Clone)]
-pub(in crate::naming) struct ModuleType {
+pub(super) struct ModuleType {
     pub original_mident: ModuleIdent,
     pub decl_loc: Loc,
     pub arity: usize,
@@ -86,7 +86,7 @@ enum NominalBlockType {
     LambdaLoopCapture,
 }
 
-pub(in crate::naming) struct Context<'env> {
+pub(super) struct Context<'env> {
     pub env: &'env mut CompilationEnv,
     current_module: Option<ModuleIdent>,
     scoped_types: BTreeMap<ModuleIdent, BTreeMap<Symbol, ModuleType>>,

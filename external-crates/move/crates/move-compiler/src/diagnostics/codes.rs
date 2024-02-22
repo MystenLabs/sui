@@ -208,7 +208,7 @@ codes!(
             { msg: "invalid visibility modifier", severity: NonblockingError },
         InvalidUseFun: { msg: "invalid 'use fun' declaration", severity: NonblockingError },
         UnknownAttribute: { msg: "unknown attribute", severity: Warning },
-        InvalidSyntaxMethod: { msg: "invalid syntax method type", severity: NonblockingError },
+        InvalidSyntaxMethod: { msg: "invalid 'syntax' method type", severity: NonblockingError },
         MissingSyntaxMethod: { msg: "no valid 'syntax' declaration found", severity: BlockingError },
     ],
     // errors name resolution, mostly expansion/translate and naming/translate
@@ -273,7 +273,7 @@ codes!(
         UnexpectedLambda: { msg: "invalid usage of lambda", severity: BlockingError },
         CannotExpandMacro: { msg: "unable to expand macro function", severity: BlockingError },
         InvariantError: { msg: "types are not equal", severity: BlockingError },
-        IncompatibleSyntaxMethods: { msg: "syntax method types differ", severity: BlockingError },
+        IncompatibleSyntaxMethods: { msg: "'syntax' method types differ", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

@@ -146,54 +146,55 @@ fn validate_index_syntax_methods(
         }
     }
 
-    fn ty_str(ty: &N::Type) -> String {
-        core::error_format(ty, &core::Subst::empty())
-    }
+    let mut param_tys = index_ty
+        .params
+        .iter()
+        .zip(index_mut_ty.params.iter())
+        .map(|((_, t1), (_, t2))| (t1, t2))
+        .enumerate();
 
-    fn ty_str_(ty: &N::Type_) -> String {
-        core::error_format_(ty, &core::Subst::empty())
-    }
-
-    if let Ok((subst_, _)) = core::subtype(
-        subst.clone(),
-        &index_mut_ty.params[0].1,
-        &index_ty.params[0].1,
-    ) {
-        subst = subst_;
+    // The first one is a subtype because we want to ensure the `&mut` param is a subtype of the
+    // `&` param. We already ensured they were both references of the appropriate shape in naming,
+    // so this is a bit redundant.
+    if let Some((ndx, (subject_ref_type, subject_mut_ref_type))) = param_tys.next() {
+        if let Ok((subst_, _)) =
+            core::subtype(subst.clone(), subject_mut_ref_type, subject_ref_type)
+        {
+            subst = subst_;
+        } else {
+            let (_, _, index_type) = &index_finfo.signature.parameters[ndx];
+            let (_, _, mut_type) = &mut_finfo.signature.parameters[ndx];
+            // This case shouldn't really be reachable, but we might as well provide an error.
+            let index_msg = format!(
+                "This index function subject has type {}",
+                ty_str(index_type)
+            );
+            let mut_msg = format!(
+                "This mutable index function subject has type {}",
+                ty_str(mut_type)
+            );
+            let mut diag = diag!(
+                TypeSafety::IncompatibleSyntaxMethods,
+                (index_type.loc, index_msg),
+                (mut_type.loc, mut_msg)
+            );
+            diag.add_note(
+                "These functions must take the same subject type, differing only by mutability.",
+            );
+            context.env.add_diag(diag);
+            valid = false;
+        }
     } else {
-        let (_, _, index_type) = &index_finfo.signature.parameters[0];
-        let (_, _, mut_type) = &mut_finfo.signature.parameters[0];
-        // This case shouldn't really be reachable, but we might as well provide an error.
-        let index_msg = format!(
-            "This index function subject has type {}",
-            ty_str(index_type)
-        );
-        let mut_msg = format!(
-            "This mutable index function subject has type {}",
-            ty_str(mut_type)
-        );
-        let mut diag = diag!(
-            TypeSafety::IncompatibleSyntaxMethods,
-            (index_type.loc, index_msg),
-            (mut_type.loc, mut_msg)
-        );
-        diag.add_note(
-            "These functions must take the same subject type, differing only by mutability.",
-        );
-        context.env.add_diag(diag);
         valid = false;
     }
 
-    for (ndx, ((_, index_param), (_, index_mut_param))) in index_ty.params[1..]
-        .iter()
-        .zip(index_mut_ty.params[1..].iter())
-        .enumerate()
-    {
-        if let Ok((subst_, _)) = core::invariant(subst.clone(), index_param, index_mut_param) {
+    // We ensure the rest of the parameters match exactly.
+    for (ndx, (ptype, mut_ptype)) in param_tys {
+        if let Ok((subst_, _)) = core::invariant(subst.clone(), ptype, mut_ptype) {
             subst = subst_;
         } else {
-            let (_, _, index_type) = &index_finfo.signature.parameters[ndx + 1];
-            let (_, _, mut_type) = &mut_finfo.signature.parameters[ndx + 1];
+            let (_, _, index_type) = &index_finfo.signature.parameters[ndx];
+            let (_, _, mut_type) = &mut_finfo.signature.parameters[ndx];
             let index_msg = format!("This index function expects type {}", ty_str(index_type));
             let mut_msg = format!(
                 "This mutable index function expects type {}",
@@ -210,6 +211,9 @@ fn validate_index_syntax_methods(
         }
     }
 
+    // Similar to the subject type, we ensure the return types are the same. We already checked
+    // that they are appropriately-shaped references, and now we ensure they refer to the same type
+    // under the reference.
     if core::subtype(subst, &index_mut_ty.return_, &index_ty.return_).is_err() {
         let sp!(index_loc, index_type) = &index_finfo.signature.return_type;
         let sp!(mut_loc, mut_type) = &mut_finfo.signature.return_type;
@@ -231,4 +235,14 @@ fn validate_index_syntax_methods(
     let _ = std::mem::replace(&mut context.constraints, prev_constraints);
 
     valid
+}
+
+// Error printing helpers
+
+fn ty_str(ty: &N::Type) -> String {
+    core::error_format(ty, &core::Subst::empty())
+}
+
+fn ty_str_(ty: &N::Type_) -> String {
+    core::error_format_(ty, &core::Subst::empty())
 }

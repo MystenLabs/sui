@@ -1,4 +1,4 @@
-error[E04034]: syntax method types differ
+error[E04034]: 'syntax' method types differ
   ┌─ tests/move_2024/typing/primitive_index_invalid_2.move:5:64
   │
 5 │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;

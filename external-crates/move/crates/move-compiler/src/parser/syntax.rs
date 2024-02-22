@@ -1560,7 +1560,7 @@ fn parse_index_args(context: &mut Context) -> Result<Spanned<Vec<Exp>>, Box<Diag
         Tok::LBracket,
         Tok::RBracket,
         parse_exp,
-        "an index operation expression",
+        "an index access expression",
     )?;
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(

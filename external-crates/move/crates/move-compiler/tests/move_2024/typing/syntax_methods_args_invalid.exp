@@ -1,4 +1,4 @@
-error[E04034]: syntax method types differ
+error[E04034]: 'syntax' method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:7:39
    │
  7 │     public fun borrow<T>(s: &S<T>, i: u64): &u64 { abort 0 }
@@ -9,7 +9,7 @@ error[E04034]: syntax method types differ
    │
    = Index operation non-subject parameter types must match exactly
 
-error[E04034]: syntax method types differ
+error[E04034]: 'syntax' method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:20:16
    │
 20 │     public fun borrow<T,U,V>(s: &S<T>, i: U, j: V): &u64 { abort 0 }
@@ -20,7 +20,7 @@ error[E04034]: syntax method types differ
    │
    = Index operations on the same type must take the name number of type arguments
 
-error[E04034]: syntax method types differ
+error[E04034]: 'syntax' method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:34:39
    │
 34 │     public fun borrow<T>(s: &S<T>, i: u64, j: T): &T { abort 0 }
@@ -31,7 +31,7 @@ error[E04034]: syntax method types differ
    │
    = Index operation non-subject parameter types must match exactly
 
-error[E04034]: syntax method types differ
+error[E04034]: 'syntax' method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:48:16
    │
 48 │     public fun borrow<T,Q>(s: &S<T>, i: u64, j: Q): &T { abort 0 }
@@ -42,7 +42,7 @@ error[E04034]: syntax method types differ
    │
    = Index operations on the same type must take the name number of type arguments
 
-error[E04034]: syntax method types differ
+error[E04034]: 'syntax' method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:62:41
    │
 62 │     public fun borrow<T,Q>(s: &S<T>, i: u64, j: Q): &T { abort 0 }
@@ -53,7 +53,7 @@ error[E04034]: syntax method types differ
    │
    = Index operation non-subject parameter types must match exactly
 
-error[E04034]: syntax method types differ
+error[E04034]: 'syntax' method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:62:49
    │
 62 │     public fun borrow<T,Q>(s: &S<T>, i: u64, j: Q): &T { abort 0 }
@@ -64,7 +64,7 @@ error[E04034]: syntax method types differ
    │
    = Index operation non-subject parameter types must match exactly
 
-error[E04034]: syntax method types differ
+error[E04034]: 'syntax' method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:76:41
    │
 76 │     public fun borrow<T,R>(s: &S<T>, i: R, j: T): &T { abort 0 }
@@ -75,7 +75,7 @@ error[E04034]: syntax method types differ
    │
    = Index operation non-subject parameter types must match exactly
 
-error[E04034]: syntax method types differ
+error[E04034]: 'syntax' method types differ
    ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:90:39
    │
 90 │     public fun borrow<T>(s: &S<T>, i: u64): &T {
@@ -86,7 +86,7 @@ error[E04034]: syntax method types differ
    │
    = Index operation non-subject parameter types must match exactly
 
-error[E04034]: syntax method types differ
+error[E04034]: 'syntax' method types differ
     ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:107:39
     │
 107 │     public fun borrow<T>(s: &S<T>, i: &u64, j: T): &T { abort 0 }
@@ -97,7 +97,7 @@ error[E04034]: syntax method types differ
     │
     = Index operation non-subject parameter types must match exactly
 
-error[E04034]: syntax method types differ
+error[E04034]: 'syntax' method types differ
     ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:121:48
     │
 121 │     public fun borrow<T>(s: &S<T>, i: &u64, j: &T): &T { abort 0 }
@@ -108,7 +108,7 @@ error[E04034]: syntax method types differ
     │
     = Index operation non-subject parameter types must match exactly
 
-error[E04034]: syntax method types differ
+error[E04034]: 'syntax' method types differ
     ┌─ tests/move_2024/typing/syntax_methods_args_invalid.move:135:48
     │
 135 │     public fun borrow<T>(s: &S<T>, i: &u64, j: &mut T): &T { abort 0 }
