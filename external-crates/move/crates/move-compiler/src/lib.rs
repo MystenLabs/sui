@@ -10,7 +10,7 @@ extern crate move_ir_types;
 #[macro_use(symbol)]
 extern crate move_symbol_pool;
 
-pub const STACK_LIMIT: usize = 42 * 1_000_000_000;
+pub const STACK_LIMIT: usize = 1_000_000_000;
 
 macro_rules! with_large_stack {
     ($e:expr) => {
