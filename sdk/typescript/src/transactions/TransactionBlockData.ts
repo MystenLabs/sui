@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB58 } from '@mysten/bcs';
+import type { Input } from 'valibot';
 import { parse } from 'valibot';
 
 import { bcs } from '../bcs/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
+import { transactionBlockStateFromV1BlockData } from './blockData/v1.js';
 import type { SerializedTransactionDataBuilderV1 } from './blockData/v1.js';
 import type { CallArg, GasData, Transaction, TransactionExpiration } from './blockData/v2.js';
 import { TransactionBlockState } from './blockData/v2.js';
@@ -60,11 +62,15 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 		});
 	}
 
-	static restore(data: TransactionBlockState | SerializedTransactionDataBuilderV1) {
+	static restore(
+		data: Input<typeof TransactionBlockState> | Input<typeof SerializedTransactionDataBuilderV1>,
+	) {
 		if (data.version === 2) {
 			return new TransactionBlockDataBuilder(parse(TransactionBlockState, data));
 		} else {
-			throw new Error('Todo implement transform');
+			return new TransactionBlockDataBuilder(
+				parse(TransactionBlockState, transactionBlockStateFromV1BlockData(data)),
+			);
 		}
 	}
 

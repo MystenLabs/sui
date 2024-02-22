@@ -5,15 +5,19 @@ import type { SerializedBcs } from '@mysten/bcs';
 import { isSerializedBcs } from '@mysten/bcs';
 
 import { bcs } from '../bcs/index.js';
-import type { ObjectCallArg, PureArg, SharedObjectRef } from '../bcs/index.js';
+import type { SharedObjectRef } from '../bcs/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { CallArg, ObjectRef } from './blockData/v2.js';
 
-function Pure(data: Uint8Array | SerializedBcs<any>, type?: string): PureArg;
+function Pure(
+	data: Uint8Array | SerializedBcs<any>,
+	type?: string,
+): Extract<CallArg, { Pure: unknown }>;
 /** @deprecated pass SerializedBcs values instead */
-function Pure(data: unknown, type?: string): PureArg;
-function Pure(data: unknown, type?: string): PureArg {
+function Pure(data: unknown, type?: string): Extract<CallArg, { Pure: unknown }>;
+function Pure(data: unknown, type?: string): Extract<CallArg, { Pure: unknown }> {
 	return {
+		$kind: 'Pure',
 		Pure: Array.from(
 			data instanceof Uint8Array
 				? data
@@ -27,9 +31,11 @@ function Pure(data: unknown, type?: string): PureArg {
 
 export const Inputs = {
 	Pure,
-	ObjectRef({ objectId, digest, version }: ObjectRef): ObjectCallArg {
+	ObjectRef({ objectId, digest, version }: ObjectRef): Extract<CallArg, { Object: unknown }> {
 		return {
+			$kind: 'Object',
 			Object: {
+				$kind: 'ImmOrOwnedObject',
 				ImmOrOwnedObject: {
 					digest,
 					version,
@@ -38,9 +44,15 @@ export const Inputs = {
 			},
 		};
 	},
-	SharedObjectRef({ objectId, mutable, initialSharedVersion }: SharedObjectRef): ObjectCallArg {
+	SharedObjectRef({
+		objectId,
+		mutable,
+		initialSharedVersion,
+	}: SharedObjectRef): Extract<CallArg, { Object: unknown }> {
 		return {
+			$kind: 'Object',
 			Object: {
+				$kind: 'SharedObject',
 				SharedObject: {
 					mutable,
 					initialSharedVersion,
@@ -49,9 +61,11 @@ export const Inputs = {
 			},
 		};
 	},
-	ReceivingRef({ objectId, digest, version }: ObjectRef): ObjectCallArg {
+	ReceivingRef({ objectId, digest, version }: ObjectRef): Extract<CallArg, { Object: unknown }> {
 		return {
+			$kind: 'Object',
 			Object: {
+				$kind: 'Receiving',
 				Receiving: {
 					digest,
 					version,

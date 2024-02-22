@@ -1,12 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { BcsType } from '@mysten/bcs';
 import { parse } from 'valibot';
 
+import { bcs } from '../bcs/index.js';
 import type { SuiClient } from '../client/client.js';
+import type { SuiMoveNormalizedType } from '../client/index.js';
 import { SUI_TYPE_ARG } from '../utils/index.js';
 import { normalizeSuiAddress, normalizeSuiObjectId } from '../utils/sui-types.js';
-import type { CallArg, OpenMoveTypeSignature, Transaction } from './blockData/v2.js';
+import type {
+	Argument,
+	CallArg,
+	OpenMoveTypeSignature,
+	OpenMoveTypeSignatureBody,
+	Transaction,
+} from './blockData/v2.js';
 import { ObjectRef } from './blockData/v2.js';
 import { Inputs, isMutableSharedObjectInput } from './Inputs.js';
 import { getPureSerializationType, isTxContext } from './serializer.js';
@@ -215,36 +224,36 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 			}
 
 			objectsToResolve.forEach((input) => {
-				let updated: CallArg = input;
+				let updated: CallArg | undefined;
 				const id = normalizeSuiAddress(input.UnresolvedObject.value);
-				const normalizedType = input.UnresolvedObject.typeSignature;
+				const typeSignatures = input.UnresolvedObject.typeSignatures;
 				const object = objectsById.get(id)!;
 				const owner = object.data?.owner;
 				const initialSharedVersion =
 					owner && typeof owner === 'object' && 'Shared' in owner
 						? owner.Shared.initial_shared_version
 						: undefined;
-
-				if (initialSharedVersion) {
+				const isMutable = typeSignatures.some((typeSignature) => {
 					// There could be multiple transactions that reference the same shared object.
 					// If one of them is a mutable reference or taken by value, then we should mark the input
 					// as mutable.
-					const isByValue = !normalizedType.ref;
-					const mutable =
-						isMutableSharedObjectInput(input) || isByValue || normalizedType.ref === '&mut';
+					const isByValue = !typeSignature.ref;
+					return isMutableSharedObjectInput(input) || isByValue || typeSignature.ref === '&mut';
+				});
+				const isReceiving = !initialSharedVersion && typeSignatures.some(isReceivingType);
 
+				if (initialSharedVersion) {
 					updated = Inputs.SharedObjectRef({
 						objectId: id,
 						initialSharedVersion,
-						mutable,
+						mutable: isMutable,
 					});
-				} else if (normalizedType && isReceivingType(normalizedType)) {
+				} else if (isReceiving) {
 					updated = Inputs.ReceivingRef(object.data!);
-				} else {
-					updated = Inputs.ObjectRef(object.data!);
 				}
 
-				blockData.inputs[blockData.inputs.indexOf(input)] = updated;
+				blockData.inputs[blockData.inputs.indexOf(input)] =
+					updated ?? Inputs.ObjectRef(object.data!);
 			});
 		}
 	};
@@ -262,7 +271,7 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 				// - If they do, then we need to fetch the normalized move module.
 
 				const inputs = transaction.MoveCall.arguments.map((arg) => {
-					if (arg.Input) {
+					if (arg.$kind === 'Input') {
 						return blockData.inputs[arg.Input];
 					}
 					return null;
@@ -276,27 +285,16 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 
 			// Special handling for values that where previously encoded using the wellKnownEncoding pattern.
 			// This should only happen when transaction block data was hydrated from an old version of the SDK
-			if (transaction.SplitCoins) {
-				// TODO: Fix this during hydration
-				// const amounts = transaction.SplitCoins[1].map((amount) => {
-				// transaction.amounts.forEach((amount) => {
-				// 	if (amount.kind === 'Input') {
-				// 		const input = inputs[amount.index];
-				// 		if (typeof input.value !== 'object') {
-				// 			input.value = Inputs.Pure(bcs.U64.serialize(input.value));
-				// 		}
-				// 	}
-				// });
+			switch (transaction.$kind) {
+				case 'SplitCoins':
+					transaction.SplitCoins[1].forEach((amount) => {
+						this.#normalizeRawArgument(amount, bcs.U64, blockData);
+					});
+					break;
+				case 'TransferObjects':
+					this.#normalizeRawArgument(transaction.TransferObjects[1], bcs.Address, blockData);
+					break;
 			}
-
-			// if (transaction.kind === 'TransferObjects') {
-			// 	if (transaction.address.kind === 'Input') {
-			// 		const input = inputs[transaction.address.index];
-			// 		if (typeof input.value !== 'object') {
-			// 			input.value = Inputs.Pure(bcs.Address.serialize(input.value));
-			// 		}
-			// 	}
-			// }
 		});
 
 		if (moveModulesToResolve.length) {
@@ -324,17 +322,17 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 
 					params.forEach((param, i) => {
 						const arg = moveCall.arguments[i];
-						if (!arg.Input) return;
+						if (arg.$kind !== 'Input') return;
 						const input = inputs[arg.Input];
 						// Skip if the input is already resolved
-						if (!input.RawValue) return;
+						if (!input.RawValue && !input.UnresolvedObject) return;
 
-						const inputValue = input.RawValue.value;
+						const inputValue = input.RawValue?.value ?? input.UnresolvedObject?.value!;
 
 						const serType = getPureSerializationType(param, inputValue);
 
 						if (serType) {
-							inputs[inputs.indexOf(input)] = Inputs.Pure(inputValue, serType);
+							inputs[inputs.indexOf(input)] = Inputs.Pure(bcs.ser(serType, inputValue).toBytes());
 							return;
 						}
 
@@ -350,13 +348,18 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 								);
 							}
 
-							inputs[inputs.indexOf(input)] = {
-								UnresolvedObject: {
-									value: inputValue,
-									// TODO convert to OpenMoveTypeSignature
-									typeSignature: param,
-								},
-							};
+							if (input.$kind === 'RawValue') {
+								inputs[inputs.indexOf(input)] = {
+									$kind: 'UnresolvedObject',
+									UnresolvedObject: {
+										value: inputValue,
+										typeSignatures: [normalizedTypeToSignature(param)],
+									},
+								};
+							} else {
+								input.UnresolvedObject.typeSignatures.push(normalizedTypeToSignature(param));
+							}
+
 							return;
 						}
 
@@ -371,6 +374,18 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 				}),
 			);
 		}
+
+		blockData.inputs.forEach((input, index) => {
+			if (input.RawValue?.type === 'Object') {
+				inputs[index] = {
+					$kind: 'UnresolvedObject',
+					UnresolvedObject: {
+						value: input.RawValue.value as string,
+						typeSignatures: [],
+					},
+				};
+			}
+		});
 	};
 
 	validate: NonNullable<TransactionBlockPlugin['validate']> = async (blockData, options) => {
@@ -386,6 +401,23 @@ export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
 			}
 		});
 	};
+
+	#normalizeRawArgument = (
+		arg: Argument,
+		schema: BcsType<any>,
+		blockData: TransactionBlockDataBuilder,
+	) => {
+		if (arg.$kind !== 'Input') {
+			return;
+		}
+		const input = blockData.inputs[arg.Input];
+
+		if (input.$kind !== 'RawValue') {
+			return;
+		}
+
+		blockData.inputs[arg.Input] = Inputs.Pure(schema.serialize(input.RawValue.value));
+	};
 }
 
 function isReceivingType(type: OpenMoveTypeSignature): boolean {
@@ -398,4 +430,74 @@ function isReceivingType(type: OpenMoveTypeSignature): boolean {
 		type.body.datatype.module === 'transfer' &&
 		type.body.datatype.type === 'Receiving'
 	);
+}
+
+function normalizedTypeToSignature(type: SuiMoveNormalizedType): OpenMoveTypeSignature {
+	if (typeof type === 'object' && 'Reference' in type) {
+		return {
+			ref: '&',
+			body: normalizedTypeToSignatureBody(type.Reference),
+		};
+	}
+
+	if (typeof type === 'object' && 'MutableReference' in type) {
+		return {
+			ref: '&mut',
+			body: normalizedTypeToSignatureBody(type.MutableReference),
+		};
+	}
+
+	return {
+		ref: null,
+		body: normalizedTypeToSignatureBody(type),
+	};
+}
+
+function normalizedTypeToSignatureBody(type: SuiMoveNormalizedType): OpenMoveTypeSignatureBody {
+	switch (type) {
+		case 'Address':
+			return 'address';
+		case 'Bool':
+			return 'bool';
+		case 'Signer':
+			throw new Error('Signer type is not expected');
+		case 'U8':
+			return 'u8';
+		case 'U16':
+			return 'u16';
+		case 'U32':
+			return 'u32';
+		case 'U64':
+			return 'u64';
+		case 'U128':
+			return 'u128';
+		case 'U256':
+			return 'u256';
+	}
+
+	if ('Struct' in type) {
+		return {
+			datatype: {
+				package: type.Struct.address,
+				module: type.Struct.module,
+				type: type.Struct.name,
+				typeParameters: type.Struct.typeArguments.map((param) =>
+					normalizedTypeToSignatureBody(param),
+				),
+			},
+		};
+	}
+	if ('Vector' in type) {
+		return {
+			vector: normalizedTypeToSignatureBody(type.Vector),
+		};
+	}
+
+	if ('TypeParameter' in type) {
+		return {
+			typeParameter: type.TypeParameter,
+		};
+	}
+
+	throw new Error(`Unknown type ${JSON.stringify(type, null, 2)}`);
 }

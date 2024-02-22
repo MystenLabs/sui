@@ -63,17 +63,33 @@ export type InferBcsType<T extends BcsType<any>> = T extends BcsType<infer U, an
 export type InferBcsInput<T extends BcsType<any, any>> = T extends BcsType<any, infer U>
 	? U
 	: never;
-export type Merge<T> = T extends object ? { [K in keyof T]: T[K] } : never;
+
+type EnumValue<T, Keys extends string> = T & { [K in Exclude<Keys, keyof T>]?: never };
 
 export type EnumOutputShape<
 	T extends Record<string, BcsType<any> | null>,
 	Keys extends string = Extract<keyof T, string>,
+	Values = T[keyof T] extends infer Type ? (Type extends BcsType<infer U> ? U : never) : never,
+> = 0 extends Values
+	? EnumOutputShapeWithKeys<T, never>
+	: 0n extends Values
+	? EnumOutputShapeWithKeys<T, never>
+	: '' extends Values
+	? EnumOutputShapeWithKeys<T, never>
+	: false extends Values
+	? EnumOutputShapeWithKeys<T, never>
+	: EnumOutputShapeWithKeys<T, Keys>;
+
+export type EnumOutputShapeWithKeys<
+	T extends Record<string, BcsType<any> | null>,
+	Keys extends string,
 > = {
-	[K in keyof T]: Merge<
-		(T[K] extends BcsType<infer U, any> ? { [K2 in K]: U } : { [K2 in K]: true }) & {
-			[K2 in Exclude<Keys, K>]?: never;
-		}
-	>;
+	[K in keyof T]: EnumValue<
+		T[K] extends BcsType<infer U, any> ? { [K2 in K]: U } : { [K2 in K]: true },
+		Keys
+	> & {
+		$kind: K;
+	};
 }[keyof T];
 
 export type EnumInputShape<T extends Record<string, BcsType<any> | null>> = {

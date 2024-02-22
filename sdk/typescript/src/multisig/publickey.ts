@@ -95,7 +95,10 @@ export class MultiSigPublicKey extends PublicKey {
 		const seenPublicKeys = new Set<string>();
 
 		this.publicKeys = this.multisigPublicKey.pk_map.map(({ pubKey, weight }) => {
-			const [scheme, bytes] = Object.entries(pubKey)[0] as [SignatureScheme, number[]];
+			const [scheme, bytes] = Object.entries(pubKey).filter(([name]) => name !== '$kind')[0] as [
+				SignatureScheme,
+				number[],
+			];
 			const publicKeyStr = Uint8Array.from(bytes).toString();
 
 			if (seenPublicKeys.has(publicKeyStr)) {
@@ -300,10 +303,9 @@ export class MultiSigPublicKey extends PublicKey {
 export function parsePartialSignatures(multisig: MultiSigStruct): ParsedPartialMultiSigSignature[] {
 	let res: ParsedPartialMultiSigSignature[] = new Array(multisig.sigs.length);
 	for (let i = 0; i < multisig.sigs.length; i++) {
-		const [signatureScheme, signature] = Object.entries(multisig.sigs[i])[0] as [
-			SignatureScheme,
-			number[],
-		];
+		const [signatureScheme, signature] = Object.entries(multisig.sigs[i]).filter(
+			([name]) => name !== '$kind',
+		)[0] as [SignatureScheme, number[]];
 		const pkIndex = asIndices(multisig.bitmap).at(i)!;
 		const pair = multisig.multisig_pk.pk_map[pkIndex];
 		const pkBytes = Uint8Array.from(Object.values(pair.pubKey)[0]);

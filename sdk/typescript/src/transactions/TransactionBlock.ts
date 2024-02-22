@@ -3,22 +3,23 @@
 
 import type { SerializedBcs } from '@mysten/bcs';
 import { fromB64, isSerializedBcs } from '@mysten/bcs';
+import type { Input } from 'valibot';
 import { is, parse } from 'valibot';
 
-import type { ObjectCallArg } from '../bcs/index.js';
 import type { ProtocolConfig, SuiClient } from '../client/index.js';
 import type { SignatureWithBytes, Signer } from '../cryptography/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import type { CallArg, Transaction, TransactionExpiration } from './blockData/v2.js';
-import { Argument, ObjectRef } from './blockData/v2.js';
+import { v1BlockDataFromTransactionBlockState } from './blockData/v1.js';
+import type { CallArg, Transaction } from './blockData/v2.js';
+import { Argument, NormalizedCallArg, ObjectRef, TransactionExpiration } from './blockData/v2.js';
 import { getIdFromCallArg, Inputs } from './Inputs.js';
 import { createPure } from './pure.js';
 import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 import { DefaultTransactionBlockFeatures } from './TransactionBlockPlugin.js';
+import type { TransactionArgument } from './Transactions.js';
 import { Transactions } from './Transactions.js';
 
-export type TransactionArgument = Argument;
-export type TransactionObjectArgument = Exclude<Argument, { type?: 'pure' }>;
+export type TransactionObjectArgument = Exclude<Argument, { Input: unknown; type?: 'pure' }>;
 
 export type TransactionResult = Extract<Argument, { Result: unknown }> &
 	Extract<Argument, { NestedResult: unknown }>[];
@@ -31,11 +32,12 @@ const DefaultOfflineLimits = {
 } satisfies Limits;
 
 function createTransactionResult(index: number): TransactionResult {
-	const baseResult: TransactionArgument = { Result: index };
+	const baseResult: TransactionArgument = { $kind: 'Result', Result: index };
 
 	const nestedResults: TransactionArgument[] = [];
 	const nestedResultFor = (resultIndex: number): TransactionArgument =>
 		(nestedResults[resultIndex] ??= {
+			$kind: 'NestedResult',
 			NestedResult: [index, resultIndex],
 		});
 
@@ -116,7 +118,7 @@ export function isTransactionBlock(obj: unknown): obj is TransactionBlock {
 	return !!obj && typeof obj === 'object' && (obj as any)[TRANSACTION_BRAND] === true;
 }
 
-export type TransactionObjectInput = string | ObjectCallArg | TransactionObjectArgument;
+export type TransactionObjectInput = string | CallArg | TransactionObjectArgument;
 
 /**
  * Transaction Builder
@@ -169,8 +171,8 @@ export class TransactionBlock {
 			this.#blockData.sender = sender;
 		}
 	}
-	setExpiration(expiration?: TransactionExpiration | null) {
-		this.#blockData.expiration = expiration ?? null;
+	setExpiration(expiration?: Input<typeof TransactionExpiration> | null) {
+		this.#blockData.expiration = parse(TransactionExpiration, expiration) ?? null;
 	}
 	setGasPrice(price: number | bigint) {
 		this.#blockData.gasConfig.price = String(price);
@@ -186,8 +188,14 @@ export class TransactionBlock {
 	}
 
 	#blockData: TransactionBlockDataBuilder;
-	/** Get a snapshot of the transaction data, in JSON form: */
+	/** @deprecated Use `getBlockData()` instead. */
+
 	get blockData() {
+		return v1BlockDataFromTransactionBlockState(this.#blockData.snapshot());
+	}
+
+	/** Get a snapshot of the transaction data, in JSON form: */
+	getBlockData() {
 		return this.#blockData.snapshot();
 	}
 
@@ -201,9 +209,10 @@ export class TransactionBlock {
 	get pure(): ReturnType<typeof createPure> {
 		Object.defineProperty(this, 'pure', {
 			enumerable: false,
-			value: createPure((value, type) => {
+			value: createPure((value, type): Argument => {
 				if (isSerializedBcs(value)) {
 					return this.#input('pure', {
+						$kind: 'Pure',
 						Pure: Array.from(value.toBytes()),
 					});
 				}
@@ -211,11 +220,13 @@ export class TransactionBlock {
 				// TODO: we can also do some deduplication here
 				return this.#input(
 					'pure',
-					value instanceof Uint8Array
+					is(NormalizedCallArg, value)
+						? parse(NormalizedCallArg, value)
+						: value instanceof Uint8Array
 						? Inputs.Pure(value)
 						: type
 						? Inputs.Pure(value, type)
-						: { RawValue: { type: 'Pure', value } },
+						: { $kind: 'RawValue', RawValue: { type: 'Pure', value } },
 				);
 			}),
 		});
@@ -225,13 +236,13 @@ export class TransactionBlock {
 
 	constructor(transaction?: TransactionBlock) {
 		this.#blockData = new TransactionBlockDataBuilder(
-			transaction ? transaction.blockData : undefined,
+			transaction ? transaction.getBlockData() : undefined,
 		);
 	}
 
 	/** Returns an argument for the gas coin, to be used in a transaction. */
 	get gas() {
-		return { GasCoin: true };
+		return { $kind: 'GasCoin' as const, GasCoin: true as const };
 	}
 
 	/**
@@ -246,7 +257,7 @@ export class TransactionBlock {
 	#input<T extends 'object' | 'pure'>(type: T, arg: CallArg) {
 		const index = this.#blockData.inputs.length;
 		this.#blockData.inputs.push(arg);
-		return { Input: index, type };
+		return { Input: index, type, $kind: 'Input' as const };
 	}
 
 	/**
@@ -262,22 +273,17 @@ export class TransactionBlock {
 		const inserted = this.#blockData.inputs.find((i) => id === getIdFromCallArg(i));
 
 		// Upgrade shared object inputs to mutable if needed:
-		if (
-			inserted?.Object?.SharedObject &&
-			typeof value === 'object' &&
-			// TODO update to match enum style
-			'SharedObject' in value.Object
-		) {
+		if (inserted?.Object?.SharedObject && typeof value === 'object' && value.Object?.SharedObject) {
 			inserted.Object.SharedObject.mutable =
 				inserted.Object.SharedObject.mutable || value.Object.SharedObject.mutable;
 		}
 
 		return inserted
-			? { Input: this.#blockData.inputs.indexOf(inserted), type: 'object' }
+			? { $kind: 'Input', Input: this.#blockData.inputs.indexOf(inserted), type: 'object' }
 			: this.#input(
 					'object',
 					typeof value === 'string'
-						? { RawValue: { type: 'Object', value: normalizeSuiAddress(value) } }
+						? { $kind: 'RawValue', RawValue: { type: 'Object', value: normalizeSuiAddress(value) } }
 						: value,
 			  );
 	}
@@ -427,7 +433,7 @@ export class TransactionBlock {
 	 * and performing a dry run).
 	 */
 	serialize() {
-		return JSON.stringify(this.#blockData.snapshot());
+		return JSON.stringify(v1BlockDataFromTransactionBlockState(this.#blockData.snapshot()));
 	}
 
 	#getConfig(key: keyof typeof LIMITS, { protocolConfig, limits }: BuildOptions) {
@@ -499,6 +505,16 @@ export class TransactionBlock {
 		const plugins = new DefaultTransactionBlockFeatures([], () => expectClient(options));
 		await plugins.normalizeInputs(this.#blockData);
 		await plugins.resolveObjectReferences(this.#blockData);
+
+		this.#blockData.inputs.forEach((input, index) => {
+			if (input.$kind !== 'Object' && input.$kind !== 'Pure') {
+				throw new Error(
+					`Input at index ${index} has not been resolved.  Expected a Pure or Object input, but found ${JSON.stringify(
+						input,
+					)}`,
+				);
+			}
+		});
 
 		if (!options.onlyTransactionKind) {
 			await plugins.setGasPrice(this.#blockData);
