@@ -32,9 +32,9 @@ Before getting started, make sure you:
 - Check out [Express](https://expressjs.com/) to learn how to quickly setup a Web server application in Node.js as we will use it to bootstrap our API service.
 - Check out [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui with Typescript.
 
-## Indexing Service
+## Indexing service
 
-### Data Model
+### Data model
 
 In most cases, when we're working with a database directly from a backend service, we may want to use some sort of database libraries and toolings to abstract us away from database creation and management complexity. In our case, we use [Prisma](https://www.prisma.io/) to manage all the database interactions such as defining data models and database migrations.
 
@@ -107,7 +107,7 @@ import { handleLockObjects } from './locked-handler';
 
 These lines import the necessary modules and dependencies for the script. The `EventId`, `SuiClient`, `SuiEvent`, and `SuiEventFilter` types are imported from the `@mysten/sui.js/client` package. The `CONFIG` constant is imported from the local `config` module, `prisma` from the local `db` module, `getClient` from the local `sui-utils` module, and the `handleEscrowObjects` and `handleLockObjects` functions from the local `escrow-handler` and `locked-handler` modules respectively.
 
-#### Type Definitions
+#### Type definitions
 
 ```ts title='event-indexer.ts'
 type SuiEventsCursor = EventId | null | undefined;
@@ -260,7 +260,7 @@ This function sets up all the listeners for the events to track. It iterates ove
 
 Now let’s take a look at `escrow-handler.ts`:
 
-### escrow-handler.ts
+### `escrow-handler.ts`
 
 #### Imports
 
@@ -273,7 +273,7 @@ import { prisma } from '../db';
 
 These lines import the necessary modules and dependencies for the script. The `SuiEvent` type is imported from the `@mysten/sui.js/client` package. The `Prisma` namespace is imported from the `@prisma/client package`. The `prisma` instance is imported from the local `db` module.
 
-#### Type Definitions
+#### Type definitions
 
 ```ts title='escrow-handler.ts'
 type EscrowEvent = EscrowCreated | EscrowCancelled | EscrowSwapped;
@@ -355,7 +355,7 @@ export const handleEscrowObjects = async (events: SuiEvent[], type: string) => {
 
 This function handles all events emitted by the `escrow` module. It takes an array of `SuiEvent` objects and a string representing the type of the events as arguments. The function processes each event and updates the corresponding escrow object in the database accordingly. If an event indicates that an escrow was canceled or swapped, the function marks the corresponding escrow object as canceled or swapped. If an event indicates that an escrow was created, the function creates a new escrow object with the details from the event.
 
-### locked-handler.ts
+### `locked-handler.ts`
 
 #### Imports
 
@@ -368,7 +368,7 @@ import { prisma } from '../db';
 
 These lines import the necessary modules and dependencies for the script. The `SuiEvent` type is imported from the `@mysten/sui.js/client` package. The `Prisma` namespace is imported from the `@prisma/client package`. The `prisma` instance is imported from the local `db` module.
 
-#### Type Definitions
+#### Type definitions
 
 ```ts title='locked-handler.ts'
 type LockEvent = LockCreated | LockDestroyed;
@@ -437,13 +437,13 @@ export const handleLockObjects = async (events: SuiEvent[], type: string) => {
 
 This function handles all events emitted by the `lock` module. It takes an array of `SuiEvent` objects and a string representing the type of the events as arguments. The function processes each event and updates the corresponding locked object in the database accordingly. If an event indicates that a lock was destroyed, the function marks the corresponding locked object as deleted. If an event indicates that a lock was created, the function creates a new locked object with the details from the event.
 
-## API Service
+## API service
 
 As we mentioned earlier, we should expose the indexed data for external consumption through an API Service. Particularly, we will use [Express](https://expressjs.com/) to build a Node.js HTTP API.
 
-### API Design
+### API design
 
-#### Query Parameters
+#### Query parameters
 
 We want our API to accept the query string in the URL as the parameters for database WHERE query. Hence, we want utility that can extract and parse the URL query string into valid query parameters for Prisma. With the `parseWhereStatement()` function, we allow the callers to filter the set of keys from URL query string and transform those corresponding key-value pairs into the correct format for Prisma.
 
@@ -491,7 +491,7 @@ export const parseWhereStatement = (query: Record<string, any>, acceptedParams: 
 };
 ```
 
-#### Query Pagination
+#### Query pagination
 
 Pagination is another crucial part to ensure our API will return sufficient or/and ordered chunk of information instead all the data which might be the vector for DDOS attack. Similar to **WHERE parameters**, we define a set of keys in the URL query string to be accepted as valid pagination parameters. `parsePaginationForQuery()` utility function helps us to achieve this by filtering the pre-determined keys `sort`, `limit`, `cursor` and parsing corresponding key-value pairs into `ApiPagination` which can be consumed by Prisma.
 
@@ -545,7 +545,7 @@ export const parsePaginationForQuery = (body: Record<string, any>) => {
 };
 ```
 
-### API Endpoints
+### API endpoints
 
 All the endpoints are defined in `server.ts`, particularly, we have 2 endpoints:
 
@@ -630,3 +630,6 @@ app.get('/escrows', async (req, res) => {
 	}
 });
 ```
+
+## Frontend
+With our code successfully deployed on Testnet, we should now allow users to interact with it via a frontend.

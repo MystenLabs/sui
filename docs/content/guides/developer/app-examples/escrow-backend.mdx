@@ -51,7 +51,7 @@ struct Escrow<T: key + store> has key, store {
 
 The ID of the key is used as the `exchange_key`, rather than the ID of the object, to ensure that the object is not modified after a trade has been initiated.
 
-### Error Codes
+### Error codes
 
 Two constants are defined to represent potential errors during the execution of the swap:
 
@@ -63,7 +63,7 @@ const EMismatchedSenderRecipient: u64 = 0;
 const EMismatchedExchangeObject: u64 = 1;
 ```
 
-### Public Functions
+### Public functions
 
 #### `create`
 
