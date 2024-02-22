@@ -216,6 +216,12 @@ Some policies require that assets never get removed from a kiosk, such as for st
 
 To lock an asset in a kiosk, call the `sui::kiosk::lock` function. To ensure that you can later unlock the asset you must associate a `TransferPolicy` with the asset.
 
+:::info
+
+After you lock an asset, you must use `list` or `list_with_purchase_cap` functions to list it.
+
+:::
+
 ### Lock an item in a kiosk
 
 When you use the `lock` function, similar to using the `place` function, you specify the `KioskOwnerCap` and the `Item` as arguments. But to lock the item, you must also show the `TransferPolicy`.
