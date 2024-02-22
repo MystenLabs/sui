@@ -1,8 +1,6 @@
-# the last checkpoint of epoch 97 is 8097645, and the last transaction
-# number of the checkpoint is 261225985.
 {
   epoch {
-    transactionBlocks(first: 20, after: "eyJjIjo4MDk3NjQ1LCJ0IjoyNjEyMjU5ODV9") {
+    transactionBlocks(first: 20, after: "eyJjIjoyNjkzMzMyNCwidCI6MTEwMTYxMDQ4MywidGMiOjI2ODUxMjQ4fQ") {
       pageInfo {
         hasNextPage
         endCursor
