@@ -11,7 +11,7 @@ use crate::models_v2::transactions::{
     StoredTransactionTimestamp, TxSeq,
 };
 use crate::models_v2::tx_count_metrics::StoredTxCountMetrics;
-use crate::types_v2::IndexerResult;
+use crate::types::IndexerResult;
 
 #[async_trait]
 pub trait IndexerAnalyticalStore {

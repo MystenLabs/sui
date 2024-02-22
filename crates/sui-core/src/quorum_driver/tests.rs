@@ -4,6 +4,7 @@
 use crate::quorum_driver::reconfig_observer::DummyReconfigObserver;
 use crate::quorum_driver::{AuthorityAggregator, QuorumDriverHandlerBuilder};
 use crate::test_authority_clients::LocalAuthorityClient;
+use crate::test_authority_clients::LocalAuthorityClientFaultConfig;
 use crate::test_utils::make_transfer_sui_transaction;
 use crate::{quorum_driver::QuorumDriverMetrics, test_utils::init_local_authorities};
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
@@ -16,6 +17,7 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::{generate_test_gas_objects, Object};
 use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResponse, QuorumDriverResult};
 use sui_types::transaction::Transaction;
+use tokio::time::timeout;
 
 async fn setup() -> (AuthorityAggregator<LocalAuthorityClient>, Transaction) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
@@ -444,4 +446,60 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
     }
 
     Ok(())
+}
+
+// Tests that quorum driver can continuously retry txn with SystemOverloadedRetryAfter error.
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_quorum_driver_handling_overload_and_retry() {
+    telemetry_subscribers::init_for_testing();
+
+    // Setup
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = Object::with_owner_for_testing(sender);
+    let (mut aggregator, authorities, genesis, _) =
+        init_local_authorities(4, vec![gas_object.clone()]).await;
+
+    // Make local authority client to always return SystemOverloadedRetryAfter error.
+    let fault_config = LocalAuthorityClientFaultConfig {
+        overload_retry_after_handle_transaction: true,
+        ..Default::default()
+    };
+    let mut clients = aggregator.clone_inner_clients_test_only();
+    for client in &mut clients.values_mut() {
+        client.authority_client_mut().fault_config = fault_config;
+    }
+    let clients = clients.into_iter().map(|(k, v)| (k, Arc::new(v))).collect();
+    aggregator.authority_clients = Arc::new(clients);
+
+    // Create a transaction for the test.
+    let rgp = authorities
+        .first()
+        .unwrap()
+        .reference_gas_price_for_testing()
+        .unwrap();
+    let gas_object = genesis
+        .objects()
+        .iter()
+        .find(|o| o.id() == gas_object.id())
+        .unwrap();
+    let tx = make_tx(gas_object, sender, &keypair, rgp);
+
+    // Create a quorum driver with max_retry_times = 0.
+    let arc_aggregator = Arc::new(aggregator.clone());
+    let quorum_driver_handler = Arc::new(
+        QuorumDriverHandlerBuilder::new(
+            arc_aggregator.clone(),
+            Arc::new(QuorumDriverMetrics::new_for_tests()),
+        )
+        .with_reconfig_observer(Arc::new(DummyReconfigObserver {}))
+        .with_max_retry_times(0)
+        .start(),
+    );
+
+    // Submit the transaction, and check that it shouldn't return.
+    let ticket = quorum_driver_handler.submit_transaction(tx).await.unwrap();
+    match timeout(Duration::from_secs(300), ticket).await {
+        Ok(result) => panic!("Process transaction should timeout! {:?}", result),
+        Err(_) => eprintln!("Waiting for txn timed out! This is desired behavior."),
+    }
 }

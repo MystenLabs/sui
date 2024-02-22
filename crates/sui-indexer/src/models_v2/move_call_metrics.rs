@@ -12,7 +12,7 @@ use sui_json_rpc_types::MoveFunctionName;
 use sui_types::base_types::ObjectID;
 
 use crate::errors::IndexerError;
-use crate::schema_v2::{move_call_metrics, move_calls};
+use crate::schema::{move_call_metrics, move_calls};
 
 #[derive(Clone, Debug, Queryable, Insertable)]
 #[diesel(table_name = move_calls)]

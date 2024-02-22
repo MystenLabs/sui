@@ -2,18 +2,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::SuiAddress;
-use sui_types::error::{SuiError, SuiResult};
-use sui_types::utils::{
-    get_legacy_zklogin_user_address, get_zklogin_user_address, make_zklogin_tx,
-    sign_zklogin_tx_with_default_proof,
-};
-use sui_types::SUI_AUTHENTICATOR_STATE_OBJECT_ID;
-use test_cluster::{TestCluster, TestClusterBuilder};
+use std::time::Duration;
 
+use shared_crypto::intent::Intent;
+use shared_crypto::intent::IntentMessage;
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
+use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::Signature;
+use sui_types::error::{SuiError, SuiResult};
+use sui_types::signature::GenericSignature;
+use sui_types::transaction::Transaction;
+use sui_types::utils::load_test_vectors;
+use sui_types::utils::{
+    get_legacy_zklogin_user_address, get_zklogin_user_address, make_zklogin_tx,
+};
+use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
+use sui_types::SUI_AUTHENTICATOR_STATE_OBJECT_ID;
+use test_cluster::{TestCluster, TestClusterBuilder};
 
 async fn do_zklogin_test(address: SuiAddress, legacy: bool) -> SuiResult {
     let test_cluster = TestClusterBuilder::new().build().await;
@@ -80,6 +87,44 @@ async fn test_legacy_zklogin_address_accept() {
 #[sim_test]
 async fn zklogin_end_to_end_test() {
     run_zklogin_end_to_end_test(TestClusterBuilder::new().with_default_jwks().build().await).await;
+
+    // wait for current epoch to 11
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(1000)
+        .build()
+        .await;
+    test_cluster
+        .wait_for_epoch_with_timeout(Some(11), Duration::from_secs(180))
+        .await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+
+    // zklogin sig tx fails to execute bc it has max_epoch set to 10.
+    let context = &test_cluster.wallet;
+
+    let (eph_kp, pk_zklogin, zklogin_inputs) =
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
+    let zklogin_addr = (pk_zklogin).into();
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), zklogin_addr)
+        .await;
+    let tx_data = TestTransactionBuilder::new(zklogin_addr, gas, rgp)
+        .transfer_sui(None, SuiAddress::ZERO)
+        .build();
+    let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
+
+    let sig: GenericSignature = ZkLoginAuthenticator::new(
+        zklogin_inputs.clone(),
+        10,
+        Signature::new_secure(&intent_msg, eph_kp),
+    )
+    .into();
+    let tx = Transaction::from_generic_sig_data(tx_data.clone(), vec![sig]);
+
+    let res = context.execute_transaction_may_fail(tx).await;
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("ZKLogin expired at epoch 10"));
 }
 
 #[sim_test]
@@ -103,51 +148,70 @@ async fn zklogin_end_to_end_test_with_auth_state_creation() {
     run_zklogin_end_to_end_test(test_cluster).await;
 }
 
-async fn run_zklogin_end_to_end_test(mut test_cluster: TestCluster) {
+async fn run_zklogin_end_to_end_test(test_cluster: TestCluster) {
     // wait for JWKs to be fetched and sequenced.
     test_cluster.wait_for_authenticator_state_update().await;
+    let test_vectors =
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1..];
+    for (kp, pk_zklogin, inputs) in test_vectors {
+        let zklogin_addr = (pk_zklogin).into();
+        let (sender, gas) = test_cluster
+            .wallet
+            .get_one_gas_object()
+            .await
+            .unwrap()
+            .unwrap();
 
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let sender = test_cluster.get_address_0();
+        let rgp = test_cluster.get_reference_gas_price().await;
+        let context = &test_cluster.wallet;
 
-    let context = &mut test_cluster.wallet;
-    let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
-    let gas_object = accounts_and_objs[0].1[0];
-    let object_to_send = accounts_and_objs[0].1[1];
+        // first send some gas to the zklogin address.
+        let transfer_to_zklogin = context.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas, rgp)
+                .transfer_sui(Some(20000000000), zklogin_addr)
+                .build(),
+        );
+        let _ = context
+            .execute_transaction_must_succeed(transfer_to_zklogin)
+            .await;
 
-    let zklogin_addr = get_zklogin_user_address();
+        let gas_obj = context
+            .get_one_gas_object_owned_by_address(zklogin_addr)
+            .await
+            .unwrap()
+            .unwrap();
 
-    // first send an object to the zklogin address.
-    let txn = context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, rgp)
-            .transfer(object_to_send, zklogin_addr)
-            .build(),
-    );
+        // create txn to send from the zklogin address.
+        let tx_data = TestTransactionBuilder::new(zklogin_addr, gas_obj, rgp)
+            .transfer_sui(None, SuiAddress::ZERO)
+            .build();
 
-    context.execute_transaction_must_succeed(txn).await;
+        let msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
+        let eph_sig = Signature::new_secure(&msg, kp);
 
-    // now send it back
-    let gas_object = context
-        .get_gas_objects_owned_by_address(zklogin_addr, None)
-        .await
-        .unwrap()
-        .into_iter()
-        .next()
-        .unwrap();
+        // combine ephemeral sig with zklogin inputs.
+        let generic_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+            inputs.clone(),
+            10,
+            eph_sig.clone(),
+        ));
+        let signed_txn = Transaction::from_generic_sig_data(tx_data.clone(), vec![generic_sig]);
 
-    let txn = TestTransactionBuilder::new(zklogin_addr, gas_object, rgp)
-        .transfer_sui(None, sender)
-        .build();
+        // a valid txn executes.
+        context.execute_transaction_must_succeed(signed_txn).await;
 
-    let (_, signed_txn, _) = sign_zklogin_tx_with_default_proof(txn, false);
-
-    context.execute_transaction_must_succeed(signed_txn).await;
-
-    assert!(context
-        .get_gas_objects_owned_by_address(zklogin_addr, None)
-        .await
-        .unwrap()
-        .is_empty());
+        // a txn with max_epoch mismatch with proof, fails to execute.
+        let generic_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+            inputs.clone(),
+            0,
+            eph_sig,
+        ));
+        let signed_txn_expired = Transaction::from_generic_sig_data(tx_data, vec![generic_sig]);
+        let result = context
+            .execute_transaction_may_fail(signed_txn_expired)
+            .await;
+        assert!(result.is_err());
+    }
 }
 
 #[sim_test]

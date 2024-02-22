@@ -17,7 +17,7 @@ use crate::{
 
 #[cfg(test)]
 #[path = "tests/base_committer_tests.rs"]
-pub mod base_committer_tests;
+mod base_committer_tests;
 
 #[allow(unused)]
 pub(crate) struct BaseCommitterOptions {

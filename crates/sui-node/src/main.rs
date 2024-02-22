@@ -132,7 +132,7 @@ fn main() {
     let (runtime_shutdown_tx, runtime_shutdown_rx) = broadcast::channel::<()>(1);
 
     runtimes.sui_node.spawn(async move {
-        match sui_node::SuiNode::start_async(&config, registry_service, Some(rpc_runtime)).await {
+        match sui_node::SuiNode::start_async(&config, registry_service, Some(rpc_runtime), VERSION).await {
             Ok(sui_node) => node_once_cell_clone
                 .set(sui_node)
                 .expect("Failed to set node in AsyncOnceCell"),

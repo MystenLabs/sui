@@ -184,7 +184,7 @@ query ($address: SuiAddress!) {
 }
 ```
 
-## Finding the dynamic fields of an object
+## Fetching a dynamic field on an object
 
 :::info
 This example uses aliases and [fragments](/concepts/graphql-rpc/fragments).
@@ -234,6 +234,44 @@ fragment MoveValueFields on MoveValue {
   }
   data
   bcs
+}
+```
+
+## Fetching all dynamic fields on an object
+
+This query can be used to paginate over the dynamic fields of an object. This works even when the object in question is [wrapped](/concepts/object-ownership/wrapped), by using the [owner](/references/sui-graphql/reference/queries/owner) query, so can be used for iterating over the elements of on-chain data structures, like [Tables and Bags](/concepts/dynamic-fields/tables-bags).
+
+:::info
+This example uses [fragments](/concepts/graphql-rpc/fragments) and [variables](/concepts/graphql-rpc/variables).
+:::
+
+```graphql
+query ($id: SuiAddress!) {
+  owner(address: $id) {
+    dynamicFields {
+      nodes {
+        name { ...Value }
+        value {
+          __typename
+          ... on MoveValue {
+            ...Value
+          }
+          ... on MoveObject {
+            contents {
+              ...Value
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment Value on MoveValue {
+  type {
+    repr
+  }
+  json
 }
 ```
 

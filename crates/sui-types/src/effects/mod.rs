@@ -110,7 +110,7 @@ impl UnauthenticatedMessage for TransactionEffects {}
 
 impl Default for TransactionEffects {
     fn default() -> Self {
-        TransactionEffects::V1(Default::default())
+        TransactionEffects::V2(Default::default())
     }
 }
 

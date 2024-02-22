@@ -31,10 +31,8 @@ async fn test_sui_cluster() {
         epoch_duration_ms: Some(60000),
         indexer_address: Some(format!("127.0.0.1:{}", indexer_rpc_port)),
         pg_address: Some(pg_address),
-        use_indexer_experimental_methods: false,
         config_dir: None,
         graphql_address: Some(graphql_address),
-        use_indexer_v2: true,
     };
 
     let _cluster = LocalNewCluster::start(&opts).await.unwrap();

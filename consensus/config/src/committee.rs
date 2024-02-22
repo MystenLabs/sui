@@ -56,7 +56,8 @@ impl Committee {
         }
     }
 
-    /// Public accessors for Committee fields.
+    /// -----------------------------------------------------------------------
+    /// Accessors to Committee fields.
 
     pub fn epoch(&self) -> Epoch {
         self.epoch
@@ -74,26 +75,8 @@ impl Committee {
         self.validity_threshold
     }
 
-    /// Returns true if the provided stake has reached quorum (2f+1)
-    pub fn reached_quorum(&self, stake: Stake) -> bool {
-        stake >= self.quorum_threshold()
-    }
-
-    /// Returns true if the provided stake has reached validity (f+1)
-    pub fn reached_validity(&self, stake: Stake) -> bool {
-        stake >= self.validity_threshold()
-    }
-
     pub fn stake(&self, authority_index: AuthorityIndex) -> Stake {
         self.authorities[authority_index].stake
-    }
-
-    pub fn to_authority_index(&self, index: usize) -> Option<AuthorityIndex> {
-        if index < self.authorities.len() {
-            Some(AuthorityIndex(index as u32))
-        } else {
-            None
-        }
     }
 
     pub fn authority(&self, authority_index: AuthorityIndex) -> &Authority {
@@ -107,10 +90,35 @@ impl Committee {
             .map(|(i, a)| (AuthorityIndex(i as u32), a))
     }
 
-    pub fn exists(&self, index: AuthorityIndex) -> bool {
+    /// -----------------------------------------------------------------------
+    /// Helpers for Committee properties.
+
+    /// Returns true if the provided stake has reached quorum (2f+1).
+    pub fn reached_quorum(&self, stake: Stake) -> bool {
+        stake >= self.quorum_threshold()
+    }
+
+    /// Returns true if the provided stake has reached validity (f+1).
+    pub fn reached_validity(&self, stake: Stake) -> bool {
+        stake >= self.validity_threshold()
+    }
+
+    /// Coverts an index to an AuthorityIndex, if valid.
+    /// Returns None if index is out of bound.
+    pub fn to_authority_index(&self, index: usize) -> Option<AuthorityIndex> {
+        if index < self.authorities.len() {
+            Some(AuthorityIndex(index as u32))
+        } else {
+            None
+        }
+    }
+
+    /// Returns true if the provided index is valid.
+    pub fn is_valid_index(&self, index: AuthorityIndex) -> bool {
         index.value() < self.size()
     }
 
+    /// Returns number of authorities in the committee.
     pub fn size(&self) -> usize {
         self.authorities.len()
     }

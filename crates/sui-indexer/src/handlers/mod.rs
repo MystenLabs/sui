@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     models_v2::display::StoredDisplay,
-    types_v2::{
+    types::{
         IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
         IndexedPackage, IndexedTransaction, TxIndex,
     },

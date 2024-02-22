@@ -12,6 +12,7 @@ use diesel::{ExpressionMethods, OptionalExtension};
 use diesel::{QueryDsl, RunQueryDsl};
 use sui_types::base_types::ObjectID;
 
+use crate::db::PgConnectionPool;
 use crate::errors::{Context, IndexerError};
 use crate::models_v2::address_metrics::StoredAddressMetrics;
 use crate::models_v2::checkpoints::StoredCheckpoint;
@@ -24,13 +25,12 @@ use crate::models_v2::transactions::{
     StoredTransactionTimestamp, TxSeq,
 };
 use crate::models_v2::tx_count_metrics::StoredTxCountMetrics;
-use crate::schema_v2::{
+use crate::schema::{
     active_addresses, address_metrics, addresses, checkpoints, epoch_peak_tps, move_call_metrics,
     move_calls, transactions, tx_count_metrics,
 };
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
-use crate::types_v2::IndexerResult;
-use crate::PgConnectionPool;
+use crate::types::IndexerResult;
 
 use super::IndexerAnalyticalStore;
 

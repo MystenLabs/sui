@@ -10,6 +10,7 @@ require("dotenv").config();
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: "Sui Documentation",
+  staticDirectories: ["static"],
   tagline:
     "Sui is a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move",
   favicon: "img/favicon.ico",
@@ -99,7 +100,10 @@ const config = {
           rehypePlugins: [katex],
         },
         theme: {
-          customCss: require.resolve("./src/css/custom.css"),
+          customCss: [
+            require.resolve("./src/css/fonts.css"),
+            require.resolve("./src/css/custom.css"),
+          ],
         },
         googleTagManager: {
           containerId: "GTM-TTZ5J8V",
@@ -107,8 +111,11 @@ const config = {
       }),
     ],
   ],
-
   stylesheets: [
+    {
+      href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap",
+      type: "text/css",
+    },
     {
       href: "https://cdn.jsdelivr.net/npm/katex@0.13.24/dist/katex.min.css",
       type: "text/css",
@@ -150,7 +157,7 @@ const config = {
 
         //... other Algolia params
       },
-      image: "img/og.jpg",
+      image: "img/sui-doc-og.png",
       docs: {
         sidebar: {
           autoCollapseCategories: true,
@@ -160,7 +167,7 @@ const config = {
         title: "Sui Documentation",
         logo: {
           alt: "Sui Docs Logo",
-          src: "img/logo.svg",
+          src: "img/sui-logo.svg",
         },
         items: [
           {
@@ -194,6 +201,11 @@ const config = {
         ],
       },
       footer: {
+        logo: {
+          alt: "Sui Logo",
+          src: "img/sui-logo-footer.svg",
+          href: "https://sui.io",
+        },
         style: "dark",
         copyright: `© ${new Date().getFullYear()} Sui Foundation | Documentation distributed under <a href="https://github.com/sui-foundation/sui-docs/blob/main/LICENSE">CC BY 4.0</a>`,
       },

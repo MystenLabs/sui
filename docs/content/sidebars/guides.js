@@ -56,7 +56,19 @@ const guides = [
 				},
 				items: [
 					'guides/developer/sui-101/shared-owned',
-					'guides/developer/sui-101/create-coin',
+					{
+						type: 'category',
+						label: 'Create Coins and Tokens',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/sui-101/create-coin',
+						},
+						items: [
+							'guides/developer/sui-101/create-coin/regulated',
+							'guides/developer/sui-101/create-coin/in-game-token',
+							'guides/developer/sui-101/create-coin/loyalty',
+						],
+					},
 					'guides/developer/sui-101/create-nft',
 					'guides/developer/sui-101/using-events',
 					'guides/developer/sui-101/access-time',
@@ -90,20 +102,12 @@ const guides = [
 			{
 				type: 'category',
 				label: 'Advanced Topics',
-				items: [
-					'guides/developer/advanced/asset-tokenization',
-					'guides/developer/advanced/graphql-migration',
-				],
-			},
-			/*{
-				type: 'category',
-				label: 'Advanced Topics',
 				link: {
 					type: 'doc',
 					id: 'guides/developer/advanced',
 				},
 				items: [
-					{
+					/*{
 						type: 'category',
 						label: 'Efficient Smart Contracts',
 						link: {
@@ -111,13 +115,12 @@ const guides = [
 							id: 'guides/developer/advanced/efficient-smart-contracts',
 						},
 						items: ['guides/developer/advanced/min-gas-fees'],
-					},
-					'guides/developer/advanced/wallet-integrations',
-					'guides/developer/advanced/security-best-practices',
-					'guides/developer/advanced/maximize-reach',
+					},*/
 					'guides/developer/advanced/asset-tokenization',
+					'guides/developer/advanced/graphql-migration',
+					//'guides/developer/advanced/custom-indexers',
 				],
-			},*/
+			},
 			{
 				type: 'category',
 				label: 'App Examples',

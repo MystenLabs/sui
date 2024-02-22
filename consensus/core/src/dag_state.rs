@@ -11,12 +11,11 @@ use std::{
 
 use consensus_config::AuthorityIndex;
 
-use crate::block::Block;
-use crate::error::ConsensusResult;
 use crate::{
-    block::{BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
+    block::{Block, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
     commit::{Commit, CommitIndex},
     context::Context,
+    error::ConsensusResult,
     storage::Store,
 };
 
@@ -275,6 +274,20 @@ impl DagState {
         }
     }
 
+    /// Leader slot of the last commit.
+    pub(crate) fn last_commit_leader(&self) -> Slot {
+        match &self.last_commit {
+            Some(commit) => commit.leader.into(),
+            None => self
+                .genesis
+                .iter()
+                .next()
+                .map(|(genesis_ref, _)| *genesis_ref)
+                .expect("Genesis blocks should always be available.")
+                .into(),
+        }
+    }
+
     /// Last committed round per authority.
     pub(crate) fn last_committed_rounds(&self) -> Vec<Round> {
         match &self.last_commit {
@@ -283,7 +296,25 @@ impl DagState {
         }
     }
 
+    // Write commits to store. Commits should be provided in commit order, meaning
+    // the last element in commits is the new last_commit.
+    pub(crate) fn write_commits(
+        &mut self,
+        commits: Vec<Commit>,
+        committed_blocks: Vec<VerifiedBlock>,
+    ) {
+        assert!(!commits.is_empty());
+        let last_commit = commits.last().unwrap().clone();
+        self.store
+            .write(committed_blocks, commits)
+            .expect("Writing commits to store should not fail");
+        self.set_last_commit(last_commit);
+    }
+
     pub(crate) fn set_last_commit(&mut self, commit: Commit) {
+        if let Some(last_commit) = &self.last_commit {
+            assert!(commit.index >= last_commit.index);
+        }
         self.last_commit = Some(commit);
     }
 

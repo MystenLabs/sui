@@ -14,6 +14,7 @@ pub mod build;
 pub mod coverage;
 #[cfg(feature = "disassemble")]
 pub mod disassemble;
+pub mod manage_package;
 pub mod new;
 #[cfg(feature = "unit_test")]
 pub mod unit_test;
@@ -26,6 +27,7 @@ pub enum Command {
     Coverage(coverage::Coverage),
     #[cfg(feature = "disassemble")]
     Disassemble(disassemble::Disassemble),
+    ManagePackage(manage_package::ManagePackage),
     New(new::New),
     #[cfg(feature = "unit_test")]
     Test(unit_test::Test),
@@ -53,6 +55,7 @@ pub fn execute_move_command(
         Command::Coverage(c) => c.execute(package_path, build_config),
         #[cfg(feature = "disassemble")]
         Command::Disassemble(c) => c.execute(package_path, build_config),
+        Command::ManagePackage(c) => c.execute(package_path, build_config),
         Command::New(c) => c.execute(package_path),
 
         #[cfg(feature = "unit_test")]

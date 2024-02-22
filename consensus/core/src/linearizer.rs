@@ -1,126 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::HashSet,
-    fmt::{self, Display, Formatter},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use parking_lot::RwLock;
 
 use crate::{
-    block::{BlockAPI, BlockRef, BlockTimestampMs, Round, VerifiedBlock},
-    commit::{Commit, CommitIndex},
+    block::{BlockAPI, Round, VerifiedBlock},
+    commit::{Commit, CommitIndex, CommittedSubDag},
     dag_state::DagState,
-    storage::Store,
 };
-
-/// The output of consensus is an ordered list of [`CommittedSubDag`]. The application
-/// can arbitrarily sort the blocks within each sub-dag (but using a deterministic algorithm).
-#[derive(Clone)]
-pub struct CommittedSubDag {
-    /// A reference to the leader of the sub-dag
-    pub leader: BlockRef,
-    /// All the committed blocks that are part of this sub-dag
-    pub blocks: Vec<VerifiedBlock>,
-    /// The timestamp of the commit, obtained from the timestamp of the leader block.
-    pub timestamp_ms: BlockTimestampMs,
-    /// Index of the commit.
-    /// First commit after genesis has a index of 1, then every next commit has a
-    /// index incremented by 1.
-    pub commit_index: CommitIndex,
-}
-
-#[allow(unused)]
-impl CommittedSubDag {
-    /// Create new (empty) sub-dag.
-    pub fn new(
-        leader: BlockRef,
-        blocks: Vec<VerifiedBlock>,
-        timestamp_ms: u64,
-        commit_index: CommitIndex,
-    ) -> Self {
-        Self {
-            leader,
-            blocks,
-            timestamp_ms,
-            commit_index,
-        }
-    }
-
-    // Used for recovery, which is why we need to get the data from block store.
-    pub fn new_from_commit_data(commit_data: Commit, block_store: Arc<dyn Store>) -> Self {
-        let mut leader_block_idx = None;
-        let commit_blocks = block_store
-            .read_blocks(&commit_data.blocks)
-            .expect("We should have the block referenced in the commit data");
-        let blocks = commit_blocks
-            .into_iter()
-            .enumerate()
-            .map(|(idx, commit_block_opt)| {
-                let commit_block = commit_block_opt
-                    .expect("We should have the block referenced in the commit data");
-                if commit_block.reference() == commit_data.leader {
-                    leader_block_idx = Some(idx);
-                }
-                commit_block
-            })
-            .collect::<Vec<_>>();
-        let leader_block_idx = leader_block_idx.expect("Leader block must be in the sub-dag");
-        let leader_block_ref = blocks[leader_block_idx].reference();
-        let timestamp_ms = blocks[leader_block_idx].timestamp_ms();
-        CommittedSubDag::new(leader_block_ref, blocks, timestamp_ms, commit_data.index)
-    }
-
-    /// Sort the blocks of the sub-dag by round number then authority index. Any
-    /// deterministic & stable algorithm works.
-    pub fn sort(&mut self) {
-        self.blocks.sort_by(|a, b| {
-            a.round()
-                .cmp(&b.round())
-                .then_with(|| a.author().cmp(&b.author()))
-        });
-    }
-}
-
-impl Display for CommittedSubDag {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "CommittedSubDag(leader={}, index={}, blocks=[",
-            self.leader, self.commit_index
-        )?;
-        for (idx, block) in self.blocks.iter().enumerate() {
-            if idx > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}", block.digest())?;
-        }
-        write!(f, "])")
-    }
-}
-
-impl fmt::Debug for CommittedSubDag {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{} (", self.leader, self.commit_index)?;
-        for block in &self.blocks {
-            write!(f, "{}, ", block.reference())?;
-        }
-        write!(f, ")")
-    }
-}
 
 /// Expand a committed sequence of leader into a sequence of sub-dags.
 #[allow(unused)]
-pub struct Linearizer {
+#[derive(Clone)]
+pub(crate) struct Linearizer {
     /// In memory block store representing the dag state
     dag_state: Arc<RwLock<DagState>>,
 }
 
 #[allow(unused)]
 impl Linearizer {
-    pub fn new(dag_state: Arc<RwLock<DagState>>) -> Self {
+    pub(crate) fn new(dag_state: Arc<RwLock<DagState>>) -> Self {
         Self { dag_state }
     }
 
@@ -177,9 +78,15 @@ impl Linearizer {
     }
 
     // This function should be called whenever a new commit is observed. This will
-    // iterate over the sequence of committed leaders and produce a list of sub-dags.
-    pub fn handle_commit(&mut self, committed_leaders: Vec<VerifiedBlock>) -> Vec<CommittedSubDag> {
+    // iterate over the sequence of committed leaders and produce a list of committed
+    // sub-dags.
+    pub(crate) fn handle_commit(
+        &mut self,
+        committed_leaders: Vec<VerifiedBlock>,
+    ) -> Vec<CommittedSubDag> {
         let mut committed_sub_dags = vec![];
+        let mut commits = vec![];
+        let mut committed_blocks = vec![];
 
         for leader_block in committed_leaders {
             // Grab latest commit state from dag state
@@ -199,7 +106,7 @@ impl Linearizer {
             sub_dag.sort();
 
             // Update last commit in dag state
-            let last_commit = Commit {
+            let last_commit_data = Commit {
                 index: sub_dag.commit_index,
                 leader: sub_dag.leader,
                 blocks: sub_dag
@@ -213,9 +120,18 @@ impl Linearizer {
                     .collect::<Vec<_>>(),
                 last_committed_rounds,
             };
-            self.dag_state.write().set_last_commit(last_commit);
-
+            self.dag_state
+                .write()
+                .set_last_commit(last_commit_data.clone());
+            commits.push(last_commit_data);
+            committed_blocks.extend(sub_dag.blocks.clone());
             committed_sub_dags.push(sub_dag);
+        }
+        // TODO: Revisit this after refactor of dag state
+        if !commits.is_empty() {
+            self.dag_state
+                .write()
+                .write_commits(commits, committed_blocks);
         }
         committed_sub_dags
     }
@@ -224,21 +140,19 @@ impl Linearizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use consensus_config::AuthorityIndex;
-
     use crate::{
-        block::{BlockTimestampMs, TestBlock},
         commit::DEFAULT_WAVE_LENGTH,
         context::Context,
         leader_schedule::LeaderSchedule,
         storage::mem_store::MemStore,
+        test_dag::{build_dag, get_all_leader_blocks},
     };
 
     #[test]
     fn test_handle_commit() {
         telemetry_subscribers::init_for_testing();
-        let context = Arc::new(Context::new_for_test(4).0);
+        let num_authorities = 4;
+        let context = Arc::new(Context::new_for_test(num_authorities).0);
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
             Arc::new(MemStore::new()),
@@ -248,47 +162,18 @@ mod tests {
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds: u32 = 10;
-        let num_authorities: u32 = 4;
-        let mut leaders = vec![];
+        build_dag(context.clone(), dag_state.clone(), None, num_rounds);
+        let leaders = get_all_leader_blocks(
+            dag_state.clone(),
+            leader_schedule,
+            num_rounds,
+            DEFAULT_WAVE_LENGTH,
+            false,
+            1,
+        );
 
-        let (genesis_references, genesis): (Vec<_>, Vec<_>) = context
-            .committee
-            .authorities()
-            .map(|index| {
-                let author_idx = index.0.value() as u32;
-                let block = TestBlock::new(0, author_idx).build();
-                VerifiedBlock::new_for_test(block)
-            })
-            .map(|block| (block.reference(), block))
-            .unzip();
-        dag_state.write().accept_blocks(genesis);
-
-        let mut ancestors = genesis_references;
-        for round in 1..=num_rounds {
-            let mut new_ancestors = vec![];
-            for author in 0..num_authorities {
-                let base_ts = round as BlockTimestampMs * 1000;
-                let block = VerifiedBlock::new_for_test(
-                    TestBlock::new(round, author)
-                        .set_timestamp_ms(base_ts + (author + round) as u64)
-                        .set_ancestors(ancestors.clone())
-                        .build(),
-                );
-                dag_state.write().accept_block(block.clone());
-                new_ancestors.push(block.reference());
-
-                if round % DEFAULT_WAVE_LENGTH == 0
-                    && AuthorityIndex::new_for_test(author)
-                        == leader_schedule.elect_leader(round, 0)
-                {
-                    leaders.push(block.clone());
-                }
-            }
-            ancestors = new_ancestors;
-        }
-
-        let subdags = linearizer.handle_commit(leaders.clone());
-        for (idx, subdag) in subdags.into_iter().enumerate() {
+        let commits = linearizer.handle_commit(leaders.clone());
+        for (idx, subdag) in commits.into_iter().enumerate() {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
             assert_eq!(subdag.timestamp_ms, leaders[idx].timestamp_ms());
@@ -297,14 +182,14 @@ mod tests {
                 // of the leader minus the genesis round blocks
                 assert_eq!(
                     subdag.blocks.len(),
-                    (num_authorities * (DEFAULT_WAVE_LENGTH - 1)) as usize + 1
+                    (num_authorities * (DEFAULT_WAVE_LENGTH - 1) as usize) + 1
                 );
             } else {
                 // Every subdag after will be missing the leader block from the previous
                 // committed subdag
                 assert_eq!(
                     subdag.blocks.len(),
-                    (num_authorities * DEFAULT_WAVE_LENGTH) as usize
+                    (num_authorities * DEFAULT_WAVE_LENGTH as usize)
                 );
             }
             for block in subdag.blocks.iter() {
@@ -317,119 +202,126 @@ mod tests {
     #[test]
     fn test_handle_already_committed() {
         telemetry_subscribers::init_for_testing();
-        let context = Arc::new(Context::new_for_test(4).0);
+        let num_authorities = 4;
+        let context = Arc::new(Context::new_for_test(num_authorities).0);
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
             Arc::new(MemStore::new()),
         )));
+        let leader_schedule = LeaderSchedule::new(context.clone());
         let mut linearizer = Linearizer::new(dag_state.clone());
         let wave_length = DEFAULT_WAVE_LENGTH;
 
-        // Populate fully connected test blocks for round 0 ~ 3, authorities 0 ~ 3.
-        let first_wave_rounds: u32 = wave_length;
-        let num_authorities: u32 = 4;
+        let mut blocks = vec![];
+        let mut ancestors = None;
+        let leader_round_wave_1 = 3;
 
-        let mut blocks = Vec::new();
-        let (genesis_references, _genesis): (Vec<_>, Vec<_>) = context
-            .committee
-            .authorities()
-            .map(|index| {
-                let author_idx = index.0.value() as u32;
-                let block = TestBlock::new(0, author_idx).build();
-                VerifiedBlock::new_for_test(block)
-            })
-            .map(|block| (block.reference(), block))
-            .unzip();
-        blocks.append(&mut genesis_references.clone());
-
-        let mut ancestors = genesis_references;
-        let mut last_committed_rounds = vec![0; num_authorities as usize];
-        for round in 1..=first_wave_rounds {
-            let mut new_ancestors = vec![];
-            for author in 0..num_authorities {
-                let base_ts = round as BlockTimestampMs * 1000;
-                let block = VerifiedBlock::new_for_test(
-                    TestBlock::new(round, author)
-                        .set_timestamp_ms(base_ts + (author + round) as u64)
-                        .set_ancestors(ancestors.clone())
-                        .build(),
-                );
-                new_ancestors.push(block.reference());
-                blocks.push(block.reference());
-                last_committed_rounds[block.author().value()] = block.round();
-
-                // only write one block for the final round, which is the leader
-                // of the committed subdag.
-                if round == first_wave_rounds {
-                    break;
-                }
-            }
-            ancestors = new_ancestors;
+        // Build dag layers for rounds 0 ~ 2 and maintain list of blocks to be included
+        // in the subdag of the leader of wave 1.
+        for n in 0..leader_round_wave_1 {
+            ancestors = Some(build_dag(context.clone(), dag_state.clone(), ancestors, n));
+            blocks.extend(ancestors.clone().unwrap());
         }
 
-        let first_leader = *blocks.last().unwrap();
+        // Build dag layer for round 3 which is the leader round of wave 1
+        ancestors = Some(build_dag(
+            context.clone(),
+            dag_state.clone(),
+            ancestors,
+            leader_round_wave_1,
+        ));
+
+        let leaders = get_all_leader_blocks(
+            dag_state.clone(),
+            leader_schedule.clone(),
+            leader_round_wave_1,
+            wave_length,
+            false,
+            1,
+        );
+
+        // Add leader block to first committed subdag blocks
+        blocks.push(leaders[0].reference());
+
+        let mut last_committed_rounds = vec![0; num_authorities];
+        for block in blocks.iter() {
+            let last_committed_round = last_committed_rounds[block.author];
+            last_committed_rounds[block.author] = std::cmp::max(last_committed_round, block.round);
+        }
+
+        let first_leader = leaders[0].clone();
         let mut last_commit_index = 1;
         let first_commit_data = Commit {
             index: last_commit_index,
-            leader: first_leader,
+            leader: first_leader.reference(),
             blocks: blocks.clone(),
             last_committed_rounds,
         };
         dag_state.write().set_last_commit(first_commit_data);
 
         blocks.clear();
-        let second_wave_rounds = first_wave_rounds + wave_length;
-        for round in first_wave_rounds..=second_wave_rounds {
-            let mut new_ancestors = vec![];
-            for author in 0..num_authorities {
-                // skip leader of last committed subdag as it was already written
-                if round == first_leader.round && author == first_leader.author.value() as u32 {
-                    continue;
-                }
-                let base_ts = round as BlockTimestampMs * 1000;
-                let block = VerifiedBlock::new_for_test(
-                    TestBlock::new(round, author)
-                        .set_timestamp_ms(base_ts + (author + round) as u64)
-                        .set_ancestors(ancestors.clone())
-                        .build(),
-                );
-                new_ancestors.push(block.reference());
-                blocks.push(block.reference());
-                dag_state.write().accept_block(block);
+        let leader_round_wave_2 = leader_round_wave_1 + wave_length;
 
-                // only write one block for the final round, which is the leader
-                // of the next committed subdag.
-                if round == second_wave_rounds {
-                    break;
-                }
-            }
-            ancestors = new_ancestors;
+        // Add all nonleader blocks from round 3 to the blocks which will be part
+        // of the second committed subdag
+        blocks.extend(
+            ancestors
+                .clone()
+                .unwrap()
+                .into_iter()
+                .filter(|block_ref| block_ref.author != first_leader.author())
+                .collect::<Vec<_>>(),
+        );
+
+        // Build dag layers for rounds 4 ~ 5 and maintain list of blocks to be included
+        // in the subdag of the leader of wave 1.
+        for n in leader_round_wave_1 + 1..leader_round_wave_2 {
+            ancestors = Some(build_dag(context.clone(), dag_state.clone(), ancestors, n));
+            blocks.extend(ancestors.clone().unwrap());
         }
 
+        // Build dag layer for round 6 which is the leader round of wave 2
+        build_dag(
+            context.clone(),
+            dag_state.clone(),
+            ancestors,
+            leader_round_wave_2,
+        );
+
+        let leaders = get_all_leader_blocks(
+            dag_state.clone(),
+            leader_schedule,
+            leader_round_wave_2,
+            wave_length,
+            false,
+            1,
+        );
+
+        // Add leader block to second committed subdag blocks
+        blocks.push(leaders[1].reference());
+
         last_commit_index += 1;
-        let second_leader = *blocks.last().unwrap();
+        let second_leader = leaders[1].clone();
         let expected_second_commit_data = Commit {
             index: last_commit_index,
-            leader: second_leader,
+            leader: second_leader.reference(),
             blocks: blocks.clone(),
             last_committed_rounds: vec![],
         };
 
-        let second_leader_block = dag_state
-            .read()
-            .get_uncommitted_block(&second_leader)
-            .unwrap();
-        let subdag = linearizer.handle_commit(vec![second_leader_block.clone()]);
+        let commit = linearizer.handle_commit(vec![second_leader.clone()]);
+        assert_eq!(commit.len(), 1);
+
+        let subdag = &commit[0];
         tracing::info!("{subdag:?}");
-        assert_eq!(subdag.len(), 1);
-        assert_eq!(subdag[0].leader, second_leader);
-        assert_eq!(subdag[0].timestamp_ms, second_leader_block.timestamp_ms());
-        assert_eq!(subdag[0].commit_index, expected_second_commit_data.index);
+        assert_eq!(subdag.leader, second_leader.reference());
+        assert_eq!(subdag.timestamp_ms, second_leader.timestamp_ms());
+        assert_eq!(subdag.commit_index, expected_second_commit_data.index);
 
         // Using the same sorting as used in CommittedSubDag::sort
         blocks.sort_by(|a, b| a.round.cmp(&b.round).then_with(|| a.author.cmp(&b.author)));
         assert_eq!(
-            subdag[0]
+            subdag
                 .blocks
                 .clone()
                 .into_iter()
@@ -437,78 +329,8 @@ mod tests {
                 .collect::<Vec<_>>(),
             blocks
         );
-        for block in subdag[0].blocks.iter() {
+        for block in subdag.blocks.iter() {
             assert!(block.round() <= expected_second_commit_data.leader.round);
         }
-    }
-
-    #[test]
-    fn test_new_subdag_from_commit_data() {
-        let store = Arc::new(MemStore::new());
-        let context = Arc::new(Context::new_for_test(4).0);
-        let wave_length = DEFAULT_WAVE_LENGTH;
-
-        // Populate fully connected test blocks for round 0 ~ 3, authorities 0 ~ 3.
-        let first_wave_rounds: u32 = wave_length;
-        let num_authorities: u32 = 4;
-
-        let mut blocks = Vec::new();
-        let (genesis_references, genesis): (Vec<_>, Vec<_>) = context
-            .committee
-            .authorities()
-            .map(|index| {
-                let author_idx = index.0.value() as u32;
-                let block = TestBlock::new(0, author_idx).build();
-                VerifiedBlock::new_for_test(block)
-            })
-            .map(|block| (block.reference(), block))
-            .unzip();
-        store.write(genesis, vec![]).unwrap();
-        blocks.append(&mut genesis_references.clone());
-
-        let mut ancestors = genesis_references;
-        let mut leader = None;
-        for round in 1..=first_wave_rounds {
-            let mut new_ancestors = vec![];
-            for author in 0..num_authorities {
-                let base_ts = round as BlockTimestampMs * 1000;
-                let block = VerifiedBlock::new_for_test(
-                    TestBlock::new(round, author)
-                        .set_timestamp_ms(base_ts + (author + round) as u64)
-                        .set_ancestors(ancestors.clone())
-                        .build(),
-                );
-                store.write(vec![block.clone()], vec![]).unwrap();
-                new_ancestors.push(block.reference());
-                blocks.push(block.reference());
-
-                // only write one block for the final round, which is the leader
-                // of the committed subdag.
-                if round == first_wave_rounds {
-                    leader = Some(block.clone());
-                    break;
-                }
-            }
-            ancestors = new_ancestors;
-        }
-
-        let leader_block = leader.unwrap();
-        let leader_ref = leader_block.reference();
-        let commit_index = 1;
-        let commit_data = Commit {
-            index: commit_index,
-            leader: leader_ref,
-            blocks: blocks.clone(),
-            last_committed_rounds: vec![],
-        };
-
-        let subdag = CommittedSubDag::new_from_commit_data(commit_data, store.clone());
-        assert_eq!(subdag.leader, leader_ref);
-        assert_eq!(subdag.timestamp_ms, leader_block.timestamp_ms());
-        assert_eq!(
-            subdag.blocks.len(),
-            (num_authorities * wave_length) as usize + 1
-        );
-        assert_eq!(subdag.commit_index, commit_index);
     }
 }

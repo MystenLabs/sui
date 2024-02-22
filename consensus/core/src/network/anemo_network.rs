@@ -11,7 +11,7 @@ use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use fastcrypto::traits::KeyPair as _;
 use tokio::sync::broadcast::error::RecvError;
-use tracing::error;
+use tracing::{error, warn};
 
 use super::{
     anemo_gen::{
@@ -109,6 +109,7 @@ impl AnemoClient {
     }
 }
 
+#[async_trait]
 impl NetworkClient for AnemoClient {
     async fn send_block(&self, peer: AuthorityIndex, block: &Bytes) -> ConsensusResult<()> {
         let mut client = self
@@ -142,9 +143,7 @@ impl NetworkClient for AnemoClient {
 }
 
 /// Proxies Anemo RPC handlers to AnemoService.
-#[allow(unused)]
 struct AnemoServiceProxy<S: NetworkService> {
-    context: Arc<Context>,
     peer_map: BTreeMap<PeerId, AuthorityIndex>,
     service: Arc<S>,
 }
@@ -159,11 +158,7 @@ impl<S: NetworkService> AnemoServiceProxy<S> {
                 (peer_id, index)
             })
             .collect();
-        Self {
-            context,
-            peer_map,
-            service,
-        }
+        Self { peer_map, service }
     }
 }
 
@@ -238,24 +233,31 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
 pub(crate) struct AnemoManager {
     context: Arc<Context>,
     client: Arc<AnemoClient>,
+    network: Arc<ArcSwapOption<anemo::Network>>,
 }
 
-#[allow(unused)]
 impl AnemoManager {
     pub(crate) fn new(context: Arc<Context>) -> Self {
         Self {
             context: context.clone(),
             client: Arc::new(AnemoClient::new(context)),
+            network: Arc::new(ArcSwapOption::default()),
         }
     }
 }
 
-impl<S: NetworkService> NetworkManager<AnemoClient, S> for AnemoManager {
-    fn client(&self) -> Arc<AnemoClient> {
+impl<S: NetworkService> NetworkManager<S> for AnemoManager {
+    type Client = AnemoClient;
+
+    fn new(context: Arc<Context>) -> Self {
+        AnemoManager::new(context)
+    }
+
+    fn client(&self) -> Arc<Self::Client> {
         self.client.clone()
     }
 
-    fn install_service(&self, network_signer: NetworkKeyPair, service: Arc<S>) {
+    fn install_service(&self, network_keypair: NetworkKeyPair, service: Arc<S>) {
         let server = ConsensusRpcServer::new(AnemoServiceProxy::new(self.context.clone(), service));
         let authority = self.context.committee.authority(self.context.own_index);
         let address = authority.address.clone();
@@ -314,7 +316,7 @@ impl<S: NetworkService> NetworkManager<AnemoClient, S> for AnemoManager {
         let network = loop {
             let network_result = anemo::Network::bind(addr.clone())
                 .server_name("consensus")
-                .private_key(network_signer.copy().private().0.to_bytes())
+                .private_key(network_keypair.copy().private().0.to_bytes())
                 .config(anemo_config.clone())
                 // TODO: add outbound request layer
                 .start(service.clone());
@@ -347,7 +349,17 @@ impl<S: NetworkService> NetworkManager<AnemoClient, S> for AnemoManager {
             network.known_peers().insert(peer_info);
         }
 
-        self.client.set_network(network);
+        self.client.set_network(network.clone());
+        self.network.store(Some(Arc::new(network)));
+    }
+
+    async fn stop(&self) {
+        if let Some(network) = self.network.load_full() {
+            if let Err(e) = network.shutdown().await {
+                warn!("Failure when shutting down AnemoNetwork: {e:?}");
+            }
+            self.network.store(None);
+        }
     }
 }
 
@@ -365,10 +377,7 @@ mod test {
         block::BlockRef,
         context::Context,
         error::ConsensusResult,
-        network::{
-            anemo_network::{AnemoClient, AnemoManager},
-            NetworkClient, NetworkManager, NetworkService,
-        },
+        network::{anemo_network::AnemoManager, NetworkClient, NetworkManager, NetworkService},
     };
 
     struct TestService {
@@ -406,7 +415,7 @@ mod test {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_basics() {
         let (context, keys) = Context::new_for_test(4);
 
@@ -416,8 +425,7 @@ mod test {
                 .with_authority_index(context.committee.to_authority_index(0).unwrap()),
         );
         let manager_0 = AnemoManager::new(context_0.clone());
-        let client_0 =
-            <AnemoManager as NetworkManager<AnemoClient, Mutex<TestService>>>::client(&manager_0);
+        let client_0 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_0);
         let service_0 = Arc::new(Mutex::new(TestService::new()));
         manager_0.install_service(keys[0].0.copy(), service_0.clone());
 
@@ -427,8 +435,7 @@ mod test {
                 .with_authority_index(context.committee.to_authority_index(1).unwrap()),
         );
         let manager_1 = AnemoManager::new(context_1.clone());
-        let client_1 =
-            <AnemoManager as NetworkManager<AnemoClient, Mutex<TestService>>>::client(&manager_1);
+        let client_1 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_1);
         let service_1 = Arc::new(Mutex::new(TestService::new()));
         manager_1.install_service(keys[1].0.copy(), service_1.clone());
 
@@ -461,8 +468,7 @@ mod test {
                 .with_authority_index(context_4.committee.to_authority_index(4).unwrap()),
         );
         let manager_4 = AnemoManager::new(context_4.clone());
-        let client_4 =
-            <AnemoManager as NetworkManager<AnemoClient, Mutex<TestService>>>::client(&manager_4);
+        let client_4 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_4);
         let service_4 = Arc::new(Mutex::new(TestService::new()));
         manager_4.install_service(keys_4[4].0.copy(), service_4.clone());
 

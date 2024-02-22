@@ -16,9 +16,7 @@ use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
 
 use crate::models_v2::display::StoredDisplay;
 use crate::models_v2::objects::{StoredDeletedObject, StoredObject};
-use crate::types_v2::{
-    IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
-};
+use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 
 #[allow(clippy::large_enum_variant)]
 pub enum ObjectChangeToCommit {

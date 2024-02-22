@@ -4,6 +4,9 @@
 #[cfg(msim)]
 pub use msim::*;
 
+#[cfg(msim)]
+use std::hash::Hasher;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 // Re-export things used by sui-macros
@@ -144,4 +147,57 @@ macro_rules! return_if_killed {
 #[cfg(msim)]
 pub fn current_simnode_id() -> msim::task::NodeId {
     msim::runtime::NodeHandle::current().id()
+}
+
+#[cfg(msim)]
+pub mod random {
+    use super::*;
+
+    use rand_crate::{rngs::SmallRng, thread_rng, Rng, SeedableRng};
+    use serde::Serialize;
+    use std::cell::RefCell;
+    use std::collections::HashSet;
+    use std::hash::Hash;
+
+    /// Given a value, produce a random probability using the value as a seed, with
+    /// an additional seed that is constant only for the current test thread.
+    pub fn deterministic_probabilty<T: Hash>(value: T, chance: f32) -> bool {
+        thread_local! {
+            // a random seed that is shared by the whole test process, so that equal `value`
+            // inputs produce different outputs when the test seed changes
+            static SEED: u64 = thread_rng().gen();
+        }
+
+        chance
+            > SEED.with(|seed| {
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                seed.hash(&mut hasher);
+                value.hash(&mut hasher);
+                let mut rng = SmallRng::seed_from_u64(hasher.finish());
+                rng.gen_range(0.0..1.0)
+            })
+    }
+
+    /// Like deterministic_probabilty, but only returns true once for each unique value. May eventually
+    /// consume all memory if there are a large number of unique, failing values.
+    pub fn deterministic_probabilty_once<T: Hash + Serialize>(value: T, chance: f32) -> bool {
+        thread_local! {
+            static FAILING_VALUES: RefCell<HashSet<(msim::task::NodeId, Vec<u8>)>> = RefCell::new(HashSet::new());
+        }
+
+        let bytes = bcs::to_bytes(&value).unwrap();
+        let key = (current_simnode_id(), bytes);
+
+        FAILING_VALUES.with(|failing_values| {
+            let mut failing_values = failing_values.borrow_mut();
+            if failing_values.contains(&key) {
+                false
+            } else if deterministic_probabilty(value, chance) {
+                failing_values.insert(key);
+                true
+            } else {
+                false
+            }
+        })
+    }
 }

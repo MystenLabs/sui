@@ -10,7 +10,7 @@ import type {
 	SuiMoveNormalizedModule,
 } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { normalizeStructTag, parseStructTag } from '@mysten/sui.js/utils';
+import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten/sui.js/utils';
 
 import type {
 	ObjectFilter,
@@ -412,7 +412,7 @@ export const RPC_METHODS: {
 			afterStructs = page.structs?.pageInfo.endCursor;
 		}
 
-		return mapNormalizedMoveModule(moveModule, pkg);
+		return mapNormalizedMoveModule(moveModule, normalizeSuiAddress(pkg));
 	},
 	async getNormalizedMoveStruct(transport, [pkg, module, struct]) {
 		const moveStruct = await transport.graphqlQuery(
