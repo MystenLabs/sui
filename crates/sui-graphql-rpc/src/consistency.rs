@@ -43,6 +43,8 @@ pub(crate) struct ConsistentNamedCursor {
     pub c: u64,
 }
 
+pub(crate) struct CheckpointViewedAt(pub u64);
+
 /// Trait for cursors that have a checkpoint sequence number associated with them.
 pub(crate) trait Checkpointed: CursorType {
     fn checkpoint_viewed_at(&self) -> u64;
