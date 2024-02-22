@@ -165,7 +165,7 @@ where
             let packages = packages_per_checkpoint
                 .remove(checkpoint.checkpoint_summary.sequence_number())
                 .unwrap_or_default();
-            tasks.push(tokio::task::spawn(Self::index_one_checkpoint(
+            tasks.push(tokio::task::spawn(Self::index_checkpoint(
                 state_clone.clone(),
                 checkpoint.clone(),
                 metrics_clone.clone(),
@@ -229,7 +229,7 @@ where
         let CheckpointData {
             transactions,
             checkpoint_summary,
-            checkpoint_contents: _,
+            checkpoint_contents,
         } = data;
 
         // Genesis epoch
@@ -251,6 +251,10 @@ where
         if checkpoint_summary.end_of_epoch_data.is_none() {
             return Ok(None);
         }
+
+        let tx_seq = checkpoint_contents.enumerate_transactions(checkpoint_summary);
+        let (last_cp_start_tx_seq, _) = tx_seq.next().unwrap();
+        let next_cp_start_tx_seq = last_cp_start_tx_seq + checkpoint_contents.size() as u64;
 
         let system_state: SuiSystemStateSummary =
             get_sui_system_state(&checkpoint_object_store)?.into_sui_system_state_summary();
@@ -297,7 +301,7 @@ where
         }))
     }
 
-    async fn index_one_checkpoint(
+    async fn index_checkpoint(
         state: Arc<S>,
         data: CheckpointData,
         metrics: Arc<IndexerMetrics>,

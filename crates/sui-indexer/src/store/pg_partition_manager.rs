@@ -36,6 +36,8 @@ pub struct EpochPartitionData {
     next_epoch: u64,
     last_epoch_start_cp: u64,
     next_epoch_start_cp: u64,
+    last_epoch_start_tx: u64,
+    next_epoch_start_tx: u64,
 }
 
 impl EpochPartitionData {
@@ -44,11 +46,15 @@ impl EpochPartitionData {
         let last_epoch_start_cp = last_db_epoch.first_checkpoint_id as u64;
         let next_epoch = epoch.new_epoch.epoch;
         let next_epoch_start_cp = epoch.new_epoch.first_checkpoint_id;
+
+        // TODOggao: replace with real values
         Self {
             last_epoch,
             next_epoch,
             last_epoch_start_cp,
             next_epoch_start_cp,
+            last_epoch_start_tx: 0,
+            next_epoch_start_tx: 0,
         }
     }
 }
