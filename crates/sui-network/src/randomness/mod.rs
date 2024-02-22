@@ -231,6 +231,7 @@ impl RandomnessEventLoop {
         for (_, task) in std::mem::take(&mut self.send_tasks) {
             task.abort();
         }
+        self.metrics.set_epoch(new_epoch);
 
         // Throw away info from old epochs.
         self.round_request_time = self
@@ -486,7 +487,7 @@ impl RandomnessEventLoop {
 
         debug!("successfully generated randomness full signature");
         self.completed_sigs.insert((epoch, round));
-        self.metrics.record_completed_round(epoch, round);
+        self.metrics.record_completed_round(round);
         if let Some(start_time) = self.round_request_time.get(&(epoch, round)) {
             if let Some(metric) = self.metrics.round_generation_latency_metric() {
                 metric.observe(start_time.elapsed().as_secs_f64());

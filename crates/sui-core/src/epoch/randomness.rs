@@ -448,15 +448,16 @@ impl Inner {
             ) {
                 Ok(output) => {
                     let num_shares = output.shares.as_ref().map_or(0, |shares| shares.len());
-                    info!("random beacon: DKG complete with {num_shares} shares for this node");
+                    let elapsed = epoch_store.epoch_open_time.elapsed().as_millis();
+                    info!("random beacon: DKG complete in {elapsed}ms with {num_shares} shares for this node");
                     epoch_store
                         .metrics
                         .epoch_random_beacon_dkg_num_shares
                         .set(output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
                     epoch_store
                         .metrics
-                        .epoch_random_beacon_dkg_completion_time
-                        .observe(epoch_store.epoch_open_time.elapsed().as_secs_f64());
+                        .epoch_random_beacon_dkg_completion_time_ms
+                        .set(elapsed as i64);
                     self.dkg_output
                         .set(output.clone())
                         .expect("checked above that `dkg_output` is uninitialized");

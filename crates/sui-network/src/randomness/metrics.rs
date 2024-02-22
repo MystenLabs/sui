@@ -27,19 +27,18 @@ impl Metrics {
         Metrics(None)
     }
 
-    pub fn record_completed_round(&self, epoch: EpochId, round: RandomnessRound) {
+    pub fn set_epoch(&self, epoch: EpochId) {
         if let Some(inner) = &self.0 {
-            if inner.highest_epoch_generated.get() >= epoch as i64 {
-                inner
-                    .highest_round_generated
-                    .set(inner.highest_round_generated.get().max(round.0 as i64));
-            } else {
-                // Reset round if epoch changed.
-                inner.highest_round_generated.set(round.0 as i64);
-            }
+            inner.current_epoch.set(epoch as i64);
+            inner.highest_round_generated.set(-1);
+        }
+    }
+
+    pub fn record_completed_round(&self, round: RandomnessRound) {
+        if let Some(inner) = &self.0 {
             inner
-                .highest_epoch_generated
-                .set(inner.highest_epoch_generated.get().max(epoch as i64));
+                .highest_round_generated
+                .set(inner.highest_round_generated.get().max(round.0 as i64));
         }
     }
 
@@ -61,7 +60,7 @@ impl Metrics {
 }
 
 struct Inner {
-    highest_epoch_generated: IntGauge,
+    current_epoch: IntGauge,
     highest_round_generated: IntGauge,
     num_rounds_pending: IntGauge,
     round_generation_latency: Histogram,
@@ -77,9 +76,9 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 impl Inner {
     pub fn new(registry: &Registry) -> Arc<Self> {
         Self {
-            highest_epoch_generated: register_int_gauge_with_registry!(
-                "randomness_highest_epoch_generated",
-                "The highest epoch for which randomness has been generated",
+            current_epoch: register_int_gauge_with_registry!(
+                "randomness_current_epoch",
+                "The current epoch for which randomness is being generated (only updated after DKG completes)",
                 registry
             ).unwrap(),
             highest_round_generated: register_int_gauge_with_registry!(
