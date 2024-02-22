@@ -2599,10 +2599,12 @@ impl AuthorityPerEpochStore {
             self.defer_transactions(batch, key, txns)?;
         }
 
+        let mut is_dkg_completed = None;
         if let Some(randomness_manager) = self.randomness_manager.get() {
             if randomness_state_updated {
                 randomness_manager.advance_dkg(batch).await?;
             }
+            is_dkg_completed = Some(randomness_manager.is_dkg_completed().await);
         }
 
         batch.insert_batch(
@@ -2614,6 +2616,7 @@ impl AuthorityPerEpochStore {
             batch,
             end_of_publish_transactions,
             commit_has_deferred_txns,
+            is_dkg_completed,
         )?;
 
         Ok((
@@ -2630,6 +2633,7 @@ impl AuthorityPerEpochStore {
         write_batch: &mut DBBatch,
         transactions: &[VerifiedSequencedConsensusTransaction],
         commit_has_deferred_txns: bool,
+        is_dkg_completed: Option<bool>,
     ) -> SuiResult<(
         Option<RwLockWriteGuard<ReconfigState>>,
         bool, // true if final round
@@ -2706,15 +2710,23 @@ impl AuthorityPerEpochStore {
             self.get_reconfig_state_read_lock_guard()
                 .is_reject_all_certs()
         };
+        if !is_reject_all_certs {
+            // At this point, RejectAllCerts is the only state we can advance from.
+            return Ok((lock, false));
+        }
 
-        if !is_reject_all_certs || !self.deferred_transactions_empty() || commit_has_deferred_txns {
-            // Don't end epoch until all deferred transactions are processed.
-            if is_reject_all_certs {
-                debug!(
-                    "Blocking end of epoch on deferred transactions, from previous commits?={}, from this commit?={commit_has_deferred_txns}",
-                    !self.deferred_transactions_empty(),
-                );
-            }
+        // Don't end epoch until all deferred transactions are processed.
+        if !self.deferred_transactions_empty() || commit_has_deferred_txns {
+            debug!(
+                "Blocking end of epoch on deferred transactions, from previous commits?={}, from this commit?={commit_has_deferred_txns}",
+                !self.deferred_transactions_empty(),
+            );
+            return Ok((lock, false));
+        }
+
+        // Don't end epoch until DKG has completed.
+        if !is_dkg_completed.unwrap_or(true) {
+            debug!("Blocking end of epoch on incomplete DKG");
             return Ok((lock, false));
         }
 
@@ -2879,10 +2891,7 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, bytes),
                 ..
             }) => {
-                if self
-                    .get_reconfig_state_read_lock_guard()
-                    .should_accept_consensus_certs()
-                {
+                if self.get_reconfig_state_read_lock_guard().should_accept_tx() {
                     if let Some(randomness_manager) = self.randomness_manager.get() {
                         debug!(
                             "Received RandomnessDkgMessage from {:?}",
@@ -2915,10 +2924,7 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::RandomnessDkgConfirmation(authority, bytes),
                 ..
             }) => {
-                if self
-                    .get_reconfig_state_read_lock_guard()
-                    .should_accept_consensus_certs()
-                {
+                if self.get_reconfig_state_read_lock_guard().should_accept_tx() {
                     if let Some(randomness_manager) = self.randomness_manager.get() {
                         debug!(
                             "Received RandomnessDkgConfirmation from {:?}",

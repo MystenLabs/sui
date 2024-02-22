@@ -336,6 +336,11 @@ impl RandomnessManager {
             .await
     }
 
+    /// Returns true if DKG has completed.
+    pub async fn is_dkg_completed(&self) -> bool {
+        self.inner.lock().await.dkg_output.initialized()
+    }
+
     fn randomness_dkg_info_from_committee(
         committee: &Committee,
     ) -> Vec<(
