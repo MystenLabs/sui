@@ -94,7 +94,7 @@
 
 </dd>
 <dt>
-<code>member_registration: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="committee.md#0xb_committee_CommitteeMemberRegistration">committee::CommitteeMemberRegistration</a>&gt;</code>
+<code>member_registrations: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="committee.md#0xb_committee_CommitteeMemberRegistration">committee::CommitteeMemberRegistration</a>&gt;</code>
 </dt>
 <dd>
 
@@ -297,7 +297,7 @@
     <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a> {
         members: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
         stake_thresholds_percentage: thresholds,
-        member_registration: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
+        member_registrations: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
         last_committee_update_epoch: 0,
     }
 }
@@ -392,8 +392,8 @@
     // Sender is active <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a>, record the registration
 
     // In case <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a> need <b>to</b> <b>update</b> the info
-    <b>if</b> (<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.member_registration, &sender)) {
-        <b>let</b> registration = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.member_registration, &sender);
+    <b>if</b> (<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.member_registrations, &sender)) {
+        <b>let</b> registration = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.member_registrations, &sender);
         registration.http_rest_url = http_rest_url;
         registration.bridge_pubkey_bytes = bridge_pubkey_bytes;
     }<b>else</b> {
@@ -402,7 +402,7 @@
             bridge_pubkey_bytes,
             http_rest_url,
         };
-        <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.member_registration, sender, registration);
+        <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.member_registrations, sender, registration);
     }
 }
 </code></pre>
@@ -440,9 +440,9 @@
 
     <b>let</b> new_members = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
 
-    <b>while</b> (i &lt; <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_size">vec_map::size</a>(&self.member_registration)) {
+    <b>while</b> (i &lt; <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_size">vec_map::size</a>(&self.member_registrations)) {
         // retrieve registration
-        <b>let</b> (_, registration) = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx">vec_map::get_entry_by_idx</a>(&self.member_registration, i);
+        <b>let</b> (_, registration) = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx">vec_map::get_entry_by_idx</a>(&self.member_registrations, i);
         // Find <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a> stake amount from system state
 
         // Process registration <b>if</b> it's active <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a>
@@ -470,7 +470,7 @@
     // Store new <a href="committee.md#0xb_committee">committee</a> info
     <b>if</b> (stake_participation_percentage &gt;= min_stake_participation_percentage) {
         // Clear registrations
-        self.member_registration = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
+        self.member_registrations = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
         self.members = new_members;
         self.last_committee_update_epoch = <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx);
         // TODO: emit <a href="committee.md#0xb_committee">committee</a> <b>update</b> <a href="dependencies/sui-framework/event.md#0x2_event">event</a>?

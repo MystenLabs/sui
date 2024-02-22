@@ -41,7 +41,7 @@ module bridge::bridge {
     #[test_only]
     use bridge::message::create_blocklist_message;
 
-    const ACCEPTED_MESSAGE_VERSION: u8 = 1;
+    const MESSAGE_VERSION: u8 = 1;
 
     struct Bridge has key {
         id: UID,
@@ -50,6 +50,7 @@ module bridge::bridge {
 
     struct BridgeInner has store {
         bridge_version: u64,
+        message_version: u8,
         chain_id: u8,
         // nonce for replay protection
         // key: message type, value: next sequence number
@@ -105,7 +106,6 @@ module bridge::bridge {
     const EBridgeAlreadyFrozen: u64 = 13;
     const EBridgeNotFrozen: u64 = 14;
     const ETokenAlreadyClaimed: u64 = 15;
-    const ECommitteeAlreadyInitiated: u64 = 16;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -131,6 +131,7 @@ module bridge::bridge {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         let bridge_inner = BridgeInner {
             bridge_version: CURRENT_VERSION,
+            message_version: MESSAGE_VERSION,
             chain_id,
             sequence_nums: vec_map::empty(),
             committee: committee::create(ctx),
@@ -155,13 +156,14 @@ module bridge::bridge {
     ) {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         let inner = load_inner_mut(self);
-        assert!(vec_map::is_empty(committee::committee_members(&inner.committee)), ECommitteeAlreadyInitiated);
-        committee::try_create_next_committee(
-            &mut inner.committee,
-            system_state,
-            min_stake_participation_percentage,
-            ctx
-        )
+        if (vec_map::is_empty(committee::committee_members(&inner.committee))) {
+            committee::try_create_next_committee(
+                &mut inner.committee,
+                system_state,
+                min_stake_participation_percentage,
+                ctx
+            )
+        }
     }
 
     public fun committee_registration(self: &mut Bridge,
@@ -235,7 +237,7 @@ module bridge::bridge {
         let inner = load_inner_mut(self);
         let key = message::key(&message);
         // TODO: test this
-        assert!(message::message_version(&message) == ACCEPTED_MESSAGE_VERSION, EUnexpectedMessageVersion);
+        assert!(message::message_version(&message) == MESSAGE_VERSION, EUnexpectedMessageVersion);
 
         // retrieve pending message if source chain is Sui, the initial message must exist on chain.
         if (message::message_type(&message) == message_types::token() && message::source_chain(
@@ -390,7 +392,7 @@ module bridge::bridge {
     ) {
         let message_type = message::message_type(&message);
         // TODO: test version mismatch
-        assert!(message::message_version(&message) == ACCEPTED_MESSAGE_VERSION, EUnexpectedMessageVersion);
+        assert!(message::message_version(&message) == MESSAGE_VERSION, EUnexpectedMessageVersion);
         let inner = load_inner_mut(self);
 
         assert!(message::source_chain(&message) == inner.chain_id, EUnexpectedChainID);
@@ -459,6 +461,7 @@ module bridge::bridge {
     fun new_for_testing(ctx: &mut TxContext, chain_id: u8): Bridge {
         let bridge_inner = BridgeInner {
             bridge_version: CURRENT_VERSION,
+            message_version: MESSAGE_VERSION,
             chain_id,
             sequence_nums: vec_map::empty<u8, u64>(),
             committee: committee::create(ctx),

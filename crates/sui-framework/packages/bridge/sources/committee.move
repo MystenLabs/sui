@@ -54,7 +54,7 @@ module bridge::committee {
         // min stake threshold for each message type, values are voting power (percentage), 2DP
         stake_thresholds_percentage: VecMap<u8, u64>,
         // Committee member registrations for the next committee creation.
-        member_registration: VecMap<address, CommitteeMemberRegistration>,
+        member_registrations: VecMap<address, CommitteeMemberRegistration>,
         // Epoch when the current committee was updated
         last_committee_update_epoch: u64,
     }
@@ -95,7 +95,7 @@ module bridge::committee {
         BridgeCommittee {
             members: vec_map::empty(),
             stake_thresholds_percentage: thresholds,
-            member_registration: vec_map::empty(),
+            member_registrations: vec_map::empty(),
             last_committee_update_epoch: 0,
         }
     }
@@ -150,8 +150,8 @@ module bridge::committee {
         // Sender is active validator, record the registration
 
         // In case validator need to update the info
-        if (vec_map::contains(&self.member_registration, &sender)) {
-            let registration = vec_map::get_mut(&mut self.member_registration, &sender);
+        if (vec_map::contains(&self.member_registrations, &sender)) {
+            let registration = vec_map::get_mut(&mut self.member_registrations, &sender);
             registration.http_rest_url = http_rest_url;
             registration.bridge_pubkey_bytes = bridge_pubkey_bytes;
         }else {
@@ -160,7 +160,7 @@ module bridge::committee {
                 bridge_pubkey_bytes,
                 http_rest_url,
             };
-            vec_map::insert(&mut self.member_registration, sender, registration);
+            vec_map::insert(&mut self.member_registrations, sender, registration);
         }
     }
 
@@ -181,9 +181,9 @@ module bridge::committee {
 
         let new_members = vec_map::empty();
 
-        while (i < vec_map::size(&self.member_registration)) {
+        while (i < vec_map::size(&self.member_registrations)) {
             // retrieve registration
-            let (_, registration) = vec_map::get_entry_by_idx(&self.member_registration, i);
+            let (_, registration) = vec_map::get_entry_by_idx(&self.member_registrations, i);
             // Find validator stake amount from system state
 
             // Process registration if it's active validator
@@ -211,7 +211,7 @@ module bridge::committee {
         // Store new committee info
         if (stake_participation_percentage >= min_stake_participation_percentage) {
             // Clear registrations
-            self.member_registration = vec_map::empty();
+            self.member_registrations = vec_map::empty();
             self.members = new_members;
             self.last_committee_update_epoch = tx_context::epoch(ctx);
             // TODO: emit committee update event?
@@ -415,7 +415,7 @@ module bridge::committee {
         assert!(vec_map::is_empty(&committee.members), 0);
 
         let ctx = test_scenario::ctx(&mut scenario);
-        try_create_next_committee(&mut committee, &mut system_state, 60, ctx);
+        try_create_next_committee(&mut committee, &mut system_state, 6000, ctx);
 
         // committee should be empty because registration did not reach min stake threshold.
         assert!(vec_map::is_empty(&committee.members), 0);
@@ -584,7 +584,7 @@ module bridge::committee {
         let committee = BridgeCommittee {
             members,
             stake_thresholds_percentage: thresholds,
-            member_registration: vec_map::empty(),
+            member_registrations: vec_map::empty(),
             last_committee_update_epoch: 1,
         };
         committee

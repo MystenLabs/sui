@@ -111,6 +111,12 @@
 
 </dd>
 <dt>
+<code>message_version: u8</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
 <code>chain_id: u8</code>
 </dt>
 <dd>
@@ -432,15 +438,6 @@
 
 
 
-<a name="0xb_bridge_ACCEPTED_MESSAGE_VERSION"></a>
-
-
-
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_ACCEPTED_MESSAGE_VERSION">ACCEPTED_MESSAGE_VERSION</a>: u8 = 1;
-</code></pre>
-
-
-
 <a name="0xb_bridge_EBridgeAlreadyFrozen"></a>
 
 
@@ -464,15 +461,6 @@
 
 
 <pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>: u64 = 8;
-</code></pre>
-
-
-
-<a name="0xb_bridge_ECommitteeAlreadyInitiated"></a>
-
-
-
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>: u64 = 16;
 </code></pre>
 
 
@@ -585,6 +573,15 @@
 
 
 
+<a name="0xb_bridge_MESSAGE_VERSION"></a>
+
+
+
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>: u8 = 1;
+</code></pre>
+
+
+
 <a name="0xb_bridge_UNFREEZE"></a>
 
 
@@ -613,6 +610,7 @@
     <b>assert</b>!(<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="bridge.md#0xb_bridge_ENotSystemAddress">ENotSystemAddress</a>);
     <b>let</b> bridge_inner = <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
         bridge_version: <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>,
+        message_version: <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>,
         chain_id,
         sequence_nums: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
         <a href="committee.md#0xb_committee">committee</a>: <a href="committee.md#0xb_committee_create">committee::create</a>(ctx),
@@ -656,13 +654,14 @@
 ) {
     <b>assert</b>!(<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="bridge.md#0xb_bridge_ENotSystemAddress">ENotSystemAddress</a>);
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
-    <b>assert</b>!(<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_is_empty">vec_map::is_empty</a>(<a href="committee.md#0xb_committee_committee_members">committee::committee_members</a>(&inner.<a href="committee.md#0xb_committee">committee</a>)), <a href="bridge.md#0xb_bridge_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>);
-    <a href="committee.md#0xb_committee_try_create_next_committee">committee::try_create_next_committee</a>(
-        &<b>mut</b> inner.<a href="committee.md#0xb_committee">committee</a>,
-        system_state,
-        min_stake_participation_percentage,
-        ctx
-    )
+    <b>if</b> (<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_is_empty">vec_map::is_empty</a>(<a href="committee.md#0xb_committee_committee_members">committee::committee_members</a>(&inner.<a href="committee.md#0xb_committee">committee</a>))) {
+        <a href="committee.md#0xb_committee_try_create_next_committee">committee::try_create_next_committee</a>(
+            &<b>mut</b> inner.<a href="committee.md#0xb_committee">committee</a>,
+            system_state,
+            min_stake_participation_percentage,
+            ctx
+        )
+    }
 }
 </code></pre>
 
@@ -792,7 +791,7 @@
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
     <b>let</b> key = <a href="message.md#0xb_message_key">message::key</a>(&<a href="message.md#0xb_message">message</a>);
     // TODO: test this
-    <b>assert</b>!(<a href="message.md#0xb_message_message_version">message::message_version</a>(&<a href="message.md#0xb_message">message</a>) == <a href="bridge.md#0xb_bridge_ACCEPTED_MESSAGE_VERSION">ACCEPTED_MESSAGE_VERSION</a>, <a href="bridge.md#0xb_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>);
+    <b>assert</b>!(<a href="message.md#0xb_message_message_version">message::message_version</a>(&<a href="message.md#0xb_message">message</a>) == <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>, <a href="bridge.md#0xb_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>);
 
     // retrieve pending <a href="message.md#0xb_message">message</a> <b>if</b> source chain is Sui, the initial <a href="message.md#0xb_message">message</a> must exist on chain.
     <b>if</b> (<a href="message.md#0xb_message_message_type">message::message_type</a>(&<a href="message.md#0xb_message">message</a>) == <a href="message_types.md#0xb_message_types_token">message_types::token</a>() && <a href="message.md#0xb_message_source_chain">message::source_chain</a>(
@@ -1060,7 +1059,7 @@
 ) {
     <b>let</b> message_type = <a href="message.md#0xb_message_message_type">message::message_type</a>(&<a href="message.md#0xb_message">message</a>);
     // TODO: test version mismatch
-    <b>assert</b>!(<a href="message.md#0xb_message_message_version">message::message_version</a>(&<a href="message.md#0xb_message">message</a>) == <a href="bridge.md#0xb_bridge_ACCEPTED_MESSAGE_VERSION">ACCEPTED_MESSAGE_VERSION</a>, <a href="bridge.md#0xb_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>);
+    <b>assert</b>!(<a href="message.md#0xb_message_message_version">message::message_version</a>(&<a href="message.md#0xb_message">message</a>) == <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>, <a href="bridge.md#0xb_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>);
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
 
     <b>assert</b>!(<a href="message.md#0xb_message_source_chain">message::source_chain</a>(&<a href="message.md#0xb_message">message</a>) == inner.chain_id, <a href="bridge.md#0xb_bridge_EUnexpectedChainID">EUnexpectedChainID</a>);
