@@ -5,7 +5,6 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
     use std::{collections::HashSet, sync::Arc};
@@ -23,7 +22,7 @@ mod checked {
         RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE_FUNCTION_NAME,
         RANDOMNESS_STATE_UPDATE_FUNCTION_NAME,
     };
-    use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
+    use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
     use tracing::{info, instrument, trace, warn};
 
     use crate::programmable_transactions;
@@ -34,6 +33,7 @@ mod checked {
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
         AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
     };
+    use sui_types::bridge::{BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_MODULE_NAME};
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
     use sui_types::deny_list::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
@@ -44,6 +44,7 @@ mod checked {
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
+    use sui_types::id::UID;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::storage::BackingStore;
     #[cfg(msim)]
@@ -629,6 +630,10 @@ mod checked {
                             assert!(protocol_config.enable_coin_deny_list());
                             builder = setup_coin_deny_list_state_create(builder);
                         }
+                        EndOfEpochTransactionKind::BridgeStateCreate => {
+                            assert!(protocol_config.enable_bridge());
+                            builder = setup_bridge_create(builder)
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
@@ -986,6 +991,25 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate randomness_state_create transaction!");
+        builder
+    }
+
+    fn setup_bridge_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        let bridge_uid = builder
+            .input(CallArg::Pure(UID::new(SUI_BRIDGE_OBJECT_ID).to_bcs_bytes()))
+            .unwrap();
+        // Set chain id to sui devnet
+        // TODO: set this according to ChainIdentifier
+        let bridge_chain_id = builder.pure(2u8).unwrap();
+        builder.programmable_move_call(
+            BRIDGE_ADDRESS.into(),
+            BRIDGE_MODULE_NAME.to_owned(),
+            BRIDGE_CREATE_FUNCTION_NAME.to_owned(),
+            vec![],
+            vec![bridge_uid, bridge_chain_id],
+        );
         builder
     }
 
