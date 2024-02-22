@@ -40,8 +40,8 @@ impl AuthorityOverloadInfo {
 }
 
 const STEADY_OVERLOAD_REDUCTION_PERCENTAGE: u32 = 10;
-const EXECUTION_RATE_RATIO_FOR_COMPARISON: f64 = 0.9;
-const ADDITIONAL_LOAD_SHEDDING: f64 = 0.1;
+const EXECUTION_RATE_RATIO_FOR_COMPARISON: f64 = 0.95;
+const ADDITIONAL_LOAD_SHEDDING: f64 = 0.02;
 
 // The update interval of the random seed used to determine whether a txn should be rejected.
 const SEED_UPDATE_DURATION_SECS: u64 = 30;
