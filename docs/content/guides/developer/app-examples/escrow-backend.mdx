@@ -155,8 +155,8 @@ In conclusion, this code provides a robust and secure way to perform atomic swap
 
 Now that we have written the smart contract, let’s deploy it. First ensure the contract compiles successfully using `sui move build`. Once that is confirmed, you can deploy the project using the command `sui client publish --gas-budget 10000000`.
 
-## Frontend
-With our code successfully deployed on Testnet, we should now allow users to interact with it via a frontend.
+## Next steps
 
-## Indexing Service
-In order to have our dApp production ready, we need to have an indexer listening to the blockchain, and updating the frontend as escrows are made and swaps are fulfilled.
+You have written and deployed the Move package. To turn this into a complete dApp with frontend, you will need to create a frontend. For the frontend to be updated, you will need to create an indexer that listens to the blockchain as escrows are made and swaps are fulfilled.
+
+For the next step, you will [create the indexing service](/guides/developer/app-examples/escrow-indexer-api).

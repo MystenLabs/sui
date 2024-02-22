@@ -9,9 +9,7 @@ This is the second in a [three-part guide](/guides/developer/app-examples/escrow
 
 :::
 
-This is a continuation of the Escrow smart contract guide to demonstrate how to implement a service responsible for indexing chain state in order to discover trades.
-
-In most cases where we want to enhance our dApp and ensure it is production ready, we need to have an indexing service (indexer) listening to the blockchain for on-chain data, shaping the data to fit our application needs, storing the transformed data into the local off-chain database so we can query them in the most efficient way. Joining hands with an indexer, we will expose an API allowing frontend to query the indexed data and update the screen as escrows are made and swaps are fulfilled.
+In most cases where we want to enhance an dApp and ensure it is production ready, we need to have an indexing service (indexer) listening to the blockchain for on-chain data, shaping the data to fit our application needs, storing the transformed data into the local off-chain database so we can query them in the most efficient way. Joining hands with an indexer, we will expose an API allowing frontend to query the indexed data and update the screen as escrows are made and swaps are fulfilled.
 
 Architecturally, we will have the service doing the heavy-lifting indexing the data while the other service will expose the data through an API convention for external consumption.
 
@@ -631,5 +629,6 @@ app.get('/escrows', async (req, res) => {
 });
 ```
 
-## Frontend
-With our code successfully deployed on Testnet, we should now allow users to interact with it via a frontend.
+## Next steps
+
+With the code successfully deployed on Testnet, you can now [create a frontend](/guides/developer/app-examples/escrow-frontend) to display the trading data and to allow users to interact with the Move modules.
