@@ -22,6 +22,7 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{
     ExecutionDigests, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxContext,
 };
+use sui_types::bridge::{BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_MODULE_NAME};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignInfoTrait,
@@ -34,6 +35,7 @@ use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::StakedSui;
+use sui_types::id::UID;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::message_envelope::Message;
@@ -47,7 +49,7 @@ use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState, SuiSyste
 use sui_types::transaction::{
     CallArg, CheckedInputObjects, Command, InputObjectKind, ObjectReadResult, Transaction,
 };
-use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
+use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use tracing::trace;
 use validator_info::{GenesisValidatorInfo, GenesisValidatorMetadata, ValidatorInfo};
 
@@ -319,6 +321,11 @@ impl Builder {
         assert_eq!(
             protocol_config.random_beacon(),
             unsigned_genesis.has_randomness_state_object()
+        );
+
+        assert_eq!(
+            protocol_config.enable_bridge(),
+            unsigned_genesis.has_bridge_object()
         );
 
         assert_eq!(
@@ -1073,6 +1080,21 @@ pub fn generate_genesis_system_object(
                 vec![],
                 vec![],
             )?;
+        }
+
+        if protocol_config.enable_bridge() {
+            let bridge_uid = builder
+                .input(CallArg::Pure(UID::new(SUI_BRIDGE_OBJECT_ID).to_bcs_bytes()))
+                .unwrap();
+            // Hardcoding chain id to devnet
+            let bridge_chain_id = builder.pure(2u8).unwrap();
+            builder.programmable_move_call(
+                BRIDGE_ADDRESS.into(),
+                BRIDGE_MODULE_NAME.to_owned(),
+                BRIDGE_CREATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![bridge_uid, bridge_chain_id],
+            );
         }
 
         // Step 4: Mint the supply of SUI.

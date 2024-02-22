@@ -1849,6 +1849,13 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
             move_compiler::shared::NumberFormat::Hex,
         ),
     );
+    map.insert(
+        "bridge".to_string(),
+        NumericalAddress::new(
+            BRIDGE_ADDRESS.into_bytes(),
+            move_compiler::shared::NumberFormat::Hex,
+        ),
+    );
     map
 });
 
@@ -1881,10 +1888,21 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         flavor: Flavor::Sui,
         ..Default::default()
     };
+    let bridge_sources = {
+        let mut buf = sui_files.to_path_buf();
+        buf.extend(["packages", "bridge", "sources"]);
+        buf.to_string_lossy().to_string()
+    };
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: Some(("sui-framework".into(), config)),
-            paths: vec![sui_system_sources, sui_sources, sui_deps, deepbook_sources],
+            paths: vec![
+                sui_system_sources,
+                sui_sources,
+                sui_deps,
+                deepbook_sources,
+                bridge_sources,
+            ],
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
         None,

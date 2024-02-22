@@ -40,6 +40,7 @@ pub(crate) enum EndOfEpochTransactionKind {
     AuthenticatorStateExpire(AuthenticatorStateExpireTransaction),
     RandomnessStateCreate(RandomnessStateCreateTransaction),
     CoinDenyListStateCreate(CoinDenyListStateCreateTransaction),
+    BridgeStateCreate(BridgeStateCreateTransaction),
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -73,6 +74,13 @@ pub(crate) struct RandomnessStateCreateTransaction {
 
 #[derive(SimpleObject, Clone, PartialEq, Eq)]
 pub(crate) struct CoinDenyListStateCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+#[derive(SimpleObject, Clone, PartialEq, Eq)]
+pub(crate) struct BridgeStateCreateTransaction {
     /// A workaround to define an empty variant of a GraphQL union.
     #[graphql(name = "_")]
     dummy: Option<bool>,
@@ -254,6 +262,9 @@ impl EndOfEpochTransactionKind {
             }
             N::DenyListStateCreate => {
                 K::CoinDenyListStateCreate(CoinDenyListStateCreateTransaction { dummy: None })
+            }
+            N::BridgeStateCreate => {
+                K::BridgeStateCreate(BridgeStateCreateTransaction { dummy: None })
             }
         }
     }

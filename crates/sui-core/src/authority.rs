@@ -4411,6 +4411,23 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all)]
+    fn create_bridge_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().enable_bridge() {
+            info!("bridge not enabled");
+            return None;
+        }
+        if epoch_store.bridge_exists() {
+            return None;
+        }
+        let tx = EndOfEpochTransactionKind::new_bridge_create();
+        info!("Creating Bridge Create tx");
+        Some(tx)
+    }
+
+    #[instrument(level = "debug", skip_all)]
     fn create_deny_list_state_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -4452,6 +4469,9 @@ impl AuthorityState {
             txns.push(tx);
         }
         if let Some(tx) = self.create_randomness_state_tx(epoch_store) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.create_bridge_tx(epoch_store) {
             txns.push(tx);
         }
         if let Some(tx) = self.create_deny_list_state_tx(epoch_store) {

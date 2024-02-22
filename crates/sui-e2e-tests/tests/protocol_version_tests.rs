@@ -87,7 +87,8 @@ mod sim_only_tests {
         object::Object,
         programmable_transaction_builder::ProgrammableTransactionBuilder,
         transaction::TransactionKind,
-        MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+        MOVE_STDLIB_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
+        SUI_SYSTEM_PACKAGE_ID,
     };
     use sui_types::{
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
@@ -436,6 +437,7 @@ mod sim_only_tests {
                         SUI_CLOCK_OBJECT_ID,
                         SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                         SUI_RANDOMNESS_STATE_OBJECT_ID,
+                        SUI_BRIDGE_OBJECT_ID,
                     ]
                     .contains(&obj.0);
                     (!is_framework_obj).then_some(obj.0)
