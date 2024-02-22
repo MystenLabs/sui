@@ -53,7 +53,7 @@ The back-end is used for all the transactions that are executed by the dealer. T
 
 ### Directories structure
 
-The back-end code is splitted in the following sub directories:
+The back-end code is split in the following sub directories:
 
 - [games/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/api/games):
   The main code of the back-end endpoints. Each file that is named `route.ts` is served as an endpoint, in the path defined by the project structure (see [Route Segments on NextJS App Router](https://nextjs.org/docs/app/building-your-application/routing#route-segments) for details)
@@ -73,7 +73,7 @@ The back-end code is splitted in the following sub directories:
 
 ### Need of usage of waitForTransactionBlock
 
-An interesting aspect of developing a Dapp on Sui, that is coupled to using a full node with/without a load balancer, and requires attention by the developer, is the occurence of read-after-write and write-after-write cases.
+An interesting aspect of developing a Dapp on Sui, that is coupled to using a full node with/without a load balancer, and requires attention by the developer, is the occurrence of read-after-write and write-after-write cases.
 
 #### Initial Deal Transaction
 
