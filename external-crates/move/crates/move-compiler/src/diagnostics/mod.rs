@@ -29,7 +29,6 @@ use csr::files::Files;
 use move_command_line_common::{env::read_env_var, files::FileHash};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use pathdiff::diff_paths;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     io::Write,
@@ -164,23 +163,10 @@ fn output_diagnostics<W: WriteColor>(
     sources: &FilesSourceText,
     diags: Diagnostics,
 ) {
-    fn relativize_path(path: Symbol) -> Symbol {
-        let Some(current_dir) = std::env::current_dir().ok() else {
-            return path;
-        };
-        let Some(new_path) = diff_paths(path.to_string(), current_dir) else {
-            return path;
-        };
-        return Symbol::from(new_path.to_string_lossy().to_string());
-    }
-
     let mut files = SimpleFiles::new();
     let mut file_mapping = HashMap::new();
     for (fhash, (fname, source)) in sources {
-        // path relativization is needed as paths are initially canonicalized when using virtual
-        // file system and would show up as absolute paths in the test output which wouldn't be
-        // machine-agnostic
-        let id = files.add(relativize_path(*fname), source.as_str());
+        let id = files.add(*fname, source.as_str());
         file_mapping.insert(*fhash, id);
     }
     render_diagnostics(writer, &files, &file_mapping, diags);

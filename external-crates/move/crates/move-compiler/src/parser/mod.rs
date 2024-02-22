@@ -19,19 +19,32 @@ use anyhow::anyhow;
 use comments::*;
 use move_command_line_common::files::{find_move_filenames, FileHash};
 use move_symbol_pool::Symbol;
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
-use vfs::filesystem::FileSystem;
+use std::collections::{BTreeSet, HashMap};
+use vfs::VfsPath;
 
+/// Contains the same data as IndexedPackagePath but also information about which file system this
+/// path is located in.
+pub struct InterfaceFilePath {
+    idx_pkg_path: IndexedPackagePath,
+    // Virtual file system where this file is located
+    vfs: VfsPath,
+}
+
+impl InterfaceFilePath {
+    pub fn new(idx_pkg_path: IndexedPackagePath, vfs: VfsPath) -> Self {
+        InterfaceFilePath { idx_pkg_path, vfs }
+    }
+}
+
+/// Parses program's targets and dependencies, both of which are read from different virtual file
+/// systems (vfs and deps_out_vfs, respectively).
 pub(crate) fn parse_program(
-    vfs: Arc<Box<dyn FileSystem>>,
-    deps_out_vfs: Arc<Box<dyn FileSystem>>,
+    vfs: VfsPath,
     compilation_env: &mut CompilationEnv,
     named_address_maps: NamedAddressMaps,
     targets: Vec<IndexedPackagePath>,
     deps: Vec<IndexedPackagePath>,
+    interface_files: Vec<InterfaceFilePath>,
 ) -> anyhow::Result<(FilesSourceText, parser::ast::Program, CommentMap)> {
     fn find_move_filenames_with_address_mapping(
         paths_with_mapping: Vec<IndexedPackagePath>,
@@ -89,7 +102,25 @@ pub(crate) fn parse_program(
         named_address_map,
     } in deps
     {
-        let (defs, _, _) = parse_file(&deps_out_vfs, compilation_env, &mut files, path, package)?;
+        let (defs, _, _) = parse_file(&vfs, compilation_env, &mut files, path, package)?;
+        lib_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
+            package,
+            named_address_map,
+            def,
+        }));
+    }
+
+    for InterfaceFilePath {
+        idx_pkg_path:
+            IndexedPackagePath {
+                package,
+                path,
+                named_address_map,
+            },
+        vfs,
+    } in interface_files
+    {
+        let (defs, _, _) = parse_file(&vfs, compilation_env, &mut files, path, package)?;
         lib_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
             package,
             named_address_map,
@@ -110,28 +141,15 @@ fn ensure_targets_deps_dont_intersect(
     targets: &[IndexedPackagePath],
     deps: &mut Vec<IndexedPackagePath>,
 ) -> anyhow::Result<()> {
-    /// Canonicalize a file path.
-    fn canonicalize(path: &Symbol) -> String {
-        let p = path.as_str();
-        match std::fs::canonicalize(p) {
-            Ok(s) => s.to_string_lossy().to_string(),
-            Err(_) => p.to_owned(),
-        }
-    }
-    let target_set = targets
-        .iter()
-        .map(|p| canonicalize(&p.path))
-        .collect::<BTreeSet<_>>();
-    let dep_set = deps
-        .iter()
-        .map(|p| canonicalize(&p.path))
-        .collect::<BTreeSet<_>>();
+    // FYI - paths are already canonicalized in Compiler::run
+    let target_set = targets.iter().map(|p| p.path).collect::<BTreeSet<_>>();
+    let dep_set = deps.iter().map(|p| p.path).collect::<BTreeSet<_>>();
     let intersection = target_set.intersection(&dep_set).collect::<Vec<_>>();
     if intersection.is_empty() {
         return Ok(());
     }
     if compilation_env.flags().sources_shadow_deps() {
-        deps.retain(|p| !intersection.contains(&&canonicalize(&p.path)));
+        deps.retain(|p| !intersection.contains(&&p.path));
         return Ok(());
     }
     let all_files = intersection
@@ -146,7 +164,7 @@ fn ensure_targets_deps_dont_intersect(
 }
 
 fn parse_file(
-    vfs: &Arc<Box<dyn FileSystem>>,
+    vfs: &VfsPath,
     compilation_env: &mut CompilationEnv,
     files: &mut FilesSourceText,
     fname: Symbol,
@@ -156,7 +174,7 @@ fn parse_file(
     MatchedFileCommentMap,
     FileHash,
 )> {
-    let mut f = vfs.open_file(fname.as_str())?;
+    let mut f = vfs.join(fname.as_str())?.open_file()?;
     let mut source_buffer = String::new();
     f.read_to_string(&mut source_buffer)?;
     let file_hash = FileHash::new(&source_buffer);

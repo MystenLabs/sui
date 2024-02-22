@@ -27,17 +27,17 @@ use move_command_line_common::files::{
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_symbol_pool::Symbol;
+use pathdiff::diff_paths;
 use std::{
     collections::BTreeMap,
     fs,
     io::{Read, Write},
     path::PathBuf,
-    sync::Arc,
 };
 use vfs::{
-    filesystem::FileSystem,
     impls::{memory::MemoryFS, physical::PhysicalFS},
     path::VfsFileType,
+    VfsPath,
 };
 
 //**************************************************************************************************
@@ -59,7 +59,7 @@ pub struct Compiler<'a> {
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
     /// Virtual file system
-    vfs: Option<Arc<Box<dyn FileSystem>>>,
+    vfs: Option<VfsPath>,
 }
 
 pub struct SteppedCompiler<'a, const P: Pass> {
@@ -266,7 +266,7 @@ impl<'a> Compiler<'a> {
         self
     }
 
-    pub fn set_vfs(mut self, vfs: Arc<Box<dyn FileSystem>>) -> Self {
+    pub fn set_vfs(mut self, vfs: VfsPath) -> Self {
         assert!(self.vfs.is_none());
         self.vfs = Some(vfs);
         self
@@ -278,6 +278,19 @@ impl<'a> Compiler<'a> {
         FilesSourceText,
         Result<(CommentMap, SteppedCompiler<'a, TARGET>), Diagnostics>,
     )> {
+        /// Path relativization after parsing (after they have been canonicalized prior) is needed
+        /// as paths are initially canonicalized when using virtual file system and would show up as
+        /// absolute paths in the test output which wouldn't be machine-agnostic.
+        fn relativize_path(path: Symbol) -> Symbol {
+            let Some(current_dir) = std::env::current_dir().ok() else {
+                return path;
+            };
+            let Some(new_path) = diff_paths(path.to_string(), current_dir) else {
+                return path;
+            };
+            Symbol::from(new_path.to_string_lossy().to_string())
+        }
+
         let Self {
             maps,
             mut targets,
@@ -297,14 +310,13 @@ impl<'a> Compiler<'a> {
         canonicalize_source_paths(&mut deps);
         let vfs = match vfs {
             Some(vfs) => vfs,
-            None => {
-                let physical_fs: Box<dyn FileSystem> = Box::new(PhysicalFS::new("/"));
-                Arc::new(physical_fs)
-            }
+            None => VfsPath::new(PhysicalFS::new("/")),
         };
-        let memory_vfs: Box<dyn FileSystem> = Box::new(MemoryFS::new());
-        let deps_out_vfs = Arc::new(memory_vfs);
-        generate_interface_files_for_deps(
+        // interface files for dependencies are generated into a separate in-memory virtual file
+        // system (`deps_out_vfs`) and subsequently read by the parser (input for interface
+        // generation is still read from the "regular" virtual file system, that is `vfs`)
+        let deps_out_vfs = VfsPath::new(MemoryFS::new());
+        let interface_files = generate_interface_files_for_deps(
             vfs.clone(),
             deps_out_vfs.clone(),
             &mut deps,
@@ -320,14 +332,18 @@ impl<'a> Compiler<'a> {
             compilation_env.add_custom_known_filters(prefix, filters)?;
         }
 
-        let (source_text, pprog, comments) = with_large_stack!(parse_program(
+        let (mut source_text, pprog, comments) = with_large_stack!(parse_program(
             vfs.clone(),
-            vfs,
             &mut compilation_env,
             maps,
             targets,
-            deps
+            deps,
+            interface_files
         ))?;
+
+        source_text
+            .iter_mut()
+            .for_each(|(_, (path, _))| *path = relativize_path(*path));
 
         let res: Result<_, Diagnostics> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
@@ -385,7 +401,8 @@ impl<'a> Compiler<'a> {
 
 fn canonicalize_source_paths(paths: &mut Vec<IndexedPackagePath>) {
     for p in paths {
-        if let Some(new_path) = std::fs::canonicalize(p.path.as_str()).ok() {
+        // dunce does a better job of canonicalization on Windows
+        if let Some(new_path) = dunce::canonicalize(p.path.as_str()).ok() {
             p.path = Symbol::from(new_path.to_string_lossy().to_string());
         } // else keep the path the same
     }
@@ -712,13 +729,13 @@ pub fn output_compiled_units(
 }
 
 fn generate_interface_files_for_deps(
-    vfs: Arc<Box<dyn FileSystem>>,
-    deps_out_vfs: Arc<Box<dyn FileSystem>>,
+    vfs: VfsPath,
+    deps_out_vfs: VfsPath,
     deps: &mut Vec<IndexedPackagePath>,
     interface_files_dir_opt: Option<String>,
     module_to_named_address: &BTreeMap<CompiledModuleId, String>,
-) -> anyhow::Result<()> {
-    let interface_files_paths = generate_interface_files(
+) -> anyhow::Result<Vec<InterfaceFilePath>> {
+    let interface_files = generate_interface_files(
         vfs,
         deps_out_vfs,
         deps,
@@ -726,26 +743,28 @@ fn generate_interface_files_for_deps(
         module_to_named_address,
         true,
     )?;
-    deps.extend(interface_files_paths);
     // Remove bytecode files
     deps.retain(|p| !p.path.as_str().ends_with(MOVE_COMPILED_EXTENSION));
-    Ok(())
+    Ok(interface_files)
 }
 
 pub fn generate_interface_files(
-    vfs: Arc<Box<dyn FileSystem>>,
-    deps_out_vfs: Arc<Box<dyn FileSystem>>,
+    vfs: VfsPath,
+    deps_out_vfs: VfsPath,
     mv_file_locations: &mut [IndexedPackagePath],
     interface_files_dir_opt: Option<String>,
     module_to_named_address: &BTreeMap<CompiledModuleId, String>,
     separate_by_hash: bool,
-) -> anyhow::Result<Vec<IndexedPackagePath>> {
+) -> anyhow::Result<Vec<InterfaceFilePath>> {
     let mv_files = {
         let mut v = vec![];
         let (mv_magic_files, other_file_locations): (Vec<_>, Vec<_>) =
             mv_file_locations.iter().cloned().partition(|s| {
-                let is_file = vfs
-                    .metadata(s.path.as_str())
+                let Some(path) = vfs.join(s.path.as_str()).ok() else {
+                    return false;
+                };
+                let is_file = path
+                    .metadata()
                     .map(|d| d.file_type == VfsFileType::File)
                     .unwrap_or(false);
                 is_file && has_compiled_module_magic_number(vfs.clone(), &s.path)
@@ -789,7 +808,7 @@ pub fn generate_interface_files(
         mv_files.len().hash(&mut hasher);
         HASH_DELIM.hash(&mut hasher);
         for IndexedPackagePath { path, .. } in &mv_files {
-            let mut f = vfs.open_file(path.as_str())?;
+            let mut f = vfs.join(path.as_str())?.open_file()?;
             let mut buf = vec![];
             f.read_to_end(&mut buf)?;
             buf.hash(&mut hasher);
@@ -814,25 +833,33 @@ pub fn generate_interface_files(
             interface_generator::write_file_to_string(vfs.clone(), module_to_named_address, &path)?;
         let addr_dir = dir_path!(all_addr_dir.clone(), format!("{}", id.address()));
         let file_path = file_path!(addr_dir.clone(), format!("{}", id.name()), MOVE_EXTENSION)
-            .into_os_string()
-            .into_string()
-            .unwrap();
-        let mut out_file = deps_out_vfs.create_file(&file_path)?;
-        out_file.write_all(interface_contents.as_bytes())?;
+            .to_string_lossy()
+            .to_string();
+        let vfs_path = deps_out_vfs.join(&file_path)?;
+        vfs_path.parent().create_dir()?;
+        vfs_path
+            .create_file()?
+            .write_all(interface_contents.as_bytes())?;
 
-        result.push(IndexedPackagePath {
-            path: Symbol::from(file_path),
-            package,
-            named_address_map,
-        });
+        result.push(InterfaceFilePath::new(
+            IndexedPackagePath {
+                path: Symbol::from(file_path),
+                package,
+                named_address_map,
+            },
+            deps_out_vfs.clone(),
+        ));
     }
 
     Ok(result)
 }
 
-fn has_compiled_module_magic_number(vfs: Arc<Box<dyn FileSystem>>, path: &str) -> bool {
+fn has_compiled_module_magic_number(vfs: VfsPath, path: &str) -> bool {
     use move_binary_format::file_format_common::BinaryConstants;
-    let mut file = match vfs.open_file(path) {
+    let Some(path) = vfs.join(path).ok() else {
+        return false;
+    };
+    let mut file = match path.open_file() {
         Err(_) => return false,
         Ok(f) => f,
     };

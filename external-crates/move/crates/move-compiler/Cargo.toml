@@ -10,6 +10,7 @@ license = "Apache-2.0"
 [dependencies]
 anyhow.workspace = true
 codespan-reporting.workspace = true
+dunce.workspace = true
 hex.workspace = true
 regex.workspace = true
 clap.workspace = true
