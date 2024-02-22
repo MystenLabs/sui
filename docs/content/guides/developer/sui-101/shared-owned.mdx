@@ -20,7 +20,7 @@ For more information on the types of objects that Sui supports, see [Object Owne
 The Escrow example demonstrates the trade-offs between shared objects and owned objects by implementing the same application in both styles. It implements a service that allows two addresses to perform a trustless swap of objects with each other (a "trade") with the service holding their objects in escrow.
 
 ### `Locked<T>` and `Key`
-[Code Sample](https://github.com/MystenLabs/sui/blob/main/examples/move/escrow/sources/lock.move)
+[Code Sample](https://github.com/MystenLabs/sui/blob/93e6b4845a481300ed4a56ab4ac61c5ccb6aa008/examples/move/escrow/sources/lock.move)
 
 Both implementations use a primitive for locking values, which offers the following interface:
 
@@ -37,11 +37,35 @@ The important property that this interface provides is that locked values cannot
 
 ### Owned objects
 
-[Code Sample](https://github.com/MystenLabs/sui/blob/main/examples/move/escrow/sources/owned.move)
+[Code Sample](https://github.com/MystenLabs/sui/blob/93e6b4845a481300ed4a56ab4ac61c5ccb6aa008/examples/move/escrow/sources/owned.move)
 
-The protocol for swapping via escrow implemented using owned objects starts with both parties locking their respective objects. This will be used to prove that the object has not been tampered with after the swap has been agreed. If either party does not want to proceed at this stage, they just unlock their object.
+The protocol for swapping via escrow implemented using owned objects starts with both parties locking their respective objects. 
 
-Assuming both parties are happy to continue, the next step requires a third party to act as custodian.  The custodian holds objects that are waiting for their counterparts to arrive and when they arrive, it matches them up to complete the swap.
+```mermaid
+flowchart TD
+    SR[Locked&ltfa:fa-wrench S&gt, fa:fa-key key_s]
+    BR[Locked&ltfa:fa-coins B&gt, fa:fa-key key_b]
+
+    subgraph Seller
+    a2(fa:fa-wrench S)--escrow::lock-->SR
+    end
+
+    subgraph Buyer
+    a1(fa:fa-coins B)--escrow::lock-->BR
+    end
+```
+
+This is used to prove that the object has not been tampered with after the swap has been agreed to. If either party doesn't want to proceed at this stage, they just unlock their object.
+
+Assuming both parties are happy to continue, the next step requires both parties to swap the keys.
+
+```mermaid
+flowchart LR
+    Buyer--fa:fa-key key_b-->Seller
+    Seller--fa:fa-key key_s-->Buyer
+```
+
+A third party acts as custodian. The custodian holds objects that are waiting for their counterparts to arrive and when they arrive, it matches them up to complete the swap.
 
 ```move
 public fun create<T: key + store>(
@@ -65,9 +89,49 @@ public fun create<T: key + store>(
 }
 ```
 
+```mermaid
+flowchart TB
+    S["fa:fa-key key_s,
+        Locked&ltfa:fa-wrench S&gt,
+        exchange_key: fa:fa-key key_b,
+        recipient: Buyer
+    "]
+    B["fa:fa-key key_b,
+        Locked&ltfa:fa-coins B&gt,
+        exchange_key: fa:fa-key key_s,
+        recipient: Seller
+    "]
+
+    id1(Escrow&ltfa:fa-coins B&gt)-->Third_Party
+    id2(Escrow&ltfa:fa-wrench S&gt)-->Third_Party
+    subgraph Buyer
+    direction TB
+    B--create-->id1
+    end
+
+    subgraph Seller
+    direction TB
+    S--create-->id2
+    end
+```
+
 The `create` function prepares the `Escrow` request and sends it to the `custodian`.  The object being offered by this party is passed in, locked, with its key, and the object being requested is identified by the ID of the key it was locked with.  While preparing the request, the offered object is unlocked, while remembering the ID of its key.
 
 Although the custodian is trusted to preserve liveness (to complete swaps if it owns both sides of a swap and to return objects if requested), all other correctness properties are maintained in Move: Even though the custodian owns both objects being swapped, the only valid action they are permitted to take is to match them up with their correct counterpart to finish the swap, or to return them:
+
+```mermaid
+flowchart TB
+
+    subgraph Third_Party
+    direction TB
+    id1(fa:fa-wrench S, fa:fa-coins B)
+    id2(Escrow&ltfa:fa-coins B&gt, Escrow&ltfa:fa-wrench S&gt)
+    id2--swap-->id1
+    end
+
+    Third_Party--fa:fa-wrench S-->Buyer
+    Third_Party--fa:fa-coins B-->Seller
+```
 
 
 ```move
