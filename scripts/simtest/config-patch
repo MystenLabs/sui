@@ -19,7 +19,7 @@ diff --git a/Cargo.toml b/Cargo.toml
 index 3b1ca4591c..e4ff4d61d2 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -672,10 +672,14 @@ semver = "1.0.16"
+@@ -668,2 +668,6 @@ semver = "1.0.16"
  spinners = "4.1.0"
  include_dir = "0.7.3"
 +
