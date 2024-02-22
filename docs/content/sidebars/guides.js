@@ -132,6 +132,7 @@ const guides = [
 							id: 'guides/developer/app-examples/escrow',
 						},
 						items: [
+							'guides/developer/app-examples/escrow-backend',
 							'guides/developer/app-examples/escrow-indexer-api',
 							'guides/developer/app-examples/escrow-frontend',
 						],
