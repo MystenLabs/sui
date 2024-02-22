@@ -2,8 +2,6 @@
 title: Closed-Loop Token
 ---
 
-import BalanceTokenCoin from '@site/static/img/balance-token-coin.png';
-
 Closed-Loop Token allows its creator to limit applications where the token is used, set up custom policies for transfers, spending and conversions. It is defined in the `sui::token` module and is a part of the Sui Framework.
 
 ## Background & Use Cases
@@ -20,7 +18,23 @@ Specific domains that can benefit from a closed-loop token include:
 
 ## Difference with Coin
 
-<img className="balance-coin-token" src={BalanceTokenCoin} />
+```mermaid
+flowchart LR
+    subgraph "&nbsp;&nbsp;Balance has store { u64 }&nbsp;&nbsp;"
+        A["Balance&lt;T>
+        Supply&lt;T>"];
+    end
+    subgraph "&nbsp;&nbsp;Coin has key, store { Balance }&nbsp;&nbsp;"
+        B["Coin&lt;T>
+        TreasuryCap&lt;T>"];
+    end
+        subgraph "&nbsp;&nbsp;Token has key { Balance }&nbsp;&nbsp;"
+        C["Token&lt;T>
+        TreasuryCap&lt;T>"];
+    end
+    A<-- to_balance\nfrom_balance -->B;
+    B<-- to_coin\nfrom_coin -->C;
+```
 
 Unlike Coin, which has `key + store` abilities and thus supports wrapping and public transfers, Token has only the `key` ability and cannot be wrapped, stored as a dynamic field, or freely transferred (unless there's a custom policy for that). Due to this restriction, Token **can only be owned by an account** and can't be stored in an application (however, it can be "spent" - see [Spending section](./closed-loop-token/spending.mdx) section).
 
