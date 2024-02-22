@@ -581,12 +581,12 @@ fn module(
     context.address = None
 }
 
-fn set_sender_address(
+fn set_module_address(
     context: &mut Context,
     module_name: &ModuleName,
-    sender: Option<Spanned<Address>>,
+    address: Option<Spanned<Address>>,
 ) {
-    context.address = Some(match sender {
+    context.address = Some(match address {
         Some(sp!(_, addr)) => addr,
         None => {
             let loc = module_name.loc();
@@ -628,7 +628,7 @@ fn module_(
         .add_warning_filter_scope(warning_filter.clone());
     assert!(context.address.is_none());
     assert!(address.is_none());
-    set_sender_address(context, &name, module_address);
+    set_module_address(context, &name, module_address);
     let _ = check_restricted_name_all_cases(&mut context.defn_context, NameCase::Module, &name.0);
     if name.value().starts_with(|c| c == '_') {
         let msg = format!(
@@ -1425,8 +1425,8 @@ impl Move2024PathExpander {
     ) -> AccessChainResult {
         use AccessChainFailure::*;
         use AccessChainResult::*;
-
         use E::ModuleAccess_ as EN;
+
         match self.aliases.resolve(namespace, &name) {
             Some(AliasEntry::Member(_, mident, sp!(_, mem))) => {
                 // We are preserving the name's original location, rather than referring to where
@@ -1502,15 +1502,28 @@ impl Move2024PathExpander {
         use AccessChainResult::*;
         use E::ModuleAccess_ as EN;
         use P::NameAccessChain_ as PN;
+
         match chain {
             PN::One(name) => {
+                use crate::naming::ast::BuiltinFunction_;
+                use crate::naming::ast::BuiltinTypeName_;
                 let namespace = match access {
                     Access::Type | Access::ApplyNamed | Access::ApplyPositional | Access::Term => {
                         NameSpace::ModuleMembers
                     }
                     Access::Module => NameSpace::LeadingAccess,
                 };
-                self.resolve_name(context, namespace, name)
+
+                // This is a hack to let `use std::vector` play nicely with `vector`,
+                // plus preserve things like `u64`, etc.
+                if !matches!(access, Access::Module)
+                    && (BuiltinFunction_::all_names().contains(&name.value)
+                        || BuiltinTypeName_::all_names().contains(&name.value))
+                {
+                    AccessChainResult::UnresolvedName(name.loc, name)
+                } else {
+                    self.resolve_name(context, namespace, name)
+                }
             }
             PN::Two(root_name, name) => match self.resolve_root(context, root_name) {
                 Address(_, address) => {
