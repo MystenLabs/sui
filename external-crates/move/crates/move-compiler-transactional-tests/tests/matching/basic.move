@@ -4,11 +4,6 @@
 
 module 0x42::t {
 
-    use std::vector;
-    use fun std::vector::pop_back as vector.pop_back;
-    use fun std::vector::push_back as vector.push_back;
-    use fun std::vector::is_empty as vector.is_empty;
-
     public enum Exp has drop {
        Done,
        Add,
@@ -38,7 +33,7 @@ module 0x42::t {
                 }
             }
         };
-        let result = vector::pop_back(&mut stack);
+        let result = stack.pop_back();
         assert!(expressions.is_empty(), EINVALIDEXP);
         assert!(stack.is_empty(), EINVALIDEXP);
         result

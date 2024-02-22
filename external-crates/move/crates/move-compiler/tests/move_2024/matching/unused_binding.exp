@@ -1,11 +1,3 @@
-error[E13002]: feature is under active development
-  ┌─ tests/move_2024/matching/unused_binding.move:3:17
-  │
-3 │     public enum Option<T> {
-  │                 ^^^^^^ Enums are not supported in bytecode.
-  │
-  = This feature is currently in development.
-
 warning[W09002]: unused variable
    ┌─ tests/move_2024/matching/unused_binding.move:10:26
    │
