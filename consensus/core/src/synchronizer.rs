@@ -16,7 +16,7 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::{error::Elapsed, sleep, sleep_until, timeout, Instant};
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 use crate::block::{BlockRef, SignedBlock, VerifiedBlock};
 use crate::block_verifier::BlockVerifier;
@@ -30,6 +30,8 @@ use consensus_config::AuthorityIndex;
 const FETCH_BLOCKS_CONCURRENCY: usize = 5;
 
 const FETCH_REQUEST_TIMEOUT: Duration = Duration::from_millis(2_000);
+
+const FETCH_FROM_PEERS_TIMEOUT: Duration = Duration::from_millis(4_000);
 
 const MAX_FETCH_BLOCKS_PER_REQUEST: usize = 200;
 
@@ -271,7 +273,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     .invalid_blocks
                     .with_label_values(&[&peer_index.to_string(), "synchronizer"])
                     .inc();
-                error!("Invalid block received from {}: {}", peer_index, e);
+                warn!("Invalid block received from {}: {}", peer_index, e);
                 return Err(e);
             }
             let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
@@ -366,7 +368,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     context.metrics.node_metrics.fetched_blocks.with_label_values(&[&peer.to_string(), "periodic"]).inc_by(fetched_blocks.len() as u64);
 
                     if let Err(err) = Self::process_fetched_blocks(fetched_blocks, peer, requested_block_refs, core_dispatcher.clone(), block_verifier.clone(), context.clone()).await {
-                        error!("Error occurred while processing fetched blocks from peer {peer}: {err}");
+                        warn!("Error occurred while processing fetched blocks from peer {peer}: {err}");
                     }
                 }
 
@@ -385,7 +387,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         network_client: Arc<C>,
         missing_blocks: BTreeSet<BlockRef>,
     ) -> Vec<(BTreeSet<BlockRef>, Vec<Bytes>, AuthorityIndex)> {
-        const FETCH_FROM_PEERS_TIMEOUT: Duration = Duration::from_millis(2_000);
         const MAX_PEERS: usize = 3;
 
         // Attempt to fetch only up to a max of blocks
@@ -716,7 +717,7 @@ mod tests {
             .stub_fetch_blocks(
                 expected_blocks.clone(),
                 AuthorityIndex::new_for_test(1),
-                Some(2 * FETCH_REQUEST_TIMEOUT),
+                Some(FETCH_REQUEST_TIMEOUT),
             )
             .await;
         network_client
@@ -735,7 +736,7 @@ mod tests {
             block_verifier,
         );
 
-        sleep(Duration::from_secs(2)).await;
+        sleep(2 * FETCH_REQUEST_TIMEOUT).await;
 
         // THEN the missing blocks should now be fetched and added to core
         let added_blocks = core_dispatcher.get_add_blocks().await;
