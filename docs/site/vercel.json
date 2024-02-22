@@ -89,6 +89,7 @@
       { "source": "/concepts/transactions/transaction-lifecycle", "destination": "/concepts/sui-architecture/transaction-lifecycle", "permanent": true},
       { "source": "standards/closed-loop-token/overview", "destination": "standards/closed-loop-token", "permanent": true},
       { "source": "concepts/dynamic-fields/transfers/custom-rules", "destination": "concepts/transfers/custom-rules", "permanent": true},
-      { "source": "concepts/dynamic-fields/transfers/transfer-to-object", "destination": "concepts/transfers/transfer-to-object", "permanent": true}
+      { "source": "concepts/dynamic-fields/transfers/transfer-to-object", "destination": "concepts/transfers/transfer-to-object", "permanent": true},
+      { "source": "references/sui-graphql/:path*", "destination": "references/sui-api/sui-graphql/:path*", "permanent": true}
     ]
   }

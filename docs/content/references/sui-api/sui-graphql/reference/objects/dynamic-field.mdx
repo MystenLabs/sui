@@ -1,0 +1,86 @@
+---
+id: dynamic-field
+title: DynamicField
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Dynamic fields are heterogeneous fields that can be added or removed at runtime,
+and can have arbitrary user-assigned names. There are two sub-types of dynamic
+fields:
+
+1) Dynamic Fields can store any value that has the `store` ability, however an object
+stored in this kind of field will be considered wrapped and will not be accessible
+directly via its ID by external tools (explorers, wallets, etc) accessing storage.
+2) Dynamic Object Fields values must be Sui objects (have the `key` and `store`
+abilities, and id: UID as the first field), but will still be directly accessible off-chain
+via their object ID after being attached.
+
+
+```graphql
+type DynamicField {
+  name: MoveValue
+  value: DynamicFieldValue
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>DynamicField.<b>name</b></code>](#)<Bullet />[`MoveValue`](/references/sui-api/sui-graphql/reference/objects/move-value) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The string type, data, and serialized value of the DynamicField's 'name' field.
+> This field is used to uniquely identify a child of the parent object.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>DynamicField.<b>value</b></code>](#)<Bullet />[`DynamicFieldValue`](/references/sui-api/sui-graphql/reference/unions/dynamic-field-value) <Badge class="badge badge--secondary" text="union"/> 
+> 
+> 
+> The actual data stored in the dynamic field.
+> The returned dynamic field is an object if its return type is MoveObject,
+> in which case it is also accessible off-chain via its address.
+> 
+
+
+
+### Member Of
+
+[`Coin`](/references/sui-api/sui-graphql/reference/objects/coin)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`CoinMetadata`](/references/sui-api/sui-graphql/reference/objects/coin-metadata)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`DynamicFieldConnection`](/references/sui-api/sui-graphql/reference/objects/dynamic-field-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`DynamicFieldEdge`](/references/sui-api/sui-graphql/reference/objects/dynamic-field-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`IMoveObject`](/references/sui-api/sui-graphql/reference/interfaces/imove-object)  <Badge class="badge badge--secondary" text="interface"/><Bullet />[`MoveObject`](/references/sui-api/sui-graphql/reference/objects/move-object)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Object`](/references/sui-api/sui-graphql/reference/objects/object)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Owner`](/references/sui-api/sui-graphql/reference/objects/owner)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`StakedSui`](/references/sui-api/sui-graphql/reference/objects/staked-sui)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`SuinsRegistration`](/references/sui-api/sui-graphql/reference/objects/suins-registration)  <Badge class="badge badge--secondary" text="object"/>
+

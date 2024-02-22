@@ -1,0 +1,152 @@
+---
+id: iobject
+title: IObject
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Interface implemented by on-chain values that are addressable by an ID (also referred to as its
+address). This includes Move objects and packages.
+
+
+```graphql
+interface IObject {
+  version: Int!
+  status: ObjectKind!
+  digest: String
+  owner: ObjectOwner
+  previousTransactionBlock: TransactionBlock
+  storageRebate: BigInt
+  receivedTransactionBlocks(
+    first: Int
+    after: String
+    last: Int
+    before: String
+    filter: TransactionBlockFilter
+  ): TransactionBlockConnection!
+  bcs: Base64
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>IObject.<b>version</b></code>](#)<Bullet />[`Int!`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>IObject.<b>status</b></code>](#)<Bullet />[`ObjectKind!`](/references/sui-api/sui-graphql/reference/enums/object-kind) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="enum"/> 
+> 
+> 
+> The current status of the object as read from the off-chain store. The possible states are: NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or system package upgrade transaction. LIVE, the version returned is the most recent for the object, and it is not deleted or wrapped at that version. HISTORICAL, the object was referenced at a specific version or checkpoint, so is fetched from historical tables and may not be the latest version of the object. WRAPPED_OR_DELETED, the object is deleted or wrapped and only partial information can be loaded.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>IObject.<b>digest</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 32-byte hash that identifies the object's current contents, encoded as a Base58 string.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>IObject.<b>owner</b></code>](#)<Bullet />[`ObjectOwner`](/references/sui-api/sui-graphql/reference/unions/object-owner) <Badge class="badge badge--secondary" text="union"/> 
+> 
+> 
+> The owner type of this object: Immutable, Shared, Parent, Address
+> Immutable and Shared Objects do not have owners.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>IObject.<b>previousTransactionBlock</b></code>](#)<Bullet />[`TransactionBlock`](/references/sui-api/sui-graphql/reference/objects/transaction-block) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The transaction block that created this version of the object.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>IObject.<b>storageRebate</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/sui-graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>IObject.<b>receivedTransactionBlocks</b></code>](#)<Bullet />[`TransactionBlockConnection!`](/references/sui-api/sui-graphql/reference/objects/transaction-block-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The transaction blocks that sent objects to this object.
+> ##### [<code style={{ fontWeight: 'normal' }}>IObject.receivedTransactionBlocks.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>IObject.receivedTransactionBlocks.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>IObject.receivedTransactionBlocks.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>IObject.receivedTransactionBlocks.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>IObject.receivedTransactionBlocks.<b>filter</b></code>](#)<Bullet />[`TransactionBlockFilter`](/references/sui-api/sui-graphql/reference/inputs/transaction-block-filter) <Badge class="badge badge--secondary" text="input"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>IObject.<b>bcs</b></code>](#)<Bullet />[`Base64`](/references/sui-api/sui-graphql/reference/scalars/base-64) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The Base64-encoded BCS serialization of the object's content.
+> 
+
+
+
+### Implemented By
+
+[`Coin`](/references/sui-api/sui-graphql/reference/objects/coin)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`CoinMetadata`](/references/sui-api/sui-graphql/reference/objects/coin-metadata)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveObject`](/references/sui-api/sui-graphql/reference/objects/move-object)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MovePackage`](/references/sui-api/sui-graphql/reference/objects/move-package)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Object`](/references/sui-api/sui-graphql/reference/objects/object)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`StakedSui`](/references/sui-api/sui-graphql/reference/objects/staked-sui)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`SuinsRegistration`](/references/sui-api/sui-graphql/reference/objects/suins-registration)  <Badge class="badge badge--secondary" text="object"/>
+

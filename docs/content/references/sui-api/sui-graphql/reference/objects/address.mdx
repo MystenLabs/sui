@@ -1,0 +1,339 @@
+---
+id: address
+title: Address
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+The 32-byte address that is an account address (corresponding to a public key).
+
+
+```graphql
+type Address implements IOwner {
+  address: SuiAddress!
+  objects(
+    first: Int
+    after: String
+    last: Int
+    before: String
+    filter: ObjectFilter
+  ): MoveObjectConnection!
+  balance(
+    type: String
+  ): Balance
+  balances(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): BalanceConnection!
+  coins(
+    first: Int
+    after: String
+    last: Int
+    before: String
+    type: String
+  ): CoinConnection!
+  stakedSuis(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): StakedSuiConnection!
+  defaultSuinsName: String
+  suinsRegistrations(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): SuinsRegistrationConnection!
+  transactionBlocks(
+    first: Int
+    after: String
+    last: Int
+    before: String
+    relation: AddressTransactionBlockRelationship
+    filter: TransactionBlockFilter
+  ): TransactionBlockConnection!
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>Address.<b>address</b></code>](#)<Bullet />[`SuiAddress!`](/references/sui-api/sui-graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Address.<b>objects</b></code>](#)<Bullet />[`MoveObjectConnection!`](/references/sui-api/sui-graphql/reference/objects/move-object-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Objects owned by this address, optionally `filter`-ed.
+> ##### [<code style={{ fontWeight: 'normal' }}>Address.objects.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.objects.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.objects.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.objects.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.objects.<b>filter</b></code>](#)<Bullet />[`ObjectFilter`](/references/sui-api/sui-graphql/reference/inputs/object-filter) <Badge class="badge badge--secondary" text="input"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Address.<b>balance</b></code>](#)<Bullet />[`Balance`](/references/sui-api/sui-graphql/reference/objects/balance) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Total balance of all coins with marker type owned by this address. If type is not supplied,
+> it defaults to `0x2::sui::SUI`.
+> ##### [<code style={{ fontWeight: 'normal' }}>Address.balance.<b>type</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Address.<b>balances</b></code>](#)<Bullet />[`BalanceConnection!`](/references/sui-api/sui-graphql/reference/objects/balance-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The balances of all coin types owned by this address.
+> ##### [<code style={{ fontWeight: 'normal' }}>Address.balances.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.balances.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.balances.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.balances.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Address.<b>coins</b></code>](#)<Bullet />[`CoinConnection!`](/references/sui-api/sui-graphql/reference/objects/coin-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The coin objects for this address.
+> 
+> `type` is a filter on the coin's type parameter, defaulting to `0x2::sui::SUI`.
+> ##### [<code style={{ fontWeight: 'normal' }}>Address.coins.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.coins.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.coins.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.coins.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.coins.<b>type</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Address.<b>stakedSuis</b></code>](#)<Bullet />[`StakedSuiConnection!`](/references/sui-api/sui-graphql/reference/objects/staked-sui-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The `0x3::staking_pool::StakedSui` objects owned by this address.
+> ##### [<code style={{ fontWeight: 'normal' }}>Address.stakedSuis.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.stakedSuis.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.stakedSuis.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.stakedSuis.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Address.<b>defaultSuinsName</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The domain explicitly configured as the default domain pointing to this address.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Address.<b>suinsRegistrations</b></code>](#)<Bullet />[`SuinsRegistrationConnection!`](/references/sui-api/sui-graphql/reference/objects/suins-registration-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The SuinsRegistration NFTs owned by this address. These grant the owner the capability to
+> manage the associated domain.
+> ##### [<code style={{ fontWeight: 'normal' }}>Address.suinsRegistrations.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.suinsRegistrations.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.suinsRegistrations.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.suinsRegistrations.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Address.<b>transactionBlocks</b></code>](#)<Bullet />[`TransactionBlockConnection!`](/references/sui-api/sui-graphql/reference/objects/transaction-block-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Similar behavior to the `transactionBlocks` in Query but supporting the additional
+> `AddressTransactionBlockRelationship` filter, which defaults to `SIGN`.
+> ##### [<code style={{ fontWeight: 'normal' }}>Address.transactionBlocks.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.transactionBlocks.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.transactionBlocks.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/sui-graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.transactionBlocks.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/sui-graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.transactionBlocks.<b>relation</b></code>](#)<Bullet />[`AddressTransactionBlockRelationship`](/references/sui-api/sui-graphql/reference/enums/address-transaction-block-relationship) <Badge class="badge badge--secondary" text="enum"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Address.transactionBlocks.<b>filter</b></code>](#)<Bullet />[`TransactionBlockFilter`](/references/sui-api/sui-graphql/reference/inputs/transaction-block-filter) <Badge class="badge badge--secondary" text="input"/> 
+> 
+> 
+> 
+> 
+
+### Interfaces
+
+#### [`IOwner`](/references/sui-api/sui-graphql/reference/interfaces/iowner) <Badge class="badge badge--secondary" text="interface"/> 
+> 
+> 
+> Interface implemented by GraphQL types representing entities that can own objects. Object owners
+> are identified by an address which can represent either the public key of an account or another
+> object. The same address can only refer to an account or an object, never both, but it is not
+> possible to know which up-front.
+> 
+
+
+
+### Returned by
+
+[`address`](/references/sui-api/sui-graphql/reference/queries/address)  <Badge class="badge badge--secondary" text="query"/><Bullet />[`resolveSuinsAddress`](/references/sui-api/sui-graphql/reference/queries/resolve-suins-address)  <Badge class="badge badge--secondary" text="query"/>
+
+### Member Of
+
+[`AddressConnection`](/references/sui-api/sui-graphql/reference/objects/address-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`AddressEdge`](/references/sui-api/sui-graphql/reference/objects/address-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Event`](/references/sui-api/sui-graphql/reference/objects/event)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`GasInput`](/references/sui-api/sui-graphql/reference/objects/gas-input)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Owner`](/references/sui-api/sui-graphql/reference/objects/owner)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`TransactionBlock`](/references/sui-api/sui-graphql/reference/objects/transaction-block)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Validator`](/references/sui-api/sui-graphql/reference/objects/validator)  <Badge class="badge badge--secondary" text="object"/>
+

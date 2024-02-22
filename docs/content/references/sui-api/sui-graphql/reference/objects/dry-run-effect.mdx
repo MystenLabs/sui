@@ -1,0 +1,74 @@
+---
+id: dry-run-effect
+title: DryRunEffect
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+type DryRunEffect {
+  mutatedReferences: [DryRunMutation!]
+  returnValues: [DryRunReturn!]
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>DryRunEffect.<b>mutatedReferences</b></code>](#)<Bullet />[`[DryRunMutation!]`](/references/sui-api/sui-graphql/reference/objects/dry-run-mutation) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Changes made to arguments that were mutably borrowed by each command in this transaction.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>DryRunEffect.<b>returnValues</b></code>](#)<Bullet />[`[DryRunReturn!]`](/references/sui-api/sui-graphql/reference/objects/dry-run-return) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Return results of each command in this transaction.
+> 
+
+
+
+### Member Of
+
+[`DryRunResult`](/references/sui-api/sui-graphql/reference/objects/dry-run-result)  <Badge class="badge badge--secondary" text="object"/>
+

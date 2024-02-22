@@ -6,7 +6,7 @@ const concepts = [
 	'concepts/components',
 	{
 		type: 'category',
-		label: 'Sui GraphQL RPC',
+		label: 'Sui GraphQL',
 		link: {
 			type: 'doc',
 			id: 'concepts/graphql-rpc',
