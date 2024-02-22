@@ -80,8 +80,17 @@ async fn main() {
             node_rpc_url,
             prom_host,
             prom_port,
+            available_range_update_ms,
         } => {
-            let connection = ConnectionConfig::new(port, host, db_url, None, prom_host, prom_port);
+            let connection = ConnectionConfig::new(
+                port,
+                host,
+                db_url,
+                None,
+                prom_host,
+                prom_port,
+                available_range_update_ms,
+            );
             let service_config = service_config(config);
             let _guard = telemetry_subscribers::TelemetryConfig::new()
                 .with_env()

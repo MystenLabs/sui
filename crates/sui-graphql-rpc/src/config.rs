@@ -42,6 +42,7 @@ pub(crate) const DEFAULT_SERVER_DB_URL: &str =
 pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 3;
 pub(crate) const DEFAULT_SERVER_PROM_HOST: &str = "0.0.0.0";
 pub(crate) const DEFAULT_SERVER_PROM_PORT: u16 = 9184;
+pub(crate) const DEFAULT_AVAILABLE_RANGE_UPDATE_MS: u64 = 1000;
 
 /// The combination of all configurations for the GraphQL service.
 #[derive(Serialize, Clone, Deserialize, Debug, Default)]
@@ -71,6 +72,7 @@ pub struct ConnectionConfig {
     pub(crate) db_pool_size: u32,
     pub(crate) prom_url: String,
     pub(crate) prom_port: u16,
+    pub(crate) available_range_update_ms: u64,
 }
 
 /// Configuration on features supported by the GraphQL service, passed in a TOML-based file. These
@@ -362,6 +364,7 @@ impl Default for ConnectionConfig {
             db_pool_size: DEFAULT_SERVER_DB_POOL_SIZE,
             prom_url: DEFAULT_SERVER_PROM_HOST.to_string(),
             prom_port: DEFAULT_SERVER_PROM_PORT,
+            available_range_update_ms: DEFAULT_AVAILABLE_RANGE_UPDATE_MS,
         }
     }
 }

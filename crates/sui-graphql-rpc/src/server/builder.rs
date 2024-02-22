@@ -8,6 +8,8 @@ use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
+use crate::types::available_range::AvailableRange;
+use crate::types::checkpoint::Checkpoint;
 use crate::types::move_object::IMoveObject;
 use crate::types::object::IObject;
 use crate::types::owner::IOwner;
@@ -27,8 +29,8 @@ use crate::{
 use async_graphql::dataloader::DataLoader;
 use async_graphql::extensions::ApolloTracing;
 use async_graphql::extensions::Tracing;
-use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
+use async_graphql::{EmptySubscription, ServerError};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::extract::FromRef;
 use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
@@ -41,9 +43,11 @@ use http::{HeaderValue, Method, Request};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
 use hyper::Server as HyperServer;
+use mysten_metrics::spawn_monitored_task;
 use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
 use std::convert::Infallible;
 use std::net::TcpStream;
+use std::sync::{Arc, RwLock};
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
@@ -51,7 +55,7 @@ use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
 use tower_http::cors::{AllowOrigin, CorsLayer};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 pub struct Server {
@@ -71,6 +75,7 @@ pub(crate) struct ServerBuilder {
     state: AppState,
     schema: SchemaBuilder<Query, Mutation, EmptySubscription>,
     router: Option<Router>,
+    db_reader: Option<Db>,
 }
 
 #[derive(Clone)]
@@ -106,6 +111,7 @@ impl ServerBuilder {
             state,
             schema: schema_builder(),
             router: None,
+            db_reader: None,
         }
     }
 
@@ -130,12 +136,27 @@ impl ServerBuilder {
         self.schema.finish()
     }
 
-    fn build_components(self) -> (String, Schema<Query, Mutation, EmptySubscription>, Router) {
+    /// Prepares the components of the server to be run. Finalizes the graphql schema, and expects
+    /// the `Db` and `Router` to have been initialized.
+    fn build_components(
+        self,
+    ) -> (
+        String,
+        Schema<Query, Mutation, EmptySubscription>,
+        Db,
+        Router,
+    ) {
         let address = self.address();
-        let ServerBuilder { schema, router, .. } = self;
+        let ServerBuilder {
+            schema,
+            db_reader,
+            router,
+            ..
+        } = self;
         (
             address,
             schema.finish(),
+            db_reader.expect("DB reader not initialized"),
             router.expect("Router not initialized"),
         )
     }
@@ -209,10 +230,25 @@ impl ServerBuilder {
         Ok(cors)
     }
 
+    /// Consumes the `ServerBuilder` to create a `Server` that can be run. Spawns a background task
+    /// to periodically update the `AvailableRange`, which is the range of checkpoints that the
+    /// service is guaranteed to produce a consistent result for.
     pub fn build(self) -> Result<Server, Error> {
-        let (address, schema, router) = self.build_components();
+        let metrics = self.state.metrics.clone();
+        let sleep_ms = self.state.connection.available_range_update_ms;
+        let (address, schema, db_reader, router) = self.build_components();
+
+        // Start the background task to update a shared `AvailableRange`
+        let shared_available_range: Arc<RwLock<AvailableRange>> =
+            Arc::new(RwLock::new(AvailableRange { first: 0, last: 0 }));
+        let available_range_clone = shared_available_range.clone();
+        spawn_monitored_task!(async move {
+            update_available_range(&db_reader, available_range_clone, metrics, sleep_ms).await;
+        });
+
         let app = router
             .layer(axum::extract::Extension(schema))
+            .layer(axum::extract::Extension(shared_available_range))
             .layer(Self::cors()?);
 
         Ok(Server {
@@ -266,8 +302,9 @@ impl ServerBuilder {
         // DB
         let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader.clone());
-        let package_store = DbPackageStore(reader);
+        let package_store = DbPackageStore(reader.clone());
         let package_cache = PackageStoreWithLruCache::new(package_store);
+        builder.db_reader = Some(db.clone());
 
         // SDK for talking to fullnode. Used for executing transactions only
         // TODO: fail fast if no url, once we enable mutations fully
@@ -337,9 +374,12 @@ pub fn export_schema() -> String {
     schema_builder().finish().sdl()
 }
 
+/// Entry point for graphql requests. Each request is stamped with a unique ID, a `ShowUsage` flag
+/// if set in the request headers, and the available range as marked by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
+    shared_available_range: axum::Extension<Arc<RwLock<AvailableRange>>>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -351,6 +391,13 @@ async fn graphql_handler(
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
+
+    let available_range = {
+        let lock = shared_available_range.read().unwrap();
+        *lock
+    };
+    req.data.insert(available_range);
+
     let result = schema.execute(req).await;
 
     // If there are errors, insert them as an extention so that the Metrics callback handler can
@@ -438,6 +485,36 @@ async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode
 async fn get_or_init_server_start_time() -> &'static Instant {
     static ONCE: OnceCell<Instant> = OnceCell::const_new();
     ONCE.get_or_init(|| async move { Instant::now() }).await
+}
+
+/// Starts an infinite loop that periodically updates the `AvailableRange`.
+pub(crate) async fn update_available_range(
+    db: &Db,
+    available_range: Arc<RwLock<AvailableRange>>,
+    metrics: Metrics,
+    sleep_ms: u64,
+) {
+    loop {
+        let new_range = match {
+            db.execute(move |conn| Checkpoint::available_range(conn))
+                .await
+        } {
+            Ok((start, end)) => Some((start, end)),
+            Err(e) => {
+                let error_string = format!("Failed to update available range: {}", e);
+                error!("{}", error_string);
+                metrics.inc_errors(&[ServerError::new(error_string, None)]);
+                None
+            }
+        };
+
+        if let Some((first, last)) = new_range {
+            let mut mark = available_range.write().unwrap();
+            *mark = AvailableRange { first, last };
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(sleep_ms)).await;
+    }
 }
 
 pub mod tests {
