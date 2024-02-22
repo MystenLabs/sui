@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { BaseSchema, Output, UnionOptions, UnionSchema } from 'valibot';
+import type { BaseSchema, Input, Output, UnionOptions } from 'valibot';
 import {
 	array,
 	boolean,
@@ -25,15 +25,32 @@ import type { StructTag as StructTagType, TypeTag as TypeTagType } from '../../b
 import { isValidSuiAddress, normalizeSuiAddress } from '../../utils/sui-types.js';
 
 type Merge<T> = T extends object ? { [K in keyof T]: T[K] } : never;
+
+type UnionToEnumSchema<In, Out> = BaseSchema<In, UnionToEnum<Out>>;
+
 type UnionToEnum<
 	T,
-	Keys extends string = string & (T extends object ? keyof T : never),
-> = T extends object ? Merge<T & { [K in Exclude<Keys, keyof T>]?: never }> : never;
+	Keys = T extends object ? keyof T : never,
+	Values = T extends object ? T[keyof T] : never,
+> = T extends object
+	? 0 extends Values
+		? Merge<T & { $kind: keyof T }>
+		: '' extends Values
+		? Merge<T & { $kind: keyof T }>
+		: 0n extends Values
+		? Merge<T & { $kind: keyof T }>
+		: false extends Values
+		? Merge<T & { $kind: keyof T }>
+		: Merge<T & { [K in Exclude<string & Keys, keyof T>]?: never } & { $kind: keyof T }>
+	: never;
 
-type UnionToEnumSchema<T extends BaseSchema<unknown>> = BaseSchema<UnionToEnum<Output<T>>>;
-
-function enumUnion<T extends UnionOptions>(options: T): UnionToEnumSchema<UnionSchema<T>> {
-	return union(options);
+function enumUnion<T extends UnionOptions>(
+	options: T,
+): UnionToEnumSchema<Input<T[number]>, Output<T[number]>> {
+	return transform(union(options), (value) => ({
+		...value,
+		$kind: Object.keys(value)[0] as keyof typeof value,
+	})) as UnionToEnumSchema<T[number], Output<T[number]>>;
 }
 
 const SuiAddress = transform(string(), (value) => normalizeSuiAddress(value), [
@@ -66,11 +83,13 @@ export type ObjectRef = Output<typeof ObjectRef>;
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L690-L702
 export const Argument = enumUnion([
 	object({ GasCoin: literal(true) }),
+
 	object({ Input: number([integer()]), type: optional(literal('pure')) }),
 	object({ Input: number([integer()]), type: optional(literal('object')) }),
 	object({ Result: number([integer()]) }),
 	object({ NestedResult: tuple([number([integer()]), number([integer()])]) }),
 ]);
+
 export type Argument = Output<typeof Argument>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L1387-L1392
@@ -120,7 +139,7 @@ const ProgrammableMoveCall = object({
 export type ProgrammableMoveCall = Output<typeof ProgrammableMoveCall>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L657-L685
-const Transaction = enumUnion([
+export const Transaction = enumUnion([
 	object({ MoveCall: ProgrammableMoveCall }),
 	object({ TransferObjects: tuple([array(Argument), Argument]) }),
 	object({ SplitCoins: tuple([Argument, array(Argument)]) }),
@@ -203,11 +222,11 @@ export type OpenMoveTypeSignature = Output<typeof OpenMoveTypeSignature>;
 const CallArg = enumUnion([
 	object({ Object: ObjectArg }),
 	object({ Pure: BCSBytes }),
-	// added for sui:unresolvedObjectIds
+	// // added for sui:unresolvedObjectIds
 	object({
 		UnresolvedObject: object({
 			value: string(),
-			typeSignature: OpenMoveTypeSignature,
+			typeSignatures: array(OpenMoveTypeSignature),
 		}),
 	}),
 	// added for sui:rawValues
@@ -225,7 +244,7 @@ export const NormalizedCallArg = enumUnion([
 	object({ Pure: BCSBytes }),
 ]);
 
-const TransactionExpiration = enumUnion([
+export const TransactionExpiration = enumUnion([
 	object({ None: literal(true) }),
 	object({ Epoch: JsonU64 }),
 ]);

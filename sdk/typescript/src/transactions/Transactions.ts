@@ -2,10 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64 } from '@mysten/bcs';
+import { parse } from 'valibot';
+import type { Input } from 'valibot';
 
 import { TypeTagSerializer } from '../bcs/type-tag-serializer.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
-import type { Argument, Transaction, TypeTag } from './blockData/v2.js';
+import type { CallArg, Transaction, TypeTag } from './blockData/v2.js';
+import { Argument } from './blockData/v2.js';
+
+export type { Argument as TransactionArgument };
+export type { CallArg as TransactionBlockInput };
 
 // Keep in sync with constants in
 // crates/sui-framework/packages/sui-framework/sources/package.move
@@ -15,8 +21,7 @@ export enum UpgradePolicy {
 	DEP_ONLY = 192,
 }
 
-type TransactionKind = Transaction extends infer T ? (T extends unknown ? keyof T : never) : never;
-type TransactionShape<T extends TransactionKind> = {
+type TransactionShape<T extends Transaction['$kind']> = { $kind: T } & {
 	[K in T]: Extract<Transaction, { [K in T]: any }>[T];
 };
 
@@ -43,6 +48,7 @@ export const Transactions = {
 			'target' in input ? input.target.split('::') : [input.package, input.module, input.function];
 
 		return {
+			$kind: 'MoveCall',
 			MoveCall: {
 				package: pkg,
 				module: mod,
@@ -56,17 +62,24 @@ export const Transactions = {
 		};
 	},
 
-	TransferObjects(objects: Argument[], address: Argument): TransactionShape<'TransferObjects'> {
+	TransferObjects(
+		objects: Input<typeof Argument>[],
+		address: Input<typeof Argument>,
+	): TransactionShape<'TransferObjects'> {
 		// TODO: arguments aren't linked to inputs anymore, so we need to handle this somewhere else
 		// if (address.kind === 'Input' && address.type === 'pure' && typeof address.value !== 'object') {
 		// 	address.value = Inputs.Pure(bcs.Address.serialize(address.value));
 		// }
 
 		return {
-			TransferObjects: [objects, address],
+			$kind: 'TransferObjects',
+			TransferObjects: [objects.map((o) => parse(Argument, o)), parse(Argument, address)],
 		};
 	},
-	SplitCoins(coin: Argument, amounts: Argument[]): TransactionShape<'SplitCoins'> {
+	SplitCoins(
+		coin: Input<typeof Argument>,
+		amounts: Input<typeof Argument>[],
+	): TransactionShape<'SplitCoins'> {
 		// TODO: arguments aren't linked to inputs anymore, so we need to handle this somewhere else
 		// Handle deprecated usage of `Input.Pure(100)`
 		// amounts.forEach((input) => {
@@ -76,12 +89,17 @@ export const Transactions = {
 		// });
 
 		return {
-			SplitCoins: [coin, amounts],
+			$kind: 'SplitCoins',
+			SplitCoins: [parse(Argument, coin), amounts.map((o) => parse(Argument, o))],
 		};
 	},
-	MergeCoins(destination: Argument, sources: Argument[]): TransactionShape<'MergeCoins'> {
+	MergeCoins(
+		destination: Input<typeof Argument>,
+		sources: Input<typeof Argument>[],
+	): TransactionShape<'MergeCoins'> {
 		return {
-			MergeCoins: [destination, sources],
+			$kind: 'MergeCoins',
+			MergeCoins: [parse(Argument, destination), sources.map((o) => parse(Argument, o))],
 		};
 	},
 	Publish({
@@ -92,6 +110,7 @@ export const Transactions = {
 		dependencies: string[];
 	}): TransactionShape<'Publish'> {
 		return {
+			$kind: 'Publish',
 			Publish: [
 				modules.map((module) =>
 					typeof module === 'string' ? Array.from(fromB64(module)) : module,
@@ -109,16 +128,17 @@ export const Transactions = {
 		modules: number[][] | string[];
 		dependencies: string[];
 		packageId: string;
-		ticket: Argument;
+		ticket: Input<typeof Argument>;
 	}): TransactionShape<'Upgrade'> {
 		return {
+			$kind: 'Upgrade',
 			Upgrade: [
 				modules.map((module) =>
 					typeof module === 'string' ? Array.from(fromB64(module)) : module,
 				),
 				dependencies.map((dep) => normalizeSuiObjectId(dep)),
 				packageId,
-				ticket,
+				parse(Argument, ticket),
 			],
 		};
 	},
@@ -127,12 +147,15 @@ export const Transactions = {
 		objects,
 	}: {
 		type?: string;
-		objects: Argument[];
+		objects: Input<typeof Argument>[];
 	}): TransactionShape<'MakeMoveVec'> {
 		return {
+			$kind: 'MakeMoveVec',
 			MakeMoveVec: [
-				type ? { Some: TypeTagSerializer.parseFromStr(type) } : { None: null },
-				objects,
+				type
+					? { $kind: 'Some', Some: TypeTagSerializer.parseFromStr(type) }
+					: { $kind: 'None', None: true },
+				objects.map((o) => parse(Argument, o)),
 			],
 		};
 	},

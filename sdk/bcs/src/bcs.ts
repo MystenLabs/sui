@@ -15,7 +15,6 @@ import type {
 	EnumInputShape,
 	EnumOutputShape,
 	GenericPlaceholder,
-	Merge,
 	ReplaceBcsGenerics,
 } from './types.js';
 import { ulebEncode } from './uleb.js';
@@ -466,17 +465,21 @@ export const bcs = {
 		options?: Omit<BcsTypeOptions<EnumOutputShape<T>, EnumInputShape<T>>, 'name'>,
 	) {
 		const canonicalOrder = Object.entries(values as object);
-		return new BcsType<Merge<EnumOutputShape<T>>, EnumInputShape<T>>({
+		return new BcsType<EnumOutputShape<T>, EnumInputShape<T>>({
 			name,
 			read: (reader) => {
 				const index = reader.readULEB();
 				const [name, type] = canonicalOrder[index];
 				return {
 					[name]: type?.read(reader) ?? true,
+					$kind: name,
 				} as never;
 			},
 			write: (value, writer) => {
-				const [name, val] = Object.entries(value)[0];
+				const [name, val] = Object.entries(value).filter(([name]) =>
+					Object.hasOwn(values, name),
+				)[0];
+
 				for (let i = 0; i < canonicalOrder.length; i++) {
 					const [optionName, optionType] = canonicalOrder[i];
 					if (optionName === name) {
@@ -493,8 +496,12 @@ export const bcs = {
 					throw new TypeError(`Expected object, found ${typeof value}`);
 				}
 
-				const keys = Object.keys(value);
+				const keys = Object.keys(value).filter(
+					(k) => value[k] !== undefined && Object.hasOwn(values, k),
+				);
+
 				if (keys.length !== 1) {
+					console.log(value, keys, values);
 					throw new TypeError(`Expected object with one key, found ${keys.length}`);
 				}
 
