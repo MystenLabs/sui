@@ -483,7 +483,7 @@ mod tests {
             block_verifier,
             core_dispatcher: core_dispatcher.clone(),
             synchronizer,
-            dag_state
+            dag_state,
         });
 
         // Test delaying blocks with time drift.

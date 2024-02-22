@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
-use std::time::Duration;
 use bytes::Bytes;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -11,6 +8,9 @@ use mysten_metrics::{monitored_future, monitored_scope};
 use parking_lot::Mutex;
 #[cfg(not(test))]
 use rand::{rngs::ThreadRng, seq::SliceRandom};
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
@@ -29,7 +29,7 @@ use consensus_config::AuthorityIndex;
 /// The number of concurrent fetch blocks requests per authority
 const FETCH_BLOCKS_CONCURRENCY: usize = 5;
 
-const FETCH_REQUEST_TIMEOUT: Duration = Duration::from_millis(500);
+const FETCH_REQUEST_TIMEOUT: Duration = Duration::from_millis(2_000);
 
 const MAX_FETCH_BLOCKS_PER_REQUEST: usize = 200;
 
@@ -202,7 +202,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         core_dispatcher: Arc<D>,
         mut receiver: Receiver<BTreeSet<BlockRef>>,
     ) {
-        const REQUEST_TIMEOUT: Duration = Duration::from_millis(2_000);
         const MAX_RETRIES: u32 = 5;
 
         let mut requests = FuturesUnordered::new();
