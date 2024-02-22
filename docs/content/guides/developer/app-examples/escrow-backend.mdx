@@ -17,15 +17,19 @@ This particular protocol consists of three phases:
 
 Let’s create a Sui project using the terminal command `sui move new escrow`. Create a file in the sources directory named `shared.move`, and let’s go through the code together.
 
-See [this](https://github.com/MystenLabs/sui/blob/main/examples/move/escrow/sources/shared.move) for the complete code.
+## `shared.move`
 
-### `shared.move`
+:::info
+
+You can view the [complete source code for this module](https://github.com/MystenLabs/sui/blob/main/examples/trading/contracts/escrow/sources/shared.move) in the Sui repository.
+
+:::
 
 Let's go through the code line by line:
 
-#### Structs
+### Structs
 
-##### `Escrow<T>`
+#### `Escrow<T>`
 
 This struct represents an object held in escrow. It contains the following fields:
 
@@ -45,7 +49,9 @@ struct Escrow<T: key + store> has key, store {
 }
 ```
 
-#### Error Codes
+The ID of the key is used as the `exchange_key`, rather than the ID of the object, to ensure that the object is not modified after a trade has been initiated.
+
+### Error Codes
 
 Two constants are defined to represent potential errors during the execution of the swap:
 
@@ -57,9 +63,9 @@ const EMismatchedSenderRecipient: u64 = 0;
 const EMismatchedExchangeObject: u64 = 1;
 ```
 
-#### Public Functions
+### Public Functions
 
-##### `create`
+#### `create`
 
 This function is used to create a new escrow object. It takes four arguments: the object to be escrowed, the ID of the key that opens the lock on the object sender wants from the recipient, the intended recipient, and the transaction context.
 
@@ -82,7 +88,7 @@ public fun create<T: key + store>(
 }
 ```
 
-##### `swap`
+#### `swap`
 
 This function is used to perform the swap operation. It takes four arguments: the escrow object, the key, the locked object, and the transaction context.
 
@@ -112,7 +118,9 @@ public fun swap<T: key + store, U: key + store>(
 }
 ```
 
-##### `return_to_sender`
+The `object::delete` function call is used to delete the shared `Escrow` object. Previously, Move supported only the deletion of owned objects, but [shared-object deletion has since been enabled](https://github.com/MystenLabs/sui/pull/16008).
+
+#### `return_to_sender`
 
 This function is used to cancel the escrow and return the escrowed item to the sender. It takes two arguments: the escrow object and the transaction context.
 
@@ -135,18 +143,20 @@ public fun return_to_sender<T: key + store>(
 }
 ```
 
-#### Tests
+Once again, the shared `Escrow` object is deleted after the escrowed item is returned to the sender.
+
+### Tests
 
 The code includes several tests to ensure the correct functioning of the atomic swap process. These tests cover successful swaps, mismatches in sender or recipient, mismatches in the exchange object, tampering with the object, and returning the object to the sender.
 
 In conclusion, this code provides a robust and secure way to perform atomic swaps of objects in a decentralized system, without the need for a trusted third party. It uses shared objects and a series of checks to ensure that the swap only occurs if all conditions are met.
 
-#### Deployment
+## Deployment
 
 Now that we have written the smart contract, let’s deploy it. First ensure the contract compiles successfully using `sui move build`. Once that is confirmed, you can deploy the project using the command `sui client publish --gas-budget 10000000`.
 
 ## Frontend
-With our code successfully deployed on testnet, we should now allow users to interact with it via a frontend.
+With our code successfully deployed on Testnet, we should now allow users to interact with it via a frontend.
 
 ## Indexing Service
 In order to have our dApp production ready, we need to have an indexer listening to the blockchain, and updating the frontend as escrows are made and swaps are fulfilled.
