@@ -29,12 +29,17 @@ impl Metrics {
 
     pub fn record_completed_round(&self, epoch: EpochId, round: RandomnessRound) {
         if let Some(inner) = &self.0 {
+            if inner.highest_epoch_generated.get() >= epoch as i64 {
+                inner
+                    .highest_round_generated
+                    .set(inner.highest_round_generated.get().max(round.0 as i64));
+            } else {
+                // Reset round if epoch changed.
+                inner.highest_round_generated.set(round.0 as i64);
+            }
             inner
                 .highest_epoch_generated
                 .set(inner.highest_epoch_generated.get().max(epoch as i64));
-            inner
-                .highest_round_generated
-                .set(inner.highest_round_generated.get().max(round.0 as i64));
         }
     }
 
@@ -79,7 +84,7 @@ impl Inner {
             ).unwrap(),
             highest_round_generated: register_int_gauge_with_registry!(
                 "randomness_highest_round_generated",
-                "The highest round for which randomness has been generated",
+                "The highest round for which randomness has been generated for the current epoch",
                 registry
             ).unwrap(),
             num_rounds_pending: register_int_gauge_with_registry!(
