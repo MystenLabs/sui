@@ -302,6 +302,8 @@ EndOfEpochTransactionKind:
       RandomnessStateCreate: UNIT
     4:
       DenyListStateCreate: UNIT
+    5:
+      BridgeStateCreate: UNIT
 Envelope:
   STRUCT:
     - data:
