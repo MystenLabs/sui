@@ -3,9 +3,17 @@
 
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
-use crate::simulator_persisted_store::PersistedStore;
-use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
-use crate::{TransactionalAdapter, ValidatorWithFullnode};
+use std::fmt::{self, Write};
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::path::PathBuf;
+use std::time::Duration;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+    sync::Arc,
+};
+
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
@@ -37,16 +45,8 @@ use move_transactional_test_runner::{
 use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::fmt::{self, Write};
-use std::hash::Hash;
-use std::hash::Hasher;
-use std::path::PathBuf;
-use std::time::Duration;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::Path,
-    sync::Arc,
-};
+use tempfile::NamedTempFile;
+
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
@@ -92,8 +92,11 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
-use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
-use tempfile::NamedTempFile;
+use sui_types::{BRIDGE_ADDRESS, DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
+
+use crate::simulator_persisted_store::PersistedStore;
+use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
+use crate::{TransactionalAdapter, ValidatorWithFullnode};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum FakeID {
@@ -901,7 +904,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                         Ok((output, modules))
                     },
                 )
-                .await;
+                    .await;
                 // if the package name was not updated, reset it to the value before the upgrade
                 let package_addr = self
                     .compiled_state
@@ -1753,6 +1756,13 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
             move_compiler::shared::NumberFormat::Hex,
         ),
     );
+    map.insert(
+        "bridge".to_string(),
+        NumericalAddress::new(
+            BRIDGE_ADDRESS.into_bytes(),
+            move_compiler::shared::NumberFormat::Hex,
+        ),
+    );
     map
 });
 
@@ -1779,10 +1789,21 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         buf.extend(["packages", "deepbook", "sources"]);
         buf.to_string_lossy().to_string()
     };
+    let bridge_sources = {
+        let mut buf = sui_files.to_path_buf();
+        buf.extend(["packages", "bridge", "sources"]);
+        buf.to_string_lossy().to_string()
+    };
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
-            paths: vec![sui_system_sources, sui_sources, sui_deps, deepbook_sources],
+            paths: vec![
+                sui_system_sources,
+                sui_sources,
+                sui_deps,
+                deepbook_sources,
+                bridge_sources,
+            ],
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
         None,

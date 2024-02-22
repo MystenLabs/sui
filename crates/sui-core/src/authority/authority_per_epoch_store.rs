@@ -887,6 +887,12 @@ impl AuthorityPerEpochStore {
         self.protocol_config().enable_coin_deny_list() && self.coin_deny_list_state_exists()
     }
 
+    pub fn bridge_exists(&self) -> bool {
+        self.epoch_start_configuration
+            .bridge_obj_initial_shared_version()
+            .is_some()
+    }
+
     pub fn get_parent_path(&self) -> PathBuf {
         self.parent_path.clone()
     }
