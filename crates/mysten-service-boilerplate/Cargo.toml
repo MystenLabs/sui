@@ -12,6 +12,5 @@ mysten-service.workspace = true
 prometheus.workspace = true
 tracing.workspace = true
 axum.workspace = true
-workspace-hack.workspace = true
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }

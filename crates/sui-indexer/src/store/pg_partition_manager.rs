@@ -9,7 +9,7 @@ use tracing::{error, info};
 
 use crate::db::PgConnectionPool;
 use crate::handlers::EpochToCommit;
-use crate::models_v2::epoch::StoredEpochInfo;
+use crate::models::epoch::StoredEpochInfo;
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
 use crate::IndexerError;
 

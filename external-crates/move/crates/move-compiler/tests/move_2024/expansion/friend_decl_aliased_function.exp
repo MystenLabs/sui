@@ -1,6 +1,12 @@
 error[E03006]: unexpected name in this position
-  ┌─ tests/move_2024/expansion/friend_decl_aliased_function.move:8:12
-  │
-8 │     friend a;
-  │            ^ Unexpected module member identifier. A module member identifier is not a valid module
+   ┌─ tests/move_2024/expansion/friend_decl_aliased_function.move:10:12
+   │
+10 │     friend a;
+   │            ^ Unexpected address identifier. An address identifier is not a valid module
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/expansion/friend_decl_aliased_function.move:11:12
+   │
+11 │     friend foo;
+   │            ^^^ Expected an address or module in this position, not a module member
 

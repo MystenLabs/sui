@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-ghcloud
     steps:
       - name: checkout code repository
-        uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
         with:
           fetch-depth: 0
       - name: Run split cluster check script
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-ghcloud
     steps:
       - name: checkout code repository
-        uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
         with:
           fetch-depth: 0
       - name: Run split cluster check script

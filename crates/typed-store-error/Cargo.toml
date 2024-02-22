@@ -10,5 +10,4 @@ publish = false
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
-workspace-hack.workspace = true
 

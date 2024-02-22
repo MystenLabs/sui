@@ -3,7 +3,7 @@
 
 use async_graphql::connection::CursorType;
 use serde::{Deserialize, Serialize};
-use sui_indexer::models_v2::objects::StoredHistoryObject;
+use sui_indexer::models::objects::StoredHistoryObject;
 
 use crate::data::Conn;
 use crate::raw_query::RawQuery;
