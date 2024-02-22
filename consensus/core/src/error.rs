@@ -8,7 +8,7 @@ use fastcrypto::error::FastCryptoError;
 use thiserror::Error;
 use typed_store::TypedStoreError;
 
-use crate::block::{BlockTimestampMs, Round};
+use crate::block::{BlockRef, BlockTimestampMs, Round};
 
 /// Errors that can occur when processing blocks, reading from storage, or encountering shutdown.
 #[allow(unused)]
@@ -29,6 +29,12 @@ pub enum ConsensusError {
     #[error("Genesis blocks should only be generated from Committee!")]
     UnexpectedGenesisBlock,
 
+    #[error("Unexpected block returned while fetching missing blocks")]
+    UnexpectedFetchedBlock {
+        index: AuthorityIndex,
+        block_ref: BlockRef,
+    },
+
     #[error("Invalid authority index: {index} > {max}")]
     InvalidAuthorityIndex { index: AuthorityIndex, max: usize },
 
@@ -37,6 +43,9 @@ pub enum ConsensusError {
 
     #[error("Failed to verify the block's signature: {0}")]
     SignatureVerificationFailure(FastCryptoError),
+
+    #[error("Synchronizer for fetching blocks directly from {0} is saturated")]
+    SynchronizerSaturated(AuthorityIndex),
 
     #[error("Ancestor's round ({ancestor}) should be lower than the block's round ({block})")]
     InvalidAncestorRound { ancestor: Round, block: Round },

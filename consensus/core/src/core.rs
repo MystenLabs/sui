@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     sync::Arc,
 };
 
@@ -131,11 +131,11 @@ impl Core {
 
     /// Processes the provided blocks and accepts them if possible when their causal history exists.
     /// The method returns the references of parents that are unknown and need to be fetched.
-    pub(crate) fn add_blocks(&mut self, blocks: Vec<VerifiedBlock>) -> Vec<BlockRef> {
+    pub(crate) fn add_blocks(&mut self, blocks: Vec<VerifiedBlock>) -> BTreeSet<BlockRef> {
         let _scope = monitored_scope("Core::add_blocks");
 
         // Try to accept them via the block manager
-        let accepted_blocks = self
+        let (accepted_blocks, missing_blocks) = self
             .block_manager
             .try_accept_blocks(blocks)
             .unwrap_or_else(|err| panic!("Fatal error while accepting blocks: {err}"));
@@ -154,8 +154,7 @@ impl Core {
             }
         }
 
-        // TODO: we don't deal for now with missed references, will address later.
-        vec![]
+        missing_blocks
     }
 
     /// Adds/processed all the newly `accepted_blocks`. We basically try to move the threshold clock and add them to the
@@ -275,10 +274,12 @@ impl Core {
                 .or_default()
                 .push(verified_block.clone());
 
-            let _ = self
+            let (accepted_blocks, missing) = self
                 .block_manager
                 .try_accept_blocks(vec![verified_block.clone()])
                 .unwrap_or_else(|err| panic!("Fatal error while accepting our own block: {err}"));
+            assert_eq!(accepted_blocks.len(), 1);
+            assert!(missing.is_empty());
 
             self.last_proposed_block = verified_block.clone();
 
