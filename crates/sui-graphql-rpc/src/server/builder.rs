@@ -4,6 +4,7 @@
 use crate::config::{
     ConnectionConfig, MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
+use crate::consistency::CheckpointViewedAt;
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
 
@@ -44,10 +45,13 @@ use hyper::Server as HyperServer;
 use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
 use std::convert::Infallible;
 use std::net::TcpStream;
+use std::sync::{Arc, RwLock};
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
+use sui_indexer::indexer_reader::IndexerReader;
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
+use tokio::spawn;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -71,6 +75,7 @@ pub(crate) struct ServerBuilder {
     state: AppState,
     schema: SchemaBuilder<Query, Mutation, EmptySubscription>,
     router: Option<Router>,
+    db_reader: Option<IndexerReader>,
 }
 
 #[derive(Clone)]
@@ -106,6 +111,7 @@ impl ServerBuilder {
             state,
             schema: schema_builder(),
             router: None,
+            db_reader: None,
         }
     }
 
@@ -130,12 +136,25 @@ impl ServerBuilder {
         self.schema.finish()
     }
 
-    fn build_components(self) -> (String, Schema<Query, Mutation, EmptySubscription>, Router) {
+    fn build_components(
+        self,
+    ) -> (
+        String,
+        Schema<Query, Mutation, EmptySubscription>,
+        IndexerReader, // maybe this should be Db instead of IndexerReader
+        Router,
+    ) {
         let address = self.address();
-        let ServerBuilder { schema, router, .. } = self;
+        let ServerBuilder {
+            schema,
+            db_reader,
+            router,
+            ..
+        } = self;
         (
             address,
             schema.finish(),
+            db_reader.expect("DB reader not initialized"),
             router.expect("Router not initialized"),
         )
     }
@@ -210,9 +229,18 @@ impl ServerBuilder {
     }
 
     pub fn build(self) -> Result<Server, Error> {
-        let (address, schema, router) = self.build_components();
+        let (address, schema, db_reader, router) = self.build_components();
+        let shared_high_water_mark: Arc<RwLock<u64>> = Arc::new(RwLock::new(0));
+
+        let water_mark_clone = shared_high_water_mark.clone();
+
+        spawn(async move {
+            update_high_water_mark(db_reader, water_mark_clone).await;
+        });
+
         let app = router
             .layer(axum::extract::Extension(schema))
+            .layer(axum::extract::Extension(shared_high_water_mark)) // Pass the shared state to the router
             .layer(Self::cors()?);
 
         Ok(Server {
@@ -232,6 +260,8 @@ impl ServerBuilder {
             .map(|builder| (builder, config))
     }
 
+    /// TODO (wlmyng) doc comments - this is the actual function that gets called when we build a
+    /// server for production
     pub async fn from_config(config: &ServerConfig) -> Result<Self, Error> {
         // PROMETHEUS
         let prom_addr: SocketAddr = format!(
@@ -268,8 +298,9 @@ impl ServerBuilder {
         // DB
         let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader.clone());
-        let package_store = DbPackageStore(reader);
+        let package_store = DbPackageStore(reader.clone());
         let package_cache = PackageStoreWithLruCache::new(package_store);
+        builder.db_reader = Some(reader);
 
         // SDK for talking to fullnode. Used for executing transactions only
         // TODO: fail fast if no url, once we enable mutations fully
@@ -338,9 +369,11 @@ pub fn export_schema() -> String {
     schema_builder().finish().sdl()
 }
 
+#[axum::debug_handler]
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
+    shared_high_water_mark: axum::Extension<Arc<RwLock<u64>>>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -352,6 +385,13 @@ async fn graphql_handler(
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
+
+    let checkpoint_viewed_at = {
+        let lock = shared_high_water_mark.read().unwrap();
+        *lock
+    };
+    req.data.insert(CheckpointViewedAt(checkpoint_viewed_at));
+
     let result = schema.execute(req).await;
 
     // If there are errors, insert them as an extention so that the Metrics callback handler can
@@ -440,6 +480,37 @@ async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode
 async fn get_or_init_server_start_time() -> &'static Instant {
     static ONCE: OnceCell<Instant> = OnceCell::const_new();
     ONCE.get_or_init(|| async move { Instant::now() }).await
+}
+
+async fn update_high_water_mark(
+    db_reader: IndexerReader,
+    shared_high_water_mark: Arc<RwLock<u64>>,
+) {
+    loop {
+        let new_mark = match {
+            db_reader
+                .spawn_blocking(|this| this.get_consistent_read_range())
+                .await
+                .map(|(start, end)| (start as u64, end as u64))
+        } {
+            Ok((start, end)) => {
+                info!("Got consistent read range: {} - {}", start, end);
+                end
+            }
+            Err(e) => {
+                warn!("Failed to get consistent read range: {}", e);
+                0
+            }
+        };
+        {
+            // Acquire a write lock to update the high water mark
+            let mut mark = shared_high_water_mark.write().unwrap();
+            *mark = new_mark;
+        }
+
+        // Sleep for some time before the next update
+        tokio::time::sleep(tokio::time::Duration::from_secs(4)).await; // Adjust the interval as needed
+    }
 }
 
 pub mod tests {
