@@ -141,30 +141,6 @@ Changes complete
 Wrote patchfile out to: ./migration.patch
 
 External Command `diff -s migration.patch expected_migration.patch`:
-1,2c1,2
-< --- sources/mod0.move
-< +++ sources/mod0.move
----
-> --- ./sources/mod0.move
-> +++ ./sources/mod0.move
-18,19c18,19
-< --- sources/mod1.move
-< +++ sources/mod1.move
----
-> --- ./sources/mod1.move
-> +++ ./sources/mod1.move
-29,30c29,30
-< --- sources/mod2.move
-< +++ sources/mod2.move
----
-> --- ./sources/mod2.move
-> +++ ./sources/mod2.move
-43,44c43,44
-< --- sources/mod3_4.move
-< +++ sources/mod3_4.move
----
-> --- ./sources/mod3_4.move
-> +++ ./sources/mod3_4.move
 69,70c69,70
 < --- sources/mod5.move
 < +++ sources/mod5.move

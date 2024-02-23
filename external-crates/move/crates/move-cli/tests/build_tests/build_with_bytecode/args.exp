@@ -5,10 +5,9 @@ External Command `rm -rf ./C/build/Foo/sources`:
 Command `build -v -p ./B`:
 INCLUDING DEPENDENCY Foo
 BUILDING Bar
-Error: Unable to deserialize module at '/private/var/folders/gw/732jkstx1j3fxgsqnlxg35c80000gn/T/.tmpDkeDrJ/0/1/C/buiExternal Command `mv ./B/sources/Bar.move ./C/sources/Bar.move_old`:
+External Command `mv ./B/sources/Bar.move ./C/sources/Bar.move_old`:
 External Command `rm -rf ./B/build/Bar/sources`:
 Command `build -v`:
 INCLUDING DEPENDENCY Bar
 INCLUDING DEPENDENCY Foo
 BUILDING A
-Error: Unable to deserialize module at '/private/var/folders/gw/732jkstx1j3fxgsqnlxg35c80000gn/T/.tmpDkeDrJ/0/1/C/bui
