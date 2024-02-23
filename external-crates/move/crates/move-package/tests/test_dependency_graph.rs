@@ -45,6 +45,7 @@ fn no_dep_graph() {
             pkg,
             manifest_string,
             /* lock_string_opt */ None,
+            DependencyMode::Always,
         )
         .expect("Creating DependencyGraph");
 
@@ -161,6 +162,7 @@ fn always_deps() {
             pkg,
             manifest_string,
             /* lock_string_opt */ None,
+            DependencyMode::Always,
         )
         .expect("Creating DependencyGraph");
 
@@ -570,6 +572,7 @@ fn immediate_dependencies() {
             pkg,
             manifest_string,
             /* lock_string_opt */ None,
+            DependencyMode::Always,
         )
         .expect("Creating DependencyGraph");
 

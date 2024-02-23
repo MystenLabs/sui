@@ -20,7 +20,10 @@ use move_compiler::{
 };
 use move_core_types::account_address::AccountAddress;
 use move_model::model::GlobalEnv;
-use resolution::{dependency_graph::DependencyGraphBuilder, resolution_graph::ResolvedGraph};
+use resolution::{
+    dependency_graph::{DependencyGraphBuilder, DependencyMode},
+    resolution_graph::ResolvedGraph,
+};
 use serde::{Deserialize, Serialize};
 use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
 use std::{
@@ -221,11 +224,17 @@ impl BuildConfig {
             writer,
             install_dir.clone(),
         );
+        let mode = if self.dev_mode {
+            DependencyMode::DevOnly
+        } else {
+            DependencyMode::Always
+        };
         let (dependency_graph, modified) = dep_graph_builder.get_graph(
             &DependencyKind::default(),
             path,
             manifest_string,
             lock_string,
+            mode,
         )?;
 
         if modified || install_dir_set {

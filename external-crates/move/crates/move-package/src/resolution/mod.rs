@@ -14,7 +14,7 @@ use crate::{
     BuildConfig,
 };
 
-use self::dependency_graph::DependencyGraphBuilder;
+use self::dependency_graph::{DependencyGraphBuilder, DependencyMode};
 
 pub mod dependency_cache;
 pub mod dependency_graph;
@@ -39,11 +39,18 @@ pub fn download_dependency_repos<Progress: Write>(
         progress_output,
         install_dir,
     );
+    let mode = if build_options.dev_mode {
+        DependencyMode::DevOnly
+    } else {
+        DependencyMode::Always
+    };
+
     let (graph, _) = dep_graph_builder.get_graph(
         &DependencyKind::default(),
         root_path.to_path_buf(),
         manifest_string,
         lock_string,
+        mode,
     )?;
 
     for pkg_id in graph.topological_order() {

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::account_address::AccountAddress;
+use move_package::resolution::dependency_graph::DependencyMode;
 use move_package::{
     resolution::{dependency_graph as DG, resolution_graph as RG},
     source_package::{layout::SourcePackageLayout, parsed_manifest as PM},
@@ -35,6 +36,7 @@ fn test_additonal_addresses() {
             path,
             manifest_string,
             /* lock_string_opt */ None,
+            DependencyMode::Always,
         )
         .unwrap();
 
@@ -91,6 +93,7 @@ fn test_additonal_addresses_already_assigned_same_value() {
             path,
             manifest_string,
             /* lock_string_opt */ None,
+            DependencyMode::Always,
         )
         .unwrap();
 
@@ -136,6 +139,7 @@ fn test_additonal_addresses_already_assigned_different_value() {
             path,
             manifest_string,
             /* lock_string_opt */ None,
+            DependencyMode::Always,
         )
         .unwrap();
 

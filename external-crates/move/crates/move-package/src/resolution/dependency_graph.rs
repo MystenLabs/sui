@@ -221,6 +221,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         root_path: PathBuf,
         manifest_string: String,
         lock_string_opt: Option<String>,
+        _mode: DependencyMode,
     ) -> Result<(DependencyGraph, bool)> {
         let toml_manifest = parse_move_manifest_string(manifest_string.clone())?;
         let root_manifest = parse_source_manifest(toml_manifest)?;
@@ -464,7 +465,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 self.visited_dependencies
                     .push_front((resolved_pkg_id, d.clone()));
                 let (mut pkg_graph, modified) =
-                    self.get_graph(&d.kind, pkg_path, manifest_string, lock_string)?;
+                    self.get_graph(&d.kind, pkg_path, manifest_string, lock_string, mode)?;
                 self.visited_dependencies.pop_front();
                 // reroot all packages to normalize local paths across all graphs
                 for (_, p) in pkg_graph.package_table.iter_mut() {
