@@ -8,7 +8,6 @@ module bridge::limiter {
     use std::vector;
 
     use sui::clock::{Self, Clock};
-    use sui::math::pow;
     use sui::vec_map::{Self, VecMap};
 
     use bridge::btc::BTC;
@@ -92,7 +91,7 @@ module bridge::limiter {
         let route_limit = vec_map::try_get(&self.transfer_limits, &route);
         assert!(option::is_some(&route_limit), ELimitNotFoundForRoute);
         let route_limit = option::destroy_some(route_limit);
-        let route_limit_adjsuted = (route_limit as u128) * (pow(10, treasury::token_decimals<T>()) as u128);
+        let route_limit_adjusted = (route_limit as u128) * (treasury::decimal_multiplier<T>() as u128);
 
         // Compute notional amount
         let coin_type = type_name::get<T>();
@@ -101,13 +100,12 @@ module bridge::limiter {
 
         // Check if transfer amount exceed limit
         // Upscale them to the token's decimal.
-        if ((record.total_amount * pow(10, treasury::token_decimals<T>()) as u128) + notional_amount_with_token_multiplier > route_limit_adjsuted) {
+        if ((record.total_amount * treasury::decimal_multiplier<T>() as u128) + notional_amount_with_token_multiplier > route_limit_adjusted) {
             return false
         };
 
-        // TODO: add `treasury::token_multiplier`
         // Now scale down to notional value
-        let notional_amount = notional_amount_with_token_multiplier / (pow(10, treasury::token_decimals<T>()) as u128);
+        let notional_amount = notional_amount_with_token_multiplier / (treasury::decimal_multiplier<T>() as u128);
         // Should be safe to downcast to u64 after dividing by the decimals
         let notional_amount = (notional_amount as u64);
 

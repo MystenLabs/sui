@@ -41,16 +41,16 @@ module bridge::treasury {
         }
     }
 
-    public fun token_decimals<T>(): u8 {
+    public fun decimal_multiplier<T>(): u64 {
         let coin_type = type_name::get<T>();
         if (coin_type == type_name::get<BTC>()) {
-            btc::decimal()
+            btc::multiplier()
         } else if (coin_type == type_name::get<ETH>()) {
-            eth::decimal()
+            eth::multiplier()
         } else if (coin_type == type_name::get<USDC>()) {
-            usdc::decimal()
+            usdc::multiplier()
         } else if (coin_type == type_name::get<USDT>()) {
-            usdt::decimal()
+            usdt::multiplier()
         } else {
             abort EUnsupportedTokenType
         }

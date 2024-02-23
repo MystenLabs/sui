@@ -14,8 +14,12 @@ module bridge::btc {
     struct BTC has drop {}
 
     const DECIMAL: u8 = 8;
+    /// Multiplier of the token, it must be 10^DECIMAL
+    const MULTIPLIER: u64 = 100_000_000;
+    const EDecimalMultiplierMismatch: u64 = 0;
 
     public(friend) fun create(ctx: &mut TxContext): TreasuryCap<BTC> {
+        assert!(MULTIPLIER == pow(10, DECIMAL), EDecimalMultiplierMismatch);
         let (treasury_cap, metadata) = coin::create_currency(
             BTC {},
             DECIMAL,
@@ -34,6 +38,6 @@ module bridge::btc {
     }
 
     public fun multiplier(): u64 {
-        pow(10, DECIMAL)
+        MULTIPLIER
     }
 }
