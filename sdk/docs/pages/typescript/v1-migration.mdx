@@ -4,18 +4,19 @@
 
 ### Types
 
-- `SuiObjectRef`: removing bigint from `version`, should we remove this completely
-- `ObjectArg`: `ImmOrOwned` -> `ImmOrOwnedObject`, `Shared` -> `SharedObject`
+- `SuiObjectRef`: removing bigint from `version` should we remove this completely
+- `ObjectArg`: `ImmOrOwned` -> `ImmOrOwnedObject` and `Shared` -> `SharedObject`
 - Added `ObjectCallArg`
-- `PureArg` Changed ArrayLike to Array, not sure if this is correct
+- `PureArg` Changed ArrayLike to Array not sure if this is correct
 
 ### Bcs Types
 
 - `CallArg` removed `ObjVec`
-- `Argument` enumKind to enum, Removed nested structs to align with Rust definitions
-- `ProgrammableMoveCall` Split target into `package`, `module` and `function`, typeArguments now
+- `Argument` enumKind to enum\, Removed nested structs to align with Rust definitions
+- `ProgrammableMoveCall` Split target into `package`\, `module` and `function`\, typeArguments now
   TypeTag instead of String
-- `Transaction` enumKind to enum, replaced nested structs with tuples to align with Rust definitions
+- `Transaction` enumKind to enum\, replaced nested structs with tuples to align with Rust
+  definitions
 
 ## /transactions
 
@@ -29,7 +30,7 @@
 
 ### TransactionBlock
 
-- `blockData` is deprecated, returns snapshot of v1 blockData, should this be removed?
+- `blockData` is deprecated\, returns snapshot of v1 blockData\, should this be removed?
 - added getBlockData that returns new v2 blockData
 
 ## /utils
@@ -47,6 +48,6 @@ Removed `is` and `assert` helpers
 - TransactionBlock constructor args?
 - Remove pure inputs without types
 - Need to export types for blockData
-- Remove all type-exports from bcs, only export export implementations and helper types to get type
+- Remove all type-exports from bcs\, only export export implementations and helper types to get type
   from implementation
 - Serialize should be updated to allow exporting v2 state
