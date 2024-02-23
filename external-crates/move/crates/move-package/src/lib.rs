@@ -131,13 +131,14 @@ impl BuildConfig {
         writer: &mut W,
         _reader: &mut R, // Reader here for enabling migration mode
     ) -> Result<CompiledPackage> {
+        // We clone here because we may need to recompute the resolved graph if the edition changes
+        // during migration.
         let resolved_graph = self.resolution_graph_for_package(path, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
         let build_plan = BuildPlan::create(resolved_graph)?;
         // TODO: When we are ready to release and enable automatic migration, uncomment this.
         // if !build_plan.root_crate_edition_defined() {
-        //     migrate_package(self, writer, reader)?;
-        //     build_plan.compile(writer)
+        //     migration::migrate(build_plan, writer, _reader)?;
         // } else {
         //     build_plan.compile(writer)
         // }
