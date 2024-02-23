@@ -36,11 +36,7 @@ use super::{
     transaction_metadata::TransactionMetadata,
     type_filter::ExactTypeFilter,
 };
-use crate::consistency::CheckpointViewedAt;
-use crate::{
-    config::ServiceConfig, context_data::db_data_provider::PgManager, data::Db, error::Error,
-    mutation::Mutation,
-};
+use crate::{config::ServiceConfig, data::Db, error::Error, mutation::Mutation};
 
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, Mutation, EmptySubscription>;
@@ -59,12 +55,7 @@ impl Query {
     /// Range of checkpoints that the RPC has data available for (for data
     /// that can be tied to a particular checkpoint).
     async fn available_range(&self, ctx: &Context<'_>) -> Result<AvailableRange> {
-        let checkpoint_viewed_at = ctx.data::<CheckpointViewedAt>()?.0;
-        let (first, last) = ctx.data_unchecked::<PgManager>().available_range().await?;
-        Ok(AvailableRange {
-            first: checkpoint_viewed_at,
-            last,
-        })
+        ctx.data::<AvailableRange>().copied().extend()
     }
 
     /// Configuration for this RPC service
@@ -180,7 +171,7 @@ impl Query {
     async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Option<Owner> {
         Some(Owner {
             address,
-            checkpoint_viewed_at: ctx.data_opt::<CheckpointViewedAt>().map(|c| c.0),
+            checkpoint_viewed_at: ctx.data_opt::<AvailableRange>().map(|c| c.last),
         })
     }
 
@@ -192,7 +183,7 @@ impl Query {
         address: SuiAddress,
         version: Option<u64>,
     ) -> Result<Option<Object>> {
-        let checkpoint_viewed_at = ctx.data_opt::<CheckpointViewedAt>().map(|c| c.0);
+        let checkpoint_viewed_at = ctx.data_opt::<AvailableRange>().map(|c| c.last);
 
         match version {
             Some(version) => Object::query(
@@ -222,7 +213,7 @@ impl Query {
     async fn address(&self, ctx: &Context<'_>, address: SuiAddress) -> Option<Address> {
         Some(Address {
             address,
-            checkpoint_viewed_at: ctx.data_opt::<CheckpointViewedAt>().map(|c| c.0),
+            checkpoint_viewed_at: ctx.data_opt::<AvailableRange>().map(|c| c.last),
         })
     }
 
@@ -241,7 +232,7 @@ impl Query {
         Epoch::query(
             ctx.data_unchecked(),
             id,
-            ctx.data_opt::<CheckpointViewedAt>().map(|c| c.0),
+            ctx.data_opt::<AvailableRange>().map(|c| c.last),
         )
         .await
         .extend()
@@ -257,7 +248,7 @@ impl Query {
         Checkpoint::query(
             ctx.data_unchecked(),
             id.unwrap_or_default(),
-            ctx.data_opt::<CheckpointViewedAt>().map(|c| c.0),
+            ctx.data_opt::<AvailableRange>().map(|c| c.last),
         )
         .await
         .extend()
@@ -272,7 +263,7 @@ impl Query {
         TransactionBlock::query(
             ctx.data_unchecked(),
             digest,
-            ctx.data_opt::<CheckpointViewedAt>().map(|c| c.0),
+            ctx.data_opt::<AvailableRange>().map(|c| c.last),
         )
         .await
         .extend()
@@ -298,7 +289,7 @@ impl Query {
             page,
             coin,
             /* owner */ None,
-            ctx.data_opt::<CheckpointViewedAt>().map(|c| c.0),
+            ctx.data_opt::<AvailableRange>().map(|c| c.last),
         )
         .await
         .extend()
@@ -318,7 +309,7 @@ impl Query {
             ctx.data_unchecked(),
             page,
             /* epoch */ None,
-            ctx.data_opt::<CheckpointViewedAt>().map(|c| c.0),
+            ctx.data_opt::<AvailableRange>().map(|c| c.last),
         )
         .await
         .extend()
@@ -339,7 +330,7 @@ impl Query {
             ctx.data_unchecked(),
             page,
             filter.unwrap_or_default(),
-            ctx.data_opt::<CheckpointViewedAt>().map(|c| c.0),
+            ctx.data_opt::<AvailableRange>().map(|c| c.last),
         )
         .await
         .extend()
@@ -360,7 +351,7 @@ impl Query {
             ctx.data_unchecked(),
             page,
             filter.unwrap_or_default(),
-            ctx.data_opt::<CheckpointViewedAt>().map(|c| c.0),
+            ctx.data_opt::<AvailableRange>().map(|c| c.last),
         )
         .await
         .extend()
@@ -381,7 +372,7 @@ impl Query {
             ctx.data_unchecked(),
             page,
             filter.unwrap_or_default(),
-            ctx.data_opt::<CheckpointViewedAt>().map(|c| c.0),
+            ctx.data_opt::<AvailableRange>().map(|c| c.last),
         )
         .await
         .extend()
@@ -415,7 +406,7 @@ impl Query {
         .and_then(|r| r.target_address)
         .map(|a| Address {
             address: a.into(),
-            checkpoint_viewed_at: ctx.data_opt::<CheckpointViewedAt>().map(|c| c.0),
+            checkpoint_viewed_at: ctx.data_opt::<AvailableRange>().map(|c| c.last),
         }))
     }
 

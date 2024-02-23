@@ -4,7 +4,7 @@
 use super::checkpoint::{Checkpoint, CheckpointId};
 use async_graphql::*;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub(crate) struct AvailableRange {
     pub first: u64,
     pub last: u64,
