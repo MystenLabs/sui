@@ -60,12 +60,8 @@ module bridge::bridge {
         treasury: BridgeTreasury,
         bridge_records: LinkedTable<BridgeMessageKey, BridgeRecord>,
         limiter: TransferLimiter,
-        frozen: bool,
+        paused: bool,
     }
-
-    // Emergency Op types
-    const FREEZE: u8 = 0;
-    const UNFREEZE: u8 = 1;
 
     struct TokenBridgeEvent has copy, drop {
         // TODO: do we need message_type here?
@@ -102,8 +98,8 @@ module bridge::bridge {
     const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 10;
     const EMessageNotFoundInRecords: u64 = 11;
     const EUnexpectedMessageVersion: u64 = 12;
-    const EBridgeAlreadyFrozen: u64 = 13;
-    const EBridgeNotFrozen: u64 = 14;
+    const EBridgeAlreadyPaused: u64 = 13;
+    const EBridgeNotPaused: u64 = 14;
     const ETokenAlreadyClaimed: u64 = 15;
 
     const CURRENT_VERSION: u64 = 1;
@@ -137,7 +133,7 @@ module bridge::bridge {
             treasury: treasury::create(ctx),
             bridge_records: linked_table::new(ctx),
             limiter: limiter::new(),
-            frozen: false,
+            paused: false,
         };
         let bridge = Bridge {
             id,
@@ -183,7 +179,7 @@ module bridge::bridge {
         ctx: &mut TxContext
     ) {
         let inner = load_inner_mut(self);
-        assert!(!inner.frozen, EBridgeUnavailable);
+        assert!(!inner.paused, EBridgeUnavailable);
         let amount = balance::value(coin::balance(&token));
 
         let bridge_seq_num = get_current_seq_num_and_increment(inner, message_types::token());
@@ -336,7 +332,7 @@ module bridge::bridge {
         ctx: &mut TxContext
     ): (Option<Coin<T>>, address) {
         let inner = load_inner_mut(self);
-        assert!(!inner.frozen, EBridgeUnavailable);
+        assert!(!inner.paused, EBridgeUnavailable);
 
         let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
         assert!(linked_table::contains(&inner.bridge_records, key), EMessageNotFoundInRecords);
@@ -421,13 +417,13 @@ module bridge::bridge {
 
     fun execute_emergency_op(inner: &mut BridgeInner, payload: EmergencyOp) {
         let op = message::emergency_op_type(&payload);
-        if (op == FREEZE) {
-            assert!(!inner.frozen, EBridgeAlreadyFrozen);
-            inner.frozen = true;
+        if (op == message::emergency_op_pause()) {
+            assert!(!inner.paused, EBridgeAlreadyPaused);
+            inner.paused = true;
             emit(EmergencyOpEvent { frozen: true });
-        } else if (op == UNFREEZE) {
-            assert!(inner.frozen, EBridgeNotFrozen);
-            inner.frozen = false;
+        } else if (op == message::emergency_op_unpause()) {
+            assert!(inner.paused, EBridgeNotPaused);
+            inner.paused = false;
             emit(EmergencyOpEvent { frozen: false });
         } else {
             abort EUnexpectedOperation
@@ -467,7 +463,7 @@ module bridge::bridge {
             treasury: treasury::create(ctx),
             bridge_records: linked_table::new<BridgeMessageKey, BridgeRecord>(ctx),
             limiter: limiter::new(),
-            frozen: false,
+            paused: false,
         };
         Bridge {
             id: object::new(ctx),
@@ -582,7 +578,7 @@ module bridge::bridge {
         let inner = load_inner_mut(&mut bridge);
 
         // initially it's unfrozen
-        assert!(!inner.frozen, 0);
+        assert!(!inner.paused, 0);
         // freeze it
         let msg = message::create_emergency_op_message(
             chain_ids::sui_devnet(),
@@ -593,7 +589,7 @@ module bridge::bridge {
         execute_emergency_op(inner, payload);
 
         // should be frozen now
-        assert!(inner.frozen, 0);
+        assert!(inner.paused, 0);
 
         // unfreeze it
         let msg = message::create_emergency_op_message(
@@ -605,14 +601,14 @@ module bridge::bridge {
         execute_emergency_op(inner, payload);
 
         // should be unfrozen now
-        assert!(!inner.frozen, 0);
+        assert!(!inner.paused, 0);
 
         destroy(bridge);
         test_scenario::end(scenario);
     }
 
     #[test]
-    #[expected_failure(abort_code = EBridgeNotFrozen)]
+    #[expected_failure(abort_code = EBridgeNotPaused)]
     fun test_execute_emergency_op_abort_when_not_frozen() {
         let scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
@@ -621,7 +617,7 @@ module bridge::bridge {
         let inner = load_inner_mut(&mut bridge);
 
         // initially it's unfrozen
-        assert!(!inner.frozen, 0);
+        assert!(!inner.paused, 0);
         // unfreeze it, should abort
         let msg = message::create_emergency_op_message(
             chain_ids::sui_devnet(),
@@ -636,7 +632,7 @@ module bridge::bridge {
     }
 
     #[test]
-    #[expected_failure(abort_code = EBridgeAlreadyFrozen)]
+    #[expected_failure(abort_code = EBridgeAlreadyPaused)]
     fun test_execute_emergency_op_abort_when_already_frozen() {
         let scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
@@ -645,7 +641,7 @@ module bridge::bridge {
         let inner = load_inner_mut(&mut bridge);
 
         // initially it's unfrozen
-        assert!(!inner.frozen, 0);
+        assert!(!inner.paused, 0);
         // freeze it
         let msg = message::create_emergency_op_message(
             chain_ids::sui_devnet(),
@@ -656,7 +652,7 @@ module bridge::bridge {
         execute_emergency_op(inner, payload);
 
         // should be frozen now
-        assert!(inner.frozen, 0);
+        assert!(inner.paused, 0);
 
         // freeze it again, should abort
         let msg = message::create_emergency_op_message(
