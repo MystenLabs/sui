@@ -289,11 +289,11 @@
     <b>assert</b>!(<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="committee.md#0xb_committee_ENotSystemAddress">ENotSystemAddress</a>);
     // Default signature threshold
     <b>let</b> thresholds = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), 5000);
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_committee_blocklist">message_types::committee_blocklist</a>(), 5000);
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_emergency_op">message_types::emergency_op</a>(), 5000);
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_update_asset_price">message_types::update_asset_price</a>(), 5000);
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_update_bridge_limit">message_types::update_bridge_limit</a>(), 5000);
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), 3334);
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_emergency_op">message_types::emergency_op</a>(), 450);
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_committee_blocklist">message_types::committee_blocklist</a>(), 5001);
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_update_asset_price">message_types::update_asset_price</a>(), 5001);
+    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> thresholds, <a href="message_types.md#0xb_message_types_update_bridge_limit">message_types::update_bridge_limit</a>(), 5001);
     <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a> {
         members: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
         stake_thresholds_percentage: thresholds,
