@@ -33,7 +33,7 @@ module bridge::limiter {
 
     const ELimitNotFoundForRoute: u64 = 0;
 
-    // TODO: Make this configurable?
+    // TODO: U64::MAX, make this configurable?
     const MAX_TRANSFER_LIMIT: u64 = 18_446_744_073_709_551_615;
 
     const USD_VALUE_MULTIPLIER: u64 = 10000; // 4 DP accuracy
@@ -69,8 +69,8 @@ module bridge::limiter {
     }
 
     public fun check_and_record_sending_transfer<T>(
-        clock: & Clock,
         self: &mut TransferLimiter,
+        clock: &Clock,
         route: BridgeRoute,
         amount: u64
     ): bool {
@@ -225,7 +225,7 @@ module bridge::limiter {
         clock::set_for_testing(&mut clock, 1706288001377);
 
         // transfer 10000 ETH every hour, the totol should be 10000 * 5
-        assert!(check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 10_000 * eth::multiplier()), 0);
+        assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 10_000 * eth::multiplier()), 0);
 
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert!(record.total_amount == 10000 * 5 * USD_VALUE_MULTIPLIER, 0);
@@ -234,7 +234,7 @@ module bridge::limiter {
         let i = 0;
         while (i < 50) {
             clock::increment_for_testing(&mut clock, 60 * 60 * 1000);
-            assert!(check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 1_000 * eth::multiplier()), 0);
+            assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 1_000 * eth::multiplier()), 0);
             i = i + 1;
         };
         let record = vec_map::get(&limiter.transfer_records, &route);
@@ -247,7 +247,15 @@ module bridge::limiter {
         // In each iteration, the old $5000 gets replaced with (i * 5000)
         while (i < 24) {
             clock::increment_for_testing(&mut clock, 60 * 60 * 1000);
-            assert!(check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 1_000 * eth::multiplier() * (i + 1)), 0);
+            assert!(
+                check_and_record_sending_transfer<ETH>(
+                    &mut limiter,
+                    &clock,
+                    route,
+                    1_000 * eth::multiplier() * (i + 1)
+                ),
+                0
+            );
 
             let record = vec_map::get(&limiter.transfer_records, &route);
 
@@ -288,9 +296,9 @@ module bridge::limiter {
         clock::set_for_testing(&mut clock, 1706288001377);
 
         // Transfer 10000 ETH on route 1
-        assert!(check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 10_000 * eth::multiplier()), 0);
+        assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 10_000 * eth::multiplier()), 0);
         // Transfer 50000 ETH on route 2
-        assert!(check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route2, 50_000 * eth::multiplier()), 0);
+        assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route2, 50_000 * eth::multiplier()), 0);
 
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert!(record.total_amount == 10000 * 5 * USD_VALUE_MULTIPLIER, 0);
@@ -323,28 +331,28 @@ module bridge::limiter {
         let clock = clock::create_for_testing(ctx);
         clock::set_for_testing(&mut clock, 1706288001377);
 
-        assert!(check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 90_000 * eth::multiplier()), 0);
+        assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 90_000 * eth::multiplier()), 0);
 
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert_eq(record.total_amount, 90000 * 10 * USD_VALUE_MULTIPLIER);
 
         clock::increment_for_testing(&mut clock, 60 * 60 * 1000);
-        assert!(check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 10_000 * eth::multiplier()), 0);
+        assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 10_000 * eth::multiplier()), 0);
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert_eq(record.total_amount, 100000 * 10 * USD_VALUE_MULTIPLIER);
 
         // Tx should fail with a tiny amount because the limit is hit
-        assert!(!check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 1), 0);
-        assert!(!check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 90_000 * eth::multiplier()), 0);
+        assert!(!check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 1), 0);
+        assert!(!check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 90_000 * eth::multiplier()), 0);
 
         // Fast forward 23 hours, now the first 90k should be discarded
         clock::increment_for_testing(&mut clock, 60 * 60 * 1000 * 23);
-        assert!(check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 90_000 * eth::multiplier()), 0);
+        assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 90_000 * eth::multiplier()), 0);
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert_eq(record.total_amount, 100000 * 10 * USD_VALUE_MULTIPLIER);
 
         // But now limit is hit again
-        assert!(!check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 1), 0);
+        assert!(!check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 1), 0);
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert_eq(record.total_amount, 100000 * 10 * USD_VALUE_MULTIPLIER);
 
@@ -386,7 +394,7 @@ module bridge::limiter {
         let clock = clock::create_for_testing(ctx);
         clock::set_for_testing(&mut clock, 1706288001377);
         // We don't limit eth -> sui transfers. This aborts with `ERR_LIMIT_NOT_FOUND_FOR_ROUTE`
-        check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 1 * eth::multiplier());
+        check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 1 * eth::multiplier());
         destroy(limiter);
         clock::destroy_for_testing(clock);
         test_scenario::end(scenario);
@@ -416,7 +424,7 @@ module bridge::limiter {
 
         // hour 0 (10023): $15 * 2.5 = $37.5
         // 15 eth = $37.5
-        assert!(check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 15 * eth::multiplier()), 0);
+        assert!(check_and_record_sending_transfer<ETH>(&mut limiter, &clock, route, 15 * eth::multiplier()), 0);
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert_eq(record.hour_head, 10023);
         assert_eq(record.hour_tail, 10000);
@@ -428,7 +436,7 @@ module bridge::limiter {
 
         // hour 0 (10023): $37.5 + $10 = $47.5
         // 10 uddc = $10
-        assert!(check_and_record_sending_transfer<USDC>(&clock, &mut limiter, route, 10 * usdc::multiplier()), 0);
+        assert!(check_and_record_sending_transfer<USDC>(&mut limiter, &clock, route, 10 * usdc::multiplier()), 0);
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert_eq(record.hour_head, 10023);
         assert_eq(record.hour_tail, 10000);
@@ -442,7 +450,7 @@ module bridge::limiter {
         // hour 1 (10024): $20
         clock::increment_for_testing(&mut clock, 60 * 60 * 1000);
         // 2 btc = $20
-        assert!(check_and_record_sending_transfer<BTC>(&clock, &mut limiter, route, 2 * btc::multiplier()), 0);
+        assert!(check_and_record_sending_transfer<BTC>(&mut limiter, &clock, route, 2 * btc::multiplier()), 0);
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert_eq(record.hour_head, 10024);
         assert_eq(record.hour_tail, 10001);
@@ -457,7 +465,7 @@ module bridge::limiter {
         clock::increment_for_testing(&mut clock, 60 * 60 * 1000 * 22);
         // fail
         // 65 usdt = $33
-        assert!(!check_and_record_sending_transfer<USDT>(&clock, &mut limiter, route, 66 * usdt::multiplier()), 0);
+        assert!(!check_and_record_sending_transfer<USDT>(&mut limiter, &clock, route, 66 * usdt::multiplier()), 0);
         // but window slided
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert_eq(record.hour_head, 10046);
@@ -470,7 +478,7 @@ module bridge::limiter {
 
         // hour 23 (10046): $32.5 deposit will succeed
         // 65 usdt = $32.5
-        assert!(check_and_record_sending_transfer<USDT>(&clock, &mut limiter, route, 65 * usdt::multiplier()), 0);
+        assert!(check_and_record_sending_transfer<USDT>(&mut limiter, &clock, route, 65 * usdt::multiplier()), 0);
         let record = vec_map::get(&limiter.transfer_records, &route);
         let expected_notion_amount_10046 = 325 * USD_VALUE_MULTIPLIER / 10;
         assert_eq(record.hour_head, 10046);
@@ -484,7 +492,7 @@ module bridge::limiter {
         // Hour 24 (10047), we can deposit $0.5 now
         clock::increment_for_testing(&mut clock, 60 * 60 * 1000);
         // 1 usdt = $0.5
-        assert!(check_and_record_sending_transfer<USDT>(&clock, &mut limiter, route, 1 * usdt::multiplier()), 0);
+        assert!(check_and_record_sending_transfer<USDT>(&mut limiter, &clock, route, 1 * usdt::multiplier()), 0);
         let record = vec_map::get(&limiter.transfer_records, &route);
         let expected_notion_amount_10047 = 5 * USD_VALUE_MULTIPLIER / 10;
         assert_eq(record.hour_head, 10047);
@@ -498,7 +506,7 @@ module bridge::limiter {
         // Fast forward to Hour 30 (10053)
         clock::increment_for_testing(&mut clock, 60 * 60 * 1000 * 6);
         // 1 usdc = $1
-        assert!(check_and_record_sending_transfer<USDC>(&clock, &mut limiter, route, 1 * usdc::multiplier()), 0);
+        assert!(check_and_record_sending_transfer<USDC>(&mut limiter, &clock, route, 1 * usdc::multiplier()), 0);
         let record = vec_map::get(&limiter.transfer_records, &route);
         let expected_notion_amount_10053 = 1 * USD_VALUE_MULTIPLIER;
         assert_eq(record.hour_head, 10053);
@@ -512,7 +520,7 @@ module bridge::limiter {
         // Fast forward to hour 130 (10153)
         clock::increment_for_testing(&mut clock, 60 * 60 * 1000 * 100);
         // 1 usdc = $1
-        assert!(check_and_record_sending_transfer<USDC>(&clock, &mut limiter, route, 1 * usdc::multiplier()), 0);
+        assert!(check_and_record_sending_transfer<USDC>(&mut limiter, &clock, route, 1 * usdc::multiplier()), 0);
         let record = vec_map::get(&limiter.transfer_records, &route);
         let expected_notion_amount_10153 = 1 * USD_VALUE_MULTIPLIER;
         assert_eq(record.hour_head, 10153);
