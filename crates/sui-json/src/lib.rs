@@ -29,9 +29,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Number, Value as JsonValue};
 
 use sui_types::base_types::{
-    ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
-    RESOLVED_UTF8_STR, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME,
-    STD_OPTION_STRUCT_NAME, STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME,
+    is_primitive_type_tag, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
+    RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME,
+    STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME, STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME,
 };
 use sui_types::id::{ID, RESOLVED_SUI_ID};
 use sui_types::move_package::MovePackage;
@@ -540,38 +540,6 @@ fn check_valid_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> Result<(), 
     }
     // Process the next level
     check_valid_homogeneous_rec(&mut next_q)
-}
-
-pub fn is_primitive_type_tag(t: &TypeTag) -> bool {
-    match t {
-        TypeTag::Bool
-        | TypeTag::U8
-        | TypeTag::U16
-        | TypeTag::U32
-        | TypeTag::U64
-        | TypeTag::U128
-        | TypeTag::U256
-        | TypeTag::Address => true,
-        TypeTag::Vector(inner) => is_primitive_type_tag(inner),
-        TypeTag::Struct(st) => {
-            let StructTag {
-                address,
-                module,
-                name,
-                type_params: type_args,
-            } = &**st;
-            let resolved_struct = (address, module.as_ident_str(), name.as_ident_str());
-            // is id or..
-            if resolved_struct == RESOLVED_SUI_ID {
-                return true;
-            }
-            // is option of a primitive
-            resolved_struct == RESOLVED_STD_OPTION
-                && type_args.len() == 1
-                && is_primitive_type_tag(&type_args[0])
-        }
-        TypeTag::Signer => false,
-    }
 }
 
 /// Checks if a give SignatureToken represents a primitive type and, if so, returns MoveTypeLayout
