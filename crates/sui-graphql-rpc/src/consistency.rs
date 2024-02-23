@@ -1,16 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::{Arc, RwLock};
-
 use async_graphql::connection::CursorType;
 use serde::{Deserialize, Serialize};
 use sui_indexer::models::objects::StoredHistoryObject;
-use tracing::{info, warn};
 
-use crate::data::{Conn, Db, QueryExecutor};
+use crate::data::Conn;
 use crate::raw_query::RawQuery;
-use crate::types::available_range::AvailableRange;
 use crate::types::checkpoint::Checkpoint;
 use crate::types::cursor::{JsonCursor, Page};
 use crate::types::object::Cursor;
@@ -211,34 +207,4 @@ pub(crate) fn consistent_range(
     }
 
     Ok(Some((lhs, rhs)))
-}
-
-/// Starts an infinite loop that periodically updates the `AvailableRange`.
-pub(crate) async fn update_available_range(
-    db: &Db,
-    available_range: Arc<RwLock<AvailableRange>>,
-    sleep_ms: u64,
-) {
-    loop {
-        let new_range = match {
-            db.execute(move |conn| Checkpoint::available_range(conn))
-                .await
-        } {
-            Ok((start, end)) => {
-                info!("Got consistent read range: {} - {}", start, end);
-                Some((start, end))
-            }
-            Err(e) => {
-                warn!("Failed to get consistent read range: {}", e);
-                None // TODO (wlmyng) - is this the right thing to do?
-            }
-        };
-
-        if let Some((first, last)) = new_range {
-            let mut mark = available_range.write().unwrap();
-            *mark = AvailableRange { first, last };
-        }
-
-        tokio::time::sleep(tokio::time::Duration::from_millis(sleep_ms)).await;
-    }
 }
