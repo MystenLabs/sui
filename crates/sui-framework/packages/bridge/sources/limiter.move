@@ -113,7 +113,7 @@ module bridge::limiter {
         let new_amount = vector::pop_back(&mut record.per_hour_amounts) + notional_amount;
         vector::push_back(&mut record.per_hour_amounts, new_amount);
         record.total_amount = record.total_amount + notional_amount;
-        return true
+        true
     }
 
     fun adjust_transfer_records(self: &mut TransferRecord, current_hour_since_epoch: u64) {
@@ -143,8 +143,8 @@ module bridge::limiter {
 
         // Backfill from hour_head to current hour
         while (self.hour_head < current_hour_since_epoch) {
-            self.hour_head = self.hour_head + 1;
             vector::push_back(&mut self.per_hour_amounts, 0);
+            self.hour_head = self.hour_head + 1;
         }
     }
 
