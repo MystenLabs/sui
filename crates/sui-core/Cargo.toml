@@ -115,6 +115,12 @@ test-fuzz.workspace = true
 sui-macros.workspace = true
 sui-protocol-config.workspace = true
 
+# moka uses `quanta` by default for timing, which is not compatible with the simulator
+[target.'cfg(msim)'.dependencies]
+moka = { workspace = true, default-features = false, features = ["sync", "atomic64"] }
+[target.'cfg(not(msim))'.dependencies]
+moka = { workspace = true, features = ["sync"] }
+
 [[example]]
 name = "generate-format"
 path = "src/generate_format.rs"
