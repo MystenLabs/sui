@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_json_rpc_api::BridgeReadApiClient;
 use sui_macros::sim_test;
 use sui_types::SUI_BRIDGE_OBJECT_ID;
 use test_cluster::TestClusterBuilder;
@@ -43,4 +44,17 @@ async fn test_create_bridge_state_object() {
                 .expect("auth state object should exist");
         });
     }
+}
+
+// A test to make sure bridge_api is compatible
+#[tokio::test]
+async fn test_bridge_api_get_latest_bridge() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_protocol_version(37.into())
+        .build()
+        .await;
+
+    let client = test_cluster.rpc_client();
+    client.get_latest_bridge().await.unwrap();
+    // TODO: assert fields in summary
 }
