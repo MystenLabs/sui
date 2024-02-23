@@ -314,66 +314,6 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::Parser
 {
 }
 
-/*
-
-            TaskCommand::Bench(
-                RunCommand {
-                    signers,
-                    args,
-                    type_args,
-                    gas_budget,
-                    syntax,
-                    name: Some((raw_addr, module_name, name)),
-                },
-                extra_args,
-            ) => {
-                use criterion::Criterion;
-                use std::time::Duration;
-
-                assert!(
-                    syntax.is_none(),
-                    "syntax flag meaningless with function execution"
-                );
-
-                // The main function to run your benchmarks
-                let mut c = Criterion::default()
-                    .sample_size(10)
-                    .warm_up_time(Duration::from_secs(1));
-
-                c.bench_function("fib 20", move |b| {
-                    b.iter(|| {
-                        let args = args.clone();
-                        let type_args = type_args.clone();
-                        let module_name = module_name.clone();
-                        let signers = signers.clone();
-                        let extra_args = extra_args.clone();
-                        let addr = self.compiled_state().resolve_address(&raw_addr);
-                        let module_id = ModuleId::new(addr, module_name);
-                        let type_args = self.compiled_state().resolve_type_args(type_args).unwrap();
-                        let args = self.compiled_state().resolve_args(args).unwrap();
-
-                        let (_output, _return_values) = self
-                            .call_function(
-                                &module_id,
-                                name.as_ident_str(),
-                                type_args,
-                                signers,
-                                args,
-                                gas_budget,
-                                extra_args,
-                            )
-                            .now_or_never()
-                            .unwrap()
-                            .unwrap();
-                    })
-                });
-
-                Ok(merge_output(None, None))
-            }
-            TaskCommand::Bench(_, _) => Err(anyhow!("Benchmarks must be run with a function")),
-
-*/
-
 #[derive(Clone, Debug)]
 pub enum SuiExtraValueArgs {
     Object(FakeID, Option<SequenceNumber>),

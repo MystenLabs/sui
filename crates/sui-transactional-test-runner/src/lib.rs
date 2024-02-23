@@ -71,7 +71,7 @@ pub trait TransactionalAdapter: Send + Sync + ReadStore {
         transaction: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)>;
 
-    async fn read_objects(&self, transaction: Transaction) -> SuiResult<InputObjects>;
+    async fn read_input_objects(&self, transaction: Transaction) -> SuiResult<InputObjects>;
 
     fn prepare_txn(
         &self,
@@ -131,7 +131,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         Ok((effects.into_data(), execution_error))
     }
 
-    async fn read_objects(&self, transaction: Transaction) -> SuiResult<InputObjects> {
+    async fn read_input_objects(&self, transaction: Transaction) -> SuiResult<InputObjects> {
         let tx = VerifiedExecutableTransaction::new_unchecked(
             ExecutableTransaction::new_from_data_and_sig(
                 transaction.data().clone(),
@@ -396,8 +396,8 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
         Ok(self.execute_transaction(transaction)?)
     }
 
-    async fn read_objects(&self, _transaction: Transaction) -> SuiResult<InputObjects> {
-        unimplemented!("read_objects not supported in simulator mode")
+    async fn read_input_objects(&self, _transaction: Transaction) -> SuiResult<InputObjects> {
+        unimplemented!("read_input_objects not supported in simulator mode")
     }
 
     fn prepare_txn(
