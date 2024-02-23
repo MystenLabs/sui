@@ -167,12 +167,7 @@ pub fn on_completion_request(
         .to_file_path()
         .unwrap();
     let mut buffer = String::new();
-    if let Some(mut f) = ide_files
-        .join(path.to_string_lossy().to_string())
-        .unwrap()
-        .open_file()
-        .ok()
-    {
+    if let Ok(mut f) = ide_files.join(&path.to_string_lossy()).unwrap().open_file() {
         if f.read_to_string(&mut buffer).is_err() {
             eprintln!(
                 "Could not read '{:?}' when handling completion request",
