@@ -66,6 +66,13 @@ impl Extension for LoggerExtension {
                 .with_label_values(&[info.name])
                 .inc();
         }
+        let query_id: &Uuid = ctx.data_unchecked();
+        let session_id: &SocketAddr = ctx.data_unchecked();
+        tracing::error!(
+            %query_id,
+            %session_id,
+            "==============================================================================================================================================[Path info] {:?} and name: {:?}", info.path_node, info.name
+        );
         next.run(ctx, info).await
     }
 
@@ -196,10 +203,10 @@ impl Extension for LoggerExtension {
                         "[Schema] {}", resp.data
                     );
                 }
-                _ => info!(
+                _ => tracing::error!(
                         %query_id,
                         %session_id,
-                        "[Response] {}", resp.data
+                        "==============================================================================================================================================[Response] {}", resp.data
                 ),
             }
         }

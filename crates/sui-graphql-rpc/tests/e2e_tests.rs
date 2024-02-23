@@ -9,6 +9,7 @@ mod tests {
     use serde_json::json;
     use serial_test::serial;
     use simulacrum::Simulacrum;
+    use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
@@ -623,7 +624,29 @@ mod tests {
             .build();
         let tx_bytes = Base64::encode(bcs::to_bytes(&tx).unwrap());
 
-        let query = r#"{ dryRunTransactionBlock(txBytes: $tx) {
+        let query = r#"{ a:dryRunTransactionBlock(txBytes: $tx) {
+                results {
+                    mutatedReferences {
+                        input {
+                            __typename
+                        }
+                    }
+                }
+                transaction {
+                    digest
+                    sender {
+                        address
+                    }
+                    gasInput {
+                        gasSponsor {
+                            address
+                        }
+                        gasPrice
+                    }
+                }
+                error
+            }
+            b:dryRunTransactionBlock(txBytes: $tx) {
                 results {
                     mutatedReferences {
                         input {
@@ -668,6 +691,61 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("UnusedValueWithoutDrop"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_dry_run_publish() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+
+        let sender = addresses[0];
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("tests/move_test_code");
+        let tx_data = cluster
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            .publish(path)
+            .build();
+        let tx_bytes = Base64::encode(bcs::to_bytes(&tx_data).unwrap());
+
+        let query = r#"{ dryRunTransactionBlock(txBytes: $tx) {
+            transaction {
+                effects {
+                    events {
+                        nodes {
+                            type {
+                                layout
+                            }
+                        }
+                    }
+                }
+            }
+        }}"#;
+        let variables = vec![GraphqlQueryVariable {
+            name: "tx".to_string(),
+            ty: "String!".to_string(),
+            value: json!(tx_bytes),
+        }];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, variables, vec![])
+            .await
+            .unwrap();
+        tracing::error!("0x0000000000000000000000000000000000000000000000000000000000000x0000000000000000000000000000000000000000000000000000000000000x000000000000000000000000000000000000000000000000000000000000 res: {:?}", res);
+        let binding = res.response_body().data.clone().into_json().unwrap();
+        tracing::error!("binding: {:?}", binding);
+        assert!(false);
+        // let res = binding.get("dryRunTransactionBlock").unwrap();
     }
 
     #[tokio::test]
