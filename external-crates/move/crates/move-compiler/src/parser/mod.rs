@@ -141,15 +141,20 @@ fn ensure_targets_deps_dont_intersect(
     targets: &[IndexedPackagePath],
     deps: &mut Vec<IndexedPackagePath>,
 ) -> anyhow::Result<()> {
-    // FYI - paths are already canonicalized in Compiler::run
-    let target_set = targets.iter().map(|p| p.path).collect::<BTreeSet<_>>();
-    let dep_set = deps.iter().map(|p| p.path).collect::<BTreeSet<_>>();
+    let target_set = targets
+        .iter()
+        .map(|p| canonicalize(&p.path))
+        .collect::<BTreeSet<_>>();
+    let dep_set = deps
+        .iter()
+        .map(|p| canonicalize(&p.path))
+        .collect::<BTreeSet<_>>();
     let intersection = target_set.intersection(&dep_set).collect::<Vec<_>>();
     if intersection.is_empty() {
         return Ok(());
     }
     if compilation_env.flags().sources_shadow_deps() {
-        deps.retain(|p| !intersection.contains(&&p.path));
+        deps.retain(|p| !intersection.contains(&&canonicalize(&p.path)));
         return Ok(());
     }
     let all_files = intersection
@@ -174,7 +179,7 @@ fn parse_file(
     MatchedFileCommentMap,
     FileHash,
 )> {
-    let mut f = vfs.join(fname.as_str())?.open_file()?;
+    let mut f = vfs.join(canonicalize(&fname))?.open_file()?;
     let mut source_buffer = String::new();
     f.read_to_string(&mut source_buffer)?;
     let file_hash = FileHash::new(&source_buffer);
@@ -195,4 +200,13 @@ fn parse_file(
     };
     files.insert(file_hash, (fname, source_buffer));
     Ok((defs, comments, file_hash))
+}
+
+/// Canonicalize a file path.
+pub fn canonicalize(path: &Symbol) -> String {
+    let p = path.as_str();
+    match std::fs::canonicalize(p) {
+        Ok(s) => s.to_string_lossy().to_string(),
+        Err(_) => p.to_owned(),
+    }
 }

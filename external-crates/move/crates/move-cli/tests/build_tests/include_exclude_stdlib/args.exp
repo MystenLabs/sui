@@ -1,13 +1,13 @@
 Command `build -v`:
 BUILDING build_include_exclude_stdlib
 error[E03002]: unbound module
-  ┌─ sources/UseSigner.move:2:7
+  ┌─ ./sources/UseSigner.move:2:7
   │
 2 │   use std::signer;
   │       ^^^^^^^^^^^ Invalid 'use'. Unbound module: 'std::signer'
 
 warning[W09002]: unused variable
-  ┌─ sources/UseSigner.move:4:16
+  ┌─ ./sources/UseSigner.move:4:16
   │
 4 │   public fun f(account: &signer): address {
   │                ^^^^^^^ Unused parameter 'account'. Consider removing or prefixing with an underscore: '_account'
@@ -15,7 +15,7 @@ warning[W09002]: unused variable
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E03002]: unbound module
-  ┌─ sources/UseSigner.move:5:5
+  ┌─ ./sources/UseSigner.move:5:5
   │
 5 │     signer::address_of(account)
   │     ^^^^^^ Unbound module alias 'signer'

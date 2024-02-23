@@ -27,7 +27,6 @@ use move_command_line_common::files::{
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_symbol_pool::Symbol;
-use pathdiff::diff_paths;
 use std::{
     collections::BTreeMap,
     fs,
@@ -278,22 +277,9 @@ impl<'a> Compiler<'a> {
         FilesSourceText,
         Result<(CommentMap, SteppedCompiler<'a, TARGET>), Diagnostics>,
     )> {
-        /// Path relativization after parsing (after they have been canonicalized prior) is needed
-        /// as paths are initially canonicalized when using virtual file system and would show up as
-        /// absolute paths in the test output which wouldn't be machine-agnostic.
-        fn relativize_path(path: Symbol) -> Symbol {
-            let Some(current_dir) = std::env::current_dir().ok() else {
-                return path;
-            };
-            let Some(new_path) = diff_paths(path.to_string(), current_dir) else {
-                return path;
-            };
-            Symbol::from(new_path.to_string_lossy().to_string())
-        }
-
         let Self {
             maps,
-            mut targets,
+            targets,
             mut deps,
             interface_files_dir_opt,
             pre_compiled_lib,
@@ -306,8 +292,6 @@ impl<'a> Compiler<'a> {
             default_config,
             vfs,
         } = self;
-        canonicalize_source_paths(&mut targets);
-        canonicalize_source_paths(&mut deps);
         let vfs = match vfs {
             Some(vfs) => vfs,
             None => VfsPath::new(PhysicalFS::new("/")),
@@ -332,7 +316,7 @@ impl<'a> Compiler<'a> {
             compilation_env.add_custom_known_filters(prefix, filters)?;
         }
 
-        let (mut source_text, pprog, comments) = with_large_stack!(parse_program(
+        let (source_text, pprog, comments) = with_large_stack!(parse_program(
             vfs.clone(),
             &mut compilation_env,
             maps,
@@ -340,10 +324,6 @@ impl<'a> Compiler<'a> {
             deps,
             interface_files
         ))?;
-
-        source_text
-            .iter_mut()
-            .for_each(|(_, (path, _))| *path = relativize_path(*path));
 
         let res: Result<_, Diagnostics> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
@@ -396,15 +376,6 @@ impl<'a> Compiler<'a> {
         let (units, warnings) = unwrap_or_report_diagnostics(&files, units_res);
         report_warnings(&files, warnings);
         Ok((files, units))
-    }
-}
-
-fn canonicalize_source_paths(paths: &mut Vec<IndexedPackagePath>) {
-    for p in paths {
-        // dunce does a better job of canonicalization on Windows
-        if let Ok(new_path) = dunce::canonicalize(p.path.as_str()) {
-            p.path = Symbol::from(new_path.to_string_lossy().to_string());
-        } // else keep the path the same
     }
 }
 
@@ -760,14 +731,16 @@ pub fn generate_interface_files(
         let mut v = vec![];
         let (mv_magic_files, other_file_locations): (Vec<_>, Vec<_>) =
             mv_file_locations.iter().cloned().partition(|s| {
-                let Some(path) = vfs.join(s.path.as_str()).ok() else {
+                let canonical_path = canonicalize(&s.path);
+                let Some(path) = vfs.join(canonical_path.as_str()).ok() else {
                     return false;
                 };
                 let is_file = path
                     .metadata()
                     .map(|d| d.file_type == VfsFileType::File)
                     .unwrap_or(false);
-                is_file && has_compiled_module_magic_number(vfs.clone(), &s.path)
+                is_file
+                    && has_compiled_module_magic_number(vfs.clone(), &Symbol::from(canonical_path))
             });
         v.extend(mv_magic_files);
         for IndexedPackagePath {
@@ -808,7 +781,7 @@ pub fn generate_interface_files(
         mv_files.len().hash(&mut hasher);
         HASH_DELIM.hash(&mut hasher);
         for IndexedPackagePath { path, .. } in &mv_files {
-            let mut f = vfs.join(path.as_str())?.open_file()?;
+            let mut f = vfs.join(canonicalize(path))?.open_file()?;
             let mut buf = vec![];
             f.read_to_end(&mut buf)?;
             buf.hash(&mut hasher);
@@ -829,13 +802,18 @@ pub fn generate_interface_files(
         named_address_map,
     } in mv_files
     {
-        let (id, interface_contents) =
-            interface_generator::write_file_to_string(vfs.clone(), module_to_named_address, &path)?;
+        let (id, interface_contents) = interface_generator::write_file_to_string(
+            vfs.clone(),
+            module_to_named_address,
+            &canonicalize(&path),
+        )?;
         let addr_dir = dir_path!(all_addr_dir.clone(), format!("{}", id.address()));
-        let file_path = file_path!(addr_dir.clone(), format!("{}", id.name()), MOVE_EXTENSION)
-            .to_string_lossy()
-            .to_string();
-        let vfs_path = deps_out_vfs.join(&file_path)?;
+        let file_path = Symbol::from(
+            file_path!(addr_dir.clone(), format!("{}", id.name()), MOVE_EXTENSION)
+                .to_string_lossy()
+                .to_string(),
+        );
+        let vfs_path = deps_out_vfs.join(&canonicalize(&file_path))?;
         vfs_path.parent().create_dir_all()?;
         vfs_path
             .create_file()?
@@ -843,7 +821,7 @@ pub fn generate_interface_files(
 
         result.push(InterfaceFilePath::new(
             IndexedPackagePath {
-                path: Symbol::from(file_path),
+                path: file_path,
                 package,
                 named_address_map,
             },
