@@ -4,12 +4,12 @@
 use crate::config::{
     ConnectionConfig, Version, MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
-use crate::consistency::update_available_range;
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
 use crate::types::available_range::AvailableRange;
+use crate::types::checkpoint::Checkpoint;
 use crate::types::move_object::IMoveObject;
 use crate::types::object::IObject;
 use crate::types::owner::IOwner;
@@ -492,6 +492,38 @@ async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode
 async fn get_or_init_server_start_time() -> &'static Instant {
     static ONCE: OnceCell<Instant> = OnceCell::const_new();
     ONCE.get_or_init(|| async move { Instant::now() }).await
+}
+
+/// Starts an infinite loop that periodically updates the `AvailableRange`.
+pub(crate) async fn update_available_range(
+    db: &Db,
+    available_range: Arc<RwLock<AvailableRange>>,
+    sleep_ms: u64,
+) {
+    loop {
+        let new_range = match {
+            db.execute(move |conn| Checkpoint::available_range(conn))
+                .await
+        } {
+            Ok((start, end)) => {
+                info!("Got consistent read range: {} - {}", start, end);
+                Some((start, end))
+            }
+            Err(e) => {
+                warn!("Failed to get consistent read range: {}", e);
+                None // TODO (wlmyng) - is this the right thing to do?
+                     // i think what we can do is `metrics.inc_errors` after converting this to an Internal error
+                     // then whether alerting on metrics or logs, we can catch this
+            }
+        };
+
+        if let Some((first, last)) = new_range {
+            let mut mark = available_range.write().unwrap();
+            *mark = AvailableRange { first, last };
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(sleep_ms)).await;
+    }
 }
 
 pub mod tests {
