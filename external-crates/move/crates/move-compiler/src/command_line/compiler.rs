@@ -402,7 +402,7 @@ impl<'a> Compiler<'a> {
 fn canonicalize_source_paths(paths: &mut Vec<IndexedPackagePath>) {
     for p in paths {
         // dunce does a better job of canonicalization on Windows
-        if let Some(new_path) = dunce::canonicalize(p.path.as_str()).ok() {
+        if let Ok(new_path) = dunce::canonicalize(p.path.as_str()) {
             p.path = Symbol::from(new_path.to_string_lossy().to_string());
         } // else keep the path the same
     }

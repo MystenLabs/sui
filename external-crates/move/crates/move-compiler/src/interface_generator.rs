@@ -40,7 +40,7 @@ pub fn write_file_to_string(
 ) -> Result<(ModuleId, String)> {
     let mut f = vfs.join(compiled_module_file_input_path)?.open_file()?;
     let mut file_contents = vec![];
-    f.read(&mut file_contents)?;
+    f.read_to_end(&mut file_contents)?;
     let module = CompiledModule::deserialize_with_defaults(&file_contents).map_err(|e| {
         anyhow!(
             "Unable to deserialize module at '{}': {}",
