@@ -148,4 +148,6 @@ module examples::object_basics {
     public entry fun use_auth_state(_auth_state: &AuthenticatorState) {}
 
     public entry fun use_random(_random: &Random) {}
+
+    public entry fun use_value(_value: u64) {}
 }

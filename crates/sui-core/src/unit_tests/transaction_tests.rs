@@ -992,7 +992,7 @@ async fn get_object_ref(obj_id: &ObjectID, authority_state: &Arc<AuthorityState>
 }
 
 #[tokio::test]
-async fn test_allowed_pbt_with_random_txn() {
+async fn test_allowed_ptb_with_random_txn() {
     telemetry_subscribers::init_for_testing();
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let num_of_tx = 9;
@@ -1034,6 +1034,7 @@ async fn test_allowed_pbt_with_random_txn() {
     let obj_basics_id = Identifier::new("object_basics").unwrap();
     let use_clock_id = Identifier::new("use_clock").unwrap();
     let use_random_id = Identifier::new("use_random").unwrap();
+    let use_value_id = Identifier::new("use_value").unwrap();
     let clock_arg = CallArg::CLOCK_IMM;
     let random_arg = CallArg::Object(ObjectArg::SharedObject {
         id: SUI_RANDOMNESS_STATE_OBJECT_ID,
@@ -1041,8 +1042,17 @@ async fn test_allowed_pbt_with_random_txn() {
         mutable: false,
     });
 
-    // good tx - use_random
+    // good tx - use_value, use_random
     let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            pkg,
+            obj_basics_id.clone(),
+            use_value_id.clone(),
+            vec![],
+            vec![CallArg::from(123u64)],
+        )
+        .unwrap();
     builder
         .move_call(
             pkg,
@@ -1062,7 +1072,24 @@ async fn test_allowed_pbt_with_random_txn() {
         ),
         &sender_key,
     );
-    assert!(client.handle_transaction(tx).await.is_ok());
+    let res = client.handle_transaction(tx.clone()).await;
+    assert!(res.is_ok());
+
+    let epoch_store = authority_state.epoch_store_for_testing();
+    let signed_transaction = VerifiedSignedTransaction::new(
+        epoch_store.epoch(),
+        VerifiedTransaction::new_unchecked(tx.clone()),
+        authority_state.name,
+        &*authority_state.secret,
+    );
+    let ct = CertifiedTransaction::new(
+        tx.data().clone(),
+        vec![signed_transaction.auth_sig().clone()],
+        &epoch_store.committee().deref().clone(),
+    )
+    .unwrap();
+    let res = client.handle_certificate_v2(ct.clone()).await;
+    assert!(res.is_ok());
 
     // good tx - use_clock, use_random, transfer, merge (via pay without destinations)
     let mut builder = ProgrammableTransactionBuilder::new();

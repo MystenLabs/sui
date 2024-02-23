@@ -920,8 +920,7 @@ impl ProgrammableTransaction {
             }
         );
 
-        let input_objects = self.input_objects()?;
-        let total_inputs = input_objects.len() + self.receiving_objects().len();
+        let total_inputs = self.input_objects()?.len() + self.receiving_objects().len();
         fp_ensure!(
             total_inputs <= config.max_input_objects() as usize,
             UserInputError::SizeLimitExceeded {
@@ -952,14 +951,15 @@ impl ProgrammableTransaction {
         // A command that uses Random can only be followed by TransferObjects or MergeCoins.
         if config.enable_randomness_ptb_limits() {
             // Check if there is a random object in the input objects
-            if let Some(random_index) = input_objects.iter().position(|obj| {
-                matches!(obj, InputObjectKind::SharedMoveObject { id, .. } if *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
+            if let Some(random_index) = inputs.iter().position(|obj| {
+                matches!(obj, CallArg::Object(ObjectArg::SharedObject { id, .. }) if *id == SUI_RANDOMNESS_STATE_OBJECT_ID)
             }) {
                 let mut used_random_object = false;
+                let random_index = random_index as u16;
                 for command in commands {
                     if !used_random_object {
                         let has_random = if let Command::MoveCall(c) = command {
-                            c.arguments.iter().any(|arg| matches!(arg, Argument::Input(inp) if *inp == (random_index as u16))) } else { false };
+                            c.arguments.iter().any(|arg| matches!(arg, Argument::Input(inp) if *inp == random_index)) } else { false };
                         used_random_object = has_random;
                     } else {
                         fp_ensure!(
