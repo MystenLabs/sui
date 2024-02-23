@@ -4,10 +4,8 @@ init:
 A: object(0,0)
 
 task 1 'publish'. lines 8-15:
-created: object(1,0), object(1,1)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5639200,  storage_rebate: 0, non_refundable_storage_fee: 0
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: UNKNOWN_VERSION, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
 
 task 2 'run'. lines 17-32:
-mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }

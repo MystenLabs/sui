@@ -23,6 +23,7 @@ pub(crate) mod execution_result;
 pub(crate) mod gas;
 pub(crate) mod intersect;
 pub(crate) mod json;
+pub(crate) mod move_enum;
 pub(crate) mod move_function;
 pub(crate) mod move_module;
 pub(crate) mod move_object;

@@ -54,3 +54,60 @@ module 0x1.M6 {
         a: Self.S1<T>
     }
 }
+
+//# publish
+
+// Tests checking incorrect enum declarations using phantom parameters
+// in illegal positions.
+
+module 0x2.M1 {
+    // A phantom parameter cannot be used as the type of a field
+    enum S1<phantom T> {
+        V { a: T }
+    }
+}
+
+//# publish
+module 0x2.M2 {
+    // The parameter of vector is non-phantom and a phantom parameter shouldn't be allowed in that position
+    enum S2<phantom T> {
+        V { a: vector<T> }
+    }
+}
+
+//# publish
+module 0x2.M3 {
+    // A phantom parameter cannot be used as the argument to a non-phantom parameter
+    enum S1<T> { V{ f: bool }}
+    enum S2<phantom T> {
+        V { a: Self.S1<T> }
+    }
+}
+
+//# publish
+module 0x2.M4 {
+    // More complicated test where the phantom position violation is inside another
+    // type argument.
+    enum S1<T> { V{ a: T}}
+    enum S2<T> { V{ a : T } }
+    enum S3<phantom T> {
+        V { a: Self.S1<Self.S2<T>> }
+    }
+}
+
+//# publish
+module 0x2.M5 {
+    // Mixing phantom and non-phantom parameters
+    enum S<T1, phantom T2, T3> {
+        V { a: T2 }
+    }
+}
+
+//# publish
+module 0x2.M6 {
+    // Phantom parameters should satisfy constraints
+    enum S1<phantom T: copy> { V{ a: bool } }
+    enum S2<phantom T> {
+        V { a: Self.S1<T> }
+    }
+}

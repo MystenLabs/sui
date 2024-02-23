@@ -4,4 +4,5 @@
 
 pub mod ast;
 pub(crate) mod detect_dead_code;
+mod match_compilation;
 pub(crate) mod translate;

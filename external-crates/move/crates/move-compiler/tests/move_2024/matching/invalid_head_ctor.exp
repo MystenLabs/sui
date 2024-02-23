@@ -1,0 +1,12 @@
+error[E04033]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/invalid_head_ctor.move:8:16
+  │
+8 │         match (opt) {
+  │                ^^^ Pattern '_' not covered
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/matching/invalid_head_ctor.move:9:13
+  │
+9 │             Some(_) => (),
+  │             ^^^^ Unexpected name access. Expected an '<enum>::<variant>' form.
+

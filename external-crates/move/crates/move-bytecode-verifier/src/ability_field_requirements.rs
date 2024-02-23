@@ -20,7 +20,7 @@ pub fn verify_module(module: &CompiledModule) -> VMResult<()> {
 fn verify_module_impl(module: &CompiledModule) -> PartialVMResult<()> {
     let view = BinaryIndexedView::Module(module);
     for (idx, struct_def) in module.struct_defs().iter().enumerate() {
-        let sh = module.struct_handle_at(struct_def.struct_handle);
+        let sh = module.datatype_handle_at(struct_def.struct_handle);
         let fields = match &struct_def.field_information {
             StructFieldInformation::Native => continue,
             StructFieldInformation::Declared(fields) => fields,
@@ -45,6 +45,37 @@ fn verify_module_impl(module: &CompiledModule) -> PartialVMResult<()> {
                     IndexKind::StructDefinition,
                     idx as TableIndex,
                 ));
+            }
+        }
+    }
+
+    for (idx, enum_def) in module.enum_defs().iter().enumerate() {
+        let sh = module.datatype_handle_at(enum_def.enum_handle);
+        let required_abilities = sh
+            .abilities
+            .into_iter()
+            .map(|a| a.requires())
+            .fold(AbilitySet::EMPTY, |acc, required| acc | required);
+        // Assume type parameters have all abilities, as the enum's abilities will be dependent on
+        // them
+        let type_parameter_abilities = sh
+            .type_parameters
+            .iter()
+            .map(|_| AbilitySet::ALL)
+            .collect::<Vec<_>>();
+        for (i, variant) in enum_def.variants.iter().enumerate() {
+            for (fi, field) in variant.fields.iter().enumerate() {
+                let field_abilities =
+                    view.abilities(&field.signature.0, &type_parameter_abilities)?;
+                if !required_abilities.is_subset(field_abilities) {
+                    return Err(verification_error(
+                        StatusCode::FIELD_MISSING_TYPE_ABILITY,
+                        IndexKind::EnumDefinition,
+                        idx as TableIndex,
+                    )
+                    .at_index(IndexKind::VariantTag, i as TableIndex)
+                    .at_index(IndexKind::FieldDefinition, fi as TableIndex));
+                }
             }
         }
     }

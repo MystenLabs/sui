@@ -4,9 +4,10 @@
 use async_trait::async_trait;
 use lru::LruCache;
 use move_binary_format::file_format::{
-    AbilitySet, FunctionDefinitionIndex, Signature, SignatureIndex, StructTypeParameter, Visibility,
+    AbilitySet, DatatypeTyParameter, EnumDefinitionIndex, FunctionDefinitionIndex, Signature,
+    SignatureIndex, Visibility,
 };
-use std::collections::btree_map::Entry;
+use move_core_types::annotated_value::MoveEnumLayout;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::{borrow::Cow, collections::BTreeMap};
@@ -16,7 +17,7 @@ use move_binary_format::errors::Location;
 use move_binary_format::{
     access::ModuleAccess,
     file_format::{
-        SignatureToken, StructDefinitionIndex, StructFieldInformation, StructHandleIndex,
+        DatatypeHandleIndex, SignatureToken, StructDefinitionIndex, StructFieldInformation,
         TableIndex,
     },
     CompiledModule,
@@ -98,6 +99,10 @@ pub struct Module {
     /// bytecode, to speed up definition lookups.
     struct_index: BTreeMap<String, (AccountAddress, StructDefinitionIndex)>,
 
+    /// Index mapping enum named to their defining ID and the index of their definition in the
+    /// bytecode. This speeds up definition lookups.
+    enum_index: BTreeMap<String, (AccountAddress, EnumDefinitionIndex)>,
+
     /// Index mapping function names to the index for their definition in the bytecode, to speed up
     /// definition lookups.
     function_index: BTreeMap<String, FunctionDefinitionIndex>,
@@ -113,11 +118,38 @@ pub struct StructDef {
     pub abilities: AbilitySet,
 
     /// Ability constraints and phantom status for type parameters
-    pub type_params: Vec<StructTypeParameter>,
+    pub type_params: Vec<DatatypeTyParameter>,
 
     /// Serialized representation of fields (names and deserialized signatures). Signatures refer to
     /// packages at their runtime IDs (not their storage ID or defining ID).
     pub fields: Vec<(String, OpenSignatureBody)>,
+}
+
+/// Deserialized representation of an enum definition.
+#[derive(Debug)]
+pub struct EnumDef {
+    /// The storage ID of the package that first introduced this type.
+    pub defining_id: AccountAddress,
+
+    /// This type's abilities.
+    pub abilities: AbilitySet,
+
+    /// Ability constraints and phantom status for type parameters
+    pub type_params: Vec<DatatypeTyParameter>,
+
+    /// Serialized representation of variants (names and deserialized signatures). Signatures refer to
+    /// packages at their runtime IDs (not their storage ID or defining ID).
+    pub variants: Vec<VariantDef>,
+}
+
+/// Deserialized representation of an enum definition. These are always held inside an `EnumDef`.
+#[derive(Debug)]
+pub struct VariantDef {
+    /// The name of the enum variant
+    pub name: String,
+    /// The serialized representation of the variant's signature. Signatures refer to packages at
+    /// their runtime IDs (not their storage ID or defining ID).
+    pub signatures: Vec<(String, OpenSignatureBody)>,
 }
 
 /// Deserialized representation of a function definition
@@ -187,6 +219,9 @@ pub enum OpenSignatureBody {
 struct ResolutionContext<'l> {
     /// Definitions (field information) for structs referred to by types added to this context.
     structs: BTreeMap<DatatypeKey, StructDef>,
+    /// Definitions (variant and field information) for enums referred to by types added to this
+    /// context.
+    enums: BTreeMap<DatatypeKey, EnumDef>,
     /// Limits configuration from the calling resolver.
     limits: Option<&'l Limits>,
 }
@@ -421,10 +456,17 @@ impl Package {
         &self.modules
     }
 
+    /// Returns `true` if the package contains a definition for the struct with name `struct_name`.
+    fn is_struct_def(&self, module_name: &str, struct_name: &str) -> bool {
+        self.module(module_name)
+            .map(|module| module.struct_def(struct_name).is_ok_and(|x| x.is_some()))
+            .unwrap_or(false)
+    }
+
     fn struct_def(&self, module_name: &str, struct_name: &str) -> Result<StructDef> {
         let module = self.module(module_name)?;
         let Some(struct_def) = module.struct_def(struct_name)? else {
-            return Err(Error::StructNotFound(
+            return Err(Error::DatatypeNotFound(
                 self.storage_id,
                 module_name.to_string(),
                 struct_name.to_string(),
@@ -432,6 +474,19 @@ impl Package {
         };
 
         Ok(struct_def)
+    }
+
+    fn enum_def(&self, module_name: &str, enum_name: &str) -> Result<EnumDef> {
+        let module = self.module(module_name)?;
+        let Some(enum_def) = module.enum_def(enum_name)? else {
+            return Err(Error::DatatypeNotFound(
+                self.storage_id,
+                module_name.to_string(),
+                enum_name.to_string(),
+            ));
+        };
+
+        Ok(enum_def)
     }
 
     /// Translate the `runtime_id` of a package to a specific storage ID using this package's
@@ -460,7 +515,7 @@ impl Module {
     ) -> std::result::Result<Self, String> {
         let mut struct_index = BTreeMap::new();
         for (index, def) in bytecode.struct_defs.iter().enumerate() {
-            let sh = bytecode.struct_handle_at(def.struct_handle);
+            let sh = bytecode.datatype_handle_at(def.struct_handle);
             let struct_ = bytecode.identifier_at(sh.name).to_string();
             let index = StructDefinitionIndex::new(index as TableIndex);
 
@@ -469,6 +524,19 @@ impl Module {
             };
 
             struct_index.insert(struct_, (defining_id, index));
+        }
+
+        let mut enum_index = BTreeMap::new();
+        for (index, def) in bytecode.enum_defs.iter().enumerate() {
+            let eh = bytecode.datatype_handle_at(def.enum_handle);
+            let enum_ = bytecode.identifier_at(eh.name).to_string();
+            let index = EnumDefinitionIndex::new(index as TableIndex);
+
+            let Some(defining_id) = origins.remove(&enum_) else {
+                return Err(enum_);
+            };
+
+            enum_index.insert(enum_, (defining_id, index));
         }
 
         let mut function_index = BTreeMap::new();
@@ -483,6 +551,7 @@ impl Module {
         Ok(Module {
             bytecode,
             struct_index,
+            enum_index,
             function_index,
         })
     }
@@ -514,6 +583,22 @@ impl Module {
             .map(|(name, _)| name.as_str())
     }
 
+    /// Iterate over the enums with names strictly after `after` (or from the beginning), and
+    /// strictly before `before` (or to the end).
+    pub fn enums(
+        &self,
+        after: Option<&str>,
+        before: Option<&str>,
+    ) -> impl DoubleEndedIterator<Item = &str> + Clone {
+        use std::ops::Bound as B;
+        self.enum_index
+            .range::<str, _>((
+                after.map_or(B::Unbounded, B::Excluded),
+                before.map_or(B::Unbounded, B::Excluded),
+            ))
+            .map(|(name, _)| name.as_str())
+    }
+
     /// Get the struct definition corresponding to the struct with name `name` in this module.
     /// Returns `Ok(None)` if the struct cannot be found in this module, `Err(...)` if there was an
     /// error deserializing it, and `Ok(Some(def))` on success.
@@ -523,7 +608,7 @@ impl Module {
         };
 
         let struct_def = self.bytecode.struct_def_at(index);
-        let struct_handle = self.bytecode.struct_handle_at(struct_def.struct_handle);
+        let struct_handle = self.bytecode.datatype_handle_at(struct_def.struct_handle);
         let abilities = struct_handle.abilities;
         let type_params = struct_handle.type_parameters.clone();
 
@@ -545,6 +630,50 @@ impl Module {
             abilities,
             type_params,
             fields,
+        }))
+    }
+
+    /// Get the enum definition corresponding to the enum with name `name` in this module.
+    /// Returns `Ok(None)` if the enum cannot be found in this module, `Err(...)` if there was an
+    /// error deserializing it, and `Ok(Some(def))` on success.
+    pub fn enum_def(&self, name: &str) -> Result<Option<EnumDef>> {
+        let Some(&(defining_id, index)) = self.enum_index.get(name) else {
+            return Ok(None);
+        };
+
+        let enum_def = self.bytecode.enum_def_at(index);
+        let enum_handle = self.bytecode.datatype_handle_at(enum_def.enum_handle);
+        let abilities = enum_handle.abilities;
+        let type_params = enum_handle.type_parameters.clone();
+
+        let variants = enum_def
+            .variants
+            .iter()
+            .map(|variant| {
+                let name = self
+                    .bytecode
+                    .identifier_at(variant.variant_name)
+                    .to_string();
+                let signatures = variant
+                    .fields
+                    .iter()
+                    .map(|f| {
+                        Ok((
+                            self.bytecode.identifier_at(f.name).to_string(),
+                            OpenSignatureBody::read(&f.signature.0, &self.bytecode)?,
+                        ))
+                    })
+                    .collect::<Result<_>>()?;
+
+                Ok(VariantDef { name, signatures })
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(Some(EnumDef {
+            defining_id,
+            abilities,
+            type_params,
+            variants,
         }))
     }
 
@@ -628,8 +757,8 @@ impl OpenSignatureBody {
 
             S::Vector(sig) => O::Vector(Box::new(OpenSignatureBody::read(sig, bytecode)?)),
 
-            S::Struct(ix) => O::Datatype(DatatypeKey::read(*ix, bytecode), vec![]),
-            S::StructInstantiation(ix, params) => O::Datatype(
+            S::Datatype(ix) => O::Datatype(DatatypeKey::read(*ix, bytecode), vec![]),
+            S::DatatypeInstantiation(ix, params) => O::Datatype(
                 DatatypeKey::read(*ix, bytecode),
                 params
                     .iter()
@@ -651,8 +780,8 @@ impl<'m, 'n> DatatypeRef<'m, 'n> {
 }
 
 impl DatatypeKey {
-    fn read(ix: StructHandleIndex, bytecode: &CompiledModule) -> Self {
-        let sh = bytecode.struct_handle_at(ix);
+    fn read(ix: DatatypeHandleIndex, bytecode: &CompiledModule) -> Self {
+        let sh = bytecode.datatype_handle_at(ix);
         let mh = bytecode.module_handle_at(sh.module);
 
         let package = *bytecode.address_identifier_at(mh.address);
@@ -671,6 +800,7 @@ impl<'l> ResolutionContext<'l> {
     fn new(limits: Option<&'l Limits>) -> Self {
         ResolutionContext {
             structs: BTreeMap::new(),
+            enums: BTreeMap::new(),
             limits,
         }
     }
@@ -731,51 +861,94 @@ impl<'l> ResolutionContext<'l> {
 
                 T::Struct(s) => {
                     let context = store.fetch(s.address).await?;
-                    let def = context
-                        .clone()
-                        .struct_def(s.module.as_str(), s.name.as_str())?;
+                    if context.is_struct_def(s.module.as_str(), s.name.as_str()) {
+                        let def = context
+                            .clone()
+                            .struct_def(s.module.as_str(), s.name.as_str())?;
 
-                    // Normalize `address` (the ID of a package that contains the definition of this
-                    // struct) to be a runtime ID, because that's what the resolution context uses
-                    // for keys.  Take care to do this before generating the key that is used to
-                    // query and/or write into `self.structs.
-                    s.address = context.runtime_id;
-                    let key = DatatypeRef::from(s.as_ref()).as_key();
+                        // Normalize `address` (the ID of a package that contains the definition of this
+                        // struct) to be a runtime ID, because that's what the resolution context uses
+                        // for keys.  Take care to do this before generating the key that is used to
+                        // query and/or write into `self.structs.
+                        s.address = context.runtime_id;
+                        let key = DatatypeRef::from(s.as_ref()).as_key();
 
-                    if def.type_params.len() != s.type_params.len() {
-                        return Err(Error::TypeArityMismatch(
-                            def.type_params.len(),
-                            s.type_params.len(),
-                        ));
-                    }
-
-                    check_max_limit!(
-                        TooManyTypeParams, self.limits;
-                        max_type_argument_width >= s.type_params.len()
-                    );
-
-                    for (param, def) in s.type_params.iter_mut().zip(def.type_params.iter()) {
-                        if !def.is_phantom || visit_phantoms {
-                            push_ty_param!(param);
+                        if def.type_params.len() != s.type_params.len() {
+                            return Err(Error::TypeArityMismatch(
+                                def.type_params.len(),
+                                s.type_params.len(),
+                            ));
                         }
-                    }
 
-                    if self.structs.contains_key(&key) {
-                        continue;
-                    }
+                        check_max_limit!(
+                            TooManyTypeParams, self.limits;
+                            max_type_argument_width >= s.type_params.len()
+                        );
 
-                    if visit_fields {
-                        for (_, sig) in &def.fields {
-                            self.add_signature(sig.clone(), store, &context).await?;
+                        for (param, def) in s.type_params.iter_mut().zip(def.type_params.iter()) {
+                            if !def.is_phantom || visit_phantoms {
+                                push_ty_param!(param);
+                            }
                         }
+
+                        if self.structs.contains_key(&key) {
+                            continue;
+                        }
+
+                        if visit_fields {
+                            for (_, sig) in &def.fields {
+                                self.add_signature(sig.clone(), store, &context).await?;
+                            }
+                        }
+
+                        check_max_limit!(
+                            TooManyTypeNodes, self.limits;
+                            max_type_nodes > self.structs.len()
+                        );
+
+                        self.structs.insert(key, def);
+                    } else {
+                        let def = context
+                            .clone()
+                            .enum_def(s.module.as_str(), s.name.as_str())?;
+                        s.address = context.runtime_id;
+                        let key = DatatypeRef::from(s.as_ref()).as_key();
+                        if def.type_params.len() != s.type_params.len() {
+                            return Err(Error::TypeArityMismatch(
+                                def.type_params.len(),
+                                s.type_params.len(),
+                            ));
+                        }
+                        check_max_limit!(
+                            TooManyTypeParams, self.limits;
+                            max_type_argument_width >= s.type_params.len()
+                        );
+
+                        for (param, def) in s.type_params.iter_mut().zip(def.type_params.iter()) {
+                            if !def.is_phantom || visit_phantoms {
+                                push_ty_param!(param);
+                            }
+                        }
+
+                        if self.enums.contains_key(&key) {
+                            continue;
+                        }
+
+                        if visit_fields {
+                            for variant in &def.variants {
+                                for (_, sig) in &variant.signatures {
+                                    self.add_signature(sig.clone(), store, &context).await?;
+                                }
+                            }
+                        }
+
+                        check_max_limit!(
+                            TooManyTypeNodes, self.limits;
+                            max_type_nodes > self.structs.len()
+                        );
+
+                        self.enums.insert(key, def);
                     }
-
-                    check_max_limit!(
-                        TooManyTypeNodes, self.limits;
-                        max_type_nodes > self.structs.len()
-                    );
-
-                    self.structs.insert(key, def);
                 }
             }
         }
@@ -817,33 +990,44 @@ impl<'l> ResolutionContext<'l> {
                     );
 
                     let params_count = params.len();
-                    let struct_count = self.structs.len();
+                    let data_count = self.structs.len() + self.enums.len();
                     frontier.extend(params.into_iter());
 
-                    let def = match self.structs.entry(key.clone()) {
-                        Entry::Occupied(e) => e.into_mut(),
-
-                        Entry::Vacant(e) => {
-                            let storage_id = context.relocate(key.package)?;
-                            let package = store.fetch(storage_id).await?;
-                            let def = package.struct_def(&key.module, &key.name)?;
-
-                            frontier.extend(def.fields.iter().map(|f| &f.1).cloned());
-
+                    let type_params =
+                        if self.structs.contains_key(&key) || self.enums.contains_key(&key) {
+                            self.structs
+                                .get(&key)
+                                .map(|def| &def.type_params)
+                                .or(self.enums.get(&key).map(|def| &def.type_params))
+                                .expect("either struct or enum should be present")
+                        } else {
                             check_max_limit!(
                                 TooManyTypeNodes, self.limits;
-                                max_type_nodes > struct_count
+                                max_type_nodes > data_count
                             );
 
-                            e.insert(def)
-                        }
-                    };
+                            // Need to resolve the datatype, so fetch the package that contains it.
+                            let storage_id = context.relocate(key.package)?;
+                            let package = store.fetch(storage_id).await?;
 
-                    if def.type_params.len() != params_count {
-                        return Err(Error::TypeArityMismatch(
-                            def.type_params.len(),
-                            params_count,
-                        ));
+                            if package.is_struct_def(&key.module, &key.name) {
+                                let def = package.struct_def(&key.module, &key.name)?;
+                                frontier.extend(def.fields.iter().map(|f| &f.1).cloned());
+                                &self.structs.entry(key).or_insert(def).type_params
+                            } else {
+                                let def = package.enum_def(&key.module, &key.name)?;
+                                frontier.extend(
+                                    def.variants
+                                        .iter()
+                                        .flat_map(|v| v.signatures.iter().map(|(_, s)| s))
+                                        .cloned(),
+                                );
+                                &self.enums.entry(key).or_insert(def).type_params
+                            }
+                        };
+
+                    if type_params.len() != params_count {
+                        return Err(Error::TypeArityMismatch(type_params.len(), params_count));
                     }
                 }
             }
@@ -893,24 +1077,14 @@ impl<'l> ResolutionContext<'l> {
                 // these layouts are naturally keyed based on defining ID, but during resolution,
                 // they are keyed by runtime IDs.
 
-                // SAFETY: `add_type_tag` ensures `structs` has an element with this key.
-                let key = DatatypeRef::from(s.as_ref());
-                let def = &self.structs[&key];
-
-                let StructTag {
-                    module,
-                    name,
-                    type_params,
-                    ..
-                } = s.as_ref();
-
                 // TODO (optimization): This could be made more efficient by only generating layouts
                 // for non-phantom types.  This efficiency could be extended to the exploration
                 // phase (i.e. only explore layouts of non-phantom types). But this optimisation is
                 // complicated by the fact that we still need to create a correct type tag for a
                 // phantom parameter, which is currently done by converting a type layout into a
                 // tag.
-                let param_layouts = type_params
+                let param_layouts = s
+                    .type_params
                     .iter()
                     // Reduce the max depth because we know these type parameters will be nested
                     // wthin this struct.
@@ -922,33 +1096,96 @@ impl<'l> ResolutionContext<'l> {
                 // is necessary to avoid errors when converting layouts into type tags.
                 let type_params = param_layouts.iter().map(|l| TypeTag::from(&l.0)).collect();
 
-                let type_ = StructTag {
-                    address: def.defining_id,
-                    module: module.clone(),
-                    name: name.clone(),
-                    type_params,
-                };
-
-                let mut fields = Vec::with_capacity(def.fields.len());
-                let mut field_depth = 0;
-
-                for (name, sig) in &def.fields {
-                    let (layout, depth) =
-                        self.resolve_signature(sig, &param_layouts, max_depth - 1)?;
-
-                    field_depth = field_depth.max(depth);
-                    fields.push(MoveFieldLayout {
-                        name: ident(name.as_str())?,
-                        layout,
-                    })
+                // SAFETY: `add_type_tag` ensures `structs` xor `enums` has an element with this key.
+                let key = DatatypeRef::from(s.as_ref());
+                if self.structs.contains_key(&key) {
+                    self.resolve_struct_signature(&key, s, type_params, param_layouts, max_depth)?
+                } else {
+                    self.resolve_enum_signature(&key, s, type_params, param_layouts, max_depth)?
                 }
-
-                (
-                    L::Struct(MoveStructLayout { type_, fields }),
-                    field_depth + 1,
-                )
             }
         })
+    }
+
+    fn resolve_enum_signature(
+        &self,
+        key: &DatatypeRef,
+        tag: &StructTag,
+        type_params: Vec<TypeTag>,
+        param_layouts: Vec<(MoveTypeLayout, usize)>,
+        max_depth: usize,
+    ) -> Result<(MoveTypeLayout, usize)> {
+        // SAFETY: `add_type_tag` ensures `structs` xor `enums` has an element with this key, and
+        // we've checked in the calling context that the key refers to an enum.
+        let def = &self.enums[&key];
+
+        let type_ = StructTag {
+            address: def.defining_id,
+            module: tag.module.clone(),
+            name: tag.name.clone(),
+            type_params,
+        };
+
+        let mut field_depth = 0;
+        let mut variants = BTreeMap::new();
+
+        for (tag, variant) in def.variants.iter().enumerate() {
+            let mut fields = Vec::with_capacity(variant.signatures.len());
+            for (name, sig) in &variant.signatures {
+                // Note: We decrement the depth here because we're already under the variant
+                let (layout, depth) = self.resolve_signature(sig, &param_layouts, max_depth - 1)?;
+
+                field_depth = field_depth.max(depth);
+                fields.push(MoveFieldLayout {
+                    name: ident(name.as_str())?,
+                    layout,
+                })
+            }
+            variants.insert((ident(variant.name.as_str())?, tag as u16), fields);
+        }
+
+        Ok((
+            MoveTypeLayout::Enum(MoveEnumLayout { type_, variants }),
+            field_depth + 1,
+        ))
+    }
+
+    fn resolve_struct_signature(
+        &self,
+        key: &DatatypeRef,
+        tag: &StructTag,
+        type_params: Vec<TypeTag>,
+        param_layouts: Vec<(MoveTypeLayout, usize)>,
+        max_depth: usize,
+    ) -> Result<(MoveTypeLayout, usize)> {
+        // SAFETY: `add_type_tag` ensures `structs` xor `enums` has an element with this key, and
+        // we've checked in the calling context that this key refers to a struct.
+        let def = &self.structs[&key];
+
+        let type_ = StructTag {
+            address: def.defining_id,
+            module: tag.module.clone(),
+            name: tag.name.clone(),
+            type_params,
+        };
+
+        let mut fields = Vec::with_capacity(def.fields.len());
+        let mut field_depth = 0;
+
+        for (name, sig) in &def.fields {
+            let (layout, depth) = self.resolve_signature(sig, &param_layouts, max_depth - 1)?;
+
+            field_depth = field_depth.max(depth);
+            fields.push(MoveFieldLayout {
+                name: ident(name.as_str())?,
+                layout,
+            })
+        }
+
+        Ok((
+            MoveTypeLayout::Struct(MoveStructLayout { type_, fields }),
+            field_depth + 1,
+        ))
     }
 
     /// Like `resolve_type_tag` but for signatures.  Needs to be provided the layouts of type
@@ -1007,9 +1244,6 @@ impl<'l> ResolutionContext<'l> {
             }
 
             O::Datatype(key, params) => {
-                // SAFETY: `add_signature` ensures `structs` has an element with this key.
-                let def = &self.structs[key];
-
                 let param_layouts = params
                     .iter()
                     .map(|sig| self.resolve_signature(sig, param_layouts, max_depth - 1))
@@ -1018,32 +1252,35 @@ impl<'l> ResolutionContext<'l> {
                 // SAFETY: `param_layouts` contains `MoveTypeLayout`-s that are generated by this
                 // `ResolutionContext`, which guarantees that struct layouts come with types, which
                 // is necessary to avoid errors when converting layouts into type tags.
-                let type_params = param_layouts.iter().map(|l| TypeTag::from(&l.0)).collect();
+                let type_params: Vec<TypeTag> =
+                    param_layouts.iter().map(|l| TypeTag::from(&l.0)).collect();
+
+                // SAFETY: `add_signature` ensures `structs` or `enums` has an element with this key.
+                let defining_id = self
+                    .structs
+                    .get(key)
+                    .map(|s| s.defining_id)
+                    .or(self.enums.get(key).map(|e| e.defining_id))
+                    .expect("either struct or enum should be present");
 
                 let type_ = StructTag {
-                    address: def.defining_id,
+                    address: defining_id,
                     module: ident(&key.module)?,
                     name: ident(&key.name)?,
-                    type_params,
+                    type_params: type_params.clone(),
                 };
 
-                let mut fields = Vec::with_capacity(def.fields.len());
-                let mut field_depth = 0;
-                for (name, sig) in &def.fields {
-                    let (layout, depth) =
-                        self.resolve_signature(sig, &param_layouts, max_depth - 1)?;
-
-                    field_depth = field_depth.max(depth);
-                    fields.push(MoveFieldLayout {
-                        name: ident(name.as_str())?,
-                        layout,
-                    });
+                if self.structs.contains_key(key) {
+                    self.resolve_struct_signature(
+                        key,
+                        &type_,
+                        type_params,
+                        param_layouts,
+                        max_depth,
+                    )?
+                } else {
+                    self.resolve_enum_signature(key, &type_, type_params, param_layouts, max_depth)?
                 }
-
-                (
-                    L::Struct(MoveStructLayout { type_, fields }),
-                    field_depth + 1,
-                )
             }
         })
     }
@@ -1062,13 +1299,21 @@ impl<'l> ResolutionContext<'l> {
             T::Vector(tag) => self.resolve_abilities(tag)?.intersect(AbilitySet::VECTOR),
 
             T::Struct(s) => {
-                // SAFETY: `add_type_tag` ensures `structs` has an element with this key.
+                // SAFETY: `add_type_tag` ensures `structs` or `enums` has an element with this key.
                 let key = DatatypeRef::from(s.as_ref());
-                let def = &self.structs[&key];
+                let (type_params, abilities) = self
+                    .structs
+                    .get(&key)
+                    .map(|def| (&def.type_params, &def.abilities))
+                    .or(self
+                        .enums
+                        .get(&key)
+                        .map(|def| (&def.type_params, &def.abilities)))
+                    .expect("either struct or enum should be present");
 
-                if def.type_params.len() != s.type_params.len() {
+                if type_params.len() != s.type_params.len() {
                     return Err(Error::TypeArityMismatch(
-                        def.type_params.len(),
+                        type_params.len(),
                         s.type_params.len(),
                     ));
                 }
@@ -1076,7 +1321,7 @@ impl<'l> ResolutionContext<'l> {
                 let param_abilities: Result<Vec<AbilitySet>> = s
                     .type_params
                     .iter()
-                    .zip(def.type_params.iter())
+                    .zip(type_params.iter())
                     .map(|(p, d)| {
                         if d.is_phantom {
                             Ok(AbilitySet::EMPTY)
@@ -1087,8 +1332,8 @@ impl<'l> ResolutionContext<'l> {
                     .collect();
 
                 AbilitySet::polymorphic_abilities(
-                    def.abilities,
-                    def.type_params.iter().map(|p| p.is_phantom),
+                    *abilities,
+                    type_params.iter().map(|p| p.is_phantom),
                     param_abilities?.into_iter(),
                 )
                 // This error is unexpected because the only reason it would fail is because of a
@@ -1139,16 +1384,24 @@ mod tests {
 
     use super::*;
 
+    fn fmt(struct_layout: MoveTypeLayout, enum_layout: MoveTypeLayout) -> String {
+        format!("struct:\n{struct_layout:#}\n\nenum:\n{enum_layout:#}",)
+    }
+
     /// Layout for a type that only refers to base types or other types in the same module.
     #[tokio::test]
     async fn test_simple_type() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
         let package_resolver = Resolver::new(cache);
-        let layout = package_resolver
+        let struct_layout = package_resolver
             .type_layout(type_("0xa0::m::T0"))
             .await
             .unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let enum_layout = package_resolver
+            .type_layout(type_("0xa0::m::E0"))
+            .await
+            .unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     /// A type that refers to types from other modules in the same package.
@@ -1156,11 +1409,12 @@ mod tests {
     async fn test_cross_module() {
         let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
         let resolver = Resolver::new(cache);
-        let layout = resolver.type_layout(type_("0xa0::n::T0")).await.unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let struct_layout = resolver.type_layout(type_("0xa0::n::T0")).await.unwrap();
+        let enum_layout = resolver.type_layout(type_("0xa0::n::E0")).await.unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
-    /// A type that refers to types from other modules in the same package.
+    /// A type that refers to types a different package.
     #[tokio::test]
     async fn test_cross_package() {
         let (_, cache) = package_cache([
@@ -1169,8 +1423,9 @@ mod tests {
         ]);
         let resolver = Resolver::new(cache);
 
-        let layout = resolver.type_layout(type_("0xb0::m::T0")).await.unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let struct_layout = resolver.type_layout(type_("0xb0::m::T0")).await.unwrap();
+        let enum_layout = resolver.type_layout(type_("0xb0::m::E0")).await.unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     /// A type from an upgraded package, mixing structs defined in the original package and the
@@ -1183,8 +1438,9 @@ mod tests {
         ]);
         let resolver = Resolver::new(cache);
 
-        let layout = resolver.type_layout(type_("0xa1::n::T1")).await.unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let struct_layout = resolver.type_layout(type_("0xa1::n::T1")).await.unwrap();
+        let enum_layout = resolver.type_layout(type_("0xa1::n::E1")).await.unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     /// A generic type instantiation where the type parameters are resolved relative to linkage
@@ -1197,11 +1453,15 @@ mod tests {
         ]);
         let resolver = Resolver::new(cache);
 
-        let layout = resolver
+        let struct_layout = resolver
             .type_layout(type_("0xa0::m::T1<0xa0::m::T0, 0xa1::m::T3>"))
             .await
             .unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let enum_layout = resolver
+            .type_layout(type_("0xa0::m::E1<0xa0::m::E0, 0xa1::m::E3>"))
+            .await
+            .unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     /// Refer to a type, not by its defining ID, but by the ID of some later version of that
@@ -1216,11 +1476,15 @@ mod tests {
         ]);
         let resolver = Resolver::new(cache);
 
-        let layout = resolver
+        let struct_layout = resolver
             .type_layout(type_("0xa1::m::T1<0xa1::m::T3, 0xa1::m::T0>"))
             .await
             .unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let enum_layout = resolver
+            .type_layout(type_("0xa1::m::E1<0xa1::m::E3, 0xa1::m::E0>"))
+            .await
+            .unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     /// A type that refers to a types in a relinked package.  C depends on B and overrides its
@@ -1236,8 +1500,9 @@ mod tests {
         ]);
         let resolver = Resolver::new(cache);
 
-        let layout = resolver.type_layout(type_("0xc0::m::T0")).await.unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let struct_layout = resolver.type_layout(type_("0xc0::m::T0")).await.unwrap();
+        let enum_layout = resolver.type_layout(type_("0xc0::m::E0")).await.unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     #[tokio::test]
@@ -1255,11 +1520,15 @@ mod tests {
         );
 
         // The layout of this type is fine, because it is *just* at the correct depth.
-        let layout = resolver
+        let struct_layout = resolver
             .type_layout(type_("0xa0::m::T1<u8, u8>"))
             .await
             .unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let enum_layout = resolver
+            .type_layout(type_("0xa0::m::E1<u8, u8>"))
+            .await
+            .unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     #[tokio::test]
@@ -1277,11 +1546,16 @@ mod tests {
         );
 
         // The depth limit is now too low, so this will fail.
-        let err = resolver
+        let struct_err = resolver
             .type_layout(type_("0xa0::m::T1<u8, u8>"))
             .await
             .unwrap_err();
-        assert!(matches!(err, Error::ValueNesting(2)))
+        let enum_err = resolver
+            .type_layout(type_("0xa0::m::E1<u8, u8>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(struct_err, Error::ValueNesting(2)));
+        assert!(matches!(enum_err, Error::ValueNesting(2)));
     }
 
     #[tokio::test]
@@ -1300,11 +1574,16 @@ mod tests {
 
         // This layout calculation will fail early because we know that the type parameter we're
         // calculating will eventually contribute to a layout that exceeds the max depth.
-        let err = resolver
+        let struct_err = resolver
             .type_layout(type_("0xa0::m::T1<vector<vector<u8>>, u8>"))
             .await
             .unwrap_err();
-        assert!(matches!(err, Error::ValueNesting(3)))
+        let enum_err = resolver
+            .type_layout(type_("0xa0::m::E1<vector<vector<u8>>, u8>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(struct_err, Error::ValueNesting(3)));
+        assert!(matches!(enum_err, Error::ValueNesting(3)));
     }
 
     #[tokio::test]
@@ -1329,15 +1608,24 @@ mod tests {
             .type_layout(type_("0xd0::m::O<u8, u8>"))
             .await
             .unwrap();
+        let _ = resolver
+            .type_layout(type_("0xd0::m::EO<u8, u8>"))
+            .await
+            .unwrap();
 
         // But this one fails, even though the big layout is for a phantom type parameter. This may
         // change in future if we optimise the way we handle phantom type parameters to not
         // calculate their full layout, just their type tag.
-        let err = resolver
+        let struct_err = resolver
             .type_layout(type_("0xd0::m::O<u8, vector<vector<u8>>>"))
             .await
             .unwrap_err();
-        assert!(matches!(err, Error::ValueNesting(3)))
+        let enum_err = resolver
+            .type_layout(type_("0xd0::m::EO<u8, vector<vector<u8>>>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(struct_err, Error::ValueNesting(3)));
+        assert!(matches!(enum_err, Error::ValueNesting(3)));
     }
 
     #[tokio::test]
@@ -1359,12 +1647,17 @@ mod tests {
 
         // Make sure that even if all type parameters individually meet the depth requirements,
         // that we correctly fail if they extend the layout's depth on application.
-        let err = resolver
+        let struct_err = resolver
             .type_layout(type_("0xd0::m::O<vector<u8>, u8>"))
             .await
             .unwrap_err();
+        let enum_err = resolver
+            .type_layout(type_("0xd0::m::EO<vector<u8>, u8>"))
+            .await
+            .unwrap_err();
 
-        assert!(matches!(err, Error::ValueNesting(3)))
+        assert!(matches!(struct_err, Error::ValueNesting(3)));
+        assert!(matches!(enum_err, Error::ValueNesting(3)));
     }
 
     #[tokio::test]
@@ -1372,8 +1665,10 @@ mod tests {
         let (inner, cache) = package_cache([(1, build_package("s0"), s0_types())]);
         let resolver = Resolver::new(cache);
 
-        let not_found = resolver.type_layout(type_("0x1::m::T1")).await.unwrap_err();
-        assert!(matches!(not_found, Error::StructNotFound(_, _, _)));
+        let struct_not_found = resolver.type_layout(type_("0x1::m::T1")).await.unwrap_err();
+        let enum_not_found = resolver.type_layout(type_("0x1::m::E1")).await.unwrap_err();
+        assert!(matches!(struct_not_found, Error::DatatypeNotFound(_, _, _)));
+        assert!(matches!(enum_not_found, Error::DatatypeNotFound(_, _, _)));
 
         // Add a new version of the system package into the store underlying the cache.
         inner.write().unwrap().replace(
@@ -1381,8 +1676,9 @@ mod tests {
             cached_package(2, BTreeMap::new(), &build_package("s1"), &s1_types()),
         );
 
-        let layout = resolver.type_layout(type_("0x1::m::T1")).await.unwrap();
-        insta::assert_snapshot!(format!("{layout:#}"));
+        let struct_layout = resolver.type_layout(type_("0x1::m::T1")).await.unwrap();
+        let enum_layout = resolver.type_layout(type_("0x1::m::E1")).await.unwrap();
+        insta::assert_snapshot!(fmt(struct_layout, enum_layout));
     }
 
     #[tokio::test]
@@ -1415,6 +1711,10 @@ mod tests {
         assert_ne!(format!("{l0}"), format!("{l2}"));
         assert_eq!(stats(&inner), (1, 0));
 
+        // Enum types won't trigger a fetch either.
+        resolver.type_layout(type_("0xa0::m::E0")).await.unwrap();
+        assert_eq!(stats(&inner), (1, 0));
+
         // New package to load.  It's a system package, which would need a version check if it
         // already existed in the cache, but it doesn't yet, so we only see a fetch.
         let l3 = resolver.type_layout(type_("0x1::m::T0")).await.unwrap();
@@ -1424,6 +1724,11 @@ mod tests {
         let l4 = resolver.type_layout(type_("0x1::m::T0")).await.unwrap();
         assert_eq!(format!("{l3}"), format!("{l4}"));
         assert_eq!(stats(&inner), (2, 1));
+
+        // Reload a same system package type (enum), which will cause a version check.
+        let el4 = resolver.type_layout(type_("0x1::m::E0")).await.unwrap();
+        assert_ne!(format!("{el4}"), format!("{l4}"));
+        assert_eq!(stats(&inner), (2, 2));
 
         // Upgrade the system package
         inner.write().unwrap().replace(
@@ -1436,7 +1741,7 @@ mod tests {
         // system types) is why a layout cache would be particularly helpful (future optimisation).
         let l5 = resolver.type_layout(type_("0x1::m::T0")).await.unwrap();
         assert_eq!(format!("{l4}"), format!("{l5}"));
-        assert_eq!(stats(&inner), (3, 2));
+        assert_eq!(stats(&inner), (3, 3));
     }
 
     #[tokio::test]
@@ -1470,7 +1775,7 @@ mod tests {
             .type_layout(type_("0xa0::m::T9"))
             .await
             .unwrap_err();
-        assert!(matches!(err, Error::StructNotFound(_, _, _)));
+        assert!(matches!(err, Error::DatatypeNotFound(_, _, _)));
     }
 
     #[tokio::test]
@@ -1524,6 +1829,40 @@ mod tests {
             "a0::m::T0: {t0:#?}\n\
              a0::m::T1: {t1:#?}\n\
              a0::m::T2: {t2:#?}",
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_enums() {
+        let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
+        let a0 = cache
+            .fetch(AccountAddress::from_str("0xa0").unwrap())
+            .await
+            .unwrap();
+        let m = a0.module("m").unwrap();
+
+        assert_eq!(
+            m.enums(None, None).collect::<Vec<_>>(),
+            vec!["E0", "E1", "E2"],
+        );
+
+        assert_eq!(m.enums(None, Some("E1")).collect::<Vec<_>>(), vec!["E0"],);
+
+        assert_eq!(
+            m.enums(Some("E0"), Some("E2")).collect::<Vec<_>>(),
+            vec!["E1"],
+        );
+
+        assert_eq!(m.enums(Some("E1"), None).collect::<Vec<_>>(), vec!["E2"],);
+
+        let e0 = m.enum_def("E0").unwrap().unwrap();
+        let e1 = m.enum_def("E1").unwrap().unwrap();
+        let e2 = m.enum_def("E2").unwrap().unwrap();
+
+        insta::assert_snapshot!(format!(
+            "a0::m::E0: {e0:#?}\n\
+             a0::m::E1: {e1:#?}\n\
+             a0::m::E2: {e2:#?}",
         ));
     }
 
@@ -1843,10 +2182,14 @@ mod tests {
 
     fn a0_types() -> TypeOriginTable {
         vec![
-            struct_("0xa0", "m", "T0"),
-            struct_("0xa0", "m", "T1"),
-            struct_("0xa0", "m", "T2"),
-            struct_("0xa0", "n", "T0"),
+            datakey("0xa0", "m", "T0"),
+            datakey("0xa0", "m", "T1"),
+            datakey("0xa0", "m", "T2"),
+            datakey("0xa0", "m", "E0"),
+            datakey("0xa0", "m", "E1"),
+            datakey("0xa0", "m", "E2"),
+            datakey("0xa0", "n", "T0"),
+            datakey("0xa0", "n", "E0"),
         ]
     }
 
@@ -1854,47 +2197,56 @@ mod tests {
         let mut types = a0_types();
 
         types.extend([
-            struct_("0xa1", "m", "T3"),
-            struct_("0xa1", "m", "T4"),
-            struct_("0xa1", "n", "T1"),
+            datakey("0xa1", "m", "T3"),
+            datakey("0xa1", "m", "T4"),
+            datakey("0xa1", "n", "T1"),
+            datakey("0xa1", "m", "E3"),
+            datakey("0xa1", "m", "E4"),
+            datakey("0xa1", "n", "E1"),
         ]);
 
         types
     }
 
     fn b0_types() -> TypeOriginTable {
-        vec![struct_("0xb0", "m", "T0")]
+        vec![datakey("0xb0", "m", "T0"), datakey("0xb0", "m", "E0")]
     }
 
     fn c0_types() -> TypeOriginTable {
-        vec![struct_("0xc0", "m", "T0")]
+        vec![datakey("0xc0", "m", "T0"), datakey("0xc0", "m", "E0")]
     }
 
     fn d0_types() -> TypeOriginTable {
         vec![
-            struct_("0xd0", "m", "O"),
-            struct_("0xd0", "m", "P"),
-            struct_("0xd0", "m", "Q"),
-            struct_("0xd0", "m", "R"),
-            struct_("0xd0", "m", "S"),
-            struct_("0xd0", "m", "T"),
+            datakey("0xd0", "m", "O"),
+            datakey("0xd0", "m", "P"),
+            datakey("0xd0", "m", "Q"),
+            datakey("0xd0", "m", "R"),
+            datakey("0xd0", "m", "S"),
+            datakey("0xd0", "m", "T"),
+            datakey("0xd0", "m", "EO"),
+            datakey("0xd0", "m", "EP"),
+            datakey("0xd0", "m", "EQ"),
+            datakey("0xd0", "m", "ER"),
+            datakey("0xd0", "m", "ES"),
+            datakey("0xd0", "m", "ET"),
         ]
     }
 
     fn s0_types() -> TypeOriginTable {
-        vec![struct_("0x1", "m", "T0")]
+        vec![datakey("0x1", "m", "T0"), datakey("0x1", "m", "E0")]
     }
 
     fn s1_types() -> TypeOriginTable {
         let mut types = s0_types();
 
-        types.extend([struct_("0x1", "m", "T1")]);
+        types.extend([datakey("0x1", "m", "T1"), datakey("0x1", "m", "E1")]);
 
         types
     }
 
     fn sui_types() -> TypeOriginTable {
-        vec![struct_("0x2", "object", "UID")]
+        vec![datakey("0x2", "object", "UID")]
     }
 
     /// Build an in-memory package cache from locally compiled packages.  Assumes that all packages
@@ -2015,7 +2367,7 @@ mod tests {
         AccountAddress::from_str(a).unwrap()
     }
 
-    fn struct_(a: &str, m: &'static str, n: &'static str) -> DatatypeKey {
+    fn datakey(a: &str, m: &'static str, n: &'static str) -> DatatypeKey {
         DatatypeKey {
             package: addr(a),
             module: m.into(),

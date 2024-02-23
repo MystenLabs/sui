@@ -1,0 +1,116 @@
+//# publish
+module 0x2.ByValue {
+    enum Foo { V { x: u64 } }
+
+    foo(y: Self.Foo) {
+        let x: u64;
+    label b0:
+        // invalid
+        Foo.V<u64> { x }  = move(y);
+        return;
+    }
+}
+
+//# publish
+module 0x2.ByImmRef {
+    enum Foo { V { x: u64 } }
+
+    foo(y: Self.Foo) {
+        let x: u64;
+    label b0:
+        // invalid
+        Foo.V<u64> { x } &= move(y);
+        return;
+    }
+}
+
+//# publish
+module 0x2.ByMutRef {
+    enum Foo { V { x: u64 } }
+
+    foo(y: Self.Foo) {
+        let x: u64;
+    label b0:
+        // invalid
+        Foo.V<u64> { x } &mut = move(y);
+        return;
+    }
+}
+
+//# publish
+module 0x2.ByValue {
+    enum Foo { V { x: u64 } }
+
+    foo(y: &Self.Foo) {
+        let x: u64;
+    label b0:
+        // invalid
+        Foo.V<u64> { x } = move(y);
+        return;
+    }
+}
+
+//# publish
+module 0x2.ByImmRef {
+    enum Foo { V { x: u64 } }
+
+    foo(y: &Self.Foo) {
+        let x: u64;
+    label b0:
+        // invalid
+        Foo.V<u64> { x } &= move(y);
+        return;
+    }
+}
+
+//# publish
+module 0x2.ByMutRef {
+    enum Foo { V { x: u64 } }
+
+    foo(y: &Self.Foo) {
+        let x: u64;
+    label b0:
+        // invalid
+        Foo.V<u64> { x } &mut = move(y);
+        return;
+    }
+}
+
+//# publish
+module 0x2.ByValue {
+    enum Foo { V { x: u64 } }
+
+    foo(y: &mut Self.Foo) {
+        let x: u64;
+    label b0:
+        // invalid
+        Foo.V<u64> { x } = move(y);
+        return;
+    }
+}
+
+//# publish
+module 0x2.ByImmRef {
+    enum Foo { V { x: u64 } }
+
+    foo(y: &mut Self.Foo) {
+        let x: u64;
+    label b0:
+        // invalid
+        Foo.V<u64> { x } &= move(y);
+        return;
+    }
+}
+
+//# publish
+module 0x2.ByMutRef {
+    enum Foo { V { x: u64 } }
+
+    foo(y: &mut Self.Foo) {
+        let x: u64;
+    label b0:
+        // invalid
+        Foo.V<u64> { x } &mut = move(y);
+        return;
+    }
+}

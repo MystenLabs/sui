@@ -1,0 +1,14 @@
+//# publish
+module 0x42.A {
+    struct Coin has store { value: u64 }
+    enum T { V { f: Self.Coin } }
+
+    public t(this: &mut Self.T, y: Self.Coin) {
+        let x: &mut Self.Coin;
+    label b0:
+        T.V { f: x } &mut = move(this);
+        *move(x) = move(y); // cannot assign/mutate without drop ability
+        return;
+    }
+}
+// check: WRITEREF_WITHOUT_DROP_ABILITY

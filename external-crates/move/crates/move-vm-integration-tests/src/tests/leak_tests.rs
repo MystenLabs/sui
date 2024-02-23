@@ -34,6 +34,7 @@ fn leak_with_abort() {
         acquires_global_resources: vec![],
         code: Some(CodeUnit {
             locals: SignatureIndex(1),
+            jump_tables: vec![],
             code: vec![
                 // leak
                 LdU128(0),

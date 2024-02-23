@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 6-78:
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 12524800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 12547600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 80-80:
 created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7)
@@ -26,12 +26,12 @@ Contents: sui::dynamic_field::Field<u64, tto::M1::A> {id: sui::object::UID {id: 
 task 5 'view-object'. lines 86-86:
 Owner: Object ID: ( _ )
 Version: 2
-Contents: sui::dynamic_field::Field<u64, tto::M1::A> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, name: 0u64, value: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: _}}, value: vector[98u8, 95u8, 99u8, 104u8, 105u8, 108u8, 100u8, 95u8, 99u8, 104u8, 105u8, 108u8, 100u8]}}
+Contents: sui::dynamic_field::Field<u64, tto::M1::A> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, name: 0u64, value: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: _}}, value: vector[119u8, 114u8, 97u8, 112u8, 112u8, 101u8, 100u8, 95u8, 100u8, 111u8, 102u8]}}
 
 task 6 'view-object'. lines 88-88:
 Owner: Object ID: ( _ )
 Version: 2
-Contents: sui::dynamic_field::Field<u64, tto::M1::A> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}, name: 0u64, value: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: _}}, value: vector[119u8, 114u8, 97u8, 112u8, 112u8, 101u8, 100u8, 95u8, 100u8, 111u8, 102u8]}}
+Contents: sui::dynamic_field::Field<u64, tto::M1::A> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}, name: 0u64, value: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: _}}, value: vector[98u8, 95u8, 99u8, 104u8, 105u8, 108u8, 100u8, 95u8, 99u8, 104u8, 105u8, 108u8, 100u8]}}
 
 task 7 'view-object'. lines 90-90:
 Owner: Account Address ( A )

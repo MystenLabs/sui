@@ -9,7 +9,10 @@ use crate::{
         codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
         Diagnostic, Diagnostics, WarningFilters,
     },
-    editions::{check_feature_or_error as edition_check_feature, Edition, FeatureGate, Flavor},
+    editions::{
+        check_feature_or_error as edition_check_feature, feature_edition_error_msg, Edition,
+        FeatureGate, Flavor,
+    },
     expansion::ast as E,
     naming::ast as N,
     sui_mode,
@@ -521,6 +524,15 @@ impl CompilationEnv {
         edition_check_feature(self, self.package_config(package).edition, feature, loc)
     }
 
+    // Returns an error string if if the feature isn't supported, or None otherwise.
+    pub fn feature_edition_error_msg(
+        &mut self,
+        feature: FeatureGate,
+        package: Option<Symbol>,
+    ) -> Option<String> {
+        feature_edition_error_msg(self.package_config(package).edition, feature)
+    }
+
     pub fn supports_feature(&self, package: Option<Symbol>, feature: FeatureGate) -> bool {
         self.package_config(package).edition.supports(feature)
     }
@@ -860,3 +872,38 @@ macro_rules! process_binops {
 }
 
 pub(crate) use process_binops;
+
+//**************************************************************************************************
+// String Construction Helpers
+//**************************************************************************************************
+
+macro_rules! format_oxford_list {
+    ($sep:expr, $format_str:expr, $e:expr) => {{
+        let entries = $e;
+        match entries.len() {
+            0 => String::new(),
+            1 => format!($format_str, entries[0]),
+            2 => format!(
+                "{} {} {}",
+                format!($format_str, entries[0]),
+                $sep,
+                format!($format_str, entries[1])
+            ),
+            _ => {
+                let entries = entries
+                    .iter()
+                    .map(|entry| format!($format_str, entry))
+                    .collect::<Vec<_>>();
+                if let Some((last, init)) = entries.split_last() {
+                    let mut result = init.join(", ");
+                    result.push_str(&format!(", {} {}", $sep, last));
+                    result
+                } else {
+                    String::new()
+                }
+            }
+        }
+    }};
+}
+
+pub(crate) use format_oxford_list;

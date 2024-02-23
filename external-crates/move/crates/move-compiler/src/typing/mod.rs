@@ -8,6 +8,6 @@ mod dependency_ordering;
 mod expand;
 mod infinite_instantiations;
 mod macro_expand;
-mod recursive_structs;
+mod recursive_datatypes;
 pub(crate) mod translate;
 pub mod visitor;

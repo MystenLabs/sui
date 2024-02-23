@@ -184,6 +184,7 @@ pub struct ModuleDefinition {
 pub enum ModuleMember {
     Function(Function),
     Struct(StructDefinition),
+    Enum(EnumDefinition),
     Use(UseDecl),
     Friend(FriendDecl),
     Constant(Constant),
@@ -202,16 +203,16 @@ pub struct FriendDecl {
 }
 
 //**************************************************************************************************
-// Structs
+// Datatypes
 //**************************************************************************************************
 
 new_name!(Field);
-new_name!(StructName);
+new_name!(DatatypeName);
 
 pub type ResourceLoc = Option<Loc>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct StructTypeParameter {
+pub struct DatatypeTypeParameter {
     pub is_phantom: bool,
     pub name: Name,
     pub constraints: Vec<Ability>,
@@ -222,16 +223,42 @@ pub struct StructDefinition {
     pub attributes: Vec<Attributes>,
     pub loc: Loc,
     pub abilities: Vec<Ability>,
-    pub name: StructName,
-    pub type_parameters: Vec<StructTypeParameter>,
+    pub name: DatatypeName,
+    pub type_parameters: Vec<DatatypeTypeParameter>,
     pub fields: StructFields,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum StructFields {
-    Defined(Vec<(Field, Type)>),
+    Named(Vec<(Field, Type)>),
     Native(Loc),
     Positional(Vec<Type>),
+}
+
+new_name!(VariantName);
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct EnumDefinition {
+    pub attributes: Vec<Attributes>,
+    pub loc: Loc,
+    pub abilities: Vec<Ability>,
+    pub name: DatatypeName,
+    pub type_parameters: Vec<DatatypeTypeParameter>,
+    pub variants: Vec<VariantDefinition>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct VariantDefinition {
+    pub loc: Loc,
+    pub name: VariantName,
+    pub fields: VariantFields,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum VariantFields {
+    Named(Vec<(Field, Type)>),
+    Positional(Vec<Type>),
+    Empty,
 }
 
 //**************************************************************************************************
@@ -434,6 +461,8 @@ pub enum NameAccessChain_ {
     Two(LeadingNameAccess, Name),
     // (<Name>|<Num>)::<Name>::<Name>
     Three(Spanned<(LeadingNameAccess, Name)>, Name),
+    // (<Name>|<Num>)::<Name>::<Name>::<Name>
+    Four(Spanned<(LeadingNameAccess, Name)>, Name, Name),
 }
 pub type NameAccessChain = Spanned<NameAccessChain_>;
 
@@ -475,8 +504,8 @@ pub type Mutability = Option<Loc>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FieldBindings {
-    Named(Vec<(Field, Bind)>),
-    Positional(Vec<Bind>),
+    Named(Vec<Ellipsis<(Field, Bind)>>),
+    Positional(Vec<Ellipsis<Bind>>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -618,6 +647,8 @@ pub enum Exp_ {
 
     // if (eb) et else ef
     IfElse(Box<Exp>, Box<Exp>, Option<Box<Exp>>),
+    // match subject arms
+    Match(Box<Exp>, Spanned<Vec<MatchArm>>),
     // while (eb) eloop
     While(Box<Exp>, Box<Exp>),
     // loop eloop
@@ -715,6 +746,47 @@ pub enum SequenceItem_ {
     Bind(BindList, Option<Type>, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchArm_ {
+    pub pattern: MatchPattern,
+    pub guard: Option<Box<Exp>>,
+    pub rhs: Box<Exp>,
+}
+
+pub type MatchArm = Spanned<MatchArm_>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Ellipsis<T> {
+    Binder(T),
+    Ellipsis(Loc),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MatchPattern_ {
+    // T<t1, ..., tn>(pat1, ..., patn)
+    PositionalConstructor(
+        NameAccessChain,
+        Option<Vec<Type>>,
+        Spanned<Vec<Ellipsis<MatchPattern>>>,
+    ),
+    // T<t1, ..., tn> { x1: pat1, ..., xn: patn }
+    FieldConstructor(
+        NameAccessChain,
+        Option<Vec<Type>>,
+        Spanned<Vec<Ellipsis<(Field, MatchPattern)>>>,
+    ),
+    // T<t1, ..., tn>
+    Name(Mutability, NameAccessChain, Option<Vec<Type>>),
+    // 0 | true | ...
+    Literal(Value),
+    // pat1 | pat2
+    Or(Box<MatchPattern>, Box<MatchPattern>),
+    // x @ pat
+    At(Var, Box<MatchPattern>),
+}
+
+pub type MatchPattern = Spanned<MatchPattern_>;
 
 //**************************************************************************************************
 // Traits
@@ -992,6 +1064,9 @@ impl fmt::Display for NameAccessChain_ {
             NameAccessChain_::One(n) => write!(f, "{}", n),
             NameAccessChain_::Two(ln, n2) => write!(f, "{}::{}", ln, n2),
             NameAccessChain_::Three(sp!(_, (ln, n2)), n3) => write!(f, "{}::{}::{}", ln, n2, n3),
+            NameAccessChain_::Four(sp!(_, (ln, n2)), n3, n4) => {
+                write!(f, "{}::{}::{}::{}", ln, n2, n3, n4)
+            }
         }
     }
 }
@@ -1198,6 +1273,7 @@ impl AstDebug for ModuleMember {
         match self {
             ModuleMember::Function(f) => f.ast_debug(w),
             ModuleMember::Struct(s) => s.ast_debug(w),
+            ModuleMember::Enum(e) => e.ast_debug(w),
             ModuleMember::Use(u) => u.ast_debug(w),
             ModuleMember::Friend(f) => f.ast_debug(w),
             ModuleMember::Constant(c) => c.ast_debug(w),
@@ -1281,6 +1357,64 @@ impl AstDebug for FriendDecl {
     }
 }
 
+impl AstDebug for EnumDefinition {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let EnumDefinition {
+            attributes,
+            loc: _loc,
+            abilities,
+            name,
+            type_parameters,
+            variants,
+        } = self;
+        attributes.ast_debug(w);
+
+        if !abilities.is_empty() {
+            w.write("[");
+            w.list(abilities, " ", |w, ab_mod| {
+                ab_mod.ast_debug(w);
+                false
+            });
+            w.write("]");
+        }
+
+        w.write(&format!(" enum {}", name));
+        type_parameters.ast_debug(w);
+        w.block(|w| {
+            w.list(variants, ",", |w, variant| {
+                variant.ast_debug(w);
+                true
+            })
+        });
+    }
+}
+
+impl AstDebug for VariantDefinition {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let VariantDefinition {
+            loc: _,
+            name,
+            fields,
+        } = self;
+        w.write(&format!("{}", name));
+        match fields {
+            VariantFields::Named(fields) => w.block(|w| {
+                w.semicolon(fields, |w, (f, st)| {
+                    w.write(&format!("{}: ", f));
+                    st.ast_debug(w);
+                });
+            }),
+            VariantFields::Positional(types) => w.block(|w| {
+                w.semicolon(types.iter().enumerate(), |w, (i, st)| {
+                    w.write(&format!("pos{}: ", i));
+                    st.ast_debug(w);
+                });
+            }),
+            VariantFields::Empty => (),
+        }
+    }
+}
+
 impl AstDebug for StructDefinition {
     fn ast_debug(&self, w: &mut AstWriter) {
         let StructDefinition {
@@ -1305,7 +1439,7 @@ impl AstDebug for StructDefinition {
         w.write(&format!("struct {}", name));
         type_parameters.ast_debug(w);
         match fields {
-            StructFields::Defined(fields) => w.block(|w| {
+            StructFields::Named(fields) => w.block(|w| {
                 w.semicolon(fields, |w, (f, st)| {
                     w.write(&format!("{}: ", f));
                     st.ast_debug(w);
@@ -1628,7 +1762,7 @@ impl AstDebug for (Name, Vec<Ability>) {
     }
 }
 
-impl AstDebug for Vec<StructTypeParameter> {
+impl AstDebug for Vec<DatatypeTypeParameter> {
     fn ast_debug(&self, w: &mut AstWriter) {
         if !self.is_empty() {
             w.write("<");
@@ -1638,7 +1772,7 @@ impl AstDebug for Vec<StructTypeParameter> {
     }
 }
 
-impl AstDebug for StructTypeParameter {
+impl AstDebug for DatatypeTypeParameter {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Self {
             is_phantom,
@@ -1835,6 +1969,17 @@ impl AstDebug for Exp_ {
                     f.ast_debug(w);
                 }
             }
+            E::Match(subject, arms) => {
+                w.write("match (");
+                subject.ast_debug(w);
+                w.write(") ");
+                w.block(|w| {
+                    w.list(&arms.value, ", ", |w, arm| {
+                        arm.ast_debug(w);
+                        true
+                    })
+                });
+            }
             E::While(b, e) => {
                 w.write("while (");
                 b.ast_debug(w);
@@ -1976,6 +2121,101 @@ impl AstDebug for Exp_ {
     }
 }
 
+impl AstDebug for MatchArm_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let MatchArm_ {
+            pattern,
+            guard,
+            rhs,
+        } = self;
+        pattern.ast_debug(w);
+        if let Some(exp) = guard.as_ref() {
+            w.write(" if ");
+            exp.ast_debug(w);
+        }
+        w.write(" => ");
+        rhs.ast_debug(w);
+    }
+}
+
+impl<T: AstDebug> AstDebug for Ellipsis<T> {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            Ellipsis::Ellipsis(_) => {
+                w.write("..");
+            }
+            Ellipsis::Binder(p) => p.ast_debug(w),
+        }
+    }
+}
+
+impl AstDebug for Ellipsis<(Field, MatchPattern)> {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            Ellipsis::Ellipsis(_) => {
+                w.write("..");
+            }
+            Ellipsis::Binder((n, p)) => {
+                w.write(&format!("{}: ", n));
+                p.ast_debug(w);
+            }
+        }
+    }
+}
+
+impl AstDebug for MatchPattern_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        use MatchPattern_::*;
+        match self {
+            PositionalConstructor(name, tys_opt, fields) => {
+                name.ast_debug(w);
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.write("(");
+                w.comma(fields.value.iter(), |w, pat| {
+                    pat.ast_debug(w);
+                });
+                w.write(") ");
+            }
+            FieldConstructor(name, tys_opt, fields) => {
+                name.ast_debug(w);
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.write(" {");
+                w.comma(fields.value.iter(), |w, field_pat| field_pat.ast_debug(w));
+                w.write("} ");
+            }
+            Name(mut_, name, tys_opt) => {
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                if mut_.is_some() {
+                    w.write("mut ");
+                }
+                name.ast_debug(w)
+            }
+            Literal(v) => v.ast_debug(w),
+            Or(lhs, rhs) => {
+                lhs.ast_debug(w);
+                w.write(" | ");
+                rhs.ast_debug(w);
+            }
+            At(x, pat) => {
+                w.write(format!("{}@", x));
+                pat.ast_debug(w);
+            }
+        }
+    }
+}
+
 impl AstDebug for BinOp_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         w.write(&format!("{}", self));
@@ -2093,14 +2333,27 @@ impl AstDebug for LambdaBindings_ {
     }
 }
 
+impl AstDebug for Ellipsis<(Field, Bind)> {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            Ellipsis::Ellipsis(_) => {
+                w.write("..");
+            }
+            Ellipsis::Binder((n, b)) => {
+                w.write(&format!("{}: ", n));
+                b.ast_debug(w);
+            }
+        }
+    }
+}
+
 impl AstDebug for FieldBindings {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
             FieldBindings::Named(bs) => {
                 w.write("{");
-                w.comma(bs, |w, (f, b)| {
-                    w.write(&format!("{}: ", f));
-                    b.ast_debug(w);
+                w.comma(bs, |w, e| {
+                    e.ast_debug(w);
                 });
                 w.write("}");
             }

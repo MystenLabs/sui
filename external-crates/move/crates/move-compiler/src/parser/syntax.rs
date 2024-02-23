@@ -13,14 +13,14 @@ use move_symbol_pool::{symbol, Symbol};
 use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
-    editions::{Edition, FeatureGate},
+    editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, lexer::*},
     shared::*,
     MatchedFileCommentMap,
 };
 
 struct Context<'env, 'lexer, 'input> {
-    package_name: Option<Symbol>,
+    current_package: Option<Symbol>,
     env: &'env mut CompilationEnv,
     tokens: &'lexer mut Lexer<'input>,
 }
@@ -32,7 +32,7 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
         package_name: Option<Symbol>,
     ) -> Self {
         Self {
-            package_name,
+            current_package: package_name,
             env,
             tokens,
         }
@@ -351,6 +351,50 @@ where
     }
 }
 
+// Helper for location blocks
+
+macro_rules! with_loc {
+    ($context:expr, $body:block) => {{
+        let start_loc = $context.tokens.start_loc();
+        let result = $body;
+        let end_loc = $context.tokens.previous_end_loc();
+        (
+            make_loc($context.tokens.file_hash(), start_loc, end_loc),
+            result,
+        )
+    }};
+    ($context:expr, $body:expr) => {{
+        let start_loc = $context.tokens.start_loc();
+        let result = $body;
+        let end_loc = $context.tokens.previous_end_loc();
+        (
+            make_loc($context.tokens.file_hash(), start_loc, end_loc),
+            result,
+        )
+    }};
+}
+
+macro_rules! ok_with_loc {
+    ($context:expr, $body:block) => {{
+        let start_loc = $context.tokens.start_loc();
+        let result = $body;
+        let end_loc = $context.tokens.previous_end_loc();
+        Ok(sp(
+            make_loc($context.tokens.file_hash(), start_loc, end_loc),
+            result,
+        ))
+    }};
+    ($context:expr, $body:expr) => {{
+        let start_loc = $context.tokens.start_loc();
+        let result = $body;
+        let end_loc = $context.tokens.previous_end_loc();
+        Ok(sp(
+            make_loc($context.tokens.file_hash(), start_loc, end_loc),
+            result,
+        ))
+    }};
+}
+
 //**************************************************************************************************
 // Identifiers, Addresses, and Names
 //**************************************************************************************************
@@ -486,25 +530,21 @@ fn parse_module_name(context: &mut Context) -> Result<ModuleName, Box<Diagnostic
 //                  | "::" <LeadingNameAccess> "::" <ModuleName>
 
 // Parse a module access (a variable, struct type, or function):
-//      NameAccessChain = <LeadingNameAccess> ( "::" <Identifier> ( "::" <Identifier> )? )?
+//      NameAccessChain =
+//          <LeadingNameAccess> ( "::" <Identifier> ( "::" <Identifier> ( "::" <Identifier> )? )? )?
 fn parse_name_access_chain<'a, F: FnOnce() -> &'a str>(
     context: &mut Context,
     item_description: F,
 ) -> Result<NameAccessChain, Box<Diagnostic>> {
-    let start_loc = context.tokens.start_loc();
-    let access = if context.tokens.peek() == Tok::ColonColon {
-        context.tokens.advance()?;
-        parse_name_access_chain_(context, true, item_description)?
-    } else {
-        parse_name_access_chain_(context, false, item_description)?
-    };
-    let end_loc = context.tokens.previous_end_loc();
-    Ok(spanned(
-        context.tokens.file_hash(),
-        start_loc,
-        end_loc,
-        access,
-    ))
+    ok_with_loc!(
+        context,
+        if context.tokens.peek() == Tok::ColonColon {
+            context.tokens.advance()?;
+            parse_name_access_chain_(context, true, item_description)?
+        } else {
+            parse_name_access_chain_(context, false, item_description)?
+        }
+    )
 }
 
 // Parse a module access with a specific description
@@ -557,7 +597,12 @@ fn parse_name_access_chain_<'a, F: FnOnce() -> &'a str>(
     );
     consume_token(context.tokens, Tok::ColonColon)?;
     let n3 = parse_identifier(context)?;
-    Ok(NameAccessChain_::Three(sp(ln_n2_loc, (ln, n2)), n3))
+    if context.tokens.peek() != Tok::ColonColon {
+        return Ok(NameAccessChain_::Three(sp(ln_n2_loc, (ln, n2)), n3));
+    }
+    consume_token(context.tokens, Tok::ColonColon)?;
+    let n4 = parse_identifier(context)?;
+    Ok(NameAccessChain_::Four(sp(ln_n2_loc, (ln, n2)), n3, n4))
 }
 
 //**************************************************************************************************
@@ -786,8 +831,33 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
 // Fields and Bindings
 //**************************************************************************************************
 
+// Parse an optional ellipis token. Consumes and returns the location of the token if present, and
+// returns `Ok(None)` if not present.
+//      Ellipsis = "..."?
+fn parse_ellipsis_opt(context: &mut Context) -> Result<Option<Loc>, Box<Diagnostic>> {
+    consume_optional_token_with_loc(context.tokens, Tok::PeriodPeriod)
+}
+
+// Parse an optional "mut" modifier token. Consumes and returns the location of the token if present
+// and returns None otherwise.
+//     MutOpt = "mut"?
+fn parse_mut_opt(context: &mut Context) -> Result<Option<Loc>, Box<Diagnostic>> {
+    if context.tokens.peek() == Tok::Mut {
+        let start_loc = context.tokens.start_loc();
+        context.tokens.advance()?;
+        let end_loc = context.tokens.previous_end_loc();
+        Ok(Some(make_loc(
+            context.tokens.file_hash(),
+            start_loc,
+            end_loc,
+        )))
+    } else {
+        Ok(None)
+    }
+}
+
 // Parse a field name optionally followed by a colon and an expression argument:
-//      ExpField = <Field> <":" <Exp>>?
+//      ExpField = <Field> ( ":" <Exp> )?
 fn parse_exp_field(context: &mut Context) -> Result<(Field, Exp), Box<Diagnostic>> {
     let f = parse_field(context)?;
     let arg = if match_token(context.tokens, Tok::Colon)? {
@@ -805,10 +875,11 @@ fn parse_exp_field(context: &mut Context) -> Result<(Field, Exp), Box<Diagnostic
 //      BindField =
 //          <Field> <":" <Bind>>?
 //          | "mut" <Field>
+//          | <Ellipsis>
 //
 // If the binding is not specified, the default is to use a variable
 // with the same name as the field.
-fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnostic>> {
+fn parse_bind_field(context: &mut Context) -> Result<Ellipsis<(Field, Bind)>, Box<Diagnostic>> {
     if context.tokens.peek() == Tok::Mut {
         let start_loc = context.tokens.start_loc();
         context.tokens.advance()?;
@@ -816,15 +887,18 @@ fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnost
         let mut_loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
         let f = parse_field(context)?;
         let arg = sp(f.loc(), Bind_::Var(Some(mut_loc), Var(f.0)));
-        Ok((f, arg))
+        Ok(Ellipsis::Binder((f, arg)))
     } else {
+        if let Some(loc) = parse_ellipsis_opt(context)? {
+            return Ok(Ellipsis::Ellipsis(loc));
+        }
         let f = parse_field(context)?;
         let arg = if match_token(context.tokens, Tok::Colon)? {
             parse_bind(context)?
         } else {
             sp(f.loc(), Bind_::Var(None, Var(f.0)))
         };
-        Ok((f, arg))
+        Ok(Ellipsis::Binder((f, arg)))
     }
 }
 
@@ -832,7 +906,7 @@ fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnost
 //      Bind =
 //          "mut"? <Var>
 //          | <NameAccessChain> <OptionalTypeArgs> "{" Comma<BindField> "}"
-//          | <NameAccessChain> <OptionalTypeArgs> "(" Comma<Bind> ")"
+//          | <NameAccessChain> <OptionalTypeArgs> "(" Comma<BindOrEllipsis> ")"
 fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     if matches!(
@@ -844,13 +918,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
             next_tok,
             Tok::LBrace | Tok::Less | Tok::ColonColon | Tok::LParen
         ) {
-            let mut_ = if context.tokens.peek() == Tok::Mut {
-                context.tokens.advance()?;
-                let end_loc = context.tokens.previous_end_loc();
-                Some(make_loc(context.tokens.file_hash(), start_loc, end_loc))
-            } else {
-                None
-            };
+            let mut_ = parse_mut_opt(context)?;
             let v = Bind_::Var(mut_, parse_var(context)?);
             let end_loc = context.tokens.previous_end_loc();
             return Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, v));
@@ -865,14 +933,14 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
         let current_loc = current_token_loc(context.tokens);
         context.env.check_feature(
             FeatureGate::PositionalFields,
-            context.package_name,
+            context.current_package,
             current_loc,
         );
         let args = parse_comma_list(
             context,
             Tok::LParen,
             Tok::RParen,
-            parse_bind,
+            parse_bind_or_ellipsis,
             "a field binding",
         )?;
         FieldBindings::Positional(args)
@@ -894,6 +962,16 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
         end_loc,
         unpack,
     ))
+}
+
+// Parse an inner field binding -- either a normal binding or an ellipsis:
+//      EllipsisOrBind = <Bind> | <Ellipsis>
+fn parse_bind_or_ellipsis(context: &mut Context) -> Result<Ellipsis<Bind>, Box<Diagnostic>> {
+    if let Some(loc) = parse_ellipsis_opt(context)? {
+        return Ok(Ellipsis::Ellipsis(loc));
+    }
+    let b = parse_bind(context)?;
+    Ok(Ellipsis::Binder(b))
 }
 
 // Parse a list of bindings, which can be zero, one, or more bindings:
@@ -1132,6 +1210,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
 //          | "return" <BlockLabel>? <Exp>?
 //          | "abort" "{" <Exp> "}"
 //          | "abort" <Exp>
+//          | "match" "(" <Exp> ")" "{" (<MatchArm> ",")+ "}"
 fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
     const VECTOR_IDENT: &str = "vector";
 
@@ -1180,7 +1259,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
         Tok::ColonColon
             if context
                 .env
-                .supports_feature(context.package_name, FeatureGate::Move2024Paths) =>
+                .supports_feature(context.current_package, FeatureGate::Move2024Paths) =>
         {
             if context.tokens.lookahead()? == Tok::Identifier {
                 parse_name_exp(context)?
@@ -1285,6 +1364,7 @@ fn is_control_exp(tok: Tok) -> bool {
             | Tok::Return
             | Tok::Abort
             | Tok::BlockLabel
+            | Tok::Match
     )
 }
 
@@ -1462,6 +1542,15 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
             };
             (Exp_::Labeled(name, Box::new(e)), ends_in_block)
         }
+        Tok::Match => {
+            context.tokens.advance()?;
+            consume_token(context.tokens, Tok::LParen)?;
+            let subject_exp = Box::new(parse_exp(context)?);
+            consume_token(context.tokens, Tok::RParen)?;
+            let arms = parse_match_arms(context)?;
+            let result = Exp_::Match(subject_exp, arms);
+            (result, true)
+        }
         _ => unreachable!(),
     };
     let end_loc = context.tokens.previous_end_loc();
@@ -1535,21 +1624,213 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
 
 // Parse the arguments to a call: "(" Comma<Exp> ")"
 fn parse_call_args(context: &mut Context) -> Result<Spanned<Vec<Exp>>, Box<Diagnostic>> {
-    let start_loc = context.tokens.start_loc();
-    let args = parse_comma_list(
+    ok_with_loc!(
         context,
-        Tok::LParen,
-        Tok::RParen,
-        parse_exp,
-        "a call argument expression",
-    )?;
-    let end_loc = context.tokens.previous_end_loc();
-    Ok(spanned(
-        context.tokens.file_hash(),
-        start_loc,
-        end_loc,
-        args,
-    ))
+        parse_comma_list(
+            context,
+            Tok::LParen,
+            Tok::RParen,
+            parse_exp,
+            "a call argument expression",
+        )?
+    )
+}
+
+// Parses a series of match arms, such as for a match block body "{" (<MatchArm>,)+ "}"
+fn parse_match_arms(context: &mut Context) -> Result<Spanned<Vec<MatchArm>>, Box<Diagnostic>> {
+    ok_with_loc!(
+        context,
+        parse_comma_list(
+            context,
+            Tok::LBrace,
+            Tok::RBrace,
+            parse_match_arm,
+            "a call argument expression",
+        )?
+    )
+}
+
+// Parses a match arm:
+//   <MatchArm> = <MatchPat> ( "if" "(" <Exp>")" )? "=>" ("{" <Exp> "}" | <Exp>)
+fn parse_match_arm(context: &mut Context) -> Result<MatchArm, Box<Diagnostic>> {
+    ok_with_loc!(context, {
+        let pattern = parse_match_pattern(context)?;
+        let guard = match context.tokens.peek() {
+            Tok::If => {
+                context.tokens.advance()?;
+                consume_token(context.tokens, Tok::LParen)?;
+                let guard_exp = parse_exp(context)?;
+                consume_token(context.tokens, Tok::RParen)?;
+                Some(Box::new(guard_exp))
+            }
+            _ => None,
+        };
+        consume_token(context.tokens, Tok::EqualGreater)?;
+        let rhs = match context.tokens.peek() {
+            Tok::LBrace => {
+                let block_start_loc = context.tokens.start_loc();
+                context.tokens.advance()?; // consume the LBrace
+                let block_ = Exp_::Block(parse_sequence(context)?);
+                let block_end_loc = context.tokens.previous_end_loc();
+                let exp = spanned(
+                    context.tokens.file_hash(),
+                    block_start_loc,
+                    block_end_loc,
+                    block_,
+                );
+                Box::new(exp)
+            }
+            _ => Box::new(parse_exp(context)?),
+        };
+        MatchArm_ {
+            pattern,
+            guard,
+            rhs,
+        }
+    })
+}
+
+// Parses a match pattern:
+//   <MatchPat> = <OptAtPat> ("|" <MatchPat>)?
+//   <OptAtPat> = (<Identifier> "@")? <CtorPat>
+//   <CtorPat>  = "(" <MatchPat> ")"
+//              | <NameAccessChain> <OptionalTypeArgs> "{" Comma<PatField> "}"
+//              | <NameAccessChain> <OptionalTypeArgs> "(" Comma<MatchPat> ")"
+//              | <NameAccessChain> <OptionalTypeArgs>
+//   <PatField> = <Field> ( ":" <MatchPat> )?
+
+fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagnostic>> {
+    const INVALID_PAT_ERROR_MSG: &str = "Invalid pattern";
+
+    use MatchPattern_::*;
+
+    fn parse_ctor_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagnostic>> {
+        match context.tokens.peek() {
+            Tok::LParen => {
+                context.tokens.advance()?;
+                let pat = parse_match_pattern(context);
+                consume_token(context.tokens, Tok::RParen)?;
+                pat
+            }
+            Tok::Mut | Tok::Identifier => ok_with_loc!(context, {
+                let next_tok = context.tokens.lookahead()?;
+                if !matches!(
+                    next_tok,
+                    Tok::LBrace | Tok::Less | Tok::ColonColon | Tok::LParen
+                ) {
+                    let mut_ = parse_mut_opt(context)?;
+                    let name_access_chain = parse_name_access_chain(context, || "a pattern entry")?;
+                    Name(mut_, name_access_chain, None)
+                } else {
+                    let name_access_chain = parse_name_access_chain(context, || "a pattern entry")?;
+                    let ty_args = parse_optional_type_args(context)?;
+
+                    match context.tokens.peek() {
+                        Tok::LParen => {
+                            let (loc, patterns) = with_loc!(
+                                context,
+                                parse_comma_list(
+                                    context,
+                                    Tok::LParen,
+                                    Tok::RParen,
+                                    parse_positional_field_pattern,
+                                    "a pattern",
+                                )?
+                            );
+                            PositionalConstructor(name_access_chain, ty_args, sp(loc, patterns))
+                        }
+                        Tok::LBrace => {
+                            let (loc, patterns) = with_loc!(
+                                context,
+                                parse_comma_list(
+                                    context,
+                                    Tok::LBrace,
+                                    Tok::RBrace,
+                                    parse_field_pattern,
+                                    "a field pattern",
+                                )?
+                            );
+                            FieldConstructor(name_access_chain, ty_args, sp(loc, patterns))
+                        }
+                        _ => Name(None, name_access_chain, ty_args),
+                    }
+                }
+            }),
+            _ => {
+                if let Some(value) = maybe_parse_value(context)? {
+                    Ok(sp(value.loc, Literal(value)))
+                } else {
+                    Err(Box::new(diag!(
+                        Syntax::UnexpectedToken,
+                        (context.tokens.current_token_loc(), INVALID_PAT_ERROR_MSG)
+                    )))
+                }
+            }
+        }
+    }
+
+    fn parse_positional_field_pattern(
+        context: &mut Context,
+    ) -> Result<Ellipsis<MatchPattern>, Box<Diagnostic>> {
+        if let Some(loc) = parse_ellipsis_opt(context)? {
+            return Ok(Ellipsis::Ellipsis(loc));
+        }
+
+        parse_match_pattern(context).map(Ellipsis::Binder)
+    }
+
+    fn parse_field_pattern(
+        context: &mut Context,
+    ) -> Result<Ellipsis<(Field, MatchPattern)>, Box<Diagnostic>> {
+        const INVALID_MUT_ERROR_MSG: &str = "'mut' modifier can only be used on variable bindings";
+
+        if let Some(loc) = parse_ellipsis_opt(context)? {
+            return Ok(Ellipsis::Ellipsis(loc));
+        }
+
+        let mut_ = parse_mut_opt(context)?;
+        let field = parse_field(context)?;
+        let pattern = if match_token(context.tokens, Tok::Colon)? {
+            if let Some(loc) = mut_ {
+                return Err(Box::new(diag!(
+                    Syntax::UnexpectedToken,
+                    (loc, INVALID_MUT_ERROR_MSG)
+                )));
+            }
+            parse_match_pattern(context)?
+        } else {
+            sp(
+                field.loc(),
+                Name(mut_, sp(field.loc(), NameAccessChain_::One(field.0)), None),
+            )
+        };
+        Ok(Ellipsis::Binder((field, pattern)))
+    }
+
+    fn parse_optional_at_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagnostic>> {
+        match context.tokens.peek() {
+            Tok::Identifier if context.tokens.lookahead() == Ok(Tok::AtSign) => {
+                ok_with_loc!(context, {
+                    let binder = parse_var(context)?;
+                    consume_token(context.tokens, Tok::AtSign)?;
+                    let rhs = parse_ctor_pattern(context)?;
+                    MatchPattern_::At(binder, Box::new(rhs))
+                })
+            }
+            _ => parse_ctor_pattern(context),
+        }
+    }
+
+    ok_with_loc!(context, {
+        let lhs = parse_optional_at_pattern(context)?;
+        if matches!(context.tokens.peek(), Tok::Pipe) {
+            context.tokens.advance()?;
+            let rhs = parse_match_pattern(context)?;
+            MatchPattern_::Or(Box::new(lhs), Box::new(rhs))
+        } else {
+            lhs.value
+        }
+    })
 }
 
 // Return true if the current token is one that might occur after an Exp.
@@ -1857,7 +2138,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                     Tok::NumValue | Tok::NumTypedValue
                         if context.env.check_feature(
                             FeatureGate::PositionalFields,
-                            context.package_name,
+                            context.current_package,
                             loc,
                         ) =>
                     {
@@ -2293,7 +2574,7 @@ fn parse_type_parameter(context: &mut Context) -> Result<(Name, Vec<Ability>), B
 //   TypeParameterWithPhantomDecl = "phantom"? <TypeParameter>
 fn parse_type_parameter_with_phantom_decl(
     context: &mut Context,
-) -> Result<StructTypeParameter, Box<Diagnostic>> {
+) -> Result<(bool, Name, Vec<Ability>), Box<Diagnostic>> {
     let is_phantom =
         if context.tokens.peek() == Tok::Identifier && context.tokens.content() == "phantom" {
             context.tokens.advance()?;
@@ -2302,11 +2583,7 @@ fn parse_type_parameter_with_phantom_decl(
             false
         };
     let (name, constraints) = parse_type_parameter(context)?;
-    Ok(StructTypeParameter {
-        is_phantom,
-        name,
-        constraints,
-    })
+    Ok((is_phantom, name, constraints))
 }
 
 // Parse optional type parameter list.
@@ -2327,22 +2604,35 @@ fn parse_optional_type_parameters(
     }
 }
 
-// Parse optional struct type parameters:
-//    StructTypeParameter = '<' Comma<TypeParameterWithPhantomDecl> ">" | <empty>
-fn parse_struct_type_parameters(
+// Parse optional datatype type parameters:
+//    DatatypeTypeParameter = '<' Comma<TypeParameterWithPhantomDecl> ">" | <empty>
+fn parse_datatype_type_parameters(
     context: &mut Context,
-) -> Result<Vec<StructTypeParameter>, Box<Diagnostic>> {
+) -> Result<Vec<DatatypeTypeParameter>, Box<Diagnostic>> {
     if context.tokens.peek() == Tok::Less {
         parse_comma_list(
             context,
             Tok::Less,
             Tok::Greater,
-            parse_type_parameter_with_phantom_decl,
+            parse_datatype_type_parameter,
             "a type parameter",
         )
     } else {
         Ok(vec![])
     }
+}
+
+// Parse type parameter with optional phantom declaration:
+//   TypeParameterWithPhantomDecl = "phantom"? <TypeParameter>
+fn parse_datatype_type_parameter(
+    context: &mut Context,
+) -> Result<DatatypeTypeParameter, Box<Diagnostic>> {
+    let (is_phantom, name, constraints) = parse_type_parameter_with_phantom_decl(context)?;
+    Ok(DatatypeTypeParameter {
+        is_phantom,
+        name,
+        constraints,
+    })
 }
 
 //**************************************************************************************************
@@ -2452,18 +2742,200 @@ fn parse_function_decl(
 // Parse a function parameter:
 //      Parameter = "mut"? <Var> ":" <Type>
 fn parse_parameter(context: &mut Context) -> Result<(Mutability, Var, Type), Box<Diagnostic>> {
-    let mut_ = if context.tokens.peek() == Tok::Mut {
-        let start_loc = context.tokens.start_loc();
-        context.tokens.advance()?;
-        let end_loc = context.tokens.previous_end_loc();
-        Some(make_loc(context.tokens.file_hash(), start_loc, end_loc))
-    } else {
-        None
-    };
+    let mut_ = parse_mut_opt(context)?;
     let v = parse_var(context)?;
     consume_token(context.tokens, Tok::Colon)?;
     let t = parse_type(context)?;
     Ok((mut_, v, t))
+}
+
+//**************************************************************************************************
+// Enums
+//**************************************************************************************************
+
+// Parse an enum definition:
+//      EnumDecl =
+//          "enum" <EnumDefName> ("has" <Ability> (, <Ability>)+)?
+//          "{" (<VariantDecl>,)+ "}" ("has" <Ability> (, <Ability>)+;)
+//      EnumDefName =
+//          <Identifier> <OptionalTypeParameters>
+// Where the the two "has" statements are mutually exclusive -- an enum cannot be declared with
+// both infix and postfix ability declarations.
+fn parse_enum_decl(
+    attributes: Vec<Attributes>,
+    start_loc: usize,
+    modifiers: Modifiers,
+    context: &mut Context,
+) -> Result<EnumDefinition, Box<Diagnostic>> {
+    let Modifiers {
+        visibility,
+        entry,
+        native,
+        macro_,
+    } = modifiers;
+
+    check_no_modifier(context, ENTRY_MODIFIER, entry, "enum");
+    check_no_modifier(context, MACRO_MODIFIER, macro_, "enum");
+    check_no_modifier(context, NATIVE_MODIFIER, native, "enum");
+    check_enum_visibility(visibility, context);
+
+    consume_token(context.tokens, Tok::Enum)?;
+
+    // <EnumDefName>
+    let name = DatatypeName(parse_identifier(context)?);
+    let type_parameters = parse_datatype_type_parameters(context)?;
+
+    let infix_ability_declaration_loc =
+        if context.tokens.peek() == Tok::Identifier && context.tokens.content() == "has" {
+            Some(current_token_loc(context.tokens))
+        } else {
+            None
+        };
+    let mut abilities = if infix_ability_declaration_loc.is_some() {
+        context.tokens.advance()?;
+        parse_list(
+            context,
+            |context| match context.tokens.peek() {
+                Tok::Comma => {
+                    context.tokens.advance()?;
+                    Ok(true)
+                }
+                Tok::LBrace | Tok::Semicolon | Tok::LParen => Ok(false),
+                _ => Err(unexpected_token_error(
+                    context.tokens,
+                    &format!(
+                        "one of: '{}', '{}', '{}', or '{}'",
+                        Tok::Comma,
+                        Tok::LBrace,
+                        Tok::LParen,
+                        Tok::Semicolon
+                    ),
+                )),
+            },
+            parse_ability,
+        )?
+    } else {
+        vec![]
+    };
+
+    let variants = parse_enum_variant_decls(context)?;
+    parse_postfix_ability_declarations(infix_ability_declaration_loc, &mut abilities, context)?;
+
+    let loc = make_loc(
+        context.tokens.file_hash(),
+        start_loc,
+        context.tokens.previous_end_loc(),
+    );
+    Ok(EnumDefinition {
+        attributes,
+        loc,
+        abilities,
+        name,
+        type_parameters,
+        variants,
+    })
+}
+
+fn parse_enum_variant_decls(
+    context: &mut Context,
+) -> Result<Vec<VariantDefinition>, Box<Diagnostic>> {
+    let start_loc = context.tokens.start_loc();
+    expect_token!(
+        context.tokens,
+        Tok::LBrace,
+        Tok::LParen =>
+            (Syntax::UnexpectedToken, context.tokens.current_token_loc(), "Enum variants must be within '{}' blocks"),
+        Tok::Semicolon =>
+            (Syntax::UnexpectedToken, context.tokens.current_token_loc(), "Native enums are not supported")
+    )?;
+
+    let variants = parse_comma_list_after_start(
+        context,
+        start_loc,
+        Tok::LBrace,
+        Tok::RBrace,
+        parse_enum_variant_decl,
+        "a variant",
+    )?;
+    Ok(variants)
+}
+
+// Parse an enum variant definition:
+//      VariantDecl = <Identifier> ("{" Comma<FieldAnnot> "}" | "(" Comma<PosField> ")")
+fn parse_enum_variant_decl(context: &mut Context) -> Result<VariantDefinition, Box<Diagnostic>> {
+    let start_loc = context.tokens.start_loc();
+    let name = parse_identifier(context)?;
+    let fields = parse_enum_variant_fields(context)?;
+    let loc = make_loc(
+        context.tokens.file_hash(),
+        start_loc,
+        context.tokens.previous_end_loc(),
+    );
+    Ok(VariantDefinition {
+        loc,
+        name: VariantName(name),
+        fields,
+    })
+}
+
+fn parse_enum_variant_fields(context: &mut Context) -> Result<VariantFields, Box<Diagnostic>> {
+    match context.tokens.peek() {
+        Tok::LParen => {
+            let current_package = context.current_package;
+            let loc = current_token_loc(context.tokens);
+            context
+                .env
+                .check_feature(FeatureGate::PositionalFields, current_package, loc);
+
+            let list = parse_comma_list(
+                context,
+                Tok::LParen,
+                Tok::RParen,
+                parse_positional_field,
+                "a type",
+            )?;
+            Ok(VariantFields::Positional(list))
+        }
+        Tok::LBrace => {
+            let fields = parse_comma_list(
+                context,
+                Tok::LBrace,
+                Tok::RBrace,
+                parse_field_annot,
+                "a field",
+            )?;
+            Ok(VariantFields::Named(fields))
+        }
+        _ => Ok(VariantFields::Empty),
+    }
+}
+
+fn check_enum_visibility(visibility: Option<Visibility>, context: &mut Context) {
+    let current_package = context.current_package;
+    // NB this could be an if-let but we will eventually want the match for other vis. support.
+    match &visibility {
+        Some(Visibility::Public(loc)) => {
+            context
+                .env
+                .check_feature(FeatureGate::Enums, current_package, *loc);
+        }
+        vis => {
+            let (loc, vis_str) = match vis {
+                Some(vis) => (vis.loc().unwrap(), format!("'{vis}'")),
+                None => {
+                    let loc = current_token_loc(context.tokens);
+                    (loc, "Internal".to_owned())
+                }
+            };
+            let msg = format!(
+                "Invalid enum declaration. {vis_str} enum declarations are not yet supported"
+            );
+            let note = "Visibility annotations are required on enum declarations.";
+            let mut err = diag!(Syntax::InvalidModifier, (loc, msg));
+            err.add_note(note);
+            context.env.add_diag(err);
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -2499,8 +2971,8 @@ fn parse_struct_decl(
     consume_token(context.tokens, Tok::Struct)?;
 
     // <StructDefName>
-    let name = StructName(parse_identifier(context)?);
-    let type_parameters = parse_struct_type_parameters(context)?;
+    let name = DatatypeName(parse_identifier(context)?);
+    let type_parameters = parse_datatype_type_parameters(context)?;
 
     let infix_ability_declaration_loc =
         if context.tokens.peek() == Tok::Identifier && context.tokens.content() == "has" {
@@ -2580,6 +3052,18 @@ fn parse_field_annot(context: &mut Context) -> Result<(Field, Type), Box<Diagnos
 //      PosField = <DocComments> <Type>
 fn parse_positional_field(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
     context.tokens.match_doc_comments();
+    if matches!(
+        (context.tokens.peek(), context.tokens.lookahead()),
+        (Tok::Identifier, Ok(Tok::Colon))
+    ) {
+        return Err(Box::new(diag!(
+            Syntax::UnexpectedToken,
+            (
+                context.tokens.current_token_loc(),
+                "Cannot use named fields in a positional definition"
+            )
+        )));
+    }
     parse_type(context)
 }
 
@@ -2599,7 +3083,7 @@ fn parse_postfix_ability_declarations(
     if postfix_ability_declaration {
         context.env.check_feature(
             FeatureGate::PostFixAbilities,
-            context.package_name,
+            context.current_package,
             has_location,
         );
 
@@ -2643,7 +3127,7 @@ fn parse_postfix_ability_declarations(
 fn parse_struct_fields(context: &mut Context) -> Result<StructFields, Box<Diagnostic>> {
     let positional_declaration = context.tokens.peek() == Tok::LParen;
     if positional_declaration {
-        let current_package = context.package_name;
+        let current_package = context.current_package;
         let loc = current_token_loc(context.tokens);
         context
             .env
@@ -2665,12 +3149,12 @@ fn parse_struct_fields(context: &mut Context) -> Result<StructFields, Box<Diagno
             parse_field_annot,
             "a field",
         )?;
-        Ok(StructFields::Defined(fields))
+        Ok(StructFields::Named(fields))
     }
 }
 
 fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context) {
-    let current_package = context.package_name;
+    let current_package = context.current_package;
     if let Some(Visibility::Public(loc)) = &visibility {
         context
             .env
@@ -3226,22 +3710,72 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                 Tok::Struct => Ok(ModuleMember::Struct(parse_struct_decl(
                     attributes, start_loc, modifiers, context,
                 )?)),
+                Tok::Enum => Ok(ModuleMember::Enum(parse_enum_decl(
+                    attributes, start_loc, modifiers, context,
+                )?)),
                 Tok::Use => Ok(ModuleMember::Use(parse_use_decl(
                     attributes, start_loc, modifiers, context,
                 )?)),
                 _ => {
-                    let diag = unexpected_token_error(
-                        context.tokens,
-                        &format!(
-                            "a module member: '{}', '{}', '{}', '{}', '{}', or '{}'",
-                            Tok::Spec,
-                            Tok::Use,
-                            Tok::Friend,
-                            Tok::Const,
-                            Tok::Fun,
-                            Tok::Struct
-                        ),
-                    );
+                    let diag = if matches!(context.tokens.peek(), Tok::Identifier)
+                        && context.tokens.content() == "enum"
+                        && !context
+                            .env
+                            .supports_feature(context.current_package, FeatureGate::Enums)
+                    {
+                        let msg = context
+                            .env
+                            .feature_edition_error_msg(FeatureGate::Enums, context.current_package)
+                            .unwrap();
+                        let mut diag = diag!(
+                            Syntax::UnexpectedToken,
+                            (context.tokens.current_token_loc(), msg)
+                        );
+                        diag.add_note(UPGRADE_NOTE);
+                        Box::new(diag)
+                    } else if context
+                        .env
+                        .supports_feature(context.current_package, FeatureGate::Move2024Keywords)
+                    {
+                        unexpected_token_error(
+                            context.tokens,
+                            &format!(
+                                "a module member: {}",
+                                format_oxford_list!(
+                                    "or",
+                                    "'{}'",
+                                    [
+                                        Tok::Spec,
+                                        Tok::Use,
+                                        Tok::Friend,
+                                        Tok::Const,
+                                        Tok::Fun,
+                                        Tok::Struct,
+                                        Tok::Enum
+                                    ]
+                                )
+                            ),
+                        )
+                    } else {
+                        unexpected_token_error(
+                            context.tokens,
+                            &format!(
+                                "a module member: {}",
+                                format_oxford_list!(
+                                    "or",
+                                    "'{}'",
+                                    [
+                                        Tok::Spec,
+                                        Tok::Use,
+                                        Tok::Friend,
+                                        Tok::Const,
+                                        Tok::Fun,
+                                        Tok::Struct
+                                    ]
+                                )
+                            ),
+                        )
+                    };
                     if tok == Tok::Module {
                         context.env.add_diag(*diag);
                         Err(ErrCase::ContinueToModule(attributes))

@@ -1,0 +1,119 @@
+// Tests that mutable borrows from enum variants work correctly.
+
+//# print-bytecode
+module 0x1.MonomorphicEnums {
+    enum EnumWithTwoVariants has drop {
+        One { x: u64 },
+        Two { x: u64, y: u64 }
+    }
+
+    public f(t: u64): Self.EnumWithTwoVariants {
+        let l: u64;
+        label b0:
+            l = 0;
+            return EnumWithTwoVariants.Two { x: move(t), y: move(l) };
+    }
+
+    public mutate(e: &mut Self.EnumWithTwoVariants, v: u64) {
+        let x: &mut u64;
+        let u: &mut u64;
+        label b0:
+        variant_switch EnumWithTwoVariants (freeze(copy(e))) {
+            One : b1,
+            Two : b2,
+        };
+        label b1:
+            EnumWithTwoVariants.One { x } &mut = move(e);
+            *(move(x)) = move(v);
+            return;
+        label b2:
+            EnumWithTwoVariants.Two { x, y: u } &mut = move(e);
+            *(move(x)) = move(v);
+            return;
+    }
+
+    public get(e: &Self.EnumWithTwoVariants): &u64 {
+        let x: &u64;
+        let u: &u64;
+        label b0:
+            variant_switch EnumWithTwoVariants (copy(e)) {
+                One : b1,
+                Two : b2,
+            };
+        label b1:
+            EnumWithTwoVariants.One { x } &= move(e);
+            return move(x);
+        label b2:
+            EnumWithTwoVariants.Two { x, y: u } &= move(e);
+            return move(x);
+    }
+}
+
+//# publish
+module 0x1.MonomorphicEnums {
+    enum EnumWithTwoVariants has drop {
+        One { x: u64 },
+        Two { x: u64, y: u64 }
+    }
+
+    public f(t: u64): Self.EnumWithTwoVariants {
+        let l: u64;
+        label b0:
+            l = 0;
+            return EnumWithTwoVariants.Two { x: move(t), y: move(l) };
+    }
+
+    public mutate(e: &mut Self.EnumWithTwoVariants, v: u64) {
+        let x: &mut u64;
+        let u: &mut u64;
+        label b0:
+        variant_switch EnumWithTwoVariants (freeze(copy(e))) {
+            One : b1,
+            Two : b2,
+        };
+        label b1:
+            EnumWithTwoVariants.One { x } &mut = move(e);
+            *(move(x)) = move(v);
+            return;
+        label b2:
+            EnumWithTwoVariants.Two { x, y: u } &mut = move(e);
+            *(move(x)) = move(v);
+            return;
+    }
+
+    public get(e: &Self.EnumWithTwoVariants): &u64 {
+        let x: &u64;
+        let u: &u64;
+        label b0:
+            variant_switch EnumWithTwoVariants (copy(e)) {
+                One : b1,
+                Two : b2,
+            };
+        label b1:
+            EnumWithTwoVariants.One { x } &= move(e);
+            return move(x);
+        label b2:
+            EnumWithTwoVariants.Two { x, y: u } &= move(e);
+            return move(x);
+    }
+}
+
+//# run
+module 0x2.m {
+import 0x1.MonomorphicEnums;
+entry foo() {
+    let x: MonomorphicEnums.EnumWithTwoVariants;
+    let y: &u64;
+    label b0:
+        x = MonomorphicEnums.f(42);
+        y = MonomorphicEnums.get(&x);
+        assert(*move(y) == 42, 100);
+        MonomorphicEnums.mutate(&mut x, 43);
+        y = MonomorphicEnums.get(&x);
+        assert(*move(y) == 43, 100);
+        MonomorphicEnums.mutate(&mut x, 10);
+        y = MonomorphicEnums.get(&x);
+        assert(*move(y) == 10, 100);
+        return;
+}
+}

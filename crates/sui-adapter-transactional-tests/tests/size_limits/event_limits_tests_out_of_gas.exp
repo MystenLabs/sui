@@ -3,7 +3,7 @@ processed 6 tasks
 task 1 'publish'. lines 8-68:
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 7934400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 7957200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 69-71:
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::event::emit (function index 0) at offset 0. Arithmetic error, stack overflow, max value depth, etc.

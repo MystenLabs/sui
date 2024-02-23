@@ -9,14 +9,17 @@ warning[W09002]: unused variable
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 Command `disassemble --package Test --name m`:
-// Move bytecode v6
+// Move bytecode v7
 module 42.m {
+
+
 
 
 public foo(x#0#0: u64): u64 {
 B0:
 	0: LdU64(2)
 	1: Ret
+
 }
 }
 warning[W09002]: unused variable

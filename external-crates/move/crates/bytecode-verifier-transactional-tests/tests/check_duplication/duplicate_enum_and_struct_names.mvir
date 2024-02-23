@@ -1,0 +1,6 @@
+//# publish
+module 0x42.M {
+    // duplicate structs and enums
+    struct T{b: bool}
+    enum T{ V{ x: u64 } }
+}

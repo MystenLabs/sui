@@ -14,7 +14,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
     location: 0x1::M,
-    indices: [(Signature, 1), (FunctionDefinition, 0)],
+    indices: [(Signature, 2), (FunctionDefinition, 0)],
     offsets: [],
 }
 
@@ -23,7 +23,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     major_status: INVALID_SIGNATURE_TOKEN,
     sub_status: None,
     location: 0x1::M,
-    indices: [(Signature, 1), (FunctionDefinition, 0)],
+    indices: [(Signature, 2), (FunctionDefinition, 0)],
     offsets: [],
 }
 

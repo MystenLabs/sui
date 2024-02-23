@@ -3,7 +3,7 @@ processed 4 tasks
 task 1 'publish'. lines 6-23:
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6642400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6650000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'view-object'. lines 25-25:
 Owner: Account Address ( _ )

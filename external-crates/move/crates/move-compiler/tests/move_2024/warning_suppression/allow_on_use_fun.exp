@@ -5,7 +5,7 @@ error[E02015]: invalid attribute
   │       ^^^^^
   │       │
   │       Known attribute 'allow' is not expected with a use
-  │       Expected to be used with one of the following: module, constant, struct, function
+  │       Expected to be used with one of the following: module, constant, struct, enum, function
 
 error[E02017]: invalid 'use fun' declaration
   ┌─ tests/move_2024/warning_suppression/allow_on_use_fun.move:3:5

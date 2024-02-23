@@ -1,0 +1,17 @@
+//# publish
+
+module 0x1.M {
+    enum X has drop { V{ v: u64 }}
+    id<T>(x: &T): &T {
+    label b0:
+        return move(x);
+    }
+
+    t(x: Self.X): u64 {
+        let t: &u64;
+    label b0:
+        X.V { v: t } &= Self.id<Self.X>(&x);
+        return *move(t);
+    }
+}
+
