@@ -42,6 +42,9 @@
 -  [Function `update_bridge_limit_payload_limit`](#0xb_message_update_bridge_limit_payload_limit)
 -  [Function `update_asset_price_payload_token_id`](#0xb_message_update_asset_price_payload_token_id)
 -  [Function `update_asset_price_payload_new_price`](#0xb_message_update_asset_price_payload_new_price)
+-  [Function `emergency_op_pause`](#0xb_message_emergency_op_pause)
+-  [Function `emergency_op_unpause`](#0xb_message_emergency_op_unpause)
+-  [Function `required_voting_power`](#0xb_message_required_voting_power)
 -  [Function `reverse_bytes`](#0xb_message_reverse_bytes)
 -  [Function `peel_u64_be`](#0xb_message_peel_u64_be)
 
@@ -369,11 +372,47 @@
 
 
 
+<a name="0xb_message_EInvalidEmergencyOpType"></a>
+
+
+
+<pre><code><b>const</b> <a href="message.md#0xb_message_EInvalidEmergencyOpType">EInvalidEmergencyOpType</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="0xb_message_EInvalidMessageType"></a>
+
+
+
+<pre><code><b>const</b> <a href="message.md#0xb_message_EInvalidMessageType">EInvalidMessageType</a>: u64 = 3;
+</code></pre>
+
+
+
 <a name="0xb_message_ETrailingBytes"></a>
 
 
 
 <pre><code><b>const</b> <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0xb_message_PAUSE"></a>
+
+
+
+<pre><code><b>const</b> <a href="message.md#0xb_message_PAUSE">PAUSE</a>: u8 = 0;
+</code></pre>
+
+
+
+<a name="0xb_message_UNPAUSE"></a>
+
+
+
+<pre><code><b>const</b> <a href="message.md#0xb_message_UNPAUSE">UNPAUSE</a>: u8 = 1;
 </code></pre>
 
 
@@ -1276,6 +1315,100 @@ Update asset price message
 
 <pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_update_asset_price_payload_new_price">update_asset_price_payload_new_price</a>(self: &<a href="message.md#0xb_message_UpdateAssetPrice">UpdateAssetPrice</a>): u64 {
     self.new_price
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_message_emergency_op_pause"></a>
+
+## Function `emergency_op_pause`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_emergency_op_pause">emergency_op_pause</a>(): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_emergency_op_pause">emergency_op_pause</a>(): u8 {
+    <a href="message.md#0xb_message_PAUSE">PAUSE</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_message_emergency_op_unpause"></a>
+
+## Function `emergency_op_unpause`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_emergency_op_unpause">emergency_op_unpause</a>(): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_emergency_op_unpause">emergency_op_unpause</a>(): u8 {
+    <a href="message.md#0xb_message_UNPAUSE">UNPAUSE</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_message_required_voting_power"></a>
+
+## Function `required_voting_power`
+
+Return the required signature threshold for the message, values are voting power in the scale of 10000
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_required_voting_power">required_voting_power</a>(self: &<a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_required_voting_power">required_voting_power</a>(self: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): u64 {
+    <b>let</b> message_type = <a href="message.md#0xb_message_message_type">message_type</a>(self);
+
+    <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_token">message_types::token</a>()) {
+        3334
+    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_emergency_op">message_types::emergency_op</a>()) {
+        <b>let</b> payload = <a href="message.md#0xb_message_extract_emergency_op_payload">extract_emergency_op_payload</a>(self);
+        <b>if</b> (payload.op_type == <a href="message.md#0xb_message_PAUSE">PAUSE</a>) {
+            450
+        } <b>else</b> <b>if</b> (payload.op_type == <a href="message.md#0xb_message_UNPAUSE">UNPAUSE</a>) {
+            5001
+        } <b>else</b> {
+            <b>abort</b> <a href="message.md#0xb_message_EInvalidEmergencyOpType">EInvalidEmergencyOpType</a>
+        }
+    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_committee_blocklist">message_types::committee_blocklist</a>()) {
+        5001
+    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_update_asset_price">message_types::update_asset_price</a>()) {
+        5001
+    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_update_bridge_limit">message_types::update_bridge_limit</a>()) {
+        5001
+    } <b>else</b> {
+        <b>abort</b> <a href="message.md#0xb_message_EInvalidMessageType">EInvalidMessageType</a>
+    }
 }
 </code></pre>
 
