@@ -20,7 +20,7 @@ module a::invalid0 {
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun borrow_t(s: &S, i: u64): &mut u64 { abort 0 }
+    public fun borrow_t(_s: &S, _i: u64): &mut u64 { abort 0 }
 
     public struct S2 has drop { t: vector<u64> }
 
@@ -71,19 +71,19 @@ module a::invalid2 {
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun borrow_t<T>(s: &S<T>, i: u64): &mut u64 { abort 0 }
+    public fun borrow_t<T>(_s: &S<T>, _i: u64): &mut u64 { abort 0 }
 
     public struct S2<T> has drop { t: vector<T> }
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun borrow_t2<T>(s: &S2<T>, i: u64): T { abort 0 }
+    public fun borrow_t2<T>(_s: &S2<T>, _i: u64): T { abort 0 }
 
     public struct S3<T> has drop { t: vector<T> }
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun borrow_t3<T>(s: &S3<T>, i: u64): bool { abort 0 }
+    public fun borrow_t3<T>(_s: &S3<T>, _i: u64): bool { abort 0 }
 
 }
 
@@ -93,17 +93,17 @@ module a::invalid3 {
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun borrow_t<T>(s: &mut S<T>, i: u64): &u64 { abort 0 }
+    public fun borrow_t<T>(_s: &mut S<T>, _i: u64): &u64 { abort 0 }
 
     public struct S2<T> has drop { t: vector<T> }
 
     #[allow(unused_variable)]
     #[syntax(index)]
-    public fun borrow_t2<T>(s: &mut S2<T>, i: u64): T { abort 0 }
+    public fun borrow_t2<T>(_s: &mut S2<T>, _i: u64): T { abort 0 }
 
     public struct S3<T> has drop { t: vector<T> }
 
     #[allow(unused_variable)]
-    public fun borrow_t3<T>(s: &mut S3<T>, i: u64): bool { abort 0 }
+    public fun borrow_t3<T>(_s: &mut S3<T>, _i: u64): bool { abort 0 }
 
 }

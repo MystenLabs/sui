@@ -476,22 +476,6 @@ impl UseFuns {
     }
 }
 
-impl SyntaxMethodKind_ {
-    const INDEX: &'static str = "index";
-    const INDEX_MUT: &'static str = "index_mut";
-    // const FOR_MUT: &'static str = "for_mut";
-    // const FOR_IMM: &'static str = "for_imm";
-    // const FOR_VAL: &'static str = "for_val";
-    // const ASSIGN: &'static str = "assign";
-
-    pub fn make_name(&self, loc: Loc) -> Name {
-        match self {
-            SyntaxMethodKind_::Index => sp(loc, Self::INDEX.into()),
-            SyntaxMethodKind_::IndexMut => sp(loc, Self::INDEX_MUT.into()),
-        }
-    }
-}
-
 impl IndexSyntaxMethods {
     pub fn get_name_for_typing(&self) -> Option<(ModuleIdent, FunctionName)> {
         // We prefer `index` over `index_mut` because its type is subject and return type are higher
@@ -1055,7 +1039,7 @@ impl AstDebug for SyntaxMethod {
             public_visibility: _,
             kind,
         } = self;
-        let kind_str = kind.value.make_name(kind.loc);
+        let kind_str = format!("{:?}", kind.value);
         w.write(&format!(
             "syntax({kind_str}) for {tname} -> {target_m}::{target_f}\n"
         ));

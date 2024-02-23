@@ -128,9 +128,11 @@ fn modules(
     let mut all_new_friends = BTreeMap::new();
     // We validate the syntax methods first so that processing syntax method forms later are
     // better-typed. It would be preferable to do this in naming, but the typing machinery makes it
-    // much easier to enforce the typeclass-like constraints.
+    // much easier to enforce the typeclass-like constraints. We also update the program info to
+    // reflect any changes that happened.
     for (key, mdef) in modules.key_cloned_iter_mut() {
-        validate_syntax_methods(context, &key, mdef)
+        validate_syntax_methods(context, &key, mdef);
+        context.modules.set_module_syntax_methods(key, mdef.syntax_methods.clone());
     }
     let mut typed_modules = modules.map(|ident, mdef| {
         let (typed_mdef, new_friends) = module(context, ident, mdef);
@@ -1097,6 +1099,21 @@ fn join<T: ToString, F: FnOnce() -> T>(
     }
 }
 
+fn invariant_no_report(
+    context: &mut Context,
+    pre_lhs: Type,
+    pre_rhs: Type,
+) -> Result<Type, core::TypingError> {
+    let subst = std::mem::replace(&mut context.subst, Subst::empty());
+    let lhs = core::ready_tvars(&subst, pre_lhs);
+    let rhs = core::ready_tvars(&subst, pre_rhs);
+    core::invariant(subst.clone(), &lhs, &rhs).map(|(next_subst, ty)| {
+        context.subst = next_subst;
+        ty
+    })
+}
+
+#[allow(dead_code)]
 fn invariant_impl<T: ToString, F: FnOnce() -> T>(
     context: &mut Context,
     loc: Loc,
@@ -1121,6 +1138,7 @@ fn invariant_impl<T: ToString, F: FnOnce() -> T>(
     }
 }
 
+#[allow(dead_code)]
 fn invariant<T: ToString, F: FnOnce() -> T>(
     context: &mut Context,
     loc: Loc,
@@ -2573,19 +2591,17 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
                 args_.insert(0, *exp);
                 let mut_type = sp(index_loc, Type_::Ref(mut_, Box::new(index_base_type)));
                 let (ret_ty, e_) = module_call(context, loc, m, f, None, argloc, args_);
-                let ret_ty = invariant(
-                    context,
-                    loc,
-                    || format!("Index syntax method '{m}::{f}' has the wrong return type"),
-                    mut_type,
-                    ret_ty,
-                );
-                if matches!(ret_ty.value, Type_::UnresolvedError) {
+                if invariant_no_report(context, mut_type.clone(), ret_ty.clone()).is_err() {
+                    let msg = format!(
+                        "Index syntax method '{m}::{f}' has type {} instead of {}",
+                        core::error_format(&ret_ty, &context.subst),
+                        core::error_format(&mut_type, &context.subst)
+                    );
+                    context.env.add_diag(ice!((loc, msg)));
                     exp = make_error_exp(context, index_loc);
                     break;
-                } else {
-                    exp = Box::new(T::exp(ret_ty, sp(index_loc, e_)));
                 }
+                exp = Box::new(T::exp(ret_ty, sp(index_loc, e_)));
             }
         }
     }
@@ -2928,7 +2944,10 @@ fn syntax_call_return_ty(
         params: parameters,
         return_,
     } = fty;
-    check_call_target(context, loc, macro_, macro_, declared, f);
+    // First, make sure we have a valid function for this. These are never macro calls, so this is
+    // just double-checking.
+    check_call_target(context, loc, None, macro_, declared, f);
+    // Next we take our args in question and get their types.
     let arg_tys = {
         let msg = || format!("Invalid call of '{}::{}'", &m, &f);
         let arity = parameters.len();
@@ -2936,11 +2955,21 @@ fn syntax_call_return_ty(
     };
     assert!(arg_tys.len() == parameters.len());
     let mut valid = true;
+    // Now we unify the arg types against the function's parameter types. This is to instantiate
+    // the type in the case of a polymorphic return type, e.g.,
+    //     fun index<T>(&mut S, x: &T): &T { ... }
+    // We don't know what the base type is until we have T in our hand and do this. The subtyping
+    // takes care of this for us. If it fails, however, we're in error mode (explained below).
     for (arg_ty, (_, param_ty)) in arg_tys.into_iter().zip(parameters.clone()) {
         if let Err(_failure) = subtype_no_report(context, arg_ty, param_ty) {
             valid = false;
         }
     }
+    // The failure case for dotted expressions hands an error expression up the chain: if a field
+    // or syntax index function fails to resolve, we hand up an error and propagate it, instead of
+    // re-attempting to handle it at each step in the accessors (which would cause the user to get
+    // a new error for each part of the access path). Similarly, if our call arguments are wrong,
+    // the path is already bad so we're done trying to resolve it and drop into this error case.
     if !valid {
         context.error_type(return_.loc)
     } else {

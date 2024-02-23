@@ -4,7 +4,9 @@ error[E02019]: invalid 'syntax' method type
 20 │     #[syntax(index)]
    │              ^^^^^ Invalid syntax annotation
 21 │     public fun borrow_t<T>(s: &S<T>, i: u64, j: T): &mut T { abort 0 }
-   │                                                     ------ This syntax method must return an immutable reference to match its subject type
+   │                               -----                 ------ This syntax method must return an immutable reference to match its subject type
+   │                               │                      
+   │                               Immutable subject type defined here
 
 error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_tyargs_return_mismatch.move:38:14
@@ -12,7 +14,9 @@ error[E02019]: invalid 'syntax' method type
 38 │     #[syntax(index)]
    │              ^^^^^ Invalid syntax annotation
 39 │     public fun borrow_mut<T>(s: &mut S<T>, i: u64, j: T): &T { abort 0 }
-   │                                                           -- This syntax method must return a mutable reference to match its subject type
+   │                                 ---------                 -- This syntax method must return a mutable reference to match its subject type
+   │                                 │                          
+   │                                 Mutable subject type defined here
 
 error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_tyargs_return_mismatch.move:48:14
@@ -20,7 +24,9 @@ error[E02019]: invalid 'syntax' method type
 48 │     #[syntax(index)]
    │              ^^^^^ Invalid syntax annotation
 49 │     public fun borrow_t<T>(s: &S<T>, i: u64, j: T): &mut T { abort 0 }
-   │                                                     ------ This syntax method must return an immutable reference to match its subject type
+   │                               -----                 ------ This syntax method must return an immutable reference to match its subject type
+   │                               │                      
+   │                               Immutable subject type defined here
 
 error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_tyargs_return_mismatch.move:58:14
@@ -28,5 +34,7 @@ error[E02019]: invalid 'syntax' method type
 58 │     #[syntax(index)]
    │              ^^^^^ Invalid syntax annotation
 59 │     public fun borrow_t<T>(s: &S<T>, i: u64, j: T): &mut T { abort 0 }
-   │                                                     ------ This syntax method must return an immutable reference to match its subject type
+   │                               -----                 ------ This syntax method must return an immutable reference to match its subject type
+   │                               │                      
+   │                               Immutable subject type defined here
 

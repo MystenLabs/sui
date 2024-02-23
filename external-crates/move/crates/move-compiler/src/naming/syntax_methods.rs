@@ -97,7 +97,7 @@ pub(super) fn resolve_syntax_attributes(
             assert!(context.env.has_errors());
             continue;
         };
-        if !valid_return_type(context, &kind, &function.signature.return_type) {
+        if !valid_return_type(context, &kind, param_ty.loc, &function.signature.return_type) {
             assert!(context.env.has_errors());
             continue;
         } else {
@@ -125,9 +125,13 @@ fn prev_syntax_defn_error(
     sp!(sloc, method_kind): SyntaxMethodKind,
     sp!(_, type_name): &TypeName,
 ) {
+    let kind_string = match method_kind {
+        SyntaxMethodKind_::Index => format!("'{}'", SyntaxAttribute::INDEX),
+        SyntaxMethodKind_::IndexMut => format!("mutable '{}'", SyntaxAttribute::INDEX),
+    };
     let msg = format!(
-        "Redefined syntax method with kind '{}' for '{}'",
-        method_kind.make_name(sloc),
+        "Redefined {} 'syntax' method for '{}'",
+        kind_string,
         type_name
     );
     let prev_msg = "This syntax method was previously defined here.";
@@ -344,6 +348,7 @@ fn determine_subject_type_name(
 fn valid_return_type(
     context: &mut Context,
     sp!(loc, kind_): &SyntaxMethodKind,
+    subject_loc: Loc,
     ty: &N::Type,
 ) -> bool {
     match kind_ {
@@ -357,7 +362,8 @@ fn valid_return_type(
                 context.env.add_diag(diag!(
                     Declarations::InvalidSyntaxMethod,
                     (*loc, msg),
-                    (ty.loc, tmsg)
+                    (ty.loc, tmsg),
+                    (subject_loc, "Immutable subject type defined here")
                 ));
                 false
             } else {
@@ -369,7 +375,8 @@ fn valid_return_type(
                 context.env.add_diag(diag!(
                     Declarations::InvalidSyntaxMethod,
                     (*loc, msg),
-                    (ty.loc, tmsg)
+                    (ty.loc, tmsg),
+                    (subject_loc, "Immutable subject type defined here")
                 ));
                 false
             }
@@ -385,7 +392,8 @@ fn valid_return_type(
                 context.env.add_diag(diag!(
                     Declarations::InvalidSyntaxMethod,
                     (*loc, msg),
-                    (ty.loc, tmsg)
+                    (ty.loc, tmsg),
+                    (subject_loc, "Mutable subject type defined here")
                 ));
                 false
             } else {
@@ -397,7 +405,8 @@ fn valid_return_type(
                 context.env.add_diag(diag!(
                     Declarations::InvalidSyntaxMethod,
                     (*loc, msg),
-                    (ty.loc, tmsg)
+                    (ty.loc, tmsg),
+                    (subject_loc, "Mutable subject type defined here")
                 ));
                 false
             }
