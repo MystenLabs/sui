@@ -14,7 +14,7 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
     editions::{Edition, FeatureGate},
-    parser::{ast::*, lexer::*},
+    parser::{ast::*, lexer::*, follow_set::*},
     shared::*,
     MatchedFileCommentMap,
 };
@@ -23,6 +23,8 @@ struct Context<'env, 'lexer, 'input> {
     package_name: Option<Symbol>,
     env: &'env mut CompilationEnv,
     tokens: &'lexer mut Lexer<'input>,
+    follow_set: FollowSet,
+    panic_mode: bool,
 }
 
 impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
@@ -35,6 +37,8 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
             package_name,
             env,
             tokens,
+            follow_set: FollowSet::new(),
+            panic_mode: false,
         }
     }
 }
@@ -190,6 +194,18 @@ fn match_token(tokens: &mut Lexer, tok: Tok) -> Result<bool, Box<Diagnostic>> {
     }
 }
 
+// Check for the specified token, or add an error to the context. Returns true if it found it.
+fn consume_expected_token(context: &mut Context, tok: Tok) -> bool{
+    match consume_token(context.tokens, tok) {
+        Err(err) => {
+            if context.tokens.peek() != Tok::EOF { context.env.add_diag(*err) };
+            false
+        }
+        Ok(()) => true,
+    }
+}
+
+
 // Check for the specified token and return an error if it does not match.
 fn consume_token(tokens: &mut Lexer, tok: Tok) -> Result<(), Box<Diagnostic>> {
     consume_token_(tokens, tok, tokens.start_loc(), "")
@@ -271,7 +287,9 @@ where
     F: Fn(&mut Context) -> Result<R, Box<Diagnostic>>,
 {
     let start_loc = context.tokens.start_loc();
-    consume_token(context.tokens, start_token)?;
+
+    consume_expected_token(context, start_token);
+    // consume_token(context.tokens, start_token)?;
     parse_comma_list_after_start(
         context,
         start_loc,
@@ -286,49 +304,41 @@ where
 // assuming that the starting token has already been consumed.
 fn parse_comma_list_after_start<F, R>(
     context: &mut Context,
-    start_loc: usize,
-    start_token: Tok,
+    _start_loc: usize,
+    _start_token: Tok,
     end_token: Tok,
     parse_list_item: F,
-    item_description: &str,
+    _item_description: &str,
 ) -> Result<Vec<R>, Box<Diagnostic>>
 where
     F: Fn(&mut Context) -> Result<R, Box<Diagnostic>>,
 {
     adjust_token(context.tokens, end_token);
-    if match_token(context.tokens, end_token)? {
-        return Ok(vec![]);
-    }
     let mut v = vec![];
-    loop {
-        if context.tokens.peek() == Tok::Comma {
-            let current_loc = context.tokens.start_loc();
-            let loc = make_loc(context.tokens.file_hash(), current_loc, current_loc);
-            return Err(Box::new(diag!(
-                Syntax::UnexpectedToken,
-                (loc, format!("Expected {}", item_description))
-            )));
-        }
-        v.push(parse_list_item(context)?);
-        adjust_token(context.tokens, end_token);
-        if match_token(context.tokens, end_token)? {
-            break Ok(v);
-        }
-        if !match_token(context.tokens, Tok::Comma)? {
-            let current_loc = context.tokens.start_loc();
-            let loc = make_loc(context.tokens.file_hash(), current_loc, current_loc);
-            let loc2 = make_loc(context.tokens.file_hash(), start_loc, start_loc);
-            return Err(Box::new(diag!(
-                Syntax::UnexpectedToken,
-                (loc, format!("Expected '{}'", end_token)),
-                (loc2, format!("To match this '{}'", start_token)),
-            )));
+    while !(context.tokens.at(end_token) || context.tokens.at(Tok::EOF)) {
+        match parse_list_item(context) {
+            Ok(item) => {
+                context.panic_mode = false;
+                v.push(item);
+                adjust_token(context.tokens, end_token);
+                if !context.tokens.at(end_token) {
+                    context.panic_mode = consume_expected_token(context, Tok::Comma);
+                }
+            }
+            Err(diag) => {
+                if !context.panic_mode { context.env.add_diag(*diag); }
+                context.panic_mode = true;
+                if context.follow_set.contains(context.tokens.peek()) {
+                    return Ok(v)
+                } else {
+                    let _ = context.tokens.advance();
+                }
+            }
         }
         adjust_token(context.tokens, end_token);
-        if match_token(context.tokens, end_token)? {
-            break Ok(v);
-        }
     }
+    consume_expected_token(context, end_token);
+    Ok(v)
 }
 
 // Parse a list of items, without specified start and end tokens, and the separator determined by
@@ -1536,6 +1546,9 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
 // Parse the arguments to a call: "(" Comma<Exp> ")"
 fn parse_call_args(context: &mut Context) -> Result<Spanned<Vec<Exp>>, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
+
+    let call_follow_set = FollowSet::from(&[Tok::LParen, Tok::Semicolon, Tok::Period]);
+    context.follow_set.union(&call_follow_set);
     let args = parse_comma_list(
         context,
         Tok::LParen,
@@ -1543,6 +1556,8 @@ fn parse_call_args(context: &mut Context) -> Result<Spanned<Vec<Exp>>, Box<Diagn
         parse_exp,
         "a call argument expression",
     )?;
+    context.follow_set.difference(&call_follow_set);
+    // This span is now wrong, in the worst way...
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(
         context.tokens.file_hash(),
@@ -2375,6 +2390,9 @@ fn parse_function_decl(
     let name = FunctionName(parse_identifier(context)?);
     let type_parameters = parse_optional_type_parameters(context)?;
 
+    let param_follow_set = FollowSet::from(&[Tok::Colon, Tok::LBrace]);
+    context.follow_set.union(&param_follow_set);
+
     // "(" Comma<Parameter> ")"
     let parameters = parse_comma_list(
         context,
@@ -2383,6 +2401,8 @@ fn parse_function_decl(
         parse_parameter,
         "a function parameter",
     )?;
+
+    context.follow_set.difference(&param_follow_set);
 
     // (":" <Type>)?
     let return_type = if match_token(context.tokens, Tok::Colon)? {

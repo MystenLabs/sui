@@ -14,7 +14,13 @@ use move_command_line_common::{character_sets::DisplayChar, files::FileHash};
 use move_ir_types::location::Loc;
 use std::fmt;
 
+use super::ast::MODIFIERS;
+
+// This should be replaced with std::mem::variant::count::<Tok>() if it ever comes out of nightly.
+pub const TOK_COUNT: usize = 75;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
 pub enum Tok {
     EOF,
     NumValue,
@@ -91,6 +97,15 @@ pub enum Tok {
     Match,
     BlockLabel,
     MinusGreater,
+}
+
+pub const MODULE_MEMBER_TOKENS: [Tok; 6] = [Tok::Fun, Tok::Spec, Tok::Struct, Tok::Use, Tok::Const, Tok::Friend];
+pub const MEMBER_VISIBILITY_TOKENS: [Tok; 1] = [Tok::Public];
+// Note the valid Identifiers are the MODIFIER keywords. We need to take care to filter them when
+// appropriate.
+pub const MEMBER_MODIFIER_TOKENS: [Tok; 2] = [Tok::Native, Tok::Identifier];
+pub fn valid_member_modifier_ident(ident: &str) -> bool {
+    MODIFIERS.iter().any(|modifier| modifier == &ident)
 }
 
 impl fmt::Display for Tok {
@@ -206,6 +221,10 @@ impl<'input> Lexer<'input> {
 
     pub fn peek(&self) -> Tok {
         self.token
+    }
+
+    pub fn at(&self, tok: Tok) -> bool {
+        self.token == tok
     }
 
     pub fn content(&self) -> &'input str {

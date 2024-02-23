@@ -7,6 +7,7 @@ pub mod comments;
 pub(crate) mod filter;
 pub mod keywords;
 pub mod lexer;
+mod follow_set;
 pub(crate) mod syntax;
 pub(crate) mod verification_attribute_filter;
 
