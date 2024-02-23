@@ -108,7 +108,7 @@ const MAX_PROTOCOL_VERSION: u64 = 37;
 // Version 36: Enable group operations native functions in devnet.
 //             Enable shared object deletion in mainnet.
 //             Set the consensus accepted transaction size and the included transactions size in the proposed block.
-// Version 37: Reject functions with mutable Random.
+// Version 37: Reject entry functions with mutable Random.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
