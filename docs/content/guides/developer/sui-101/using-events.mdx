@@ -54,7 +54,7 @@ public fun collect_profits( _: &ShopOwnerCap, shop: &mut DonutShop, ctx: &mut Tx
 
 Firing events is not very useful in a vacuum. You also need the ability to listen for those events so that you can act on them. In Sui, you subscribe to those events and provide logic that triggers when the event fires.
 
-Sui Full nodes support subscribe functionality using JSON-RPC notifications transmitted through the WebSocket API. You can interact with the RPC directly ([suix_subscribeEvent](/sui-api-ref#suix_subscribeEvent), [suix_subscribeTransaction](/sui-api-ref#suix_subscribeTransaction) or you can use an SDK like the Sui TypeScript SDK. The following excerpt from one of the examples uses the TypeScript SDK to create an asynchronous subscription to the filter identified in the filter.
+Sui Full nodes support subscribe functionality using JSON-RPC notifications transmitted through the WebSocket API. You can interact with the RPC directly ([suix_subscribeEvent](/sui-api-ref#suix_subscribeEvent), [suix_subscribeTransaction](/sui-api-ref#suix_subscribeTransaction)) or you can use an SDK like the Sui TypeScript SDK. The following excerpt from one of the examples uses the TypeScript SDK to create an asynchronous subscription to the filter identified in the filter.
 
 ```move
 let unsubscribe = await provider.subscribeEvent({
