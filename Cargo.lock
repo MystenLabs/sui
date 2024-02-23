@@ -15105,6 +15105,7 @@ name = "typed-store-derive"
 version = "0.3.0"
 dependencies = [
  "eyre",
+ "itertools 0.10.5",
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "rocksdb",
