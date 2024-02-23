@@ -5,7 +5,7 @@
 use crate::{
     diag,
     diagnostics::{codes::WarningFilter, Diagnostic, WarningFilters},
-    editions::{create_feature_error, FeatureGate},
+    editions::{create_feature_error, FeatureGate, Flavor},
     expansion::{
         alias_map_builder::{
             AliasEntry, AliasMapBuilder, NameSpace, ParserExplicitUseFun, UseFunsBuilder,
@@ -251,6 +251,98 @@ fn compute_address_conflicts(
         .collect()
 }
 
+// Implicit aliases for the Move Stdlib:
+// use std::vector;
+// use std::option::{Self, Option};
+const IMPLICIT_STD_MODULES: &[Symbol] = &[symbol!("option"), symbol!("vector")];
+const IMPLICIT_STD_MEMBERS: &[(Symbol, Symbol, ModuleMemberKind)] = &[(
+    symbol!("option"),
+    symbol!("Option"),
+    ModuleMemberKind::Struct,
+)];
+
+// Implicit aliases for Sui mode:
+// use sui::object::{Self, ID, UID};
+// use sui::transfer;
+// use sui::tx_context::{Self, TxContext};
+const IMPLICIT_SUI_MODULES: &[Symbol] = &[
+    symbol!("object"),
+    symbol!("transfer"),
+    symbol!("tx_context"),
+];
+const IMPLICIT_SUI_MEMBERS: &[(Symbol, Symbol, ModuleMemberKind)] = &[
+    (symbol!("object"), symbol!("ID"), ModuleMemberKind::Struct),
+    (symbol!("object"), symbol!("UID"), ModuleMemberKind::Struct),
+    (
+        symbol!("tx_context"),
+        symbol!("TxContext"),
+        ModuleMemberKind::Struct,
+    ),
+];
+
+fn default_aliases(context: &mut Context) -> AliasMapBuilder {
+    let current_package = context.current_package;
+    let mut builder = context.new_alias_map_builder();
+    if !context
+        .env()
+        .supports_feature(current_package, FeatureGate::Move2024Paths)
+    {
+        return builder;
+    }
+    // Unused loc since these will not conflict and are implicit so no warnings are given
+    let loc = Loc::invalid();
+    let std_address = maybe_make_well_known_address(context, loc, symbol!("std"));
+    let sui_address = maybe_make_well_known_address(context, loc, symbol!("sui"));
+    let mut modules: Vec<(Address, Symbol)> = vec![];
+    let mut members: Vec<(Address, Symbol, Symbol, ModuleMemberKind)> = vec![];
+    // if std is defined, add implicit std aliases
+    if let Some(std_address) = std_address {
+        modules.extend(
+            IMPLICIT_STD_MODULES
+                .iter()
+                .copied()
+                .map(|m| (std_address, m)),
+        );
+        members.extend(
+            IMPLICIT_STD_MEMBERS
+                .iter()
+                .copied()
+                .map(|(m, mem, k)| (std_address, m, mem, k)),
+        );
+    }
+    // if sui is defined and the current package is in Sui mode, add implicit sui aliases
+    if sui_address.is_some() && context.env().package_config(current_package).flavor == Flavor::Sui
+    {
+        let sui_address = sui_address.unwrap();
+        modules.extend(
+            IMPLICIT_SUI_MODULES
+                .iter()
+                .copied()
+                .map(|m| (sui_address, m)),
+        );
+        members.extend(
+            IMPLICIT_SUI_MEMBERS
+                .iter()
+                .copied()
+                .map(|(m, mem, k)| (sui_address, m, mem, k)),
+        );
+    }
+    for (addr, module) in modules {
+        let alias = sp(loc, module);
+        let mident = sp(loc, ModuleIdent_::new(addr, ModuleName(sp(loc, module))));
+        builder.add_implicit_module_alias(alias, mident).unwrap();
+    }
+    for (addr, module, member, kind) in members {
+        let alias = sp(loc, member);
+        let mident = sp(loc, ModuleIdent_::new(addr, ModuleName(sp(loc, module))));
+        let name = sp(loc, member);
+        builder
+            .add_implicit_member_alias(alias, mident, name, kind)
+            .unwrap();
+    }
+    builder
+}
+
 //**************************************************************************************************
 // Entry
 //**************************************************************************************************
@@ -403,6 +495,8 @@ fn definition(
     package_name: Option<Symbol>,
     def: P::Definition,
 ) {
+    let default_aliases = default_aliases(context);
+    context.push_alias_scope(/* unused */ Loc::invalid(), default_aliases);
     match def {
         P::Definition::Module(mut m) => {
             let module_paddr = std::mem::take(&mut m.address);
@@ -428,6 +522,7 @@ fn definition(
             }
         }
     }
+    context.pop_alias_scope(None);
 }
 
 // Access a top level address as declared, not affected by any aliasing/shadowing
@@ -480,6 +575,17 @@ fn top_level_address_(
             }
         }
     }
+}
+
+fn maybe_make_well_known_address(context: &mut Context, loc: Loc, name: Symbol) -> Option<Address> {
+    let named_address_mapping = context.defn_context.named_address_mapping.as_ref().unwrap();
+    let addr = named_address_mapping.get(&name).copied()?;
+    Some(make_address(
+        &mut context.defn_context,
+        sp(loc, name),
+        loc,
+        addr,
+    ))
 }
 
 fn address_without_value_error(suggest_declaration: bool, loc: Loc, n: &Name) -> Diagnostic {
@@ -581,12 +687,12 @@ fn module(
     context.address = None
 }
 
-fn set_sender_address(
+fn set_module_address(
     context: &mut Context,
     module_name: &ModuleName,
-    sender: Option<Spanned<Address>>,
+    address: Option<Spanned<Address>>,
 ) {
-    context.address = Some(match sender {
+    context.address = Some(match address {
         Some(sp!(_, addr)) => addr,
         None => {
             let loc = module_name.loc();
@@ -628,7 +734,7 @@ fn module_(
         .add_warning_filter_scope(warning_filter.clone());
     assert!(context.address.is_none());
     assert!(address.is_none());
-    set_sender_address(context, &name, module_address);
+    set_module_address(context, &name, module_address);
     let _ = check_restricted_name_all_cases(&mut context.defn_context, NameCase::Module, &name.0);
     if name.value().starts_with(|c| c == '_') {
         let msg = format!(
@@ -1425,8 +1531,8 @@ impl Move2024PathExpander {
     ) -> AccessChainResult {
         use AccessChainFailure::*;
         use AccessChainResult::*;
-
         use E::ModuleAccess_ as EN;
+
         match self.aliases.resolve(namespace, &name) {
             Some(AliasEntry::Member(_, mident, sp!(_, mem))) => {
                 // We are preserving the name's original location, rather than referring to where
@@ -1502,15 +1608,28 @@ impl Move2024PathExpander {
         use AccessChainResult::*;
         use E::ModuleAccess_ as EN;
         use P::NameAccessChain_ as PN;
+
         match chain {
             PN::One(name) => {
+                use crate::naming::ast::BuiltinFunction_;
+                use crate::naming::ast::BuiltinTypeName_;
                 let namespace = match access {
                     Access::Type | Access::ApplyNamed | Access::ApplyPositional | Access::Term => {
                         NameSpace::ModuleMembers
                     }
                     Access::Module => NameSpace::LeadingAccess,
                 };
-                self.resolve_name(context, namespace, name)
+
+                // This is a hack to let `use std::vector` play nicely with `vector`,
+                // plus preserve things like `u64`, etc.
+                if !matches!(access, Access::Module)
+                    && (BuiltinFunction_::all_names().contains(&name.value)
+                        || BuiltinTypeName_::all_names().contains(&name.value))
+                {
+                    AccessChainResult::UnresolvedName(name.loc, name)
+                } else {
+                    self.resolve_name(context, namespace, name)
+                }
             }
             PN::Two(root_name, name) => match self.resolve_root(context, root_name) {
                 Address(_, address) => {
