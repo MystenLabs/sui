@@ -110,7 +110,7 @@ validator_configs:
         - Kakao
         - Slack
         - Twitch
-    overload-threshold-config:
+    authority-overload-config:
       max-txn-age-in-queue:
         secs: 1
         nanos: 0
@@ -233,7 +233,7 @@ validator_configs:
         - Kakao
         - Slack
         - Twitch
-    overload-threshold-config:
+    authority-overload-config:
       max-txn-age-in-queue:
         secs: 1
         nanos: 0
@@ -356,7 +356,7 @@ validator_configs:
         - Kakao
         - Slack
         - Twitch
-    overload-threshold-config:
+    authority-overload-config:
       max-txn-age-in-queue:
         secs: 1
         nanos: 0
@@ -479,7 +479,7 @@ validator_configs:
         - Kakao
         - Slack
         - Twitch
-    overload-threshold-config:
+    authority-overload-config:
       max-txn-age-in-queue:
         secs: 1
         nanos: 0
@@ -602,7 +602,7 @@ validator_configs:
         - Kakao
         - Slack
         - Twitch
-    overload-threshold-config:
+    authority-overload-config:
       max-txn-age-in-queue:
         secs: 1
         nanos: 0
@@ -725,7 +725,7 @@ validator_configs:
         - Kakao
         - Slack
         - Twitch
-    overload-threshold-config:
+    authority-overload-config:
       max-txn-age-in-queue:
         secs: 1
         nanos: 0
@@ -848,7 +848,7 @@ validator_configs:
         - Kakao
         - Slack
         - Twitch
-    overload-threshold-config:
+    authority-overload-config:
       max-txn-age-in-queue:
         secs: 1
         nanos: 0

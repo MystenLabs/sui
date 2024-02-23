@@ -3,11 +3,15 @@
 
 use std::sync::Arc;
 
+use parking_lot::RwLock;
+use tokio::sync::mpsc::UnboundedSender;
+
 use crate::{
     block::{timestamp_utc_ms, BlockAPI, VerifiedBlock},
-    commit::CommitIndex,
+    commit::{load_committed_subdag_from_store, CommitIndex, CommittedSubDag},
     context::Context,
-    linearizer::{CommittedSubDag, Linearizer},
+    dag_state::DagState,
+    linearizer::Linearizer,
     storage::Store,
 };
 
@@ -29,7 +33,7 @@ pub(crate) struct CommitObserver {
     /// Component to deterministically collect subdags for committed leaders.
     commit_interpreter: Linearizer,
     /// An unbounded channel to send committed sub-dags to the consumer of consensus output.
-    sender: tokio::sync::mpsc::UnboundedSender<CommittedSubDag>,
+    sender: UnboundedSender<CommittedSubDag>,
     /// Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
 }
@@ -38,17 +42,17 @@ pub(crate) struct CommitObserver {
 impl CommitObserver {
     pub(crate) fn new(
         context: Arc<Context>,
-        commit_interpreter: Linearizer,
-        sender: tokio::sync::mpsc::UnboundedSender<CommittedSubDag>,
+        sender: UnboundedSender<CommittedSubDag>,
         // Last CommitIndex that has been successfully processed by the output channel.
         // First commit in the replayed sequence will have index last_processed_index + 1.
         // Set to 0 to replay from the start (as normal sequence starts at index = 1).
         last_processed_index: CommitIndex,
+        dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
         let mut observer = Self {
             context,
-            commit_interpreter,
+            commit_interpreter: Linearizer::new(dag_state.clone()),
             sender,
             store,
         };
@@ -79,6 +83,7 @@ impl CommitObserver {
         }
 
         self.report_metrics(&sent_sub_dags);
+        tracing::debug!("Committed & sent {sent_sub_dags:#?}");
         sent_sub_dags
     }
 
@@ -107,8 +112,7 @@ impl CommitObserver {
             // Resend all the committed subdags to the consensus output channel
             // for all the commits above the last processed index.
             assert!(commit.index > last_processed_index);
-            let committed_subdag =
-                CommittedSubDag::new_from_commit_data(commit, self.store.clone());
+            let committed_subdag = load_committed_subdag_from_store(self.store.as_ref(), commit);
 
             // Failures in sender.send() are assumed to be permanent
             if let Err(err) = self.sender.send(committed_subdag) {
@@ -132,12 +136,19 @@ impl CommitObserver {
                 .unwrap_or_default();
 
             total += 1;
+
             self.context
                 .metrics
                 .node_metrics
                 .block_commit_latency
                 .observe(latency_ms as f64);
+            self.context
+                .metrics
+                .node_metrics
+                .last_committed_leader_round
+                .set(block.round() as i64);
         }
+
         self.context
             .metrics
             .node_metrics
@@ -153,11 +164,10 @@ impl CommitObserver {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use parking_lot::RwLock;
     use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
+    use super::*;
     use crate::{
         block::BlockRef,
         commit::DEFAULT_WAVE_LENGTH,
@@ -178,17 +188,15 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let linearizer = Linearizer::new(dag_state.clone());
         let leader_schedule = LeaderSchedule::new(context.clone());
         let last_processed_index = 0;
-        #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
         let (sender, mut receiver) = unbounded_channel();
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            linearizer,
             sender,
             last_processed_index,
+            dag_state.clone(),
             mem_store.clone(),
         );
 
@@ -266,17 +274,15 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let linearizer = Linearizer::new(dag_state.clone());
         let leader_schedule = LeaderSchedule::new(context.clone());
         let last_processed_index = 0;
-        #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
         let (sender, mut receiver) = unbounded_channel();
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            linearizer.clone(),
             sender.clone(),
             last_processed_index,
+            dag_state.clone(),
             mem_store.clone(),
         );
 
@@ -360,9 +366,9 @@ mod tests {
         // last processed index from the consumer over consensus output channel
         let _observer = CommitObserver::new(
             context.clone(),
-            linearizer,
             sender,
             expected_last_processed_index as CommitIndex,
+            dag_state.clone(),
             mem_store.clone(),
         );
 
@@ -392,17 +398,15 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let linearizer = Linearizer::new(dag_state.clone());
         let leader_schedule = LeaderSchedule::new(context.clone());
         let last_processed_index = 0;
-        #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
         let (sender, mut receiver) = unbounded_channel();
 
         let mut observer = CommitObserver::new(
             context.clone(),
-            linearizer.clone(),
             sender.clone(),
             last_processed_index,
+            dag_state.clone(),
             mem_store.clone(),
         );
 
@@ -448,9 +452,9 @@ mod tests {
         // last processed index from the consumer over consensus output channel
         let _observer = CommitObserver::new(
             context.clone(),
-            linearizer,
             sender,
             expected_last_processed_index as CommitIndex,
+            dag_state.clone(),
             mem_store.clone(),
         );
 

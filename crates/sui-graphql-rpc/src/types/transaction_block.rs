@@ -6,12 +6,12 @@ use async_graphql::{
     connection::{Connection, CursorType, Edge},
     *,
 };
-use diesel::{alias, ExpressionMethods, NullableExpressionMethods, OptionalExtension, QueryDsl};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
 use serde::{Deserialize, Serialize};
 use sui_indexer::{
-    models_v2::transactions::StoredTransaction,
-    schema_v2::{
+    models::transactions::StoredTransaction,
+    schema::{
         transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
     },
 };
@@ -122,6 +122,9 @@ pub(crate) struct TransactionBlockCursor {
     pub checkpoint_viewed_at: u64,
     #[serde(rename = "t")]
     pub tx_sequence_number: u64,
+    /// The checkpoint sequence number when the transaction was finalized.
+    #[serde(rename = "tc")]
+    pub tx_checkpoint_number: u64,
 }
 
 #[Object]
@@ -330,6 +333,8 @@ impl TransactionBlock {
         filter: TransactionBlockFilter,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, TransactionBlock>, Error> {
+        use transactions as tx;
+
         let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
 
@@ -344,7 +349,6 @@ impl TransactionBlock {
                     conn,
                     checkpoint_viewed_at,
                     move || {
-                        use transactions as tx;
                         let mut query = tx::dsl::transactions.into_boxed();
 
                         if let Some(f) = &filter.function {
@@ -365,82 +369,21 @@ impl TransactionBlock {
                         }
 
                         if let Some(c) = &filter.after_checkpoint {
-                            // Translate bound on checkpoint number into a bound on transaction sequence
-                            // number to make better use of indices. Experimentally, postgres struggles
-                            // to use the index on checkpoint sequence number to handle inequality
-                            // constraints -- it still uses the index on transaction sequence number --
-                            // but it's fine to use that index on an equality query.
-                            //
-                            // Diesel also does not like the same table appearing multiple times in a
-                            // single query, so we create an alias of the `transactions` table to query
-                            // for the transaction sequence number bound.
-                            let tx_ = alias!(tx as tx_after);
-                            let sub_query = tx_
-                                .select(tx_.field(tx::dsl::tx_sequence_number))
-                                .filter(
-                                    tx_.field(tx::dsl::checkpoint_sequence_number).eq(*c as i64),
-                                )
-                                .order(tx_.field(tx::dsl::tx_sequence_number).desc())
-                                .limit(1);
-
-                            query = query.filter(
-                                tx::dsl::tx_sequence_number
-                                    .nullable()
-                                    .gt(sub_query.single_value()),
-                            );
+                            query = query.filter(tx::dsl::checkpoint_sequence_number.gt(*c as i64));
                         }
 
                         if let Some(c) = &filter.at_checkpoint {
                             query = query.filter(tx::dsl::checkpoint_sequence_number.eq(*c as i64));
                         }
 
-                        // See comment on handling `after_checkpoint` filter (above) for context.
-                        // The effective checkpoint to filter "before", given both the
-                        // `before_checkpoint` and `checkpoint_viewed_at`, becomes the smaller of
-                        // the two. The difference is that filtering on `checkpoint_viewed_at`
-                        // should include the tx_sequence_number, while filtering on
-                        // `before_checkpoint` should exclude it.
-                        let tx_ = alias!(tx as tx_before);
-                        let sub_query = tx_
-                            .select(tx_.field(tx::dsl::tx_sequence_number))
-                            .limit(1)
-                            .into_boxed();
-
-                        // Exclude `checkpoint_viewed_at` if it is equal to `before_checkpoint` -
-                        // the latter sets an exclusive bound that should take precedence if it is
-                        // less than `checkpoint_viewed_at`, otherwise `checkpoint_viewed_at` is
-                        // more restrictive.
-                        if filter
+                        let before_checkpoint = filter
                             .before_checkpoint
-                            .map_or(true, |cp| cp > checkpoint_viewed_at)
-                        {
-                            // Note that this has to be <=, not strict equality!
-                            let sub_query = sub_query
-                                .filter(
-                                    tx_.field(tx::dsl::checkpoint_sequence_number)
-                                        .le(checkpoint_viewed_at as i64),
-                                )
-                                .order(tx_.field(tx::dsl::tx_sequence_number).desc())
-                                .limit(1);
-
-                            query = query.filter(
-                                tx::dsl::tx_sequence_number
-                                    .nullable()
-                                    .le(sub_query.single_value()),
-                            );
-                        } else if let Some(c) = &filter.before_checkpoint {
-                            let sub_query = sub_query
-                                .filter(
-                                    tx_.field(tx::dsl::checkpoint_sequence_number).eq(*c as i64),
-                                )
-                                .order(tx_.field(tx::dsl::tx_sequence_number).asc());
-
-                            query = query.filter(
-                                tx::dsl::tx_sequence_number
-                                    .nullable()
-                                    .lt(sub_query.single_value()),
-                            );
-                        }
+                            .map_or(checkpoint_viewed_at + 1, |c| {
+                                c.min(checkpoint_viewed_at + 1)
+                            });
+                        query = query.filter(
+                            tx::dsl::checkpoint_sequence_number.lt(before_checkpoint as i64),
+                        );
 
                         if let Some(a) = &filter.sign_address {
                             let sub_query = tx_senders::dsl::tx_senders
@@ -541,11 +484,21 @@ impl Paginated<Cursor> for StoredTransaction {
     type Source = transactions::table;
 
     fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(transactions::dsl::tx_sequence_number.ge(cursor.tx_sequence_number as i64))
+        query
+            .filter(transactions::dsl::tx_sequence_number.ge(cursor.tx_sequence_number as i64))
+            .filter(
+                transactions::dsl::checkpoint_sequence_number
+                    .ge(cursor.tx_checkpoint_number as i64),
+            )
     }
 
     fn filter_le<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(transactions::dsl::tx_sequence_number.le(cursor.tx_sequence_number as i64))
+        query
+            .filter(transactions::dsl::tx_sequence_number.le(cursor.tx_sequence_number as i64))
+            .filter(
+                transactions::dsl::checkpoint_sequence_number
+                    .le(cursor.tx_checkpoint_number as i64),
+            )
     }
 
     fn order<ST, GB>(asc: bool, query: Query<ST, GB>) -> Query<ST, GB> {
@@ -562,6 +515,7 @@ impl Target<Cursor> for StoredTransaction {
     fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
         Cursor::new(TransactionBlockCursor {
             tx_sequence_number: self.tx_sequence_number as u64,
+            tx_checkpoint_number: self.checkpoint_sequence_number as u64,
             checkpoint_viewed_at,
         })
     }

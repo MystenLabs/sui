@@ -17,4 +17,3 @@ proc-macro = true
 proc-macro2.workspace = true
 syn.workspace = true
 synstructure.workspace = true
-workspace-hack.workspace = true

@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
-    IntCounterVec, IntGauge, Registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    Registry,
 };
-use std::sync::Arc;
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4,
@@ -15,8 +17,8 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 ];
 
 pub(crate) struct Metrics {
-    pub node_metrics: NodeMetrics,
-    pub channel_metrics: ChannelMetrics,
+    pub(crate) node_metrics: NodeMetrics,
+    pub(crate) channel_metrics: ChannelMetrics,
 }
 
 pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
@@ -44,13 +46,18 @@ pub(crate) struct NodeMetrics {
     pub suspended_blocks: IntCounterVec,
     pub unsuspended_blocks: IntCounterVec,
     pub invalid_blocks: IntCounterVec,
+    pub block_timestamp_drift_wait_ms: IntCounterVec,
+    pub broadcaster_rtt_estimate_ms: IntGaugeVec,
 
     // Commit Metrics
-    #[allow(unused)]
-    pub committed_leaders_total: IntCounterVec,
+    pub last_decided_leader_round: IntGauge,
+    pub last_committed_leader_round: IntGauge,
+    pub decided_leaders_total: IntCounterVec,
     pub blocks_per_commit_count: Histogram,
     pub sub_dags_per_commit_count: Histogram,
     pub block_commit_latency: Histogram,
+    pub fetched_blocks: IntCounterVec,
+    pub fetch_blocks_scheduler_inflight: IntGauge,
 }
 
 impl NodeMetrics {
@@ -108,13 +115,37 @@ impl NodeMetrics {
             invalid_blocks: register_int_counter_vec_with_registry!(
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",
+                &["authority", "source"],
+                registry,
+            )
+            .unwrap(),
+            block_timestamp_drift_wait_ms: register_int_counter_vec_with_registry!(
+                "block_timestamp_drift_wait_ms",
+                "Total time in ms spent waiting, when a received block has timestamp in future.",
                 &["authority"],
+                registry,
+            )
+            .unwrap(),
+            broadcaster_rtt_estimate_ms: register_int_gauge_vec_with_registry!(
+                "broadcaster_rtt_estimate_ms",
+                "Estimated RTT latency per peer authority, for block sending in Broadcaster",
+                &["peer"],
                 registry,
             )
             .unwrap(),
 
             // Commit Metrics
-            committed_leaders_total: register_int_counter_vec_with_registry!(
+            last_decided_leader_round: register_int_gauge_with_registry!(
+                "last_decided_leader_round",
+                "The last round where a commit decision was made.",
+                registry,
+            ).unwrap(),
+            last_committed_leader_round: register_int_gauge_with_registry!(
+                "last_committed_leader_round",
+                "The last round where a leader was committed to store and sent to commit consumer.",
+                registry,
+            ).unwrap(),
+            decided_leaders_total: register_int_counter_vec_with_registry!(
                 "committed_leaders_total",
                 "Total number of (direct or indirect) committed leaders per authority",
                 &["authority", "commit_type"],
@@ -139,6 +170,17 @@ impl NodeMetrics {
                 registry,
             )
             .unwrap(),
+            fetched_blocks: register_int_counter_vec_with_registry!(
+                "fetched_blocks",
+                "Number of fetched blocks per peer authority via the synchronizer.",
+                &["authority", "type"],
+                registry,
+            ).unwrap(),
+            fetch_blocks_scheduler_inflight: register_int_gauge_with_registry!(
+                "fetch_blocks_scheduler_inflight",
+                "Designates whether the synchronizer scheduler task to fetch blocks is currently running",
+                registry,
+            ).unwrap()
         }
     }
 }

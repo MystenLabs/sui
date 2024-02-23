@@ -2230,14 +2230,18 @@ type Mutation {
 	"""
 	Execute a transaction, committing its effects on chain.
 	
-	`txBytes` is a `TransactionData` struct that has been BCS-encoded
-	and then Base64-encoded.
-	`signatures` are a list of `flag || signature || pubkey` bytes,
-	Base64-encoded.
+	- `txBytes` is a `TransactionData` struct that has been BCS-encoded and then Base64-encoded.
+	- `signatures` are a list of `flag || signature || pubkey` bytes, Base64-encoded.
 	
-	Waits until the transaction has been finalized on chain to return
-	its transaction digest.  If the transaction could not be
-	finalized, returns the errors that prevented it, instead.
+	Waits until the transaction has reached finality on chain to return its transaction digest,
+	or returns the error that prevented finality if that was not possible. A transaction is
+	final when its effects are guaranteed on chain (it cannot be revoked).
+	
+	There may be a delay between transaction finality and when GraphQL requests (including the
+	request that issued the transaction) reflect its effects. As a result, queries that depend
+	on indexing the state of the chain (e.g. contents of output objects, address-level balance
+	information at the time of the transaction), must wait for indexing to catch up by polling
+	for the transaction digest using `Query.transactionBlock`.
 	"""
 	executeTransactionBlock(txBytes: String!, signatures: [String!]!): ExecutionResult!
 }

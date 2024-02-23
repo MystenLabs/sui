@@ -16,7 +16,7 @@ use diesel::{
 };
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use sui_indexer::types_v2::OwnerType;
+use sui_indexer::types::OwnerType;
 use sui_types::{parse_sui_type_tag, TypeTag};
 
 /// The total balance for a particular coin type.
@@ -211,7 +211,7 @@ fn balance_query(address: SuiAddress, coin_type: Option<TypeTag>, lhs: i64, rhs:
 
     // Combine the two queries, and select the most recent version of each object.
     let candidates = query!(
-        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ({})) o"#,
+        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ALL ({})) o"#,
         snapshot_objs,
         history_objs
     )

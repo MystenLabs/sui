@@ -12,25 +12,25 @@ use diesel::{ExpressionMethods, OptionalExtension};
 use diesel::{QueryDsl, RunQueryDsl};
 use sui_types::base_types::ObjectID;
 
+use crate::db::PgConnectionPool;
 use crate::errors::{Context, IndexerError};
-use crate::models_v2::address_metrics::StoredAddressMetrics;
-use crate::models_v2::checkpoints::StoredCheckpoint;
-use crate::models_v2::move_call_metrics::{
+use crate::models::address_metrics::StoredAddressMetrics;
+use crate::models::checkpoints::StoredCheckpoint;
+use crate::models::move_call_metrics::{
     build_move_call_metric_query, QueriedMoveCallMetrics, QueriedMoveMetrics, StoredMoveCallMetrics,
 };
-use crate::models_v2::network_metrics::{StoredEpochPeakTps, Tps};
-use crate::models_v2::transactions::{
+use crate::models::network_metrics::{StoredEpochPeakTps, Tps};
+use crate::models::transactions::{
     StoredTransaction, StoredTransactionCheckpoint, StoredTransactionSuccessCommandCount,
     StoredTransactionTimestamp, TxSeq,
 };
-use crate::models_v2::tx_count_metrics::StoredTxCountMetrics;
-use crate::schema_v2::{
+use crate::models::tx_count_metrics::StoredTxCountMetrics;
+use crate::schema::{
     active_addresses, address_metrics, addresses, checkpoints, epoch_peak_tps, move_call_metrics,
     move_calls, transactions, tx_count_metrics,
 };
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
-use crate::types_v2::IndexerResult;
-use crate::PgConnectionPool;
+use crate::types::IndexerResult;
 
 use super::IndexerAnalyticalStore;
 

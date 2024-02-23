@@ -13,7 +13,7 @@ use diesel::{
     r2d2::{ConnectionManager, Pool},
     PgConnection, RunQueryDsl,
 };
-use sui_indexer::{models_v2::packages::StoredPackage, schema_v2::packages};
+use sui_indexer::{models::packages::StoredPackage, schema::packages};
 use sui_types::{base_types::SuiAddress, move_package::MovePackage};
 use tracing::info;
 

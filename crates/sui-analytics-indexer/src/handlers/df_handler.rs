@@ -10,7 +10,7 @@ use tap::tap::TapFallible;
 use tracing::warn;
 
 use sui_indexer::framework::Handler;
-use sui_indexer::types_v2::owner_to_owner_info;
+use sui_indexer::types::owner_to_owner_info;
 use sui_json_rpc_types::SuiMoveValue;
 use sui_package_resolver::Resolver;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};

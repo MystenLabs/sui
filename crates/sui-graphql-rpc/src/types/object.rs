@@ -22,8 +22,7 @@ use super::transaction_block;
 use super::transaction_block::TransactionBlockFilter;
 use super::type_filter::{ExactTypeFilter, TypeFilter};
 use super::{owner::Owner, sui_address::SuiAddress, transaction_block::TransactionBlock};
-use crate::consistency::Checkpointed;
-use crate::consistency::{build_objects_query, consistent_range, View};
+use crate::consistency::{build_objects_query, consistent_range, Checkpointed, View};
 use crate::context_data::package_cache::PackageCache;
 use crate::data::{self, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
@@ -37,12 +36,10 @@ use diesel::{CombineDsl, ExpressionMethods, OptionalExtension, QueryDsl};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
-use sui_indexer::models_v2::objects::{
-    StoredDeletedHistoryObject, StoredHistoryObject, StoredObject,
-};
-use sui_indexer::schema_v2::{objects, objects_history, objects_snapshot};
-use sui_indexer::types_v2::ObjectStatus as NativeObjectStatus;
-use sui_indexer::types_v2::OwnerType;
+use sui_indexer::models::objects::{StoredDeletedHistoryObject, StoredHistoryObject, StoredObject};
+use sui_indexer::schema::{objects, objects_history, objects_snapshot};
+use sui_indexer::types::ObjectStatus as NativeObjectStatus;
+use sui_indexer::types::OwnerType;
 use sui_package_resolver::Resolver;
 use sui_types::object::{
     MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
@@ -755,7 +752,7 @@ impl Object {
                 let result = page.paginate_raw_query::<StoredHistoryObject>(
                     conn,
                     rhs,
-                    objects_query(&filter, lhs as i64, rhs as i64),
+                    objects_query(&filter, lhs as i64, rhs as i64, &page),
                 )?;
 
                 Ok(Some((result, rhs)))
@@ -1213,6 +1210,10 @@ impl ObjectFilter {
 
         query
     }
+
+    pub(crate) fn has_filters(&self) -> bool {
+        self != &Default::default()
+    }
 }
 
 impl HistoricalObjectCursor {
@@ -1358,14 +1359,19 @@ pub(crate) async fn deserialize_move_struct(
     Ok((struct_tag, move_struct))
 }
 
-fn objects_query(filter: &ObjectFilter, lhs: i64, rhs: i64) -> RawQuery {
-    let view = if filter.object_keys.is_some() {
+/// Constructs a raw query to fetch objects from the database. Objects are filtered out if they
+/// satisfy the criteria but have a later version in the same checkpoint. If object keys are
+/// provided, or no filters are specified at all, then this final condition is not applied.
+fn objects_query(filter: &ObjectFilter, lhs: i64, rhs: i64, page: &Page<Cursor>) -> RawQuery
+where
+{
+    let view = if filter.object_keys.is_some() || !filter.has_filters() {
         View::Historical
     } else {
         View::Consistent
     };
 
-    build_objects_query(view, lhs, rhs, move |query| filter.apply(query))
+    build_objects_query(view, lhs, rhs, page, move |query| filter.apply(query))
 }
 
 #[cfg(test)]

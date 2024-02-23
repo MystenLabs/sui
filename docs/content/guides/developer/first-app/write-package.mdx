@@ -90,7 +90,7 @@ module my_first_package::my_module {
 
 The comments in the preceding code highlight different parts of a typical Move source file.
 
-* **Part 1: Imports** - Code reuse is a necessity in modern programming. Move supports this concept with imports that allow your module to use types and functions declared in other modules. In this example, the module imports from `object`, `transfer`, and `tx_content` modules. These modules are available to the package because the `Move.toml` file defines the Sui dependency (along with the `sui` named address) where they are defined.
+* **Part 1: Imports** - Code reuse is a necessity in modern programming. Move supports this concept with imports that allow your module to use types and functions declared in other modules. In this example, the module imports from `object`, `transfer`, and `tx_context` modules. These modules are available to the package because the `Move.toml` file defines the Sui dependency (along with the `sui` named address) where they are defined.
 
 * **Part 2: Struct declarations** - Structs define types that a module can create or destroy. Struct definitions can include abilities provided with the `has` keyword. The structs in this example, for instance, have the `key` ability, which indicates that these structs are Sui objects that you can transfer between addresses. The `store` ability on the structs provide the ability to appear in other struct fields and be transferred freely.
 

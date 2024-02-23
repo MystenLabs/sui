@@ -5,7 +5,7 @@ use async_graphql::*;
 
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use move_core_types::annotated_value::{MoveStruct, MoveValue};
-use sui_indexer::{models_v2::display::StoredDisplay, schema_v2::display};
+use sui_indexer::{models::display::StoredDisplay, schema::display};
 use sui_types::TypeTag;
 
 use crate::{

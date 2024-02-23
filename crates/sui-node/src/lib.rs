@@ -25,6 +25,7 @@ use std::time::Duration;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_core::epoch::randomness::RandomnessManager;
+use sui_core::execution_cache::ExecutionCacheMetrics;
 use sui_core::execution_cache::NotifyReadWrapper;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_types::base_types::ConciseableName;
@@ -249,7 +250,7 @@ impl SuiNode {
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
     ) -> Result<Arc<SuiNode>> {
-        Self::start_async(config, registry_service, custom_rpc_runtime).await
+        Self::start_async(config, registry_service, custom_rpc_runtime, "unknown").await
     }
 
     fn start_jwk_updater(
@@ -391,6 +392,7 @@ impl SuiNode {
         config: &NodeConfig,
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
+        software_version: &'static str,
     ) -> Result<Arc<SuiNode>> {
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(config);
         let mut config = config.clone();
@@ -443,7 +445,8 @@ impl SuiNode {
             &prometheus_registry,
         )
         .await?;
-        let execution_cache = Arc::new(ExecutionCache::new(store.clone(), &prometheus_registry));
+        let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(&prometheus_registry));
+        let execution_cache = Arc::new(ExecutionCache::new(store.clone(), execution_cache_metrics));
 
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store
@@ -594,7 +597,7 @@ impl SuiNode {
             config.certificate_deny_config.clone(),
             config.indirect_objects_threshold,
             config.state_debug_dump_config.clone(),
-            config.overload_threshold_config.clone(),
+            config.authority_overload_config.clone(),
             archive_readers,
         )
         .await;
@@ -652,6 +655,7 @@ impl SuiNode {
             &config,
             &prometheus_registry,
             custom_rpc_runtime,
+            software_version,
         )?;
 
         let accumulator = Arc::new(StateAccumulator::new(store));
@@ -1745,11 +1749,14 @@ pub fn build_http_server(
     config: &NodeConfig,
     prometheus_registry: &Registry,
     _custom_runtime: Option<Handle>,
+    software_version: &'static str,
 ) -> Result<Option<tokio::task::JoinHandle<()>>> {
     // Validators do not expose these APIs
     if config.consensus_config().is_some() {
         return Ok(None);
     }
+
+    let chain_id = state.get_chain_identifier().unwrap();
 
     let mut router = axum::Router::new();
 
@@ -1816,7 +1823,9 @@ pub fn build_http_server(
     router = router.merge(json_rpc_router);
 
     if config.enable_experimental_rest_api {
-        let rest_router = sui_rest_api::rest_router(store);
+        let rest_router =
+            sui_rest_api::RestService::new(Arc::new(store.clone()), chain_id, software_version)
+                .into_router();
         router = router.nest("/rest", rest_router);
     }
 

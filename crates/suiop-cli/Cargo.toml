@@ -7,7 +7,7 @@ edition = "2021"
 license = "Apache-2.0"
 name = "suiop-cli"
 publish = false
-version = "0.1.7"
+version = "0.1.8"
 
 [lib]
 name = "suioplib"
@@ -28,21 +28,20 @@ include_dir.workspace = true
 inquire.workspace = true
 prettytable-rs.workspace = true
 regex.workspace = true
-reqwest = {workspace = true, features = [
+reqwest = { workspace = true, features = [
   "rustls-tls",
   "json",
-], default-features = false}
+], default-features = false }
 semver.workspace = true
-serde = {workspace = true, features = ["derive"]}
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_yaml.workspace = true
 spinners.workspace = true
 strum.workspace = true
-tokio = {workspace = true, features = ["full"]}
+tokio = { workspace = true, features = ["full"] }
 toml_edit.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

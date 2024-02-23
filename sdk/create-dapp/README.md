@@ -15,7 +15,7 @@ ask you to select from one of the provided templates.
 
 The following templates are available:
 
-- `react-client-dapp`: A simple React dApp that fetches a list of objects owned by the connected
+- `react-client-dapp`: A basic React dApp that fetches a list of objects owned by the connected
   wallet
 - `react-e2e-counter`: An end to end Example with move code and UI for a simple counter app
 

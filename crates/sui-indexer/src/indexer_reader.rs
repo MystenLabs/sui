@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    db::{PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection},
     errors::IndexerError,
-    models_v2::{
+    models::{
         address_metrics::StoredAddressMetrics,
         checkpoints::StoredCheckpoint,
         display::StoredDisplay,
@@ -16,12 +17,11 @@ use crate::{
         transactions::StoredTransaction,
         tx_indices::TxSequenceNumber,
     },
-    schema_v2::{
+    schema::{
         address_metrics, checkpoints, display, epochs, events, move_call_metrics, objects,
         objects_snapshot, packages, transactions,
     },
-    types_v2::{IndexerResult, OwnerType},
-    PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
+    types::{IndexerResult, OwnerType},
 };
 use anyhow::{anyhow, Result};
 use cached::proc_macro::cached;
@@ -69,7 +69,7 @@ pub const EVENT_SEQUENCE_NUMBER_STR: &str = "event_sequence_number";
 
 #[derive(Clone)]
 pub struct IndexerReader {
-    pool: crate::PgConnectionPool,
+    pool: crate::db::PgConnectionPool,
     package_cache: PackageCache,
 }
 

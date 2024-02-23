@@ -188,8 +188,10 @@ mod tests {
     use diesel::QueryDsl;
     use sui_framework::BuiltInFramework;
     use sui_indexer::{
-        get_pg_pool_connection, models_v2::objects::StoredObject, new_pg_connection_pool,
-        schema_v2::objects, types_v2::IndexedObject, utils::reset_database,
+        db::{get_pg_pool_connection, new_pg_connection_pool, reset_database},
+        models::objects::StoredObject,
+        schema::objects,
+        types::IndexedObject,
     };
 
     #[test]

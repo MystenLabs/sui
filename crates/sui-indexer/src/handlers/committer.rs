@@ -12,21 +12,18 @@ use tracing::{error, info};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::metrics::IndexerMetrics;
-
-use crate::store::IndexerStoreV2;
-use crate::types_v2::IndexerResult;
-use crate::IndexerConfig;
+use crate::store::IndexerStore;
+use crate::types::IndexerResult;
 
 use super::{CheckpointDataToCommit, EpochToCommit};
 
 pub async fn start_tx_checkpoint_commit_task<S>(
     state: S,
     metrics: IndexerMetrics,
-    config: IndexerConfig,
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<CheckpointDataToCommit>,
     commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
 ) where
-    S: IndexerStoreV2 + Clone + Sync + Send + 'static,
+    S: IndexerStore + Clone + Sync + Send + 'static,
 {
     use futures::StreamExt;
 
@@ -44,15 +41,6 @@ pub async fn start_tx_checkpoint_commit_task<S>(
         if indexed_checkpoint_batch.is_empty() {
             continue;
         }
-        if config.skip_db_commit {
-            info!(
-                "[Checkpoint/Tx] Downloaded and indexed checkpoint {:?} - {:?} successfully, skipping DB commit...",
-                indexed_checkpoint_batch.first().map(|c| c.checkpoint.sequence_number),
-                indexed_checkpoint_batch.last().map(|c| c.checkpoint.sequence_number),
-            );
-            continue;
-        }
-
         // split the batch into smaller batches per epoch to handle partitioning
         let mut indexed_checkpoint_batch_per_epoch = vec![];
         for indexed_checkpoint in indexed_checkpoint_batch {
@@ -95,7 +83,7 @@ async fn commit_checkpoints<S>(
     metrics: &IndexerMetrics,
     commit_notifier: &watch::Sender<Option<CheckpointSequenceNumber>>,
 ) where
-    S: IndexerStoreV2 + Clone + Sync + Send + 'static,
+    S: IndexerStore + Clone + Sync + Send + 'static,
 {
     let mut checkpoint_batch = vec![];
     let mut tx_batch = vec![];

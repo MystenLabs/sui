@@ -96,6 +96,10 @@ impl CheckpointFetcher {
                 "successfully downloaded checkpoint"
             );
 
+            let checkpoint_bytes_size = bcs::serialized_size(&checkpoint)?;
+            self.metrics
+                .checkpoint_download_bytes_size
+                .set(checkpoint_bytes_size as i64);
             self.sender
                 .send(checkpoint)
                 .await

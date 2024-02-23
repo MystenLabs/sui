@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Weak;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
-use sui_config::node::OverloadThresholdConfig;
+use sui_config::node::AuthorityOverloadConfig;
 use sui_types::digests::TransactionDigest;
 use sui_types::error::SuiError;
 use sui_types::error::SuiResult;
@@ -43,11 +43,14 @@ const STEADY_OVERLOAD_REDUCTION_PERCENTAGE: u32 = 10;
 const EXECUTION_RATE_RATIO_FOR_COMPARISON: f64 = 0.9;
 const ADDITIONAL_LOAD_SHEDDING: f64 = 0.1;
 
+// The update interval of the random seed used to determine whether a txn should be rejected.
+const SEED_UPDATE_DURATION_SECS: u64 = 30;
+
 // Monitors the overload signals in `authority_state` periodically, and updates its `overload_info`
 // when the signals indicates overload.
 pub async fn overload_monitor(
     authority_state: Weak<AuthorityState>,
-    config: OverloadThresholdConfig,
+    config: AuthorityOverloadConfig,
 ) {
     info!("Starting system overload monitor.");
 
@@ -67,7 +70,7 @@ pub async fn overload_monitor(
 // Returns whether the authority state exists.
 fn check_authority_overload(
     authority_state: &Weak<AuthorityState>,
-    config: &OverloadThresholdConfig,
+    config: &AuthorityOverloadConfig,
 ) -> bool {
     let authority_arc = authority_state.upgrade();
     if authority_arc.is_none() {
@@ -153,7 +156,7 @@ fn calculate_load_shedding_percentage(txn_ready_rate: f64, execution_rate: f64) 
 // When txn_ready_rate is less than execution_rate, we gradually reduce load shedding percentage until
 // the queueing latency is back to normal.
 fn check_overload_signals(
-    config: &OverloadThresholdConfig,
+    config: &AuthorityOverloadConfig,
     current_load_shedding_percentage: u32,
     queueing_latency: Duration,
     txn_ready_rate: f64,
@@ -215,11 +218,11 @@ fn check_overload_signals(
 fn should_reject_tx(
     load_shedding_percentage: u32,
     tx_digest: TransactionDigest,
-    minutes_since_epoch: u64,
+    temporal_seed: u64,
 ) -> bool {
     // TODO: we also need to add a secret salt (e.g. first consensus commit in the current epoch),
     // to prevent gaming the system.
-    let mut hasher = XxHash64::with_seed(minutes_since_epoch);
+    let mut hasher = XxHash64::with_seed(temporal_seed);
     hasher.write(tx_digest.inner());
     let value = hasher.finish();
     value % 100 < load_shedding_percentage as u64
@@ -230,17 +233,23 @@ pub fn overload_monitor_accept_tx(
     load_shedding_percentage: u32,
     tx_digest: TransactionDigest,
 ) -> SuiResult {
-    // Using the minutes_since_epoch as the hash seed to allow rejected transaction's
-    // retry to have a chance to go through in the future.
-    let minutes_since_epoch = SystemTime::now()
+    // Derive a random seed from the epoch time for transaction selection. Changing the seed every
+    // `SEED_UPDATE_DURATION_SECS` interval allows rejected transaction's retry to have a chance
+    // to go through in the future.
+    // Also, using the epoch time instead of randomly generating a seed allows that all validators
+    // makes the same decision.
+    let temporal_seed = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Sui did not exist prior to 1970")
         .as_secs()
-        / 60;
+        / SEED_UPDATE_DURATION_SECS;
 
-    if should_reject_tx(load_shedding_percentage, tx_digest, minutes_since_epoch) {
-        // TODO: complete the suggestion for client retry deadline.
-        fp_bail!(SuiError::ValidatorOverloadedRetryAfter { retry_after_sec: 0 });
+    if should_reject_tx(load_shedding_percentage, tx_digest, temporal_seed) {
+        // TODO: using `SEED_UPDATE_DURATION_SECS` is a safe suggestion that the time based seed
+        // is definitely different by then. However, a shorter suggestion may be available.
+        fp_bail!(SuiError::ValidatorOverloadedRetryAfter {
+            retry_after_secs: SEED_UPDATE_DURATION_SECS
+        });
     }
     Ok(())
 }
@@ -323,7 +332,7 @@ mod tests {
 
     #[test]
     pub fn test_check_overload_signals() {
-        let config = OverloadThresholdConfig {
+        let config = AuthorityOverloadConfig {
             execution_queue_latency_hard_limit: Duration::from_secs(10),
             execution_queue_latency_soft_limit: Duration::from_secs(1),
             max_load_shedding_percentage: 90,
@@ -400,12 +409,12 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     pub async fn test_check_authority_overload() {
-        let config = OverloadThresholdConfig {
+        let config = AuthorityOverloadConfig {
             safe_transaction_ready_rate: 0,
             ..Default::default()
         };
         let state = TestAuthorityBuilder::new()
-            .with_overload_threshold_config(config.clone())
+            .with_authority_overload_config(config.clone())
             .build()
             .await;
 
@@ -712,31 +721,31 @@ mod tests {
     async fn test_txn_rejection_over_time() {
         let start_time = Instant::now();
         let mut digest = TransactionDigest::random();
-        let mut minutes_since_epoch = 28455473;
+        let mut temporal_seed = 1708108277 / SEED_UPDATE_DURATION_SECS;
         let load_shedding_percentage = 50;
 
         // Find a rejected transaction with 50% rejection rate.
-        while !should_reject_tx(load_shedding_percentage, digest, minutes_since_epoch)
+        while !should_reject_tx(load_shedding_percentage, digest, temporal_seed)
             && start_time.elapsed() < Duration::from_secs(30)
         {
             digest = TransactionDigest::random();
         }
 
-        // It should always be rejected in the current minute.
+        // It should always be rejected using the current temporal_seed.
         for _ in 0..100 {
             assert!(should_reject_tx(
                 load_shedding_percentage,
                 digest,
-                minutes_since_epoch
+                temporal_seed
             ));
         }
 
         // It will be accepted in the future.
-        minutes_since_epoch += 1;
-        while should_reject_tx(load_shedding_percentage, digest, minutes_since_epoch)
+        temporal_seed += 1;
+        while should_reject_tx(load_shedding_percentage, digest, temporal_seed)
             && start_time.elapsed() < Duration::from_secs(30)
         {
-            minutes_since_epoch += 1;
+            temporal_seed += 1;
         }
 
         // Make sure that the tests can finish within 30 seconds.
