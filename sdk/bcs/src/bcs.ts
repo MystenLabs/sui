@@ -462,10 +462,27 @@ export const bcs = {
 	enum<T extends Record<string, BcsType<any> | null>>(
 		name: string,
 		values: T,
-		options?: Omit<BcsTypeOptions<EnumOutputShape<T>, EnumInputShape<T>>, 'name'>,
+		options?: Omit<
+			BcsTypeOptions<
+				EnumOutputShape<{
+					[K in keyof T]: T[K] extends BcsType<infer U, any> ? U : true;
+				}>,
+				EnumInputShape<{
+					[K in keyof T]: T[K] extends BcsType<any, infer U> ? U : boolean | object | null;
+				}>
+			>,
+			'name'
+		>,
 	) {
 		const canonicalOrder = Object.entries(values as object);
-		return new BcsType<EnumOutputShape<T>, EnumInputShape<T>>({
+		return new BcsType<
+			EnumOutputShape<{
+				[K in keyof T]: T[K] extends BcsType<infer U, any> ? U : true;
+			}>,
+			EnumInputShape<{
+				[K in keyof T]: T[K] extends BcsType<any, infer U> ? U : boolean | object | null;
+			}>
+		>({
 			name,
 			read: (reader) => {
 				const index = reader.readULEB();

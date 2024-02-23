@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { BaseSchema, Input, Output, UnionOptions } from 'valibot';
+import type { EnumInputShape, EnumOutputShape } from '@mysten/bcs';
+import type { BaseSchema, Input, Output } from 'valibot';
 import {
 	array,
 	boolean,
@@ -21,36 +22,31 @@ import {
 	unknown,
 } from 'valibot';
 
-import type { StructTag as StructTagType, TypeTag as TypeTagType } from '../../bcs/index.js';
+import type { TypeTag as TypeTagType } from '../../bcs/index.js';
 import { isValidSuiAddress, normalizeSuiAddress } from '../../utils/sui-types.js';
 
 type Merge<T> = T extends object ? { [K in keyof T]: T[K] } : never;
 
-type UnionToEnumSchema<In, Out> = BaseSchema<In, UnionToEnum<Out>>;
+type EnumSchema<T extends Record<string, BaseSchema<any>>> = BaseSchema<
+	EnumInputShape<
+		Merge<{
+			[K in keyof T]: Input<T[K]>;
+		}>
+	>,
+	EnumOutputShape<
+		Merge<{
+			[K in keyof T]: Output<T[K]>;
+		}>
+	>
+>;
 
-type UnionToEnum<
-	T,
-	Keys = T extends object ? keyof T : never,
-	Values = T extends object ? T[keyof T] : never,
-> = T extends object
-	? 0 extends Values
-		? Merge<T & { $kind: keyof T }>
-		: '' extends Values
-		? Merge<T & { $kind: keyof T }>
-		: 0n extends Values
-		? Merge<T & { $kind: keyof T }>
-		: false extends Values
-		? Merge<T & { $kind: keyof T }>
-		: Merge<T & { [K in Exclude<string & Keys, keyof T>]?: never } & { $kind: keyof T }>
-	: never;
+function safeEnum<T extends Record<string, BaseSchema<any>>>(options: T): EnumSchema<T> {
+	const unionOptions = Object.entries(options).map(([key, value]) => object({ [key]: value }));
 
-function enumUnion<T extends UnionOptions>(
-	options: T,
-): UnionToEnumSchema<Input<T[number]>, Output<T[number]>> {
-	return transform(union(options), (value) => ({
+	return transform(union(unionOptions), (value) => ({
 		...value,
 		$kind: Object.keys(value)[0] as keyof typeof value,
-	})) as UnionToEnumSchema<T[number], Output<T[number]>>;
+	})) as EnumSchema<T>;
 }
 
 const SuiAddress = transform(string(), (value) => normalizeSuiAddress(value), [
@@ -81,14 +77,32 @@ export const ObjectRef = object({
 export type ObjectRef = Output<typeof ObjectRef>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L690-L702
-export const Argument = enumUnion([
-	object({ GasCoin: literal(true) }),
-
-	object({ Input: number([integer()]), type: optional(literal('pure')) }),
-	object({ Input: number([integer()]), type: optional(literal('object')) }),
-	object({ Result: number([integer()]) }),
-	object({ NestedResult: tuple([number([integer()]), number([integer()])]) }),
-]);
+export const Argument = transform(
+	union([
+		object({ GasCoin: literal(true) }),
+		object({ Input: number([integer()]), type: optional(literal('pure')) }),
+		object({ Input: number([integer()]), type: optional(literal('object')) }),
+		object({ Result: number([integer()]) }),
+		object({ NestedResult: tuple([number([integer()]), number([integer()])]) }),
+	]),
+	(value) => ({
+		...value,
+		$kind: Object.keys(value)[0] as keyof typeof value,
+	}),
+	// Defined manually to add `type?: 'pure' | 'object'` to Input
+) as BaseSchema<
+	// Input
+	| { GasCoin: true }
+	| { Input: number; type?: 'pure' | 'object' }
+	| { Result: number }
+	| { NestedResult: [number, number] },
+	// Output
+	| { $kind: 'GasCoin'; GasCoin: true }
+	| { $kind: 'Input'; Input: number; type?: 'pure' }
+	| { $kind: 'Input'; Input: number; type?: 'object' }
+	| { $kind: 'Result'; Result: number }
+	| { $kind: 'NestedResult'; NestedResult: [number, number] }
+>;
 
 export type Argument = Output<typeof Argument>;
 
@@ -102,23 +116,31 @@ export const GasData = object({
 export type GasData = Output<typeof GasData>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/external-crates/move/crates/move-core-types/src/language_storage.rs#L33-L59
-export const TypeTag: BaseSchema<TypeTagType> = enumUnion([
-	object({ bool: literal(true) }),
-	object({ u8: literal(true) }),
-	object({ u64: literal(true) }),
-	object({ u128: literal(true) }),
-	object({ address: literal(true) }),
-	object({ signer: literal(true) }),
-	object({ vector: recursive(() => TypeTag) }),
-	object({ struct: recursive(() => StructTag) }),
-	object({ u16: literal(true) }),
-	object({ u32: literal(true) }),
-	object({ u256: literal(true) }),
-]);
+export const TypeTag = safeEnum({
+	bool: literal(true),
+	u8: literal(true),
+	u64: literal(true),
+	u128: literal(true),
+	address: literal(true),
+	signer: literal(true),
+	vector: recursive(() => TypeTag),
+	struct: recursive(() => StructTag),
+	u16: literal(true),
+	u32: literal(true),
+	u256: literal(true),
+}) as BaseSchema<
+	TypeTagType,
+	TypeTagType extends infer Tag
+		? Tag extends unknown
+			? Merge<{ [K in keyof Tag]: NonNullable<Tag[K]> } & { $kind: keyof Tag }>
+			: never
+		: never
+>;
+
 export type TypeTag = Output<typeof TypeTag>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/external-crates/move/crates/move-core-types/src/language_storage.rs#L140-L147
-export const StructTag: BaseSchema<StructTagType> = object({
+export const StructTag = object({
 	address: string(),
 	module: string(),
 	name: string(),
@@ -139,35 +161,29 @@ const ProgrammableMoveCall = object({
 export type ProgrammableMoveCall = Output<typeof ProgrammableMoveCall>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L657-L685
-export const Transaction = enumUnion([
-	object({ MoveCall: ProgrammableMoveCall }),
-	object({ TransferObjects: tuple([array(Argument), Argument]) }),
-	object({ SplitCoins: tuple([Argument, array(Argument)]) }),
-	object({ MergeCoins: tuple([Argument, array(Argument)]) }),
-	object({ Publish: tuple([array(BCSBytes), array(ObjectID)]) }),
-	object({
-		MakeMoveVec: tuple([
-			enumUnion([object({ None: literal(true) }), object({ Some: TypeTag })]),
-			array(Argument),
-		]),
-	}),
-	object({ Upgrade: tuple([array(BCSBytes), array(ObjectID), ObjectID, Argument]) }),
-]);
+export const Transaction = safeEnum({
+	MoveCall: ProgrammableMoveCall,
+	TransferObjects: tuple([array(Argument), Argument]),
+	SplitCoins: tuple([Argument, array(Argument)]),
+	MergeCoins: tuple([Argument, array(Argument)]),
+	Publish: tuple([array(BCSBytes), array(ObjectID)]),
+	MakeMoveVec: tuple([safeEnum({ None: literal(true), Some: TypeTag }), array(Argument)]),
+	Upgrade: tuple([array(BCSBytes), array(ObjectID), ObjectID, Argument]),
+});
+
 export type Transaction = Output<typeof Transaction>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L102-L114
-const ObjectArg = enumUnion([
-	object({ ImmOrOwnedObject: ObjectRef }),
-	object({
-		SharedObject: object({
-			objectId: ObjectID,
-			// snake case in rust
-			initialSharedVersion: JsonU64,
-			mutable: boolean(),
-		}),
+const ObjectArg = safeEnum({
+	ImmOrOwnedObject: ObjectRef,
+	SharedObject: object({
+		objectId: ObjectID,
+		// snake case in rust
+		initialSharedVersion: JsonU64,
+		mutable: boolean(),
 	}),
-	object({ Receiving: ObjectRef }),
-]);
+	Receiving: ObjectRef,
+});
 
 // https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-graphql-rpc/schema/current_progress_schema.graphql#L1614-L1627
 export type OpenMoveTypeSignatureBody =
@@ -219,35 +235,32 @@ const OpenMoveTypeSignature = object({
 export type OpenMoveTypeSignature = Output<typeof OpenMoveTypeSignature>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L75-L80
-const CallArg = enumUnion([
-	object({ Object: ObjectArg }),
-	object({ Pure: BCSBytes }),
+const CallArg = safeEnum({
+	Object: ObjectArg,
+	Pure: BCSBytes,
 	// // added for sui:unresolvedObjectIds
-	object({
-		UnresolvedObject: object({
-			value: string(),
-			typeSignatures: array(OpenMoveTypeSignature),
-		}),
+	UnresolvedObject: object({
+		value: string(),
+		typeSignatures: array(OpenMoveTypeSignature),
 	}),
 	// added for sui:rawValues
-	object({
-		RawValue: object({
-			value: unknown(),
-			type: nullish(union([literal('Pure'), literal('Object')])),
-		}),
+	RawValue: object({
+		value: unknown(),
+		type: nullish(union([literal('Pure'), literal('Object')])),
 	}),
-]);
+});
 export type CallArg = Output<typeof CallArg>;
 
-export const NormalizedCallArg = enumUnion([
-	object({ Object: ObjectArg }),
-	object({ Pure: BCSBytes }),
-]);
+export const NormalizedCallArg = safeEnum({
+	Object: ObjectArg,
+	Pure: BCSBytes,
+});
 
-export const TransactionExpiration = enumUnion([
-	object({ None: literal(true) }),
-	object({ Epoch: JsonU64 }),
-]);
+export const TransactionExpiration = safeEnum({
+	None: literal(true),
+	Epoch: JsonU64,
+});
+
 export type TransactionExpiration = Output<typeof TransactionExpiration>;
 
 export const TransactionBlockState = object({
