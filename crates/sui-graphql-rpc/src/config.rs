@@ -92,6 +92,11 @@ pub struct Limits {
     pub max_move_value_depth: u32,
 }
 
+#[derive(Debug)]
+pub struct Version {
+    pub version: &'static str,
+}
+
 impl Limits {
     pub fn default_for_simulator_testing() -> Self {
         Self {
