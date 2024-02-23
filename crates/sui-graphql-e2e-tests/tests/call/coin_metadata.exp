@@ -3,15 +3,15 @@ processed 7 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-20:
+task 1 'publish'. lines 6-19:
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 10617200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'create-checkpoint'. lines 22-22:
+task 2 'create-checkpoint'. lines 21-21:
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 24-35:
+task 3 'run-graphql'. lines 23-34:
 Response: {
   "data": {
     "coinMetadata": {
@@ -26,15 +26,15 @@ Response: {
   }
 }
 
-task 4 'programmable'. lines 38-40:
+task 4 'programmable'. lines 37-39:
 created: object(4,0)
 mutated: object(0,0), object(1,2)
 gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
-task 5 'create-checkpoint'. lines 42-42:
+task 5 'create-checkpoint'. lines 41-41:
 Checkpoint created: 2
 
-task 6 'run-graphql'. lines 44-55:
+task 6 'run-graphql'. lines 43-54:
 Response: {
   "data": {
     "coinMetadata": {

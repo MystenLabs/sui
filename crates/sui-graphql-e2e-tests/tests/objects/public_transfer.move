@@ -9,11 +9,11 @@ module P0::m {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    struct Foo has key, store {
+    public struct Foo has key, store {
         id: UID,
     }
 
-    struct Bar has key {
+    public struct Bar has key {
         id: UID,
     }
 

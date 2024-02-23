@@ -15,18 +15,18 @@ module Test::M1 {
     use sui::tx_context::TxContext;
     use sui::transfer;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         value: u64,
     }
 
-    struct Ledger has key, store {
+    public struct Ledger has key, store {
         id: UID,
         object_ids: vector<UID>,
     }
 
     public entry fun create_many(recipient: address, ctx: &mut TxContext) {
-        let i = 0;
+        let mut i = 0;
         while (i < 500) {
             transfer::public_transfer(
 
