@@ -5,28 +5,30 @@ module bridge::limiter {
 
     use std::option;
     use std::vector;
+
     use sui::clock;
-    use sui::event::emit;
     use sui::clock::Clock;
+    use sui::event::emit;
     use sui::math::pow;
-    use sui::vec_map;
-    use sui::vec_map::VecMap;
-    use bridge::treasury;
-    use bridge::eth::ETH;
+    use sui::vec_map::{Self, VecMap};
+
     use bridge::btc::BTC;
+    use bridge::chain_ids::{Self, BridgeRoute};
+    use bridge::eth::ETH;
+    use bridge::treasury;
     use bridge::usdc::USDC;
     use bridge::usdt::USDT;
-    use bridge::chain_ids::{Self, BridgeRoute};
+
     #[test_only]
     use sui::test_scenario;
     #[test_only]
-    use sui::test_utils::{destroy, assert_eq};
+    use sui::test_utils::{assert_eq, destroy};
+    #[test_only]
+    use bridge::btc;
     #[test_only]
     use bridge::eth;
     #[test_only]
     use bridge::usdc;
-    #[test_only]
-    use bridge::btc;
     #[test_only]
     use bridge::usdt;
 
@@ -76,22 +78,22 @@ module bridge::limiter {
     }
 
     // Abort if the route limit is not found
-    public fun get_route_limit(self: &TransferLimiter, route: &BridgeRoute): &u64 {
-        vec_map::get(&self.transfer_limits, route)
+    public fun get_route_limit(self: &TransferLimiter, route: &BridgeRoute): u64 {
+        *vec_map::get(&self.transfer_limits, route)
     }
 
     // Abort if the token's notional price is not found
-    public fun get_asset_notional_price(self: &TransferLimiter, token_id: &u8): &u64 {
-        vec_map::get(&self.notional_values, token_id)
+    public fun get_asset_notional_price(self: &TransferLimiter, token_id: &u8): u64 {
+        *vec_map::get(&self.notional_values, token_id)
     }
 
     public(friend) fun update_route_limit(self: &mut TransferLimiter, route: &BridgeRoute, new_usd_limit: u64) {
         if (!vec_map::contains(&self.transfer_limits, route)) {
             vec_map::insert(&mut self.transfer_limits, *route, new_usd_limit);
-            return
+        } else {
+            let entry = vec_map::get_mut(&mut self.transfer_limits, route);
+            *entry = new_usd_limit;
         };
-        let entry = vec_map::get_mut(&mut self.transfer_limits, route);
-        *entry = new_usd_limit;
         emit(UpdateRouteLimitEvent {
             sending_chain: *chain_ids::route_source(route),
             receiving_chain: *chain_ids::route_destination(route),
@@ -102,12 +104,12 @@ module bridge::limiter {
     public(friend) fun update_asset_notional_price(self: &mut TransferLimiter, token_id: u8, new_usd_price: u64) {
         if (!vec_map::contains(&self.notional_values, &token_id)) {
             vec_map::insert(&mut self.notional_values, token_id, new_usd_price);
-            return
+        } else {
+            let entry = vec_map::get_mut(&mut self.notional_values, &token_id);
+            *entry = new_usd_price;
         };
-        let entry = vec_map::get_mut(&mut self.notional_values, &token_id);
-        *entry = new_usd_price;
         emit(UpdateAssetPriceEvent {
-            token_id: token_id,
+            token_id,
             new_price: new_usd_price,
         })
     }
@@ -173,7 +175,7 @@ module bridge::limiter {
 
         let target_tail = current_hour_since_epoch - 23;
 
-        // If `hour_head` is even older than 24 hours ago, it means all items in 
+        // If `hour_head` is even older than 24 hours ago, it means all items in
         // `per_hour_amounts` are to be evicted.
         if (self.hour_head < target_tail) {
             self.per_hour_amounts = vector::empty();
@@ -413,7 +415,7 @@ module bridge::limiter {
 
         assert_eq(
             *vec_map::get(
-                &limiter.transfer_limits, 
+                &limiter.transfer_limits,
                 &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())
             ),
             5_000_000 * USD_VALUE_MULTIPLIER,
@@ -469,7 +471,7 @@ module bridge::limiter {
         assert_eq(record.hour_head, 10023);
         assert_eq(record.hour_tail, 10000);
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15 * 25000]
         );
         assert_eq(record.total_amount, 15 * 25000);
@@ -482,7 +484,7 @@ module bridge::limiter {
         assert_eq(record.hour_tail, 10000);
         let expected_notion_amount_10023 = 15 * 25000 + 10 * USD_VALUE_MULTIPLIER;
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, expected_notion_amount_10023]
         );
         assert_eq(record.total_amount, expected_notion_amount_10023);
@@ -496,7 +498,7 @@ module bridge::limiter {
         assert_eq(record.hour_tail, 10001);
         let expected_notion_amount_10024 = 20 * USD_VALUE_MULTIPLIER;
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, expected_notion_amount_10023, expected_notion_amount_10024]
         );
         assert_eq(record.total_amount, expected_notion_amount_10023 + expected_notion_amount_10024);
@@ -511,7 +513,7 @@ module bridge::limiter {
         assert_eq(record.hour_head, 10046);
         assert_eq(record.hour_tail, 10023);
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[expected_notion_amount_10023, expected_notion_amount_10024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         );
         assert_eq(record.total_amount, expected_notion_amount_10023 + expected_notion_amount_10024);
@@ -524,7 +526,7 @@ module bridge::limiter {
         assert_eq(record.hour_head, 10046);
         assert_eq(record.hour_tail, 10023);
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[expected_notion_amount_10023, expected_notion_amount_10024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, expected_notion_amount_10046]
         );
         assert_eq(record.total_amount, expected_notion_amount_10023 + expected_notion_amount_10024 + expected_notion_amount_10046);
@@ -538,7 +540,7 @@ module bridge::limiter {
         assert_eq(record.hour_head, 10047);
         assert_eq(record.hour_tail, 10024);
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[expected_notion_amount_10024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, expected_notion_amount_10046, expected_notion_amount_10047]
         );
         assert_eq(record.total_amount, expected_notion_amount_10024 + expected_notion_amount_10046 + expected_notion_amount_10047);
@@ -552,7 +554,7 @@ module bridge::limiter {
         assert_eq(record.hour_head, 10053);
         assert_eq(record.hour_tail, 10030);
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, expected_notion_amount_10046, expected_notion_amount_10047, 0, 0, 0, 0, 0, expected_notion_amount_10053]
         );
         assert_eq(record.total_amount, expected_notion_amount_10046 + expected_notion_amount_10047 + expected_notion_amount_10053);
@@ -566,7 +568,7 @@ module bridge::limiter {
         assert_eq(record.hour_head, 10153);
         assert_eq(record.hour_tail, 10130);
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, expected_notion_amount_10153]
         );
         assert_eq(record.total_amount, expected_notion_amount_10153);
@@ -582,7 +584,7 @@ module bridge::limiter {
         let limiter = new();
         assert_eq(
             *vec_map::get(
-                &limiter.transfer_limits, 
+                &limiter.transfer_limits,
                 &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())
             ),
             5_000_000 * USD_VALUE_MULTIPLIER,
@@ -590,7 +592,7 @@ module bridge::limiter {
 
         assert_eq(
             *vec_map::get(
-                &limiter.transfer_limits, 
+                &limiter.transfer_limits,
                 &chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia())
             ),
             MAX_TRANSFER_LIMIT,
@@ -600,7 +602,7 @@ module bridge::limiter {
         update_route_limit(&mut limiter, &chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia()), 1_000 * USD_VALUE_MULTIPLIER);
         assert_eq(
             *vec_map::get(
-                &limiter.transfer_limits, 
+                &limiter.transfer_limits,
                 &chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia())
             ),
             1_000 * USD_VALUE_MULTIPLIER,
@@ -608,7 +610,7 @@ module bridge::limiter {
         // mainnet route does not change
         assert_eq(
             *vec_map::get(
-                &limiter.transfer_limits, 
+                &limiter.transfer_limits,
                 &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())
             ),
             5_000_000 * USD_VALUE_MULTIPLIER,
