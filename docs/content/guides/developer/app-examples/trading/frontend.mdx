@@ -29,8 +29,6 @@ Before getting started, make sure you:
 
 ## Overview
 
-Let's start with the UI wireframe.
-
 The UI design consists of three parts:
 
 - A header containing the button allowing users to connect their wallet and navigate to other pages.
@@ -509,7 +507,7 @@ export function useCancelEscrowMutation() {
 
 ## Locked dashboard
 
-Recall from the UI design wireframe, there is a tab for users to manage their owned objects to be ready for escrow trading. The code of this tab lives in the file `src/routes/LockedDashBoard.tsx`. In this tab, there are two sub-tabs:
+The UI has a tab for users to manage their owned objects to be ready for escrow trading. The code of this tab lives in the file `src/routes/LockedDashBoard.tsx`. In this tab, there are two sub-tabs:
 
 - **My Locked Objects** tab to list out all of owned `Locked` objects.
 - **Lock Own Objects** tab to lock owned objects.
@@ -699,7 +697,7 @@ export function LockOwnedObjects() {
 
 ## Escrow dashboard
 
-Recall from the UI design wireframe, there is a place for users to discover, create, and execute trades. The code of this tab lives in the file `src/routes/EscrowDashboard.tsx`. In this tab, there are three sub-tabs:
+The UI has a place for users to discover, create, and execute trades. The code of this tab lives in the file `src/routes/EscrowDashboard.tsx`. In this tab, there are three sub-tabs:
 
 - **Requested Escrows** tab to list out all of the escrow requested for locked objects.
 - **Browse Locked Objects** tab to browse locked objects to trade for.
