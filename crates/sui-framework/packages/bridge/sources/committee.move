@@ -40,8 +40,11 @@ module bridge::committee {
     const ENotSystemAddress: u64 = 3;
     const EValidatorBlocklistContainsUnknownKey: u64 = 4;
     const ESenderNotActiveValidator: u64 = 5;
+    const EInvalidPubkeyLength: u64 = 6;
 
     const SUI_MESSAGE_PREFIX: vector<u8> = b"SUI_BRIDGE_MESSAGE";
+
+    const ECDSA_COMPRESSED_PUBKEY_LENGTH: u64 = 33;
 
     struct BlocklistValidatorEvent has copy, drop {
         blocklisted: bool,
@@ -62,7 +65,7 @@ module bridge::committee {
         sui_address: address,
         /// The public key bytes of the bridge key
         bridge_pubkey_bytes: vector<u8>,
-        /// Voting power percentage, 2DP
+        /// Voting power, values are voting power in the scale of 10000.
         voting_power: u64,
         /// The HTTP REST URL the member's node listens to
         /// it looks like b'https://127.0.0.1:9191'
@@ -83,13 +86,6 @@ module bridge::committee {
 
     public(friend) fun create(ctx: &TxContext): BridgeCommittee {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
-        // Default signature threshold
-        let thresholds = vec_map::empty();
-        vec_map::insert(&mut thresholds, message_types::token(), 3334);
-        vec_map::insert(&mut thresholds, message_types::emergency_op(), 450);
-        vec_map::insert(&mut thresholds, message_types::committee_blocklist(), 5001);
-        vec_map::insert(&mut thresholds, message_types::update_asset_price(), 5001);
-        vec_map::insert(&mut thresholds, message_types::update_bridge_limit(), 5001);
         BridgeCommittee {
             members: vec_map::empty(),
             member_registrations: vec_map::empty(),
@@ -135,6 +131,7 @@ module bridge::committee {
         http_rest_url: vector<u8>,
         ctx: &TxContext
     ) {
+        assert!(vector::length(&bridge_pubkey_bytes) == ECDSA_COMPRESSED_PUBKEY_LENGTH, EInvalidPubkeyLength);
         // sender must be the same sender that created the validator object
         let sender = tx_context::sender(ctx);
         let validators = sui_system::active_validator_addresses(system_state);

@@ -4349,7 +4349,7 @@ impl AuthorityState {
             info!("bridge not enabled");
             return None;
         }
-        // Only crate this transaction if bridge exists
+        // Only create this transaction if bridge exists
         if !epoch_store.bridge_exists() {
             return None;
         }

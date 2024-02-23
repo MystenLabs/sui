@@ -67,7 +67,7 @@ async fn test_committee_registration() {
         .await;
 
     let ref_gas_price = test_cluster.get_reference_gas_price().await;
-    let bridge_shares_version = get_bridge_obj_initial_shared_version(
+    let bridge_shared_version = get_bridge_obj_initial_shared_version(
         test_cluster
             .fullnode_handle
             .sui_node
@@ -105,7 +105,7 @@ async fn test_committee_registration() {
         let bridge = builder
             .obj(ObjectArg::SharedObject {
                 id: SUI_BRIDGE_OBJECT_ID,
-                initial_shared_version: bridge_shares_version,
+                initial_shared_version: bridge_shared_version,
                 mutable: true,
             })
             .unwrap();

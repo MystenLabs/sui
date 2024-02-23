@@ -153,7 +153,7 @@
 
 </dd>
 <dt>
-<code>frozen: bool</code>
+<code>paused: bool</code>
 </dt>
 <dd>
 
@@ -438,20 +438,20 @@
 
 
 
-<a name="0xb_bridge_EBridgeAlreadyFrozen"></a>
+<a name="0xb_bridge_EBridgeAlreadyPaused"></a>
 
 
 
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EBridgeAlreadyFrozen">EBridgeAlreadyFrozen</a>: u64 = 13;
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EBridgeAlreadyPaused">EBridgeAlreadyPaused</a>: u64 = 13;
 </code></pre>
 
 
 
-<a name="0xb_bridge_EBridgeNotFrozen"></a>
+<a name="0xb_bridge_EBridgeNotPaused"></a>
 
 
 
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EBridgeNotFrozen">EBridgeNotFrozen</a>: u64 = 14;
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EBridgeNotPaused">EBridgeNotPaused</a>: u64 = 14;
 </code></pre>
 
 
@@ -564,29 +564,11 @@
 
 
 
-<a name="0xb_bridge_FREEZE"></a>
-
-
-
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_FREEZE">FREEZE</a>: u8 = 0;
-</code></pre>
-
-
-
 <a name="0xb_bridge_MESSAGE_VERSION"></a>
 
 
 
 <pre><code><b>const</b> <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>: u8 = 1;
-</code></pre>
-
-
-
-<a name="0xb_bridge_UNFREEZE"></a>
-
-
-
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_UNFREEZE">UNFREEZE</a>: u8 = 1;
 </code></pre>
 
 
@@ -617,7 +599,7 @@
         <a href="treasury.md#0xb_treasury">treasury</a>: <a href="treasury.md#0xb_treasury_create">treasury::create</a>(ctx),
         bridge_records: <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_new">linked_table::new</a>(ctx),
         <a href="limiter.md#0xb_limiter">limiter</a>: <a href="limiter.md#0xb_limiter_new">limiter::new</a>(),
-        frozen: <b>false</b>,
+        paused: <b>false</b>,
     };
     <b>let</b> <a href="bridge.md#0xb_bridge">bridge</a> = <a href="bridge.md#0xb_bridge_Bridge">Bridge</a> {
         id,
@@ -721,7 +703,7 @@
     ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
-    <b>assert</b>!(!inner.frozen, <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
+    <b>assert</b>!(!inner.paused, <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
     <b>let</b> amount = <a href="dependencies/sui-framework/balance.md#0x2_balance_value">balance::value</a>(<a href="dependencies/sui-framework/coin.md#0x2_coin_balance">coin::balance</a>(&token));
 
     <b>let</b> bridge_seq_num = <a href="bridge.md#0xb_bridge_get_current_seq_num_and_increment">get_current_seq_num_and_increment</a>(inner, <a href="message_types.md#0xb_message_types_token">message_types::token</a>());
@@ -984,7 +966,7 @@
     ctx: &<b>mut</b> TxContext
 ): (Option&lt;Coin&lt;T&gt;&gt;, <b>address</b>) {
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
-    <b>assert</b>!(!inner.frozen, <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
+    <b>assert</b>!(!inner.paused, <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
 
     <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(source_chain, <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), bridge_seq_num);
     <b>assert</b>!(<a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(&inner.bridge_records, key), <a href="bridge.md#0xb_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>);
@@ -1109,13 +1091,13 @@
 
 <pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_emergency_op">execute_emergency_op</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a>, payload: EmergencyOp) {
     <b>let</b> op = <a href="message.md#0xb_message_emergency_op_type">message::emergency_op_type</a>(&payload);
-    <b>if</b> (op == <a href="bridge.md#0xb_bridge_FREEZE">FREEZE</a>) {
-        <b>assert</b>!(!inner.frozen, <a href="bridge.md#0xb_bridge_EBridgeAlreadyFrozen">EBridgeAlreadyFrozen</a>);
-        inner.frozen = <b>true</b>;
+    <b>if</b> (op == <a href="message.md#0xb_message_emergency_op_pause">message::emergency_op_pause</a>()) {
+        <b>assert</b>!(!inner.paused, <a href="bridge.md#0xb_bridge_EBridgeAlreadyPaused">EBridgeAlreadyPaused</a>);
+        inner.paused = <b>true</b>;
         emit(<a href="bridge.md#0xb_bridge_EmergencyOpEvent">EmergencyOpEvent</a> { frozen: <b>true</b> });
-    } <b>else</b> <b>if</b> (op == <a href="bridge.md#0xb_bridge_UNFREEZE">UNFREEZE</a>) {
-        <b>assert</b>!(inner.frozen, <a href="bridge.md#0xb_bridge_EBridgeNotFrozen">EBridgeNotFrozen</a>);
-        inner.frozen = <b>false</b>;
+    } <b>else</b> <b>if</b> (op == <a href="message.md#0xb_message_emergency_op_unpause">message::emergency_op_unpause</a>()) {
+        <b>assert</b>!(inner.paused, <a href="bridge.md#0xb_bridge_EBridgeNotPaused">EBridgeNotPaused</a>);
+        inner.paused = <b>false</b>;
         emit(<a href="bridge.md#0xb_bridge_EmergencyOpEvent">EmergencyOpEvent</a> { frozen: <b>false</b> });
     } <b>else</b> {
         <b>abort</b> <a href="bridge.md#0xb_bridge_EUnexpectedOperation">EUnexpectedOperation</a>
