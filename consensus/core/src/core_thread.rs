@@ -9,6 +9,7 @@ use thiserror::Error;
 use tokio::sync::{oneshot, oneshot::error::RecvError};
 use tracing::warn;
 
+use crate::error::{ConsensusError, ConsensusResult};
 use crate::{
     block::{BlockRef, Round, VerifiedBlock},
     context::Context,
@@ -68,7 +69,7 @@ struct CoreThread {
 }
 
 impl CoreThread {
-    pub fn run(mut self) {
+    pub fn run(mut self) -> ConsensusResult<()> {
         tracing::debug!("Started core thread");
 
         while let Some(command) = self.receiver.blocking_recv() {
@@ -76,11 +77,11 @@ impl CoreThread {
             self.context.metrics.node_metrics.core_lock_dequeued.inc();
             match command {
                 CoreThreadCommand::AddBlocks(blocks, sender) => {
-                    let missing_blocks = self.core.add_blocks(blocks);
+                    let missing_blocks = self.core.add_blocks(blocks)?;
                     sender.send(missing_blocks).ok();
                 }
                 CoreThreadCommand::ForceNewBlock(round, sender) => {
-                    self.core.force_new_block(round);
+                    self.core.force_new_block(round)?;
                     sender.send(()).ok();
                 }
                 CoreThreadCommand::GetMissing(sender) => {
@@ -88,6 +89,8 @@ impl CoreThread {
                 }
             }
         }
+
+        Ok(())
     }
 }
 
@@ -111,7 +114,13 @@ impl ChannelCoreThreadDispatcher {
         };
         let join_handle = thread::Builder::new()
             .name("consensus-core".to_string())
-            .spawn(move || core_thread.run())
+            .spawn(move || {
+                if let Err(err) = core_thread.run() {
+                    if !matches!(err, ConsensusError::Shutdown) {
+                        panic!("Fatal error occurred: {err}");
+                    }
+                }
+            })
             .unwrap();
         // Explicitly using downgraded sender in order to allow sharing the CoreThreadDispatcher but
         // able to shutdown the CoreThread by dropping the original sender.

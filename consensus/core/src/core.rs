@@ -9,6 +9,7 @@ use std::{
 use consensus_config::{AuthorityIndex, ProtocolKeyPair};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use tap::TapFallible;
 use tokio::sync::{broadcast, watch};
 use tracing::warn;
 
@@ -28,6 +29,7 @@ use crate::{
     universal_committer::{
         universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
     },
+    CommittedSubDag,
 };
 
 // TODO: Move to protocol config once initial value is finalized.
@@ -125,39 +127,36 @@ impl Core {
             .expect("At least one block - even genesis - should be present");
 
         // Accept all blocks but make sure that only the last quorum round blocks and onwards are kept.
-        self.add_accepted_blocks(all_blocks, Some(0));
-
         // TODO: run commit and propose logic, or just use add_blocks() instead of add_accepted_blocks().
-
+        self.add_accepted_blocks(all_blocks, Some(0))
+            .expect("Error while recovering Core");
         self
     }
 
     /// Processes the provided blocks and accepts them if possible when their causal history exists.
     /// The method returns the references of parents that are unknown and need to be fetched.
-    pub(crate) fn add_blocks(&mut self, blocks: Vec<VerifiedBlock>) -> BTreeSet<BlockRef> {
+    pub(crate) fn add_blocks(
+        &mut self,
+        blocks: Vec<VerifiedBlock>,
+    ) -> ConsensusResult<BTreeSet<BlockRef>> {
         let _scope = monitored_scope("Core::add_blocks");
 
         // Try to accept them via the block manager
-        let (accepted_blocks, missing_blocks) = self
-            .block_manager
-            .try_accept_blocks(blocks)
-            .unwrap_or_else(|err| panic!("Fatal error while accepting blocks: {err}"));
+        let (accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks)?;
 
-        // Now add accepted blocks to the threshold clock and pending ancestors list.
-        self.add_accepted_blocks(accepted_blocks, None);
+        self.add_accepted_blocks(accepted_blocks, None)?;
 
         // TODO: Add optimization for added blocks that do not achieve quorum for a round.
-        self.try_commit();
+        self.try_commit()?;
 
         // Attempt to create a new block and broadcast it.
-        if let Some(block) = self.try_new_block(false) {
-            if let Err(e) = self.signals.new_block(block.clone()) {
-                warn!("Failed to broadcast block {}: {:?}", block, e);
-                // TODO: propagate shutdown or ensure this will never return error?
-            }
+        if let Some(block) = self.try_new_block(false)? {
+            self.signals
+                .new_block(block.clone())
+                .tap_err(|err| warn!("Failed to broadcast block {}: {:?}", block, err))?;
         }
 
-        missing_blocks
+        Ok(missing_blocks)
     }
 
     /// Adds/processed all the newly `accepted_blocks`. We basically try to move the threshold clock and add them to the
@@ -169,15 +168,14 @@ impl Core {
         &mut self,
         accepted_blocks: Vec<VerifiedBlock>,
         pending_ancestors_retain_rounds: Option<u32>,
-    ) {
+    ) -> ConsensusResult<()> {
         // Advance the threshold clock. If advanced to a new round then send a signal that a new quorum has been received.
         if let Some(new_round) = self
             .threshold_clock
             .add_blocks(accepted_blocks.iter().map(|b| b.reference()).collect())
         {
             // notify that threshold clock advanced to new round
-            let _ = self.signals.new_round(new_round);
-            // TODO: propagate shutdown or ensure this will never return error?
+            self.signals.new_round(new_round)?
         }
 
         // Report the threshold clock round
@@ -205,30 +203,35 @@ impl Core {
                 *round >= last_quorum.saturating_sub(retain_ancestor_rounds_from_quorum)
             });
         }
+
+        Ok(())
     }
 
     /// Force creating a new block for the dictated round. This is used when a leader timeout occurs.
-    pub(crate) fn force_new_block(&mut self, round: Round) -> Option<VerifiedBlock> {
+    pub(crate) fn force_new_block(
+        &mut self,
+        round: Round,
+    ) -> ConsensusResult<Option<VerifiedBlock>> {
         if self.last_proposed_round() < round {
             self.context.metrics.node_metrics.leader_timeout_total.inc();
-            if let Some(block) = self.try_new_block(true) {
-                if let Err(e) = self.signals.new_block(block.clone()) {
-                    warn!("Failed to broadcast block {}: {:?}", block, e);
-                    // TODO: propagate shutdown or ensure this will never return error?
-                }
-                return Some(block);
+            if let Some(block) = self.try_new_block(true)? {
+                self.signals.new_block(block.clone())?;
+                return Ok(Some(block));
             }
         }
-        None
+        Ok(None)
     }
 
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
     /// or earlier round, then no block is created and None is returned.
-    fn try_new_block(&mut self, ignore_leaders_check: bool) -> Option<VerifiedBlock> {
+    fn try_new_block(
+        &mut self,
+        ignore_leaders_check: bool,
+    ) -> ConsensusResult<Option<VerifiedBlock>> {
         let _scope = monitored_scope("Core::try_new_block");
         let clock_round = self.threshold_clock.get_round();
         if clock_round <= self.last_proposed_round() {
-            return None;
+            return Ok(None);
         }
 
         // create a new block either because we want to "forcefully" propose a block due to a leader timeout,
@@ -276,8 +279,7 @@ impl Core {
 
             let (accepted_blocks, missing) = self
                 .block_manager
-                .try_accept_blocks(vec![verified_block.clone()])
-                .unwrap_or_else(|err| panic!("Fatal error while accepting our own block: {err}"));
+                .try_accept_blocks(vec![verified_block.clone()])?;
             assert_eq!(accepted_blocks.len(), 1);
             assert!(missing.is_empty());
 
@@ -286,16 +288,15 @@ impl Core {
             tracing::debug!("New block created {}", verified_block);
 
             //5. emit an event that a new block is ready
-            let _ = self.signals.new_block_ready(verified_block.reference());
-            // TODO: propagate shutdown or ensure this will never return error?
+            self.signals.new_block_ready(verified_block.reference())?;
 
-            return Some(verified_block);
+            return Ok(Some(verified_block));
         }
 
-        None
+        Ok(None)
     }
 
-    fn try_commit(&mut self) {
+    fn try_commit(&mut self) -> ConsensusResult<Vec<CommittedSubDag>> {
         let sequenced_leaders = self.committer.try_commit(self.last_decided_leader);
 
         if let Some(last) = sequenced_leaders.last() {
@@ -312,7 +313,7 @@ impl Core {
             .filter_map(|leader| leader.into_committed_block())
             .collect::<Vec<_>>();
 
-        self.commit_observer.handle_commit(committed_leaders);
+        self.commit_observer.handle_commit(committed_leaders)
     }
 
     pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
@@ -571,6 +572,7 @@ mod test {
         // When trying to propose now we should propose block for round 5
         let proposed_block = core
             .try_new_block(true)
+            .unwrap()
             .expect("A block should have been created");
         assert_eq!(proposed_block.round(), 5);
         let ancestors = proposed_block.ancestors();
@@ -674,6 +676,7 @@ mod test {
         // When trying to propose now we should propose block for round 4
         let proposed_block = core
             .try_new_block(true)
+            .unwrap()
             .expect("A block should have been created");
         assert_eq!(proposed_block.round(), 4);
         let ancestors = proposed_block.ancestors();
@@ -761,6 +764,7 @@ mod test {
         // trigger the try_new_block - that should return now a new block
         let block = core
             .try_new_block(false)
+            .unwrap()
             .expect("A new block should have been created");
 
         // A new block created - assert the details
@@ -792,8 +796,8 @@ mod test {
         }
 
         // Try to propose again - with or without ignore leaders check, it will not return any block
-        assert!(core.try_new_block(false).is_none());
-        assert!(core.try_new_block(true).is_none());
+        assert!(core.try_new_block(false).unwrap().is_none());
+        assert!(core.try_new_block(true).unwrap().is_none());
 
         // Check no commits have been persisted to dag_state & store
         let last_commit = store.read_last_commit().unwrap();
@@ -845,7 +849,7 @@ mod test {
         assert_eq!(core.last_proposed_round(), 1);
         expected_ancestors.insert(core.last_proposed_block().reference());
         // attempt to create a block - none will be produced.
-        assert!(core.try_new_block(false).is_none());
+        assert!(core.try_new_block(false).unwrap().is_none());
 
         // Adding another block now forms a quorum for round 1, so block at round 2 will proposed
         let block_3 = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
@@ -886,7 +890,7 @@ mod test {
             let mut this_round_blocks = Vec::new();
 
             for (core, _signal_receivers) in &mut cores {
-                core.add_blocks(last_round_blocks.clone());
+                core.add_blocks(last_round_blocks.clone()).unwrap();
 
                 assert_eq!(core.last_proposed_round(), round);
 
@@ -899,13 +903,13 @@ mod test {
         // Try to create the blocks for round 4 by calling the try_new_block method. No block should be created as the
         // leader - authority 3 - hasn't proposed any block.
         for (core, _) in &mut cores {
-            core.add_blocks(last_round_blocks.clone());
-            assert!(core.try_new_block(false).is_none());
+            core.add_blocks(last_round_blocks.clone()).unwrap();
+            assert!(core.try_new_block(false).unwrap().is_none());
         }
 
         // Now try to create the blocks for round 4 via the leader timeout method which should ignore any leader checks
         for (core, _) in &mut cores {
-            assert!(core.force_new_block(4).is_some());
+            assert!(core.force_new_block(4).unwrap().is_some());
             assert_eq!(core.last_proposed_round(), 4);
 
             // Check commits have been persisted to store
@@ -936,7 +940,7 @@ mod test {
             for (core, signal_receivers) in &mut cores {
                 // add the blocks from last round
                 // this will trigger a block creation for the round and a signal should be emitted
-                core.add_blocks(last_round_blocks.clone());
+                core.add_blocks(last_round_blocks.clone()).unwrap();
 
                 // A "new round" signal should be received given that all the blocks of previous round have been processed
                 let new_round = receive(
@@ -1016,8 +1020,8 @@ mod test {
                 }
 
                 // try to propose to ensure that we are covering the case where we miss the leader authority 3
-                core.add_blocks(last_round_blocks.clone());
-                core.force_new_block(round);
+                core.add_blocks(last_round_blocks.clone()).unwrap();
+                core.force_new_block(round).unwrap();
 
                 let block = core.last_proposed_block();
                 assert_eq!(block.round(), round);
@@ -1034,7 +1038,7 @@ mod test {
         // be applied the we should expect all the previous blocks to be referenced from round 0..=10. However, since compression
         // is applied only the last round's (10) blocks should be referenced + the authority's block of round 0.
         let (core, _) = &mut cores[excluded_authority];
-        core.add_blocks(all_blocks);
+        core.add_blocks(all_blocks).unwrap();
 
         // Assert that a block has been created for round 11 and it references to blocks of round 10 for the other peers, and
         // to round 0 for its own block.
