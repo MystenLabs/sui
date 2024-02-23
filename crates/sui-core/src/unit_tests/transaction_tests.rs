@@ -991,6 +991,9 @@ async fn get_object_ref(obj_id: &ObjectID, authority_state: &Arc<AuthorityState>
         .compute_object_reference()
 }
 
+// TODO: Next test checks here only good transactions since execution with Random is not yet ready.
+// Testing bad transactions is done in crates/sui-adapter-transactional-tests/tests/a/ptb.move and once execution is
+// ready, we can add tests for good transactions there as well ans remove the next test.
 #[tokio::test]
 async fn test_allowed_ptb_with_random_txn() {
     telemetry_subscribers::init_for_testing();
@@ -1075,8 +1078,6 @@ async fn test_allowed_ptb_with_random_txn() {
     let res = client.handle_transaction(tx.clone()).await;
     assert!(res.is_ok());
 
-    // TODO: Complete tx execution once execution with Random is possible.
-
     // good tx - use_clock, use_random, transfer, merge (via pay without destinations)
     let mut builder = ProgrammableTransactionBuilder::new();
     builder
@@ -1121,83 +1122,6 @@ async fn test_allowed_ptb_with_random_txn() {
         &sender_key,
     );
     assert!(client.handle_transaction(tx).await.is_ok());
-
-    // bad tx - use_random, use_clock
-    let mut builder = ProgrammableTransactionBuilder::new();
-    builder
-        .move_call(
-            pkg,
-            obj_basics_id.clone(),
-            use_random_id.clone(),
-            vec![],
-            vec![random_arg.clone()],
-        )
-        .unwrap();
-    builder
-        .move_call(
-            pkg,
-            obj_basics_id.clone(),
-            use_clock_id.clone(),
-            vec![],
-            vec![clock_arg.clone()],
-        )
-        .unwrap();
-    let tx = to_sender_signed_transaction(
-        TransactionData::new_programmable(
-            sender,
-            vec![get_object_ref(&obj_ids[6], &authority_state).await],
-            builder.finish(),
-            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-            rgp,
-        ),
-        &sender_key,
-    );
-    assert_matches!(
-        client.handle_transaction(tx).await.unwrap_err(),
-        SuiError::UserInputError {
-            error: UserInputError::PostRandomCommandLimits
-        }
-    );
-
-    // bad tx - use_random, transfer objects, use_clock
-    let mut builder = ProgrammableTransactionBuilder::new();
-    builder
-        .move_call(
-            pkg,
-            obj_basics_id.clone(),
-            use_random_id.clone(),
-            vec![],
-            vec![random_arg.clone()],
-        )
-        .unwrap();
-    builder
-        .transfer_object(sender, get_object_ref(&obj_ids[7], &authority_state).await)
-        .unwrap();
-    builder
-        .move_call(
-            pkg,
-            obj_basics_id.clone(),
-            use_clock_id.clone(),
-            vec![],
-            vec![clock_arg.clone()],
-        )
-        .unwrap();
-    let tx = to_sender_signed_transaction(
-        TransactionData::new_programmable(
-            sender,
-            vec![get_object_ref(&obj_ids[8], &authority_state).await],
-            builder.finish(),
-            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-            rgp,
-        ),
-        &sender_key,
-    );
-    assert_matches!(
-        client.handle_transaction(tx).await.unwrap_err(),
-        SuiError::UserInputError {
-            error: UserInputError::PostRandomCommandLimits
-        }
-    );
 }
 
 #[tokio::test]

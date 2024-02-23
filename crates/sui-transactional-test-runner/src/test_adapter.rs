@@ -73,7 +73,7 @@ use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
-use sui_types::DEEPBOOK_PACKAGE_ID;
+use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::{
@@ -113,6 +113,7 @@ const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_CLOCK_OBJECT_ID,
     SUI_DENY_LIST_OBJECT_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID,
 ];
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [
