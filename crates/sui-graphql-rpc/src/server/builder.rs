@@ -384,6 +384,8 @@ pub fn export_schema() -> String {
     schema_builder().finish().sdl()
 }
 
+/// Entry point for graphql requests. Each request is stamped with a unique ID, a `ShowUsage` flag
+/// if set in the request headers, and the available range as marked by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
