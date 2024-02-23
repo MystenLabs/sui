@@ -16,7 +16,7 @@ You can also find the [full repository for this example here](https://github.com
 
 ## Gameplay
 
-In this single-player version of blackjack, the player competes against a dealer, which is automated by the system. The dealer is equipped with a public BLS key that plays a central role in the game's mechanics. The dealer's actions are triggered by HTTP requests to serverless functions. Players generate randomness for the game by interacting with their mouse on the screen, after which they place their bet to start the game. Upon initiating the game, a request is made to the dealer's back-end, which processes it by signing and subsequently dealing two cards to the player and one to themselves.
+In this single-player version of blackjack, the player competes against a dealer, which is automated by the system. The dealer is equipped with a public BLS key that plays a central role in the game's mechanics. The dealer's actions are triggered by HTTP requests to serverless functions. Players generate randomness for the game by interacting with their mouse on the screen, after which they place their bet to start the game. Upon initiating the game, a request is made to the backend (dealer), which processes it by signing and subsequently dealing two cards to the player and one to themselves.
 
 The player has the options to 'Hit' or 'Stand.' Selecting 'Stand' triggers the dealer to draw cards until the total reaches 17 or higher. After the dealer stops, the smart contract steps in to compare the totals and declare the winner. On the other hand, choosing 'Hit' prompts the dealer to draw an additional card for the player.
 
