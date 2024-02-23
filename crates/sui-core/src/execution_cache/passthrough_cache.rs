@@ -279,7 +279,7 @@ impl ExecutionCacheWrite for PassthroughCache {
                 .await?;
 
             self.executed_effects_digests_notify_read
-                .notify(&tx_digest, &effects_digest);
+                .notify(&TransactionKey::Digest(tx_digest), &effects_digest);
             if let Some(key) = tx_secondary_key {
                 self.executed_effects_digests_notify_read
                     .notify(&key, &effects_digest);
