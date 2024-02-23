@@ -50,7 +50,7 @@ authority-store-pruning-config:
 
 metrics:
   push-interval-seconds: 60
-  push-url: TODO
+  push-url: https://metrics-proxy.mainnet.sui.io:8443/publish/metrics
 ```
 
 This coupled with starting your node from a formal snapshot should mean a very small database footprint for ssfns
