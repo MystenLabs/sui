@@ -135,6 +135,8 @@ impl ServerBuilder {
         self.schema.finish()
     }
 
+    /// Prepares the components of the server to be run. Finalizes the graphql schema, and expects
+    /// the `Db` and `Router` to have been initialized.
     fn build_components(
         self,
     ) -> (
