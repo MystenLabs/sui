@@ -42,9 +42,12 @@ With the dependency added, you can use the `emit` function to fire an event when
 /// Take coin from `DonutShop` and transfer it to tx sender.
 /// Requires authorization with `ShopOwnerCap`.
 public fun collect_profits( _: &ShopOwnerCap, shop: &mut DonutShop, ctx: &mut TxContext ) {
-let amount = balance::value(&shop.balance);
-let profits = coin::take(&mut shop.balance, amount, ctx);
-// simply create new type instance and emit it event::emit(ProfitsCollected { amount }); transfer::public_transfer(profits, tx_context::sender(ctx)) }
+    let amount = balance::value(&shop.balance);
+    let profits = coin::take(&mut shop.balance, amount, ctx);
+    // simply create new type instance and emit it.
+    event::emit(ProfitsCollected { amount });
+    transfer::public_transfer(profits, tx_context::sender(ctx));
+}
 ```
 
 ## Subscribe to events in Move
