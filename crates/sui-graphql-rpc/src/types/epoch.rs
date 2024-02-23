@@ -23,7 +23,7 @@ use sui_types::messages_checkpoint::CheckpointCommitment as EpochCommitment;
 
 pub(crate) struct Epoch {
     pub stored: QueryableEpochInfo,
-    pub checkpoint_viewed_at: Option<u64>,
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Operation of the Sui network is temporally partitioned into non-overlapping epochs,
@@ -52,13 +52,11 @@ impl Epoch {
             .fetch_sui_system_state(Some(self.stored.epoch as u64))
             .await?;
 
-        let checkpoint_viewed_at = match self.checkpoint_viewed_at {
-            Some(value) => Ok(value),
-            None => Checkpoint::query_latest_checkpoint_sequence_number(ctx.data_unchecked()).await,
-        }?;
-
-        let active_validators =
-            convert_to_validators(system_state.active_validators, None, checkpoint_viewed_at);
+        let active_validators = convert_to_validators(
+            system_state.active_validators,
+            None,
+            self.checkpoint_viewed_at,
+        );
         let validator_set = ValidatorSet {
             total_stake: Some(BigInt::from(self.stored.total_stake)),
             active_validators: Some(active_validators),
@@ -71,7 +69,7 @@ impl Epoch {
             inactive_pools_size: Some(system_state.inactive_pools_size),
             validator_candidates_id: Some(system_state.validator_candidates_id.into()),
             validator_candidates_size: Some(system_state.validator_candidates_size),
-            checkpoint_viewed_at,
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
         };
         Ok(Some(validator_set))
     }
@@ -93,12 +91,16 @@ impl Epoch {
     async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
         let last = match self.stored.last_checkpoint_id {
             Some(last) => last as u64,
-            None => Checkpoint::query(ctx.data_unchecked(), CheckpointId::default(), None)
-                .await
-                .extend()?
-                .map_or(self.stored.first_checkpoint_id as u64, |c| {
-                    c.sequence_number_impl()
-                }),
+            None => Checkpoint::query(
+                ctx.data_unchecked(),
+                CheckpointId::default(),
+                self.checkpoint_viewed_at,
+            )
+            .await
+            .extend()?
+            .map_or(self.stored.first_checkpoint_id as u64, |c| {
+                c.sequence_number_impl()
+            }),
         };
         Ok(Some(BigInt::from(
             last - self.stored.first_checkpoint_id as u64,
@@ -208,7 +210,7 @@ impl Epoch {
             ctx.data_unchecked(),
             page,
             Some(epoch),
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -243,7 +245,7 @@ impl Epoch {
             ctx.data_unchecked(),
             page,
             filter,
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -261,48 +263,40 @@ impl Epoch {
     pub(crate) async fn query(
         db: &Db,
         filter: Option<u64>,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         use epochs::dsl;
 
         let id = filter.map(|id| id as i64);
-        let (stored, checkpoint_viewed_at): (Option<QueryableEpochInfo>, u64) = db
-            .execute_repeatable(move |conn| {
-                let checkpoint_viewed_at = match checkpoint_viewed_at {
-                    Some(value) => Ok(value),
-                    None => Checkpoint::available_range(conn).map(|(_, rhs)| rhs),
-                }?;
+        let stored: Option<QueryableEpochInfo> = db
+            .execute(move |conn| {
+                conn.first(move || {
+                    let mut query = dsl::epochs
+                        .select(QueryableEpochInfo::as_select())
+                        .order_by(dsl::epoch.desc())
+                        .into_boxed();
 
-                let stored = conn
-                    .first(move || {
-                        let mut query = dsl::epochs
-                            .select(QueryableEpochInfo::as_select())
-                            .order_by(dsl::epoch.desc())
-                            .into_boxed();
+                    // Bound the query on `checkpoint_viewed_at` by filtering for the epoch whose
+                    // `first_checkpoint_id <= checkpoint_viewed_at`, selecting the epoch with the
+                    // largest `first_checkpoint_id` among the filtered set.
+                    query = query
+                        .filter(dsl::first_checkpoint_id.le(checkpoint_viewed_at as i64))
+                        .order_by(dsl::first_checkpoint_id.desc());
 
-                        // Bound the query on `checkpoint_viewed_at` by filtering for the epoch
-                        // whose `first_checkpoint_id <= checkpoint_viewed_at`, selecting the epoch
-                        // with the largest `first_checkpoint_id` among the filtered set.
-                        query = query
-                            .filter(dsl::first_checkpoint_id.le(checkpoint_viewed_at as i64))
-                            .order_by(dsl::first_checkpoint_id.desc());
+                    if let Some(id) = id {
+                        query = query.filter(dsl::epoch.eq(id));
+                    }
 
-                        if let Some(id) = id {
-                            query = query.filter(dsl::epoch.eq(id));
-                        }
-
-                        query
-                    })
-                    .optional()?;
-
-                Ok::<_, diesel::result::Error>((stored, checkpoint_viewed_at))
+                    query
+                })
+                .optional()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch epoch: {e}")))?;
 
         Ok(stored.map(|stored| Epoch {
             stored,
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         }))
     }
 }

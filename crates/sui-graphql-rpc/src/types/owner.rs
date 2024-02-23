@@ -28,17 +28,15 @@ use sui_types::gas_coin::GAS;
 #[derive(Clone, Debug)]
 pub(crate) struct Owner {
     pub address: SuiAddress,
-    /// The checkpoint sequence number at which this was viewed at, or None if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Type to implement GraphQL fields that are shared by all Owners.
 pub(crate) struct OwnerImpl {
     pub address: SuiAddress,
-    /// The checkpoint sequence number at which this was viewed at, or None if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Interface implemented by GraphQL types representing entities that can own objects. Object owners
@@ -235,10 +233,7 @@ impl Owner {
         Object::query(
             ctx.data_unchecked(),
             self.address,
-            match self.checkpoint_viewed_at {
-                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
-                None => ObjectLookupKey::Latest,
-            },
+            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -321,7 +316,7 @@ impl OwnerImpl {
             ctx.data_unchecked(),
             page,
             filter,
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -356,7 +351,7 @@ impl OwnerImpl {
             ctx.data_unchecked(),
             page,
             self.address,
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -378,7 +373,7 @@ impl OwnerImpl {
             page,
             coin,
             Some(self.address),
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -397,7 +392,7 @@ impl OwnerImpl {
             ctx.data_unchecked(),
             page,
             self.address,
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -428,7 +423,7 @@ impl OwnerImpl {
             ctx.data_unchecked::<NameServiceConfig>(),
             page,
             self.address,
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -490,7 +485,7 @@ impl OwnerImpl {
             page,
             self.address,
             parent_version,
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()

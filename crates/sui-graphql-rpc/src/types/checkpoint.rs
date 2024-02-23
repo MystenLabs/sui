@@ -40,9 +40,8 @@ pub(crate) struct Checkpoint {
     /// Representation of transaction data in the Indexer's Store. The indexer stores the
     /// transaction data and its effects together, in one table.
     pub stored: StoredCheckpoint,
-    // The checkpoint_sequence_number at which this was viewed at, or `None` if the data was
-    // requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    // The checkpoint_sequence_number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 pub(crate) type Cursor = cursor::JsonCursor<CheckpointCursor>;
@@ -151,7 +150,7 @@ impl Checkpoint {
             ctx.data_unchecked(),
             page,
             filter,
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -183,50 +182,47 @@ impl Checkpoint {
 
     /// Look up a `Checkpoint` in the database, filtered by either sequence number or digest. If
     /// both filters are supplied they will both be applied. If none are supplied, the latest
-    /// checkpoint is fetched.
+    /// checkpoint bounded by `checkpoint_viewed_at` is fetched.
     pub(crate) async fn query(
         db: &Db,
         filter: CheckpointId,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         use checkpoints::dsl;
 
         let digest = filter.digest.map(|d| d.to_vec());
         let seq_num = filter.sequence_number.map(|n| n as i64);
 
-        let (stored, checkpoint_viewed_at): (Option<StoredCheckpoint>, u64) = db
-            .execute_repeatable(move |conn| {
-                let checkpoint_viewed_at = match checkpoint_viewed_at {
-                    Some(value) => Ok(value),
-                    None => Checkpoint::available_range(conn).map(|(_, rhs)| rhs),
-                }?;
+        let stored: Option<StoredCheckpoint> = db
+            .execute(move |conn| {
+                conn.first(move || {
+                    let mut query = dsl::checkpoints
+                        .order_by(dsl::sequence_number.desc())
+                        .into_boxed();
 
-                let stored = conn
-                    .first(move || {
-                        let mut query = dsl::checkpoints
-                            .order_by(dsl::sequence_number.desc())
-                            .into_boxed();
+                    if let Some(digest) = digest.clone() {
+                        query = query.filter(dsl::checkpoint_digest.eq(digest));
+                    }
 
-                        if let Some(digest) = digest.clone() {
-                            query = query.filter(dsl::checkpoint_digest.eq(digest));
-                        }
+                    if let Some(seq_num) = seq_num {
+                        query = query.filter(dsl::sequence_number.eq(seq_num));
+                    }
 
-                        if let Some(seq_num) = seq_num {
-                            query = query.filter(dsl::sequence_number.eq(seq_num));
-                        }
+                    // Constrained the latest checkpoint returned by the `checkpoint_viewed_at`.
+                    // Even if there are later checkpoints, they should not "exist" when the state
+                    // is viewed at `checkpoint_viewed_at`.
+                    query = query.filter(dsl::sequence_number.le(checkpoint_viewed_at as i64));
 
-                        query
-                    })
-                    .optional()?;
-
-                Ok::<_, diesel::result::Error>((stored, checkpoint_viewed_at))
+                    query
+                })
+                .optional()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))?;
 
         Ok(stored.map(|stored| Checkpoint {
             stored,
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         }))
     }
 
@@ -310,7 +306,7 @@ impl Checkpoint {
                 cursor,
                 Checkpoint {
                     stored,
-                    checkpoint_viewed_at: Some(checkpoint_viewed_at),
+                    checkpoint_viewed_at,
                 },
             ));
         }

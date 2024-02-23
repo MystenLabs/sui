@@ -143,7 +143,7 @@ impl TransactionBlock {
 
         (sender != NativeSuiAddress::ZERO).then(|| Address {
             address: SuiAddress::from(sender),
-            checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
         })
     }
 
@@ -153,16 +153,9 @@ impl TransactionBlock {
     /// If the owner of the gas object(s) is not the same as the sender, the transaction block is a
     /// sponsored transaction block.
     async fn gas_input(&self) -> Option<GasInput> {
-        let checkpoint_sequence_number = match &self.inner {
-            TransactionBlockInner::Stored { stored_tx, .. } => {
-                Some(stored_tx.checkpoint_sequence_number as u64)
-            }
-            _ => None,
-        };
-
         Some(GasInput::from(
             self.native().gas_data(),
-            checkpoint_sequence_number,
+            self.checkpoint_viewed_at,
         ))
     }
 
@@ -199,13 +192,9 @@ impl TransactionBlock {
             return Ok(None);
         };
 
-        Epoch::query(
-            ctx.data_unchecked(),
-            Some(*id),
-            Some(self.checkpoint_viewed_at),
-        )
-        .await
-        .extend()
+        Epoch::query(ctx.data_unchecked(), Some(*id), self.checkpoint_viewed_at)
+            .await
+            .extend()
     }
 
     /// Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
@@ -240,30 +229,23 @@ impl TransactionBlock {
         }
     }
 
-    /// Look up a `TransactionBlock` in the database, by its transaction digest. If
-    /// `checkpoint_viewed_at` is provided, the transaction block will inherit the value. Otherwise,
-    /// it will be set to the upper bound of the available range at the time of the query.
+    /// Look up a `TransactionBlock` in the database by its transaction digest bounded by
+    /// `checkpoint_viewed_at`.
     pub(crate) async fn query(
         db: &Db,
         digest: Digest,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         use transactions::dsl;
 
-        let (stored, checkpoint_viewed_at): (Option<StoredTransaction>, u64) = db
-            .execute_repeatable(move |conn| {
-                let checkpoint_viewed_at = match checkpoint_viewed_at {
-                    Some(value) => Ok(value),
-                    None => Checkpoint::available_range(conn).map(|(_, rhs)| rhs),
-                }?;
-
-                let stored = conn
-                    .result(move || {
-                        dsl::transactions.filter(dsl::transaction_digest.eq(digest.to_vec()))
-                    })
-                    .optional()?;
-
-                Ok::<_, diesel::result::Error>((stored, checkpoint_viewed_at))
+        let stored: Option<StoredTransaction> = db
+            .execute(move |conn| {
+                conn.result(move || {
+                    dsl::transactions
+                        .filter(dsl::transaction_digest.eq(digest.to_vec()))
+                        .filter(dsl::checkpoint_sequence_number.le(checkpoint_viewed_at as i64))
+                })
+                .optional()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch transaction: {e}")))?;

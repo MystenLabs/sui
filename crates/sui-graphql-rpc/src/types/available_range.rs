@@ -18,7 +18,7 @@ impl AvailableRange {
         Checkpoint::query(
             ctx.data_unchecked(),
             CheckpointId::by_seq_num(self.first),
-            Some(self.last),
+            self.last,
         )
         .await
         .extend()
@@ -28,7 +28,7 @@ impl AvailableRange {
         Checkpoint::query(
             ctx.data_unchecked(),
             CheckpointId::by_seq_num(self.last),
-            Some(self.last),
+            self.last,
         )
         .await
         .extend()

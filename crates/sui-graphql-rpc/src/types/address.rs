@@ -19,9 +19,8 @@ use async_graphql::{connection::Connection, *};
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub(crate) struct Address {
     pub address: SuiAddress,
-    /// The checkpoint sequence number at which this was viewed at, or None if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// The possible relationship types for a transaction block: sign, sent, received, or paid.
@@ -164,7 +163,7 @@ impl Address {
             ctx.data_unchecked(),
             page,
             filter,
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()

@@ -157,7 +157,7 @@ impl DynamicField {
         parent_version: Option<u64>,
         name: DynamicFieldName,
         kind: DynamicFieldType,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<DynamicField>, Error> {
         let type_ = match kind {
             DynamicFieldType::DynamicField => name.type_.0,
@@ -170,10 +170,9 @@ impl DynamicField {
             .map_err(|e| Error::Internal(format!("Failed to derive dynamic field id: {e}")))?;
 
         use ObjectLookupKey as K;
-        let key = match (parent_version, checkpoint_viewed_at) {
-            (None, None) => K::Latest,
-            (None, Some(checkpoint_viewed_at)) => K::LatestAt(checkpoint_viewed_at),
-            (Some(version), checkpoint_viewed_at) => K::LatestAtParentVersion {
+        let key = match parent_version {
+            None => K::LatestAt(checkpoint_viewed_at),
+            Some(version) => K::LatestAtParentVersion {
                 version,
                 checkpoint_viewed_at,
             },
@@ -230,8 +229,7 @@ impl DynamicField {
             // checkpoint found on the cursor.
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
 
-            let object =
-                Object::try_from_stored_history_object(stored, Some(checkpoint_viewed_at))?;
+            let object = Object::try_from_stored_history_object(stored, checkpoint_viewed_at)?;
 
             let move_ = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
