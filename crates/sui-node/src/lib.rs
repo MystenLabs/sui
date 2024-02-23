@@ -125,6 +125,7 @@ use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 
 pub mod admin;
 mod handle;
+pub mod health_check;
 pub mod metrics;
 
 pub struct ValidatorComponents {

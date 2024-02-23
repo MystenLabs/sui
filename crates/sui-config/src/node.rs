@@ -167,6 +167,9 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_with_range: Option<RunWithRange>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub health_check_config: Option<HealthCheckConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -619,6 +622,19 @@ impl AuthorityStorePruningConfig {
     pub fn set_killswitch_tombstone_pruning(&mut self, killswitch_tombstone_pruning: bool) {
         self.killswitch_tombstone_pruning = killswitch_tombstone_pruning;
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct HealthCheckConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ready_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub health_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub listen_port: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

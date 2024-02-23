@@ -2,17 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::{ArgGroup, Parser};
+use serde_json::json;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, Notify};
 use tokio::time::sleep;
 use tracing::{error, info};
 
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
+use mysten_metrics::RegistryService;
 use sui_config::node::RunWithRange;
 use sui_config::{Config, NodeConfig};
 use sui_core::runtime::SuiRuntimes;
+use sui_node::health_check;
 use sui_node::metrics;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_telemetry::send_telemetry_event;
@@ -109,9 +113,10 @@ fn main() {
         config.metrics_address
     );
 
+    let notify = Arc::new(Notify::new());
     {
         let _enter = runtimes.metrics.enter();
-        metrics::start_metrics_push_task(&config, registry_service.clone());
+        metrics::start_metrics_push_task(&config, registry_service.clone(), notify.clone());
     }
 
     if let Some(listen_address) = args.listen_address {
@@ -132,6 +137,17 @@ fn main() {
     let (runtime_shutdown_tx, runtime_shutdown_rx) = broadcast::channel::<()>(1);
 
     runtimes.sui_node.spawn(async move {
+        match &config.health_check_config {
+            Some(health_config) => {
+                if health_config.enable.unwrap_or(false) == true {
+                    let registry_service_clone = registry_service.clone();
+                    tokio::spawn(async move {
+                        sui_node::health_check::start_health_checks(registry_service_clone, notify, health_check_config).await;
+                    });
+                }
+            },
+            None => { info!("health check configed not enabled"); },
+        }
         match sui_node::SuiNode::start_async(&config, registry_service, Some(rpc_runtime)).await {
             Ok(sui_node) => node_once_cell_clone
                 .set(sui_node)

@@ -10,9 +10,11 @@ use prometheus::{
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use sui_network::tonic::Code;
+use tokio::sync::Notify;
 
 use mysten_metrics::RegistryService;
-use tracing::error;
+use std::sync::Arc;
+use tracing::{error, info};
 
 pub struct MetricsPushClient {
     certificate: std::sync::Arc<sui_tls::SelfSignedCertificate>,
@@ -49,7 +51,11 @@ impl MetricsPushClient {
 
 /// Starts a task to periodically push metrics to a configured endpoint if a metrics push endpoint
 /// is configured.
-pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: RegistryService) {
+pub fn start_metrics_push_task(
+    config: &sui_config::NodeConfig,
+    registry: RegistryService,
+    notify: Arc<Notify>,
+) {
     use fastcrypto::traits::KeyPair;
     use sui_config::node::MetricsConfig;
 
@@ -136,6 +142,8 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
 
         loop {
             interval.tick().await;
+            // signal to health check of metrics push
+            notify.notify_one();
 
             if let Err(error) = push_metrics(&client, &url, &registry).await {
                 tracing::warn!("unable to push metrics: {error}; new client will be created");

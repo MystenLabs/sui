@@ -190,6 +190,7 @@ impl ValidatorConfigBuilder {
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             overload_threshold_config: self.overload_threshold_config.unwrap_or_default(),
             run_with_range: None,
+            health_check_config: None,
         }
     }
 
@@ -436,6 +437,7 @@ impl FullnodeConfigBuilder {
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             overload_threshold_config: Default::default(),
             run_with_range: self.run_with_range,
+            health_check_config: None,
         }
     }
 }
