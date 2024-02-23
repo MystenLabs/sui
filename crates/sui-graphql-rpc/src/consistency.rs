@@ -239,7 +239,6 @@ pub(crate) async fn update_available_range(
             *mark = AvailableRange { first, last };
         }
 
-        // Sleep for some time before the next update
-        tokio::time::sleep(tokio::time::Duration::from_millis(sleep_ms)).await; // Adjust the interval as needed
+        tokio::time::sleep(tokio::time::Duration::from_millis(sleep_ms)).await;
     }
 }
