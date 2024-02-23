@@ -1,11 +1,11 @@
 ---
-title: Escrow Backend
+title: Trading Backend
 sidebar_label: Backend
 ---
 
 :::note Multi-Page Guide
 
-This is the first in a [three-part guide](/guides/developer/app-examples/escrow) on how to build a trustless atomic swap on Sui.
+This is the first in a [three-part guide](../trading.mdx) on how to build a trustless atomic swap on Sui.
 
 :::
 
@@ -15,15 +15,11 @@ This particular protocol consists of three phases:
 2. The other party registers a publicly accessible, shared `Escrow` object. This effectively locks their object at a particular version as well, waiting for the first party to complete the swap. The second party is able to request their object is returned to them, to preserve liveness as well.
 3. The first party sends their locked object and its key to the shared `Escrow` object. This completes the swap, as long as all conditions are met: The sender of the swap transaction is the recipient of the `Escrow`, the key of the desired object (`exchange_key`) in the escrow matches the key supplied in the swap, and the key supplied in the swap unlocks the `Locked<U>`.
 
-Let’s create a Sui project using the terminal command `sui move new escrow`. Create a file in the sources directory named `shared.move`, and let’s go through the code together.
+Let's create a Sui project using the terminal command `sui move new escrow`. Create a file in the sources directory named `shared.move`, and let's go through the code together.
 
-## `shared.move`
+## shared.move
 
-:::info
-
-You can view the [complete source code for this module](https://github.com/MystenLabs/sui/blob/main/examples/trading/contracts/escrow/sources/shared.move) in the Sui repository.
-
-:::
+{@include: ../../../../snippets/app-examples-trading-source.mdx}
 
 Let's go through the code line by line:
 
@@ -67,7 +63,7 @@ const EMismatchedExchangeObject: u64 = 1;
 
 #### `create`
 
-This function is used to create a new escrow object. It takes four arguments: the object to be escrowed, the ID of the key that opens the lock on the object sender wants from the recipient, the intended recipient, and the transaction context.
+This function is used to create a new escrow object. It takes four arguments: the object to be escrowed, the ID of the key that opens the lock on the object the sender wants from the recipient, the intended recipient, and the transaction context.
 
 ```move
 public fun create<T: key + store>(
@@ -153,10 +149,12 @@ In conclusion, this code provides a robust and secure way to perform atomic swap
 
 ## Deployment
 
-Now that we have written the smart contract, let’s deploy it. First ensure the contract compiles successfully using `sui move build`. Once that is confirmed, you can deploy the project using the command `sui client publish --gas-budget 10000000`.
+{@include: ../../../../snippets/initialize-sui-client-cli.mdx}
+
+{@include: ../../../../snippets/publish-to-devnet-with-coins.mdx}
 
 ## Next steps
 
-You have written and deployed the Move package. To turn this into a complete dApp with frontend, you will need to create a frontend. For the frontend to be updated, you will need to create an indexer that listens to the blockchain as escrows are made and swaps are fulfilled.
+You have written and deployed the Move package. To turn this into a complete dApp with frontend, you need to create a frontend. For the frontend to be updated, create an indexer that listens to the blockchain as escrows are made and swaps are fulfilled.
 
-For the next step, you will [create the indexing service](/guides/developer/app-examples/escrow-indexer-api).
+For the next step, you [create the indexing service](./indexer-api.mdx).

@@ -126,15 +126,15 @@ const guides = [
 					'guides/developer/app-examples/auction',
 					{
 						type: 'category',
-						label: 'Escrow',
+						label: 'Trading',
 						link: {
 							type: 'doc',
-							id: 'guides/developer/app-examples/escrow',
+							id: 'guides/developer/app-examples/trading',
 						},
 						items: [
-							'guides/developer/app-examples/escrow-backend',
-							'guides/developer/app-examples/escrow-indexer-api',
-							'guides/developer/app-examples/escrow-frontend',
+							'guides/developer/app-examples/trading/backend',
+							'guides/developer/app-examples/trading/indexer-api',
+							'guides/developer/app-examples/trading/frontend',
 						],
 					},
 					'guides/developer/app-examples/trusted-swap',

@@ -5,44 +5,40 @@ sidebar_label: Indexing and API Service
 
 :::note Multi-Page Guide
 
-This is the second in a [three-part guide](/guides/developer/app-examples/escrow) on how to build a trustless atomic swap on Sui.
+This is the second in a [three-part guide](../trading.mdx) on how to build a trustless atomic swap on Sui.
 
 :::
 
-In most cases where we want to enhance an dApp and ensure it is production ready, we need to have an indexing service (indexer) listening to the blockchain for on-chain data, shaping the data to fit our application needs, storing the transformed data into the local off-chain database so we can query them in the most efficient way. Joining hands with an indexer, we will expose an API allowing frontend to query the indexed data and update the screen as escrows are made and swaps are fulfilled.
+In most cases where you want to enhance a dApp and ensure it is production ready, you need to have an indexing service (indexer) listening to the blockchain for on-chain events, shaping the data to fit your application needs, and storing the transformed data into the local off-chain database so you can query them in the most efficient way. Joining hands with an indexer, you expose an API allowing the frontend to query the indexed data and update the screen as escrows are made and swaps are fulfilled.
 
-Architecturally, we will have the service doing the heavy-lifting indexing the data while the other service will expose the data through an API convention for external consumption.
+Architecturally, the service does the heavy lifting of indexing the data, while the other service exposes the data through an API convention for external consumption.
 
 ## Prerequisites
 
-:::info
-
-You can view the [complete source code for this app example](https://github.com/MystenLabs/sui/tree/main/examples/trading) in the Sui repository.
-
-:::
+{@include: ../../../../snippets/app-examples-trading-source.mdx}
 
 Before getting started, make sure you:
 
-- Understand [the mechanism behind the Escrow smart contract backend](/guides/developer/app-examples/escrow).
-- Install [`pnpm` through this guide](https://pnpm.io/installation) as we will use it as our package manager.
+- Understand [the mechanism behind the Trading backend](../trading.mdx).
+- Install [`pnpm` through this guide](https://pnpm.io/installation) as this example uses it as the package manager.
 - Check out the [indexer's README](https://github.com/MystenLabs/sui/examples/trading/api) to setup the development environment.
-- Check out [Prisma](https://www.prisma.io/) to have an overall sense on what it is as we will use it to facilitate all the database interactions.
-- Check out [Express](https://expressjs.com/) to learn how to quickly setup a Web server application in Node.js as we will use it to bootstrap our API service.
-- Check out [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui with Typescript.
+- Check out [Prisma](https://www.prisma.io/) to get an overall sense of the technology that facilitates all the database interactions.
+- Check out [Express](https://expressjs.com/) to learn how to set up a web server application in Node.js. This server bootstraps your API service.
+- Check out [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui with TypeScript.
 
 ## Indexing service
 
 ### Data model
 
-In most cases, when we're working with a database directly from a backend service, we may want to use some sort of database libraries and toolings to abstract us away from database creation and management complexity. In our case, we use [Prisma](https://www.prisma.io/) to manage all the database interactions such as defining data models and database migrations.
+In most cases, when you're working with a database directly from a backend service, you might want to use some sort of database libraries and toolings to abstract away database creation and management complexity. In this case, the example uses [Prisma](https://www.prisma.io/) to manage all the database interactions, such as defining data models and database migrations.
 
-First of all, we want to design what data to index
+First of all, design what data to index:
 
 ```ts title='prisma/schema.prisma'
 /// Our `Locked` objects list
 model Locked {
-  // Keeping an ID so we can use as a pagination cursor
-  // There's an issue with BigInt for sqlite, so we're using a plain ID.
+  // Keeping an ID to use as a pagination cursor
+  // There's an issue with BigInt for sqlite, so use a plain ID.
   id Int @id @default(autoincrement())
   objectId String @unique
   keyId String?
@@ -54,10 +50,10 @@ model Locked {
   @@index([deleted])
 }
 
-/// Our swap objects list
+/// Swap objects list
 model Escrow {
-  // Keeping an ID so we can use as a pagination cursor
-  // There's an issue with BigInt for sqlite, so we're using a plain ID.
+  // Keeping an ID to use as a pagination cursor
+  // There's an issue with BigInt for sqlite, so use a plain ID.
   id Int @id @default(autoincrement())
   objectId String @unique
   sender String?
@@ -72,7 +68,7 @@ model Escrow {
 }
 ```
 
-These data models represents the `Locked` and `Escrow` object. Compared to their on-chain version which contains much less attributes due to initial smart contract design, they have additional fields providing extra information that will help us to facilitate any queries at later stage.
+These data models represent the `Locked` and `Escrow` object. Compared to their on-chain version, which contains much less attributes due to initial smart contract design, they have additional fields providing extra information that helps to facilitate any queries at a later stage.
 
 ```ts title='prisma/schema.prisma'
 /// Saves the latest cursor for a given key.
@@ -83,13 +79,13 @@ model Cursor {
 }
 ```
 
-Most indexing service will need to implement some sort of checkpoint mechanism to ensure it will pick up the progress where it left off even when it is crashed. `Cursor` is our checkpoint, and we ensure it long-lives and unaffected by any incident by storing it in our persistent database.
+Most indexing services need to implement some sort of checkpoint mechanism to ensure it picks up the progress where it left off even after it returns from a crash. `Cursor` is the checkpoint that you store in your persistent database to ensure the data remains and is unaffected by incidents.
 
-Next, let's explore the logic keeping the service listens to our blockchain signals and reacts accordingly.
+Next, let's explore the logic keeping the service listening to blockchain signals and reacting accordingly.
 
 ### `event-indexer.ts`
 
-Let us first examine `event-indexer.ts`
+Let's first examine `event-indexer.ts`:
 
 #### Imports
 
@@ -163,19 +159,19 @@ const executeEventJob = async (
 	cursor: SuiEventsCursor,
 ): Promise<EventExecutionResult> => {
 	try {
-		// get the events from the chain.
-		// For this implementation, we are going from start to finish.
-		// This will also allow filling in a database from scratch!
+		// Get the events from the chain.
+		// This implementation goes from start to finish.
+		// This also allows filling in a database from scratch!
 		const { data, hasNextPage, nextCursor } = await client.queryEvents({
 			query: tracker.filter,
 			cursor,
 			order: 'ascending',
 		});
 
-		// handle the data transformations defined for each event
+		// Handle the data transformations defined for each event.
 		await tracker.callback(data, tracker.type);
 
-		// We only update the cursor if we fetched extra data (which means there was a change).
+		// Only update the cursor if extra data is fetched (which means there was a change).
 		if (nextCursor && data.length > 0) {
 			await saveLatestCursor(tracker, nextCursor);
 
@@ -187,7 +183,7 @@ const executeEventJob = async (
 	} catch (e) {
 		console.error(e);
 	}
-	// By default, we return the same cursor as passed in.
+	// By default, return the same cursor as passed in.
 	return {
 		cursor,
 		hasNextPage: false,
@@ -437,13 +433,13 @@ This function handles all events emitted by the `lock` module. It takes an array
 
 ## API service
 
-As we mentioned earlier, we should expose the indexed data for external consumption through an API Service. Particularly, we will use [Express](https://expressjs.com/) to build a Node.js HTTP API.
+As we mentioned earlier, we should expose the indexed data for external consumption through an API service. Particularly, the example uses [Express](https://expressjs.com/) to build a Node.js HTTP API.
 
 ### API design
 
 #### Query parameters
 
-We want our API to accept the query string in the URL as the parameters for database WHERE query. Hence, we want utility that can extract and parse the URL query string into valid query parameters for Prisma. With the `parseWhereStatement()` function, we allow the callers to filter the set of keys from URL query string and transform those corresponding key-value pairs into the correct format for Prisma.
+You want your API to accept the query string in the URL as the parameters for database `WHERE` query. Hence, you want a utility that can extract and parse the URL query string into valid query parameters for Prisma. With the `parseWhereStatement()` function, the callers filter the set of keys from the URL query string and transforms those corresponding key-value pairs into the correct format for Prisma.
 
 ```ts title='utils/api-queries.ts'
 export enum WhereParamTypes {
@@ -491,9 +487,9 @@ export const parseWhereStatement = (query: Record<string, any>, acceptedParams: 
 
 #### Query pagination
 
-Pagination is another crucial part to ensure our API will return sufficient or/and ordered chunk of information instead all the data which might be the vector for DDOS attack. Similar to **WHERE parameters**, we define a set of keys in the URL query string to be accepted as valid pagination parameters. `parsePaginationForQuery()` utility function helps us to achieve this by filtering the pre-determined keys `sort`, `limit`, `cursor` and parsing corresponding key-value pairs into `ApiPagination` which can be consumed by Prisma.
+Pagination is another crucial part to ensure your API returns sufficient and/or ordered chunk of information instead of all the data that might be the vector for a DDOS attack. Similar to **WHERE parameters**, define a set of keys in the URL query string to be accepted as valid pagination parameters. The `parsePaginationForQuery()` utility function helps to achieve this by filtering the pre-determined keys `sort`, `limit`, `cursor` and parsing corresponding key-value pairs into `ApiPagination` that Prisma can consume.
 
-In this demo, we use the `id` field of the model in the database as the cursor to allow clients to continue subsequent queries with the next page.
+In this example, the `id` field of the model in the database as the cursor that allows clients to continue subsequent queries with the next page.
 
 ```ts title='utils/api-queries.ts'
 export type ApiPagination = {
@@ -509,7 +505,7 @@ export type ApiPagination = {
 
 /**
  * A helper to prepare pagination based on `req.query`.
- * We are doing only primary key cursor + ordering for this example.
+ * Only primary key cursor + ordering for this example.
  */
 export const parsePaginationForQuery = (body: Record<string, any>) => {
 	const pagination: ApiPagination = {
@@ -545,12 +541,12 @@ export const parsePaginationForQuery = (body: Record<string, any>) => {
 
 ### API endpoints
 
-All the endpoints are defined in `server.ts`, particularly, we have 2 endpoints:
+All the endpoints are defined in `server.ts`, particularly, there are two endpoints:
 
 - `/locked` to query `Locked` objects.
 - `/escrows` to query `Escrow` objects.
 
-The implementation for both endpoints is pretty straightforward. We will define a list of valid query keys, such as `deleted`, `creator`, `keyId`, `objectId` for `Locked` data and `cancelled`, `swapped`, `recipient`, `sender` for `Escrow` data, and pass the URL query string into our pre-defined utilities which will output the correct parameters that we can use with Prisma.
+The implementation for both endpoints is pretty straightforward. You define a list of valid query keys, such as `deleted`, `creator`, `keyId`, and `objectId` for `Locked` data and `cancelled`, `swapped`, `recipient`, and `sender` for `Escrow` data. Pass the URL query string into the pre-defined utilities to output the correct parameters that Prisma can use.
 
 ```ts title='server.ts'
 import { prisma } from './db';
@@ -631,4 +627,4 @@ app.get('/escrows', async (req, res) => {
 
 ## Next steps
 
-With the code successfully deployed on Testnet, you can now [create a frontend](/guides/developer/app-examples/escrow-frontend) to display the trading data and to allow users to interact with the Move modules.
+With the code successfully deployed on Testnet, you can now [create a frontend](./frontend.mdx) to display the trading data and to allow users to interact with the Move modules.
