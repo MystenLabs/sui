@@ -45,21 +45,21 @@ For testing purposes, the module provides special functions like `get_house_admi
 
 ### Counter module
 
-The next module, [`counter_nft.move`](https://github.com/MystenLabs/blackjack-sui/blob/main/move/blackjack/sources/counter_nft.move), introduces the Counter NFT, a key component in the game's mechanics. It serves as the [Verifiable Random Function (VRF)](../cryptography/ecvrf.mdx) input, ensuring uniqueness in each game. The Counter NFT's value increases after each use, maintaining its distinctiveness for every new request. For first-time players, the creation of a Counter NFT is mandatory. To enhance user experience, the user interface can automate this process by integrating the Counter NFT's creation with the game initiation in a single transaction block. This seamless integration simplifies the process for the player, allowing them to focus on the gameplay. This counter serves the same purpose as the one in the [Coin Flip example](./coin-flip.mdx).
+The next module, [`counter_nft.move`](https://github.com/MystenLabs/blackjack-sui/blob/main/move/blackjack/sources/counter_nft.move), introduces the Counter NFT, a key component in the game's mechanics. It serves as the [verifiable random function (VRF)](../cryptography/ecvrf.mdx) input, ensuring uniqueness in each game. The Counter NFT's value increases after each use, maintaining its distinctiveness for every new request. For first-time players, the creation of a Counter NFT is mandatory. To enhance user experience, the user interface can automate this process by integrating the Counter NFT's creation with the game initiation in a single transaction block. This seamless integration simplifies the process for the player, allowing them to focus on the gameplay. This counter serves the same purpose as the one in the [Coin Flip example](./coin-flip.mdx).
 
-## Back-end
+## Backend
 
-The back-end is used for all the transactions that are executed by the dealer. The back-end can be completely stateless, and for that reason serverless functions are utilized. As a result, the corresponding code lies under the [app/src/app/api/ directory](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/api).
+The backend is used for all the transactions that are executed by the dealer. The backend can be completely stateless, and for that reason serverless functions are utilized. As a result, the corresponding code lies under the [app/src/app/api/ directory](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/api).
 
 ### Directories structure
 
-The back-end code is split in the following sub directories:
+The backend code is split in the following sub directories:
 
 - [games/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/api/games):
-  The main code of the back-end endpoints. Each file that is named `route.ts` is served as an endpoint, in the path defined by the project structure (see [Route Segments on NextJS App Router](https://nextjs.org/docs/app/building-your-application/routing#route-segments) for details)
+  The main code of the backend endpoints. Each file that is named `route.ts` is served as an endpoint, in the path defined by the project structure (see [Route Segments on NextJS App Router](https://nextjs.org/docs/app/building-your-application/routing#route-segments) for details)
 - [health/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/api/health): A simple healthcheck endpoint to check the API availability
 - [helpers/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/api/helpers): Multiple helper functions used in various endpoints
-- [services/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/api/services): The core logic of the back-end, that signs and executes the transactions on the Sui Blockchain
+- [services/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/api/services): The core logic of the backend, that signs and executes the transactions on the Sui blockchain
 - [utils/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/api/utils): Reusable methods for signing the transactions as the dealer, and sponsoring them with Shinami, to avoid gas coins equivocation
 
 ### High-Level endpoints specification
@@ -73,28 +73,28 @@ The back-end code is split in the following sub directories:
 
 ### Need of usage of waitForTransactionBlock
 
-An interesting aspect of developing a Dapp on Sui, that is coupled to using a full node with/without a load balancer, and requires attention by the developer, is the occurrence of read-after-write and write-after-write cases.
+An interesting aspect of developing a dApp on Sui, that is coupled to using a full node with/without a load balancer, and requires attention by the developer, is the occurrence of read-after-write and write-after-write cases.
 
-#### Initial Deal Transaction
+#### Initial deal transaction
 
-As an example, in our Blackjack game, just after the create-game transaction that is executed by the user, the dealer executes the initial-deal transaction. This one, accepts as argument and modifies the game object, meaning that we are using on an object that was just created.
+As an example, in the blackjack game, just after the create-game transaction that the user executes, the dealer executes the initial-deal transaction. This one accepts an argument and modifies the game object, meaning that you are using an object that was just created.
 
-To ensure that the game object is available in the full node that the dealer is using, we need to call waitForTransactionBlock after the create-game transaction.
+To ensure that the game object is available in the Full node that the dealer is using, we need to call waitForTransactionBlock after the create-game transaction.
 
-#### Hit and Stand Transactions
+#### Hit and stand transactions
 
-In the same way, every time we re-fetch the game object in the front-end, we need to make sure that the previous transaction that modified the game object is already available in the full node.
+In the same way, every time you re-fetch the game object in the frontend, make sure that the previous transaction that modified the game object is already available in the Full node.
 
-This leads to the need of exchanging the txDigest between the front-end and the back-end, and use waitForTransactionBlock on each write-after-write or read-after-write case.
+This leads to the need of exchanging the `txDigest` between the frontend and the backend, and use `waitForTransactionBlock` on each write-after-write or read-after-write case.
 
-## Front-end
+## Frontend
 
-The [`page` component](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/page.tsx), a central element of the blackjack game's front-end module, is structured to create an interactive and responsive gaming experience. Written in React, it integrates several features and functions to handle the game's logic and user interactions effectively.
+The [`page` component](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/page.tsx), a central element of the blackjack game's frontend module, is structured to create an interactive and responsive gaming experience. Written in React, it integrates several features and functions to handle the game's logic and user interactions effectively.
 
-### Directories Structure
+### Directories structure
 
-The front-end is a NextJS project, that follows the NextJS App Router [project structure](https://nextjs.org/docs/app/building-your-application/routing).
-The main code of the front-end lies under the [app/src/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/) directory.
+The frontend is a NextJS project, that follows the NextJS App Router [project structure](https://nextjs.org/docs/app/building-your-application/routing).
+The main code of the frontend lies under the [app/src/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/) directory.
 The main sub-directories are:
   - [app/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/app/): The main code of the pages and the API endpoints.
   - [components/](https://github.com/MystenLabs/blackjack-sui/blob/main/app/src/components): The reusable components of the app, organized in sub-directories.
