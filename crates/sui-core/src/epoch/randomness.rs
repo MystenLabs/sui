@@ -12,6 +12,7 @@ use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Weak};
+use std::time::Instant;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, EpochId, StakeUnit};
 use sui_types::crypto::{AuthorityKeyPair, RandomnessRound};
@@ -60,6 +61,7 @@ pub struct Inner {
     network_handle: sui_network::randomness::Handle,
 
     // State for DKG.
+    dkg_start_time: OnceCell<Instant>,
     party: dkg::Party<PkG, EncG>,
     processed_messages: BTreeMap<PartyId, dkg::ProcessedMessage<PkG, EncG>>,
     used_messages: OnceCell<dkg::UsedProcessedMessages<PkG, EncG>>,
@@ -182,6 +184,7 @@ impl RandomnessManager {
             epoch_store: epoch_store_weak,
             consensus_adapter,
             network_handle,
+            dkg_start_time: OnceCell::new(),
             party,
             processed_messages: BTreeMap::new(),
             used_messages: OnceCell::new(),
@@ -383,6 +386,7 @@ impl Inner {
             // DKG already started (or completed).
             return Ok(());
         }
+        let _ = self.dkg_start_time.set(Instant::now());
 
         let msg = self.party.create_message(&mut rand::thread_rng());
         info!(
@@ -448,16 +452,23 @@ impl Inner {
             ) {
                 Ok(output) => {
                     let num_shares = output.shares.as_ref().map_or(0, |shares| shares.len());
-                    let elapsed = epoch_store.epoch_open_time.elapsed().as_millis();
-                    info!("random beacon: DKG complete in {elapsed}ms with {num_shares} shares for this node");
+                    let epoch_elapsed = epoch_store.epoch_open_time.elapsed().as_millis();
+                    let elapsed = self.dkg_start_time.get().map(|t| t.elapsed().as_millis());
+                    info!("random beacon: DKG complete in {epoch_elapsed}ms since epoch start, {elapsed:?}ms since DKG start, with {num_shares} shares for this node");
                     epoch_store
                         .metrics
                         .epoch_random_beacon_dkg_num_shares
                         .set(output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
                     epoch_store
                         .metrics
-                        .epoch_random_beacon_dkg_completion_time_ms
-                        .set(elapsed as i64);
+                        .epoch_random_beacon_dkg_epoch_start_completion_time_ms
+                        .set(epoch_elapsed as i64);
+                    if let Some(elapsed) = elapsed {
+                        epoch_store
+                            .metrics
+                            .epoch_random_beacon_dkg_completion_time_ms
+                            .set(elapsed as i64);
+                    }
                     self.dkg_output
                         .set(output.clone())
                         .expect("checked above that `dkg_output` is uninitialized");
