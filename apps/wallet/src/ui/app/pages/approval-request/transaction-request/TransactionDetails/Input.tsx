@@ -12,15 +12,19 @@ interface InputProps {
 }
 
 export function Input({ input }: InputProps) {
-	const { objectId } = input.value?.Object?.ImmOrOwned || input.value?.Object?.Shared || {};
+	const { objectId } =
+		input?.Object?.ImmOrOwnedObject ??
+		input?.Object?.SharedObject ??
+		input.Object?.Receiving! ??
+		{};
 
 	return (
 		<div className="break-all">
 			<Text variant="pBodySmall" weight="medium" color="steel-dark" mono>
-				{'Pure' in input.value ? (
-					`${toB64(new Uint8Array(input.value.Pure))}`
-				) : 'Object' in input.value ? (
-					<ExplorerLink type={ExplorerLinkType.object} objectID={objectId}>
+				{input.Pure ? (
+					`${toB64(new Uint8Array(input.Pure))}`
+				) : input.Object ? (
+					<ExplorerLink type={ExplorerLinkType.object} objectID={objectId!}>
 						{formatAddress(objectId)}
 					</ExplorerLink>
 				) : (

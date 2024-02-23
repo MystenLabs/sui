@@ -10,7 +10,7 @@ import type { ProtocolConfig, SuiClient } from '../client/index.js';
 import type { SignatureWithBytes, Signer } from '../cryptography/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import { v1BlockDataFromTransactionBlockState } from './blockData/v1.js';
-import type { CallArg, Transaction } from './blockData/v2.js';
+import type { CallArg, Transaction, TypeTag } from './blockData/v2.js';
 import { Argument, NormalizedCallArg, ObjectRef, TransactionExpiration } from './blockData/v2.js';
 import { getIdFromCallArg, Inputs } from './Inputs.js';
 import { createPure } from './pure.js';
@@ -384,12 +384,27 @@ export class TransactionBlock {
 			}),
 		);
 	}
-	moveCall({ arguments: args, ...input }: Parameters<typeof Transactions.MoveCall>[0]) {
+	moveCall({
+		arguments: args,
+		...input
+	}:
+		| {
+				package: string;
+				module: string;
+				function: string;
+				arguments?: (TransactionArgument | SerializedBcs<any>)[];
+				typeArguments?: (string | TypeTag)[];
+		  }
+		| {
+				target: string;
+				arguments?: (TransactionArgument | SerializedBcs<any>)[];
+				typeArguments?: (string | TypeTag)[];
+		  }) {
 		return this.add(
 			Transactions.MoveCall({
 				...input,
 				arguments: args?.map((arg) => this.#normalizeTransactionArgument(arg)),
-			}),
+			} as Parameters<typeof Transactions.MoveCall>[0]),
 		);
 	}
 	transferObjects(
