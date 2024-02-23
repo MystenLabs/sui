@@ -17,7 +17,6 @@ prometheus.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
-workspace-hack.workspace = true
 opentelemetry = { version = "0.20.0", features = ["rt-tokio"], optional = true }
 opentelemetry_api = { version = "0.20.0", optional = true }
 opentelemetry-otlp = { version = "0.13.0", features = ["grpc-tonic"], optional = true }

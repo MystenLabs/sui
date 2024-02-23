@@ -8,7 +8,7 @@ use crate::{
 };
 use std::{collections::BTreeMap, time::Duration};
 use sui_indexer::db::PgConnectionPoolConfig;
-use sui_indexer::{apis::GovernanceReadApiV2, indexer_reader::IndexerReader};
+use sui_indexer::{apis::GovernanceReadApi, indexer_reader::IndexerReader};
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
@@ -56,7 +56,7 @@ impl PgManager {
         &self,
         address: &NativeSuiAddress,
     ) -> Result<Option<f64>, Error> {
-        let governance_api = GovernanceReadApiV2::new(self.inner.clone());
+        let governance_api = GovernanceReadApi::new(self.inner.clone());
 
         governance_api
             .get_validator_apy(address)
@@ -99,7 +99,7 @@ impl PgManager {
         &self,
         stake: NativeStakedSui,
     ) -> Result<RpcStakedSui, Error> {
-        let governance_api = GovernanceReadApiV2::new(self.inner.clone());
+        let governance_api = GovernanceReadApi::new(self.inner.clone());
 
         let mut delegated_stakes = governance_api
             .get_delegated_stakes(vec![stake])

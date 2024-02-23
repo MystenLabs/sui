@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     sync::Arc,
 };
 
@@ -131,11 +131,11 @@ impl Core {
 
     /// Processes the provided blocks and accepts them if possible when their causal history exists.
     /// The method returns the references of parents that are unknown and need to be fetched.
-    pub(crate) fn add_blocks(&mut self, blocks: Vec<VerifiedBlock>) -> Vec<BlockRef> {
+    pub(crate) fn add_blocks(&mut self, blocks: Vec<VerifiedBlock>) -> BTreeSet<BlockRef> {
         let _scope = monitored_scope("Core::add_blocks");
 
         // Try to accept them via the block manager
-        let accepted_blocks = self
+        let (accepted_blocks, missing_blocks) = self
             .block_manager
             .try_accept_blocks(blocks)
             .unwrap_or_else(|err| panic!("Fatal error while accepting blocks: {err}"));
@@ -154,8 +154,7 @@ impl Core {
             }
         }
 
-        // TODO: we don't deal for now with missed references, will address later.
-        vec![]
+        missing_blocks
     }
 
     /// Adds/processed all the newly `accepted_blocks`. We basically try to move the threshold clock and add them to the
@@ -247,9 +246,6 @@ impl Core {
 
             //3. create the block and insert to storage.
             // TODO: take a decision on whether we want to flush to disk at this point the DagState.
-
-            // TODO: this will be refactored once the signing path/approach has been introduced. Adding as is for now
-            // to keep things rolling in the implementation.
             let block = Block::V1(BlockV1::new(
                 self.context.committee.epoch(),
                 clock_round,
@@ -275,10 +271,12 @@ impl Core {
                 .or_default()
                 .push(verified_block.clone());
 
-            let _ = self
+            let (accepted_blocks, missing) = self
                 .block_manager
                 .try_accept_blocks(vec![verified_block.clone()])
                 .unwrap_or_else(|err| panic!("Fatal error while accepting our own block: {err}"));
+            assert_eq!(accepted_blocks.len(), 1);
+            assert!(missing.is_empty());
 
             self.last_proposed_block = verified_block.clone();
 
@@ -316,6 +314,10 @@ impl Core {
         self.commit_observer.handle_commit(committed_leaders);
     }
 
+    pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
+        self.block_manager.missing_blocks()
+    }
+
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round. Also the `block_timestamp` is provided
     /// to sanity check that everything that goes into the proposal is ensured to have a timestamp < block_timestamp
     fn ancestors_to_propose(
@@ -343,15 +345,14 @@ impl Core {
             .flat_map(|block| block.ancestors())
             .collect();
 
-        let mut to_propose = HashSet::new();
+        // Keep block refs to propose in a map, so even if somehow a byzantine node managed to provide blocks that don't
+        // form a valid chain we can still pick one block per author.
+        let mut to_propose = BTreeMap::new();
         for block in ancestors.into_iter() {
             if !all_ancestors_parents.contains(&block.reference()) {
-                to_propose.insert(block.reference());
+                to_propose.insert(block.author(), block.reference());
             }
         }
-
-        // always include our last block to ensure that is not somehow excluded by the DAG compression
-        to_propose.insert(self.last_proposed_block.reference());
 
         assert!(!to_propose.is_empty());
 
@@ -359,7 +360,16 @@ impl Core {
         self.pending_ancestors
             .retain(|round, _blocks| *round >= clock_round);
 
-        to_propose.into_iter().collect()
+        // always include our last proposed block in front of the vector and make sure that we do not
+        // double insert.
+        let mut result = vec![self.last_proposed_block.reference()];
+        for (authority_index, block_ref) in to_propose {
+            if authority_index != self.context.own_index {
+                result.push(block_ref);
+            }
+        }
+
+        result
     }
 
     /// Checks whether all the leaders of the previous quorum exist.

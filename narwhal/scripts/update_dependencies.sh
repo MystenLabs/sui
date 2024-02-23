@@ -22,22 +22,12 @@ readarray() {
 
 # check for the presence of needed executables:
 # - we use GNU grep in perl re mode
-# - we use cargo-hakari
 function check_gnu_grep() {
 	GNUSTRING=$($GREP --version|head -n1| grep 'GNU grep')
 	if [[ -z $GNUSTRING ]];
 	then 
 		echo "Could not find GNU grep. This requires GNU grep 3.7 with PCRE expressions"; exit 1
 	else 
-		return 0
-	fi
-}
-
-function check_cargo_hakari() {
-	cargo hakari --version > /dev/null 2>&1
-	if [[ $? -ne 0 ]]; then
-		echo "Could not find cargo hakari. Please install"; exit 1		
-	else
 		return 0
 	fi
 }
@@ -67,7 +57,6 @@ function current_mi_revision() {
 
 # Check for tooling
 check_gnu_grep
-check_cargo_hakari
 
 # Debug prints for mysten-infra
 CURRENT_MI=$(current_mi_revision)
@@ -78,6 +67,5 @@ else
 	exit 0
 fi
 
-# Edit the source & run hakari
+# Edit the source
 find ./ -iname "*.toml"  -execdir sed -i '' -re "s/$CURRENT_MI/$LATEST_MI/" '{}' \;
-cargo hakari generate

@@ -31,7 +31,6 @@ mockall.workspace = true
 
 mysten-metrics.workspace = true
 store = { path = "../../crates/typed-store", package = "typed-store" }
-workspace-hack.workspace = true
 
 [dev-dependencies]
 indexmap.workspace = true

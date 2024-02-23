@@ -14,7 +14,7 @@ jobs:
       isDoc: ${{ steps.diff.outputs.isDoc }}
       isOldDoc: ${{ steps.diff.outputs.isOldDoc }}
     steps:
-      - uses: actions/checkout@v3 # pin@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Detect Changes
         uses: './.github/actions/diffs'
         id: diff
@@ -26,7 +26,7 @@ jobs:
     runs-on: [ubuntu-latest]
 
     steps:
-      - uses: actions/checkout@v3 # pin@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Spell Check Docs
         uses: crate-ci/typos@v1.16.11
         with:

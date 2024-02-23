@@ -42,7 +42,7 @@ jobs:
       isMove: ${{ steps.diff.outputs.isMove }}
       isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Detect Changes
         uses: "./.github/actions/diffs"
         id: diff
@@ -51,17 +51,14 @@ jobs:
     name: license-check
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
       - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@30f432979e99f3ea66a8fa2eede53c07063995d8
+        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
         with:
           crate: cargo-hakari
           locked: true
       - run: cargo xlint
-      - run: |
-          cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
-          cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
 
   release-notes-description-check:
     name: release-notes-check
@@ -69,7 +66,7 @@ jobs:
     if: needs.diff.outputs.isReleaseNotesEligible == 'true'
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Check Pull Request Description
         shell: bash
         run: |
@@ -103,7 +100,7 @@ jobs:
           - [ubuntu-ghcloud]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
@@ -136,7 +133,7 @@ jobs:
           - [ubuntu-ghcloud]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
@@ -157,7 +154,7 @@ jobs:
         run: |
           cargo doc --workspace --no-deps
       - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@30f432979e99f3ea66a8fa2eede53c07063995d8
+        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
         with:
           crate: cargo-hakari
           locked: true
@@ -181,9 +178,9 @@ jobs:
           - [windows-ghcloud]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - uses: taiki-e/install-action@nextest
-      - uses: arduino/setup-protoc@v1
+      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # pin@v3.0.0
         # this avoids rate-limiting
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -209,7 +206,7 @@ jobs:
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 60000
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
@@ -231,7 +228,7 @@ jobs:
     timeout-minutes: 10
     runs-on: [ubuntu-ghcloud]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - uses: taiki-e/install-action@nextest
       - name: Run move tests
         run: |
@@ -244,7 +241,7 @@ jobs:
   #   timeout-minutes: 45
   #   runs-on: [ubuntu-ghcloud]
   #   steps:
-  #     - uses: actions/checkout@v3
+  #     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
 
   #     - name: Setup environment
   #       run: .github/scripts/rosetta/setup.sh
@@ -314,11 +311,11 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ubuntu-ghcloud]
     steps:
-      - uses: arduino/setup-protoc@v1
+      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # pin@v3.0.0
         # this avoids rate-limiting
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - run: rustup component add clippy
       # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
@@ -336,10 +333,10 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - run: rustup component add rustfmt
       - name: rustfmt
-        uses: actions-rs/cargo@v1
+        uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b # pin@v1.0.3
         with:
           command: fmt
           args: --check
@@ -350,7 +347,7 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - uses: mystenlabs/cargo-deny-action@main
 
   sui-excution-cut:
@@ -359,12 +356,13 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ubuntu-ghcloud]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@30f432979e99f3ea66a8fa2eede53c07063995d8
+        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
         with:
           crate: cargo-hakari
           locked: true
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: Make cut
         run: ./scripts/execution_layer.py cut for_ci_test
       - name: Check execution builds
@@ -390,7 +388,7 @@ jobs:
   #      ports:
   #        - 5432:5432
   #  steps:
-  #    - uses: actions/checkout@v3
+  #    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
   #    - name: integration-test-with-postgres
   #      #We only have 1 instance of postgres DB, can only run test in single thread
   #      run: |
@@ -419,11 +417,11 @@ jobs:
        ports:
          - 5432:5432
    steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
      - uses: taiki-e/install-action@nextest
      - name: Setup db
        run: |
-         PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer_v2;' -c 'ALTER SYSTEM SET max_connections = 500;'
+         PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer;' -c 'ALTER SYSTEM SET max_connections = 500;'
        env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgrespw

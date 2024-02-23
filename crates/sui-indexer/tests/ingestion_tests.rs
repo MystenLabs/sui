@@ -12,9 +12,9 @@ mod ingestion_tests {
     use sui_indexer::db::get_pg_pool_connection;
     use sui_indexer::errors::Context;
     use sui_indexer::errors::IndexerError;
-    use sui_indexer::models_v2::transactions::StoredTransaction;
+    use sui_indexer::models::transactions::StoredTransaction;
     use sui_indexer::schema::transactions;
-    use sui_indexer::store::{indexer_store_v2::IndexerStoreV2, PgIndexerStoreV2};
+    use sui_indexer::store::{indexer_store::IndexerStore, PgIndexerStore};
     use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
     use sui_types::base_types::SuiAddress;
     use sui_types::effects::TransactionEffectsAPI;
@@ -33,14 +33,14 @@ mod ingestion_tests {
     }
 
     const DEFAULT_SERVER_PORT: u16 = 3000;
-    const DEFAULT_DB_URL: &str = "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2";
+    const DEFAULT_DB_URL: &str = "postgres://postgres:postgrespw@localhost:5432/sui_indexer";
 
     /// Set up a test indexer fetching from a REST endpoint served by the given Simulacrum.
     async fn set_up(
         sim: Arc<Simulacrum>,
     ) -> (
         JoinHandle<()>,
-        PgIndexerStoreV2,
+        PgIndexerStore,
         JoinHandle<Result<(), IndexerError>>,
     ) {
         let server_url: SocketAddr = format!("127.0.0.1:{}", DEFAULT_SERVER_PORT)
@@ -71,7 +71,7 @@ mod ingestion_tests {
 
     /// Wait for the indexer to catch up to the given checkpoint sequence number.
     async fn wait_for_checkpoint(
-        pg_store: &PgIndexerStoreV2,
+        pg_store: &PgIndexerStore,
         checkpoint_sequence_number: u64,
     ) -> Result<(), IndexerError> {
         tokio::time::timeout(Duration::from_secs(10), async {

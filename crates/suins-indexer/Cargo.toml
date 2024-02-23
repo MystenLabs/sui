@@ -29,7 +29,6 @@ tracing.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 url.workspace = true
-workspace-hack.workspace = true
 sui-json-rpc.workspace = true
 dotenvy = "0.15"
 move-core-types.workspace = true

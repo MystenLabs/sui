@@ -23,7 +23,6 @@ prometheus.workspace = true
 lru.workspace = true
 parking_lot.workspace = true
 tap.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
