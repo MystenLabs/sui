@@ -275,7 +275,7 @@ speedscope <PATH/PROFILE-OUTPUT-FILE>
 
 When looking at the profile in speedscope, there are three different views available from the top left menu: **Timer Order**,
 **Left Heavy**, and **Sandwich**. In each view, each bar's vertical width corresponds to the percentage of gas consumption incurred by the function,
-and you can hover your mouse over a bar or click a bar to see the computational power the relevant call used in relation to the rest of the call stack. Although not a one to one relationship, the percentage of use roughly translates to the percentage of total gas the call is responsible for.
+and you can hover your mouse over a bar or click a bar to see the computation units accrued by the function invocation. The transaction's total computation units, along with the storage computation units, are multiplied by the gas price to determine the gas cost of the transaction based on a tier system.
 
 **Time Order** shows the callstack of function invocations from left to right in the order
 of invocation, while **Left Heavy** combines repeated sequences of nested invocations into a single combined call stack. **Left Heavy** 
