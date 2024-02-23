@@ -289,7 +289,7 @@ export class DeepBookClient {
 	 * @param txb
 	 */
 	async placeMarketOrder(
-		accountCap: string | Extract<TransactionArgument, { kind: 'NestedResult' }>,
+		accountCap: string | Extract<TransactionArgument, { $kind: 'NestedResult' }>,
 		poolId: string,
 		quantity: bigint,
 		orderType: 'bid' | 'ask',

@@ -501,7 +501,6 @@ export const bcs = {
 				);
 
 				if (keys.length !== 1) {
-					console.log(value, keys, values);
 					throw new TypeError(`Expected object with one key, found ${keys.length}`);
 				}
 
