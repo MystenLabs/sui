@@ -54,9 +54,9 @@ pub enum Token {
 
     // The following tokens are special -- they consume multiple shell tokens, to ensure we capture
     // the path for a publish or an upgrade command.
-    /// --publish <shell-token>
+    /// --publish \<shell-token\>
     Publish,
-    /// --upgraded <shell-token>
+    /// --upgraded \<shell-token\>
     Upgrade,
 }
 
