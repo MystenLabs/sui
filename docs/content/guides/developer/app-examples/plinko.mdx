@@ -50,7 +50,7 @@ const EGameDoesNotExist: u64 = 6;
 
 // === Structs ===
 
-/// Represents a game and holds the acrued stake.
+/// Represents a game and holds the accrued stake.
 struct Game has key, store {
     id: UID,
     game_start_epoch: u64,
@@ -393,7 +393,7 @@ fun init(otw: HOUSE_DATA, ctx: &mut TxContext) {
 /// Initializes the house data object with the house's public key and an initial balance.
 /// It also sets the max and min stake values, that can later on be updated.
 /// Stores the house address and the base fee in basis points.
-/// This object is involed in all games created by the same instance of this package.
+/// This object is invovled in all games created by the same instance of this package.
 public fun initialize_house_data(house_cap: HouseCap, coin: Coin<SUI>, public_key: vector<u8>, multiplier: vector<u64>, ctx: &mut TxContext) {
     assert!(coin::value(&coin) > 0, EInsufficientBalance);
 
