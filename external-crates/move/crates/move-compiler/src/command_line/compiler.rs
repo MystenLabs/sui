@@ -836,7 +836,7 @@ pub fn generate_interface_files(
             .to_string_lossy()
             .to_string();
         let vfs_path = deps_out_vfs.join(&file_path)?;
-        vfs_path.parent().create_dir()?;
+        vfs_path.parent().create_dir_all()?;
         vfs_path
             .create_file()?
             .write_all(interface_contents.as_bytes())?;
