@@ -188,7 +188,11 @@ impl NamingProgramInfo {
             .collect()
     }
 
-    pub fn set_module_syntax_methods(&mut self, mident: ModuleIdent, syntax_methods: SyntaxMethods) {
+    pub fn set_module_syntax_methods(
+        &mut self,
+        mident: ModuleIdent,
+        syntax_methods: SyntaxMethods,
+    ) {
         let syntax_methods_ref = &mut self.modules.get_mut(&mident).unwrap().syntax_methods;
         *syntax_methods_ref = syntax_methods;
     }

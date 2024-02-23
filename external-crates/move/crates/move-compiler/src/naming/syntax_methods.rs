@@ -97,7 +97,12 @@ pub(super) fn resolve_syntax_attributes(
             assert!(context.env.has_errors());
             continue;
         };
-        if !valid_return_type(context, &kind, param_ty.loc, &function.signature.return_type) {
+        if !valid_return_type(
+            context,
+            &kind,
+            param_ty.loc,
+            &function.signature.return_type,
+        ) {
             assert!(context.env.has_errors());
             continue;
         } else {
@@ -131,8 +136,7 @@ fn prev_syntax_defn_error(
     };
     let msg = format!(
         "Redefined {} 'syntax' method for '{}'",
-        kind_string,
-        type_name
+        kind_string, type_name
     );
     let prev_msg = "This syntax method was previously defined here.";
     context.env.add_diag(diag!(

@@ -1,0 +1,11 @@
+error[E04034]: 'syntax' method types differ
+  ┌─ tests/move_2024/typing/syntax_methods_args_polymorphic_invalid.move:6:43
+  │
+6 │     public fun borrow<T,Q>(_s: &S<T>, _j: Q): &T { abort 0 }
+  │                                           ^ This index function expects type 'Q'
+  ·
+9 │     public fun borrow_mut<T,Q>(_s: &mut S<T>, _j: T): &mut T { abort 0 }
+  │                                                   - This mutable index function expects type 'T'
+  │
+  = Index operation non-subject parameter types must match exactly
+

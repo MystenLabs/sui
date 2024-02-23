@@ -132,7 +132,9 @@ fn modules(
     // reflect any changes that happened.
     for (key, mdef) in modules.key_cloned_iter_mut() {
         validate_syntax_methods(context, &key, mdef);
-        context.modules.set_module_syntax_methods(key, mdef.syntax_methods.clone());
+        context
+            .modules
+            .set_module_syntax_methods(key, mdef.syntax_methods.clone());
     }
     let mut typed_modules = modules.map(|ident, mdef| {
         let (typed_mdef, new_friends) = module(context, ident, mdef);
