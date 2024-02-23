@@ -28,8 +28,8 @@ use crate::{
 };
 use async_graphql::extensions::ApolloTracing;
 use async_graphql::extensions::Tracing;
-use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
+use async_graphql::{EmptySubscription, ServerError};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::extract::FromRef;
 use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
@@ -54,7 +54,7 @@ use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
 use tower_http::cors::{AllowOrigin, CorsLayer};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 pub struct Server {
@@ -231,6 +231,8 @@ impl ServerBuilder {
     /// to periodically update the `AvailableRange`, which is the range of checkpoints that the
     /// service is guaranteed to produce a consistent result for.
     pub fn build(self) -> Result<Server, Error> {
+        let metrics = self.state.metrics.clone();
+        let sleep_ms = self.state.connection.available_range_update_ms;
         let (address, schema, db_reader, router) = self.build_components();
 
         // Start the background task to update a shared `AvailableRange`
@@ -238,8 +240,7 @@ impl ServerBuilder {
             Arc::new(RwLock::new(AvailableRange { first: 0, last: 0 }));
         let available_range_clone = shared_available_range.clone();
         spawn_monitored_task!(async move {
-            update_available_range(&db_reader, available_range_clone, /* sleep_ms */ 1000).await;
-            // todo (wlmyng) extend ... connectionconfig to pass this in?
+            update_available_range(&db_reader, available_range_clone, metrics, sleep_ms).await;
         });
 
         let app = router
@@ -498,6 +499,7 @@ async fn get_or_init_server_start_time() -> &'static Instant {
 pub(crate) async fn update_available_range(
     db: &Db,
     available_range: Arc<RwLock<AvailableRange>>,
+    metrics: Metrics,
     sleep_ms: u64,
 ) {
     loop {
@@ -505,15 +507,12 @@ pub(crate) async fn update_available_range(
             db.execute(move |conn| Checkpoint::available_range(conn))
                 .await
         } {
-            Ok((start, end)) => {
-                info!("Got consistent read range: {} - {}", start, end);
-                Some((start, end))
-            }
+            Ok((start, end)) => Some((start, end)),
             Err(e) => {
-                warn!("Failed to get consistent read range: {}", e);
-                None // TODO (wlmyng) - is this the right thing to do?
-                     // i think what we can do is `metrics.inc_errors` after converting this to an Internal error
-                     // then whether alerting on metrics or logs, we can catch this
+                let error_string = format!("Failed to update available range: {}", e);
+                error!("{}", error_string);
+                metrics.inc_errors(&[ServerError::new(error_string, None)]);
+                None
             }
         };
 

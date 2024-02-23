@@ -42,6 +42,7 @@ pub(crate) const DEFAULT_SERVER_DB_URL: &str =
 pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 3;
 pub(crate) const DEFAULT_SERVER_PROM_HOST: &str = "0.0.0.0";
 pub(crate) const DEFAULT_SERVER_PROM_PORT: u16 = 9184;
+pub(crate) const DEFAULT_AVAILABLE_RANGE_UPDATE_MS: u64 = 1000;
 
 /// Configuration on connections for the RPC, passed in as command-line arguments.
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
@@ -52,6 +53,7 @@ pub struct ConnectionConfig {
     pub(crate) db_pool_size: u32,
     pub(crate) prom_url: String,
     pub(crate) prom_port: u16,
+    pub(crate) available_range_update_ms: u64,
 }
 
 /// Configuration on features supported by the RPC, passed in a TOML-based file.
@@ -152,6 +154,7 @@ impl ConnectionConfig {
         db_pool_size: Option<u32>,
         prom_url: Option<String>,
         prom_port: Option<u16>,
+        available_range_update_ms: Option<u64>,
     ) -> Self {
         let default = Self::default();
         Self {
@@ -161,12 +164,15 @@ impl ConnectionConfig {
             db_pool_size: db_pool_size.unwrap_or(default.db_pool_size),
             prom_url: prom_url.unwrap_or(default.prom_url),
             prom_port: prom_port.unwrap_or(default.prom_port),
+            available_range_update_ms: available_range_update_ms
+                .unwrap_or(default.available_range_update_ms),
         }
     }
 
     pub fn ci_integration_test_cfg() -> Self {
         Self {
             db_url: DEFAULT_SERVER_DB_URL.to_string(),
+            available_range_update_ms: 100, // Set to 100ms for faster tests
             ..Default::default()
         }
     }
@@ -180,6 +186,7 @@ impl ConnectionConfig {
             db_url: format!("postgres://postgres:postgrespw@localhost:5432/{}", db_name),
             port,
             prom_port,
+            available_range_update_ms: 100, // Set to 100ms for faster tests
             ..Default::default()
         }
     }
@@ -306,6 +313,7 @@ impl Default for ConnectionConfig {
             db_pool_size: DEFAULT_SERVER_DB_POOL_SIZE,
             prom_url: DEFAULT_SERVER_PROM_HOST.to_string(),
             prom_port: DEFAULT_SERVER_PROM_PORT,
+            available_range_update_ms: DEFAULT_AVAILABLE_RANGE_UPDATE_MS,
         }
     }
 }
