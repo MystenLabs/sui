@@ -4,11 +4,11 @@
 use crate::config::{
     ConnectionConfig, Version, MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
-use crate::consistency::CheckpointViewedAt;
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
+use crate::types::available_range::AvailableRange;
 use crate::types::move_object::IMoveObject;
 use crate::types::object::IObject;
 use crate::types::owner::IOwner;
@@ -229,7 +229,8 @@ impl ServerBuilder {
 
     pub fn build(self) -> Result<Server, Error> {
         let (address, schema, db_reader, router) = self.build_components();
-        let shared_high_water_mark: Arc<RwLock<u64>> = Arc::new(RwLock::new(0));
+        let shared_high_water_mark: Arc<RwLock<AvailableRange>> =
+            Arc::new(RwLock::new(AvailableRange { first: 0, last: 0 }));
 
         let water_mark_clone = shared_high_water_mark.clone();
 
@@ -378,7 +379,7 @@ pub fn export_schema() -> String {
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
-    shared_high_water_mark: axum::Extension<Arc<RwLock<u64>>>,
+    shared_high_water_mark: axum::Extension<Arc<RwLock<AvailableRange>>>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -391,11 +392,11 @@ async fn graphql_handler(
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
 
-    let checkpoint_viewed_at = {
+    let available_range = {
         let lock = shared_high_water_mark.read().unwrap();
         *lock
     };
-    req.data.insert(CheckpointViewedAt(checkpoint_viewed_at));
+    req.data.insert(available_range);
 
     let result = schema.execute(req).await;
 
@@ -489,10 +490,10 @@ async fn get_or_init_server_start_time() -> &'static Instant {
 
 async fn update_high_water_mark(
     db_reader: IndexerReader,
-    shared_high_water_mark: Arc<RwLock<u64>>,
+    shared_high_water_mark: Arc<RwLock<AvailableRange>>,
 ) {
     loop {
-        let new_mark = match {
+        let (first, last) = match {
             db_reader
                 .spawn_blocking(|this| this.get_consistent_read_range())
                 .await
@@ -500,21 +501,21 @@ async fn update_high_water_mark(
         } {
             Ok((start, end)) => {
                 info!("Got consistent read range: {} - {}", start, end);
-                end
+                (start, end)
             }
             Err(e) => {
                 warn!("Failed to get consistent read range: {}", e);
-                0
+                (0, 0)
             }
         };
         {
             // Acquire a write lock to update the high water mark
             let mut mark = shared_high_water_mark.write().unwrap();
-            *mark = new_mark;
+            *mark = AvailableRange { first, last };
         }
 
         // Sleep for some time before the next update
-        tokio::time::sleep(tokio::time::Duration::from_secs(4)).await; // Adjust the interval as needed
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await; // Adjust the interval as needed
     }
 }
 
