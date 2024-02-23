@@ -28,6 +28,8 @@ Before getting started, make sure you:
 
 ## Indexing service
 
+The indexing service fetches `Escrow` objects by `sender` and `recipient`.  
+
 ### Data model
 
 In most cases, when you're working with a database directly from a backend service, you might want to use some sort of database libraries and toolings to abstract away database creation and management complexity. In this case, the example uses [Prisma](https://www.prisma.io/) to manage all the database interactions, such as defining data models and database migrations.
