@@ -754,6 +754,12 @@ impl ProgrammableMoveCall {
         );
         Ok(())
     }
+
+    fn is_arg_used(&self, arg: u16) -> bool {
+        self.arguments
+            .iter()
+            .any(|a| matches!(a, Argument::Input(inp) if *inp == arg))
+    }
 }
 
 impl Command {
@@ -861,6 +867,19 @@ impl Command {
         };
         Ok(())
     }
+
+    fn is_arg_used(&self, arg: u16) -> bool {
+        match self {
+            Command::MoveCall(c) => c.is_arg_used(arg),
+            Command::TransferObjects(args, _)
+            | Command::MergeCoins(_, args)
+            | Command::SplitCoins(_, args)
+            | Command::MakeMoveVec(_, args) => args
+                .iter()
+                .any(|a| matches!(a, Argument::Input(inp) if *inp == arg)),
+            Command::Publish(_, _) | Command::Upgrade(_, _, _, _) => false,
+        }
+    }
 }
 
 pub fn write_sep<T: Display>(
@@ -958,9 +977,7 @@ impl ProgrammableTransaction {
                 let random_index = random_index as u16;
                 for command in commands {
                     if !used_random_object {
-                        let has_random = if let Command::MoveCall(c) = command {
-                            c.arguments.iter().any(|arg| matches!(arg, Argument::Input(inp) if *inp == random_index)) } else { false };
-                        used_random_object = has_random;
+                        used_random_object = command.is_arg_used(random_index);
                     } else {
                         fp_ensure!(
                             matches!(

@@ -998,7 +998,7 @@ async fn get_object_ref(obj_id: &ObjectID, authority_state: &Arc<AuthorityState>
 async fn test_allowed_ptb_with_random_txn() {
     telemetry_subscribers::init_for_testing();
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let num_of_tx = 9;
+    let num_of_tx = 6;
     let obj_ids = (0..num_of_tx)
         .map(|_| ObjectID::random())
         .collect::<Vec<_>>();
