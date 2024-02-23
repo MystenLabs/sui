@@ -232,6 +232,8 @@ async fn wait_for_indexer_checkpoint_catchup(
     .expect("Timeout waiting for indexer to catchup to checkpoint");
 }
 
+/// Ping the GraphQL server until its background task has updated the available range to the desired
+/// checkpoint.
 async fn wait_for_graphql_checkpoint_catchup(
     client: &SimpleClient,
     checkpoint: u64,
