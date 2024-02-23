@@ -7,8 +7,8 @@ import type { Input } from 'valibot';
 
 import { TypeTagSerializer } from '../bcs/type-tag-serializer.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
-import type { CallArg, Transaction, TypeTag } from './blockData/v2.js';
-import { Argument } from './blockData/v2.js';
+import type { CallArg, Transaction } from './blockData/v2.js';
+import { Argument, TypeTag } from './blockData/v2.js';
 
 export type { Argument as TransactionArgument };
 export type { CallArg as TransactionBlockInput };
@@ -55,7 +55,7 @@ export const Transactions = {
 				function: fn,
 				typeArguments:
 					input.typeArguments?.map((arg) =>
-						typeof arg === 'string' ? TypeTagSerializer.parseFromStr(arg) : arg,
+						typeof arg === 'string' ? parse(TypeTag, TypeTagSerializer.parseFromStr(arg)) : arg,
 					) ?? [],
 				arguments: input.arguments ?? [],
 			},
@@ -153,7 +153,7 @@ export const Transactions = {
 			$kind: 'MakeMoveVec',
 			MakeMoveVec: [
 				type
-					? { $kind: 'Some', Some: TypeTagSerializer.parseFromStr(type) }
+					? { $kind: 'Some', Some: parse(TypeTag, TypeTagSerializer.parseFromStr(type)) }
 					: { $kind: 'None', None: true },
 				objects.map((o) => parse(Argument, o)),
 			],
