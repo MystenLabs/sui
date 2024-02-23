@@ -100,7 +100,7 @@ module bridge::limiter {
 
         // Check if transfer amount exceed limit
         // Upscale them to the token's decimal.
-        if ((record.total_amount * treasury::decimal_multiplier<T>() as u128) + notional_amount_with_token_multiplier > route_limit_adjusted) {
+        if ((record.total_amount as u128) * (treasury::decimal_multiplier<T>() as u128) + notional_amount_with_token_multiplier > route_limit_adjusted) {
             return false
         };
 
