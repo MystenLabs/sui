@@ -35,7 +35,7 @@ The [`single_player_blackjack.move`](https://github.com/MystenLabs/blackjack-sui
 
 There are also constants for error handling, such as `EInvalidBlsSig`, `EInsufficientBalance`, and others, ensuring robust game mechanics.
 
-Structs like `GameCreatedEvent`, `GameOutcomeEvent`, `HitDoneEvent` capture the various events and actions within a game. The `HitRequest` and `StandRequest` structs ensure that a move (hit/stand) can be performed by the house only if the player has already requested it. `HouseAdminCap` and `HouseData` are crucial for maintaining the house's data, including balance and public key, while the `Game` struct contains all the necessary information about each game, such as player data, cards, and the current status.
+Structs like `GameCreatedEvent`, `GameOutcomeEvent`, and `HitDoneEvent` capture the various events and actions within a game. The `HitRequest` and `StandRequest` structs ensure that a move (hit/stand) can be performed by the house only if the player has already requested it. `HouseAdminCap` and `HouseData` are crucial for maintaining the house's data, including balance and public key, while the `Game` struct contains all the necessary information about each game, such as player data, cards, and the current status.
 
 The module's functions can be broadly categorized into initialization, game management, and utility functions. The `init` function sets up the house admin capability, while `initialize_house_data` prepares the house for the game by setting up the balance and public key. `place_bet_and_create_game` is the entry point for players to start a new game, involving a bet and random input. The functions `first_deal`, `hit`, and `stand` govern the core gameplay, handling the dealing of cards and player choices.
 
