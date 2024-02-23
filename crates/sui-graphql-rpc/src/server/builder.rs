@@ -4,6 +4,7 @@
 use crate::config::{
     ConnectionConfig, Version, MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
+use crate::consistency::update_available_range;
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
@@ -41,16 +42,15 @@ use http::{HeaderValue, Method, Request};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
 use hyper::Server as HyperServer;
+use mysten_metrics::spawn_monitored_task;
 use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
 use std::convert::Infallible;
 use std::net::TcpStream;
 use std::sync::{Arc, RwLock};
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
-use sui_indexer::indexer_reader::IndexerReader;
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
-use tokio::spawn;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -74,7 +74,7 @@ pub(crate) struct ServerBuilder {
     state: AppState,
     schema: SchemaBuilder<Query, Mutation, EmptySubscription>,
     router: Option<Router>,
-    db_reader: Option<IndexerReader>,
+    db_reader: Option<Db>,
 }
 
 #[derive(Clone)]
@@ -140,7 +140,7 @@ impl ServerBuilder {
     ) -> (
         String,
         Schema<Query, Mutation, EmptySubscription>,
-        IndexerReader, // maybe this should be Db instead of IndexerReader
+        Db,
         Router,
     ) {
         let address = self.address();
@@ -227,20 +227,24 @@ impl ServerBuilder {
         Ok(cors)
     }
 
+    /// Consumes the `ServerBuilder` to create a `Server` that can be run. Spawns a background task
+    /// to periodically update the `AvailableRange`, which is the range of checkpoints that the
+    /// service is guaranteed to produce a consistent result for.
     pub fn build(self) -> Result<Server, Error> {
         let (address, schema, db_reader, router) = self.build_components();
-        let shared_high_water_mark: Arc<RwLock<AvailableRange>> =
+
+        // Start the background task to update a shared `AvailableRange`
+        let shared_available_range: Arc<RwLock<AvailableRange>> =
             Arc::new(RwLock::new(AvailableRange { first: 0, last: 0 }));
-
-        let water_mark_clone = shared_high_water_mark.clone();
-
-        spawn(async move {
-            update_high_water_mark(db_reader, water_mark_clone).await;
+        let available_range_clone = shared_available_range.clone();
+        spawn_monitored_task!(async move {
+            update_available_range(&db_reader, available_range_clone, /* sleep_ms */ 1000).await;
+            // todo (wlmyng) extend ... connectionconfig to pass this in?
         });
 
         let app = router
             .layer(axum::extract::Extension(schema))
-            .layer(axum::extract::Extension(shared_high_water_mark)) // Pass the shared state to the router
+            .layer(axum::extract::Extension(shared_available_range))
             .layer(Self::cors()?);
 
         Ok(Server {
@@ -263,6 +267,8 @@ impl ServerBuilder {
             .map(|builder| (builder, config))
     }
 
+    /// Instantiate a `ServerBuilder` from a `ServerConfig`, typically called when building the
+    /// graphql service for production usage.
     pub async fn from_config(config: &ServerConfig, version: &Version) -> Result<Self, Error> {
         // PROMETHEUS
         let prom_addr: SocketAddr = format!(
@@ -306,7 +312,7 @@ impl ServerBuilder {
         let pg_conn_pool = PgManager::new(reader.clone());
         let package_store = DbPackageStore(reader.clone());
         let package_cache = PackageStoreWithLruCache::new(package_store);
-        builder.db_reader = Some(reader);
+        builder.db_reader = Some(db.clone());
 
         // SDK for talking to fullnode. Used for executing transactions only
         // TODO: fail fast if no url, once we enable mutations fully
@@ -379,7 +385,7 @@ pub fn export_schema() -> String {
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
-    shared_high_water_mark: axum::Extension<Arc<RwLock<AvailableRange>>>,
+    shared_available_range: axum::Extension<Arc<RwLock<AvailableRange>>>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -393,7 +399,7 @@ async fn graphql_handler(
     req.data.insert(addr);
 
     let available_range = {
-        let lock = shared_high_water_mark.read().unwrap();
+        let lock = shared_available_range.read().unwrap();
         *lock
     };
     req.data.insert(available_range);
@@ -486,37 +492,6 @@ async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode
 async fn get_or_init_server_start_time() -> &'static Instant {
     static ONCE: OnceCell<Instant> = OnceCell::const_new();
     ONCE.get_or_init(|| async move { Instant::now() }).await
-}
-
-async fn update_high_water_mark(
-    db_reader: IndexerReader,
-    shared_high_water_mark: Arc<RwLock<AvailableRange>>,
-) {
-    loop {
-        let (first, last) = match {
-            db_reader
-                .spawn_blocking(|this| this.get_consistent_read_range())
-                .await
-                .map(|(start, end)| (start as u64, end as u64))
-        } {
-            Ok((start, end)) => {
-                info!("Got consistent read range: {} - {}", start, end);
-                (start, end)
-            }
-            Err(e) => {
-                warn!("Failed to get consistent read range: {}", e);
-                (0, 0)
-            }
-        };
-        {
-            // Acquire a write lock to update the high water mark
-            let mut mark = shared_high_water_mark.write().unwrap();
-            *mark = AvailableRange { first, last };
-        }
-
-        // Sleep for some time before the next update
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await; // Adjust the interval as needed
-    }
 }
 
 pub mod tests {
