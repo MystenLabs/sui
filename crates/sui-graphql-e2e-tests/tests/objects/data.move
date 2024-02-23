@@ -6,12 +6,11 @@
 //# publish
 module P0::m {
     use std::ascii::{Self, String as ASCII};
-    use std::option::{Self, Option};
     use std::string::{Self, String as UTF8};
     use sui::object::{Self, ID, UID};
     use sui::tx_context::TxContext;
 
-    struct Foo has key, store {
+    public struct Foo has key, store {
         id: UID,
         f0: ID,
         f1: bool,
@@ -23,7 +22,7 @@ module P0::m {
         f7: Option<u32>,
     }
 
-    struct Bar has key {
+    public struct Bar has key {
         id: UID,
     }
 

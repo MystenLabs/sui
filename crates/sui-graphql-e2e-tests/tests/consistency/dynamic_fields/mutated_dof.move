@@ -19,12 +19,12 @@ module Test::M1 {
     use sui::tx_context::TxContext;
     use sui::transfer;
 
-    struct Parent has key, store {
+    public struct Parent has key, store {
         id: UID,
         count: u64
     }
 
-    struct Child has key, store {
+    public struct Child has key, store {
         id: UID,
         count: u64,
     }
