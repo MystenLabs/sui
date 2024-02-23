@@ -18,8 +18,8 @@ use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
 use serde::{Deserialize, Serialize};
-use sui_indexer::models_v2::{events::StoredEvent, transactions::StoredTransaction};
-use sui_indexer::schema_v2::{events, transactions, tx_senders};
+use sui_indexer::models::{events::StoredEvent, transactions::StoredTransaction};
+use sui_indexer::schema::{events, transactions, tx_senders};
 use sui_types::base_types::ObjectID;
 use sui_types::Identifier;
 use sui_types::{

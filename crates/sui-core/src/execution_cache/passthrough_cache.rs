@@ -36,6 +36,7 @@ use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::VerifiedTransaction;
+use tap::TapFallible;
 use tracing::instrument;
 use typed_store::Map;
 
@@ -46,28 +47,24 @@ use super::{
 
 pub struct PassthroughCache {
     store: Arc<AuthorityStore>,
-    metrics: Option<ExecutionCacheMetrics>,
+    metrics: Arc<ExecutionCacheMetrics>,
     package_cache: Arc<PackageObjectCache>,
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
 }
 
 impl PassthroughCache {
-    pub fn new(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
+    pub fn new(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
         Self {
             store,
-            metrics: Some(ExecutionCacheMetrics::new(registry)),
+            metrics,
             package_cache: PackageObjectCache::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
         }
     }
 
-    pub fn new_with_no_metrics(store: Arc<AuthorityStore>) -> Self {
-        Self {
-            store,
-            metrics: None,
-            package_cache: PackageObjectCache::new(),
-            executed_effects_digests_notify_read: NotifyRead::new(),
-        }
+    pub fn new_for_tests(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
+        let metrics = Arc::new(ExecutionCacheMetrics::new(registry));
+        Self::new(store, metrics)
     }
 
     pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper<Self> {
@@ -96,6 +93,19 @@ impl PassthroughCache {
         )
         .await;
         let _ = AuthorityStorePruner::compact(&self.store.perpetual_tables);
+    }
+
+    fn revert_state_update_impl(&self, digest: &TransactionDigest) -> SuiResult {
+        self.store.revert_state_update(digest)
+    }
+
+    fn clear_state_end_of_epoch_impl(&self, execution_guard: &ExecutionLockWriteGuard) {
+        self.store
+            .clear_object_per_epoch_marker_table(execution_guard)
+            .tap_err(|e| {
+                tracing::error!(?e, "Failed to clear object per-epoch marker table");
+            })
+            .ok();
     }
 }
 
@@ -167,7 +177,7 @@ impl ExecutionCacheRead for PassthroughCache {
         self.store.get_lock(obj_ref, epoch_id)
     }
 
-    fn get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
+    fn _get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
         self.store.get_latest_lock_for_object_id(object_id)
     }
 
@@ -240,10 +250,10 @@ impl ExecutionCacheRead for PassthroughCache {
     fn get_marker_value(
         &self,
         object_id: &ObjectID,
-        version: &SequenceNumber,
+        version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<MarkerValue>> {
-        self.store.get_marker_value(object_id, version, epoch_id)
+        self.store.get_marker_value(object_id, &version, epoch_id)
     }
 
     fn get_latest_marker(
@@ -272,11 +282,9 @@ impl ExecutionCacheWrite for PassthroughCache {
             self.executed_effects_digests_notify_read
                 .notify(&tx_digest, &effects_digest);
 
-            if let Some(metrics) = &self.metrics {
-                metrics
-                    .pending_notify_read
-                    .set(self.executed_effects_digests_notify_read.num_pending() as i64);
-            }
+            self.metrics
+                .pending_notify_read
+                .set(self.executed_effects_digests_notify_read.num_pending() as i64);
 
             Ok(())
         }

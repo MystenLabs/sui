@@ -197,7 +197,6 @@ dependencies = [
  "rand 0.8.5",
  "telemetry-subscribers",
  "tokio",
- "workspace-hack",
 ]
 
 [[package]]
@@ -2236,6 +2235,19 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4acbb09d9ee8e23699b9634375c72795d095bf268439da88562cf9b501f181fa"
+dependencies = [
+ "camino",
+ "cargo-platform",
+ "semver 1.0.16",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "cargo_metadata"
 version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eee4243f1f26fc7a42710e7439c149e2b10b05472f88090acce52632f231a73a"
@@ -2605,7 +2617,6 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "shared-crypto",
- "workspace-hack",
 ]
 
 [[package]]
@@ -2624,6 +2635,7 @@ dependencies = [
  "consensus-config",
  "enum_dispatch",
  "fastcrypto",
+ "futures",
  "mockall",
  "mysten-metrics",
  "mysten-network",
@@ -2642,7 +2654,6 @@ dependencies = [
  "tower",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -3283,15 +3294,15 @@ dependencies = [
 
 [[package]]
 name = "dashmap"
-version = "5.4.0"
+version = "5.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "907076dfda823b0b36d2a1bb5f90c96660a5bbcd7729e10727f07858f22c4edc"
+checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
 dependencies = [
  "cfg-if",
- "hashbrown 0.12.3",
+ "hashbrown 0.14.1",
  "lock_api",
  "once_cell",
- "parking_lot_core 0.9.5",
+ "parking_lot_core 0.9.9",
 ]
 
 [[package]]
@@ -3338,7 +3349,6 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-types",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -4043,6 +4053,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "error-chain"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d2f06b9cac1506ece98fe3231e3cc9c4410ec3d5b1f24ae1c8946f0742cdefc"
+dependencies = [
+ "version_check",
+]
+
+[[package]]
 name = "error-code"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4217,7 +4236,7 @@ checksum = "40bf114f1017ace0f622f1652f59c2c5e1abfe7d88891cca0c43da979b351de0"
 dependencies = [
  "arrayvec 0.7.2",
  "bytes",
- "cargo_metadata",
+ "cargo_metadata 0.15.4",
  "chrono",
  "convert_case 0.6.0",
  "elliptic-curve 0.13.4",
@@ -5065,7 +5084,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f822a2716041492e071691606474f5a7e4fa7c2acbfd7da7b29884fb448291c7"
 dependencies = [
  "camino",
- "cargo_metadata",
+ "cargo_metadata 0.15.4",
  "cfg-if",
  "debug-ignore",
  "fixedbitset 0.4.2",
@@ -6249,9 +6268,9 @@ checksum = "c4cd1a83af159aa67994778be9070f0ae1bd732942279cabb14f86f986a21456"
 
 [[package]]
 name = "lock_api"
-version = "0.4.9"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "435011366fe56583b16cf956f9df0095b405b82d76425bc8981c0e22e60ec4df"
+checksum = "3c168f8615b12bc01f9c17e2eb0cc07dcae1940121185446edc3744920e8ef45"
 dependencies = [
  "autocfg",
  "scopeguard",
@@ -6454,9 +6473,9 @@ dependencies = [
 
 [[package]]
 name = "mime"
-version = "0.3.16"
+version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a60c7ce501c71e03a9c9c0d35b861413ae925bd979cc7a4e30d060069aaac8d"
+checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
 name = "mime_guess"
@@ -6560,6 +6579,26 @@ dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "moka"
+version = "0.12.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1911e88d5831f748a4097a43862d129e3c6fca831eecac9b8db6d01d93c9de2"
+dependencies = [
+ "crossbeam-channel",
+ "crossbeam-epoch",
+ "crossbeam-utils",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "rustc_version",
+ "skeptic",
+ "smallvec",
+ "tagptr",
+ "thiserror",
+ "triomphe",
+ "uuid 1.2.2",
 ]
 
 [[package]]
@@ -7375,7 +7414,6 @@ dependencies = [
  "futures",
  "parking_lot 0.12.1",
  "tokio",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7395,7 +7433,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid 1.2.2",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7419,7 +7456,6 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7436,7 +7472,6 @@ dependencies = [
  "tokio",
  "tower",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7450,7 +7485,6 @@ dependencies = [
  "serde",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7469,7 +7503,6 @@ dependencies = [
  "parking_lot 0.12.1",
  "roaring",
  "smallvec",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7479,7 +7512,6 @@ dependencies = [
  "proc-macro2 1.0.66",
  "syn 1.0.107",
  "synstructure",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7554,7 +7586,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7573,7 +7604,6 @@ dependencies = [
  "serde-reflection",
  "serde_json",
  "shared-crypto",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7607,7 +7637,6 @@ dependencies = [
  "tonic 0.10.0",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7638,7 +7667,6 @@ dependencies = [
  "tokio",
  "tower",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7682,7 +7710,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7737,7 +7764,6 @@ dependencies = [
  "tower",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7760,7 +7786,6 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7793,7 +7818,6 @@ dependencies = [
  "tonic 0.10.0",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7841,7 +7865,6 @@ dependencies = [
  "tonic-build",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -7883,7 +7906,6 @@ dependencies = [
  "tower",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -8712,7 +8734,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
 dependencies = [
  "lock_api",
- "parking_lot_core 0.9.5",
+ "parking_lot_core 0.9.9",
 ]
 
 [[package]]
@@ -8731,15 +8753,15 @@ dependencies = [
 
 [[package]]
 name = "parking_lot_core"
-version = "0.9.5"
+version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ff9f3fef3968a3ec5945535ed654cb38ff72d7495a25619e2247fb15a2ed9ba"
+checksum = "4c42a9226546d68acdd9c0a280d17ce19bfe27a46bf68784e4066115788d008e"
 dependencies = [
  "cfg-if",
  "libc",
- "redox_syscall 0.2.16",
+ "redox_syscall 0.4.1",
  "smallvec",
- "windows-sys 0.42.0",
+ "windows-targets 0.48.0",
 ]
 
 [[package]]
@@ -9360,7 +9382,6 @@ dependencies = [
  "anyhow",
  "prometheus",
  "protobuf",
- "workspace-hack",
 ]
 
 [[package]]
@@ -9521,6 +9542,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5787f7cda34e3033a72192c018bc5883100330f362ef279a8cbccfce8bb4e874"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "pulldown-cmark"
+version = "0.9.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57206b407293d2bcd3af849ce869d52068623f19e1b5ff8e8778e3309439682b"
+dependencies = [
+ "bitflags 2.4.1",
+ "memchr",
+ "unicase",
 ]
 
 [[package]]
@@ -9845,6 +9877,15 @@ name = "redox_syscall"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "567664f262709473930a4bf9e51bf2ebf3348f2e748ccc50dea20646858f8f29"
+dependencies = [
+ "bitflags 1.3.2",
+]
+
+[[package]]
+name = "redox_syscall"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4722d768eff46b75989dd134e5c353f0d6296e5aaa3132e776cbdb56be7731aa"
 dependencies = [
  "bitflags 1.3.2",
 ]
@@ -11082,7 +11123,6 @@ dependencies = [
  "fastcrypto",
  "serde",
  "serde_repr",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11202,7 +11242,6 @@ dependencies = [
  "sui-transaction-checks",
  "sui-types",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11219,6 +11258,21 @@ checksum = "16d69225bde7a69b235da73377861095455d298f2b970996eec25ddbb42b3d1e"
 dependencies = [
  "bitmaps",
  "typenum",
+]
+
+[[package]]
+name = "skeptic"
+version = "0.13.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16d23b015676c90a0f01c197bfdc786c20342c73a0afdda9025adb0bc42940a8"
+dependencies = [
+ "bytecount",
+ "cargo_metadata 0.14.2",
+ "error-chain",
+ "glob",
+ "pulldown-cmark",
+ "tempfile",
+ "walkdir",
 ]
 
 [[package]]
@@ -11490,7 +11544,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -11556,7 +11610,6 @@ dependencies = [
  "tokio",
  "tracing",
  "unescape",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11583,7 +11636,6 @@ dependencies = [
  "sui-types",
  "sui-verifier-latest",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11592,7 +11644,6 @@ version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "sui-transactional-test-runner",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11620,7 +11671,6 @@ dependencies = [
  "sui-types",
  "sui-verifier-v0",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11647,12 +11697,11 @@ dependencies = [
  "sui-types",
  "sui-verifier-v1",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -11701,17 +11750,15 @@ dependencies = [
  "typed-store",
  "typed-store-derive",
  "url",
- "workspace-hack",
 ]
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "syn 1.0.107",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11744,7 +11791,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11756,7 +11802,6 @@ dependencies = [
  "sui-types",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11788,7 +11833,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11839,7 +11883,6 @@ dependencies = [
  "tokio-util 0.7.4",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11850,6 +11893,7 @@ dependencies = [
  "arc-swap",
  "async-trait",
  "axum",
+ "backoff",
  "bcs",
  "clap",
  "const-str",
@@ -11883,12 +11927,10 @@ dependencies = [
  "tempfile",
  "test-cluster",
  "tokio",
- "tokio-retry",
  "tracing",
  "typed-store",
  "typed-store-derive",
  "url",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11928,7 +11970,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid 1.2.2",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11940,7 +11981,6 @@ dependencies = [
  "sui-types",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11969,7 +12009,6 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11983,6 +12022,8 @@ dependencies = [
  "bytes",
  "chrono",
  "clap",
+ "consensus-config",
+ "consensus-core",
  "criterion",
  "dashmap",
  "diffy",
@@ -12000,6 +12041,7 @@ dependencies = [
  "itertools 0.10.5",
  "lru 0.10.0",
  "mockall",
+ "moka",
  "more-asserts",
  "move-binary-format",
  "move-bytecode-utils",
@@ -12067,7 +12109,6 @@ dependencies = [
  "twox-hash",
  "typed-store",
  "typed-store-derive",
- "workspace-hack",
  "zeroize",
 ]
 
@@ -12091,7 +12132,6 @@ dependencies = [
  "sui-types",
  "test-cluster",
  "tokio",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12126,7 +12166,6 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12151,7 +12190,6 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12179,6 +12217,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "shared-crypto",
  "sui",
  "sui-config",
  "sui-core",
@@ -12204,7 +12243,6 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12212,14 +12250,13 @@ name = "sui-enum-compat-util"
 version = "0.1.0"
 dependencies = [
  "serde_yaml 0.8.26",
- "workspace-hack",
 ]
 
 [[package]]
 name = "sui-execution"
 version = "0.1.0"
 dependencies = [
- "cargo_metadata",
+ "cargo_metadata 0.15.4",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-bytecode-verifier-v0",
@@ -12240,7 +12277,6 @@ dependencies = [
  "sui-verifier-latest",
  "sui-verifier-v0",
  "sui-verifier-v1",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12254,12 +12290,11 @@ dependencies = [
  "thiserror",
  "toml 0.7.4",
  "toml_edit 0.19.10",
- "workspace-hack",
 ]
 
 [[package]]
 name = "sui-faucet"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -12295,7 +12330,6 @@ dependencies = [
  "typed-store",
  "typed-store-derive",
  "uuid 1.2.2",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12312,7 +12346,6 @@ dependencies = [
  "sui-move-build",
  "sui-types",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12328,7 +12361,6 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "tokio",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12347,7 +12379,6 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12376,7 +12407,6 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12388,7 +12418,6 @@ dependencies = [
  "sui-graphql-rpc",
  "sui-transactional-test-runner",
  "tokio",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12457,7 +12486,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "uuid 1.2.2",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12471,7 +12499,6 @@ dependencies = [
  "serde_json",
  "sui-graphql-rpc-headers",
  "thiserror",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12479,12 +12506,11 @@ name = "sui-graphql-rpc-headers"
 version = "0.1.0"
 dependencies = [
  "axum",
- "workspace-hack",
 ]
 
 [[package]]
 name = "sui-indexer"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12535,7 +12561,6 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12555,7 +12580,6 @@ dependencies = [
  "sui-move-build",
  "sui-types",
  "test-fuzz",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12606,7 +12630,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "typed-store-error",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12626,7 +12649,6 @@ dependencies = [
  "sui-types",
  "tap",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12663,7 +12685,6 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12692,7 +12713,6 @@ dependencies = [
  "sui-types",
  "tabled",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12712,7 +12732,6 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tiny-bip39",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12737,7 +12756,6 @@ dependencies = [
  "sui-sdk",
  "sui-types",
  "tokio",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12748,7 +12766,6 @@ dependencies = [
  "once_cell",
  "sui-proc-macros",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12770,12 +12787,11 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
 name = "sui-move"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -12817,7 +12833,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -12836,7 +12852,6 @@ dependencies = [
  "sui-types",
  "sui-verifier-latest",
  "tempfile",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12857,7 +12872,6 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12878,7 +12892,6 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12899,7 +12912,6 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12933,12 +12945,11 @@ dependencies = [
  "tonic-build",
  "tower",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
 name = "sui-node"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -12984,12 +12995,11 @@ dependencies = [
  "tracing",
  "typed-store",
  "url",
- "workspace-hack",
 ]
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13009,7 +13019,6 @@ dependencies = [
  "sui-types",
  "tokio",
  "versions",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13022,12 +13031,11 @@ dependencies = [
  "quote 1.0.33",
  "syn 1.0.107",
  "unescape",
- "workspace-hack",
 ]
 
 [[package]]
 name = "sui-oracle"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13053,7 +13061,6 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13077,7 +13084,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tower",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13089,7 +13095,6 @@ dependencies = [
  "quote 1.0.33",
  "sui-enum-compat-util",
  "syn 2.0.32",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13103,7 +13108,6 @@ dependencies = [
  "serde_with",
  "sui-protocol-config-macros",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13113,7 +13117,6 @@ dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "syn 1.0.107",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13157,7 +13160,6 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13203,7 +13205,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13213,12 +13214,17 @@ dependencies = [
  "anyhow",
  "axum",
  "bcs",
+ "fastcrypto",
+ "mime",
  "rand 0.8.5",
  "reqwest",
  "serde",
+ "serde_json",
+ "serde_with",
  "sui-types",
+ "tap",
+ "thiserror",
  "tokio",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13261,12 +13267,11 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13291,12 +13296,11 @@ dependencies = [
  "tokio",
  "tonic 0.10.0",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
 name = "sui-sdk"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -13327,7 +13331,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13336,12 +13339,14 @@ version = "0.7.0"
 dependencies = [
  "anemo",
  "anemo-tower",
+ "bcs",
  "fastcrypto",
  "lru 0.10.0",
  "move-package",
  "msim",
  "narwhal-network",
  "rand 0.8.5",
+ "serde",
  "sui-framework",
  "sui-move-build",
  "sui-types",
@@ -13349,7 +13354,6 @@ dependencies = [
  "tempfile",
  "tower",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13384,7 +13388,6 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13413,12 +13416,11 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
 name = "sui-source-validation"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -13445,7 +13447,6 @@ dependencies = [
  "tokio",
  "tracing",
  "ureq",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13484,7 +13485,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "url",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13541,13 +13541,12 @@ dependencies = [
  "typed-store",
  "typed-store-derive",
  "url",
- "workspace-hack",
  "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
 name = "sui-surfer"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -13571,7 +13570,6 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13597,7 +13595,6 @@ dependencies = [
  "tokio",
  "tonic-health",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13625,7 +13622,6 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13636,7 +13632,6 @@ dependencies = [
  "serde",
  "sui-core",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13650,7 +13645,6 @@ dependencies = [
  "sui-move-build",
  "sui-sdk",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13668,7 +13662,6 @@ dependencies = [
  "tower",
  "tower-http",
  "uuid 1.2.2",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13689,13 +13682,12 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.24.0",
  "tower-layer",
- "workspace-hack",
  "x509-parser",
 ]
 
 [[package]]
 name = "sui-tool"
-version = "1.19.0"
+version = "1.20.0"
 dependencies = [
  "anemo",
  "anemo-cli",
@@ -13741,7 +13733,6 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13758,7 +13749,6 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-protocol-config",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13773,7 +13763,6 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13821,7 +13810,6 @@ dependencies = [
  "tokio",
  "typed-store",
  "typed-store-derive",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13833,6 +13821,7 @@ dependencies = [
  "bcs",
  "bincode",
  "byteorder",
+ "consensus-config",
  "criterion",
  "derivative",
  "derive_more",
@@ -13884,7 +13873,6 @@ dependencies = [
  "tonic 0.10.0",
  "tracing",
  "typed-store-error",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13899,7 +13887,6 @@ dependencies = [
  "move-compiler",
  "move-package",
  "sui-move-build",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13914,7 +13901,6 @@ dependencies = [
  "move-vm-config",
  "sui-protocol-config",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13923,7 +13909,6 @@ version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "sui-transactional-test-runner",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13938,7 +13923,6 @@ dependencies = [
  "move-vm-config",
  "sui-protocol-config",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13952,7 +13936,6 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -13961,9 +13944,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "aws-config",
- "aws-sdk-dynamodb",
- "aws-sdk-s3",
  "backoff",
  "base64-url",
  "bcs",
@@ -13989,12 +13969,11 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "workspace-hack",
 ]
 
 [[package]]
 name = "suiop-cli"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -14018,7 +13997,6 @@ dependencies = [
  "toml_edit 0.19.10",
  "tracing",
  "tracing-subscriber",
- "workspace-hack",
 ]
 
 [[package]]
@@ -14145,6 +14123,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "tagptr"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b2093cf4c8eb1e67749a6762251bc9cd836b6fc171623bd0a9d324d37af2417"
+
+[[package]]
 name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14213,7 +14197,6 @@ dependencies = [
  "tracing-appender",
  "tracing-opentelemetry",
  "tracing-subscriber",
- "workspace-hack",
 ]
 
 [[package]]
@@ -14294,7 +14277,6 @@ dependencies = [
  "sui-types",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -14315,7 +14297,7 @@ version = "3.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9186daca5c58cb307d09731e0ba06b13fd6c036c90672b9bfc31cecf76cf689"
 dependencies = [
- "cargo_metadata",
+ "cargo_metadata 0.15.4",
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "serde",
@@ -15012,7 +14994,6 @@ dependencies = [
  "sui-types",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -15020,6 +15001,12 @@ name = "treeline"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
+
+[[package]]
+name = "triomphe"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "859eb650cfee7434994602c3a68b25d77ad9e68c8a6cd491616ef86661382eb3"
 
 [[package]]
 name = "try-lock"
@@ -15075,7 +15062,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
@@ -15111,7 +15098,6 @@ dependencies = [
  "typed-store-derive",
  "typed-store-error",
  "uint",
- "workspace-hack",
 ]
 
 [[package]]
@@ -15126,7 +15112,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -15135,7 +15120,6 @@ version = "0.4.0"
 dependencies = [
  "serde",
  "thiserror",
- "workspace-hack",
 ]
 
 [[package]]
@@ -15869,1052 +15853,6 @@ checksum = "524e57b2c537c0f9b1e69f1965311ec12182b4122e45035b1508cd24d2adadb1"
 dependencies = [
  "cfg-if",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "workspace-hack"
-version = "0.1.0"
-dependencies = [
- "Inflector",
- "addchain",
- "addr2line",
- "adler",
- "aead",
- "aes",
- "aes-gcm",
- "ahash 0.7.6",
- "ahash 0.8.2",
- "aho-corasick 0.7.20",
- "aho-corasick 1.0.2",
- "aliasable",
- "alloc-no-stdlib",
- "alloc-stdlib",
- "anemo",
- "anemo-build",
- "anemo-cli",
- "anemo-tower",
- "anes",
- "ansi_term",
- "anstream",
- "anstyle",
- "anstyle-parse",
- "anstyle-query",
- "anstyle-wincon",
- "anyhow",
- "arbitrary",
- "arc-swap",
- "ark-bls12-381",
- "ark-bn254",
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ff",
- "ark-ff-asm",
- "ark-ff-macros",
- "ark-groth16",
- "ark-poly",
- "ark-relations",
- "ark-secp256r1",
- "ark-serialize",
- "ark-serialize-derive",
- "ark-snark",
- "ark-std",
- "arrayref",
- "arrayvec 0.5.2",
- "arrayvec 0.7.2",
- "arrow",
- "arrow-arith",
- "arrow-array",
- "arrow-buffer",
- "arrow-cast",
- "arrow-csv",
- "arrow-data",
- "arrow-ipc",
- "arrow-json",
- "arrow-ord",
- "arrow-row",
- "arrow-schema",
- "arrow-select",
- "arrow-string",
- "ascii_utils",
- "asn1-rs",
- "asn1-rs-derive",
- "asn1-rs-impl",
- "assert_cmd",
- "async-compression 0.3.15",
- "async-compression 0.4.6",
- "async-graphql",
- "async-graphql-axum",
- "async-graphql-derive",
- "async-graphql-parser",
- "async-graphql-value",
- "async-lock",
- "async-recursion",
- "async-stream",
- "async-stream-impl",
- "async-trait",
- "async_once",
- "asynchronous-codec",
- "atomic_float",
- "atomicwrites",
- "auto_impl",
- "auto_ops",
- "autocfg",
- "autotools",
- "aws-config",
- "aws-credential-types",
- "aws-http",
- "aws-runtime",
- "aws-sdk-dynamodb",
- "aws-sdk-ec2",
- "aws-sdk-s3",
- "aws-sdk-sso",
- "aws-sdk-sts",
- "aws-sigv4",
- "aws-smithy-async",
- "aws-smithy-checksums",
- "aws-smithy-client",
- "aws-smithy-eventstream",
- "aws-smithy-http",
- "aws-smithy-http-tower",
- "aws-smithy-json",
- "aws-smithy-query",
- "aws-smithy-runtime",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "aws-smithy-xml",
- "aws-types",
- "axum",
- "axum-core",
- "axum-extra",
- "axum-server",
- "backoff",
- "backtrace",
- "base-x",
- "base16ct 0.1.1",
- "base16ct 0.2.0",
- "base64 0.13.1",
- "base64 0.21.2",
- "base64-simd",
- "base64-url",
- "base64ct",
- "bcrypt-pbkdf",
- "bcs",
- "bech32",
- "beef",
- "bellpepper",
- "bellpepper-core",
- "better_any",
- "better_typeid_derive",
- "bimap",
- "bincode",
- "bindgen",
- "bip32",
- "bit-set",
- "bit-vec",
- "bitcoin-private",
- "bitcoin_hashes",
- "bitflags 1.3.2",
- "bitflags 2.4.1",
- "bitmaps",
- "bitvec 0.20.4",
- "bitvec 1.0.1",
- "blake2",
- "blake2b_simd",
- "blake2s_simd",
- "blake3",
- "block-buffer 0.10.3",
- "block-buffer 0.9.0",
- "block-padding 0.2.1",
- "block-padding 0.3.2",
- "blowfish",
- "blst",
- "blstrs",
- "brotli",
- "brotli-decompressor",
- "bs58 0.4.0",
- "bs58 0.5.0",
- "bstr",
- "bulletproofs",
- "bumpalo",
- "byte-slice-cast",
- "bytecode-interpreter-crypto",
- "bytecount",
- "bytemuck",
- "byteorder",
- "bytes",
- "bytes-utils",
- "bytes-varint",
- "cached",
- "cached_proc_macro",
- "cached_proc_macro_types",
- "camino",
- "cargo-platform",
- "cargo_metadata",
- "cassowary",
- "cast",
- "cbc",
- "cc",
- "cexpr",
- "cfg-expr",
- "cfg-if",
- "chacha20",
- "chrono",
- "ciborium",
- "ciborium-io",
- "ciborium-ll",
- "cipher",
- "clang-sys",
- "clap",
- "clap_builder",
- "clap_derive",
- "clap_lex",
- "clear_on_drop",
- "clipboard-win",
- "codespan",
- "codespan-reporting",
- "coins-bip32",
- "coins-bip39",
- "coins-core",
- "collectable",
- "color-eyre",
- "color-spantrace",
- "colorchoice",
- "colored",
- "colored-diff",
- "combine",
- "comfy-table",
- "console",
- "console-api",
- "console-subscriber",
- "const-oid",
- "const-str",
- "constant_time_eq 0.2.4",
- "constant_time_eq 0.3.0",
- "containers-api",
- "convert_case 0.4.0",
- "convert_case 0.6.0",
- "core-foundation",
- "core-foundation-sys",
- "core2",
- "cpp_demangle",
- "cpufeatures",
- "crc32c",
- "crc32fast",
- "criterion",
- "criterion-plot",
- "crossbeam-channel",
- "crossbeam-deque",
- "crossbeam-epoch",
- "crossbeam-utils",
- "crossterm 0.21.0",
- "crossterm 0.22.1",
- "crossterm 0.25.0",
- "crossterm_winapi 0.8.0",
- "crossterm_winapi 0.9.0",
- "crunchy",
- "crypto-bigint 0.4.9",
- "crypto-bigint 0.5.1",
- "crypto-common",
- "crypto-mac",
- "csv",
- "csv-core",
- "ctor",
- "ctr",
- "curve25519-dalek",
- "curve25519-dalek-derive",
- "curve25519-dalek-fiat",
- "curve25519-dalek-ng",
- "darling 0.13.4",
- "darling 0.14.2",
- "darling 0.20.3",
- "darling_core 0.13.4",
- "darling_core 0.14.2",
- "darling_core 0.20.3",
- "darling_macro 0.13.4",
- "darling_macro 0.14.2",
- "darling_macro 0.20.3",
- "dashmap",
- "data-encoding",
- "data-encoding-macro",
- "data-encoding-macro-internal",
- "datatest-stable",
- "debug-ignore",
- "debugid",
- "der 0.6.1",
- "der 0.7.5",
- "der-parser",
- "deranged",
- "derivative",
- "derive-syn-parse",
- "derive_arbitrary",
- "derive_builder",
- "derive_builder_core",
- "derive_builder_macro",
- "derive_more",
- "determinator",
- "diesel",
- "diesel-derive-enum",
- "diesel_derives",
- "diesel_migrations",
- "diesel_table_macro_syntax",
- "diff",
- "difference",
- "difflib",
- "diffus",
- "diffy",
- "digest 0.10.6",
- "digest 0.9.0",
- "dirs 4.0.0",
- "dirs 5.0.1",
- "dirs-next",
- "dirs-sys 0.3.7",
- "dirs-sys 0.4.1",
- "dirs-sys-next",
- "displaydoc",
- "dissimilar",
- "doc-comment",
- "docker-api",
- "docker-api-stubs",
- "dotenvy",
- "downcast",
- "dunce",
- "duration-str",
- "dyn-clone",
- "ec-gpu",
- "ecdsa 0.14.8",
- "ecdsa 0.16.6",
- "ed25519 1.5.3",
- "ed25519 2.2.2",
- "ed25519-consensus",
- "ed25519-dalek",
- "ed25519-dalek-fiat",
- "either",
- "elliptic-curve 0.12.3",
- "elliptic-curve 0.13.4",
- "encode_unicode 0.3.6",
- "encode_unicode 1.0.0",
- "encoding_rs",
- "endian-type",
- "enr",
- "enum-compat-util",
- "enum_dispatch",
- "equivalent",
- "errno 0.2.8",
- "errno 0.3.8",
- "error-code",
- "eth-keystore",
- "ethabi",
- "ethbloom",
- "ethereum-types",
- "ethers",
- "ethers-addressbook",
- "ethers-contract",
- "ethers-contract-abigen",
- "ethers-contract-derive",
- "ethers-core",
- "ethers-etherscan",
- "ethers-middleware",
- "ethers-providers",
- "ethers-signers",
- "ethnum",
- "event-listener",
- "expect-test",
- "eyre",
- "fast_chemail",
- "fastcrypto",
- "fastcrypto-derive",
- "fastcrypto-tbls",
- "fastcrypto-zkp",
- "fastrand 1.8.0",
- "fastrand 2.0.0",
- "fd-lock",
- "fdlimit",
- "ff 0.12.1",
- "ff 0.13.0",
- "ff_derive",
- "field_names",
- "filetime",
- "findshlibs",
- "fixed-hash 0.7.0",
- "fixed-hash 0.8.0",
- "fixedbitset 0.2.0",
- "fixedbitset 0.4.2",
- "flatbuffers",
- "flate2",
- "float-cmp",
- "fnv",
- "form_urlencoded",
- "fragile",
- "fs_extra",
- "fsevent-sys",
- "funty 1.1.0",
- "funty 2.0.0",
- "futures",
- "futures-channel",
- "futures-core",
- "futures-executor",
- "futures-io",
- "futures-lite",
- "futures-locks",
- "futures-macro",
- "futures-sink",
- "futures-task",
- "futures-timer",
- "futures-util",
- "fxhash",
- "gcp-bigquery-client",
- "generic-array",
- "getrandom 0.1.16",
- "getrandom 0.2.9",
- "gettid",
- "ghash",
- "gimli",
- "git-version",
- "git-version-macro",
- "glob",
- "globset",
- "gloo-timers",
- "governor",
- "group 0.12.1",
- "group 0.13.0",
- "guppy",
- "guppy-summaries",
- "guppy-workspace-hack",
- "h2",
- "hakari",
- "half 1.8.2",
- "half 2.3.1",
- "handlebars",
- "hashbrown 0.12.3",
- "hashbrown 0.13.2",
- "hashbrown 0.14.1",
- "hashers",
- "hdrhistogram",
- "headers",
- "headers-core",
- "heck",
- "hex",
- "hex-literal 0.3.4",
- "hex-literal 0.4.1",
- "hkdf",
- "hmac 0.11.0",
- "hmac 0.12.1",
- "hmac-sha512",
- "home",
- "http",
- "http-body",
- "http-range-header",
- "httparse",
- "httpdate",
- "humantime",
- "hyper",
- "hyper-rustls 0.23.2",
- "hyper-rustls 0.24.0",
- "hyper-timeout",
- "hyperlocal",
- "iana-time-zone",
- "ident_case",
- "idna",
- "if_chain",
- "im",
- "impl-codec 0.5.1",
- "impl-codec 0.6.0",
- "impl-rlp",
- "impl-serde 0.3.2",
- "impl-serde 0.4.0",
- "impl-trait-for-tuples",
- "include_dir",
- "include_dir_macros",
- "indenter",
- "indexmap 1.9.3",
- "indexmap 2.1.0",
- "indicatif",
- "inotify",
- "inotify-sys",
- "inout",
- "inquire",
- "insta",
- "instant",
- "integer-encoding",
- "internment",
- "io-lifetimes",
- "ipnet",
- "ipnetwork",
- "iri-string",
- "is-terminal",
- "itertools 0.10.5",
- "itertools 0.11.0",
- "itoa",
- "jemalloc-ctl",
- "jemalloc-sys",
- "jobserver",
- "js-sys",
- "json_to_table",
- "jsonpath_lib",
- "jsonrpsee",
- "jsonrpsee-client-transport",
- "jsonrpsee-core",
- "jsonrpsee-http-client",
- "jsonrpsee-proc-macros",
- "jsonrpsee-server",
- "jsonrpsee-types",
- "jsonrpsee-ws-client",
- "k256 0.11.6",
- "k256 0.13.1",
- "keccak",
- "lazy_static",
- "lazycell",
- "leb128",
- "lexical-core",
- "lexical-parse-float",
- "lexical-parse-integer",
- "lexical-util",
- "lexical-write-float",
- "lexical-write-integer",
- "libc",
- "libloading",
- "libm",
- "libtest-mimic",
- "libz-sys",
- "linked-hash-map",
- "linux-raw-sys 0.1.4",
- "linux-raw-sys 0.3.1",
- "linux-raw-sys 0.4.12",
- "lock_api",
- "log",
- "lru 0.10.0",
- "lru 0.7.8",
- "lz4-sys",
- "lz4_flex",
- "mach2",
- "maplit",
- "markdown-gen",
- "match_opt",
- "matchers",
- "matchit 0.5.0",
- "matchit 0.7.0",
- "md-5 0.10.5",
- "md-5 0.9.1",
- "md5",
- "memchr",
- "memmap2 0.5.8",
- "memmap2 0.7.1",
- "memoffset 0.6.5",
- "memoffset 0.7.1",
- "merlin",
- "migrations_internals",
- "migrations_macros",
- "mime",
- "mime_guess",
- "minibytes",
- "minimal-lexical",
- "miniz_oxide 0.6.2",
- "miniz_oxide 0.7.1",
- "mio 0.7.14",
- "mio 0.8.5",
- "mockall",
- "mockall_derive",
- "more-asserts",
- "move-abstract-stack",
- "move-binary-format",
- "move-borrow-graph",
- "move-bytecode-source-map",
- "move-bytecode-utils",
- "move-bytecode-verifier",
- "move-bytecode-verifier-v0",
- "move-bytecode-verifier-v1",
- "move-bytecode-viewer",
- "move-cli",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-coverage",
- "move-disassembler",
- "move-docgen",
- "move-errmapgen",
- "move-ir-compiler",
- "move-ir-to-bytecode",
- "move-ir-to-bytecode-syntax",
- "move-ir-types",
- "move-model",
- "move-package",
- "move-proc-macros",
- "move-prover",
- "move-read-write-set-types",
- "move-stackless-bytecode",
- "move-stackless-bytecode-interpreter",
- "move-stdlib",
- "move-stdlib-v0",
- "move-stdlib-v1",
- "move-symbol-pool",
- "move-transactional-test-runner",
- "move-unit-test",
- "multer",
- "multiaddr",
- "multibase",
- "multihash",
- "multihash-derive",
- "multimap",
- "mysticeti-core",
- "named-lock",
- "neptune",
- "nested",
- "newline-converter",
- "nexlint",
- "nexlint-lints",
- "nibble_vec",
- "nix 0.23.2",
- "nix 0.24.3",
- "no-std-compat",
- "nom",
- "nonempty",
- "nonzero_ext",
- "normalize-line-endings",
- "notify",
- "ntapi 0.4.0",
- "ntest",
- "ntest_test_cases",
- "ntest_timeout",
- "nu-ansi-term",
- "num",
- "num-bigint 0.3.3",
- "num-bigint 0.4.4",
- "num-bigint-dig",
- "num-complex",
- "num-integer",
- "num-iter",
- "num-rational",
- "num-traits",
- "num_cpus",
- "num_enum 0.5.11",
- "num_enum 0.6.1",
- "num_enum_derive 0.5.11",
- "num_enum_derive 0.6.1",
- "num_threads",
- "number_prefix",
- "object",
- "oid-registry",
- "once_cell",
- "oorandom",
- "opaque-debug",
- "open-fastrlp",
- "open-fastrlp-derive",
- "openssl-probe",
- "opentelemetry 0.19.0",
- "opentelemetry 0.20.0",
- "opentelemetry-otlp",
- "opentelemetry-proto",
- "opentelemetry-semantic-conventions",
- "opentelemetry_api 0.19.0",
- "opentelemetry_api 0.20.0",
- "opentelemetry_sdk 0.19.0",
- "opentelemetry_sdk 0.20.0",
- "option-ext",
- "ordered-float 2.10.1",
- "ordered-float 3.9.1",
- "ouroboros",
- "ouroboros_macro",
- "output_vt100",
- "outref",
- "overload",
- "owo-colors",
- "p256",
- "pairing",
- "papergrid",
- "parity-scale-codec 2.3.1",
- "parity-scale-codec 3.6.5",
- "parity-scale-codec-derive 2.3.1",
- "parity-scale-codec-derive 3.6.5",
- "parking",
- "parking_lot 0.11.2",
- "parking_lot 0.12.1",
- "parking_lot_core 0.8.6",
- "parking_lot_core 0.9.5",
- "parquet",
- "password-hash",
- "pasta_curves",
- "paste",
- "pathdiff",
- "pbkdf2 0.11.0",
- "pbkdf2 0.12.1",
- "peeking_take_while",
- "pem",
- "pem-rfc7468 0.6.0",
- "pem-rfc7468 0.7.0",
- "percent-encoding",
- "pest",
- "pest_derive",
- "pest_generator",
- "pest_meta",
- "petgraph 0.5.1",
- "petgraph 0.6.2",
- "phf",
- "phf_generator",
- "phf_macros",
- "phf_shared",
- "pin-project",
- "pin-project-internal",
- "pin-project-lite",
- "pin-utils",
- "pkcs1",
- "pkcs8 0.10.2",
- "pkcs8 0.9.0",
- "pkg-config",
- "platforms",
- "plotters",
- "plotters-backend",
- "plotters-svg",
- "poly1305",
- "polyval",
- "portable-atomic",
- "powerfmt",
- "pprof",
- "ppv-lite86",
- "pq-sys",
- "predicates",
- "predicates-core",
- "predicates-tree",
- "pretty_assertions",
- "prettyplease 0.1.25",
- "prettyplease 0.2.6",
- "prettytable-rs",
- "primeorder",
- "primitive-types 0.10.1",
- "primitive-types 0.12.2",
- "proc-macro-crate",
- "proc-macro-error",
- "proc-macro-error-attr",
- "proc-macro-hack",
- "proc-macro2 0.4.30",
- "proc-macro2 1.0.66",
- "prometheus",
- "prometheus-http-query",
- "prometheus-parse",
- "proptest",
- "proptest-derive",
- "prost 0.11.9",
- "prost 0.12.1",
- "prost-build",
- "prost-derive 0.11.9",
- "prost-derive 0.12.1",
- "prost-types",
- "protobuf",
- "protobuf-src",
- "psm",
- "quanta",
- "quick-error 1.2.3",
- "quick-error 2.0.1",
- "quinn",
- "quinn-proto",
- "quinn-udp",
- "quote 0.6.13",
- "quote 1.0.33",
- "r2d2",
- "radium 0.6.2",
- "radium 0.7.0",
- "radix_trie",
- "rand 0.7.3",
- "rand 0.8.5",
- "rand_chacha 0.2.2",
- "rand_chacha 0.3.1",
- "rand_core 0.5.1",
- "rand_core 0.6.4",
- "rand_xorshift",
- "rand_xoshiro",
- "raw-cpuid",
- "rayon",
- "rayon-core",
- "rcgen",
- "readonly",
- "ref-cast",
- "ref-cast-impl",
- "regex",
- "regex-automata",
- "regex-syntax 0.6.28",
- "regex-syntax 0.7.2",
- "regex-syntax 0.8.2",
- "reqwest",
- "reqwest-middleware",
- "reqwest-retry",
- "retain_mut",
- "retry-policies",
- "rfc6979 0.3.1",
- "rfc6979 0.4.0",
- "ring 0.16.20",
- "ripemd",
- "rlp",
- "rlp-derive",
- "roaring",
- "ron",
- "rsa",
- "rstest",
- "rstest_macros",
- "rusoto_core",
- "rusoto_credential",
- "rusoto_kms",
- "rusoto_signature",
- "russh",
- "russh-cryptovec",
- "russh-keys",
- "rust_decimal",
- "rustc-demangle",
- "rustc-hash",
- "rustc-hex",
- "rustc_version",
- "rusticata-macros",
- "rustix 0.36.6",
- "rustix 0.37.7",
- "rustix 0.38.28",
- "rustls 0.20.7",
- "rustls 0.21.6",
- "rustls-native-certs",
- "rustls-pemfile",
- "rustls-webpki",
- "rustversion",
- "rusty-fork",
- "rustyline",
- "rustyline-derive",
- "ryu",
- "salsa20",
- "same-file",
- "scale-info",
- "scale-info-derive",
- "schannel",
- "scheduled-thread-pool",
- "schemars",
- "schemars_derive",
- "scopeguard",
- "scrypt",
- "sct",
- "seahash",
- "sec1 0.3.0",
- "sec1 0.7.1",
- "secp256k1",
- "secp256k1-sys",
- "security-framework",
- "security-framework-sys",
- "semver 0.11.0",
- "semver 1.0.16",
- "semver-parser",
- "send_wrapper 0.4.0",
- "seq-macro",
- "serde",
- "serde-name",
- "serde-reflection",
- "serde_bytes",
- "serde_derive",
- "serde_derive_internals",
- "serde_json",
- "serde_path_to_error",
- "serde_repr",
- "serde_spanned",
- "serde_test",
- "serde_urlencoded",
- "serde_with",
- "serde_with_macros",
- "serde_yaml 0.8.26",
- "serde_yaml 0.9.21",
- "serial_test",
- "serial_test_derive",
- "sha-1 0.10.1",
- "sha-1 0.9.8",
- "sha1",
- "sha2 0.10.6",
- "sha2 0.9.9",
- "sha3 0.10.6",
- "sha3 0.9.1",
- "sharded-slab",
- "shell-words",
- "shellexpand",
- "shlex",
- "signal-hook",
- "signal-hook-mio",
- "signal-hook-registry",
- "signature 1.6.4",
- "signature 2.0.0",
- "similar",
- "simplelog",
- "siphasher",
- "sized-chunks",
- "slab",
- "slip10_ed25519",
- "smallvec",
- "snap",
- "snowflake-api",
- "socket2 0.4.9",
- "socket2 0.5.2",
- "soketto",
- "spin 0.5.2",
- "spin 0.9.8",
- "spinners",
- "spki 0.6.0",
- "spki 0.7.1",
- "stable_deref_trait",
- "stacker",
- "static_assertions",
- "str-buf",
- "strip-ansi-escapes",
- "strsim",
- "strum 0.24.1",
- "strum 0.25.0",
- "strum_macros 0.24.3",
- "strum_macros 0.25.2",
- "subprocess",
- "subtle",
- "subtle-ng",
- "symbolic-common",
- "symbolic-demangle",
- "syn 0.15.44",
- "syn 1.0.107",
- "syn 2.0.32",
- "sync_wrapper",
- "synstructure",
- "sysinfo",
- "tabled",
- "tabled_derive",
- "tabular",
- "tap",
- "tar",
- "target-lexicon",
- "target-spec",
- "task-local-extensions",
- "tempfile",
- "term",
- "termcolor",
- "terminal_size",
- "termtree",
- "test-fuzz",
- "test-fuzz-internal",
- "test-fuzz-macro",
- "test-fuzz-runtime",
- "thiserror",
- "thiserror-impl",
- "thread_local",
- "threadpool",
- "thrift",
- "time",
- "time-core",
- "time-macros",
- "tiny-bip39",
- "tiny-keccak",
- "tinytemplate",
- "tinyvec",
- "tinyvec_macros",
- "tokio",
- "tokio-io-timeout",
- "tokio-macros 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio-retry",
- "tokio-rustls 0.23.4",
- "tokio-rustls 0.24.0",
- "tokio-stream",
- "tokio-tungstenite",
- "tokio-util 0.7.4",
- "toml 0.5.10",
- "toml 0.7.4",
- "toml_datetime 0.5.1",
- "toml_datetime 0.6.2",
- "toml_edit 0.14.4",
- "toml_edit 0.15.0",
- "toml_edit 0.19.10",
- "tonic 0.10.0",
- "tonic 0.9.2",
- "tonic-build",
- "tonic-health",
- "toolchain_find",
- "tower",
- "tower-http",
- "tower-layer",
- "tower-service",
- "tracing",
- "tracing-appender",
- "tracing-attributes",
- "tracing-core",
- "tracing-error",
- "tracing-futures",
- "tracing-log",
- "tracing-opentelemetry",
- "tracing-serde",
- "tracing-subscriber",
- "trait-set",
- "treeline",
- "try-lock",
- "ttl_cache",
- "tui",
- "tungstenite",
- "twox-hash",
- "typenum",
- "ucd-trie",
- "uint",
- "unarray",
- "unescape",
- "unicase",
- "unicode-bidi",
- "unicode-ident",
- "unicode-normalization",
- "unicode-segmentation",
- "unicode-width",
- "unicode-xid 0.1.0",
- "unicode-xid 0.2.4",
- "universal-hash",
- "unsafe-libyaml",
- "unsigned-varint",
- "untrusted 0.7.1",
- "unzip-n",
- "ureq",
- "url",
- "urlencoding",
- "utf-8",
- "utf8parse",
- "uuid 0.8.2",
- "uuid 1.2.2",
- "variant_count",
- "vcpkg",
- "version_check",
- "versions",
- "vsimd",
- "vte",
- "vte_generate_state_changes",
- "wait-timeout",
- "waker-fn",
- "walkdir",
- "want",
- "wasm-bindgen",
- "wasm-bindgen-backend",
- "wasm-bindgen-macro",
- "wasm-bindgen-macro-support",
- "wasm-bindgen-shared",
- "webpki",
- "webpki-roots 0.22.6",
- "webpki-roots 0.25.2",
- "which",
- "whoami",
- "widestring",
- "winapi",
- "winapi-util",
- "windows-sys 0.42.0",
- "windows-sys 0.48.0",
- "windows-targets 0.48.0",
- "windows_x86_64_msvc 0.42.2",
- "windows_x86_64_msvc 0.48.0",
- "winnow",
- "winreg",
- "wyz 0.2.0",
- "wyz 0.5.1",
- "x509-parser",
- "xattr",
- "xml-rs",
- "xmlparser",
- "yaml-rust",
- "yansi",
- "yasna",
- "yup-oauth2",
- "zeroize",
- "zeroize_derive",
- "zstd 0.12.3+zstd.1.5.2",
- "zstd 0.13.0",
- "zstd-safe 6.0.5+zstd.1.5.4",
- "zstd-safe 7.0.0",
- "zstd-sys",
 ]
 
 [[package]]

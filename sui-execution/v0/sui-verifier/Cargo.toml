@@ -18,4 +18,3 @@ move-bytecode-verifier = { path = "../../../external-crates/move/move-execution/
 
 sui-types.workspace = true
 sui-protocol-config.workspace = true
-workspace-hack.workspace = true

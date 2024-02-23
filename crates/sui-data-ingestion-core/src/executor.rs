@@ -79,11 +79,7 @@ impl<P: ProgressStore> IndexerExecutor<P> {
         }
         loop {
             tokio::select! {
-                Some(checkpoint) = checkpoint_recv.recv() => {
-                    for sender in &self.pool_senders {
-                        sender.send(checkpoint.clone()).await?;
-                    }
-                }
+                _ = &mut exit_receiver => break,
                 Some((task_name, sequence_number)) = self.pool_progress_receiver.recv() => {
                     self.progress_store.save(task_name.clone(), sequence_number).await?;
                     let seq_number = self.progress_store.min_watermark()?;
@@ -93,7 +89,11 @@ impl<P: ProgressStore> IndexerExecutor<P> {
                     }
                     self.metrics.data_ingestion_checkpoint.with_label_values(&[&task_name]).set(sequence_number as i64);
                 }
-                _ = &mut exit_receiver => break,
+                Some(checkpoint) = checkpoint_recv.recv() => {
+                    for sender in &self.pool_senders {
+                        sender.send(checkpoint.clone()).await?;
+                    }
+                }
             }
         }
         Ok(self.progress_store.stats())

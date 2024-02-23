@@ -39,7 +39,7 @@ use std::{
     sync::Arc,
     vec,
 };
-use sui_config::node::{OverloadThresholdConfig, StateDebugDumpConfig};
+use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
 use sui_types::type_resolver::LayoutResolver;
 use tap::{TapFallible, TapOptional};
@@ -748,7 +748,7 @@ pub struct AuthorityState {
     debug_dump_config: StateDebugDumpConfig,
 
     /// Config for when we consider the node overloaded.
-    overload_threshold_config: OverloadThresholdConfig,
+    authority_overload_config: AuthorityOverloadConfig,
 
     /// Current overload status in this authority. Updated periodically.
     pub overload_info: AuthorityOverloadInfo,
@@ -778,7 +778,7 @@ impl AuthorityState {
     }
 
     pub fn max_txn_age_in_queue(&self) -> Duration {
-        self.overload_threshold_config.max_txn_age_in_queue
+        self.authority_overload_config.max_txn_age_in_queue
     }
 
     pub fn get_epoch_state_commitments(
@@ -935,12 +935,12 @@ impl AuthorityState {
     }
 
     pub fn check_system_overload_at_signing(&self) -> bool {
-        self.overload_threshold_config
+        self.authority_overload_config
             .check_system_overload_at_signing
     }
 
     pub fn check_system_overload_at_execution(&self) -> bool {
-        self.overload_threshold_config
+        self.authority_overload_config
             .check_system_overload_at_execution
     }
 
@@ -1207,6 +1207,13 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let digest = *certificate.digest();
+
+        fail_point_if!("correlated-crash-process-certificate", || {
+            if sui_simulator::random::deterministic_probabilty_once(&digest, 0.01) {
+                sui_simulator::task::kill_current_node(None);
+            }
+        });
+
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
         if let Some(effects) = self.execution_cache.get_executed_effects(&digest)? {
@@ -2494,7 +2501,7 @@ impl AuthorityState {
         certificate_deny_config: CertificateDenyConfig,
         indirect_objects_threshold: usize,
         debug_dump_config: StateDebugDumpConfig,
-        overload_threshold_config: OverloadThresholdConfig,
+        authority_overload_config: AuthorityOverloadConfig,
         archive_readers: ArchiveReaderBalancer,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
@@ -2547,7 +2554,7 @@ impl AuthorityState {
             transaction_deny_config,
             certificate_deny_config,
             debug_dump_config,
-            overload_threshold_config: overload_threshold_config.clone(),
+            authority_overload_config: authority_overload_config.clone(),
             overload_info: AuthorityOverloadInfo::default(),
         });
 
@@ -2560,9 +2567,9 @@ impl AuthorityState {
         ));
 
         // Don't start the overload monitor when max_load_shedding_percentage is 0.
-        if overload_threshold_config.max_load_shedding_percentage > 0 {
+        if authority_overload_config.max_load_shedding_percentage > 0 {
             let authority_state = Arc::downgrade(&state);
-            spawn_monitored_task!(overload_monitor(authority_state, overload_threshold_config));
+            spawn_monitored_task!(overload_monitor(authority_state, authority_overload_config));
         }
 
         // TODO: This doesn't belong to the constructor of AuthorityState.
@@ -2656,17 +2663,6 @@ impl AuthorityState {
             .enqueue_certificates(certs, epoch_store)
     }
 
-    // NB: This must only be called at time of reconfiguration. We take the execution lock write
-    // guard as an argument to ensure that this is the case.
-    fn clear_object_per_epoch_marker_table(
-        &self,
-        execution_guard: &ExecutionLockWriteGuard<'_>,
-    ) -> SuiResult<()> {
-        self.execution_cache
-            .clear_object_per_epoch_marker_table(execution_guard);
-        Ok(())
-    }
-
     fn create_owner_index_if_empty(
         &self,
         genesis_objects: &[Object],
@@ -2756,8 +2752,12 @@ impl AuthorityState {
 
         self.committee_store.insert_new_committee(&new_committee)?;
         let mut execution_lock = self.execution_lock_for_reconfiguration().await;
+        // TODO: revert_uncommitted_epoch_transactions will soon be unnecessary -
+        // clear_state_end_of_epoch() can simply drop all uncommitted transactions
         self.revert_uncommitted_epoch_transactions(cur_epoch_store)
             .await?;
+        self.execution_cache
+            .clear_state_end_of_epoch(&execution_lock);
         self.check_system_consistency(
             cur_epoch_store,
             checkpoint_executor,
@@ -2770,7 +2770,6 @@ impl AuthorityState {
                 .epoch_start_state()
                 .protocol_version(),
         );
-        self.clear_object_per_epoch_marker_table(&execution_lock)?;
         self.execution_cache
             .set_epoch_start_configuration(&epoch_start_configuration)?;
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {

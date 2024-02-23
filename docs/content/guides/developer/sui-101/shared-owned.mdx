@@ -131,7 +131,7 @@ public fun create<T: key + store>(
         sender: tx_context::sender(ctx),
         recipient,
         exchange_key,
-        escrowed: option::some(escrowed),
+        escrowed,
     };
 
     transfer::public_share_object(escrow);
@@ -142,27 +142,33 @@ This time the swap request is a shared object, and accepts the object being escr
 
 ```move
 public fun swap<T: key + store, U: key + store>(
-    escrow: &mut Escrow<T>,
+    escrow: Escrow<T>,
     key: Key,
     locked: Locked<U>,
     ctx: &TxContext,
 ): T {
-    assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrReturned);
-    assert!(escrow.recipient == tx_context::sender(ctx), EMismatchedSenderRecipient);
-    assert!(escrow.exchange_key == object::id(&key), EMismatchedExchangeObject);
+    let Escrow {
+        id,
+        sender,
+        recipient,
+        exchange_key,
+        escrowed,
+    } = escrow;
 
-    let escrowed1 = option::extract<T>(&mut escrow.escrowed);
-    let escrowed2 = lock::unlock(locked, key);
+    assert!(recipient == tx_context::sender(ctx), EMismatchedSenderRecipient);
+    assert!(exchange_key == object::id(&key), EMismatchedExchangeObject);
 
     // Do the actual swap
-    transfer::public_transfer(escrowed2, escrow.sender);
-    escrowed1
+    transfer::public_transfer(lock::unlock(locked, key), sender);
+    object::delete(id);
+
+    escrowed
 }
 ```
 
 Even though the `Escrow` request is a shared object that is accessible by anyone, the Move interface ensures that only the original sender and the intended recipient can successfully interact with it. `swap` checks that the locked object matches the object that was requested when the `Escrow` was created (again, by comparing key IDs) and assumes that the intended recipient wants the escrowed object (if they did not, they would not have called `swap`).
 
-Assuming all checks pass, the object held in `Escrow` is extracted and returned to the first party, leaving the shared request object empty (but still existing).  The locked object offered by the first party is also unlocked and sent to the second party, completing the swap.
+Assuming all checks pass, the object held in `Escrow` is extracted, its wrapper is deleted and it is returned to the first party.  The locked object offered by the first party is also unlocked and sent to the second party, completing the swap.
 
 ### Comparison
 
@@ -170,4 +176,4 @@ This topic explores two ways to implement a swap between two objects.  In both c
 
 In one case, the protocol uses only owned objects but requires a custodian to act as an intermediary. This has the advantage of avoiding the costs and latencies of consensus altogether, but involves more steps and requires trusting a third party for liveness.
 
-In the other case, the object is custodied on chain in a shared object.  This requires consensus, and leaves a shared object on chain at the end of the swap (consuming gas in the form of irretrievable storage rebate), but involves fewer steps, and no third party.
+In the other case, the object is custodied on chain in a shared object.  This requires consensus but involves fewer steps, and no third party.

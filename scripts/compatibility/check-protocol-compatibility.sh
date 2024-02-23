@@ -24,10 +24,10 @@ case "$NETWORK" in
     URL="https://$API_USER:$API_KEY@gateway.mimir.sui.io/prometheus/api/v1/query"
     ;;
   testnet)
-    URL="http://$API_USER:$API_KEY@metrics-gw.testnet.sui.io/prometheus/api/v1/query"
+    URL="http://$API_USER:$API_KEY@metrics-gw-2.testnet.sui.io/prometheus/api/v1/query"
     ;;
   mainnet)
-    URL="https://$API_USER:$API_KEY@metrics-gw.mainnet.sui.io/prometheus/api/v1/query"
+    URL="https://$API_USER:$API_KEY@metrics-gw-2.mainnet.sui.io/prometheus/api/v1/query"
     ;;
 esac
 

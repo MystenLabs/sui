@@ -67,7 +67,6 @@ telemetry-subscribers.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
 csv.workspace = true
-workspace-hack.workspace = true
 move-vm-profiler.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]

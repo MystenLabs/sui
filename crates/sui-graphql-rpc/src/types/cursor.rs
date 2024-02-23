@@ -328,18 +328,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         T: Send + RawPaginated<C> + FromSqlRow<Untyped, DieselBackend> + 'static,
     {
         let new_query = move || {
-            let mut query = query.clone();
-            if let Some(after) = self.after() {
-                query = T::filter_ge(after, query);
-            }
-
-            if let Some(before) = self.before() {
-                query = T::filter_le(before, query);
-            }
-
-            query = T::order(self.is_from_front(), query);
-
-            query = query.limit(self.limit() as i64 + 2);
+            let query = self.apply::<T>(query.clone());
             query.into_boxed()
         };
 
@@ -444,6 +433,23 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         }
 
         (prev, next, results)
+    }
+
+    pub(crate) fn apply<T>(&self, mut query: RawQuery) -> RawQuery
+    where
+        T: RawPaginated<C>,
+    {
+        if let Some(after) = self.after() {
+            query = T::filter_ge(after, query);
+        }
+
+        if let Some(before) = self.before() {
+            query = T::filter_le(before, query);
+        }
+
+        query = T::order(self.is_from_front(), query);
+
+        query.limit(self.limit() as i64 + 2)
     }
 }
 

@@ -7,6 +7,7 @@ use crate::core_thread::CoreThreadDispatcher;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::oneshot::{Receiver, Sender};
+use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep_until, Instant};
 use tracing::{debug, warn};
@@ -24,23 +25,23 @@ impl LeaderTimeoutTaskHandle {
 }
 
 pub(crate) struct LeaderTimeoutTask<D: CoreThreadDispatcher> {
-    dispatcher: D,
-    signals_receivers: CoreSignalsReceivers,
+    dispatcher: Arc<D>,
+    new_round_receiver: watch::Receiver<Round>,
     leader_timeout: Duration,
     stop: Receiver<()>,
 }
 
 impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
     pub fn start(
-        dispatcher: D,
-        signals_receivers: CoreSignalsReceivers,
+        dispatcher: Arc<D>,
+        signals_receivers: &CoreSignalsReceivers,
         context: Arc<Context>,
     ) -> LeaderTimeoutTaskHandle {
         let (stop_sender, stop) = tokio::sync::oneshot::channel();
         let mut me = Self {
             dispatcher,
             stop,
-            signals_receivers,
+            new_round_receiver: signals_receivers.new_round_receiver(),
             leader_timeout: context.parameters.leader_timeout,
         };
         let handle = tokio::spawn(async move { me.run().await });
@@ -52,7 +53,7 @@ impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
     }
 
     async fn run(&mut self) {
-        let mut new_round = self.signals_receivers.new_round_receiver();
+        let new_round = &mut self.new_round_receiver;
         let mut leader_round: Round = *new_round.borrow_and_update();
         let mut leader_round_timed_out = false;
         let timer_start = Instant::now();
@@ -95,7 +96,7 @@ impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::BTreeSet;
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -128,7 +129,7 @@ mod tests {
         async fn add_blocks(
             &self,
             _blocks: Vec<VerifiedBlock>,
-        ) -> Result<Vec<BlockRef>, CoreError> {
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
             todo!()
         }
 
@@ -139,30 +140,30 @@ mod tests {
             Ok(())
         }
 
-        async fn get_missing_blocks(&self) -> Result<Vec<HashSet<BlockRef>>, CoreError> {
+        async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
             todo!()
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn basic_leader_timeout() {
         let (context, _signers) = Context::new_for_test(4);
-        let dispatcher = MockCoreThreadDispatcher::default();
+        let dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let leader_timeout = Duration::from_millis(500);
         let parameters = Parameters {
             leader_timeout,
             ..Default::default()
         };
         let context = Arc::new(context.with_parameters(parameters));
-        let now = Instant::now();
+        let start = Instant::now();
 
         let (mut signals, signal_receivers) = CoreSignals::new();
 
         // spawn the task
-        let _handle = LeaderTimeoutTask::start(dispatcher.clone(), signal_receivers, context);
+        let _handle = LeaderTimeoutTask::start(dispatcher.clone(), &signal_receivers, context);
 
         // send a signal that a new round has been produced.
-        signals.new_round(10);
+        signals.new_round(10).unwrap();
 
         // wait enough until a force_new_block has been received
         sleep(2 * leader_timeout).await;
@@ -172,7 +173,12 @@ mod tests {
 
         let (round, timestamp) = all_calls[0];
         assert_eq!(round, 10);
-        assert!(leader_timeout < timestamp - now);
+        assert!(
+            leader_timeout <= timestamp - start,
+            "Leader timeout setting {:?} should be less than actual time difference {:?}",
+            leader_timeout,
+            timestamp - start
+        );
 
         // now wait another 2 * leader_timeout, no other call should be received
         sleep(2 * leader_timeout).await;
@@ -181,10 +187,10 @@ mod tests {
         assert_eq!(all_calls.len(), 0);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn multiple_leader_timeouts() {
         let (context, _signers) = Context::new_for_test(4);
-        let dispatcher = MockCoreThreadDispatcher::default();
+        let dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let leader_timeout = Duration::from_millis(500);
         let parameters = Parameters {
             leader_timeout,
@@ -196,15 +202,15 @@ mod tests {
         let (mut signals, signal_receivers) = CoreSignals::new();
 
         // spawn the task
-        let _handle = LeaderTimeoutTask::start(dispatcher.clone(), signal_receivers, context);
+        let _handle = LeaderTimeoutTask::start(dispatcher.clone(), &signal_receivers, context);
 
         // now send some signals with some small delay between them, but not enough so every round
         // manages to timeout and call the force new block method.
-        signals.new_round(13);
+        signals.new_round(13).unwrap();
         sleep(leader_timeout / 2).await;
-        signals.new_round(14);
+        signals.new_round(14).unwrap();
         sleep(leader_timeout / 2).await;
-        signals.new_round(15);
+        signals.new_round(15).unwrap();
         sleep(2 * leader_timeout).await;
 
         // only the last one should be received

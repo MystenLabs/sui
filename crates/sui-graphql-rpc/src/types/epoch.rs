@@ -17,8 +17,8 @@ use async_graphql::connection::Connection;
 use async_graphql::*;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use fastcrypto::encoding::{Base58, Encoding};
-use sui_indexer::models_v2::epoch::QueryableEpochInfo;
-use sui_indexer::schema_v2::epochs;
+use sui_indexer::models::epoch::QueryableEpochInfo;
+use sui_indexer::schema::epochs;
 use sui_types::messages_checkpoint::CheckpointCommitment as EpochCommitment;
 
 pub(crate) struct Epoch {

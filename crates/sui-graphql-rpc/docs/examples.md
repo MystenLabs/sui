@@ -587,12 +587,12 @@
 
 ### <a id=458748></a>
 ### With Tx Block Connection
-####  Fetch the first 20 transactions after 885733467 (encoded as a
+####  Fetch the first 20 transactions after tx 231220153 (encoded as a
 ####  cursor) in epoch 97.
 
 ><pre>{
 >  epoch(id: 97) {
->    transactionBlocks(first: 20, after:"eyJjIjoyMjgwMDY5MiwidCI6ODg1NzMzNDY3fQ") {
+>    transactionBlocks(first: 20, after:"eyJjIjoyNjkzMzc3OCwidCI6MjMxMjIwMTUzLCJ0YyI6ODAxMDg4NH0") {
 >      pageInfo {
 >        hasNextPage
 >        endCursor
@@ -623,12 +623,10 @@
 
 ### <a id=458749></a>
 ### With Tx Block Connection Latest Epoch
-####  the last checkpoint of epoch 97 is 8097645, and the last transaction
-####  number of the checkpoint is 261225985.
 
 ><pre>{
 >  epoch {
->    transactionBlocks(first: 20, after: "eyJjIjo4MDk3NjQ1LCJ0IjoyNjEyMjU5ODV9") {
+>    transactionBlocks(first: 20, after: "eyJjIjoyNjkzMzMyNCwidCI6MTEwMTYxMDQ4MywidGMiOjI2ODUxMjQ4fQ") {
 >      pageInfo {
 >        hasNextPage
 >        endCursor

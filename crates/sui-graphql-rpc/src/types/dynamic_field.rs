@@ -4,8 +4,8 @@
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use move_core_types::annotated_value::{self as A, MoveStruct};
-use sui_indexer::models_v2::objects::StoredHistoryObject;
-use sui_indexer::types_v2::{ObjectStatus, OwnerType};
+use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::types::{ObjectStatus, OwnerType};
 use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
 
@@ -345,7 +345,7 @@ fn dynamic_fields_query(
 
     // Combine the two queries, and select the most recent version of each object.
     let candidates = query!(
-        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ({})) o"#,
+        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ALL ({})) o"#,
         snapshot_objs,
         history_objs
     )

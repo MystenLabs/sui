@@ -2,8 +2,8 @@
 # see https://diesel.rs/guides/configuring-diesel-cli
 
 [print_schema]
-file = "src/schema_v2.rs"
-patch_file = "src/schema_v2.patch"
+file = "src/schema.rs"
+patch_file = "src/schema.patch"
 
 [migrations_directory]
-dir = "migrations_v2"
+dir = "migrations"

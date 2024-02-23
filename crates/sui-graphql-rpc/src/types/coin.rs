@@ -25,8 +25,8 @@ use super::type_filter::ExactTypeFilter;
 use async_graphql::*;
 
 use async_graphql::connection::{Connection, CursorType, Edge};
-use sui_indexer::models_v2::objects::StoredHistoryObject;
-use sui_indexer::types_v2::OwnerType;
+use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::types::OwnerType;
 use sui_types::coin::Coin as NativeCoin;
 use sui_types::TypeTag;
 
@@ -315,7 +315,7 @@ impl Coin {
                 let result = page.paginate_raw_query::<StoredHistoryObject>(
                     conn,
                     rhs,
-                    coins_query(coin_type, owner, lhs as i64, rhs as i64),
+                    coins_query(coin_type, owner, lhs as i64, rhs as i64, &page),
                 )?;
 
                 Ok(Some((result, rhs)))
@@ -371,8 +371,17 @@ impl TryFrom<&MoveObject> for Coin {
     }
 }
 
-fn coins_query(coin_type: TypeTag, owner: Option<SuiAddress>, lhs: i64, rhs: i64) -> RawQuery {
-    build_objects_query(View::Consistent, lhs, rhs, move |query| {
+/// Constructs a raw query to fetch objects from the database. Since there are no point lookups for
+/// the coin query, objects are filtered out if they satisfy the criteria but have a later version
+/// in the same checkpoint.
+fn coins_query(
+    coin_type: TypeTag,
+    owner: Option<SuiAddress>,
+    lhs: i64,
+    rhs: i64,
+    page: &Page<object::Cursor>,
+) -> RawQuery {
+    build_objects_query(View::Consistent, lhs, rhs, page, move |query| {
         apply_filter(query, &coin_type, owner)
     })
 }
