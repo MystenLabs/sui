@@ -382,7 +382,6 @@ pub fn export_schema() -> String {
     schema_builder().finish().sdl()
 }
 
-#[axum::debug_handler]
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
