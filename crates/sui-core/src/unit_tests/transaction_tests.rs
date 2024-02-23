@@ -1075,21 +1075,7 @@ async fn test_allowed_ptb_with_random_txn() {
     let res = client.handle_transaction(tx.clone()).await;
     assert!(res.is_ok());
 
-    let epoch_store = authority_state.epoch_store_for_testing();
-    let signed_transaction = VerifiedSignedTransaction::new(
-        epoch_store.epoch(),
-        VerifiedTransaction::new_unchecked(tx.clone()),
-        authority_state.name,
-        &*authority_state.secret,
-    );
-    let ct = CertifiedTransaction::new(
-        tx.data().clone(),
-        vec![signed_transaction.auth_sig().clone()],
-        &epoch_store.committee().deref().clone(),
-    )
-    .unwrap();
-    let res = client.handle_certificate_v2(ct.clone()).await;
-    assert!(res.is_ok());
+    // TODO: Complete tx execution once execution with Random is possible.
 
     // good tx - use_clock, use_random, transfer, merge (via pay without destinations)
     let mut builder = ProgrammableTransactionBuilder::new();
