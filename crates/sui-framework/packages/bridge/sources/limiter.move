@@ -4,36 +4,34 @@
 module bridge::limiter {
 
     use std::option;
-    use std::type_name;
-    use std::type_name::TypeName;
+    use std::type_name::{Self, TypeName};
     use std::vector;
-    use sui::clock;
-    use sui::clock::Clock;
+
+    use sui::clock::{Self, Clock};
     use sui::math::pow;
-    use sui::vec_map;
-    use sui::vec_map::VecMap;
-    use bridge::treasury;
-    use bridge::eth::ETH;
+    use sui::vec_map::{Self, VecMap};
+
     use bridge::btc::BTC;
+    use bridge::chain_ids::{Self, BridgeRoute};
+    use bridge::eth::ETH;
+    use bridge::treasury;
     use bridge::usdc::USDC;
     use bridge::usdt::USDT;
-    use bridge::chain_ids::{Self, BridgeRoute};
-    #[test_only]
-    use std::debug::print;
+
     #[test_only]
     use sui::test_scenario;
     #[test_only]
-    use sui::test_utils::{destroy, assert_eq};
+    use sui::test_utils::{assert_eq, destroy};
+    #[test_only]
+    use bridge::btc;
     #[test_only]
     use bridge::eth;
     #[test_only]
     use bridge::usdc;
     #[test_only]
-    use bridge::btc;
-    #[test_only]
     use bridge::usdt;
 
-    const ERR_LIMIT_NOT_FOUND_FOR_ROUTE: u64 = 0;
+    const ELimitNotFoundForRoute: u64 = 0;
 
     // TODO: Make this configurable?
     const MAX_TRANSFER_LIMIT: u64 = 18_446_744_073_709_551_615;
@@ -92,7 +90,7 @@ module bridge::limiter {
 
         // Get limit for the route
         let route_limit = vec_map::try_get(&self.transfer_limits, &route);
-        assert!(option::is_some(&route_limit), ERR_LIMIT_NOT_FOUND_FOR_ROUTE);
+        assert!(option::is_some(&route_limit), ELimitNotFoundForRoute);
         let route_limit = option::destroy_some(route_limit);
         let route_limit_adjsuted = (route_limit as u128) * (pow(10, treasury::token_decimals<T>()) as u128);
 
@@ -127,7 +125,7 @@ module bridge::limiter {
 
         let target_tail = current_hour_since_epoch - 23;
 
-        // If `hour_head` is even older than 24 hours ago, it means all items in 
+        // If `hour_head` is even older than 24 hours ago, it means all items in
         // `per_hour_amounts` are to be evicted.
         if (self.hour_head < target_tail) {
             self.per_hour_amounts = vector::empty();
@@ -230,7 +228,6 @@ module bridge::limiter {
         assert!(check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 10_000 * eth::multiplier()), 0);
 
         let record = vec_map::get(&limiter.transfer_records, &route);
-        print(&record.total_amount);
         assert!(record.total_amount == 10000 * 5 * USD_VALUE_MULTIPLIER, 0);
 
         // transfer 1000 ETH every hour for 50 hours, the 24 hours totol should be 24000 * 10
@@ -368,7 +365,7 @@ module bridge::limiter {
 
         assert_eq(
             *vec_map::get(
-                &limiter.transfer_limits, 
+                &limiter.transfer_limits,
                 &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())
             ),
             5_000_000 * USD_VALUE_MULTIPLIER,
@@ -379,7 +376,7 @@ module bridge::limiter {
     }
 
     #[test]
-    #[expected_failure(abort_code = ERR_LIMIT_NOT_FOUND_FOR_ROUTE)]
+    #[expected_failure(abort_code = ELimitNotFoundForRoute)]
     fun test_limiter_does_not_limit_receiving_transfers() {
         let limiter = new();
 
@@ -424,7 +421,7 @@ module bridge::limiter {
         assert_eq(record.hour_head, 10023);
         assert_eq(record.hour_tail, 10000);
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15 * 25000]
         );
         assert_eq(record.total_amount, 15 * 25000);
@@ -437,7 +434,7 @@ module bridge::limiter {
         assert_eq(record.hour_tail, 10000);
         let expected_notion_amount_10023 = 15 * 25000 + 10 * USD_VALUE_MULTIPLIER;
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, expected_notion_amount_10023]
         );
         assert_eq(record.total_amount, expected_notion_amount_10023);
@@ -451,7 +448,7 @@ module bridge::limiter {
         assert_eq(record.hour_tail, 10001);
         let expected_notion_amount_10024 = 20 * USD_VALUE_MULTIPLIER;
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, expected_notion_amount_10023, expected_notion_amount_10024]
         );
         assert_eq(record.total_amount, expected_notion_amount_10023 + expected_notion_amount_10024);
@@ -466,7 +463,7 @@ module bridge::limiter {
         assert_eq(record.hour_head, 10046);
         assert_eq(record.hour_tail, 10023);
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[expected_notion_amount_10023, expected_notion_amount_10024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         );
         assert_eq(record.total_amount, expected_notion_amount_10023 + expected_notion_amount_10024);
@@ -479,7 +476,7 @@ module bridge::limiter {
         assert_eq(record.hour_head, 10046);
         assert_eq(record.hour_tail, 10023);
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[expected_notion_amount_10023, expected_notion_amount_10024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, expected_notion_amount_10046]
         );
         assert_eq(record.total_amount, expected_notion_amount_10023 + expected_notion_amount_10024 + expected_notion_amount_10046);
@@ -493,7 +490,7 @@ module bridge::limiter {
         assert_eq(record.hour_head, 10047);
         assert_eq(record.hour_tail, 10024);
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[expected_notion_amount_10024, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, expected_notion_amount_10046, expected_notion_amount_10047]
         );
         assert_eq(record.total_amount, expected_notion_amount_10024 + expected_notion_amount_10046 + expected_notion_amount_10047);
@@ -507,7 +504,7 @@ module bridge::limiter {
         assert_eq(record.hour_head, 10053);
         assert_eq(record.hour_tail, 10030);
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, expected_notion_amount_10046, expected_notion_amount_10047, 0, 0, 0, 0, 0, expected_notion_amount_10053]
         );
         assert_eq(record.total_amount, expected_notion_amount_10046 + expected_notion_amount_10047 + expected_notion_amount_10053);
@@ -521,7 +518,7 @@ module bridge::limiter {
         assert_eq(record.hour_head, 10153);
         assert_eq(record.hour_tail, 10130);
         assert_eq(
-            record.per_hour_amounts, 
+            record.per_hour_amounts,
             vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, expected_notion_amount_10153]
         );
         assert_eq(record.total_amount, expected_notion_amount_10153);
