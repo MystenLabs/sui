@@ -327,7 +327,7 @@ impl Query {
             ctx.data_unchecked(),
             page,
             filter.unwrap_or_default(),
-            Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         )
         .await
         .extend()

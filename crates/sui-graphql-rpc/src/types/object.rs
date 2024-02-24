@@ -589,7 +589,7 @@ impl ObjectImpl<'_> {
             ctx.data_unchecked(),
             page,
             filter,
-            Some(self.0.checkpoint_viewed_at),
+            self.0.checkpoint_viewed_at,
         )
         .await
         .extend()

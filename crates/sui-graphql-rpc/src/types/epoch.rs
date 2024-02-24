@@ -245,7 +245,7 @@ impl Epoch {
             ctx.data_unchecked(),
             page,
             filter,
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()

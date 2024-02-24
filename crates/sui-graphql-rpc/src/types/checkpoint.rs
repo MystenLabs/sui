@@ -150,7 +150,7 @@ impl Checkpoint {
             ctx.data_unchecked(),
             page,
             filter,
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -224,23 +224,6 @@ impl Checkpoint {
             stored,
             checkpoint_viewed_at,
         }))
-    }
-
-    /// Queries the database for the upper bound of the available range supported by the graphql
-    /// server. This method takes a connection, so that it can be used in an execute_repeatable
-    /// transaction.
-    pub(crate) fn latest_checkpoint_sequence_number(
-        conn: &mut Conn,
-    ) -> Result<u64, diesel::result::Error> {
-        use checkpoints::dsl;
-
-        let result: i64 = conn.first(move || {
-            dsl::checkpoints
-                .select(dsl::sequence_number)
-                .order_by(dsl::sequence_number.desc())
-        })?;
-
-        Ok(result as u64)
     }
 
     /// Query the database for a `page` of checkpoints. The Page uses the checkpoint sequence number
