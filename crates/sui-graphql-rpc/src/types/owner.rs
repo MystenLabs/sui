@@ -317,7 +317,7 @@ impl OwnerImpl {
             ctx.data_unchecked(),
             page,
             filter,
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -393,7 +393,7 @@ impl OwnerImpl {
             ctx.data_unchecked(),
             page,
             self.address,
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -426,7 +426,7 @@ impl OwnerImpl {
             ctx.data_unchecked::<NameServiceConfig>(),
             page,
             self.address,
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()

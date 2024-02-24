@@ -688,15 +688,14 @@ impl Object {
 
     /// Query the database for a `page` of objects, optionally `filter`-ed.
     ///
-    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
-    /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
-    /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
-    /// state, it will be as if it was read at the same checkpoint.
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number this page was queried in.
+    /// Each entity returned in the connection will inherit this checkpoint, so that when viewing
+    /// that entity's state, it will be as if it was read at the same checkpoint.
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<Cursor>,
         filter: ObjectFilter,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Object>, Error> {
         Self::paginate_subtype(db, page, filter, checkpoint_viewed_at, Ok).await
     }
@@ -706,8 +705,8 @@ impl Object {
     /// further `filter`-ed. The subtype is created using the `downcast` function, which is allowed
     /// to fail, if the downcast has failed.
     ///
-    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
-    /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number this page was
+    /// queried in. Each entity
     /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
     /// state, it will be as if it was read at the same checkpoint.
     ///
@@ -719,18 +718,19 @@ impl Object {
         db: &Db,
         page: Page<Cursor>,
         filter: ObjectFilter,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
         downcast: impl Fn(Object) -> Result<T, Error>,
     ) -> Result<Connection<String, T>, Error> {
         // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
-        // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
-        // paginated queries are consistent with the previous query that created the cursor.
+        // consistent. Otherwise, use the value from the parameter. This is so that paginated
+        // queries are consistent with the previous query that created the cursor.
         let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
         let response = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                // Check that the `checkpoint_viewed_at` is within the latest available range.
+                let Some((lhs, rhs)) = consistent_range(conn, Some(checkpoint_viewed_at))? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
