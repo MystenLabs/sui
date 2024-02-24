@@ -67,7 +67,7 @@ impl Balance {
     ) -> Result<Option<Balance>, Error> {
         let stored: Option<StoredBalance> = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, Some(checkpoint_viewed_at))? else {
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
@@ -98,7 +98,7 @@ impl Balance {
 
         let response = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, Some(checkpoint_viewed_at))? else {
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
