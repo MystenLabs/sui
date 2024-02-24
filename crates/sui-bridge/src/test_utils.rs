@@ -8,7 +8,6 @@ use crate::server::mock_handler::run_mock_server;
 use crate::sui_transaction_builder::{
     get_bridge_package_id, get_root_bridge_object_arg, get_sui_token_type_tag,
 };
-use crate::types::BridgeInnerDynamicField;
 use crate::{
     crypto::{BridgeAuthorityKeyPair, BridgeAuthorityPublicKey, BridgeAuthoritySignInfo},
     events::EmittedSuiToEthTokenBridgeV1,
@@ -37,6 +36,7 @@ use sui_json_rpc_types::ObjectChange;
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectRef;
+use sui_types::bridge::BridgeInnerDynamicField;
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
