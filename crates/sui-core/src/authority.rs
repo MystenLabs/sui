@@ -138,8 +138,8 @@ use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_cache::{
-    CheckpointCache, ExecutionCache, ExecutionCacheRead, ExecutionCacheReconfigAPI,
-    ExecutionCacheWrite, StateSyncAPI,
+    CheckpointCache, ExecutionCache, ExecutionCacheCommit, ExecutionCacheRead,
+    ExecutionCacheReconfigAPI, ExecutionCacheWrite, StateSyncAPI,
 };
 use crate::execution_driver::execution_process;
 use crate::metrics::LatencyObserver;
@@ -678,6 +678,7 @@ struct ExecutionCacheTraitPointers {
     accumulator_store: Arc<dyn AccumulatorStore>,
     checkpoint_cache: Arc<dyn CheckpointCache>,
     state_sync_store: Arc<dyn StateSyncAPI>,
+    cache_commit: Arc<dyn ExecutionCacheCommit>,
 }
 
 impl ExecutionCacheTraitPointers {
@@ -692,6 +693,7 @@ impl ExecutionCacheTraitPointers {
             accumulator_store: cache.clone(),
             checkpoint_cache: cache.clone(),
             state_sync_store: cache.clone(),
+            cache_commit: cache.clone(),
         }
     }
 }
@@ -2582,7 +2584,7 @@ impl AuthorityState {
 
     // Use this method only if one of the trait-specific methods below does not work.
     // (For instance if you need an implementation of more than one of these traits
-    // simulatenously).
+    // simultaneously).
     pub fn get_execution_cache(&self) -> Arc<ExecutionCache> {
         self.execution_cache.clone()
     }
@@ -2622,6 +2624,10 @@ impl AuthorityState {
 
     pub fn get_state_sync_store(&self) -> &Arc<dyn StateSyncAPI> {
         &self.execution_cache_trait_pointers.state_sync_store
+    }
+
+    pub fn get_cache_commit(&self) -> &Arc<dyn ExecutionCacheCommit> {
+        &self.execution_cache_trait_pointers.cache_commit
     }
 
     pub fn database_for_testing(&self) -> &Arc<AuthorityStore> {
