@@ -201,6 +201,32 @@ fn always_deps_from_lock() {
 }
 
 #[test]
+fn dev_dep_failure() {
+    let pkg = dev_dep_disallowed_test_package();
+
+    let manifest_string = std::fs::read_to_string(pkg.join(SourcePackageLayout::Manifest.path()))
+        .expect("Loading manifest");
+    let mut dep_graph_builder = DependencyGraphBuilder::new(
+        /* skip_fetch_latest_git_deps */ true,
+        std::io::sink(),
+        tempfile::tempdir().unwrap().path().to_path_buf(),
+    );
+    let Err(err) = dep_graph_builder.get_graph(
+        &DependencyKind::default(),
+        pkg,
+        manifest_string,
+        /* lock_string_opt */ None,
+    ) else {
+        panic!("Expected failure for dev-dependency and regular dependency with same name");
+    };
+
+    assert_error_contains!(
+        err,
+        "Can't have dev-dependency package and regular package with same name 'A'"
+    );
+}
+
+#[test]
 fn merge_simple() {
     let tmp = tempfile::tempdir().unwrap();
     let mut outer = DependencyGraph::read_from_lock(
@@ -613,6 +639,12 @@ fn one_dep_test_package() -> PathBuf {
 
 fn dev_dep_test_package() -> PathBuf {
     [".", "tests", "test_sources", "dep_dev_dep_diamond"]
+        .into_iter()
+        .collect()
+}
+
+fn dev_dep_disallowed_test_package() -> PathBuf {
+    [".", "tests", "test_sources", "dep_dev_disallowed"]
         .into_iter()
         .collect()
 }
