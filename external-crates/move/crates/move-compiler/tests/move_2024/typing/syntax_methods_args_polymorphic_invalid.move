@@ -15,5 +15,3 @@ module a::invalid {
     #[syntax(index)]
     public fun borrow_muAt<T,Q>(_s: &mut A<T>, _j: T): &mut T { abort 0 }
 }
-
-
