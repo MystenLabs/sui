@@ -120,11 +120,11 @@ impl fmt::Display for Tok {
         use Tok::*;
         let s = match *self {
             EOF => "[end-of-file]",
-            NumValue => "[Num]",
-            NumTypedValue => "[NumTyped]",
-            ByteStringValue => "[ByteString]",
-            Identifier => "[Identifier]",
-            SyntaxIdentifier => "[SyntaxIdentifier]",
+            NumValue => "a number",
+            NumTypedValue => "a number-like value",
+            ByteStringValue => "a byte string",
+            Identifier => "an identifier",
+            SyntaxIdentifier => "a syntax identifier",
             Exclaim => "!",
             ExclaimEqual => "!=",
             Percent => "%",
@@ -187,12 +187,12 @@ impl fmt::Display for Tok {
             Friend => "friend",
             NumSign => "#",
             AtSign => "@",
-            RestrictedIdentifier => "r#[Identifier]",
+            RestrictedIdentifier => "a restricted identifier",
             Mut => "mut",
             Enum => "enum",
             Type => "type",
             Match => "match",
-            BlockLabel => "'[Identifier]",
+            BlockLabel => "a block label",
             MinusGreater => "->",
         };
         fmt::Display::fmt(s, formatter)

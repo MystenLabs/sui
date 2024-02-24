@@ -223,6 +223,23 @@ fn consume_expected_token(context: &mut Context, tok: Tok) -> bool {
 }
 
 // Check for the specified token and return an error if it does not match.
+fn consume_token_no_advance_error(context: &mut Context, tok: Tok) -> Result<(), Box<Diagnostic>> {
+    if context.tokens.peek() == tok {
+        if let Some(err) = context.tokens.advance().err() {
+            context.env.add_diag(*err);
+        };
+        Ok(())
+    } else {
+        let expected = format!("'{}'", tok);
+        Err(unexpected_token_error_(
+            &context.tokens,
+            context.tokens.start_loc(),
+            &expected,
+        ))
+    }
+}
+
+// Check for the specified token and return an error if it does not match.
 fn consume_token(tokens: &mut Lexer, tok: Tok) -> Result<(), Box<Diagnostic>> {
     consume_token_(tokens, tok, tokens.start_loc(), "")
 }
@@ -303,8 +320,11 @@ fn parse_comma_list<F, R>(
 where
     F: Fn(&mut Context) -> Result<R, Box<Diagnostic>>,
 {
+    println!("current token: {}", context.tokens.peek());
+    println!("looking for: {}", start_token);
     let start_loc = context.tokens.current_token_loc();
-    if !consume_token(&mut context.tokens, start_token).is_ok() {
+    if !consume_token_no_advance_error(context, start_token).is_ok() {
+        println!("failed to find start");
         return vec![];
     }
     // consume_token(context.tokens, start_token)?;
@@ -336,6 +356,7 @@ where
     adjust_token(context.tokens, end_token);
     let mut v = vec![];
     let mut seq_set = item_first_set.clone();
+    println!("starting");
     while !(context.tokens.at(end_token) || context.tokens.at(Tok::EOF)) {
         println!("tok: {}", context.tokens.peek());
         if context.tokens.at_any(item_first_set) {
@@ -350,19 +371,23 @@ where
                 }
                 Err(diag) => {
                     context.env.add_diag(*diag);
-                    let _ = context.tokens.advance();
+                    if let Some(err) = context.tokens.advance().err() {
+                        context.env.add_diag(*err);
+                    }
                 }
             }
         } else if context.follow_set.contains(context.tokens.peek()) {
+            println!("follow set break for {}", context.tokens.peek());
             break;
         } else {
-            // FIXME format this error better
-            context.env.add_diag(*unexpected_token_error(&context.tokens, &format!("one of {:?}", item_first_set)));
+            context.env.add_diag(*unexpected_token_error(&context.tokens, &format_oxford_list!(",", "{}", item_first_set.iter().collect::<Vec<_>>())));
             while !(context.tokens.at_any(item_first_set) ||
                     context.tokens.at(end_token) ||
                     context.tokens.at(Tok::EOF) ||
                     context.follow_set.contains(context.tokens.peek())) {
-                let _ = context.tokens.advance();
+                if let Some(err) = context.tokens.advance().err() {
+                    context.env.add_diag(*err);
+                }
             }
         }
     }
@@ -2531,15 +2556,18 @@ fn parse_function_decl(
     consume_token(context.tokens, Tok::Fun)?;
     let name = FunctionName(parse_identifier(context)?);
     context.follow_set.add(Tok::LParen);
-    context.follow_set.add(Tok::Colon);
     context.follow_set.add(Tok::Acquires);
     context.follow_set.add(Tok::LBrace);
+    println!("parsing opt type params");
+    println!("current tok: {:?}", &context.tokens.peek());
     let type_parameters = parse_optional_type_parameters(context)?;
 
     // let param_follow_set = FollowSet::from(&[Tok::Colon, Tok::LBrace]);
     // context.follow_set.union(&param_follow_set);
 
     context.follow_set.remove(Tok::LParen);
+    println!("parsing params");
+    println!("current tok: {:?}", &context.tokens.peek());
     // "(" Comma<Parameter> ")"
     let parameters = parse_comma_list(
         context,
@@ -2550,7 +2578,6 @@ fn parse_function_decl(
         "a function parameter",
     );
 
-    context.follow_set.remove(Tok::Colon);
     // (":" <Type>)?
     let return_type = if match_token(context.tokens, Tok::Colon)? {
         parse_type(context)?
@@ -2621,6 +2648,14 @@ fn parse_function_decl(
 // Parse a function parameter:
 //      Parameter = "mut"? <Var> ":" <Type>
 fn parse_parameter(context: &mut Context) -> Result<(Mutability, Var, Type), Box<Diagnostic>> {
+    // In cases where the variable was malformed, we are trying to find a type and get out.
+    if context.tokens.peek() == Tok::Colon {
+        let loc = context.tokens.current_token_loc();
+        let sym: Symbol = "_error".into();
+        consume_token(context.tokens, Tok::Colon)?;
+        let t = parse_type(context)?;
+        return Ok((None, Var(sp(loc, sym)), t));
+    }
     let mut_ = if context.tokens.peek() == Tok::Mut {
         let start_loc = context.tokens.start_loc();
         context.tokens.advance()?;
@@ -2629,7 +2664,15 @@ fn parse_parameter(context: &mut Context) -> Result<(Mutability, Var, Type), Box
     } else {
         None
     };
-    let v = parse_var(context)?;
+    // Handle a special case if someone tried to use `mut` as a variable name.
+    let v: Var = if context.tokens.peek() == Tok::Colon {
+        context.env.add_diag(*unexpected_token_error(&context.tokens, "an identifier after 'mut'"));
+        let loc = context.tokens.current_token_loc();
+        let sym: Symbol = "_error".into();
+        Var(sp(loc, sym))
+    } else {
+        parse_var(context)?
+    };
     consume_token(context.tokens, Tok::Colon)?;
     let t = parse_type(context)?;
     Ok((mut_, v, t))

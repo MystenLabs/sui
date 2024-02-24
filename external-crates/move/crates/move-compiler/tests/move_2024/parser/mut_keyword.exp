@@ -5,5 +5,14 @@ error[E01002]: unexpected token
   │                       ^
   │                       │
   │                       Unexpected ':'
-  │                       Expected an identifier
+  │                       Expected an identifier after 'mut'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/mut_keyword.move:6:9
+  │
+6 │         mut
+  │         ^^^
+  │         │
+  │         Unexpected 'mut'
+  │         Expected an expression term
 

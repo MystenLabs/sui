@@ -1,9 +1,33 @@
+warning[W09003]: unused assignment
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:5:13
+  │
+5 │         let f = 0;
+  │             ^ Unused assignment for variable 'f'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_f')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:13
   │
-6 │         S { mut f } = s1;
+6 │         S { mut f } = s;
   │             ^^^
   │             │
   │             Unexpected 'mut'
   │             Expected an identifier
+
+error[E04024]: invalid usage of immutable variable
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:17
+  │
+5 │         let f = 0;
+  │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut f'
+6 │         S { mut f } = s;
+  │                 ^ Invalid assignment of immutable variable 'f'
+
+warning[W09003]: unused assignment
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:17
+  │
+6 │         S { mut f } = s;
+  │                 ^ Unused assignment for variable 'f'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_f')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

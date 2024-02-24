@@ -3,6 +3,6 @@ module a::m {
 
     public fun foo(s: S) {
         let f = 0;
-        S { mut f } = s1;
+        S { mut f } = s;
     }
 }

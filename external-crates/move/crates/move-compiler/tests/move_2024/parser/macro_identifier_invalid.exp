@@ -4,3 +4,29 @@ error[E01002]: unexpected token
 2 │     macro fun foo($0: u64) {
   │                   ^ Expected an identifier following '$', e.g. '$x'
 
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/macro_identifier_invalid.move:2:20
+  │
+2 │     macro fun foo($0: u64) {
+  │                    ^
+  │                    │
+  │                    Unexpected '0'
+  │                    Expected an identifier, a syntax identifier, , mut
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/macro_identifier_invalid.move:2:26
+  │
+2 │     macro fun foo($0: u64) {
+  │                          ^
+  │                          │
+  │                          Unexpected ')'
+  │                          Expected ':'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/macro_identifier_invalid.move:2:28
+  │
+2 │     macro fun foo($0: u64) {
+  │                  -         ^ Expected ')'
+  │                  │          
+  │                  To match this '('
+
