@@ -516,7 +516,7 @@ mod tests {
     // TODO: build AuthorityFixture.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_authority_committee() {
-        let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
+        let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
         let mut output_receivers = vec![];
         let mut authorities = vec![];
         for (index, _authority_info) in committee.authorities() {
