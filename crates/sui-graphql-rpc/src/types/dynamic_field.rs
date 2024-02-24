@@ -194,17 +194,17 @@ impl DynamicField {
         page: Page<object::Cursor>,
         parent: SuiAddress,
         parent_version: Option<u64>,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, DynamicField>, Error> {
         // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
         // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
         // paginated queries are consistent with the previous query that created the cursor.
         let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
         let Some(((prev, next, results), checkpoint_viewed_at)) = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                let Some((lhs, rhs)) = consistent_range(conn, Some(checkpoint_viewed_at))? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 

@@ -284,7 +284,7 @@ impl Query {
             page,
             coin,
             /* owner */ None,
-            Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         )
         .await
         .extend()

@@ -208,7 +208,7 @@ impl Checkpoint {
                         query = query.filter(dsl::sequence_number.eq(seq_num));
                     }
 
-                    // Constrained the latest checkpoint returned by the `checkpoint_viewed_at`.
+                    // Constrains the latest checkpoint returned by the `checkpoint_viewed_at`.
                     // Even if there are later checkpoints, they should not "exist" when the state
                     // is viewed at `checkpoint_viewed_at`.
                     query = query.filter(dsl::sequence_number.le(checkpoint_viewed_at as i64));

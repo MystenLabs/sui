@@ -352,7 +352,7 @@ impl OwnerImpl {
             ctx.data_unchecked(),
             page,
             self.address,
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -374,7 +374,7 @@ impl OwnerImpl {
             page,
             coin,
             Some(self.address),
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -488,7 +488,7 @@ impl OwnerImpl {
             page,
             self.address,
             parent_version,
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
