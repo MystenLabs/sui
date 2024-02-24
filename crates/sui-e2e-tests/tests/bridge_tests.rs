@@ -5,7 +5,7 @@
 use std::str::FromStr;
 
 use move_core_types::identifier::Identifier;
-
+use sui_json_rpc_api::BridgeReadApiClient;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockResponseOptions};
 use sui_macros::sim_test;
@@ -60,12 +60,11 @@ async fn test_create_bridge_state_object() {
 
 #[tokio::test]
 async fn test_committee_registration() {
-    let test_cluster = TestClusterBuilder::new()
+    let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
         .with_protocol_version(37.into())
         .with_epoch_duration_ms(10000)
         .build()
         .await;
-
     let ref_gas_price = test_cluster.get_reference_gas_price().await;
     let bridge_shared_version = get_bridge_obj_initial_shared_version(
         test_cluster
@@ -195,4 +194,22 @@ async fn test_committee_registration() {
         test_cluster.swarm.active_validators().count(),
         bridge.committee().members.contents.len()
     );
+}
+
+#[tokio::test]
+async fn test_bridge_api_compatibility() {
+    let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
+        .with_protocol_version(37.into())
+        .with_epoch_duration_ms(10000)
+        .build()
+        .await;
+
+    let client = test_cluster.rpc_client();
+    client.get_latest_bridge().await.unwrap();
+    // TODO: assert fields in summary
+
+    client
+        .get_bridge_object_initial_shared_version()
+        .await
+        .unwrap();
 }

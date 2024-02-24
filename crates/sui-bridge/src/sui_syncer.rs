@@ -8,11 +8,11 @@ use crate::{
     error::BridgeResult,
     retry_with_max_delay,
     sui_client::{SuiClient, SuiClientInner},
-    sui_transaction_builder::get_bridge_package_id,
 };
 use mysten_metrics::spawn_logged_monitored_task;
 use std::{collections::HashMap, sync::Arc};
 use sui_json_rpc_types::SuiEvent;
+use sui_types::BRIDGE_PACKAGE_ID;
 use sui_types::{event::EventID, Identifier};
 use tokio::{
     task::JoinHandle,
@@ -93,7 +93,7 @@ where
         loop {
             interval.tick().await;
             let Ok(events) = retry_with_max_delay!(
-                sui_client.query_events_by_module(*get_bridge_package_id(), module.clone(), cursor),
+                sui_client.query_events_by_module(BRIDGE_PACKAGE_ID, module.clone(), cursor),
                 Duration::from_secs(600)
             ) else {
                 tracing::error!("Failed to query events from sui client after retry");
@@ -162,7 +162,7 @@ mod tests {
 
         // Module Foo has new events
         let mut event_1: SuiEvent = SuiEvent::random_for_testing();
-        let package_id = *get_bridge_package_id();
+        let package_id = BRIDGE_PACKAGE_ID;
         event_1.type_.address = package_id.into();
         event_1.type_.module = module_foo.clone();
         let module_foo_events_1: sui_json_rpc_types::Page<SuiEvent, EventID> = EventPage {
@@ -225,11 +225,6 @@ mod tests {
         cursor: EventID,
         events: EventPage,
     ) {
-        mock.add_event_response(
-            *get_bridge_package_id(),
-            module.clone(),
-            cursor,
-            events.clone(),
-        );
+        mock.add_event_response(BRIDGE_PACKAGE_ID, module.clone(), cursor, events.clone());
     }
 }
