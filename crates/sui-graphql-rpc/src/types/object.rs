@@ -4,10 +4,8 @@
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
-use super::available_range::AvailableRange;
 use super::balance::{self, Balance};
 use super::big_int::BigInt;
-use super::checkpoint::Checkpoint;
 use super::coin::Coin;
 use super::coin_metadata::CoinMetadata;
 use super::cursor::{self, Page, Paginated, RawPaginated, Target};
@@ -171,7 +169,6 @@ pub struct AddressOwner {
 }
 
 pub(crate) enum ObjectLookupKey {
-    Latest,
     LatestAt(u64),
     VersionAt {
         version: u64,
@@ -485,7 +482,7 @@ impl Object {
     }
 
     /// Attempts to convert the object into a MovePackage
-    async fn as_move_package(&self, ctx: &Context<'_>) -> Option<MovePackage> {
+    async fn as_move_package(&self) -> Option<MovePackage> {
         MovePackage::try_from(self).ok()
     }
 }
@@ -527,7 +524,7 @@ impl ObjectImpl<'_> {
                 let parent = Object::query(
                     ctx.data_unchecked(),
                     address.into(),
-                    ObjectLookupKey::Latest,
+                    ObjectLookupKey::LatestAt(self.0.checkpoint_viewed_at),
                 )
                 .await
                 .ok()
@@ -766,17 +763,14 @@ impl Object {
         Ok(conn)
     }
 
-    /// Query for the object at a specific version, at the checkpoint_viewed_at if given, else
-    /// against the latest checkpoint.
-    ///
-    /// `available_range` represents the bounding checkpoint range this `Object` was queried in. The
-    /// rhs of the range is stored on `Object` so that when viewing that entity's state, it will be
-    /// as if it was read at the same checkpoint.
+    /// Query for the object at a specific version. Since this is a historical lookup,
+    /// `checkpoint_viewed_at` is not used as a filtering constraint, but is still stored on the
+    /// object so that other parts of the query can use it for consistency.
     async fn query_at_version(
         db: &Db,
         address: SuiAddress,
         version: u64,
-        available_range: AvailableRange,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
@@ -792,24 +786,16 @@ impl Object {
                     // table as well.
                     let snapshot_query = snapshot::objects_snapshot
                         .filter(snapshot::object_id.eq(address.into_vec()))
-                        .filter(snapshot::object_version.eq(version))
-                        .filter(
-                            snapshot::checkpoint_sequence_number.le(available_range.first as i64),
-                        );
+                        .filter(snapshot::object_version.eq(version));
 
                     let historical_query = history::objects_history
                         .filter(history::object_id.eq(address.into_vec()))
                         .filter(history::object_version.eq(version))
-                        .filter(
-                            history::checkpoint_sequence_number
-                                .between(available_range.first as i64, available_range.last as i64),
-                        )
-                        .order_by(history::object_version.desc())
                         .limit(1);
 
                     snapshot_query.union(historical_query)
                 })
-                .optional() // Return optional to match the state when checkpoint_viewed_at is out of range
+                .optional()
             })
             .await?;
 
@@ -821,20 +807,19 @@ impl Object {
         stored_objs
             .into_iter()
             .max_by_key(|o| o.object_version)
-            .map(|obj| Self::try_from_stored_history_object(obj, available_range.last))
+            .map(|obj| Self::try_from_stored_history_object(obj, checkpoint_viewed_at))
             .transpose()
     }
 
-    /// Query for the latest version of an object bounded by the provided `parent_version`.
-    ///
-    /// `available_range` represents the bounding checkpoint range this `Object` was queried in. The
-    /// rhs of the range is stored on `Object` so that when viewing that entity's state, it will be
-    /// as if it was read at the same checkpoint.
+    /// Query for the latest version of an object bounded by the provided `parent_version`. Since
+    /// this is a historical lookup, `checkpoint_viewed_at` is not used as a filtering constraint,
+    /// but is still stored on the object so that other parts of the query can use it for
+    /// consistency.
     async fn query_latest_at_parent_version(
         db: &Db,
         address: SuiAddress,
         parent_version: u64,
-        available_range: AvailableRange,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
@@ -850,18 +835,11 @@ impl Object {
                     // table as well.
                     let snapshot_query = snapshot::objects_snapshot
                         .filter(snapshot::object_id.eq(address.into_vec()))
-                        .filter(snapshot::object_version.le(version))
-                        .filter(
-                            snapshot::checkpoint_sequence_number.le(available_range.first as i64),
-                        );
+                        .filter(snapshot::object_version.le(version));
 
                     let historical_query = history::objects_history
                         .filter(history::object_id.eq(address.into_vec()))
                         .filter(history::object_version.le(version))
-                        .filter(
-                            history::checkpoint_sequence_number
-                                .between(available_range.first as i64, available_range.last as i64),
-                        )
                         .order_by(history::object_version.desc())
                         .limit(1);
 
@@ -880,39 +858,36 @@ impl Object {
         stored_objs
             .into_iter()
             .max_by_key(|o| o.object_version)
-            .map(|obj| Self::try_from_stored_history_object(obj, available_range.last))
+            .map(|obj| Self::try_from_stored_history_object(obj, checkpoint_viewed_at))
             .transpose()
     }
 
-    /// Query for the object at the latest version at the checkpoint sequence number if given, else
-    /// the latest version of the object against the latest checkpoint.
-    async fn query_latest_in_available_range(
+    /// Query for the object at the latest version at the checkpoint sequence number.
+    async fn query_latest_at_checkpoint(
         db: &Db,
         address: SuiAddress,
-        available_range: AvailableRange,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
 
         let stored_objs: Option<Vec<StoredHistoryObject>> = db
-            .execute(move |conn| {
+            .execute_repeatable(move |conn| {
+                let Some((lhs, rhs)) = consistent_range(conn, Some(checkpoint_viewed_at))? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
+
                 conn.results(move || {
                     // If an object was created or mutated in a checkpoint outside the current
                     // available range, and never touched again, it will not show up in the
                     // objects_history table. Thus, we always need to check the objects_snapshot
                     // table as well.
                     let snapshot_query = snapshot::objects_snapshot
-                        .filter(snapshot::object_id.eq(address.into_vec()))
-                        .filter(
-                            snapshot::checkpoint_sequence_number.le(available_range.first as i64),
-                        );
+                        .filter(snapshot::object_id.eq(address.into_vec()));
 
                     let historical_query = history::objects_history
                         .filter(history::object_id.eq(address.into_vec()))
-                        .filter(
-                            history::checkpoint_sequence_number
-                                .between(available_range.first as i64, available_range.last as i64),
-                        )
+                        .filter(history::checkpoint_sequence_number.between(lhs as i64, rhs as i64))
                         .order_by(history::object_version.desc())
                         .limit(1);
 
@@ -930,7 +905,7 @@ impl Object {
         stored_objs
             .into_iter()
             .max_by_key(|o| o.object_version)
-            .map(|obj| Self::try_from_stored_history_object(obj, available_range.last))
+            .map(|obj| Self::try_from_stored_history_object(obj, checkpoint_viewed_at))
             .transpose()
     }
 
@@ -940,12 +915,8 @@ impl Object {
         key: ObjectLookupKey,
     ) -> Result<Option<Self>, Error> {
         match key {
-            ObjectLookupKey::Latest => {
-                Self::query_latest_in_available_range(db, address, None).await
-            }
             ObjectLookupKey::LatestAt(checkpoint_sequence_number) => {
-                Self::query_latest_in_available_range(db, address, Some(checkpoint_sequence_number))
-                    .await
+                Self::query_latest_at_checkpoint(db, address, checkpoint_sequence_number).await
             }
             ObjectLookupKey::VersionAt {
                 version,
@@ -965,7 +936,11 @@ impl Object {
     /// Query for a singleton object identified by its type. Note: the object is assumed to be a
     /// singleton (we either find at least one object with this type and then return it, or return
     /// nothing).
-    pub(crate) async fn query_singleton(db: &Db, type_: TypeTag) -> Result<Option<Object>, Error> {
+    pub(crate) async fn query_singleton(
+        db: &Db,
+        type_: TypeTag,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Option<Object>, Error> {
         use objects::dsl;
 
         let stored_obj: Option<StoredObject> = db
@@ -981,7 +956,7 @@ impl Object {
             .map_err(|e| Error::Internal(format!("Failed to fetch singleton: {e}")))?;
 
         stored_obj
-            .map(|obj| Object::try_from_stored_object(obj, None))
+            .map(|obj| Object::try_from_stored_object(obj, checkpoint_viewed_at))
             .transpose()
     }
 

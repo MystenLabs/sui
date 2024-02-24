@@ -108,6 +108,7 @@ impl DynamicField {
                 ctx.data_unchecked(),
                 self.df_object_id,
                 ObjectLookupKey::LatestAtParentVersion {
+                    // todo (wlmyng) -> shouldn't we also pass in parent address?
                     version: self.super_.super_.version_impl(),
                     checkpoint_viewed_at: self.super_.super_.checkpoint_viewed_at,
                 },

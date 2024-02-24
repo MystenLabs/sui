@@ -400,6 +400,7 @@ impl Query {
             ctx.data_unchecked::<Db>(),
             ctx.data_unchecked::<NameServiceConfig>(),
             &domain,
+            checkpoint_viewed_at,
         )
         .await
         .extend()?
@@ -416,7 +417,9 @@ impl Query {
         ctx: &Context<'_>,
         coin_type: ExactTypeFilter,
     ) -> Result<Option<CoinMetadata>> {
-        CoinMetadata::query(ctx.data_unchecked(), coin_type.0)
+        let checkpoint_viewed_at = ctx.data::<AvailableRange>().extend()?.last;
+
+        CoinMetadata::query(ctx.data_unchecked(), coin_type.0, checkpoint_viewed_at)
             .await
             .extend()
     }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::address::Address;
+use super::available_range::AvailableRange;
 use super::coin_metadata::CoinMetadata;
 use super::cursor::Page;
 use super::dynamic_field::DynamicField;
@@ -399,10 +400,12 @@ impl OwnerImpl {
     }
 
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+        let checkpoint_viewed_at = ctx.data::<AvailableRange>().extend()?.last;
         Ok(NameService::reverse_resolve_to_name(
             ctx.data_unchecked::<Db>(),
             ctx.data_unchecked::<NameServiceConfig>(),
             self.address,
+            checkpoint_viewed_at,
         )
         .await
         .extend()?

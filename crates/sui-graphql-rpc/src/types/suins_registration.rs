@@ -314,10 +314,16 @@ impl NameService {
         db: &Db,
         config: &NameServiceConfig,
         domain: &Domain,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<NameRecord>, Error> {
         let record_id = config.record_field_id(&domain.0);
 
-        let Some(object) = MoveObject::query(db, record_id.into(), ObjectLookupKey::Latest).await?
+        let Some(object) = MoveObject::query(
+            db,
+            record_id.into(),
+            ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+        )
+        .await?
         else {
             return Ok(None);
         };
@@ -336,11 +342,16 @@ impl NameService {
         db: &Db,
         config: &NameServiceConfig,
         address: SuiAddress,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<NativeDomain>, Error> {
         let reverse_record_id = config.reverse_record_field_id(address.as_slice());
 
-        let Some(object) =
-            MoveObject::query(db, reverse_record_id.into(), ObjectLookupKey::Latest).await?
+        let Some(object) = MoveObject::query(
+            db,
+            reverse_record_id.into(),
+            ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+        )
+        .await?
         else {
             return Ok(None);
         };
