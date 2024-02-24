@@ -126,6 +126,9 @@ impl Core {
 
         // Accept all blocks but make sure that only the last quorum round blocks and onwards are kept.
         self.add_accepted_blocks(all_blocks, Some(0));
+
+        // TODO: run commit and propose logic, or just use add_blocks() instead of add_accepted_blocks().
+
         self
     }
 
@@ -140,7 +143,7 @@ impl Core {
             .try_accept_blocks(blocks)
             .unwrap_or_else(|err| panic!("Fatal error while accepting blocks: {err}"));
 
-        // Now process them, basically move the threshold clock and add them to pending list
+        // Now add accepted blocks to the threshold clock and pending ancestors list.
         self.add_accepted_blocks(accepted_blocks, None);
 
         // TODO: Add optimization for added blocks that do not achieve quorum for a round.
@@ -241,10 +244,10 @@ impl Core {
             let now = timestamp_utc_ms();
             let ancestors = self.ancestors_to_propose(clock_round, now);
 
-            //2. consume the next transactions to be included.
-            let payload = self.transaction_consumer.next();
+            // 2. Consume the next transactions to be included.
+            let transactions = self.transaction_consumer.next();
 
-            //3. create the block and insert to storage.
+            // 3. Create the block and insert to storage.
             // TODO: take a decision on whether we want to flush to disk at this point the DagState.
             let block = Block::V1(BlockV1::new(
                 self.context.committee.epoch(),
@@ -252,7 +255,7 @@ impl Core {
                 self.context.own_index,
                 now,
                 ancestors,
-                payload,
+                transactions,
             ));
             let signed_block =
                 SignedBlock::new(block, &self.block_signer).expect("Block signing failed.");
@@ -285,8 +288,6 @@ impl Core {
             //5. emit an event that a new block is ready
             let _ = self.signals.new_block_ready(verified_block.reference());
             // TODO: propagate shutdown or ensure this will never return error?
-
-            self.try_commit();
 
             return Some(verified_block);
         }
@@ -545,6 +546,11 @@ mod test {
             store.clone(),
         );
 
+        // Check no commits have been persisted to dag_state or store.
+        let last_commit = store.read_last_commit().unwrap();
+        assert!(last_commit.is_none());
+        assert_eq!(dag_state.read().last_commit_index(), 0);
+
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new();
         let mut core = Core::new(
@@ -562,11 +568,6 @@ mod test {
         let mut new_round = signal_receivers.new_round_receiver();
         assert_eq!(*new_round.borrow_and_update(), 5);
 
-        // Check no commits have been persisted to dag_state & store
-        let last_commit = store.read_last_commit().unwrap();
-        assert!(last_commit.is_none());
-        assert_eq!(dag_state.read().last_commit_index(), 0);
-
         // When trying to propose now we should propose block for round 5
         let proposed_block = core
             .try_new_block(true)
@@ -580,11 +581,13 @@ mod test {
             assert_eq!(ancestor.round, 4);
         }
 
-        // Check commits have been persisted to dag state & store
+        // Run commit rule.
+        core.try_commit();
         let last_commit = store
             .read_last_commit()
             .unwrap()
             .expect("last commit should be set");
+
         // There were no commits prior to the core starting up but there was completed
         // rounds up to and including round 4. So we should commit leaders in round 1 & 2
         // as soon as the new block for round 5 is proposed.
@@ -606,7 +609,7 @@ mod test {
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
-        // Create test blocks for all authorities except our's (index = 0) .
+        // Create test blocks for all authorities except our's (index = 0).
         let (_, mut last_round_blocks) = Block::genesis(context.clone());
         let mut all_blocks = last_round_blocks.clone();
         for round in 1..=4 {
@@ -646,6 +649,11 @@ mod test {
             store.clone(),
         );
 
+        // Check no commits have been persisted to dag_state & store
+        let last_commit = store.read_last_commit().unwrap();
+        assert!(last_commit.is_none());
+        assert_eq!(dag_state.read().last_commit_index(), 0);
+
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new();
         let mut core = Core::new(
@@ -663,11 +671,6 @@ mod test {
         let mut new_round = signal_receivers.new_round_receiver();
         assert_eq!(*new_round.borrow_and_update(), 4);
 
-        // Check no commits have been persisted to dag_state & store
-        let last_commit = store.read_last_commit().unwrap();
-        assert!(last_commit.is_none());
-        assert_eq!(dag_state.read().last_commit_index(), 0);
-
         // When trying to propose now we should propose block for round 4
         let proposed_block = core
             .try_new_block(true)
@@ -684,11 +687,13 @@ mod test {
             }
         }
 
-        // Check commits have been persisted to dag state & store
+        // Run commit rule.
+        core.try_commit();
         let last_commit = store
             .read_last_commit()
             .unwrap()
             .expect("last commit should be set");
+
         // There were no commits prior to the core starting up but there was completed
         // rounds up to round 4. So we should commit leaders in round 1 & 2 as soon
         // as the new block for round 4 is proposed.

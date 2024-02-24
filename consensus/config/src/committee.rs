@@ -21,7 +21,7 @@ pub type Stake = u64;
 
 /// Committee is the set of authorities that participate in the consensus protocol for this epoch.
 /// Its configuration is stored and computed on chain.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Committee {
     /// The epoch number of this committee
     epoch: Epoch,
@@ -128,7 +128,7 @@ impl Committee {
 ///
 /// NOTE: this is intentionally un-cloneable, to encourage only copying relevant fields.
 /// AuthorityIndex should be used to reference an authority instead.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Authority {
     /// Voting power of the authority in the committee.
     pub stake: Stake,
