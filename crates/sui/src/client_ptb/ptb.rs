@@ -86,13 +86,14 @@ impl PTB {
         let (res, warnings) = Self::build_ptb(program, context, client).await;
 
         // Render warnings
-        let suffix = if warnings.len() > 1 { "s" } else { "" };
-        eprintln!("Warning{suffix} produced when building PTB:");
-        let rendered = build_error_reports(&source_string, warnings);
-        for e in rendered.iter() {
-            eprintln!("{:?}", e);
+        if !warnings.is_empty() {
+            let suffix = if warnings.len() > 1 { "s" } else { "" };
+            eprintln!("Warning{suffix} produced when building PTB:");
+            let rendered = build_error_reports(&source_string, warnings);
+            for e in rendered.iter() {
+                eprintln!("{:?}", e);
+            }
         }
-
         let ptb = match res {
             Err(errors) => {
                 let suffix = if errors.len() > 1 { "s" } else { "" };
