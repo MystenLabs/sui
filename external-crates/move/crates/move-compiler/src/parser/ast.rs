@@ -677,7 +677,7 @@ pub enum Exp_ {
         Spanned<Vec<Exp>>,
     ),
     // e[e']
-    Index(Box<Exp>, Box<Exp>), // spec only
+    Index(Box<Exp>, Spanned<Vec<Exp>>), // spec only
 
     // (e as t)
     Cast(Box<Exp>, Type),
@@ -1953,10 +1953,10 @@ impl AstDebug for Exp_ {
                 ty.ast_debug(w);
                 w.write(")");
             }
-            E::Index(e, i) => {
+            E::Index(e, rhs) => {
                 e.ast_debug(w);
                 w.write("[");
-                i.ast_debug(w);
+                w.comma(&rhs.value, |w, e| e.ast_debug(w));
                 w.write("]");
             }
             E::Annotate(e, ty) => {

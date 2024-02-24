@@ -1,6 +1,6 @@
 module a::m {
     const ZED: Z = Z { f: 0 };
-    const V: vector<u64> = vector[0];
+    const VEC: vector<u64> = vector[0];
 
     public struct X has copy, drop {
         y: Y
@@ -13,6 +13,7 @@ module a::m {
     }
 
     fun id(x: X): X { x }
+    fun ref_unused(_x: &X) { }
     fun deref(x: &X): X { *x }
 
     fun all_copy(x: X) {
@@ -20,7 +21,7 @@ module a::m {
         copy x.y;
         copy x.y.z;
         copy x.y.z.f;
-        copy V;
+        copy VEC;
         copy ZED.f;
         (copy x).id();
     }
@@ -35,7 +36,7 @@ module a::m {
         &x.y;
         &x.y.z;
         &x.y.z.f;
-        &V;
+        &VEC;
         &ZED.f;
         (&x).deref();
         &x.id();
@@ -47,7 +48,7 @@ module a::m {
         &mut x.y;
         &mut x.y.z;
         &mut x.y.z.f;
-        &mut V;
+        &mut VEC;
         &mut ZED.f;
         (&mut x).deref();
         &mut x.id();
@@ -59,7 +60,7 @@ module a::m {
         x.y;
         x.y.z;
         x.y.z.f;
-        V;
+        VEC;
         ZED.f;
         x.id();
     }

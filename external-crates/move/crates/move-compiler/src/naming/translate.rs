@@ -11,7 +11,11 @@ use crate::{
         translate::is_valid_struct_or_constant_name as is_constant_name,
     },
     ice,
-    naming::ast::{self as N, BlockLabel, NominalBlockUsage},
+    naming::{
+        ast::{self as N, BlockLabel, NominalBlockUsage, TParamID},
+        fake_natives,
+        syntax_methods::resolve_syntax_attributes,
+    },
     parser::ast::{self as P, ConstantName, Field, FunctionName, StructName, MACRO_MODIFIER},
     shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -20,14 +24,12 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{ast::TParamID, fake_natives};
-
 //**************************************************************************************************
 // Context
 //**************************************************************************************************
 
 #[derive(Debug, Clone)]
-enum ResolvedType {
+pub(super) enum ResolvedType {
     Module(Box<ResolvedModuleType>),
     TParam(Loc, N::TParam),
     BuiltinType(N::BuiltinTypeName_),
@@ -35,19 +37,19 @@ enum ResolvedType {
 }
 
 #[derive(Debug, Clone)]
-struct ResolvedModuleType {
+pub(super) struct ResolvedModuleType {
     // original names/locs are provided to preserve loc information if needed
-    original_loc: Loc,
-    original_type_name: Name,
-    module_type: ModuleType,
+    pub original_loc: Loc,
+    pub original_type_name: Name,
+    pub module_type: ModuleType,
 }
 
 #[derive(Debug, Clone)]
-struct ModuleType {
-    original_mident: ModuleIdent,
-    decl_loc: Loc,
-    arity: usize,
-    is_positional: bool,
+pub(super) struct ModuleType {
+    pub original_mident: ModuleIdent,
+    pub decl_loc: Loc,
+    pub arity: usize,
+    pub is_positional: bool,
 }
 
 enum ResolvedFunction {
@@ -84,8 +86,8 @@ enum NominalBlockType {
     LambdaLoopCapture,
 }
 
-struct Context<'env> {
-    env: &'env mut CompilationEnv,
+pub(super) struct Context<'env> {
+    pub env: &'env mut CompilationEnv,
     current_module: Option<ModuleIdent>,
     scoped_types: BTreeMap<ModuleIdent, BTreeMap<Symbol, ModuleType>>,
     unscoped_types: BTreeMap<Symbol, ResolvedType>,
@@ -101,7 +103,7 @@ struct Context<'env> {
     /// Indicates if the compiler is currently translating a function (set to true before starting
     /// to translate a function and to false after translation is over).
     translating_fun: bool,
-    current_package: Option<Symbol>,
+    pub current_package: Option<Symbol>,
 }
 
 impl<'env> Context<'env> {
@@ -287,7 +289,7 @@ impl<'env> Context<'env> {
         }
     }
 
-    fn resolve_type(&mut self, sp!(nloc, ma_): E::ModuleAccess) -> ResolvedType {
+    pub fn resolve_type(&mut self, sp!(nloc, ma_): E::ModuleAccess) -> ResolvedType {
         use E::ModuleAccess_ as EN;
         match ma_ {
             EN::Name(n) => self.resolve_unscoped_type(nloc, n),
@@ -714,6 +716,7 @@ fn module(
     context.env.add_warning_filter_scope(warning_filter.clone());
     let unscoped = context.save_unscoped();
     let mut use_funs = use_funs(context, euse_funs);
+    let mut syntax_methods = N::SyntaxMethods::new();
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
     let structs = estructs.map(|name, s| {
         context.restore_unscoped(unscoped.clone());
@@ -721,7 +724,7 @@ fn module(
     });
     let functions = efunctions.map(|name, f| {
         context.restore_unscoped(unscoped.clone());
-        function(context, ident, name, f)
+        function(context, &mut syntax_methods, ident, name, f)
     });
     let constants = econstants.map(|name, c| {
         context.restore_unscoped(unscoped.clone());
@@ -748,6 +751,7 @@ fn module(
         attributes,
         is_source_module,
         use_funs,
+        syntax_methods,
         friends,
         structs,
         constants,
@@ -840,7 +844,7 @@ fn explicit_use_fun(
                 Declarations::InvalidUseFun,
                 (
                     loc,
-                    "Invalid 'use fun'. Cannot associate a method a type parameter"
+                    "Invalid 'use fun'. Cannot associate a method with a type parameter"
                 ),
                 (tloc, tmsg)
             ));
@@ -986,6 +990,7 @@ fn friend(context: &mut Context, mident: ModuleIdent, friend: E::Friend) -> Opti
 
 fn function(
     context: &mut Context,
+    syntax_methods: &mut N::SyntaxMethods,
     module: ModuleIdent,
     name: FunctionName,
     ef: E::Function,
@@ -1036,6 +1041,7 @@ fn function(
         signature,
         body,
     };
+    resolve_syntax_attributes(context, syntax_methods, &module, &name, &f);
     fake_natives::function(context.env, module, name, &f);
     let used_locals = std::mem::take(&mut context.used_locals);
     remove_unused_bindings_function(context, &used_locals, &mut f);
@@ -1630,7 +1636,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 assert!(context.env.has_errors());
                 NE::UnresolvedError
             }
-            Some(d) => NE::ExpDotted(case, d),
+            Some(ndot) => NE::ExpDotted(case, ndot),
         },
 
         EE::Cast(e, t) => NE::Cast(exp(context, e), type_(context, t)),
@@ -1639,7 +1645,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         EE::Call(ma, is_macro, tys_opt, rhs) if context.resolves_to_struct(&ma) => {
             context
                 .env
-                .check_feature(FeatureGate::PositionalFields, context.current_package, eloc);
+                .check_feature(context.current_package, FeatureGate::PositionalFields, eloc);
             if let Some(mloc) = is_macro {
                 let msg = "Unexpected macro invocation. Structs cannot be invoked as macros";
                 context
@@ -1717,8 +1723,8 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 ResolvedFunction::Module(mf) => {
                     if let Some(mloc) = is_macro {
                         context.env.check_feature(
-                            FeatureGate::MacroFuns,
                             context.current_package,
+                            FeatureGate::MacroFuns,
                             mloc,
                         );
                     }
@@ -1756,8 +1762,8 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 let nes = call_args(context, rhs);
                 if is_macro.is_some() {
                     context.env.check_feature(
-                        FeatureGate::MacroFuns,
                         context.current_package,
+                        FeatureGate::MacroFuns,
                         eloc,
                     );
                 }
@@ -1821,6 +1827,11 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
             }
         }
         E::ExpDotted_::Dot(d, f) => N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), Field(f)),
+        E::ExpDotted_::Index(inner, args) => {
+            let args = call_args(context, args);
+            let inner = Box::new(dotted(context, *inner)?);
+            N::ExpDotted_::Index(inner, args)
+        }
     };
     Some(sp(loc, nedot_))
 }
@@ -2341,6 +2352,12 @@ fn remove_unused_bindings_exp_dotted(
     match ed_ {
         N::ExpDotted_::Exp(e) => remove_unused_bindings_exp(context, used, e),
         N::ExpDotted_::Dot(ed, _) => remove_unused_bindings_exp_dotted(context, used, ed),
+        N::ExpDotted_::Index(ed, sp!(_, es)) => {
+            for e in es {
+                remove_unused_bindings_exp(context, used, e);
+            }
+            remove_unused_bindings_exp_dotted(context, used, ed)
+        }
     }
 }
 

@@ -1,0 +1,152 @@
+warning[W09001]: unused alias
+   ┌─ tests/move_2024/typing/all_index_paths.move:11:14
+   │
+11 │     use std::vector;
+   │              ^^^^^^ Unused 'use' of alias 'vector'. Consider removing it
+   │
+   = This alias does not shadow the built-in type 'vector' in type annotations.
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04012]: invalid type for constant
+   ┌─ tests/move_2024/typing/all_index_paths.move:44:16
+   │
+44 │     const VEC: vector<X> = vector[];
+   │                ^^^^^^^^^
+   │                │      │
+   │                │      Found: 'a::m::X'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+   │                Unpermitted constant type
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/typing/all_index_paths.move:61:9
+   │
+61 │         copy t.u.vs[n].w.xs[m+1].deref();
+   │         ^^^^ --------------------------- Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'copy' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/typing/all_index_paths.move:62:9
+   │
+62 │         copy t.u.vs[n].w.xs[m+1].deref().id();
+   │         ^^^^ -------------------------------- Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'copy' of expression
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_2024/typing/all_index_paths.move:63:14
+   │
+63 │         copy VEC[n+1];
+   │              ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/typing/all_index_paths.move:64:9
+   │
+64 │         copy VEC[n+1].id_u64();
+   │         ^^^^ ----------------- Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'copy' of expression
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/typing/all_index_paths.move:81:9
+   │
+81 │         move t2.u;
+   │         ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/typing/all_index_paths.move:82:10
+   │
+82 │         (move t2.u).vs[2];
+   │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/typing/all_index_paths.move:83:10
+   │
+83 │         (move t2.u).vs[2].w;
+   │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/typing/all_index_paths.move:84:10
+   │
+84 │         (move t2.u).vs[2].w.xs[m+1];
+   │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/typing/all_index_paths.move:85:10
+   │
+85 │         (move t2.u).vs[2].w.xs[m+1].y;
+   │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/typing/all_index_paths.move:86:10
+   │
+86 │         (move t2.u).vs[2].w.xs[m+1].y.z;
+   │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
+
+error[E04004]: expected a single non-reference type
+    ┌─ tests/move_2024/typing/all_index_paths.move:100:9
+    │
+ 16 │     fun ref_unused(_x: &X) { }
+    │         ---------- Expected a single non-reference type, but found: '()'
+    ·
+100 │         &t2.u.vs[2].w.xs[m+1].ref_unused(); // invalid -- trying to borrow `()`
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid borrow
+
+warning[W04028]: implicit copy of a constant
+    ┌─ tests/move_2024/typing/all_index_paths.move:104:10
+    │
+104 │         &VEC[n+1];
+    │          ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+    │
+    = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+    ┌─ tests/move_2024/typing/all_index_paths.move:105:10
+    │
+105 │         &VEC[n+1].id();
+    │          ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+    │
+    = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04004]: expected a single non-reference type
+    ┌─ tests/move_2024/typing/all_index_paths.move:119:9
+    │
+ 16 │     fun ref_unused(_x: &X) { }
+    │         ---------- Expected a single non-reference type, but found: '()'
+    ·
+119 │         &mut t2.u.vs[2].w.xs[m+1].ref_unused(); // invalid -- trying to borrow `()`
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid borrow
+
+warning[W04028]: implicit copy of a constant
+    ┌─ tests/move_2024/typing/all_index_paths.move:123:14
+    │
+123 │         &mut VEC[n+1];
+    │              ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+    │
+    = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+    ┌─ tests/move_2024/typing/all_index_paths.move:124:14
+    │
+124 │         &mut VEC[n+1].id();
+    │              ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+    │
+    = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+    ┌─ tests/move_2024/typing/all_index_paths.move:139:9
+    │
+139 │         VEC[n+1];
+    │         ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+    │
+    = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+    ┌─ tests/move_2024/typing/all_index_paths.move:140:9
+    │
+140 │         VEC[n+1].id();
+    │         ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+    │
+    = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

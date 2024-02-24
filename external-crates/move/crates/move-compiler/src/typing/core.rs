@@ -11,9 +11,9 @@ use crate::{
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
     ice,
     naming::ast::{
-        self as N, BlockLabel, BuiltinTypeName_, Color, ResolvedUseFuns, StructDefinition,
-        StructTypeParameter, TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind,
-        Var,
+        self as N, BlockLabel, BuiltinTypeName_, Color, IndexSyntaxMethods, ResolvedUseFuns,
+        StructDefinition, StructTypeParameter, TParam, TParamID, TVar, Type, TypeName, TypeName_,
+        Type_, UseFunKind, Var,
     },
     parser::ast::{
         Ability_, ConstantName, Field, FunctionName, Mutability, StructName, ENTRY_MODIFIER,
@@ -999,6 +999,18 @@ pub fn make_field_type(
     }
 }
 
+pub fn find_index_funs(context: &mut Context, type_name: &TypeName) -> Option<IndexSyntaxMethods> {
+    let module_ident = match &type_name.value {
+        TypeName_::Multiple(_) => return None,
+        TypeName_::Builtin(builtin_name) => context.env.primitive_definer(builtin_name.value)?,
+        TypeName_::ModuleType(m, _) => m,
+    };
+    let module_defn = context.module_info(module_ident);
+    let entry = module_defn.syntax_methods.get(type_name)?;
+    let index = entry.index.clone()?;
+    Some(*index)
+}
+
 //**************************************************************************************************
 // Constants
 //**************************************************************************************************
@@ -1669,6 +1681,30 @@ pub fn subst_tparams(subst: &TParamSubst, sp!(loc, t_): Type) -> Type {
     }
 }
 
+pub fn all_tparams(sp!(_, t_): Type) -> BTreeSet<TParam> {
+    use Type_::*;
+    match t_ {
+        Unit | UnresolvedError | Anything => BTreeSet::new(),
+        Var(_) => panic!("ICE tvar in all_tparams"),
+        Ref(_, t) => all_tparams(*t),
+        Param(tp) => BTreeSet::from([tp]),
+        Apply(_, _, ty_args) => {
+            let mut tparams = BTreeSet::new();
+            for arg in ty_args {
+                tparams.append(&mut all_tparams(arg));
+            }
+            tparams
+        }
+        Fun(args, result) => {
+            let mut tparams = all_tparams(*result);
+            for arg in args {
+                tparams.append(&mut all_tparams(arg));
+            }
+            tparams
+        }
+    }
+}
+
 pub fn ready_tvars(subst: &Subst, sp!(loc, t_): Type) -> Type {
     use Type_::*;
     match t_ {
@@ -1905,6 +1941,7 @@ pub fn give_tparams_all_abilities(sp!(_, ty_): &mut Type) {
 pub enum TypingError {
     SubtypeError(Box<Type>, Box<Type>),
     Incompatible(Box<Type>, Box<Type>),
+    InvariantError(Box<Type>, Box<Type>),
     ArityMismatch(usize, Box<Type>, usize, Box<Type>),
     FunArityMismatch(usize, Box<Type>, usize, Box<Type>),
     RecursiveType(Loc),
@@ -1913,6 +1950,7 @@ pub enum TypingError {
 #[derive(Clone, Copy, Debug)]
 enum TypingCase {
     Join,
+    Invariant,
     Subtype,
 }
 
@@ -1922,6 +1960,10 @@ pub fn subtype(subst: Subst, lhs: &Type, rhs: &Type) -> Result<(Subst, Type), Ty
 
 pub fn join(subst: Subst, lhs: &Type, rhs: &Type) -> Result<(Subst, Type), TypingError> {
     join_impl(subst, TypingCase::Join, lhs, rhs)
+}
+
+pub fn invariant(subst: Subst, lhs: &Type, rhs: &Type) -> Result<(Subst, Type), TypingError> {
+    join_impl(subst, TypingCase::Invariant, lhs, rhs)
 }
 
 fn join_impl(
@@ -1944,6 +1986,13 @@ fn join_impl(
                     // if 1 is imm and 2 is mut, use loc1. Else, loc2
                     let loc = if !*mut1 && *mut2 { *loc1 } else { *loc2 };
                     (loc, *mut1 && *mut2)
+                }
+                (Invariant, mut1, mut2) if mut1 == mut2 => (*loc1, *mut1),
+                (Invariant, _mut1, _mut2) => {
+                    return Err(TypingError::InvariantError(
+                        Box::new(lhs.clone()),
+                        Box::new(rhs.clone()),
+                    ))
                 }
                 // imm <: imm
                 // mut <: imm
@@ -2000,7 +2049,7 @@ fn join_impl(
             // TODO this is going to likely lead to some strange error locations/messages
             // since the RHS in subtyping is currently assumed to be an annotation
             let (subst, args) = match case {
-                Join => join_impl_types(subst, case, a1, a2)?,
+                Join | Invariant => join_impl_types(subst, case, a1, a2)?,
                 Subtype => join_impl_types(subst, case, a2, a1)?,
             };
             let (subst, result) = join_impl(subst, case, r1, r2)?;
