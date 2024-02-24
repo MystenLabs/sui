@@ -6,7 +6,6 @@ use std::fmt::Write;
 
 use super::balance::{self, Balance};
 use super::big_int::BigInt;
-use super::checkpoint::Checkpoint;
 use super::coin::Coin;
 use super::coin_metadata::CoinMetadata;
 use super::cursor::{self, Page, Paginated, RawPaginated, Target};
@@ -50,9 +49,8 @@ use sui_types::TypeTag;
 pub(crate) struct Object {
     pub address: SuiAddress,
     pub kind: ObjectKind,
-    /// The checkpoint sequence number at which this was viewed at, or None if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Type to implement GraphQL fields that are shared by all Objects.
@@ -170,23 +168,19 @@ pub struct AddressOwner {
     owner: Option<Owner>,
 }
 
-#[allow(dead_code)]
 pub(crate) enum ObjectLookupKey {
-    Latest,
     LatestAt(u64),
     VersionAt {
         version: u64,
-        /// The checkpoint sequence number at which this was viewed at, or None if the data was
-        /// requested at the latest checkpoint.
-        checkpoint_viewed_at: Option<u64>,
+        /// The checkpoint sequence number at which this was viewed at.
+        checkpoint_viewed_at: u64,
     },
     LatestAtParentVersion {
         /// The parent version to be used as the upper bound for the query. Look for the latest
         /// version of a child object that is less than or equal to this upper bound.
         version: u64,
-        /// The checkpoint sequence number at which this was viewed at, or None if the data was
-        /// requested at the latest checkpoint.
-        checkpoint_viewed_at: Option<u64>,
+        /// The checkpoint sequence number at which this was viewed at.
+        checkpoint_viewed_at: u64,
     },
 }
 
@@ -488,16 +482,8 @@ impl Object {
     }
 
     /// Attempts to convert the object into a MovePackage
-    async fn as_move_package(&self, ctx: &Context<'_>) -> Option<MovePackage> {
-        let Some(checkpoint_viewed_at) = match self.checkpoint_viewed_at {
-            Some(value) => Ok(value),
-            None => Checkpoint::query_latest_checkpoint_sequence_number(ctx.data_unchecked()).await,
-        }
-        .ok() else {
-            return None;
-        };
-
-        MovePackage::try_from(self, checkpoint_viewed_at).ok()
+    async fn as_move_package(&self) -> Option<MovePackage> {
+        MovePackage::try_from(self).ok()
     }
 }
 
@@ -538,7 +524,7 @@ impl ObjectImpl<'_> {
                 let parent = Object::query(
                     ctx.data_unchecked(),
                     address.into(),
-                    ObjectLookupKey::Latest,
+                    ObjectLookupKey::LatestAt(self.0.checkpoint_viewed_at),
                 )
                 .await
                 .ok()
@@ -666,13 +652,12 @@ impl Object {
     /// Construct a GraphQL object from a native object, without its stored (indexed) counterpart.
     ///
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
-    /// constructed in, or `None` if the data was requested at the latest checkpoint. This is
-    /// stored on `Object` so that when viewing that entity's state, it will be as if it was
-    /// read at the same checkpoint.
+    /// constructed in. This is stored on `Object` so that when viewing that entity's state, it will
+    /// be as if it was read at the same checkpoint.
     pub(crate) fn from_native(
         address: SuiAddress,
         native: NativeObject,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Object {
         Object {
             address,
@@ -703,15 +688,14 @@ impl Object {
 
     /// Query the database for a `page` of objects, optionally `filter`-ed.
     ///
-    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
-    /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
-    /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
-    /// state, it will be as if it was read at the same checkpoint.
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number this page was queried in.
+    /// Each entity returned in the connection will inherit this checkpoint, so that when viewing
+    /// that entity's state, it will be as if it was read at the same checkpoint.
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<Cursor>,
         filter: ObjectFilter,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Object>, Error> {
         Self::paginate_subtype(db, page, filter, checkpoint_viewed_at, Ok).await
     }
@@ -721,8 +705,8 @@ impl Object {
     /// further `filter`-ed. The subtype is created using the `downcast` function, which is allowed
     /// to fail, if the downcast has failed.
     ///
-    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
-    /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number this page was
+    /// queried in. Each entity
     /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
     /// state, it will be as if it was read at the same checkpoint.
     ///
@@ -734,17 +718,18 @@ impl Object {
         db: &Db,
         page: Page<Cursor>,
         filter: ObjectFilter,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
         downcast: impl Fn(Object) -> Result<T, Error>,
     ) -> Result<Connection<String, T>, Error> {
         // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
-        // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
-        // paginated queries are consistent with the previous query that created the cursor.
+        // consistent. Otherwise, use the value from the parameter. This is so that paginated
+        // queries are consistent with the previous query that created the cursor.
         let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
         let response = db
             .execute_repeatable(move |conn| {
+                // Check that the `checkpoint_viewed_at` is within the latest available range.
                 let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
@@ -771,26 +756,21 @@ impl Object {
             // To maintain consistency, the returned cursor should have the same upper-bound as the
             // checkpoint found on the cursor.
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
-            let object =
-                Object::try_from_stored_history_object(stored, Some(checkpoint_viewed_at))?;
+            let object = Object::try_from_stored_history_object(stored, checkpoint_viewed_at)?;
             conn.edges.push(Edge::new(cursor, downcast(object)?));
         }
 
         Ok(conn)
     }
 
-    /// Query for the object at a specific version, at the checkpoint_viewed_at if given, else
-    /// against the latest checkpoint.
-    ///
-    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
-    /// queried in, or `None` if the data was requested at the latest checkpoint. This is stored on
-    /// `Object` so that when viewing that entity's state, it will be as if it was read at the same
-    /// checkpoint.
+    /// Query for the object at a specific version. Since this is a historical lookup,
+    /// `checkpoint_viewed_at` is not used as a filtering constraint, but is still stored on the
+    /// object so that other parts of the query can use it for consistency.
     async fn query_at_version(
         db: &Db,
         address: SuiAddress,
         version: u64,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
@@ -798,11 +778,7 @@ impl Object {
         let version = version as i64;
 
         let stored_objs: Option<Vec<StoredHistoryObject>> = db
-            .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
-                    return Ok::<_, diesel::result::Error>(None);
-                };
-
+            .execute(move |conn| {
                 conn.results(move || {
                     // If an object was created or mutated in a checkpoint outside the current
                     // available range, and never touched again, it will not show up in the
@@ -815,13 +791,11 @@ impl Object {
                     let historical_query = history::objects_history
                         .filter(history::object_id.eq(address.into_vec()))
                         .filter(history::object_version.eq(version))
-                        .filter(history::checkpoint_sequence_number.between(lhs as i64, rhs as i64))
-                        .order_by(history::object_version.desc())
                         .limit(1);
 
                     snapshot_query.union(historical_query)
                 })
-                .optional() // Return optional to match the state when checkpoint_viewed_at is out of range
+                .optional()
             })
             .await?;
 
@@ -837,17 +811,15 @@ impl Object {
             .transpose()
     }
 
-    /// Query for the latest version of an object bounded by the provided `parent_version`.
-    ///
-    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
-    /// queried in, or `None` if the data was requested at the latest checkpoint. This is stored on
-    /// `Object` so that when viewing that entity's state, it will be as if it was read at the same
-    /// checkpoint.
-    async fn query_latest_at_version(
+    /// Query for the latest version of an object bounded by the provided `parent_version`. Since
+    /// this is a historical lookup, `checkpoint_viewed_at` is not used as a filtering constraint,
+    /// but is still stored on the object so that other parts of the query can use it for
+    /// consistency.
+    async fn query_latest_at_parent_version(
         db: &Db,
         address: SuiAddress,
         parent_version: u64,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
@@ -855,11 +827,7 @@ impl Object {
         let version = parent_version as i64;
 
         let stored_objs: Option<Vec<StoredHistoryObject>> = db
-            .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
-                    return Ok::<_, diesel::result::Error>(None);
-                };
-
+            .execute(move |conn| {
                 conn.results(move || {
                     // If an object was created or mutated in a checkpoint outside the current
                     // available range, and never touched again, it will not show up in the
@@ -872,7 +840,6 @@ impl Object {
                     let historical_query = history::objects_history
                         .filter(history::object_id.eq(address.into_vec()))
                         .filter(history::object_version.le(version))
-                        .filter(history::checkpoint_sequence_number.between(lhs as i64, rhs as i64))
                         .order_by(history::object_version.desc())
                         .limit(1);
 
@@ -895,12 +862,11 @@ impl Object {
             .transpose()
     }
 
-    /// Query for the object at the latest version at the checkpoint sequence number if given, else
-    /// the latest version of the object against the latest checkpoint.
+    /// Query for the object at the latest version at the checkpoint sequence number.
     async fn query_latest_at_checkpoint(
         db: &Db,
         address: SuiAddress,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
@@ -949,10 +915,8 @@ impl Object {
         key: ObjectLookupKey,
     ) -> Result<Option<Self>, Error> {
         match key {
-            ObjectLookupKey::Latest => Self::query_latest_at_checkpoint(db, address, None).await,
             ObjectLookupKey::LatestAt(checkpoint_sequence_number) => {
-                Self::query_latest_at_checkpoint(db, address, Some(checkpoint_sequence_number))
-                    .await
+                Self::query_latest_at_checkpoint(db, address, checkpoint_sequence_number).await
             }
             ObjectLookupKey::VersionAt {
                 version,
@@ -961,7 +925,10 @@ impl Object {
             ObjectLookupKey::LatestAtParentVersion {
                 version,
                 checkpoint_viewed_at,
-            } => Self::query_latest_at_version(db, address, version, checkpoint_viewed_at).await,
+            } => {
+                Self::query_latest_at_parent_version(db, address, version, checkpoint_viewed_at)
+                    .await
+            }
         }
         .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))
     }
@@ -969,7 +936,11 @@ impl Object {
     /// Query for a singleton object identified by its type. Note: the object is assumed to be a
     /// singleton (we either find at least one object with this type and then return it, or return
     /// nothing).
-    pub(crate) async fn query_singleton(db: &Db, type_: TypeTag) -> Result<Option<Object>, Error> {
+    pub(crate) async fn query_singleton(
+        db: &Db,
+        type_: TypeTag,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Option<Object>, Error> {
         use objects::dsl;
 
         let stored_obj: Option<StoredObject> = db
@@ -985,17 +956,16 @@ impl Object {
             .map_err(|e| Error::Internal(format!("Failed to fetch singleton: {e}")))?;
 
         stored_obj
-            .map(|obj| Object::try_from_stored_object(obj, None))
+            .map(|obj| Object::try_from_stored_object(obj, checkpoint_viewed_at))
             .transpose()
     }
 
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
-    /// constructed in, or `None` if the data was requested at the latest checkpoint. This is
-    /// stored on `Object` so that when viewing that entity's state, it will be as if it was read at
-    /// the same checkpoint.
+    /// viewed in. This is stored on `Object` so that when viewing that entity's state, it will be
+    /// as if it was read at the same checkpoint.
     pub(crate) fn try_from_stored_object(
         stored_object: StoredObject,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Self, Error> {
         let address = addr(&stored_object.object_id)?;
         let native_object = bcs::from_bytes(&stored_object.serialized_object)
@@ -1009,12 +979,11 @@ impl Object {
     }
 
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
-    /// constructed in, or `None` if the data was requested at the latest checkpoint. This is
-    /// stored on `Object` so that when viewing that entity's state, it will be as if it was read at
-    /// the same checkpoint.
+    /// viewed in. This is stored on `Object` so that when viewing that entity's state, it will be
+    /// as if it was read at the same checkpoint.
     pub(crate) fn try_from_stored_history_object(
         history_object: StoredHistoryObject,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Self, Error> {
         let address = addr(&history_object.object_id)?;
 

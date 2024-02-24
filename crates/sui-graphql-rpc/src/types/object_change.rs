@@ -34,7 +34,7 @@ impl ObjectChange {
             self.native.id.into(),
             ObjectLookupKey::VersionAt {
                 version: version.value(),
-                checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
+                checkpoint_viewed_at: self.checkpoint_viewed_at,
             },
         )
         .await
@@ -52,7 +52,7 @@ impl ObjectChange {
             self.native.id.into(),
             ObjectLookupKey::VersionAt {
                 version: version.value(),
-                checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
+                checkpoint_viewed_at: self.checkpoint_viewed_at,
             },
         )
         .await

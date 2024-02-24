@@ -146,7 +146,7 @@ pub(crate) fn convert_to_validators(
                     .cloned()
                     .map(|a| Address {
                         address: SuiAddress::from(a),
-                        checkpoint_viewed_at: Some(checkpoint_viewed_at),
+                        checkpoint_viewed_at,
                     })
                     .collect()
             });

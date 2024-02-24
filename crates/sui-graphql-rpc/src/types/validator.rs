@@ -32,7 +32,7 @@ impl Validator {
     async fn address(&self) -> Address {
         Address {
             address: SuiAddress::from(self.validator_summary.sui_address),
-            checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
         }
     }
 
@@ -243,7 +243,7 @@ impl Validator {
                 c.encode_cursor(),
                 Address {
                     address: addresses[c.ix].address,
-                    checkpoint_viewed_at: Some(c.c),
+                    checkpoint_viewed_at: c.c,
                 },
             ));
         }

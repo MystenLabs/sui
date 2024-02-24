@@ -37,7 +37,7 @@ impl ConsensusCommitPrologueTransaction {
         Epoch::query(
             ctx.data_unchecked(),
             Some(self.epoch),
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()

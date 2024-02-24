@@ -43,7 +43,7 @@ impl ObjectRead {
             self.address_impl(),
             ObjectLookupKey::VersionAt {
                 version: self.version_impl(),
-                checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
+                checkpoint_viewed_at: self.checkpoint_viewed_at,
             },
         )
         .await

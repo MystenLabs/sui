@@ -63,7 +63,7 @@ impl Balance {
         db: &Db,
         address: SuiAddress,
         coin_type: TypeTag,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Balance>, Error> {
         let stored: Option<StoredBalance> = db
             .execute_repeatable(move |conn| {
@@ -88,13 +88,13 @@ impl Balance {
         db: &Db,
         page: Page<Cursor>,
         address: SuiAddress,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Balance>, Error> {
         // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
         // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
         // paginated queries are consistent with the previous query that created the cursor.
         let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
         let response = db
             .execute_repeatable(move |conn| {

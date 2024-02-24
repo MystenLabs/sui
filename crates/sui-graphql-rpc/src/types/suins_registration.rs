@@ -314,10 +314,16 @@ impl NameService {
         db: &Db,
         config: &NameServiceConfig,
         domain: &Domain,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<NameRecord>, Error> {
         let record_id = config.record_field_id(&domain.0);
 
-        let Some(object) = MoveObject::query(db, record_id.into(), ObjectLookupKey::Latest).await?
+        let Some(object) = MoveObject::query(
+            db,
+            record_id.into(),
+            ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+        )
+        .await?
         else {
             return Ok(None);
         };
@@ -336,11 +342,16 @@ impl NameService {
         db: &Db,
         config: &NameServiceConfig,
         address: SuiAddress,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<NativeDomain>, Error> {
         let reverse_record_id = config.reverse_record_field_id(address.as_slice());
 
-        let Some(object) =
-            MoveObject::query(db, reverse_record_id.into(), ObjectLookupKey::Latest).await?
+        let Some(object) = MoveObject::query(
+            db,
+            reverse_record_id.into(),
+            ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+        )
+        .await?
         else {
             return Ok(None);
         };
@@ -359,16 +370,15 @@ impl SuinsRegistration {
     /// as is used for `Object`, and is further filtered to a particular `owner`. `config` specifies
     /// where to find the domain name registry and its type.
     ///
-    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
-    /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
-    /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
-    /// state, it will be as if it was read at the same checkpoint.
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number this page was queried in.
+    /// Each entity returned in the connection will inherit this checkpoint, so that when viewing
+    /// that entity's state, it will be as if it was read at the same checkpoint.
     pub(crate) async fn paginate(
         db: &Db,
         config: &NameServiceConfig,
         page: Page<object::Cursor>,
         owner: SuiAddress,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, SuinsRegistration>, Error> {
         let type_ = SuinsRegistration::type_(config.package_address.into());
 

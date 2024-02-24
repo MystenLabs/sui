@@ -43,7 +43,7 @@ impl AuthenticatorStateUpdateTransaction {
         Epoch::query(
             ctx.data_unchecked(),
             Some(self.native.epoch),
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -133,7 +133,7 @@ impl ActiveJwk {
         Epoch::query(
             ctx.data_unchecked(),
             Some(self.native.epoch),
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()

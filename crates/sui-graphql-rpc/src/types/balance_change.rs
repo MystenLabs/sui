@@ -24,7 +24,7 @@ impl BalanceChange {
         match self.stored.owner {
             O::AddressOwner(addr) | O::ObjectOwner(addr) => Some(Owner {
                 address: SuiAddress::from(addr),
-                checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
+                checkpoint_viewed_at: self.checkpoint_viewed_at,
             }),
 
             O::Shared { .. } | O::Immutable => None,
