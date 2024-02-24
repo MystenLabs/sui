@@ -8,7 +8,7 @@ use crate::{
     editions::{Edition, FeatureGate, Flavor},
     expansion::ast::{
         Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend, ModuleAccess_,
-        ModuleIdent, ModuleIdent_, Value_, Visibility,
+        ModuleIdent, ModuleIdent_, Mutability, Value_, Visibility,
     },
     ice,
     naming::ast::{
@@ -1858,10 +1858,11 @@ fn lvalue(
         } => {
             let var_ty = match case {
                 C::Bind => {
-                    context.declare_local(mut_, var, ty.clone());
+                    context.declare_local(mut_.unwrap(), var, ty.clone());
                     ty
                 }
                 C::Assign => {
+                    assert!(mut_.is_none());
                     check_mutability(context, loc, "assignment", &var);
                     let var_ty = context.get_local_type(&var);
                     subtype(
@@ -1875,6 +1876,7 @@ fn lvalue(
                 }
             };
             TL::Var {
+                mut_,
                 var,
                 ty: Box::new(var_ty),
                 unused_binding,
@@ -1968,7 +1970,7 @@ fn check_mutation(context: &mut Context, loc: Loc, given_ref: Type, rvalue_ty: &
 
 fn check_mutability(context: &mut Context, eloc: Loc, usage: &str, v: &N::Var) {
     let (decl_loc, mut_) = context.mark_mutable_usage(eloc, v);
-    if mut_.is_none() {
+    if mut_ == Mutability::Imm {
         let v = &v.value.name;
         let usage_msg = format!("Invalid {usage} of immutable variable '{v}'");
         let decl_msg =
@@ -3317,7 +3319,7 @@ fn expand_macro(
                 .map(|(sp!(vloc, v_), e)| {
                     let lvalue_ = match v_ {
                         Some(var_) => N::LValue_::Var {
-                            mut_: None,
+                            mut_: Some(Mutability::Either),
                             var: sp(vloc, var_),
                             unused_binding: false,
                         },
@@ -3413,7 +3415,9 @@ fn unused_let_muts(context: &mut Context) {
     }
     for (v, local) in locals {
         let Local { mut_, used_mut, .. } = local;
-        let Some(mut_loc) = mut_ else { continue };
+        let Mutability::Mut(mut_loc) = mut_ else {
+            continue;
+        };
         if used_mut.is_none() && !v.value.starts_with_underscore() {
             let decl_msg = format!("The variable '{}' is never used mutably", v.value.name);
             let mut_msg = "Consider removing the 'mut' declaration here";

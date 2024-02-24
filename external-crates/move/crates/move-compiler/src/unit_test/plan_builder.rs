@@ -157,7 +157,7 @@ fn build_test_info<'func>(
 
     let test_annotation_params = parse_test_attribute(context, test_attribute, 0);
     let mut arguments = Vec::new();
-    for (var, _) in &function.signature.parameters {
+    for (_mut, var, _) in &function.signature.parameters {
         let sp!(vloc, var_) = var.0;
         let var_ = match display_var(var_) {
             crate::hlir::translate::DisplayVar::Orig(s) => s.into(),

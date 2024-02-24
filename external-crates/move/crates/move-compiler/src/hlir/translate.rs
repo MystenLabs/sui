@@ -9,9 +9,11 @@
 use crate::{
     debug_display, debug_display_verbose, diag,
     editions::{FeatureGate, Flavor},
-    expansion::ast::{self as E, Fields, ModuleIdent},
-    hlir::ast::{self as H, Block, BlockLabel, MoveOpAnnotation},
-    hlir::detect_dead_code::program as detect_dead_code_analysis,
+    expansion::ast::{self as E, Fields, ModuleIdent, Mutability},
+    hlir::{
+        ast::{self as H, Block, BlockLabel, MoveOpAnnotation},
+        detect_dead_code::program as detect_dead_code_analysis,
+    },
     ice,
     naming::ast as N,
     parser::ast::{Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName},
@@ -109,7 +111,7 @@ struct Context<'env> {
     env: &'env mut CompilationEnv,
     current_package: Option<Symbol>,
     structs: UniqueMap<ModuleIdent, UniqueMap<StructName, UniqueMap<Field, usize>>>,
-    function_locals: UniqueMap<H::Var, H::SingleType>,
+    function_locals: UniqueMap<H::Var, (Mutability, H::SingleType)>,
     signature: Option<H::FunctionSignature>,
     tmp_counter: usize,
     named_block_binders: UniqueMap<H::BlockLabel, Vec<H::LValue>>,
@@ -171,21 +173,23 @@ impl<'env> Context<'env> {
         self.function_locals.is_empty()
     }
 
-    pub fn extract_function_locals(&mut self) -> UniqueMap<H::Var, H::SingleType> {
+    pub fn extract_function_locals(&mut self) -> UniqueMap<H::Var, (Mutability, H::SingleType)> {
         self.tmp_counter = 0;
         std::mem::replace(&mut self.function_locals, UniqueMap::new())
     }
 
     pub fn new_temp(&mut self, loc: Loc, t: H::SingleType) -> H::Var {
         let new_var = H::Var(sp(loc, new_temp_name(self)));
-        self.function_locals.add(new_var, t).unwrap();
+        self.function_locals
+            .add(new_var, (Mutability::Either, t))
+            .unwrap();
 
         new_var
     }
 
-    pub fn bind_local(&mut self, v: N::Var, t: H::SingleType) {
+    pub fn bind_local(&mut self, mut_: Mutability, v: N::Var, t: H::SingleType) {
         let symbol = translate_var(v);
-        self.function_locals.add(symbol, t).unwrap();
+        self.function_locals.add(symbol, (mut_, t)).unwrap();
     }
 
     pub fn record_named_block_binders(
@@ -362,10 +366,10 @@ fn function_signature(context: &mut Context, sig: N::FunctionSignature) -> H::Fu
     let parameters = sig
         .parameters
         .into_iter()
-        .map(|(_, v, tty)| {
+        .map(|(mut_, v, tty)| {
             let ty = single_type(context, tty);
-            context.bind_local(v, ty.clone());
-            (translate_var(v), ty)
+            context.bind_local(mut_, v, ty.clone());
+            (mut_, translate_var(v), ty)
         })
         .collect();
     let return_type = type_(context, sig.return_type);
@@ -402,7 +406,7 @@ fn function_body_defined(
     signature: &H::FunctionSignature,
     loc: Loc,
     seq: VecDeque<T::SequenceItem>,
-) -> (UniqueMap<H::Var, H::SingleType>, Block) {
+) -> (UniqueMap<H::Var, (Mutability, H::SingleType)>, Block) {
     context.signature = Some(signature.clone());
     let (mut body, final_value) = { body(context, Some(&signature.return_type), loc, seq) };
     if let Some(ret_exp) = final_value {
@@ -1812,9 +1816,11 @@ fn declare_bind(context: &mut Context, sp!(_, bind_): &T::LValue) {
     use T::LValue_ as L;
     match bind_ {
         L::Ignore => (),
-        L::Var { var: v, ty, .. } => {
+        L::Var {
+            var: v, ty, mut_, ..
+        } => {
             let st = single_type(context, *ty.clone());
-            context.bind_local(*v, st)
+            context.bind_local(mut_.unwrap(), *v, st)
         }
         L::Unpack(_, _, _, fields) | L::BorrowUnpack(_, _, _, _, fields) => fields
             .iter()

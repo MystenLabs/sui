@@ -18,7 +18,7 @@ use crate::{
     ice,
     parser::ast::{
         self as P, Ability, BlockLabel, ConstantName, Field, FieldBindings, FunctionName,
-        ModuleName, Mutability, StructName, Var, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
+        ModuleName, StructName, Var, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{known_attributes::AttributePosition, unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -3404,7 +3404,7 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
         PB::Var(pmut, v) => {
             let emut = mutability(context, v.loc(), pmut);
             check_valid_local_name(context, &v);
-            EL::Var(emut, sp(loc, E::ModuleAccess_::Name(v.0)), None)
+            EL::Var(Some(emut), sp(loc, E::ModuleAccess_::Name(v.0)), None)
         }
         PB::Unpack(ptn, ptys_opt, pfields) => {
             let tn = context.name_access_chain_to_module_access(Access::ApplyNamed, *ptn)?;
@@ -3577,7 +3577,7 @@ fn assign_unpack_fields(
     ))
 }
 
-fn mutability(context: &mut Context, loc: Loc, pmut: Mutability) -> Mutability {
+fn mutability(context: &mut Context, _loc: Loc, pmut: P::Mutability) -> E::Mutability {
     let supports_let_mut = {
         let pkg = context.current_package;
         context.env().supports_feature(pkg, FeatureGate::LetMut)
@@ -3585,11 +3585,11 @@ fn mutability(context: &mut Context, loc: Loc, pmut: Mutability) -> Mutability {
     match pmut {
         Some(loc) => {
             assert!(supports_let_mut, "ICE mut should not parse without let mut");
-            Some(loc)
+            E::Mutability::Mut(loc)
         }
-        None if supports_let_mut => None,
+        None if supports_let_mut => E::Mutability::Imm,
         // without let mut enabled, all locals are mutable and do not need the annotation
-        None => Some(loc),
+        None => E::Mutability::Either,
     }
 }
 

@@ -11,6 +11,7 @@ use super::{
 };
 use crate::{
     diagnostics::Diagnostics,
+    expansion::ast::Mutability,
     hlir::ast::{self as H, *},
     shared::{unique_map::UniqueMap, CompilationEnv},
 };
@@ -185,6 +186,7 @@ mod last_usage {
     use crate::{
         cfgir::liveness::state::LivenessState,
         diag,
+        expansion::ast::Mutability,
         hlir::{
             ast::*,
             translate::{display_var, DisplayVar},
@@ -196,7 +198,7 @@ mod last_usage {
 
     struct Context<'a, 'b> {
         env: &'a mut CompilationEnv,
-        locals: &'a UniqueMap<Var, SingleType>,
+        locals: &'a UniqueMap<Var, (Mutability, SingleType)>,
         next_live: &'b BTreeSet<Var>,
         dropped_live: BTreeSet<Var>,
     }
@@ -204,7 +206,7 @@ mod last_usage {
     impl<'a, 'b> Context<'a, 'b> {
         fn new(
             env: &'a mut CompilationEnv,
-            locals: &'a UniqueMap<Var, SingleType>,
+            locals: &'a UniqueMap<Var, (Mutability, SingleType)>,
             next_live: &'b BTreeSet<Var>,
             dropped_live: BTreeSet<Var>,
         ) -> Self {
@@ -217,14 +219,14 @@ mod last_usage {
         }
 
         fn has_drop(&self, local: &Var) -> bool {
-            let ty = self.locals.get(local).unwrap();
+            let ty = &self.locals.get(local).unwrap().1;
             ty.value.abilities(ty.loc).has_ability_(Ability_::Drop)
         }
     }
 
     pub fn block(
         compilation_env: &mut CompilationEnv,
-        locals: &UniqueMap<Var, SingleType>,
+        locals: &UniqueMap<Var, (Mutability, SingleType)>,
         final_invariant: &LivenessState,
         command_states: &VecDeque<LivenessState>,
         block: &mut BasicBlock,
@@ -433,7 +435,7 @@ fn build_forward_intersections(
 }
 
 fn release_dead_refs_block(
-    locals: &UniqueMap<Var, SingleType>,
+    locals: &UniqueMap<Var, (Mutability, SingleType)>,
     locals_pre_state: &locals::state::LocalStates,
     liveness_pre_state: &LivenessState,
     forward_intersection: &BTreeSet<Var>,
@@ -458,12 +460,12 @@ fn release_dead_refs_block(
         .filter(|var| locals_pre_state.get_state(var).is_available())
         .map(|var| (var, locals.get(var).unwrap()))
         .filter(is_ref);
-    for (dead_ref, ty) in dead_refs {
+    for (dead_ref, (_, ty)) in dead_refs {
         block.push_front(pop_ref(cmd_loc, *dead_ref, ty.clone()));
     }
 }
 
-fn is_ref((_local, sp!(_, local_ty_)): &(&Var, &SingleType)) -> bool {
+fn is_ref((_local, (_, sp!(_, local_ty_))): &(&Var, &(Mutability, SingleType))) -> bool {
     match local_ty_ {
         SingleType_::Ref(_, _) => true,
         SingleType_::Base(_) => false,

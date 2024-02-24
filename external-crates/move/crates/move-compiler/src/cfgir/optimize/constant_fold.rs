@@ -4,6 +4,7 @@
 
 use crate::{
     cfgir::cfg::MutForwardCFG,
+    expansion::ast::Mutability,
     hlir::ast::{
         BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
         TypeName_, UnannotatedExp_, Value, Value_, Var,
@@ -18,7 +19,7 @@ use std::convert::TryFrom;
 /// returns true if anything changed
 pub fn optimize(
     _signature: &FunctionSignature,
-    _locals: &UniqueMap<Var, SingleType>,
+    _locals: &UniqueMap<Var, (Mutability, SingleType)>,
     constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {

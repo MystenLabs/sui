@@ -4,7 +4,7 @@
 
 use crate::{
     diagnostics::WarningFilters,
-    expansion::ast::{Attributes, Friend, ModuleIdent},
+    expansion::ast::{Attributes, Friend, ModuleIdent, Mutability},
     hlir::ast::{
         BaseType, Command, Command_, FunctionSignature, Label, SingleType, StructDefinition, Var,
         Visibility,
@@ -70,7 +70,7 @@ pub struct Constant {
 pub enum FunctionBody_ {
     Native,
     Defined {
-        locals: UniqueMap<Var, SingleType>,
+        locals: UniqueMap<Var, (Mutability, SingleType)>,
         start: Label,
         block_info: BTreeMap<Label, BlockInfo>,
         blocks: BasicBlocks,
@@ -313,7 +313,8 @@ impl AstDebug for (FunctionName, &Function) {
             } => w.block(|w| {
                 w.write("locals:");
                 w.indent(4, |w| {
-                    w.list(locals, ",", |w, (_, v, st)| {
+                    w.list(locals, ",", |w, (_, v, (mut_, st))| {
+                        mut_.ast_debug(w);
                         w.write(&format!("{}: ", v));
                         st.ast_debug(w);
                         true

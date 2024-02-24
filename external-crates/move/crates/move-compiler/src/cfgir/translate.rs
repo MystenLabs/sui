@@ -10,7 +10,7 @@ use crate::{
     },
     diag,
     diagnostics::Diagnostics,
-    expansion::ast::{AbilitySet, Attributes, ModuleIdent},
+    expansion::ast::{AbilitySet, Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     parser::ast::{ConstantName, FunctionName, StructName},
     shared::{unique_map::UniqueMap, CompilationEnv},
@@ -440,7 +440,7 @@ fn constant_(
     full_loc: Loc,
     attributes: &Attributes,
     signature: H::BaseType,
-    locals: UniqueMap<Var, H::SingleType>,
+    locals: UniqueMap<Var, (Mutability, H::SingleType)>,
     body: H::Block,
 ) -> Option<H::Exp> {
     use H::Command_ as C;

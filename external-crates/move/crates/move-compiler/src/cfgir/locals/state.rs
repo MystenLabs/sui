@@ -2,7 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{cfgir::absint::*, hlir::ast::Var, shared::unique_map::UniqueMap};
+use crate::{
+    cfgir::absint::*, expansion::ast::Mutability, hlir::ast::Var, shared::unique_map::UniqueMap,
+};
 use move_ir_types::location::*;
 
 //**************************************************************************************************
@@ -44,7 +46,10 @@ pub struct LocalStates {
 }
 
 impl LocalStates {
-    pub fn initial<T>(function_arguments: &[(Var, T)], local_types: &UniqueMap<Var, T>) -> Self {
+    pub fn initial<T>(
+        function_arguments: &[(Mutability, Var, T)],
+        local_types: &UniqueMap<Var, (Mutability, T)>,
+    ) -> Self {
         let mut states = LocalStates {
             local_states: UniqueMap::new(),
         };
@@ -52,7 +57,7 @@ impl LocalStates {
             let local_state = LocalState::Unavailable(var.loc(), UnavailableReason::Unassigned);
             states.set_state(var, local_state)
         }
-        for (var, _) in function_arguments {
+        for (_, var, _) in function_arguments {
             let local_state = LocalState::Available(var.loc());
             states.set_state(*var, local_state)
         }

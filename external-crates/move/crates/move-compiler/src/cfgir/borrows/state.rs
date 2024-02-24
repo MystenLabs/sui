@@ -13,6 +13,7 @@ use crate::{
         codes::{DiagnosticCode, ReferenceSafety},
         Diagnostic, Diagnostics,
     },
+    expansion::ast::Mutability,
     hlir::{
         ast::{self as H, *},
         translate::{display_var, DisplayVar},
@@ -417,8 +418,8 @@ impl BorrowState {
     // Command Entry Points
     //**********************************************************************************************
 
-    pub fn bind_arguments(&mut self, parameter_types: &[(Var, SingleType)]) {
-        for (local, ty) in parameter_types.iter() {
+    pub fn bind_arguments(&mut self, parameter_types: &[(Mutability, Var, SingleType)]) {
+        for (_mut, local, ty) in parameter_types.iter() {
             let value = self.single_type_value(ty.loc, ty);
             if let Value::Ref(id) = value {
                 self.set_param_name(id, *local);

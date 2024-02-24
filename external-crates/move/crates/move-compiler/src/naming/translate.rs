@@ -7,7 +7,7 @@ use crate::{
     diagnostics::{self, codes::*},
     editions::FeatureGate,
     expansion::{
-        ast::{self as E, AbilitySet, ModuleIdent, Visibility},
+        ast::{self as E, AbilitySet, ModuleIdent, Mutability, Visibility},
         translate::is_valid_struct_or_constant_name as is_constant_name,
     },
     ice,
@@ -1065,15 +1065,11 @@ fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::Fu
         .map(|(mut mut_, param, param_ty)| {
             let is_underscore = param.is_underscore();
             if is_underscore {
-                check_mut_underscore(context, mut_);
-                mut_ = None
+                check_mut_underscore(context, Some(mut_));
+                mut_ = Mutability::Imm;
             };
-            if param.is_syntax_identifier()
-                && context
-                    .env
-                    .supports_feature(context.current_package, FeatureGate::LetMut)
-            {
-                if let Some(mutloc) = mut_ {
+            if param.is_syntax_identifier() {
+                if let Mutability::Mut(mutloc) = mut_ {
                     let msg = format!(
                         "Invalid 'mut' parameter. \
                         '{}' parameters cannot be declared as mutable",
@@ -1082,7 +1078,7 @@ fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::Fu
                     let mut diag = diag!(NameResolution::InvalidMacroParameter, (mutloc, msg));
                     diag.add_note(ASSIGN_SYNTAX_IDENTIFIER_NOTE);
                     context.env.add_diag(diag);
-                    mut_ = None
+                    mut_ = Mutability::Imm;
                 }
             }
             if let Err((param, prev_loc)) = declared.add(param, ()) {
@@ -1970,21 +1966,15 @@ fn lvalue(
     Some(sp(loc, nl_))
 }
 
-fn check_mut_underscore(context: &mut Context, mut_: Option<Loc>) {
+fn check_mut_underscore(context: &mut Context, mut_: Option<Mutability>) {
     // no error if not a mut declaration
-    let Some(mut_) = mut_ else { return };
-    // no error if let-mut is not supported
-    // (we mark all locals as having mut if the feature is off)
-    if !context
-        .env
-        .supports_feature(context.current_package, FeatureGate::LetMut)
-    {
+    let Some(Mutability::Mut(loc)) = mut_ else {
         return;
-    }
+    };
     let msg = "Invalid 'mut' declaration. 'mut' is applied to variables and cannot be applied to the '_' pattern";
     context
         .env
-        .add_diag(diag!(NameResolution::InvalidMut, (mut_, msg)));
+        .add_diag(diag!(NameResolution::InvalidMut, (loc, msg)));
 }
 
 fn bind_list(context: &mut Context, ls: E::LValueList) -> Option<N::LValueList> {

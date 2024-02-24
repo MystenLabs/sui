@@ -181,7 +181,7 @@ pub trait SimpleAbsIntConstructor: Sized {
                 (v, unassigned)
             })
             .collect::<BTreeMap<_, _>>();
-        for (param, _) in &context.signature.parameters {
+        for (_, param, _) in &context.signature.parameters {
             locals.insert(
                 *param,
                 LocalState::Available(

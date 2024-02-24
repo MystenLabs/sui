@@ -8,7 +8,7 @@ use super::absint::*;
 use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
-    expansion::ast::{AbilitySet, ModuleIdent},
+    expansion::ast::{AbilitySet, ModuleIdent, Mutability},
     hlir::{
         ast::*,
         translate::{display_var, DisplayVar},
@@ -27,14 +27,14 @@ use std::collections::BTreeMap;
 
 struct LocalsSafety<'a> {
     struct_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
-    local_types: &'a UniqueMap<Var, SingleType>,
+    local_types: &'a UniqueMap<Var, (Mutability, SingleType)>,
     signature: &'a FunctionSignature,
 }
 
 impl<'a> LocalsSafety<'a> {
     fn new(
         struct_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
-        local_types: &'a UniqueMap<Var, SingleType>,
+        local_types: &'a UniqueMap<Var, (Mutability, SingleType)>,
         signature: &'a FunctionSignature,
     ) -> Self {
         Self {
@@ -47,7 +47,7 @@ impl<'a> LocalsSafety<'a> {
 
 struct Context<'a, 'b> {
     struct_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
-    local_types: &'a UniqueMap<Var, SingleType>,
+    local_types: &'a UniqueMap<Var, (Mutability, SingleType)>,
     local_states: &'b mut LocalStates,
     signature: &'a FunctionSignature,
     diags: Diagnostics,
@@ -88,7 +88,7 @@ impl<'a, 'b> Context<'a, 'b> {
     }
 
     fn local_type(&self, local: &Var) -> &SingleType {
-        self.local_types.get(local).unwrap()
+        &self.local_types.get(local).unwrap().1
     }
 }
 

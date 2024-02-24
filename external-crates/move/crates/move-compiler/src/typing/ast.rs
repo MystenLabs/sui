@@ -5,7 +5,9 @@
 use crate::{
     debug_display,
     diagnostics::WarningFilters,
-    expansion::ast::{Address, Attributes, Fields, Friend, ModuleIdent, Value, Visibility},
+    expansion::ast::{
+        Address, Attributes, Fields, Friend, ModuleIdent, Mutability, Value, Visibility,
+    },
     ice,
     naming::ast::{
         BlockLabel, FunctionSignature, Neighbor, StructDefinition, SyntaxMethods, Type, TypeName_,
@@ -115,6 +117,7 @@ pub struct Constant {
 pub enum LValue_ {
     Ignore,
     Var {
+        mut_: Option<Mutability>,
         var: Var,
         ty: Box<Type>,
         unused_binding: bool,
@@ -768,11 +771,15 @@ impl AstDebug for LValue_ {
         match self {
             L::Ignore => w.write("_"),
             L::Var {
+                mut_,
                 var: v,
                 ty: st,
                 unused_binding,
             } => w.annotate(
                 |w| {
+                    if let Some(mut_) = mut_ {
+                        mut_.ast_debug(w);
+                    }
                     v.ast_debug(w);
                     if *unused_binding {
                         w.write("#unused")

@@ -4,6 +4,7 @@
 
 use crate::{
     cfgir::{cfg::MutForwardCFG, remove_no_ops},
+    expansion::ast::Mutability,
     hlir::ast::{FunctionSignature, SingleType, Value, Var},
     parser,
     shared::unique_map::UniqueMap,
@@ -13,7 +14,7 @@ use std::collections::BTreeSet;
 /// returns true if anything changed
 pub fn optimize(
     signature: &FunctionSignature,
-    _locals: &UniqueMap<Var, SingleType>,
+    _locals: &UniqueMap<Var, (Mutability, SingleType)>,
     _constants: &UniqueMap<parser::ast::ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
@@ -64,7 +65,7 @@ mod count {
                 assigned: BTreeMap::new(),
                 used: BTreeMap::new(),
             };
-            for (v, _) in &signature.parameters {
+            for (_, v, _) in &signature.parameters {
                 ctx.assign(v, false);
             }
             ctx

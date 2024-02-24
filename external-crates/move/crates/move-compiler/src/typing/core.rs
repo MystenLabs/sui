@@ -8,16 +8,14 @@ use crate::{
         codes::{NameResolution, TypeSafety},
         Diagnostic,
     },
-    expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
+    expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
     ice,
     naming::ast::{
         self as N, BlockLabel, BuiltinTypeName_, Color, IndexSyntaxMethods, ResolvedUseFuns,
         StructDefinition, StructTypeParameter, TParam, TParamID, TVar, Type, TypeName, TypeName_,
         Type_, UseFunKind, Var,
     },
-    parser::ast::{
-        Ability_, ConstantName, Field, FunctionName, Mutability, StructName, ENTRY_MODIFIER,
-    },
+    parser::ast::{Ability_, ConstantName, Field, FunctionName, StructName, ENTRY_MODIFIER},
     shared::{known_attributes::TestingAttribute, program_info::*, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
@@ -503,7 +501,7 @@ impl<'env> Context<'env> {
         if !self.locals.contains_key(var) {
             let msg = format!("ICE unbound {var:?}. Should have failed in naming");
             self.env.add_diag(ice!((loc, msg)));
-            return (loc, Mutability::None);
+            return (loc, Mutability::Either);
         }
 
         // should not fail, already checked in naming
