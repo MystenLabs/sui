@@ -1681,6 +1681,30 @@ pub fn subst_tparams(subst: &TParamSubst, sp!(loc, t_): Type) -> Type {
     }
 }
 
+pub fn all_tparams(sp!(_, t_): Type) -> BTreeSet<TParam> {
+    use Type_::*;
+    match t_ {
+        Unit | UnresolvedError | Anything => BTreeSet::new(),
+        Var(_) => panic!("ICE tvar in all_tparams"),
+        Ref(_, t) => all_tparams(*t),
+        Param(tp) => BTreeSet::from([tp]),
+        Apply(_, _, ty_args) => {
+            let mut tparams = BTreeSet::new();
+            for arg in ty_args {
+                tparams.append(&mut all_tparams(arg));
+            }
+            tparams
+        }
+        Fun(args, result) => {
+            let mut tparams = all_tparams(*result);
+            for arg in args {
+                tparams.append(&mut all_tparams(arg));
+            }
+            tparams
+        }
+    }
+}
+
 pub fn ready_tvars(subst: &Subst, sp!(loc, t_): Type) -> Type {
     use Type_::*;
     match t_ {

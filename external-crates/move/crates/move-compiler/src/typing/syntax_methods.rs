@@ -6,8 +6,11 @@
 //! trait-like constraints around their definitions. We process them here, using typing machinery
 //! to ensure the are.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use crate::{
     diag,
+    diagnostics::Diagnostic,
     expansion::ast::ModuleIdent,
     naming::ast::{self as N, IndexSyntaxMethods, SyntaxMethod},
     typing::core::{self, Context},
@@ -203,8 +206,15 @@ fn validate_index_syntax_methods(
                 (index_type.loc, index_msg),
                 (mut_type.loc, mut_msg)
             );
+            add_type_param_info(
+                &mut diag,
+                index_type,
+                &index_finfo.signature.type_parameters,
+                mut_type,
+                &mut_finfo.signature.type_parameters,
+            );
             diag.add_note(
-                "These functions must take the same subject type, differing only by mutability.",
+                "These functions must take the same subject type, differing only by mutability",
             );
             context.env.add_diag(diag);
             valid = false;
@@ -230,6 +240,13 @@ fn validate_index_syntax_methods(
                 (index_type.loc, index_msg),
                 (mut_type.loc, mut_msg)
             );
+            add_type_param_info(
+                &mut diag,
+                index_type,
+                &index_finfo.signature.type_parameters,
+                mut_type,
+                &mut_finfo.signature.type_parameters,
+            );
             diag.add_note("Index operation non-subject parameter types must match exactly");
             context.env.add_diag(diag);
             valid = false;
@@ -240,19 +257,26 @@ fn validate_index_syntax_methods(
     // that they are appropriately-shaped references, and now we ensure they refer to the same type
     // under the reference.
     if core::subtype(subst, &mut_finfo.signature.return_type, &index_ty.return_).is_err() {
-        let sp!(index_loc, index_type) = &index_finfo.signature.return_type;
-        let sp!(mut_loc, mut_type) = &mut_finfo.signature.return_type;
-        let index_msg = format!("This index function returns type {}", ty_str_(index_type));
+        let index_type = &index_finfo.signature.return_type;
+        let mut_type = &mut_finfo.signature.return_type;
+        let index_msg = format!("This index function returns type {}", ty_str(index_type));
         let mut_msg = format!(
             "This mutable index function returns type {}",
-            ty_str_(mut_type)
+            ty_str(mut_type)
         );
         let mut diag = diag!(
             TypeSafety::IncompatibleSyntaxMethods,
-            (*index_loc, index_msg),
-            (*mut_loc, mut_msg)
+            (index_type.loc, index_msg),
+            (mut_type.loc, mut_msg)
         );
-        diag.add_note("These functions must return the same type, differing only by mutability.");
+        add_type_param_info(
+            &mut diag,
+            index_type,
+            &index_finfo.signature.type_parameters,
+            mut_type,
+            &mut_finfo.signature.type_parameters,
+        );
+        diag.add_note("These functions must return the same type, differing only by mutability");
         context.env.add_diag(diag);
         valid = false;
     }
@@ -265,10 +289,65 @@ fn validate_index_syntax_methods(
 
 // Error printing helpers
 
-fn ty_str(ty: &N::Type) -> String {
-    core::error_format(ty, &core::Subst::empty())
+fn add_type_param_info(
+    diag: &mut Diagnostic,
+    index_ty: &N::Type,
+    index_tparams: &[N::TParam],
+    mut_ty: &N::Type,
+    mut_tparams: &[N::TParam],
+) {
+    let index_posns = type_param_positions(index_ty, index_tparams);
+    let mut_posns = type_param_positions(mut_ty, mut_tparams);
+    let index_names = index_posns.keys().clone().collect::<BTreeSet<_>>();
+    let mut_names = mut_posns.keys().clone().collect::<BTreeSet<_>>();
+    let shared_names = index_names.intersection(&mut_names);
+    let mut added_info = false;
+    for name in shared_names {
+        let (index_posn, index_loc) = index_posns.get(name).unwrap();
+        let (mut_posn, mut_loc) = mut_posns.get(name).unwrap();
+        if index_posn != mut_posn {
+            added_info = true;
+            diag.add_secondary_label((
+                *index_loc,
+                format!(
+                    "Type parameter {} appears in position {} here",
+                    name,
+                    index_posn + 1
+                ),
+            ));
+            diag.add_secondary_label((
+                *mut_loc,
+                format!(
+                    "Type parameter {} appears in position {} here",
+                    name,
+                    mut_posn + 1
+                ),
+            ));
+        }
+    }
+    if added_info {
+        diag.add_note("Type parameters must be used the same by position, not name");
+    }
 }
 
-fn ty_str_(ty: &N::Type_) -> String {
-    core::error_format_(ty, &core::Subst::empty())
+fn type_param_positions(
+    ty: &N::Type,
+    tparams: &[N::TParam],
+) -> BTreeMap<crate::shared::Name, (usize, Loc)> {
+    let fn_tparams = core::all_tparams(ty.clone());
+    fn_tparams
+        .into_iter()
+        .filter_map(|tparam| {
+            if let Some(posn) = tparams.iter().position(|t| t == &tparam) {
+                let declared_loc = tparams[posn].user_specified_name.loc;
+                Some((tparam.user_specified_name, (posn, declared_loc)))
+            } else {
+                None
+            }
+        })
+        .collect::<BTreeMap<_, _>>()
+}
+
+fn ty_str(ty: &N::Type) -> String {
+    core::error_format(ty, &core::Subst::empty())
 }

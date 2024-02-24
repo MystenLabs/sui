@@ -38,7 +38,7 @@ error[E04034]: 'syntax' method types differ
 62 │     public fun borrow_q_mut(s: &mut S, i: u64): &mut u32 {
    │                                                 -------- This mutable index function returns type '&mut u32'
    │
-   = These functions must return the same type, differing only by mutability.
+   = These functions must return the same type, differing only by mutability
 
 error[E02019]: invalid 'syntax' method type
    ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:78:14
