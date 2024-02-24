@@ -248,9 +248,9 @@ impl Checkpoint {
     /// can optionally be further `filter`-ed by an epoch number (to only return checkpoints within
     /// that epoch).
     ///
-    /// The `checkpoint_viewed_at` parameter represents the checkpoint_sequence_number at which this
-    /// page was queried for. Each entity returned in the connection will inherit this checkpoint,
-    /// so that when viewing that entity's state, it will be from the reference of this
+    /// The `checkpoint_viewed_at` parameter represents the checkpoint_sequence_number this page was
+    /// queried in. Each entity returned in the connection will inherit this checkpoint, so that
+    /// when viewing that entity's state, it will be from the reference of this
     /// `checkpoint_viewed_at` parameter.
     ///
     /// If the `Page<Cursor>` is set, then this function will defer to the `checkpoint_viewed_at` in
