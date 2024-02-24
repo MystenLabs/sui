@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
 };
 
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{anyhow, bail, ensure, Context};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
@@ -30,9 +32,9 @@ use shared_crypto::intent::Intent;
 use sui_execution::verifier::VerifierOverrides;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    DynamicFieldPage, SuiData, SuiObjectData, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    Coin, DynamicFieldPage, SuiCoinMetadata, SuiData, SuiObjectData, SuiObjectResponse,
+    SuiObjectResponseQuery, SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
@@ -41,8 +43,11 @@ use sui_move_build::{
     gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
 use sui_replay::ReplayToolCommand;
-use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::SuiClient;
+use sui_sdk::{
+    sui_client_config::{SuiClientConfig, SuiEnv},
+    SUI_COIN_TYPE,
+};
 use sui_sdk::{
     wallet_context::WalletContext, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
 };
@@ -132,6 +137,20 @@ pub enum SuiClientCommands {
         /// Sort by alias instead of address
         #[clap(long, short = 's')]
         sort_by_alias: bool,
+    },
+    /// List the coin balance of an address
+    #[clap(name = "balance")]
+    Balance {
+        /// Address (or its alias)
+        #[arg(value_parser)]
+        address: Option<KeyIdentity>,
+        /// Show balance for the specified coin (e.g., 0x2::sui::SUI).
+        /// All coins will be shown if none is passed.
+        #[clap(long, required = false)]
+        coin_type: Option<String>,
+        /// Show a list with each coin's object ID and balance
+        #[clap(long, required = false)]
+        with_coins: bool,
     },
     /// Call Move function
     #[clap(name = "call")]
@@ -840,6 +859,81 @@ impl SuiClientCommands {
                 };
                 SuiClientCommandResult::Addresses(output)
             }
+            SuiClientCommands::Balance {
+                address,
+                coin_type,
+                with_coins,
+            } => {
+                let address = get_identity_address(address, context)?;
+                let client = context.get_client().await?;
+
+                let mut objects: Vec<Coin> = Vec::new();
+                let mut cursor = None;
+                loop {
+                    let response = match coin_type {
+                        Some(ref coin_type) => {
+                            client
+                                .coin_read_api()
+                                .get_coins(address, Some(coin_type.clone()), cursor, None)
+                                .await?
+                        }
+                        None => {
+                            client
+                                .coin_read_api()
+                                .get_all_coins(address, cursor, None)
+                                .await?
+                        }
+                    };
+
+                    objects.extend(response.data);
+
+                    if response.has_next_page {
+                        cursor = response.next_cursor;
+                    } else {
+                        break;
+                    }
+                }
+
+                fn canonicalize_type(type_: &str) -> Result<String, anyhow::Error> {
+                    Ok(TypeTag::from_str(type_)
+                        .context("Cannot parse coin type")?
+                        .to_canonical_string(/* with_prefix */ true))
+                }
+
+                let mut coins_by_type = BTreeMap::new();
+                for c in objects {
+                    let coins = match coins_by_type.entry(canonicalize_type(&c.coin_type)?) {
+                        Entry::Vacant(entry) => {
+                            let metadata = client
+                                .coin_read_api()
+                                .get_coin_metadata(c.coin_type.clone())
+                                .await
+                                .with_context(|| {
+                                    format!(
+                                        "Cannot fetch the coin metadata for coin {}",
+                                        c.coin_type
+                                    )
+                                })?;
+
+                            &mut entry.insert((metadata, vec![])).1
+                        }
+                        Entry::Occupied(entry) => &mut entry.into_mut().1,
+                    };
+
+                    coins.push(c);
+                }
+                let sui_type_tag = canonicalize_type(SUI_COIN_TYPE)?;
+
+                // show SUI first
+                let ordered_coins_sui_first = coins_by_type
+                    .remove(&sui_type_tag)
+                    .into_iter()
+                    .chain(coins_by_type.into_values())
+                    .collect();
+
+                SuiClientCommandResult::Balance(ordered_coins_sui_first, with_coins)
+            }
+
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
                 let client = context.get_client().await?;
                 let df_read = client
@@ -1669,6 +1763,20 @@ impl Display for SuiClientCommandResult {
                 table.with(style);
                 write!(f, "{}", table)?
             }
+            SuiClientCommandResult::Balance(coins, with_coins) => {
+                if coins.is_empty() {
+                    return write!(f, "No coins found for this address.");
+                }
+                let mut builder = TableBuilder::default();
+                pretty_print_balance(coins, &mut builder, *with_coins);
+                let mut table = builder.build();
+                table.with(TablePanel::header("Balance of coins owned by this address"));
+                table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+                    1,
+                    TableStyle::modern().get_horizontal(),
+                )]));
+                write!(f, "{}", table)?;
+            }
             SuiClientCommandResult::DynamicFieldQuery(df_refs) => {
                 let df_refs = DynamicFieldOutput {
                     has_next_page: df_refs.has_next_page,
@@ -2159,6 +2267,7 @@ pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
     Addresses(AddressesOutput),
+    Balance(Vec<(Option<SuiCoinMetadata>, Vec<Coin>)>, bool),
     Call(SuiTransactionBlockResponse),
     ChainIdentifier(String),
     DynamicFieldQuery(DynamicFieldPage),
@@ -2246,4 +2355,50 @@ pub async fn request_tokens_from_faucet(
         println!("Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins.");
     }
     Ok(())
+}
+
+fn pretty_print_balance(
+    coins_by_type: &Vec<(Option<SuiCoinMetadata>, Vec<Coin>)>,
+    builder: &mut TableBuilder,
+    with_coins: bool,
+) {
+    let mut table_builder = TableBuilder::default();
+    for (metadata, coins) in coins_by_type {
+        let name = metadata
+            .as_ref()
+            .map(|x| x.name.as_str())
+            .unwrap_or_else(|| "unknown");
+        if with_coins {
+            let coin_numbers = if coins.len() != 1 { "coins" } else { "coin" };
+            builder.push_record(vec![format!(
+                "{}: {} {coin_numbers}, Balance: {}\n ┌",
+                name,
+                coins.len(),
+                coins.iter().map(|x| x.balance as u128).sum::<u128>(),
+            )]);
+
+            let mut table_builder = TableBuilder::default();
+            for c in coins {
+                table_builder.push_record(vec![
+                    "│",
+                    c.coin_object_id.to_string().as_str(),
+                    format!("{}", c.balance).as_str(),
+                ]);
+            }
+            builder.push_record(vec![table_builder
+                .build()
+                .with(TableStyle::empty())
+                .to_string()]);
+            builder.push_record(vec![format!(" └")]);
+        } else {
+            table_builder.push_record(vec![
+                name,
+                format!("{}", coins.iter().map(|x| x.balance as u128).sum::<u128>()).as_str(),
+            ]);
+        }
+    }
+    builder.push_record(vec![table_builder
+        .build()
+        .with(TableStyle::blank())
+        .to_string()]);
 }

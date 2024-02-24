@@ -17,6 +17,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
 };
+use move_compiler::editions::Edition;
 use move_compiler::{
     shared::{NumberFormat, NumericalAddress, PackagePaths},
     Flags, FullyCompiledProgram,
@@ -325,7 +326,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     AccountAddress::ZERO.into_bytes(),
                     NumberFormat::Hex,
                 )),
-                None,
+                Some(Edition::E2024_ALPHA),
             ),
             package_upgrade_mapping: BTreeMap::new(),
             accounts,
@@ -582,7 +583,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let cluster = self.cluster.as_ref().unwrap();
                 let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
                 cluster
-                    .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(30))
+                    .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(60))
                     .await;
 
                 cluster

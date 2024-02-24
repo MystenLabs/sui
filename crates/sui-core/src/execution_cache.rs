@@ -36,11 +36,14 @@ use sui_types::{
 };
 use tracing::instrument;
 
-mod passthrough_cache;
+pub(crate) mod cached_version_map;
+pub mod passthrough_cache;
+pub mod writeback_cache;
 
 use passthrough_cache::PassthroughCache;
+use writeback_cache::WritebackCache;
 
-struct ExecutionCacheMetrics {
+pub struct ExecutionCacheMetrics {
     pending_notify_read: IntGauge,
 }
 
@@ -60,6 +63,9 @@ impl ExecutionCacheMetrics {
 pub type ExecutionCache = PassthroughCache;
 
 pub trait ExecutionCacheCommit: Send + Sync {
+    /// Durably commit the transaction outputs of the given transaction to the database.
+    /// Will be called by CheckpointExecutor to ensure that transaction outputs are
+    /// written durably before marking a checkpoint as finalized.
     fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
@@ -126,7 +132,7 @@ pub trait ExecutionCacheRead: Send + Sync {
         for (object_opt, object_ref) in objects.into_iter().zip(object_refs) {
             match object_opt {
                 None => {
-                    let lock = self.get_latest_lock_for_object_id(object_ref.0)?;
+                    let lock = self._get_latest_lock_for_object_id(object_ref.0)?;
                     let error = if lock.1 >= object_ref.1 {
                         UserInputError::ObjectVersionUnavailableForConsumption {
                             provided_obj_ref: *object_ref,
@@ -196,7 +202,7 @@ pub trait ExecutionCacheRead: Send + Sync {
             } else if self
                 .get_deleted_shared_object_previous_tx_digest(
                     &input_key.id(),
-                    &input_key.version().unwrap(),
+                    input_key.version().unwrap(),
                     epoch,
                 )?
                 .is_some()
@@ -243,7 +249,7 @@ pub trait ExecutionCacheRead: Send + Sync {
     fn get_lock(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult;
 
     // This method is considered "private" - only used by multi_get_objects_with_more_accurate_error_return
-    fn get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef>;
+    fn _get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef>;
 
     fn check_owned_object_locks_exist(&self, owned_object_refs: &[ObjectRef]) -> SuiResult;
 
@@ -399,7 +405,7 @@ pub trait ExecutionCacheRead: Send + Sync {
     fn get_marker_value(
         &self,
         object_id: &ObjectID,
-        version: &SequenceNumber,
+        version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<MarkerValue>>;
 
@@ -426,7 +432,7 @@ pub trait ExecutionCacheRead: Send + Sync {
     fn get_deleted_shared_object_previous_tx_digest(
         &self,
         object_id: &ObjectID,
-        version: &SequenceNumber,
+        version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<TransactionDigest>> {
         match self.get_marker_value(object_id, version, epoch_id)? {
@@ -441,7 +447,7 @@ pub trait ExecutionCacheRead: Send + Sync {
         version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<bool> {
-        match self.get_marker_value(object_id, &version, epoch_id)? {
+        match self.get_marker_value(object_id, version, epoch_id)? {
             Some(MarkerValue::Received) => Ok(true),
             _ => Ok(false),
         }
@@ -530,7 +536,7 @@ pub trait ExecutionCacheReconfigAPI: Send + Sync {
 
     fn update_epoch_flags_metrics(&self, old: &[EpochFlag], new: &[EpochFlag]);
 
-    fn clear_object_per_epoch_marker_table(&self, execution_guard: &ExecutionLockWriteGuard<'_>);
+    fn clear_state_end_of_epoch(&self, execution_guard: &ExecutionLockWriteGuard<'_>);
 
     fn expensive_check_sui_conservation(
         &self,
@@ -734,7 +740,7 @@ macro_rules! implement_passthrough_traits {
             }
 
             fn revert_state_update(&self, digest: &TransactionDigest) -> SuiResult {
-                self.store.revert_state_update(digest)
+                self.revert_state_update_impl(digest)
             }
 
             fn set_epoch_start_configuration(
@@ -748,17 +754,8 @@ macro_rules! implement_passthrough_traits {
                 self.store.update_epoch_flags_metrics(old, new)
             }
 
-            fn clear_object_per_epoch_marker_table(
-                &self,
-                execution_guard: &ExecutionLockWriteGuard<'_>,
-            ) {
-                use tap::TapFallible;
-                self.store
-                    .clear_object_per_epoch_marker_table(execution_guard)
-                    .tap_err(|e| {
-                        tracing::error!(?e, "Failed to clear object per-epoch marker table");
-                    })
-                    .ok();
+            fn clear_state_end_of_epoch(&self, execution_guard: &ExecutionLockWriteGuard<'_>) {
+                self.clear_state_end_of_epoch_impl(execution_guard)
             }
 
             fn expensive_check_sui_conservation(
@@ -809,3 +806,14 @@ macro_rules! implement_passthrough_traits {
 use implement_passthrough_traits;
 
 implement_storage_traits!(PassthroughCache);
+implement_storage_traits!(WritebackCache);
+
+pub trait ExecutionCacheAPI:
+    ExecutionCacheRead
+    + ExecutionCacheWrite
+    + ExecutionCacheCommit
+    + ExecutionCacheReconfigAPI
+    + CheckpointCache
+    + StateSyncAPI
+{
+}

@@ -14,18 +14,18 @@ module test::m {
     use sui::tx_context::TxContext;
     use sui::dynamic_field as field;
 
-    struct Parent has key, store {
+    public struct Parent has key, store {
         id: UID,
     }
 
-    struct S has key, store {
+    public struct S has key, store {
         id: UID,
         other: UID,
         wrapped: Wrapped,
         many: vector<Wrapped>,
     }
 
-    struct Wrapped has key, store {
+    public struct Wrapped has key, store {
         id: UID,
         other: UID,
     }
@@ -36,13 +36,13 @@ module test::m {
     // new
 
     public fun new(ctx: &mut TxContext): Parent {
-        let parent = Parent { id: object::new(ctx) };
+        let mut parent = Parent { id: object::new(ctx) };
         field::add(&mut parent.id, KEY, s(ctx));
         parent
     }
 
     fun s(ctx: &mut TxContext): S {
-        let s = S {
+        let mut s = S {
             id: object::new(ctx),
             other: object::new(ctx),
             wrapped: wrapped(ctx),
@@ -54,7 +54,7 @@ module test::m {
     }
 
     fun wrapped(ctx: &mut TxContext): Wrapped {
-        let w = Wrapped {
+        let mut w = Wrapped {
             id: object::new(ctx),
             other: object::new(ctx),
         };

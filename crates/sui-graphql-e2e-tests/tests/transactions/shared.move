@@ -9,7 +9,7 @@ module P0::m {
     use sui::tx_context::TxContext;
     use sui::transfer;
 
-    struct Foo has key {
+    public struct Foo has key {
         id: UID,
         x: u64,
     }

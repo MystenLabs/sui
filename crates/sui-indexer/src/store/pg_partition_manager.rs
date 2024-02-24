@@ -7,11 +7,11 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 use tracing::{error, info};
 
+use crate::db::PgConnectionPool;
 use crate::handlers::EpochToCommit;
-use crate::models_v2::epoch::StoredEpochInfo;
+use crate::models::epoch::StoredEpochInfo;
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
 use crate::IndexerError;
-use crate::PgConnectionPool;
 
 const GET_PARTITION_SQL: &str = r"
 SELECT parent.relname                                            AS table_name,

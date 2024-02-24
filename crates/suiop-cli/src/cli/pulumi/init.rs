@@ -19,11 +19,15 @@ pub enum ProjectType {
 const KEYRING: &str = "pulumi-kms-automation-f22939d";
 
 impl ProjectType {
-    pub fn create_project(&self, use_kms: &bool) -> Result<()> {
+    pub fn create_project(&self, use_kms: &bool, project_name: Option<String>) -> Result<()> {
         // make sure we're in suiops
         ensure_in_suiops_repo()?;
         // inquire params from user
-        let project_name = Text::new("project name:").prompt()?;
+        let project_name = project_name.unwrap_or_else(|| {
+            Text::new("project name:")
+                .prompt()
+                .expect("couldn't get project name")
+        });
         // create dir
         let project_subdir = match self {
             Self::App | Self::CronJob => "apps",

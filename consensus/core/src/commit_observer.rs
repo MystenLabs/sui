@@ -8,7 +8,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     block::{timestamp_utc_ms, BlockAPI, VerifiedBlock},
-    commit::{CommitIndex, CommittedSubDag},
+    commit::{load_committed_subdag_from_store, CommitIndex, CommittedSubDag},
     context::Context,
     dag_state::DagState,
     linearizer::Linearizer,
@@ -83,6 +83,7 @@ impl CommitObserver {
         }
 
         self.report_metrics(&sent_sub_dags);
+        tracing::debug!("Committed & sent {sent_sub_dags:#?}");
         sent_sub_dags
     }
 
@@ -111,8 +112,7 @@ impl CommitObserver {
             // Resend all the committed subdags to the consensus output channel
             // for all the commits above the last processed index.
             assert!(commit.index > last_processed_index);
-            let committed_subdag =
-                CommittedSubDag::new_from_commit_data(commit, self.store.clone());
+            let committed_subdag = load_committed_subdag_from_store(self.store.as_ref(), commit);
 
             // Failures in sender.send() are assumed to be permanent
             if let Err(err) = self.sender.send(committed_subdag) {
@@ -136,12 +136,19 @@ impl CommitObserver {
                 .unwrap_or_default();
 
             total += 1;
+
             self.context
                 .metrics
                 .node_metrics
                 .block_commit_latency
                 .observe(latency_ms as f64);
+            self.context
+                .metrics
+                .node_metrics
+                .last_committed_leader_round
+                .set(block.round() as i64);
         }
+
         self.context
             .metrics
             .node_metrics

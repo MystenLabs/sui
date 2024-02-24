@@ -1,11 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// epoch | transactions
-// ------+-------------
-// 0     | 4
-// 1     | 4
-// 2     | 2
+// tx | func           | checkpoint | epoch
+// ---+----------------+------------+-------
+//  0 |                |         0 |     0
+//  1 | make_immutable |         1 |     0
+//  2 | create         |         2 |     0
+//  3 | epoch          |         3 |     0
+//  4 | create         |         4 |     1
+//  5 | create         |         5 |     1
+//  6 | create         |         6 |     1
+//  7 | epoch          |         7 |     1
+//  8 | create         |         8 |     2
+//  9 | create         |         9 |     2
+// 10 | create         |        10 |     2
+// 11 | epoch          |        11 |     2
+// 12 | epoch          |        12 |     3
 
 //# init --addresses Test=0x0 --accounts A B --simulator
 
@@ -15,7 +25,7 @@ module Test::M1 {
     use sui::tx_context::TxContext;
     use sui::transfer;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         value: u64,
     }
@@ -76,61 +86,24 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# run-graphql
-# Get latest state
-{
-  checkpoint {
-    sequenceNumber
-  }
-  epoch_0: epoch(id: 0) {
-    epochId
-    transactionBlocks {
-      edges {
-        cursor
-        node {
-          digest
-        }
-      }
-    }
-  }
-  epoch_1: epoch(id: 1) {
-    epochId
-    transactionBlocks {
-      edges {
-        cursor
-        node {
-          digest
-        }
-      }
-    }
-  }
-  epoch_2: epoch(id: 2) {
-    epochId
-    transactionBlocks {
-      edges {
-        cursor
-        node {
-          digest
-        }
-      }
-    }
-  }
-}
-
 //# run Test::M1::create --args 0 @A --sender A
 
 //# create-checkpoint
 
-//# run-graphql --cursors {"t":3,"c":4} {"t":7,"c":8} {"t":9,"c":10}
+//# advance-epoch
+
+//# advance-epoch
+
+//# run-graphql --cursors {"t":3,"tc":3,"c":4} {"t":7,"tc":7,"c":8} {"t":11,"tc":11,"c":12}
 # View transactions before the last transaction in each epoch, from the perspective of the first
 # checkpoint in the next epoch.
 {
   checkpoint {
     sequenceNumber
   }
-  epoch_0: epoch(id: 0) {
+  epoch_0_txs: epoch(id: 0) {
     epochId
-    transactionBlocks(before: "@{cursor_0}") {
+    transactionBlocks {
       edges {
         cursor
         node {
@@ -139,9 +112,17 @@ module Test::M1 {
       }
     }
   }
-  epoch_1: epoch(id: 1) {
+  txs_epoch_0: transactionBlocks(before: "@{cursor_0}") {
+    edges {
+      cursor
+      node {
+        digest
+      }
+    }
+  }
+  epoch_1_txs: epoch(id: 1) {
     epochId
-    transactionBlocks(before: "@{cursor_1}") {
+    transactionBlocks {
       edges {
         cursor
         node {
@@ -150,20 +131,36 @@ module Test::M1 {
       }
     }
   }
-  epoch_2: epoch(id: 2) {
+  txs_epoch_1: transactionBlocks(before: "@{cursor_1}") {
+    edges {
+      cursor
+      node {
+        digest
+      }
+    }
+  }
+  epoch_2_txs: epoch(id: 2) {
     epochId
-    transactionBlocks(before: "@{cursor_2}") {
+    transactionBlocks {
       edges {
         cursor
         node {
           digest
         }
+      }
+    }
+  }
+  txs_epoch_2: transactionBlocks(before: "@{cursor_2}") {
+    edges {
+      cursor
+      node {
+        digest
       }
     }
   }
 }
 
-//# run-graphql --cursors {"t":0,"c":3} {"t":4,"c":7} {"t":8,"c":9}
+//# run-graphql --cursors {"t":0,"tc":0,"c":7} {"t":4,"tc":4,"c":11} {"t":8,"tc":8,"c":12}
 # View transactions after the first transaction in each epoch, from the perspective of the last
 # checkpoint in the next epoch.
 {
@@ -205,7 +202,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"t":1,"c":2} {"t":5,"c":6} {"t":9,"c":9}
+//# run-graphql --cursors {"t":1,"tc":1,"c":2} {"t":5,"tc":5,"c":6} {"t":9,"tc":9,"c":10}
 # View transactions after the second transaction in each epoch, from the perspective of a checkpoint
 # around the middle of each epoch.
 {
@@ -247,44 +244,39 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --cursors {"t":1,"c":2} {"t":5,"c":6} {"t":9,"c":9}
+//# run-graphql --cursors {"t":5,"tc":5,"c":6}
 # Verify that with a cursor, we are locked into a view as if we were at the checkpoint stored in
 # the cursor. Compare against `without_cursor`, which should show the latest state at the actual
-# latest checkpoint.
+# latest checkpoint. There should only be 1 transaction block in the `with_cursor` query, but
+# multiple in the second
 {
   checkpoint {
     sequenceNumber
   }
-  with_cursor: epoch(id: 1) {
-    epochId
-    transactionBlocks(after: "@{cursor_1}", filter: {signAddress: "@{A}"}) {
-      edges {
-        cursor
-        node {
-          digest
-          sender {
-            objects {
-              edges {
-                cursor
-              }
+  with_cursor: transactionBlocks(after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
+    edges {
+      cursor
+      node {
+        digest
+        sender {
+          objects {
+            edges {
+              cursor
             }
           }
         }
       }
     }
   }
-  without_cursor: epoch(id: 1) {
-    epochId
-    transactionBlocks(filter: {signAddress: "@{A}"}) {
-      edges {
-        cursor
-        node {
-          digest
-          sender {
-            objects {
-              edges {
-                cursor
-              }
+  without_cursor: transactionBlocks(filter: {signAddress: "@{A}"}) {
+    edges {
+      cursor
+      node {
+        digest
+        sender {
+          objects {
+            edges {
+              cursor
             }
           }
         }

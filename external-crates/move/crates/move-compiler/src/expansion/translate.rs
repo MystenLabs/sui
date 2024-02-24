@@ -5,11 +5,12 @@
 use crate::{
     diag,
     diagnostics::{codes::WarningFilter, Diagnostic, WarningFilters},
-    editions::{self, create_feature_error, FeatureGate},
+    editions::{self, create_feature_error, FeatureGate, Flavor},
     expansion::{
-        aliases::{
-            AliasEntry, AliasMap, AliasMapBuilder, AliasSet, ParserExplicitUseFun, UseFunsBuilder,
+        alias_map_builder::{
+            AliasEntry, AliasMapBuilder, NameSpace, ParserExplicitUseFun, UseFunsBuilder,
         },
+        aliases::{AliasMap, AliasSet},
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_},
         byte_string, hex_string, legacy_aliases,
         translate::known_attributes::KnownAttribute,
@@ -99,19 +100,27 @@ impl<'env, 'map> Context<'env, 'map> {
     }
 
     pub fn new_alias_map_builder(&mut self) -> AliasMapBuilder {
-        AliasMapBuilder::new(
-            self.defn_context
-                .env
-                .supports_feature(self.current_package, FeatureGate::Move2024Paths),
-        )
+        let new_paths = self
+            .defn_context
+            .env
+            .supports_feature(self.current_package, FeatureGate::Move2024Paths);
+        if new_paths {
+            AliasMapBuilder::namespaced()
+        } else {
+            AliasMapBuilder::legacy()
+        }
     }
 
     /// Pushes a new alias map onto the alias information in the pash expander.
-    pub fn push_alias_scope(&mut self, new_scope: AliasMapBuilder) {
-        self.path_expander
+    pub fn push_alias_scope(&mut self, loc: Loc, new_scope: AliasMapBuilder) {
+        let res = self
+            .path_expander
             .as_mut()
             .unwrap()
-            .push_alias_scope(new_scope);
+            .push_alias_scope(loc, new_scope);
+        if let Err(diag) = res {
+            self.env().add_diag(*diag);
+        }
     }
 
     // Push a number of type parameters onto the alias information in the path expander.
@@ -247,6 +256,98 @@ fn compute_address_conflicts(
         .collect()
 }
 
+// Implicit aliases for the Move Stdlib:
+// use std::vector;
+// use std::option::{Self, Option};
+const IMPLICIT_STD_MODULES: &[Symbol] = &[symbol!("option"), symbol!("vector")];
+const IMPLICIT_STD_MEMBERS: &[(Symbol, Symbol, ModuleMemberKind)] = &[(
+    symbol!("option"),
+    symbol!("Option"),
+    ModuleMemberKind::Struct,
+)];
+
+// Implicit aliases for Sui mode:
+// use sui::object::{Self, ID, UID};
+// use sui::transfer;
+// use sui::tx_context::{Self, TxContext};
+const IMPLICIT_SUI_MODULES: &[Symbol] = &[
+    symbol!("object"),
+    symbol!("transfer"),
+    symbol!("tx_context"),
+];
+const IMPLICIT_SUI_MEMBERS: &[(Symbol, Symbol, ModuleMemberKind)] = &[
+    (symbol!("object"), symbol!("ID"), ModuleMemberKind::Struct),
+    (symbol!("object"), symbol!("UID"), ModuleMemberKind::Struct),
+    (
+        symbol!("tx_context"),
+        symbol!("TxContext"),
+        ModuleMemberKind::Struct,
+    ),
+];
+
+fn default_aliases(context: &mut Context) -> AliasMapBuilder {
+    let current_package = context.current_package;
+    let mut builder = context.new_alias_map_builder();
+    if !context
+        .env()
+        .supports_feature(current_package, FeatureGate::Move2024Paths)
+    {
+        return builder;
+    }
+    // Unused loc since these will not conflict and are implicit so no warnings are given
+    let loc = Loc::invalid();
+    let std_address = maybe_make_well_known_address(context, loc, symbol!("std"));
+    let sui_address = maybe_make_well_known_address(context, loc, symbol!("sui"));
+    let mut modules: Vec<(Address, Symbol)> = vec![];
+    let mut members: Vec<(Address, Symbol, Symbol, ModuleMemberKind)> = vec![];
+    // if std is defined, add implicit std aliases
+    if let Some(std_address) = std_address {
+        modules.extend(
+            IMPLICIT_STD_MODULES
+                .iter()
+                .copied()
+                .map(|m| (std_address, m)),
+        );
+        members.extend(
+            IMPLICIT_STD_MEMBERS
+                .iter()
+                .copied()
+                .map(|(m, mem, k)| (std_address, m, mem, k)),
+        );
+    }
+    // if sui is defined and the current package is in Sui mode, add implicit sui aliases
+    if sui_address.is_some() && context.env().package_config(current_package).flavor == Flavor::Sui
+    {
+        let sui_address = sui_address.unwrap();
+        modules.extend(
+            IMPLICIT_SUI_MODULES
+                .iter()
+                .copied()
+                .map(|m| (sui_address, m)),
+        );
+        members.extend(
+            IMPLICIT_SUI_MEMBERS
+                .iter()
+                .copied()
+                .map(|(m, mem, k)| (sui_address, m, mem, k)),
+        );
+    }
+    for (addr, module) in modules {
+        let alias = sp(loc, module);
+        let mident = sp(loc, ModuleIdent_::new(addr, ModuleName(sp(loc, module))));
+        builder.add_implicit_module_alias(alias, mident).unwrap();
+    }
+    for (addr, module, member, kind) in members {
+        let alias = sp(loc, member);
+        let mident = sp(loc, ModuleIdent_::new(addr, ModuleName(sp(loc, module))));
+        let name = sp(loc, member);
+        builder
+            .add_implicit_member_alias(alias, mident, name, kind)
+            .unwrap();
+    }
+    builder
+}
+
 //**************************************************************************************************
 // Entry
 //**************************************************************************************************
@@ -322,7 +423,11 @@ pub fn program(
             let mut path_expander = Move2024PathExpander::new();
 
             let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
-            path_expander.push_alias_scope(aliases);
+
+            // should never fail
+            if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
+                context.env().add_diag(*diag);
+            }
 
             context.defn_context.named_address_mapping = Some(named_address_map);
             context.path_expander = Some(Box::new(path_expander));
@@ -353,8 +458,10 @@ pub fn program(
             let mut path_expander = Move2024PathExpander::new();
 
             let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
-            path_expander.push_alias_scope(aliases);
-
+            // should never fail
+            if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
+                context.env().add_diag(*diag);
+            }
             context.defn_context.named_address_mapping = Some(named_address_map);
             context.path_expander = Some(Box::new(path_expander));
             definition(&mut context, &mut lib_module_map, package, def);
@@ -393,6 +500,8 @@ fn definition(
     package_name: Option<Symbol>,
     def: P::Definition,
 ) {
+    let default_aliases = default_aliases(context);
+    context.push_alias_scope(/* unused */ Loc::invalid(), default_aliases);
     match def {
         P::Definition::Module(mut m) => {
             let module_paddr = std::mem::take(&mut m.address);
@@ -418,6 +527,7 @@ fn definition(
             }
         }
     }
+    context.pop_alias_scope(None);
 }
 
 // Access a top level address as declared, not affected by any aliasing/shadowing
@@ -470,6 +580,17 @@ fn top_level_address_(
             }
         }
     }
+}
+
+fn maybe_make_well_known_address(context: &mut Context, loc: Loc, name: Symbol) -> Option<Address> {
+    let named_address_mapping = context.defn_context.named_address_mapping.as_ref().unwrap();
+    let addr = named_address_mapping.get(&name).copied()?;
+    Some(make_address(
+        &mut context.defn_context,
+        sp(loc, name),
+        loc,
+        addr,
+    ))
 }
 
 fn address_without_value_error(suggest_declaration: bool, loc: Loc, n: &Name) -> Diagnostic {
@@ -571,12 +692,12 @@ fn module(
     context.address = None
 }
 
-fn set_sender_address(
+fn set_module_address(
     context: &mut Context,
     module_name: &ModuleName,
-    sender: Option<Spanned<Address>>,
+    address: Option<Spanned<Address>>,
 ) {
-    context.address = Some(match sender {
+    context.address = Some(match address {
         Some(sp!(_, addr)) => addr,
         None => {
             let loc = module_name.loc();
@@ -618,7 +739,7 @@ fn module_(
         .add_warning_filter_scope(warning_filter.clone());
     assert!(context.address.is_none());
     assert!(address.is_none());
-    set_sender_address(context, &name, module_address);
+    set_module_address(context, &name, module_address);
     let _ = check_restricted_name_all_cases(&mut context.defn_context, NameCase::Module, &name.0);
     if name.value().starts_with(|c| c == '_') {
         let msg = format!(
@@ -648,7 +769,7 @@ fn module_(
             )
         })
         .collect::<Vec<_>>();
-    context.push_alias_scope(new_scope);
+    context.push_alias_scope(loc, new_scope);
 
     let mut friends = UniqueMap::new();
     let mut functions = UniqueMap::new();
@@ -1066,7 +1187,11 @@ enum Access {
 
 trait PathExpander {
     // Push a new innermost alias scope
-    fn push_alias_scope(&mut self, new_scope: AliasMapBuilder);
+    fn push_alias_scope(
+        &mut self,
+        loc: Loc,
+        new_scope: AliasMapBuilder,
+    ) -> Result<(), Box<Diagnostic>>;
 
     // Push a number of type parameters onto the alias information in the path expander. They are
     // never resolved, but are tracked to apply appropriate shadowing.
@@ -1113,9 +1238,14 @@ impl LegacyPathExpander {
 }
 
 impl PathExpander for LegacyPathExpander {
-    fn push_alias_scope(&mut self, new_scope: AliasMapBuilder) {
+    fn push_alias_scope(
+        &mut self,
+        loc: Loc,
+        new_scope: AliasMapBuilder,
+    ) -> Result<(), Box<Diagnostic>> {
         self.old_alias_maps
-            .push(self.aliases.add_and_shadow_all(new_scope));
+            .push(self.aliases.add_and_shadow_all(loc, new_scope)?);
+        Ok(())
     }
 
     fn push_type_parameters(&mut self, tparams: Vec<&Name>) {
@@ -1218,9 +1348,7 @@ impl PathExpander for LegacyPathExpander {
                 Some((mident, mem)) => EN::ModuleAccess(mident, mem),
                 None => EN::Name(n),
             },
-            (Access::Term, PN::One(n))
-                if is_valid_struct_constant_or_schema_name(n.value.as_str()) =>
-            {
+            (Access::Term, PN::One(n)) if is_valid_struct_or_constant_name(n.value.as_str()) => {
                 match self.aliases.member_alias_get(&n) {
                     Some((mident, mem)) => EN::ModuleAccess(mident, mem),
                     None => EN::Name(n),
@@ -1391,7 +1519,7 @@ impl Move2024PathExpander {
                     ResolutionFailure(Box::new(UnresolvedName(loc, name)), UnresolvedAlias(name))
                 }
             }
-            LN::Name(name) => match self.resolve_name(context, name) {
+            LN::Name(name) => match self.resolve_name(context, NameSpace::LeadingAccess, name) {
                 result @ UnresolvedName(_, _) => {
                     ResolutionFailure(Box::new(result), UnresolvedAlias(name))
                 }
@@ -1400,18 +1528,25 @@ impl Move2024PathExpander {
         }
     }
 
-    fn resolve_name(&mut self, context: &mut DefnContext, name: Name) -> AccessChainResult {
+    fn resolve_name(
+        &mut self,
+        context: &mut DefnContext,
+        namespace: NameSpace,
+        name: Name,
+    ) -> AccessChainResult {
+        use AccessChainFailure::*;
         use AccessChainResult::*;
         use E::ModuleAccess_ as EN;
-        match self.aliases.get(&name) {
-            Some(AliasEntry::Member(mident, sp!(_, mem))) => {
+
+        match self.aliases.resolve(namespace, &name) {
+            Some(AliasEntry::Member(_, mident, sp!(_, mem))) => {
                 // We are preserving the name's original location, rather than referring to where
                 // the alias was defined. The name represents JUST the member name, though, so we do
                 // not change location of the module as we don't have this information.
                 // TODO maybe we should also keep the alias reference (or its location)?
                 ModuleAccess(name.loc, EN::ModuleAccess(mident, sp(name.loc, mem)))
             }
-            Some(AliasEntry::Module(mident)) => {
+            Some(AliasEntry::Module(_, mident)) => {
                 // We are preserving the name's original location, rather than referring to where
                 // the alias was defined. The name represents JUST the module name, though, so we do
                 // not change location of the address as we don't have this information.
@@ -1426,31 +1561,81 @@ impl Move2024PathExpander {
                 let module = ModuleName(sp(name.loc, module));
                 ModuleIdent(name.loc, sp(name.loc, ModuleIdent_ { address, module }))
             }
-            Some(AliasEntry::Address(address)) => {
+            Some(AliasEntry::Address(_, address)) => {
                 Address(name.loc, make_address(context, name, name.loc, address))
             }
-            Some(AliasEntry::TypeParam) => {
+            Some(AliasEntry::TypeParam(_)) => {
                 context.env.add_diag(ice!((
                     name.loc,
                     "ICE alias map misresolved name as type param"
                 )));
                 UnresolvedName(name.loc, name)
             }
-            None => UnresolvedName(name.loc, name),
+            None => {
+                if let Some(entry) = self.aliases.resolve_any_for_error(&name) {
+                    let msg = match namespace {
+                        NameSpace::ModuleMembers => "a type, function, or constant".to_string(),
+                        // we exclude types from this message since it would have been caught in
+                        // the other namespace
+                        NameSpace::LeadingAccess => "an address or module".to_string(),
+                    };
+                    let result = match entry {
+                        AliasEntry::Address(_, address) => {
+                            Address(name.loc, make_address(context, name, name.loc, address))
+                        }
+                        AliasEntry::Module(_, mident) => ModuleIdent(name.loc, mident),
+                        AliasEntry::Member(_, mident, mem) => {
+                            ModuleAccess(name.loc, EN::ModuleAccess(mident, mem))
+                        }
+                        AliasEntry::TypeParam(_) => {
+                            context.env.add_diag(ice!((
+                                name.loc,
+                                "ICE alias map misresolved name as type param"
+                            )));
+                            UnresolvedName(name.loc, name)
+                        }
+                    };
+                    ResolutionFailure(Box::new(result), InvalidKind(msg))
+                } else {
+                    UnresolvedName(name.loc, name)
+                }
+            }
         }
     }
 
     fn resolve_name_access_chain(
         &mut self,
         context: &mut DefnContext,
+        access: Access,
         sp!(loc, chain): P::NameAccessChain,
     ) -> AccessChainResult {
         use AccessChainFailure::*;
         use AccessChainResult::*;
         use E::ModuleAccess_ as EN;
         use P::NameAccessChain_ as PN;
+
         match chain {
-            PN::One(name) => self.resolve_name(context, name),
+            PN::One(name) => {
+                use crate::naming::ast::BuiltinFunction_;
+                use crate::naming::ast::BuiltinTypeName_;
+                let namespace = match access {
+                    Access::Type | Access::ApplyNamed | Access::ApplyPositional | Access::Term => {
+                        NameSpace::ModuleMembers
+                    }
+                    Access::Module => NameSpace::LeadingAccess,
+                };
+
+                // This is a hack to let `use std::vector` play nicely with `vector`,
+                // plus preserve things like `u64`, etc.
+                if !matches!(access, Access::Module)
+                    && (BuiltinFunction_::all_names().contains(&name.value)
+                        || BuiltinTypeName_::all_names().contains(&name.value))
+                {
+                    AccessChainResult::UnresolvedName(name.loc, name)
+                } else {
+                    self.resolve_name(context, namespace, name)
+                }
+            }
             PN::Two(root_name, name) => match self.resolve_root(context, root_name) {
                 Address(_, address) => {
                     ModuleIdent(loc, sp(loc, ModuleIdent_::new(address, ModuleName(name))))
@@ -1492,8 +1677,12 @@ impl Move2024PathExpander {
 }
 
 impl PathExpander for Move2024PathExpander {
-    fn push_alias_scope(&mut self, new_scope: AliasMapBuilder) {
-        self.aliases.push_alias_scope(new_scope);
+    fn push_alias_scope(
+        &mut self,
+        loc: Loc,
+        new_scope: AliasMapBuilder,
+    ) -> Result<(), Box<Diagnostic>> {
+        self.aliases.push_alias_scope(loc, new_scope)
     }
 
     fn push_type_parameters(&mut self, tparams: Vec<&Name>) {
@@ -1531,7 +1720,7 @@ impl PathExpander for Move2024PathExpander {
                 // TODO consider if we want to just force all of these checks into the well-known
                 // attribute setup
                 PV::ModuleAccess(access_chain) => {
-                    match self.resolve_name_access_chain(context, access_chain) {
+                    match self.resolve_name_access_chain(context, Access::Term, access_chain) {
                         AccessChainResult::ModuleIdent(_, mident) => {
                             if context.module_members.get(&mident).is_none() {
                                 context.env.add_diag(diag!(
@@ -1578,39 +1767,52 @@ impl PathExpander for Move2024PathExpander {
         use AccessChainResult::*;
         use E::ModuleAccess_ as EN;
         use P::NameAccessChain_ as PN;
-        // This is a hack to let `use std::vector` play nicely with `vector`, plus preserve things like
-        // `freeze`, etc.
-        fn resolve_builtin_name(
-            access: Access,
-            chain: &P::NameAccessChain,
-        ) -> Option<E::ModuleAccess> {
-            match chain.value {
-                PN::One(name) => match access {
-                    Access::Type
-                        if crate::naming::ast::BuiltinTypeName_::all_names()
-                            .contains(&name.value) =>
-                    {
-                        Some(sp(name.loc, EN::Name(name)))
-                    }
-                    Access::ApplyPositional
-                        if crate::naming::ast::BuiltinFunction_::all_names()
-                            .contains(&name.value) =>
-                    {
-                        Some(sp(name.loc, EN::Name(name)))
-                    }
-                    _ => None,
-                },
-                _ => None,
-            }
-        }
 
         let loc = chain.loc;
-        if let Some(builtin) = resolve_builtin_name(access, &chain) {
-            Some(builtin)
-        } else {
-            let module_access = match access {
-                Access::ApplyPositional | Access::ApplyNamed | Access::Type => {
-                    let resolved_name = self.resolve_name_access_chain(context, chain.clone());
+
+        let module_access = match access {
+            Access::ApplyPositional | Access::ApplyNamed | Access::Type => {
+                let resolved_name = self.resolve_name_access_chain(context, access, chain.clone());
+                match resolved_name {
+                    UnresolvedName(_, name) => EN::Name(name),
+                    ModuleAccess(_, access) => access,
+                    Address(_, _) => {
+                        context.env.add_diag(unexpected_access_error(
+                            resolved_name.loc(),
+                            "address".to_string(),
+                            access,
+                        ));
+                        return None;
+                    }
+                    ModuleIdent(_, sp!(_, ModuleIdent_ { address, module })) => {
+                        let mut diag = unexpected_access_error(
+                            resolved_name.loc(),
+                            "module".to_string(),
+                            access,
+                        );
+                        let base_str = format!("{}", chain);
+                        let realized_str = format!("{}::{}", address, module);
+                        if base_str != realized_str {
+                            diag.add_note(format!(
+                                "Resolved '{}' to module identifier '{}'",
+                                base_str, realized_str
+                            ));
+                        }
+                        context.env.add_diag(diag);
+                        return None;
+                    }
+                    result @ ResolutionFailure(_, _) => {
+                        context.env.add_diag(access_chain_resolution_error(result));
+                        return None;
+                    }
+                }
+            }
+            Access::Term => match chain.value {
+                PN::One(name) if !is_valid_struct_or_constant_name(&name.to_string()) => {
+                    EN::Name(name)
+                }
+                _ => {
+                    let resolved_name = self.resolve_name_access_chain(context, access, chain);
                     match resolved_name {
                         UnresolvedName(_, name) => EN::Name(name),
                         ModuleAccess(_, access) => access,
@@ -1622,21 +1824,12 @@ impl PathExpander for Move2024PathExpander {
                             ));
                             return None;
                         }
-                        ModuleIdent(_, sp!(_, ModuleIdent_ { address, module })) => {
-                            let mut diag = unexpected_access_error(
+                        ModuleIdent(_, _) => {
+                            context.env.add_diag(unexpected_access_error(
                                 resolved_name.loc(),
                                 "module".to_string(),
                                 access,
-                            );
-                            let base_str = format!("{}", chain);
-                            let realized_str = format!("{}::{}", address, module);
-                            if base_str != realized_str {
-                                diag.add_note(format!(
-                                    "Resolved '{}' to module identifier '{}'",
-                                    base_str, realized_str
-                                ));
-                            }
-                            context.env.add_diag(diag);
+                            ));
                             return None;
                         }
                         result @ ResolutionFailure(_, _) => {
@@ -1645,50 +1838,16 @@ impl PathExpander for Move2024PathExpander {
                         }
                     }
                 }
-                Access::Term => match chain.value {
-                    PN::One(name)
-                        if !is_valid_struct_constant_or_schema_name(&name.to_string()) =>
-                    {
-                        EN::Name(name)
-                    }
-                    _ => {
-                        let resolved_name = self.resolve_name_access_chain(context, chain);
-                        match resolved_name {
-                            UnresolvedName(_, name) => EN::Name(name),
-                            ModuleAccess(_, access) => access,
-                            Address(_, _) => {
-                                context.env.add_diag(unexpected_access_error(
-                                    resolved_name.loc(),
-                                    "address".to_string(),
-                                    access,
-                                ));
-                                return None;
-                            }
-                            ModuleIdent(_, _) => {
-                                context.env.add_diag(unexpected_access_error(
-                                    resolved_name.loc(),
-                                    "module".to_string(),
-                                    access,
-                                ));
-                                return None;
-                            }
-                            result @ ResolutionFailure(_, _) => {
-                                context.env.add_diag(access_chain_resolution_error(result));
-                                return None;
-                            }
-                        }
-                    }
-                },
-                Access::Module => {
-                    context.env.add_diag(ice!((
-                        loc,
-                        "ICE module access should never resolve to a module member"
-                    )));
-                    return None;
-                }
-            };
-            Some(sp(loc, module_access))
-        }
+            },
+            Access::Module => {
+                context.env.add_diag(ice!((
+                    loc,
+                    "ICE module access should never resolve to a module member"
+                )));
+                return None;
+            }
+        };
+        Some(sp(loc, module_access))
     }
 
     fn name_access_chain_to_module_ident(
@@ -1697,7 +1856,7 @@ impl PathExpander for Move2024PathExpander {
         chain: P::NameAccessChain,
     ) -> Option<E::ModuleIdent> {
         use AccessChainResult::*;
-        let resolved_name = self.resolve_name_access_chain(context, chain);
+        let resolved_name = self.resolve_name_access_chain(context, Access::Module, chain);
         match resolved_name {
             ModuleIdent(_, mident) => Some(mident),
             UnresolvedName(_, name) => {
@@ -1741,10 +1900,10 @@ impl AccessChainResult {
 
     fn err_name(&self) -> String {
         match self {
-            AccessChainResult::ModuleAccess(_, _) => "module member".to_string(),
-            AccessChainResult::ModuleIdent(_, _) => "module".to_string(),
-            AccessChainResult::UnresolvedName(_, _) => "name".to_string(),
-            AccessChainResult::Address(_, _) => "address".to_string(),
+            AccessChainResult::ModuleAccess(_, _) => "a module member".to_string(),
+            AccessChainResult::ModuleIdent(_, _) => "a module".to_string(),
+            AccessChainResult::UnresolvedName(_, _) => "a name".to_string(),
+            AccessChainResult::Address(_, _) => "an address".to_string(),
             AccessChainResult::ResolutionFailure(inner, _) => inner.err_name(),
         }
     }
@@ -1783,7 +1942,7 @@ fn access_chain_resolution_error(result: AccessChainResult) -> Diagnostic {
         let loc = inner.loc();
         let msg = match reason {
             AccessChainFailure::InvalidKind(kind) => format!(
-                "Expected {} in this position, not a {}",
+                "Expected {} in this position, not {}",
                 kind,
                 inner.err_name()
             ),
@@ -1930,9 +2089,12 @@ fn aliases_from_member(
     macro_rules! check_name_and_add_implicit_alias {
         ($kind:expr, $name:expr) => {{
             if let Some(n) = check_valid_module_member_name(context, $kind, $name) {
-                if let Err(loc) =
-                    acc.add_implicit_member_alias(n.clone(), current_module.clone(), n.clone())
-                {
+                if let Err(loc) = acc.add_implicit_member_alias(
+                    n.clone(),
+                    current_module.clone(),
+                    n.clone(),
+                    $kind,
+                ) {
                     duplicate_module_member(context, loc, n)
                 }
             }
@@ -2165,7 +2327,7 @@ fn module_use(
                     None => continue,
                     Some(alias) => alias,
                 };
-                if let Err(old_loc) = acc.add_member_alias(alias, mident, member) {
+                if let Err(old_loc) = acc.add_member_alias(alias, mident, member, member_kind) {
                     duplicate_module_member(context, old_loc, alias)
                 }
                 if matches!(member_kind, ModuleMemberKind::Function) {
@@ -2685,7 +2847,7 @@ fn sequence(context: &mut Context, loc: Loc, seq: P::Sequence) -> E::Sequence {
     let (puses, pitems, maybe_last_semicolon_loc, pfinal_item) = seq;
 
     let (new_scope, use_funs_builder) = uses(context, puses);
-    context.push_alias_scope(new_scope);
+    context.push_alias_scope(loc, new_scope);
     let mut use_funs = use_funs(context, use_funs_builder);
     let mut items: VecDeque<E::SequenceItem> = pitems
         .into_iter()
@@ -3619,7 +3781,7 @@ fn check_valid_module_member_name_impl(
             }
         }
         M::Constant | M::Struct | M::Schema => {
-            if !is_valid_struct_constant_or_schema_name(&n.value) {
+            if !is_valid_struct_or_constant_name(&n.value) {
                 let msg = format!(
                     "Invalid {} name '{}'. {} names must start with 'A'..'Z'",
                     case.name(),
@@ -3714,7 +3876,7 @@ fn check_valid_type_parameter_name(
     check_restricted_name_all_cases(&mut context.defn_context, NameCase::TypeParameter, n)
 }
 
-pub fn is_valid_struct_constant_or_schema_name(s: &str) -> bool {
+pub fn is_valid_struct_or_constant_name(s: &str) -> bool {
     s.starts_with(|c: char| c.is_ascii_uppercase())
 }
 

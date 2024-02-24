@@ -42,7 +42,6 @@ mysten-metrics.workspace = true
 mysten-common.workspace = true
 mysten-network.workspace = true
 mysten-util-mem.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

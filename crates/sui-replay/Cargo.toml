@@ -48,4 +48,3 @@ sui-protocol-config.workspace = true
 sui-sdk.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
-workspace-hack.workspace = true

@@ -37,6 +37,9 @@ pub(crate) struct BlockManager {
     /// as ancestors and need them to get unsuspended. It is possible for a missing dependency (key) to be a suspended block, so
     /// the block has been already fetched but it self is still missing some of its ancestors to be processed.
     missing_ancestors: BTreeMap<BlockRef, BTreeSet<BlockRef>>,
+    /// Keeps all the blocks that we actually miss and haven't fetched them yet. That set will basically contain all the
+    /// keys from the `missing_ancestors` minus any keys that exist in `suspended_blocks`.
+    missing_blocks: BTreeSet<BlockRef>,
     dag_state: Arc<RwLock<DagState>>,
     context: Arc<Context>,
 }
@@ -46,6 +49,7 @@ impl BlockManager {
         Self {
             suspended_blocks: BTreeMap::new(),
             missing_ancestors: BTreeMap::new(),
+            missing_blocks: BTreeSet::new(),
             context,
             dag_state,
         }
@@ -53,12 +57,13 @@ impl BlockManager {
 
     /// Tries to accept the provided blocks assuming that all their causal history exists. The method
     /// returns all the blocks that have been successfully processed in round ascending order, that includes also previously
-    /// suspended blocks that have now been able to get accepted.
+    /// suspended blocks that have now been able to get accepted. Method also returns a set with the new missing ancestor blocks.
     pub(crate) fn try_accept_blocks(
         &mut self,
         mut blocks: Vec<VerifiedBlock>,
-    ) -> ConsensusResult<Vec<VerifiedBlock>> {
+    ) -> ConsensusResult<(Vec<VerifiedBlock>, BTreeSet<BlockRef>)> {
         let mut accepted_blocks = vec![];
+        let missing_blocks_before = self.missing_blocks.clone();
 
         blocks.sort_by_key(|b| b.round());
         for block in blocks {
@@ -77,7 +82,18 @@ impl BlockManager {
         }
 
         accepted_blocks.sort_by_key(|b| b.reference());
-        Ok(accepted_blocks)
+
+        // Newly missed blocks
+        // TODO: make sure that the computation here is bounded either in the byzantine or node fall
+        // back scenario.
+        let missing_blocks_after = self
+            .missing_blocks
+            .difference(&missing_blocks_before)
+            .cloned()
+            .collect();
+
+        // Figure out the new missing blocks
+        Ok((accepted_blocks, missing_blocks_after))
     }
 
     /// Tries to accept the provided block. To accept a block its ancestors must have been already successfully accepted. If
@@ -109,8 +125,18 @@ impl BlockManager {
                     .entry(*ancestor)
                     .or_default()
                     .insert(block_ref);
+
+                // Add the ancestor to the missing blocks set only if it doesn't already exist in the suspended blocks - meaning
+                // that we already have its payload.
+                if !self.suspended_blocks.contains_key(ancestor) {
+                    self.missing_blocks.insert(*ancestor);
+                }
             }
         }
+
+        // Remove the block ref from the `missing_blocks` - if exists - since we now have received the block. The block
+        // might still get suspended, but we won't report it as missing in order to not re-fetch.
+        self.missing_blocks.remove(&block.reference());
 
         if !missing_ancestors.is_empty() {
             let hostname = self
@@ -206,13 +232,8 @@ impl BlockManager {
     #[allow(dead_code)]
     /// Returns all the blocks that are currently missing and needed in order to accept suspended
     /// blocks.
-    pub(crate) fn missing_blocks(&self) -> Vec<BlockRef> {
-        self.missing_ancestors
-            .iter()
-            .flat_map(|(block_ref, _)| {
-                (!self.suspended_blocks.contains_key(block_ref)).then_some(*block_ref)
-            })
-            .collect()
+    pub(crate) fn missing_blocks(&self) -> BTreeSet<BlockRef> {
+        self.missing_blocks.clone()
     }
 
     #[allow(dead_code)]
@@ -233,6 +254,7 @@ mod tests {
     use rand::prelude::StdRng;
     use rand::seq::SliceRandom;
     use rand::SeedableRng;
+    use std::collections::BTreeSet;
     use std::sync::Arc;
 
     #[test]
@@ -255,17 +277,21 @@ mod tests {
             .collect::<Vec<VerifiedBlock>>();
 
         // WHEN
-        let accepted_blocks = block_manager
+        let (accepted_blocks, missing) = block_manager
             .try_accept_blocks(round_2_blocks.clone())
             .expect("No error was expected");
 
         // THEN
         assert!(accepted_blocks.is_empty());
 
+        // AND the returned missing ancestors should be the same as the provided block ancestors
+        let missing_block_refs = round_2_blocks.first().unwrap().ancestors();
+        let missing_block_refs = missing_block_refs.iter().cloned().collect::<BTreeSet<_>>();
+        assert_eq!(missing, missing_block_refs);
+
         // AND the missing blocks are the parents of the round 2 blocks. Since this is a fully connected DAG taking the
         // ancestors of the first element suffices.
-        let missing_blocks = round_2_blocks.first().unwrap().ancestors();
-        assert_eq!(block_manager.missing_blocks(), missing_blocks);
+        assert_eq!(block_manager.missing_blocks(), missing_block_refs);
 
         // AND suspended blocks should return the round_2_blocks
         assert_eq!(
@@ -275,6 +301,44 @@ mod tests {
                 .map(|block| block.reference())
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn try_accept_block_returns_missing_blocks_once() {
+        let (context, _key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let mut block_manager = BlockManager::new(context.clone(), dag_state);
+
+        // create a DAG of 4 rounds
+        let all_blocks = dag(context, 4);
+
+        // Take the blocks from round 4 up to 2 (included). Only the first block of each round should return missing
+        // ancestors when try to accept
+        for (i, block) in all_blocks
+            .into_iter()
+            .rev()
+            .take_while(|block| block.round() >= 2)
+            .enumerate()
+        {
+            // WHEN
+            let (accepted_blocks, missing) = block_manager
+                .try_accept_blocks(vec![block.clone()])
+                .expect("No error was expected");
+
+            // THEN
+            assert!(accepted_blocks.is_empty());
+
+            // Only the first block for each round should return missing blocks. Every other shouldn't
+            if i % 4 == 0 {
+                let block_ancestors = block.ancestors().iter().cloned().collect::<BTreeSet<_>>();
+                assert_eq!(missing, block_ancestors);
+            } else {
+                assert!(missing.is_empty());
+            }
+        }
     }
 
     #[test]
@@ -291,7 +355,7 @@ mod tests {
         let all_blocks = dag(context, 2);
 
         // WHEN
-        let accepted_blocks = block_manager
+        let (accepted_blocks, missing) = block_manager
             .try_accept_blocks(all_blocks.clone())
             .expect("No error was expected");
 
@@ -305,9 +369,10 @@ mod tests {
                 .cloned()
                 .collect::<Vec<VerifiedBlock>>()
         );
+        assert!(missing.is_empty());
 
         // WHEN trying to accept same blocks again, then none will be returned as those have been already accepted
-        let accepted_blocks = block_manager
+        let (accepted_blocks, _) = block_manager
             .try_accept_blocks(all_blocks)
             .expect("No error was expected");
         assert!(accepted_blocks.is_empty());
@@ -340,7 +405,7 @@ mod tests {
             // WHEN
             let mut all_accepted_blocks = vec![];
             for block in &all_blocks {
-                let accepted_blocks = block_manager
+                let (accepted_blocks, _) = block_manager
                     .try_accept_blocks(vec![block.clone()])
                     .expect("No error was expected");
 

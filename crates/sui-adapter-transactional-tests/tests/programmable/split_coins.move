@@ -16,7 +16,7 @@ module test::m1 {
         100
     }
 
-    public fun transfer(v: vector<coin::Coin<sui::sui::SUI>>, r: address) {
+    public fun transfer_(mut v: vector<coin::Coin<sui::sui::SUI>>, r: address) {
         while (!vector::is_empty(&v)) {
             let c = vector::pop_back(&mut v);
             transfer::public_transfer(c, r);
@@ -73,7 +73,7 @@ module test::m1 {
 //> 0: test::m1::ret_one_amount();
 //> 1: SplitCoins(Input(0), [Result(0), Input(1)]);
 //> 2: MakeMoveVec<sui::coin::Coin<sui::sui::SUI>>([NestedResult(1,0), NestedResult(1,1)]);
-//> test::m1::transfer(Result(2), Input(2));
+//> test::m1::transfer_(Result(2), Input(2));
 
 //# view-object 3,0
 

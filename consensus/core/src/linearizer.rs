@@ -14,14 +14,14 @@ use crate::{
 /// Expand a committed sequence of leader into a sequence of sub-dags.
 #[allow(unused)]
 #[derive(Clone)]
-pub struct Linearizer {
+pub(crate) struct Linearizer {
     /// In memory block store representing the dag state
     dag_state: Arc<RwLock<DagState>>,
 }
 
 #[allow(unused)]
 impl Linearizer {
-    pub fn new(dag_state: Arc<RwLock<DagState>>) -> Self {
+    pub(crate) fn new(dag_state: Arc<RwLock<DagState>>) -> Self {
         Self { dag_state }
     }
 
@@ -80,7 +80,10 @@ impl Linearizer {
     // This function should be called whenever a new commit is observed. This will
     // iterate over the sequence of committed leaders and produce a list of committed
     // sub-dags.
-    pub fn handle_commit(&mut self, committed_leaders: Vec<VerifiedBlock>) -> Vec<CommittedSubDag> {
+    pub(crate) fn handle_commit(
+        &mut self,
+        committed_leaders: Vec<VerifiedBlock>,
+    ) -> Vec<CommittedSubDag> {
         let mut committed_sub_dags = vec![];
         let mut commits = vec![];
         let mut committed_blocks = vec![];
@@ -125,9 +128,11 @@ impl Linearizer {
             committed_sub_dags.push(sub_dag);
         }
         // TODO: Revisit this after refactor of dag state
-        self.dag_state
-            .write()
-            .write_commits(commits, committed_blocks);
+        if !commits.is_empty() {
+            self.dag_state
+                .write()
+                .write_commits(commits, committed_blocks);
+        }
         committed_sub_dags
     }
 }
@@ -135,7 +140,6 @@ impl Linearizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use crate::{
         commit::DEFAULT_WAVE_LENGTH,
         context::Context,

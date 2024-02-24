@@ -253,3 +253,19 @@ pub(crate) struct DynamicFieldEntry {
     pub(crate) digest: String,
     pub(crate) object_type: String,
 }
+
+// Object information.
+// A row in the live object table.
+#[derive(Serialize, Clone, SerializeParquet)]
+pub(crate) struct WrappedObjectEntry {
+    // indexes
+    pub(crate) object_id: Option<String>,
+    pub(crate) root_object_id: String,
+    pub(crate) root_object_version: u64,
+    pub(crate) checkpoint: u64,
+    pub(crate) epoch: u64,
+    pub(crate) timestamp_ms: u64,
+    // wrapped info
+    pub(crate) json_path: String,
+    pub(crate) struct_tag: Option<String>,
+}

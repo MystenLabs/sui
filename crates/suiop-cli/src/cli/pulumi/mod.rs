@@ -36,6 +36,10 @@ pub enum PulumiAction {
         /// use GCP KMS as encryption provider
         #[arg(short, long, group = "feature")]
         kms: bool,
+
+        /// the name of the project to be created
+        #[arg(long, aliases = ["name"])]
+        project_name: Option<String>,
     },
 }
 
@@ -47,6 +51,7 @@ pub async fn pulumi_cmd(args: &PulumiArgs) -> Result<()> {
             basic,
             cronjob,
             kms,
+            project_name,
         } => {
             if *kms {
                 ensure_gcloud()?;
@@ -56,7 +61,7 @@ pub async fn pulumi_cmd(args: &PulumiArgs) -> Result<()> {
                 (false, false, true) => ProjectType::CronJob,
                 (_, _, _) => ProjectType::Basic,
             };
-            project_type.create_project(kms)
+            project_type.create_project(kms, project_name.clone())
         }
     }
 }

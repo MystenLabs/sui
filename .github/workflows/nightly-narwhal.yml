@@ -33,7 +33,7 @@ jobs:
     name: Narwhal run long-running end-to-end tests
     runs-on: ubuntu-ghcloud
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - uses: taiki-e/install-action@nextest
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
@@ -56,7 +56,7 @@ jobs:
     if: always()
     needs: [end-to-end-tests]
     steps:
-      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
 
       - name: Post to slack
         uses: slackapi/slack-github-action@v1.24.0

@@ -44,7 +44,6 @@ ipnetwork.workspace = true
 
 telemetry-subscribers.workspace = true
 fastcrypto.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 mime.workspace = true

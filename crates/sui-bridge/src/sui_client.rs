@@ -41,14 +41,12 @@ use sui_types::{
     Identifier,
 };
 use tap::TapFallible;
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
-use tokio_retry::Retry;
 use tracing::{error, warn};
 
 use crate::crypto::BridgeAuthorityPublicKey;
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::SuiBridgeEvent;
-use crate::retry_with_max_delay;
+use crate::retry_with_max_elapsed_time;
 use crate::sui_transaction_builder::get_bridge_package_id;
 use crate::types::BridgeActionStatus;
 use crate::types::BridgeInnerDynamicField;
@@ -209,9 +207,9 @@ where
         action: &BridgeAction,
     ) -> BridgeActionStatus {
         loop {
-            let Ok(status) = retry_with_max_delay!(
+            let Ok(Ok(status)) = retry_with_max_elapsed_time!(
                 self.inner.get_token_transfer_action_onchain_status(action),
-                Duration::from_secs(600)
+                Duration::from_secs(30)
             ) else {
                 // TODO: add metrics and fire alert
                 error!("Failed to get action onchain status for: {:?}", action);

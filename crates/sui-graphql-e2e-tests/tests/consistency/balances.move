@@ -18,15 +18,14 @@
 
 //# publish --sender A
 module P0::fake {
-    use std::option;
     use sui::coin;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    struct FAKE has drop {}
+    public struct FAKE has drop {}
 
     fun init(witness: FAKE, ctx: &mut TxContext){
-        let (treasury_cap, metadata) = coin::create_currency(
+        let (mut treasury_cap, metadata) = coin::create_currency(
             witness,
             2,
             b"FAKE",
@@ -78,7 +77,7 @@ module P0::fake {
 
 //# create-checkpoint
 
-//# run-graphql --cursors {"c":2,"t":1}
+//# run-graphql --cursors {"c":2,"t":1,"tc":1}
 # Emulating viewing transaction blocks at checkpoint 2. Fake coin balance should be 700.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -101,7 +100,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"c":3,"t":1}
+//# run-graphql --cursors {"c":3,"t":1,"tc":1}
 # Emulating viewing transaction blocks at checkpoint 3. Fake coin balance should be 500.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -124,7 +123,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":1}
+//# run-graphql --cursors {"c":4,"t":1,"tc":1}
 # Emulating viewing transaction blocks at checkpoint 4. Fake coin balance should be 400.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -151,7 +150,7 @@ module P0::fake {
 
 //# create-checkpoint
 
-//# run-graphql --cursors {"c":2,"t":1}
+//# run-graphql --cursors {"c":2,"t":1,"tc":1}
 # Emulating viewing transaction blocks at checkpoint 2. Fake coin balance should be 700.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -174,7 +173,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"c":3,"t":1}
+//# run-graphql --cursors {"c":3,"t":1,"tc":1}
 # Emulating viewing transaction blocks at checkpoint 3. Fake coin balance should be 500.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -197,7 +196,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":1}
+//# run-graphql --cursors {"c":4,"t":1,"tc":1}
 # Emulating viewing transaction blocks at checkpoint 4. Fake coin balance should be 400.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -224,7 +223,7 @@ module P0::fake {
 
 //# create-checkpoint
 
-//# run-graphql --cursors {"c":2,"t":1}
+//# run-graphql --cursors {"c":2,"t":1,"tc":1}
 # Outside available range
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -247,7 +246,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"c":3,"t":1}
+//# run-graphql --cursors {"c":3,"t":1,"tc":1}
 # Emulating viewing transaction blocks at checkpoint 3. Fake coin balance should be 500.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -270,7 +269,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":1}
+//# run-graphql --cursors {"c":4,"t":1,"tc":1}
 # Emulating viewing transaction blocks at checkpoint 4. Fake coin balance should be 400.
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -298,7 +297,7 @@ module P0::fake {
 
 //# create-checkpoint
 
-//# run-graphql --cursors {"c":2,"t":1}
+//# run-graphql --cursors {"c":2,"t":1,"tc":1}
 # Outside available range
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -321,7 +320,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"c":3,"t":1}
+//# run-graphql --cursors {"c":3,"t":1,"tc":1}
 # Outside available range
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {
@@ -344,7 +343,7 @@ module P0::fake {
   }
 }
 
-//# run-graphql --cursors {"c":4,"t":1}
+//# run-graphql --cursors {"c":4,"t":1,"tc":1}
 # Outside available range
 {
   transactionBlocks(first: 1, after: "@{cursor_0}", filter: {signAddress: "@{A}"}) {

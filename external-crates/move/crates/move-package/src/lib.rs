@@ -114,8 +114,6 @@ pub struct ModelConfig {
     pub target_filter: Option<String>,
 }
 
-pub const NEEDS_MIGRATION: &str = "NO_ROOT_CRATE_EDITION";
-
 impl BuildConfig {
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
     /// failure.
@@ -127,17 +125,21 @@ impl BuildConfig {
 
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
     /// failure. Will trigger migration if the package is missing an edition.
-    pub fn cli_compile_package<W: Write>(
+    pub fn cli_compile_package<W: Write, R: BufRead>(
         self,
         path: &Path,
         writer: &mut W,
+        _reader: &mut R, // Reader here for enabling migration mode
     ) -> Result<CompiledPackage> {
         let resolved_graph = self.resolution_graph_for_package(path, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
         let build_plan = BuildPlan::create(resolved_graph)?;
         // TODO: When we are ready to release and enable automatic migration, uncomment this.
         // if !build_plan.root_crate_edition_defined() {
-        //     Err(anyhow::format_err!(NEEDS_MIGRATION))
+        //     // We would also like to call build here, but the edition is already computed and
+        //     // the lock + build config have been used for this build already. The user will
+        //     // have to call build a second time -- this is reasonable...
+        //     migration::migrate(build_plan, writer, _reader)?;
         // } else {
         //     build_plan.compile(writer)
         // }

@@ -33,7 +33,7 @@ pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 pub(crate) const DEFAULT_SERVER_CONNECTION_PORT: u16 = 8000;
 pub(crate) const DEFAULT_SERVER_CONNECTION_HOST: &str = "127.0.0.1";
 pub(crate) const DEFAULT_SERVER_DB_URL: &str =
-    "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2";
+    "postgres://postgres:postgrespw@localhost:5432/sui_indexer";
 pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 3;
 pub(crate) const DEFAULT_SERVER_PROM_HOST: &str = "0.0.0.0";
 pub(crate) const DEFAULT_SERVER_PROM_PORT: u16 = 9184;
@@ -167,7 +167,7 @@ impl ConnectionConfig {
 
     pub fn ci_integration_test_cfg() -> Self {
         Self {
-            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
+            db_url: DEFAULT_SERVER_DB_URL.to_string(),
             ..Default::default()
         }
     }

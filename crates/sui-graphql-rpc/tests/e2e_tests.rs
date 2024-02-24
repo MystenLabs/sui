@@ -3,7 +3,7 @@
 
 #[cfg(feature = "pg_integration")]
 mod tests {
-    use fastcrypto::encoding::Base64;
+    use fastcrypto::encoding::{Base64, Encoding};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use serde_json::json;
@@ -16,8 +16,13 @@ mod tests {
     use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
     use sui_types::digests::ChainIdentifier;
+    use sui_types::gas_coin::GAS;
+    use sui_types::transaction::CallArg;
+    use sui_types::transaction::ObjectArg;
+    use sui_types::transaction::TransactionDataAPI;
     use sui_types::DEEPBOOK_ADDRESS;
     use sui_types::SUI_FRAMEWORK_ADDRESS;
+    use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
     use tokio::time::sleep;
 
     #[tokio::test]
@@ -434,8 +439,7 @@ mod tests {
             .await
             .transfer_sui(Some(1_000), recipient)
             .build();
-        let tx_bytes = Base64::from_bytes(&bcs::to_bytes(&tx).unwrap());
-        let tx_bytes = tx_bytes.encoded();
+        let tx_bytes = Base64::encode(bcs::to_bytes(&tx).unwrap());
 
         let query = r#"{ dryRunTransactionBlock(txBytes: $tx) {
                 transaction {
@@ -506,6 +510,166 @@ mod tests {
         assert!(res.get("results").unwrap().is_array());
     }
 
+    // Test dry run where the transaction kind is provided instead of the full transaction.
+    #[tokio::test]
+    #[serial]
+    async fn test_transaction_dry_run_with_kind() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+
+        let recipient = addresses[1];
+        let tx = cluster
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            .transfer_sui(Some(1_000), recipient)
+            .build();
+        let tx_kind_bytes = Base64::encode(bcs::to_bytes(&tx.into_kind()).unwrap());
+
+        let query = r#"{ dryRunTransactionBlock(txBytes: $tx, txMeta: {}) {
+                results {
+                    mutatedReferences {
+                        input {
+                            __typename
+                        }
+                    }
+                }
+                transaction {
+                    digest
+                    sender {
+                        address
+                    }
+                    gasInput {
+                        gasSponsor {
+                            address
+                        }
+                        gasPrice
+                    }
+                }
+                error
+            }
+        }"#;
+        let variables = vec![GraphqlQueryVariable {
+            name: "tx".to_string(),
+            ty: "String!".to_string(),
+            value: json!(tx_kind_bytes),
+        }];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, variables, vec![])
+            .await
+            .unwrap();
+        let binding = res.response_body().data.clone().into_json().unwrap();
+        let res = binding.get("dryRunTransactionBlock").unwrap();
+
+        let digest = res.get("transaction").unwrap().get("digest").unwrap();
+        // Dry run txn does not have digest
+        assert!(digest.is_null());
+        assert!(res.get("error").unwrap().is_null());
+        let sender_read = res.get("transaction").unwrap().get("sender").unwrap();
+        // Since no transaction metadata is provided, we use 0x0 as the sender while dry running the trasanction
+        // in which case the sender is null.
+        assert!(sender_read.is_null());
+        assert!(res.get("results").unwrap().is_array());
+    }
+
+    // Test that we can handle dry run with failures at execution stage too.
+    #[tokio::test]
+    #[serial]
+    async fn test_dry_run_failed_execution() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+
+        let sender = addresses[0];
+        let coin = *cluster
+            .validator_fullnode_handle
+            .wallet
+            .get_gas_objects_owned_by_address(sender, None)
+            .await
+            .unwrap()
+            .get(1)
+            .unwrap();
+        let tx = cluster
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            // A split coin that goes nowhere -> execution failure
+            .move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                "coin",
+                "split",
+                vec![
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(coin)),
+                    CallArg::Pure(bcs::to_bytes(&1000u64).unwrap()),
+                ],
+            )
+            .with_type_args(vec![GAS::type_tag()])
+            .build();
+        let tx_bytes = Base64::encode(bcs::to_bytes(&tx).unwrap());
+
+        let query = r#"{ dryRunTransactionBlock(txBytes: $tx) {
+                results {
+                    mutatedReferences {
+                        input {
+                            __typename
+                        }
+                    }
+                }
+                transaction {
+                    digest
+                    sender {
+                        address
+                    }
+                    gasInput {
+                        gasSponsor {
+                            address
+                        }
+                        gasPrice
+                    }
+                }
+                error
+            }
+        }"#;
+        let variables = vec![GraphqlQueryVariable {
+            name: "tx".to_string(),
+            ty: "String!".to_string(),
+            value: json!(tx_bytes),
+        }];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, variables, vec![])
+            .await
+            .unwrap();
+        let binding = res.response_body().data.clone().into_json().unwrap();
+        let res = binding.get("dryRunTransactionBlock").unwrap();
+
+        // Execution failed so the results are null.
+        assert!(res.get("results").unwrap().is_null());
+        // Check that the error is not null and contains the error message.
+        assert!(res
+            .get("error")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .contains("UnusedValueWithoutDrop"));
+    }
+
     #[tokio::test]
     #[serial]
     async fn test_epoch_data() {
@@ -540,7 +704,6 @@ mod tests {
             .execute_to_graphql(query.to_string(), true, vec![], vec![])
             .await
             .unwrap();
-        tracing::error!("res: {:?}", res);
 
         let binding = res.response_body().data.clone().into_json().unwrap();
 

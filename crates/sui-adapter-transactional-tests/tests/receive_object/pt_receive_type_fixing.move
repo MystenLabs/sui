@@ -10,11 +10,11 @@ module tto::M1 {
     use sui::transfer::{Self, Receiving};
     use std::vector;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
     }
 
-    struct B has key, store {
+    public struct B has key, store {
         id: UID,
     }
 
@@ -34,15 +34,15 @@ module tto::M1 {
 
     public entry fun pass_through_mut_ref_a(_x: &mut Receiving<A>) { }
 
-    public fun unpacker_a(x: vector<Receiving<A>>): Receiving<A> {
+    public fun unpacker_a(mut x: vector<Receiving<A>>): Receiving<A> {
         vector::pop_back(&mut x)
     }
 
-    public fun unpacker_b(x: vector<Receiving<B>>): Receiving<B> {
+    public fun unpacker_b(mut x: vector<Receiving<B>>): Receiving<B> {
         vector::pop_back(&mut x)
     }
 
-    public fun unpacker_generic<T: key + store>(x: vector<Receiving<T>>): Receiving<T> {
+    public fun unpacker_generic<T: key + store>(mut x: vector<Receiving<T>>): Receiving<T> {
         vector::pop_back(&mut x)
     }
 

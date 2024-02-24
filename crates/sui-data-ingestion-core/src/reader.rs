@@ -216,13 +216,13 @@ impl CheckpointReader {
 
         loop {
             tokio::select! {
-                Ok(Some(_)) | Err(_) = timeout(Duration::from_millis(timeout_ms), inotify_recv.recv())  => {
-                    self.sync().await.expect("Failed to read checkpoint files");
-                }
+                _ = &mut self.exit_receiver => break,
                 Some(gc_checkpoint_number) = self.processed_receiver.recv() => {
                     self.gc_processed_files(gc_checkpoint_number).expect("Failed to clean the directory");
                 }
-                _ = &mut self.exit_receiver => break,
+                Ok(Some(_)) | Err(_) = timeout(Duration::from_millis(timeout_ms), inotify_recv.recv())  => {
+                    self.sync().await.expect("Failed to read checkpoint files");
+                }
             }
         }
         Ok(())

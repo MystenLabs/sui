@@ -324,7 +324,7 @@ impl fmt::Debug for Slot {
 /// will affect the values of `BlockDigest` and `BlockRef`.
 #[allow(unused)]
 #[derive(Deserialize, Serialize)]
-pub struct SignedBlock {
+pub(crate) struct SignedBlock {
     inner: Block,
     signature: Bytes,
 }

@@ -11,12 +11,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_graphql_rpc_client::simple_client::SimpleClient;
 use sui_indexer::errors::IndexerError;
-pub use sui_indexer::processors_v2::objects_snapshot_processor::SnapshotLagConfig;
-use sui_indexer::store::indexer_store_v2::IndexerStoreV2;
-use sui_indexer::store::PgIndexerStoreV2;
+pub use sui_indexer::processors::objects_snapshot_processor::SnapshotLagConfig;
+use sui_indexer::store::indexer_store::IndexerStore;
+use sui_indexer::store::PgIndexerStore;
 use sui_indexer::test_utils::force_delete_database;
-use sui_indexer::test_utils::start_test_indexer_v2;
-use sui_indexer::test_utils::start_test_indexer_v2_impl;
+use sui_indexer::test_utils::start_test_indexer;
+use sui_indexer::test_utils::start_test_indexer_impl;
 use sui_indexer::test_utils::ReaderWriterConfig;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_types::storage::ReadStore;
@@ -34,7 +34,7 @@ pub const DEFAULT_INTERNAL_DATA_SOURCE_PORT: u16 = 3000;
 
 pub struct ExecutorCluster {
     pub executor_server_handle: JoinHandle<()>,
-    pub indexer_store: PgIndexerStoreV2,
+    pub indexer_store: PgIndexerStore,
     pub indexer_join_handle: JoinHandle<Result<(), IndexerError>>,
     pub graphql_server_join_handle: JoinHandle<()>,
     pub graphql_client: SimpleClient,
@@ -44,7 +44,7 @@ pub struct ExecutorCluster {
 
 pub struct Cluster {
     pub validator_fullnode_handle: TestCluster,
-    pub indexer_store: PgIndexerStoreV2,
+    pub indexer_store: PgIndexerStore,
     pub indexer_join_handle: JoinHandle<Result<(), IndexerError>>,
     pub graphql_server_join_handle: JoinHandle<()>,
     pub graphql_client: SimpleClient,
@@ -60,10 +60,9 @@ pub async fn start_cluster(
     let val_fn = start_validator_with_fullnode(internal_data_source_rpc_port).await;
 
     // Starts indexer
-    let (pg_store, pg_handle) = start_test_indexer_v2(
+    let (pg_store, pg_handle) = start_test_indexer(
         Some(db_url),
         val_fn.rpc_url().to_string(),
-        true,
         ReaderWriterConfig::writer_mode(None),
     )
     .await;
@@ -118,10 +117,9 @@ pub async fn serve_executor(
             .await;
     });
 
-    let (pg_store, pg_handle) = start_test_indexer_v2_impl(
+    let (pg_store, pg_handle) = start_test_indexer_impl(
         Some(db_url),
         format!("http://{}", executor_server_url),
-        true,
         ReaderWriterConfig::writer_mode(snapshot_config.clone()),
         Some(graphql_connection_config.db_name()),
     )
@@ -208,7 +206,7 @@ async fn wait_for_graphql_server(client: &SimpleClient) {
 }
 
 async fn wait_for_indexer_checkpoint_catchup(
-    indexer_store: &PgIndexerStoreV2,
+    indexer_store: &PgIndexerStore,
     checkpoint: u64,
     base_timeout: Duration,
 ) {
