@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(not(msim))]
 use std::path::Path;
 #[cfg(not(msim))]
 use sui_types::transaction::{CallArg, ObjectArg};
 
+#[cfg(not(msim))]
 const TEST_DIR: &str = "tests";
 
 #[cfg(not(msim))]
@@ -117,10 +119,8 @@ fn stable_call_arg_display(ca: &CallArg) -> String {
     }
 }
 
-#[cfg(msim)]
-#[tokio::main]
-async fn test_ptb_files(_: &Path) -> datatest_stable::Result<()> {
-    Ok(())
-}
-
+#[cfg(not(msim))]
 datatest_stable::harness!(test_ptb_files, TEST_DIR, r".*\.ptb$",);
+
+#[cfg(msim)]
+fn main() {}
