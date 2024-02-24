@@ -145,9 +145,7 @@ use crate::execution_driver::execution_process;
 use crate::metrics::LatencyObserver;
 use crate::metrics::RateTracker;
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::overload_monitor::{
-    overload_monitor, overload_monitor_accept_tx, AuthorityOverloadInfo,
-};
+use crate::overload_monitor::{overload_monitor_accept_tx, AuthorityOverloadInfo};
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::{AccumulatorStore, StateAccumulator, WrappedObject};
 use crate::subscription_handler::SubscriptionHandler;
@@ -2565,12 +2563,6 @@ impl AuthorityState {
             rx_ready_certificates,
             rx_execution_shutdown,
         ));
-
-        // Don't start the overload monitor when max_load_shedding_percentage is 0.
-        if authority_overload_config.max_load_shedding_percentage > 0 {
-            let authority_state = Arc::downgrade(&state);
-            spawn_monitored_task!(overload_monitor(authority_state, authority_overload_config));
-        }
 
         // TODO: This doesn't belong to the constructor of AuthorityState.
         state
