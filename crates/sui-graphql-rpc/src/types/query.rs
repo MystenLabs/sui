@@ -305,7 +305,7 @@ impl Query {
             ctx.data_unchecked(),
             page,
             /* epoch */ None,
-            Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         )
         .await
         .extend()

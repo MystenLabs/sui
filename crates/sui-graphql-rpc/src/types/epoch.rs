@@ -210,7 +210,7 @@ impl Epoch {
             ctx.data_unchecked(),
             page,
             Some(epoch),
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()

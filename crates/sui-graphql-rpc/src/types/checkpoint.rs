@@ -248,11 +248,10 @@ impl Checkpoint {
     /// can optionally be further `filter`-ed by an epoch number (to only return checkpoints within
     /// that epoch).
     ///
-    /// The `checkpoint_viewed_at` parameter is an Option<u64> representing the
-    /// checkpoint_sequence_number at which this page was queried for, or `None` if the data was
-    /// requested at the latest checkpoint. Each entity returned in the connection will inherit this
-    /// checkpoint, so that when viewing that entity's state, it will be from the reference of this
-    /// checkpoint_viewed_at parameter.
+    /// The `checkpoint_viewed_at` parameter represents the checkpoint_sequence_number at which this
+    /// page was queried for. Each entity returned in the connection will inherit this checkpoint,
+    /// so that when viewing that entity's state, it will be from the reference of this
+    /// `checkpoint_viewed_at` parameter.
     ///
     /// If the `Page<Cursor>` is set, then this function will defer to the `checkpoint_viewed_at` in
     /// the cursor if they are consistent.
@@ -260,20 +259,15 @@ impl Checkpoint {
         db: &Db,
         page: Page<Cursor>,
         filter: Option<u64>,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Checkpoint>, Error> {
         use checkpoints::dsl;
         let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
-        let ((prev, next, results), rhs) = db
-            .execute_repeatable(move |conn| {
-                let checkpoint_viewed_at = match checkpoint_viewed_at {
-                    Some(value) => Ok(value),
-                    None => Checkpoint::available_range(conn).map(|(_, rhs)| rhs),
-                }?;
-
-                let result = page.paginate_query::<StoredCheckpoint, _, _, _>(
+        let (prev, next, results) = db
+            .execute(move |conn| {
+                page.paginate_query::<StoredCheckpoint, _, _, _>(
                     conn,
                     checkpoint_viewed_at,
                     move || {
@@ -284,16 +278,13 @@ impl Checkpoint {
                         }
                         query
                     },
-                )?;
-
-                Ok::<_, diesel::result::Error>((result, checkpoint_viewed_at))
+                )
             })
             .await?;
 
-        // Defer to the provided checkpoint_viewed_at, but if it is not provided, use the
-        // current available range. This sets a consistent upper bound for the nested queries.
+        // Defer to the provided `checkpoint_viewed_at`. This sets a consistent upper bound for the
+        // nested queries.
         let mut conn = Connection::new(prev, next);
-        let checkpoint_viewed_at = checkpoint_viewed_at.unwrap_or(rhs);
         for stored in results {
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
             conn.edges.push(Edge::new(
