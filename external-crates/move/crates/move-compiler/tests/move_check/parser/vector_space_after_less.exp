@@ -1,9 +1,18 @@
+error[E03008]: too few type arguments
+  ┌─ tests/move_check/parser/vector_space_after_less.move:4:17
+  │
+4 │         let a = vector < 100;
+  │                 ^^^^^^------
+  │                 │
+  │                 Expected 1 type argument(s) but got 0
+  │                 Invalid 'vector' instantation
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/vector_space_after_less.move:4:29
   │
 4 │         let a = vector < 100;
-  │                        - ---^ Unexpected ';'
-  │                        │ │   
-  │                        │ Expected '::' after an address in a module access chain
-  │                        Perhaps you need a blank space before this '<' operator?
+  │                             ^
+  │                             │
+  │                             Unexpected ';'
+  │                             Expected '['
 

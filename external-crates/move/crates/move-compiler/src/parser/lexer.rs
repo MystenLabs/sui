@@ -12,7 +12,7 @@ use crate::{
 };
 use move_command_line_common::{character_sets::DisplayChar, files::FileHash};
 use move_ir_types::location::Loc;
-use std::fmt;
+use std::{collections::BTreeSet, fmt};
 
 use super::ast::MODIFIERS;
 
@@ -99,7 +99,14 @@ pub enum Tok {
     MinusGreater,
 }
 
-pub const MODULE_MEMBER_TOKENS: [Tok; 6] = [Tok::Fun, Tok::Spec, Tok::Struct, Tok::Use, Tok::Const, Tok::Friend];
+pub const MODULE_MEMBER_TOKENS: [Tok; 6] = [
+    Tok::Fun,
+    Tok::Spec,
+    Tok::Struct,
+    Tok::Use,
+    Tok::Const,
+    Tok::Friend,
+];
 pub const MEMBER_VISIBILITY_TOKENS: [Tok; 1] = [Tok::Public];
 // Note the valid Identifiers are the MODIFIER keywords. We need to take care to filter them when
 // appropriate.
@@ -225,6 +232,10 @@ impl<'input> Lexer<'input> {
 
     pub fn at(&self, tok: Tok) -> bool {
         self.token == tok
+    }
+
+    pub fn at_any(&self, toks: &BTreeSet<Tok>) -> bool {
+        toks.contains(&self.token)
     }
 
     pub fn content(&self) -> &'input str {

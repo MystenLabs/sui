@@ -9,7 +9,6 @@ pub struct FollowSet(Vec<u32>);
 
 #[allow(dead_code)]
 impl FollowSet {
-
     pub fn new() -> Self {
         let values = vec![0; TOK_COUNT];
         FollowSet(values)
@@ -26,19 +25,19 @@ impl FollowSet {
     }
 
     pub fn add_all(&mut self, toks: &[Tok]) {
-        for tok in  toks {
+        for tok in toks {
             self.add(*tok);
         }
     }
 
     pub fn remove_all(&mut self, toks: &[Tok]) {
-        for tok in  toks {
+        for tok in toks {
             self.remove(*tok);
         }
     }
 
     pub fn contains(&self, tok: Tok) -> bool {
-            self.0[tok as usize] > 0
+        self.0[tok as usize] > 0
     }
 
     pub fn contains_any(&self, toks: &[Tok]) -> bool {
@@ -56,7 +55,6 @@ impl FollowSet {
             *target -= n;
         }
     }
-
 }
 
 impl<const N: usize> std::convert::From<&[Tok; N]> for FollowSet {
@@ -66,7 +64,6 @@ impl<const N: usize> std::convert::From<&[Tok; N]> for FollowSet {
         new
     }
 }
-
 
 impl std::convert::From<&[Tok]> for FollowSet {
     fn from(values: &[Tok]) -> Self {

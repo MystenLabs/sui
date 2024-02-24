@@ -1,9 +1,17 @@
+warning[W09003]: unused assignment
+  ┌─ tests/move_check/parser/vector_literal_unclosed_type_args.move:4:13
+  │
+4 │         let v = vector<u64[0, 1];
+  │             ^ Unused assignment for variable 'v'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_v')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/vector_literal_unclosed_type_args.move:4:27
   │
 4 │         let v = vector<u64[0, 1];
-  │                       -   ^ Expected '>'
-  │                       │    
-  │                       To match this '<'
-  │                       Perhaps you need a blank space before this '<' operator?
+  │                           ^
+  │                           │
+  │                           Unexpected '['
+  │                           Expected ','
 
