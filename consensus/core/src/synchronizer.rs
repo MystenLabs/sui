@@ -687,7 +687,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn synchronizer_periodic_task_fetch_blocks() {
         // GIVEN
         let (context, _) = Context::new_for_test(4);

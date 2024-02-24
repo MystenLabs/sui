@@ -118,7 +118,7 @@ impl Broadcaster {
                             continue;
                         }
                     };
-                                        requests.push(send_block(network_client.clone(), peer, rtt_estimate, block));
+                    requests.push(send_block(network_client.clone(), peer, rtt_estimate, block));
                 }
                 Some((resp, start, block)) = requests.next() => {
                     match resp {

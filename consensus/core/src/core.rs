@@ -126,6 +126,9 @@ impl Core {
 
         // Accept all blocks but make sure that only the last quorum round blocks and onwards are kept.
         self.add_accepted_blocks(all_blocks, Some(0));
+
+        // TODO: run commit and propose logic, or just use add_blocks() instead of add_accepted_blocks().
+
         self
     }
 
@@ -543,6 +546,11 @@ mod test {
             store.clone(),
         );
 
+        // Check no commits have been persisted to dag_state or store.
+        let last_commit = store.read_last_commit().unwrap();
+        assert!(last_commit.is_none());
+        assert_eq!(dag_state.read().last_commit_index(), 0);
+
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new();
         let mut core = Core::new(
@@ -560,11 +568,6 @@ mod test {
         let mut new_round = signal_receivers.new_round_receiver();
         assert_eq!(*new_round.borrow_and_update(), 5);
 
-        // Check no commits have been persisted to dag_state & store
-        let last_commit = store.read_last_commit().unwrap();
-        assert!(last_commit.is_none());
-        assert_eq!(dag_state.read().last_commit_index(), 0);
-
         // When trying to propose now we should propose block for round 5
         let proposed_block = core
             .try_new_block(true)
@@ -578,11 +581,13 @@ mod test {
             assert_eq!(ancestor.round, 4);
         }
 
-        // Check commits have been persisted to dag state & store
+        // Run commit rule.
+        core.try_commit();
         let last_commit = store
             .read_last_commit()
             .unwrap()
             .expect("last commit should be set");
+
         // There were no commits prior to the core starting up but there was completed
         // rounds up to and including round 4. So we should commit leaders in round 1 & 2
         // as soon as the new block for round 5 is proposed.
@@ -604,7 +609,7 @@ mod test {
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
-        // Create test blocks for all authorities except our's (index = 0) .
+        // Create test blocks for all authorities except our's (index = 0).
         let (_, mut last_round_blocks) = Block::genesis(context.clone());
         let mut all_blocks = last_round_blocks.clone();
         for round in 1..=4 {
@@ -644,6 +649,11 @@ mod test {
             store.clone(),
         );
 
+        // Check no commits have been persisted to dag_state & store
+        let last_commit = store.read_last_commit().unwrap();
+        assert!(last_commit.is_none());
+        assert_eq!(dag_state.read().last_commit_index(), 0);
+
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new();
         let mut core = Core::new(
@@ -661,11 +671,6 @@ mod test {
         let mut new_round = signal_receivers.new_round_receiver();
         assert_eq!(*new_round.borrow_and_update(), 4);
 
-        // Check no commits have been persisted to dag_state & store
-        let last_commit = store.read_last_commit().unwrap();
-        assert!(last_commit.is_none());
-        assert_eq!(dag_state.read().last_commit_index(), 0);
-
         // When trying to propose now we should propose block for round 4
         let proposed_block = core
             .try_new_block(true)
@@ -682,11 +687,13 @@ mod test {
             }
         }
 
-        // Check commits have been persisted to dag state & store
+        // Run commit rule.
+        core.try_commit();
         let last_commit = store
             .read_last_commit()
             .unwrap()
             .expect("last commit should be set");
+
         // There were no commits prior to the core starting up but there was completed
         // rounds up to round 4. So we should commit leaders in round 1 & 2 as soon
         // as the new block for round 4 is proposed.

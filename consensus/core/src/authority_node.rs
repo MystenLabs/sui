@@ -103,7 +103,10 @@ where
         commit_consumer: CommitConsumer,
         registry: Registry,
     ) -> Self {
-        info!("Starting authority with index {}", own_index);
+        info!(
+            "Starting authority {}\n{:#?}\n{:#?}\n{:?}",
+            own_index, committee, parameters, protocol_config.version
+        );
         let context = Arc::new(Context::new(
             own_index,
             committee,
