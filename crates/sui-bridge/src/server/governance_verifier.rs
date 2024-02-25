@@ -51,10 +51,9 @@ mod tests {
     use super::*;
     use crate::{
         test_utils::get_test_sui_to_eth_bridge_action,
-        types::{
-            BridgeAction, BridgeChainId, EmergencyAction, EmergencyActionType, LimitUpdateAction,
-        },
+        types::{BridgeAction, EmergencyAction, EmergencyActionType, LimitUpdateAction},
     };
+    use sui_types::bridge::BridgeChainId;
 
     #[tokio::test]
     async fn test_governance_verifier() {

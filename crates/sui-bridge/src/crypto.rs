@@ -171,15 +171,14 @@ mod tests {
     use crate::events::EmittedSuiToEthTokenBridgeV1;
     use crate::test_utils::{get_test_authority_and_key, get_test_sui_to_eth_bridge_action};
     use crate::types::SignedBridgeAction;
-    use crate::types::{
-        BridgeAction, BridgeAuthority, BridgeChainId, SuiToEthBridgeAction, TokenId,
-    };
+    use crate::types::{BridgeAction, BridgeAuthority, SuiToEthBridgeAction, TokenId};
     use ethers::types::Address as EthAddress;
     use fastcrypto::traits::{KeyPair, ToFromBytes};
     use prometheus::Registry;
     use std::str::FromStr;
     use std::sync::Arc;
     use sui_types::base_types::SuiAddress;
+    use sui_types::bridge::BridgeChainId;
     use sui_types::crypto::get_key_pair;
     use sui_types::digests::TransactionDigest;
 
