@@ -595,7 +595,7 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version(37.into())
-            .with_epoch_duration_ms(5000)
+            .with_epoch_duration_ms(15000)
             .build_with_bridge()
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
