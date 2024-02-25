@@ -345,6 +345,8 @@ impl RandomnessEventLoop {
             return;
         };
         if sig_bytes.len() != *expected_share_count as usize {
+            // No need to verify share IDs here as well, since if we receive incorrect IDs, we
+            // will catch it later when aggregating/verifying the partial sigs.
             debug!(
                 "received partial sigs with wrong share count: expected {expected_share_count}, got {}",
                 sig_bytes.len(),
@@ -404,10 +406,10 @@ impl RandomnessEventLoop {
         if !(self.send_tasks.contains_key(&(epoch, round))
             || self.pending_tasks.contains(&(epoch, round)))
         {
-            // We have to wait here, because even if we have enough information from other nodes to complete
-            // the round, local shared object versions are not set until consensus finishes processing the
-            // corresponding commit. This function will be called again after maybe_start_pending_tasks
-            // begins this round locally.
+            // We have to wait here, because even if we have enough information from other nodes
+            // to complete the signature, local shared object versions are not set until consensus
+            // finishes processing the corresponding commit. This function will be called again
+            // after maybe_start_pending_tasks begins this round locally.
             debug!("waiting to aggregate randomness partial signatures until local consensus catches up");
             return;
         }
@@ -461,6 +463,7 @@ impl RandomnessEventLoop {
                         warn!(
                             "received invalid partial signatures from possibly-Byzantine peer {peer_id}"
                         );
+                        // TODO: Ignore future messages from peers sending bad signatures.
                         return false;
                     }
                     true
@@ -604,7 +607,7 @@ impl RandomnessEventLoop {
         }
         self.update_rounds_pending_metric();
 
-        // After starting a round we have generated our own partial sigs, check if that's
+        // After starting a round, we have generated our own partial sigs. Check if that's
         // enough for us to aggregate already.
         for (epoch, round) in rounds_to_aggregate {
             self.maybe_aggregate_partial_signatures(epoch, round).await;

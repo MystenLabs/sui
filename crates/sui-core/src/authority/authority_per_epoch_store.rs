@@ -2285,7 +2285,7 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        // We always order transactins using randomness last.
+        // We always order transactions using randomness last.
         PostConsensusTxReorder::reorder(
             &mut sequenced_transactions,
             self.protocol_config.consensus_transaction_ordering(),

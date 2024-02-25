@@ -44,13 +44,14 @@ const SINGLETON_KEY: u64 = 0;
 // 4. Randomness generation begins.
 //
 // Randomness generation:
-// 1. For each new round, AuthorityPerEpochStore eventually calls `generate_next_randomness`.
+// 1. For each new round, AuthorityPerEpochStore eventually calls `generate_randomness`.
 // 2. This kicks off a process in RandomnessEventLoop to send partial signatures for the new
 //    round to all other validators.
 // 3. Once enough partial signautres for the round are collected, a RandomnessStateUpdate
 //    transaction is generated and injected into the TransactionManager.
-// 4. Once the RandomnessStateUpdate transaction is seen in a certified checkpoint, the
-//    round is complete and we stop sending partial signatures for it.
+// 4. Once the RandomnessStateUpdate transaction is seen in a certified checkpoint,
+//    `notify_randomness_in_checkpoint` is called to complete the round and stop sending
+//    partial signatures for it.
 pub struct RandomnessManager {
     inner: Mutex<Inner>,
 }
@@ -291,7 +292,7 @@ impl RandomnessManager {
     }
 
     /// Adds a received dkg::Message to the randomness DKG state machine.
-    // TODO: change to take raw bytes and skip deserialization if a message
+    // TODO-DNS: change to take raw bytes and skip deserialization if a message
     // was already received from the same validator.
     pub async fn add_message(
         &self,
@@ -302,7 +303,7 @@ impl RandomnessManager {
     }
 
     /// Adds a received dkg::Confirmation to the randomness DKG state machine.
-    // TODO: change to take raw bytes and skip deserialization if a message
+    // TODO-DNS: change to take raw bytes and skip deserialization if a message
     // was already received from the same validator.
     pub async fn add_confirmation(
         &self,

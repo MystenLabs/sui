@@ -361,7 +361,7 @@ impl AuthorityStore {
                 TransactionKey::Digest(digest) => *digest,
                 _ => secondary_key_digests
                     .pop_front()
-                    .expect("size of `non_digest_keys_digests` should match the number of elements in `keys` that are not of type TransactionKey::Digest")
+                    .expect("size of `secondary_key_digests` should match the number of elements in `keys` that are not of type TransactionKey::Digest")
                     .unwrap_or_default(), // ok to use default here, it will return None in the lookup below
             })
             .collect();

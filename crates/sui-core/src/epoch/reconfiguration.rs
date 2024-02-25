@@ -13,7 +13,7 @@ pub enum ReconfigCertStatus {
     RejectUserCerts,
 
     // All certs rejected, including ones received through consensus.
-    // But we still accept other transactions from consensus (e.g. RandomnessStateUpdate).
+    // But we still accept other transactions from consensus (e.g. randomness DKG).
     RejectAllCerts,
 
     // All tx rejected, including system tx.

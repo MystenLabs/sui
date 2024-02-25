@@ -1749,6 +1749,11 @@ impl RandomnessRound {
     }
 
     pub fn signature_message(&self) -> Vec<u8> {
-        format!("random_beacon round {}", self.0).into()
+        "random_beacon round "
+            .as_bytes()
+            .iter()
+            .cloned()
+            .chain(bcs::to_bytes(&self.0).expect("serialization should not fail"))
+            .collect()
     }
 }
