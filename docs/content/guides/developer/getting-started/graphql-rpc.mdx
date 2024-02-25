@@ -1,11 +1,11 @@
 ---
-title: Querying Sui GraphQL RPC
-description: Sui is currently developing a GraphQL RPC service for interacting with the network.
+title: Querying Sui RPC with GraphQL
+description: Intoductory guide to making queries of the Sui RPC using the GraphQL service.
 ---
 
-The quickest way to access the Sui GraphQL service is through the online IDE that provides a complete toolbox for fetching data and executing transactions on the network. The online IDE provides features such as auto-completion (use Ctrl+Space or just start typing), built-in documentation (Book icon, top-left), multi-tabs, and more.
+The quickest way to access the GraphQL service for Sui RPC is through the online IDE that provides a complete toolbox for fetching data and executing transactions on the network. The online IDE provides features such as auto-completion (use Ctrl+Space or just start typing), built-in documentation (Book icon, top-left), multi-tabs, and more.
 
-The online IDE is available for [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql). This guide contains various queries that you can try directly in the IDE.
+The online IDE is available for [Mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [Testnet](https://sui-testnet.mystenlabs.com/graphql). This guide contains various queries that you can try directly in the IDE.
 
 :::info
 - Any existing addresses/object IDs in these examples refer to `mainnet` data only.
@@ -16,7 +16,8 @@ For more details about some concepts used in the examples below, please see the 
 
 
 ## Discovering the schema
-GraphQL introspection exposes the schema supported by the RPC service. The IDE's "Docs" pane (Book icon, top-left) and Search dialog (Cmd+K on macOS or Ctrl+K on Windows and Linux) offer a way to browse introspection output interactively.
+
+GraphQL introspection exposes the schema supported by the RPC service. The IDE's "Docs" pane (Book icon, top-left) and Search dialog (<kbd>Cmd</kbd>+<kbd>K</kbd> on macOS or <kbd>Ctrl</kbd>+<kbd>K</kbd> on Windows and Linux) offer a way to browse introspection output interactively.
 
 The [official documentation](https://graphql.org/learn/introspection/) provides an overview on introspection, and how to interact with it programmatically.
 
@@ -31,6 +32,7 @@ query {
 ```
 
 ## Finding information about a specific historical epoch
+
 This example finds the total stake rewards, the reference gas price, the number of checkpoints and the total gas fees for epoch 100. Note that in the query, the `id` argument is optional, and defaults to the latest epoch.
 
 ```graphql
@@ -52,6 +54,7 @@ query {
 ```
 
 ## Finding a transaction block by its digest
+
 This example gets a transaction block by its digest and shows information such as the gas sponsor's address, the gas price, the gas budget, and effects from executing that transaction block.
 
 ```graphql
@@ -366,6 +369,6 @@ Examples in the repository are designed to work with the version of GraphQL buil
 
 ## Related links
 
-- [Sui GraphQL Reference](../../../references/sui-graphql.mdx): The Sui GraphQL query reference.
-- [Sui GraphQL](../../../concepts/graphql-rpc.mdx) concepts: Learn how the Sui GraphQL is structured and how to best work with its features.
-- [Migrating to GraphQL](../advanced/graphql-migration.mdx): Migrate from JSON-RPC API to GraphQL. 
+- [GraphQL migration](../advanced/graphql-migration.mdx): Migrating to GraphQL guides you through migrating Sui RPC projects from JSON-RPC to GraphQL.
+- [GraphQL concepts](../../../concepts/graphql-rpc.mdx): GraphQL for Sui RPC examines the elements of GraphQL that you should know to get the most from the service.  
+- [GraphQL reference](../../../references/sui-graphql.mdx): Auto-generated GraphQL reference for Sui RPC.

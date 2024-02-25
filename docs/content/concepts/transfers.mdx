@@ -6,7 +6,7 @@ Everything on Sui is an object and your smart contracts are inevitably going to 
 
 ## Custom Transfer Rules
 
-On Sui, you can create custom transfer rules for objects that define the transfer conditions that must be met for a valid transfer operation. The object you want to create custom transfer rules for cannot have the `store` ability, as that ability provides unrestricted access to that object without having to go through the module that defines it. 
+On Sui, you can create custom transfer rules for objects that define the conditions that must be met for a valid transfer operation. The object you want to create custom transfer rules for cannot have the `store` ability, as that ability enables unrestricted transfers for the type via `sui::transfer::public_transfer` or the `TransferObjects` transaction command.
 
 Go to [Custom Transfer Rules](./transfers/custom-rules.mdx).
 

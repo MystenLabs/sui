@@ -14,7 +14,7 @@ const references = [
 	},
 	{
 		type: 'category',
-		label: 'Sui API',
+		label: 'Sui RPC',
 		link: {
 			type: 'doc',
 			id: 'references/sui-api',
@@ -22,7 +22,7 @@ const references = [
 		items: [
 			{
 				type: 'category',
-				label: 'Sui GraphQL Reference',
+				label: 'GraphQL',
 				link: {
 					type: 'doc',
 					id: 'references/sui-graphql',
@@ -36,7 +36,7 @@ const references = [
 			},
 			{
 				type: 'link',
-				label: 'JSON-RPC API Reference',
+				label: 'JSON-RPC',
 				href: '/sui-api-ref',
 			},
 			'references/sui-api/rpc-best-practices',
@@ -67,16 +67,16 @@ const references = [
 		items: [
 			{
 				type: 'link',
-				label: 'Sui TypeScript SDK Site',
+				label: 'Sui TypeScript SDK',
 				href: 'https://sdk.mystenlabs.com/typescript',
+			},
+			{
+				type: 'link',
+				label: 'dApp Kit',
+				href: 'https://sdk.mystenlabs.com/dapp-kit',
 			},
 			'references/rust-sdk',
 		],
-	},
-	{
-		type: 'link',
-		label: 'dApp Kit Site',
-		href: 'https://sdk.mystenlabs.com/dapp-kit',
 	},
 	{
 		type: 'category',
