@@ -229,13 +229,14 @@ impl BridgeTrait for BridgeInnerV1 {
                     .into_iter()
                     .map(|e| (e.key, e.value))
                     .collect(),
-                thresholds: self
+                member_registration: self
                     .committee
-                    .stake_thresholds_percentage
+                    .member_registrations
                     .contents
                     .into_iter()
                     .map(|e| (e.key, e.value))
                     .collect(),
+                last_committee_update_epoch: self.committee.last_committee_update_epoch,
             },
             bridge_records_id: self.bridge_records.id,
             is_frozen: self.frozen,
@@ -253,12 +254,14 @@ pub struct MoveTypeBridgeTreasury {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MoveTypeBridgeCommittee {
     pub members: VecMap<Vec<u8>, MoveTypeCommitteeMember>,
-    pub stake_thresholds_percentage: VecMap<u8, u64>,
     pub member_registrations: VecMap<SuiAddress, MoveTypeCommitteeMemberRegistration>,
     pub last_committee_update_epoch: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+/// Rust version of the Move committee::CommitteeMemberRegistration type.
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct MoveTypeCommitteeMemberRegistration {
     pub sui_address: SuiAddress,
     pub bridge_pubkey_bytes: Vec<u8>,
@@ -270,7 +273,8 @@ pub struct MoveTypeCommitteeMemberRegistration {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeCommitteeSummary {
     pub members: Vec<(Vec<u8>, MoveTypeCommitteeMember)>,
-    pub thresholds: Vec<(u8, u64)>,
+    pub member_registration: Vec<(SuiAddress, MoveTypeCommitteeMemberRegistration)>,
+    pub last_committee_update_epoch: u64,
 }
 
 /// Rust version of the Move committee::CommitteeMember type.

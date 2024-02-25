@@ -8,6 +8,8 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+bcs.workspace = true
+fastcrypto.workspace = true
 futures.workspace = true
 tracing.workspace = true
 jsonrpsee.workspace = true
@@ -25,6 +27,7 @@ sui-swarm.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
 prometheus.workspace = true
 sui-keys.workspace = true
+sui-bridge.workspace = true
 sui-sdk.workspace = true
 sui-test-transaction-builder.workspace = true
 
