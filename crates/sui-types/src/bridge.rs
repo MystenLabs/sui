@@ -4,6 +4,7 @@
 use enum_dispatch::enum_dispatch;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
+use num_enum::TryFromPrimitive;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -37,6 +38,22 @@ pub const BRIDGE_CREATE_FUNCTION_NAME: &IdentStr = ident_str!("create");
 pub const BRIDGE_INIT_COMMITTEE_FUNCTION_NAME: &IdentStr = ident_str!("init_bridge_committee");
 
 pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];
+
+pub const BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER: u64 = 6000; // out of 10000 (100%)
+pub const BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER: u64 = 10000; // (100%)
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, Hash)]
+#[repr(u8)]
+pub enum BridgeChainId {
+    SuiMainnet = 0,
+    SuiTestnet = 1,
+    SuiDevnet = 2,
+    SuiLocalTest = 3,
+
+    EthMainnet = 10,
+    EthSepolia = 11,
+    EthLocalTest = 12,
+}
 
 pub fn get_bridge_obj_initial_shared_version(
     object_store: &dyn ObjectStore,
@@ -212,13 +229,14 @@ impl BridgeTrait for BridgeInnerV1 {
                     .into_iter()
                     .map(|e| (e.key, e.value))
                     .collect(),
-                thresholds: self
+                member_registration: self
                     .committee
-                    .stake_thresholds_percentage
+                    .member_registrations
                     .contents
                     .into_iter()
                     .map(|e| (e.key, e.value))
                     .collect(),
+                last_committee_update_epoch: self.committee.last_committee_update_epoch,
             },
             bridge_records_id: self.bridge_records.id,
             is_frozen: self.frozen,
@@ -236,16 +254,8 @@ pub struct MoveTypeBridgeTreasury {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MoveTypeBridgeCommittee {
     pub members: VecMap<Vec<u8>, MoveTypeCommitteeMember>,
-    pub stake_thresholds_percentage: VecMap<u8, u64>,
     pub member_registrations: VecMap<SuiAddress, MoveTypeCommitteeMemberRegistration>,
     pub last_committee_update_epoch: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct MoveTypeCommitteeMemberRegistration {
-    pub sui_address: SuiAddress,
-    pub bridge_pubkey_bytes: Vec<u8>,
-    pub http_rest_url: Vec<u8>,
 }
 
 #[serde_as]
@@ -253,7 +263,8 @@ pub struct MoveTypeCommitteeMemberRegistration {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeCommitteeSummary {
     pub members: Vec<(Vec<u8>, MoveTypeCommitteeMember)>,
-    pub thresholds: Vec<(u8, u64)>,
+    pub member_registration: Vec<(SuiAddress, MoveTypeCommitteeMemberRegistration)>,
+    pub last_committee_update_epoch: u64,
 }
 
 /// Rust version of the Move committee::CommitteeMember type.
@@ -266,6 +277,16 @@ pub struct MoveTypeCommitteeMember {
     pub voting_power: u64,
     pub http_rest_url: Vec<u8>,
     pub blocklisted: bool,
+}
+
+/// Rust version of the Move committee::CommitteeMemberRegistration type.
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveTypeCommitteeMemberRegistration {
+    pub sui_address: SuiAddress,
+    pub bridge_pubkey_bytes: Vec<u8>,
+    pub http_rest_url: Vec<u8>,
 }
 
 /// Rust version of the Move message::BridgeMessageKey type.

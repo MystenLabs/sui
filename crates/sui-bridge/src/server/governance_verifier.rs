@@ -51,10 +51,9 @@ mod tests {
     use super::*;
     use crate::{
         test_utils::get_test_sui_to_eth_bridge_action,
-        types::{
-            BridgeAction, BridgeChainId, EmergencyAction, EmergencyActionType, LimitUpdateAction,
-        },
+        types::{BridgeAction, EmergencyAction, EmergencyActionType, LimitUpdateAction},
     };
+    use sui_types::bridge::BridgeChainId;
 
     #[tokio::test]
     async fn test_governance_verifier() {
@@ -92,7 +91,7 @@ mod tests {
         );
 
         // Token transfer action is not allowed
-        let action_4 = get_test_sui_to_eth_bridge_action(None, None, None, None);
+        let action_4 = get_test_sui_to_eth_bridge_action(None, None, None, None, None, None, None);
         assert!(matches!(
             GovernanceVerifier::new(vec![action_1, action_2, action_4.clone()]).unwrap_err(),
             BridgeError::ActionIsNotGovernanceAction(..)

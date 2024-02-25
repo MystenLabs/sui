@@ -11,6 +11,7 @@ anemo.workspace = true
 anyhow.workspace = true
 bincode.workspace = true
 bcs.workspace = true
+num_enum.workspace = true
 byteorder.workspace = true
 im.workspace = true
 itertools.workspace = true

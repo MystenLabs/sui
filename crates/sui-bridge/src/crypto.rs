@@ -171,15 +171,14 @@ mod tests {
     use crate::events::EmittedSuiToEthTokenBridgeV1;
     use crate::test_utils::{get_test_authority_and_key, get_test_sui_to_eth_bridge_action};
     use crate::types::SignedBridgeAction;
-    use crate::types::{
-        BridgeAction, BridgeAuthority, BridgeChainId, SuiToEthBridgeAction, TokenId,
-    };
+    use crate::types::{BridgeAction, BridgeAuthority, SuiToEthBridgeAction, TokenId};
     use ethers::types::Address as EthAddress;
     use fastcrypto::traits::{KeyPair, ToFromBytes};
     use prometheus::Registry;
     use std::str::FromStr;
     use std::sync::Arc;
     use sui_types::base_types::SuiAddress;
+    use sui_types::bridge::BridgeChainId;
     use sui_types::crypto::get_key_pair;
     use sui_types::digests::TransactionDigest;
 
@@ -200,7 +199,7 @@ mod tests {
         let committee = BridgeCommittee::new(vec![authority1.clone(), authority2.clone()]).unwrap();
 
         let action: BridgeAction =
-            get_test_sui_to_eth_bridge_action(None, Some(1), Some(1), Some(100));
+            get_test_sui_to_eth_bridge_action(None, Some(1), Some(1), Some(100), None, None, None);
 
         let sig = BridgeAuthoritySignInfo::new(&action, &secret);
 
@@ -219,7 +218,7 @@ mod tests {
         ));
 
         let mismatched_action: BridgeAction =
-            get_test_sui_to_eth_bridge_action(None, Some(2), Some(3), Some(4));
+            get_test_sui_to_eth_bridge_action(None, Some(2), Some(3), Some(4), None, None, None);
         // Verification should fail - mismatched action
         assert!(matches!(
             verify_signed_bridge_action(
@@ -234,7 +233,7 @@ mod tests {
 
         // Signature is invalid (signed over different message), verification should fail
         let action2: BridgeAction =
-            get_test_sui_to_eth_bridge_action(None, Some(3), Some(5), Some(77));
+            get_test_sui_to_eth_bridge_action(None, Some(3), Some(5), Some(77), None, None, None);
 
         let invalid_sig = BridgeAuthoritySignInfo::new(&action2, &secret);
         let signed_action = SignedBridgeAction::new_from_data_and_sig(action.clone(), invalid_sig);

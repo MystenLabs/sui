@@ -173,11 +173,12 @@ mod tests {
         events::EmittedSuiToEthTokenBridgeV1,
         server::mock_handler::BridgeRequestMockHandler,
         test_utils::{get_test_authority_and_key, get_test_sui_to_eth_bridge_action},
-        types::{BridgeChainId, SignedBridgeAction, TokenId},
+        types::{SignedBridgeAction, TokenId},
     };
     use fastcrypto::hash::{HashFunction, Keccak256};
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
+    use sui_types::bridge::BridgeChainId;
 
     use super::*;
     use crate::test_utils::run_mock_bridge_server;
@@ -193,7 +194,8 @@ mod tests {
 
         let pubkey_bytes = BridgeAuthorityPublicKeyBytes::from(&pubkey);
         let committee = Arc::new(BridgeCommittee::new(vec![authority.clone()]).unwrap());
-        let action = get_test_sui_to_eth_bridge_action(None, Some(1), Some(1), Some(100));
+        let action =
+            get_test_sui_to_eth_bridge_action(None, Some(1), Some(1), Some(100), None, None, None);
 
         // Ok
         let client = BridgeClient::new(pubkey_bytes.clone(), committee).unwrap();
@@ -270,8 +272,15 @@ mod tests {
         let tx_digest = TransactionDigest::random();
         let event_idx = 4;
 
-        let action =
-            get_test_sui_to_eth_bridge_action(Some(tx_digest), Some(event_idx), Some(1), Some(100));
+        let action = get_test_sui_to_eth_bridge_action(
+            Some(tx_digest),
+            Some(event_idx),
+            Some(1),
+            Some(100),
+            None,
+            None,
+            None,
+        );
         let sig = BridgeAuthoritySignInfo::new(&action, &secret);
         let signed_event = SignedBridgeAction::new_from_data_and_sig(action.clone(), sig.clone());
         mock_handler.add_sui_event_response(tx_digest, event_idx, Ok(signed_event.clone()));
@@ -283,8 +292,15 @@ mod tests {
             .unwrap();
 
         // mismatched action would fail, this could happen when the authority fetched the wrong event
-        let action2 =
-            get_test_sui_to_eth_bridge_action(Some(tx_digest), Some(event_idx), Some(2), Some(200));
+        let action2 = get_test_sui_to_eth_bridge_action(
+            Some(tx_digest),
+            Some(event_idx),
+            Some(2),
+            Some(200),
+            None,
+            None,
+            None,
+        );
         let wrong_sig = BridgeAuthoritySignInfo::new(&action2, &secret);
         let wrong_signed_action =
             SignedBridgeAction::new_from_data_and_sig(action2.clone(), wrong_sig.clone());
