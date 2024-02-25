@@ -7,7 +7,7 @@ At the center of DeepBook is a hyper-efficient per-current pair shared-object `P
 
 For each base and quote asset trading pair, a globally shared `Pool` is created to bookkeep open orders on the order book and handle placement, cancellation, and settlement of orders. Under this architecture, transactions involving different trading pairs can be easily parallelized to maximize throughput.
 
-DeepBook uses a critical bit (crit-bit) tree structure to process orders. Each left and right node is based on the critical bit of the price. Inside each of the nodes is a list of orders placed with a hierarchy based on the time each ocurred.
+DeepBook uses a critical bit (crit-bit) tree structure to process orders. Each left and right node is based on the critical bit of the price. Inside each of the nodes is a list of orders placed with a hierarchy based on the time each occurred.
 
 ```mermaid
 flowchart TB
