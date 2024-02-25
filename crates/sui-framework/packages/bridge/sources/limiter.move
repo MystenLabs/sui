@@ -86,6 +86,7 @@ module bridge::limiter {
     }
 
     public(friend) fun update_route_limit(self: &mut TransferLimiter, route: &BridgeRoute, new_usd_limit: u64) {
+        let receiving_chain = *chain_ids::route_destination(route);
         if (!vec_map::contains(&self.transfer_limits, route)) {
             vec_map::insert(&mut self.transfer_limits, *route, new_usd_limit);
             return
@@ -94,7 +95,7 @@ module bridge::limiter {
         *entry = new_usd_limit;
         emit(UpdateRouteLimitEvent {
             sending_chain: *chain_ids::route_source(route),
-            receiving_chain: *chain_ids::route_destination(route),
+            receiving_chain,
             new_limit: new_usd_limit,
         })
     }
@@ -200,44 +201,46 @@ module bridge::limiter {
 
     // It's tedious to list every pair, but it's safer to do so so we don't
     // accidentally turn off limiter for a new production route in the future.
+    // Note limiter only takes effects on the receiving chain, so we only need to
+    // specify routes from Ethereum to Sui.
     fun initial_transfer_limits(): VecMap<BridgeRoute, u64> {
         let transfer_limits = vec_map::empty();
         // 5M limit on Sui -> Ethereum mainnet
         vec_map::insert(
             &mut transfer_limits,
-            chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet()),
+            chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet()),
             5_000_000 * USD_VALUE_MULTIPLIER
         );
 
         // MAX limit for testnet and devnet
         vec_map::insert(
             &mut transfer_limits,
-            chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia()),
+            chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet()),
             MAX_TRANSFER_LIMIT
         );
         vec_map::insert(
             &mut transfer_limits,
-            chain_ids::get_route(chain_ids::sui_devnet(), chain_ids::eth_sepolia()),
+            chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_devnet()),
             MAX_TRANSFER_LIMIT
         );
         vec_map::insert(
             &mut transfer_limits,
-            chain_ids::get_route(chain_ids::sui_local_test(), chain_ids::eth_sepolia()),
+            chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_local_test()),
             MAX_TRANSFER_LIMIT
         );
         vec_map::insert(
             &mut transfer_limits,
-            chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_local_test()),
+            chain_ids::get_route(chain_ids::eth_local_test(), chain_ids::sui_testnet()),
             MAX_TRANSFER_LIMIT
         );
         vec_map::insert(
             &mut transfer_limits,
-            chain_ids::get_route(chain_ids::sui_devnet(), chain_ids::eth_local_test()),
+            chain_ids::get_route(chain_ids::eth_local_test(), chain_ids::sui_devnet()),
             MAX_TRANSFER_LIMIT
         );
         vec_map::insert(
             &mut transfer_limits,
-            chain_ids::get_route(chain_ids::sui_local_test(), chain_ids::eth_local_test()),
+            chain_ids::get_route(chain_ids::eth_local_test(), chain_ids::sui_local_test()),
             MAX_TRANSFER_LIMIT
         );
         transfer_limits
@@ -414,7 +417,7 @@ module bridge::limiter {
         assert_eq(
             *vec_map::get(
                 &limiter.transfer_limits, 
-                &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())
+                &chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet())
             ),
             5_000_000 * USD_VALUE_MULTIPLIER,
         );
@@ -428,12 +431,12 @@ module bridge::limiter {
     fun test_limiter_does_not_limit_receiving_transfers() {
         let limiter = new();
 
-        let route = chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet());
+        let route = chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet());
         let scenario = test_scenario::begin(@0x1);
         let ctx = test_scenario::ctx(&mut scenario);
         let clock = clock::create_for_testing(ctx);
         clock::set_for_testing(&mut clock, 1706288001377);
-        // We don't limit eth -> sui transfers. This aborts with `ERR_LIMIT_NOT_FOUND_FOR_ROUTE`
+        // We don't limit sui -> eth transfers. This aborts with `ERR_LIMIT_NOT_FOUND_FOR_ROUTE`
         check_and_record_sending_transfer<ETH>(&clock, &mut limiter, route, 1 * eth::multiplier());
         destroy(limiter);
         clock::destroy_for_testing(clock);
@@ -583,7 +586,7 @@ module bridge::limiter {
         assert_eq(
             *vec_map::get(
                 &limiter.transfer_limits, 
-                &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())
+                &chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet())
             ),
             5_000_000 * USD_VALUE_MULTIPLIER,
         );
@@ -591,17 +594,17 @@ module bridge::limiter {
         assert_eq(
             *vec_map::get(
                 &limiter.transfer_limits, 
-                &chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia())
+                &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet())
             ),
             MAX_TRANSFER_LIMIT,
         );
 
         // shrink testnet limit
-        update_route_limit(&mut limiter, &chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia()), 1_000 * USD_VALUE_MULTIPLIER);
+        update_route_limit(&mut limiter, &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet()), 1_000 * USD_VALUE_MULTIPLIER);
         assert_eq(
             *vec_map::get(
                 &limiter.transfer_limits, 
-                &chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia())
+                &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet())
             ),
             1_000 * USD_VALUE_MULTIPLIER,
         );
@@ -609,7 +612,7 @@ module bridge::limiter {
         assert_eq(
             *vec_map::get(
                 &limiter.transfer_limits, 
-                &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())
+                &chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet())
             ),
             5_000_000 * USD_VALUE_MULTIPLIER,
         );
