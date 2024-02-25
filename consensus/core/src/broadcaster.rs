@@ -213,7 +213,7 @@ mod test {
 
         let block = VerifiedBlock::new_for_test(TestBlock::new(9, 1).build());
         assert!(
-            core_signals.new_block(block.clone()),
+            core_signals.new_block(block.clone()).is_ok(),
             "No subscriber active to receive the block"
         );
 

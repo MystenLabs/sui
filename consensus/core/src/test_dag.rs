@@ -34,10 +34,7 @@ pub(crate) fn build_dag(
         }
         None => {
             let (_my_genesis_block, genesis) = Block::genesis(context.clone());
-            let references = genesis.iter().map(|x| x.reference()).collect::<Vec<_>>();
-            dag_state.write().accept_blocks(genesis);
-
-            references
+            genesis.iter().map(|x| x.reference()).collect::<Vec<_>>()
         }
     };
 

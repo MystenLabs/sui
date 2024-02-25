@@ -18,7 +18,12 @@ use crate::{
 /// A common interface for consensus storage.
 pub(crate) trait Store: Send + Sync {
     /// Writes blocks and consensus commits to store.
-    fn write(&self, blocks: Vec<VerifiedBlock>, commits: Vec<Commit>) -> ConsensusResult<()>;
+    fn write(
+        &self,
+        blocks: Vec<VerifiedBlock>,
+        commits: Vec<Commit>,
+        last_committed_rounds: Vec<Round>,
+    ) -> ConsensusResult<()>;
 
     /// Reads blocks for the given refs.
     fn read_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<Option<VerifiedBlock>>>;
@@ -46,4 +51,7 @@ pub(crate) trait Store: Send + Sync {
 
     /// Reads all commits from start_commit_index.
     fn scan_commits(&self, start_commit_index: CommitIndex) -> ConsensusResult<Vec<Commit>>;
+
+    /// Reads the last committed rounds per authority.
+    fn read_last_committed_rounds(&self) -> ConsensusResult<Vec<Round>>;
 }

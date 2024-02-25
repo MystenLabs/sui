@@ -329,7 +329,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         }
 
         // For now ask dag state directly
-        let blocks = self.dag_state.read().get_blocks(block_refs)?;
+        let blocks = self.dag_state.read().get_blocks(&block_refs);
 
         // Return the serialised blocks
         let result = blocks

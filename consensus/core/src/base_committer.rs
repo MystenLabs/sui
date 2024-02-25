@@ -200,8 +200,8 @@ impl BaseCommitter {
             let ancestor = self
                 .dag_state
                 .read()
-                .get_uncommitted_block(ancestor)
-                .expect("We should have the whole sub-dag by now");
+                .get_block(ancestor)
+                .unwrap_or_else(|| panic!("Block not found in storage: {:?}", ancestor));
             if let Some(support) = self.find_supported_block(leader_slot, &ancestor) {
                 return Some(support);
             }
@@ -237,8 +237,8 @@ impl BaseCommitter {
                 let potential_vote = self
                     .dag_state
                     .read()
-                    .get_uncommitted_block(reference)
-                    .expect("We should have the whole sub-dag by now");
+                    .get_block(reference)
+                    .unwrap_or_else(|| panic!("Block not found in storage: {:?}", reference));
                 let is_vote = self.is_vote(&potential_vote, leader_block);
                 all_votes.insert(*reference, is_vote);
                 is_vote
@@ -288,7 +288,7 @@ impl BaseCommitter {
         let potential_certificates = self
             .dag_state
             .read()
-            .ancestors_at_uncommitted_round(anchor, decision_round);
+            .ancestors_at_round(anchor, decision_round);
 
         // Use those potential certificates to determine which (if any) of the target leader
         // blocks can be committed.

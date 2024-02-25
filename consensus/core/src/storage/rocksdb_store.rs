@@ -30,13 +30,16 @@ pub(crate) struct RocksDBStore {
     digests_by_authorities: DBMap<(AuthorityIndex, Round, BlockDigest), ()>,
     /// Maps commit index to content.
     commits: DBMap<CommitIndex, Commit>,
+    /// Stores the last committed rounds per authority.
+    last_committed_rounds: DBMap<(), Vec<Round>>,
 }
 
 #[allow(unused)]
 impl RocksDBStore {
-    pub(crate) const BLOCKS_CF: &'static str = "blocks";
-    pub(crate) const DIGESTS_BY_AUTHORITIES_CF: &'static str = "digests";
-    pub(crate) const COMMITS_CF: &'static str = "commits";
+    const BLOCKS_CF: &'static str = "blocks";
+    const DIGESTS_BY_AUTHORITIES_CF: &'static str = "digests";
+    const COMMITS_CF: &'static str = "commits";
+    const LAST_COMMITTED_ROUNDS_CF: &'static str = "last_committed_rounds";
 
     /// Creates a new instance of RocksDB storage.
     pub(crate) fn new(path: &str) -> Self {
@@ -58,6 +61,7 @@ impl RocksDBStore {
             ),
             (Self::DIGESTS_BY_AUTHORITIES_CF, cf_options.clone()),
             (Self::COMMITS_CF, cf_options.clone()),
+            (Self::LAST_COMMITTED_ROUNDS_CF, cf_options.clone()),
         ];
         let rocksdb = open_cf_opts(
             path,
@@ -67,23 +71,30 @@ impl RocksDBStore {
         )
         .expect("Cannot open database");
 
-        let (blocks, digests_by_authorities, commits) = reopen!(&rocksdb,
+        let (blocks, digests_by_authorities, commits, last_committed_rounds) = reopen!(&rocksdb,
             Self::BLOCKS_CF;<(Round, AuthorityIndex, BlockDigest), bytes::Bytes>,
             Self::DIGESTS_BY_AUTHORITIES_CF;<(AuthorityIndex, Round, BlockDigest), ()>,
-            Self::COMMITS_CF;<u64, Commit>
+            Self::COMMITS_CF;<u64, Commit>,
+            Self::LAST_COMMITTED_ROUNDS_CF;<(), Vec<Round>>
         );
 
         Self {
             blocks,
             digests_by_authorities,
             commits,
+            last_committed_rounds,
         }
     }
 }
 
 #[allow(unused)]
 impl Store for RocksDBStore {
-    fn write(&self, blocks: Vec<VerifiedBlock>, commits: Vec<Commit>) -> ConsensusResult<()> {
+    fn write(
+        &self,
+        blocks: Vec<VerifiedBlock>,
+        commits: Vec<Commit>,
+        last_committed_rounds: Vec<Round>,
+    ) -> ConsensusResult<()> {
         let mut batch = self.blocks.batch();
         for block in blocks {
             let block_ref = block.reference();
@@ -102,6 +113,7 @@ impl Store for RocksDBStore {
         for commit in commits {
             batch.insert_batch(&self.commits, [(commit.index, commit)]);
         }
+        batch.insert_batch(&self.last_committed_rounds, [((), last_committed_rounds)]);
         batch.write()?;
         Ok(())
     }
@@ -209,5 +221,13 @@ impl Store for RocksDBStore {
             commits.push(commit);
         }
         Ok(commits)
+    }
+
+    fn read_last_committed_rounds(&self) -> ConsensusResult<Vec<Round>> {
+        let Some(rounds) = self.last_committed_rounds.safe_iter().next() else {
+            return Ok(vec![]);
+        };
+        let (_, last_committed_rounds) = rounds?;
+        Ok(last_committed_rounds)
     }
 }

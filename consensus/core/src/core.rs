@@ -21,7 +21,7 @@ use crate::{
     commit_observer::CommitObserver,
     context::Context,
     dag_state::DagState,
-    error::ConsensusResult,
+    error::{ConsensusError, ConsensusResult},
     storage::Store,
     threshold_clock::ThresholdClock,
     transaction::TransactionConsumer,
@@ -62,7 +62,9 @@ pub(crate) struct Core {
     signals: CoreSignals,
     /// The keypair to be used for block signing
     block_signer: ProtocolKeyPair,
-    /// The node's storage
+    /// Keeping track of state of the DAG, including blocks, commits and last committed rounds.
+    dag_state: Arc<RwLock<DagState>>,
+    /// The node's storage.
     store: Arc<dyn Store>,
 }
 
@@ -98,6 +100,7 @@ impl Core {
             commit_observer,
             signals,
             block_signer,
+            dag_state,
             store,
         }
         .recover(all_genesis_blocks)
@@ -127,8 +130,7 @@ impl Core {
 
         // Accept all blocks but make sure that only the last quorum round blocks and onwards are kept.
         // TODO: run commit and propose logic, or just use add_blocks() instead of add_accepted_blocks().
-        self.add_accepted_blocks(all_blocks, Some(0))
-            .expect("Error while recovering Core");
+        self.add_accepted_blocks(all_blocks, Some(0));
         self
     }
 
@@ -141,16 +143,17 @@ impl Core {
         let _scope = monitored_scope("Core::add_blocks");
 
         // Try to accept them via the block manager
-        let (accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks)?;
+        let (accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks);
 
-        self.add_accepted_blocks(accepted_blocks, None)?;
+        if !accepted_blocks.is_empty() {
+            // Now add accepted blocks to the threshold clock and pending ancestors list.
+            self.add_accepted_blocks(accepted_blocks, None);
 
-        // TODO: Add optimization for added blocks that do not achieve quorum for a round.
-        self.try_commit()?;
+            // TODO: Add optimization for added blocks that do not achieve quorum for a round.
+            self.try_commit()?;
 
-        // Attempt to create a new block and broadcast it.
-        if let Some(block) = self.try_new_block(false)? {
-            self.signals.new_block(block.clone());
+            // Try to propose now since there are new blocks accepted.
+            self.try_propose(false)?;
         }
 
         Ok(missing_blocks)
@@ -165,7 +168,7 @@ impl Core {
         &mut self,
         accepted_blocks: Vec<VerifiedBlock>,
         pending_ancestors_retain_rounds: Option<u32>,
-    ) -> ConsensusResult<()> {
+    ) {
         // Advance the threshold clock. If advanced to a new round then send a signal that a new quorum has been received.
         if let Some(new_round) = self
             .threshold_clock
@@ -200,8 +203,6 @@ impl Core {
                 *round >= last_quorum.saturating_sub(retain_ancestor_rounds_from_quorum)
             });
         }
-
-        Ok(())
     }
 
     /// Force creating a new block for the dictated round. This is used when a leader timeout occurs.
@@ -211,88 +212,97 @@ impl Core {
     ) -> ConsensusResult<Option<VerifiedBlock>> {
         if self.last_proposed_round() < round {
             self.context.metrics.node_metrics.leader_timeout_total.inc();
-            if let Some(block) = self.try_new_block(true)? {
-                self.signals.new_block(block.clone());
-                return Ok(Some(block));
-            }
+            return self.try_propose(true);
+        }
+        Ok(None)
+    }
+
+    // Attempts to create a new block, persist and broadcast it to all peers.
+    fn try_propose(
+        &mut self,
+        ignore_leaders_check: bool,
+    ) -> ConsensusResult<Option<VerifiedBlock>> {
+        if let Some(block) = self.try_new_block(ignore_leaders_check) {
+            // TODO: Add optimization for added blocks that do not achieve quorum for a round.
+            self.try_commit()?;
+            // Signal that a new block is created, and broadcast it.
+            self.signals.new_block_ready(block.reference());
+            self.signals.new_block(block.clone())?;
+            return Ok(Some(block));
         }
         Ok(None)
     }
 
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
     /// or earlier round, then no block is created and None is returned.
-    fn try_new_block(
-        &mut self,
-        ignore_leaders_check: bool,
-    ) -> ConsensusResult<Option<VerifiedBlock>> {
+    fn try_new_block(&mut self, ignore_leaders_check: bool) -> Option<VerifiedBlock> {
         let _scope = monitored_scope("Core::try_new_block");
         let clock_round = self.threshold_clock.get_round();
         if clock_round <= self.last_proposed_round() {
-            return Ok(None);
+            return None;
         }
-
-        // create a new block either because we want to "forcefully" propose a block due to a leader timeout,
+        // Create a new block either because we want to "forcefully" propose a block due to a leader timeout,
         // or because we are actually ready to produce the block (leader exists)
-        if ignore_leaders_check || self.last_quorum_leaders_exist() {
-            // TODO: produce the block for the clock_round. As the threshold clock can advance many rounds at once (ex
-            // because we synchronized a bulk of blocks) we can decide here whether we want to produce blocks per round
-            // or just the latest one. From earlier experiments I saw only benefit on proposing for the penultimate round
-            // only when the validator was supposed to be the leader of the round - so we bring down the missed leaders.
-            // Probably proposing for all the intermediate rounds might not make much sense.
-
-            // 1. Consume the ancestors to be included in proposal
-            let now = timestamp_utc_ms();
-            let ancestors = self.ancestors_to_propose(clock_round, now);
-
-            // 2. Consume the next transactions to be included.
-            let transactions = self.transaction_consumer.next();
-
-            // 3. Create the block and insert to storage.
-            // TODO: take a decision on whether we want to flush to disk at this point the DagState.
-            let block = Block::V1(BlockV1::new(
-                self.context.committee.epoch(),
-                clock_round,
-                self.context.own_index,
-                now,
-                ancestors,
-                transactions,
-            ));
-            let signed_block =
-                SignedBlock::new(block, &self.block_signer).expect("Block signing failed.");
-            let serialized = signed_block
-                .serialize()
-                .expect("Block serialization failed.");
-            // Unnecessary to verify own blocks.
-            let verified_block = VerifiedBlock::new_verified(signed_block, serialized);
-
-            //4. Add to the threshold clock
-            self.threshold_clock.add_block(verified_block.reference());
-
-            // Add to the pending ancestors
-            self.pending_ancestors
-                .entry(verified_block.round())
-                .or_default()
-                .push(verified_block.clone());
-
-            let (accepted_blocks, missing) = self
-                .block_manager
-                .try_accept_blocks(vec![verified_block.clone()])?;
-            assert_eq!(accepted_blocks.len(), 1);
-            assert!(missing.is_empty());
-
-            self.last_proposed_block = verified_block.clone();
-
-            tracing::debug!("New block created {}", verified_block);
-
-            //5. emit an event that a new block is ready
-            self.signals.new_block_ready(verified_block.reference());
-
-            return Ok(Some(verified_block));
+        if !(ignore_leaders_check || self.last_quorum_leaders_exist()) {
+            return None;
         }
 
-        Ok(None)
+        // TODO: produce the block for the clock_round. As the threshold clock can advance many rounds at once (ex
+        // because we synchronized a bulk of blocks) we can decide here whether we want to produce blocks per round
+        // or just the latest one. From earlier experiments I saw only benefit on proposing for the penultimate round
+        // only when the validator was supposed to be the leader of the round - so we bring down the missed leaders.
+        // Probably proposing for all the intermediate rounds might not make much sense.
+
+        // 1. Consume the ancestors to be included in proposal
+        let now = timestamp_utc_ms();
+        let ancestors = self.ancestors_to_propose(clock_round, now);
+
+        // 2. Consume the next transactions to be included.
+        let transactions = self.transaction_consumer.next();
+
+        // 3. Create the block and insert to storage.
+        let block = Block::V1(BlockV1::new(
+            self.context.committee.epoch(),
+            clock_round,
+            self.context.own_index,
+            now,
+            ancestors,
+            transactions,
+        ));
+        let signed_block =
+            SignedBlock::new(block, &self.block_signer).expect("Block signing failed.");
+        let serialized = signed_block
+            .serialize()
+            .expect("Block serialization failed.");
+        // Unnecessary to verify own blocks.
+        let verified_block = VerifiedBlock::new_verified(signed_block, serialized);
+
+        // 4. Add to the threshold clock and pending ancestors
+        self.threshold_clock.add_block(verified_block.reference());
+        self.pending_ancestors
+            .entry(verified_block.round())
+            .or_default()
+            .push(verified_block.clone());
+
+        // 5. Accept the block into BlockManager and DagState.
+        let (accepted_blocks, missing) = self
+            .block_manager
+            .try_accept_blocks(vec![verified_block.clone()]);
+        assert_eq!(accepted_blocks.len(), 1);
+        assert!(missing.is_empty());
+
+        // 6. Ensure the new block and its ancestors are persisted, before broadcasting it.
+        self.dag_state.write().flush();
+
+        // 7. Update internal state.
+        self.last_proposed_block = verified_block.clone();
+
+        tracing::info!("Created block {}", verified_block);
+
+        Some(verified_block)
     }
 
+    /// Runs commit rule to attempt to commit additional blocks from the DAG.
     fn try_commit(&mut self) -> ConsensusResult<Vec<CommittedSubDag>> {
         let sequenced_leaders = self.committer.try_commit(self.last_decided_leader);
 
@@ -443,12 +453,12 @@ impl CoreSignals {
 
     /// Sends a signal to all the waiters that a new block has been produced. The method will return
     /// true if block has reached even one subscriber, false otherwise.
-    pub fn new_block(&self, block: VerifiedBlock) -> bool {
+    pub fn new_block(&self, block: VerifiedBlock) -> ConsensusResult<()> {
         if let Err(err) = self.tx_block_broadcast.send(block) {
             warn!("Couldn't broadcast the block to any receiver: {err}");
-            return false;
+            return Err(ConsensusError::Shutdown);
         }
-        true
+        Ok(())
     }
 
     /// Sends a signal to all the waiters that a new block has been produced.
@@ -527,7 +537,9 @@ mod test {
             last_round_blocks = this_round_blocks;
         }
         // write them in store
-        store.write(all_blocks, vec![]).expect("Storage error");
+        store
+            .write(all_blocks, vec![], vec![])
+            .expect("Storage error");
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -566,7 +578,7 @@ mod test {
 
         // When trying to propose now we should propose block for round 5
         let proposed_block = core
-            .try_new_block(true)
+            .try_propose(true)
             .unwrap()
             .expect("A block should have been created");
         assert_eq!(proposed_block.round(), 5);
@@ -631,7 +643,9 @@ mod test {
         }
 
         // write them in store
-        store.write(all_blocks, vec![]).expect("Storage error");
+        store
+            .write(all_blocks, vec![], vec![])
+            .expect("Storage error");
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -670,7 +684,7 @@ mod test {
 
         // When trying to propose now we should propose block for round 4
         let proposed_block = core
-            .try_new_block(true)
+            .try_propose(true)
             .unwrap()
             .expect("A block should have been created");
         assert_eq!(proposed_block.round(), 4);
@@ -758,7 +772,7 @@ mod test {
 
         // trigger the try_new_block - that should return now a new block
         let block = core
-            .try_new_block(false)
+            .try_propose(false)
             .unwrap()
             .expect("A new block should have been created");
 
@@ -791,8 +805,8 @@ mod test {
         }
 
         // Try to propose again - with or without ignore leaders check, it will not return any block
-        assert!(core.try_new_block(false).unwrap().is_none());
-        assert!(core.try_new_block(true).unwrap().is_none());
+        assert!(core.try_propose(false).unwrap().is_none());
+        assert!(core.try_propose(true).unwrap().is_none());
 
         // Check no commits have been persisted to dag_state & store
         let last_commit = store.read_last_commit().unwrap();
@@ -844,7 +858,7 @@ mod test {
         assert_eq!(core.last_proposed_round(), 1);
         expected_ancestors.insert(core.last_proposed_block().reference());
         // attempt to create a block - none will be produced.
-        assert!(core.try_new_block(false).unwrap().is_none());
+        assert!(core.try_propose(false).unwrap().is_none());
 
         // Adding another block now forms a quorum for round 1, so block at round 2 will proposed
         let block_3 = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
@@ -899,7 +913,7 @@ mod test {
         // leader - authority 3 - hasn't proposed any block.
         for (core, _, _) in &mut cores {
             core.add_blocks(last_round_blocks.clone()).unwrap();
-            assert!(core.try_new_block(false).unwrap().is_none());
+            assert!(core.try_propose(false).unwrap().is_none());
         }
 
         // Now try to create the blocks for round 4 via the leader timeout method which should ignore any leader checks
