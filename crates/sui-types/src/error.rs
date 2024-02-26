@@ -595,6 +595,9 @@ pub enum SuiError {
     #[error("Failed to read or deserialize system state related data structures on-chain: {0}")]
     SuiSystemStateReadError(String),
 
+    #[error("Failed to read or deserialize bridge related data structures on-chain: {0}")]
+    SuiBridgeReadError(String),
+
     #[error("Unexpected version error: {0}")]
     UnexpectedVersion(String),
 
