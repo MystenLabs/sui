@@ -10065,9 +10065,9 @@ dependencies = [
 
 [[package]]
 name = "num-traits"
-version = "0.2.16"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f30b0abd723be7e2ffca1272140fac1a2f084c77ec3e123c192b66af1ee9e6c2"
+checksum = "da0df0e5185db44f69b44f26786fe401b6c293d1907744beaa7fa62b2e5a517a"
 dependencies = [
  "autocfg",
  "libm",
@@ -16200,6 +16200,8 @@ dependencies = [
  "narwhal-config",
  "narwhal-crypto",
  "nonempty",
+ "num-bigint 0.4.4",
+ "num-traits",
  "once_cell",
  "prometheus",
  "proptest",
