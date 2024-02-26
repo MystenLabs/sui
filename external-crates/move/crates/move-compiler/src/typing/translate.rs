@@ -1546,6 +1546,11 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         }
         NE::Match(nsubject, sp!(aloc, narms_)) => {
             let esubject = exp(context, nsubject);
+            context.add_single_type_constraint(
+                esubject.exp.loc,
+                "Invalid 'match' subject",
+                esubject.ty.clone(),
+            );
             let subject_type = core::unfold_type(&context.subst, esubject.ty.clone());
             let ref_mut = match subject_type.value {
                 Type_::Ref(mut_, _) => Some(mut_),

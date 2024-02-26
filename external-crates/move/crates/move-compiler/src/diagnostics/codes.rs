@@ -186,6 +186,7 @@ codes!(
         AmbiguousCast: { msg: "ambiguous 'as'", severity: NonblockingError },
         InvalidName: { msg: "invalid name", severity: BlockingError },
         InvalidMacro: { msg: "invalid macro invocation", severity: BlockingError },
+        InvalidMatch: { msg: "invalid 'match'", severity: BlockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [
@@ -215,6 +216,7 @@ codes!(
         InvalidSyntaxMethod: { msg: "invalid 'syntax' method type", severity: NonblockingError },
         MissingSyntaxMethod: { msg: "no valid 'syntax' declaration found", severity: BlockingError },
         DuplicateAlias: { msg: "duplicate alias", severity: Warning },
+        InvalidEnum: { msg: "invalid 'enum' declaration", severity: NonblockingError },
     ],
     // errors name resolution, mostly expansion/translate and naming/translate
     NameResolution: [

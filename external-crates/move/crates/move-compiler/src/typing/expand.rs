@@ -395,7 +395,17 @@ fn pat(context: &mut Context, p: &mut T::MatchPattern) {
             }
         }
         P::Literal(sp!(vloc, Value_::InferredNum(v))) => {
-            if let Some(value) = inferred_numerical_value(context, p.pat.loc, *v, &p.ty) {
+            let num_ty: &Type = match &p.ty.value {
+                Type_::Ref(_, inner) => inner,
+                Type_::Unit
+                | Type_::Param(_)
+                | Type_::Apply(_, _, _)
+                | Type_::Fun(_, _)
+                | Type_::Var(_)
+                | Type_::Anything
+                | Type_::UnresolvedError => &p.ty,
+            };
+            if let Some(value) = inferred_numerical_value(context, p.pat.loc, *v, num_ty) {
                 p.pat.value = P::Literal(sp(*vloc, value));
             } else {
                 p.pat.value = P::ErrorPat;
