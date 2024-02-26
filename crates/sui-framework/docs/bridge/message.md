@@ -21,11 +21,12 @@
 -  [Function `serialize_message`](#0xb_message_serialize_message)
 -  [Function `create_token_bridge_message`](#0xb_message_create_token_bridge_message)
 -  [Function `create_emergency_op_message`](#0xb_message_create_emergency_op_message)
--  [Function `create_block_list_message`](#0xb_message_create_block_list_message)
+-  [Function `create_blocklist_message`](#0xb_message_create_blocklist_message)
 -  [Function `create_update_bridge_limit_message`](#0xb_message_create_update_bridge_limit_message)
 -  [Function `create_update_asset_price_message`](#0xb_message_create_update_asset_price_message)
 -  [Function `create_key`](#0xb_message_create_key)
 -  [Function `key`](#0xb_message_key)
+-  [Function `message_version`](#0xb_message_message_version)
 -  [Function `message_type`](#0xb_message_message_type)
 -  [Function `seq_num`](#0xb_message_seq_num)
 -  [Function `source_chain`](#0xb_message_source_chain)
@@ -34,6 +35,13 @@
 -  [Function `token_type`](#0xb_message_token_type)
 -  [Function `token_amount`](#0xb_message_token_amount)
 -  [Function `emergency_op_type`](#0xb_message_emergency_op_type)
+-  [Function `blocklist_type`](#0xb_message_blocklist_type)
+-  [Function `blocklist_validator_addresses`](#0xb_message_blocklist_validator_addresses)
+-  [Function `update_bridge_limit_payload_sending_chain`](#0xb_message_update_bridge_limit_payload_sending_chain)
+-  [Function `update_bridge_limit_payload_receiving_chain`](#0xb_message_update_bridge_limit_payload_receiving_chain)
+-  [Function `update_bridge_limit_payload_limit`](#0xb_message_update_bridge_limit_payload_limit)
+-  [Function `update_asset_price_payload_token_id`](#0xb_message_update_asset_price_payload_token_id)
+-  [Function `update_asset_price_payload_new_price`](#0xb_message_update_asset_price_payload_new_price)
 -  [Function `reverse_bytes`](#0xb_message_reverse_bytes)
 -  [Function `peel_u64_be`](#0xb_message_peel_u64_be)
 
@@ -693,11 +701,11 @@ Emergency Op Message Format:
 
 </details>
 
-<a name="0xb_message_create_block_list_message"></a>
+<a name="0xb_message_create_blocklist_message"></a>
 
-## Function `create_block_list_message`
+## Function `create_blocklist_message`
 
-Block list Message Format:
+Blocklist Message Format:
 [message_type: u8]
 [version:u8]
 [nonce:u64]
@@ -707,7 +715,7 @@ Block list Message Format:
 [validator_ecdsa_addresses: byte[][]]
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_create_block_list_message">create_block_list_message</a>(source_chain: u8, seq_num: u64, blocklist_type: u8, validator_ecdsa_addresses: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;): <a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_create_blocklist_message">create_blocklist_message</a>(source_chain: u8, seq_num: u64, blocklist_type: u8, validator_ecdsa_addresses: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;): <a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>
 </code></pre>
 
 
@@ -716,7 +724,7 @@ Block list Message Format:
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_create_block_list_message">create_block_list_message</a>(
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_create_blocklist_message">create_blocklist_message</a>(
     source_chain: u8,
     seq_num: u64,
     // 0: block, 1: unblock
@@ -884,6 +892,30 @@ Update asset price message
 
 <pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_key">key</a>(self: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): <a href="message.md#0xb_message_BridgeMessageKey">BridgeMessageKey</a> {
     <a href="message.md#0xb_message_create_key">create_key</a>(self.source_chain, self.message_type, self.seq_num)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_message_message_version"></a>
+
+## Function `message_version`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_message_version">message_version</a>(self: &<a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_message_version">message_version</a>(self: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): u8 {
+    self.message_version
 }
 </code></pre>
 
@@ -1076,6 +1108,174 @@ Update asset price message
 
 <pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_emergency_op_type">emergency_op_type</a>(self: &<a href="message.md#0xb_message_EmergencyOp">EmergencyOp</a>): u8 {
     self.op_type
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_message_blocklist_type"></a>
+
+## Function `blocklist_type`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_blocklist_type">blocklist_type</a>(self: &<a href="message.md#0xb_message_Blocklist">message::Blocklist</a>): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_blocklist_type">blocklist_type</a>(self: &<a href="message.md#0xb_message_Blocklist">Blocklist</a>): u8 {
+    self.blocklist_type
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_message_blocklist_validator_addresses"></a>
+
+## Function `blocklist_validator_addresses`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_blocklist_validator_addresses">blocklist_validator_addresses</a>(self: &<a href="message.md#0xb_message_Blocklist">message::Blocklist</a>): &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_blocklist_validator_addresses">blocklist_validator_addresses</a>(self: &<a href="message.md#0xb_message_Blocklist">Blocklist</a>): &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt; {
+    &self.validator_eth_addresses
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_message_update_bridge_limit_payload_sending_chain"></a>
+
+## Function `update_bridge_limit_payload_sending_chain`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_update_bridge_limit_payload_sending_chain">update_bridge_limit_payload_sending_chain</a>(self: &<a href="message.md#0xb_message_UpdateBridgeLimit">message::UpdateBridgeLimit</a>): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_update_bridge_limit_payload_sending_chain">update_bridge_limit_payload_sending_chain</a>(self: &<a href="message.md#0xb_message_UpdateBridgeLimit">UpdateBridgeLimit</a>): u8 {
+    self.sending_chain
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_message_update_bridge_limit_payload_receiving_chain"></a>
+
+## Function `update_bridge_limit_payload_receiving_chain`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_update_bridge_limit_payload_receiving_chain">update_bridge_limit_payload_receiving_chain</a>(self: &<a href="message.md#0xb_message_UpdateBridgeLimit">message::UpdateBridgeLimit</a>): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_update_bridge_limit_payload_receiving_chain">update_bridge_limit_payload_receiving_chain</a>(self: &<a href="message.md#0xb_message_UpdateBridgeLimit">UpdateBridgeLimit</a>): u8 {
+    self.receiving_chain
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_message_update_bridge_limit_payload_limit"></a>
+
+## Function `update_bridge_limit_payload_limit`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_update_bridge_limit_payload_limit">update_bridge_limit_payload_limit</a>(self: &<a href="message.md#0xb_message_UpdateBridgeLimit">message::UpdateBridgeLimit</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_update_bridge_limit_payload_limit">update_bridge_limit_payload_limit</a>(self: &<a href="message.md#0xb_message_UpdateBridgeLimit">UpdateBridgeLimit</a>): u64 {
+    self.limit
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_message_update_asset_price_payload_token_id"></a>
+
+## Function `update_asset_price_payload_token_id`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_update_asset_price_payload_token_id">update_asset_price_payload_token_id</a>(self: &<a href="message.md#0xb_message_UpdateAssetPrice">message::UpdateAssetPrice</a>): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_update_asset_price_payload_token_id">update_asset_price_payload_token_id</a>(self: &<a href="message.md#0xb_message_UpdateAssetPrice">UpdateAssetPrice</a>): u8 {
+    self.token_id
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_message_update_asset_price_payload_new_price"></a>
+
+## Function `update_asset_price_payload_new_price`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_update_asset_price_payload_new_price">update_asset_price_payload_new_price</a>(self: &<a href="message.md#0xb_message_UpdateAssetPrice">message::UpdateAssetPrice</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_update_asset_price_payload_new_price">update_asset_price_payload_new_price</a>(self: &<a href="message.md#0xb_message_UpdateAssetPrice">UpdateAssetPrice</a>): u64 {
+    self.new_price
 }
 </code></pre>
 
