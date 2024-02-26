@@ -209,7 +209,7 @@ export class TransactionBlock {
 	get pure(): ReturnType<typeof createPure> {
 		Object.defineProperty(this, 'pure', {
 			enumerable: false,
-			value: createPure((value, type): Argument => {
+			value: createPure((value): Argument => {
 				if (isSerializedBcs(value)) {
 					return this.#input('pure', {
 						$kind: 'Pure',
@@ -224,8 +224,6 @@ export class TransactionBlock {
 						? parse(NormalizedCallArg, value)
 						: value instanceof Uint8Array
 						? Inputs.Pure(value)
-						: type
-						? Inputs.Pure(value, type)
 						: { $kind: 'RawValue', RawValue: { type: 'Pure', value } },
 				);
 			}),

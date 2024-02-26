@@ -89,9 +89,7 @@
 	},
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
-		"codegen:version": "node genversion.mjs",
-		"build": "node genversion.mjs && pnpm build:package",
-		"build:package": "build-package",
+		"build": "build-package",
 		"doc": "typedoc",
 		"vitest": "vitest",
 		"test": "pnpm test:typecheck && pnpm test:unit",

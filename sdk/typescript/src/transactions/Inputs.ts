@@ -2,30 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SerializedBcs } from '@mysten/bcs';
-import { isSerializedBcs } from '@mysten/bcs';
 
-import { bcs } from '../bcs/index.js';
 import type { SharedObjectRef } from '../bcs/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { CallArg, ObjectRef } from './blockData/v2.js';
 
-function Pure(
-	data: Uint8Array | SerializedBcs<any>,
-	type?: string,
-): Extract<CallArg, { Pure: unknown }>;
-/** @deprecated pass SerializedBcs values instead */
-function Pure(data: unknown, type?: string): Extract<CallArg, { Pure: unknown }>;
-function Pure(data: unknown, type?: string): Extract<CallArg, { Pure: unknown }> {
+function Pure(data: Uint8Array | SerializedBcs<any>): Extract<CallArg, { Pure: unknown }> {
 	return {
 		$kind: 'Pure',
-		Pure: Array.from(
-			data instanceof Uint8Array
-				? data
-				: isSerializedBcs(data)
-				? data.toBytes()
-				: // NOTE: We explicitly set this to be growable to infinity, because we have maxSize validation at the builder-level:
-				  bcs.ser(type!, data, { maxSize: Infinity }).toBytes(),
-		),
+		Pure: Array.from(data instanceof Uint8Array ? data : data.toBytes()),
 	};
 }
 

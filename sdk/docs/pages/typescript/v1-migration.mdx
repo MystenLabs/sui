@@ -37,14 +37,17 @@
 
 Removed `is` and `assert` helpers
 
-# Things that should still be changed
+## /mutltisig
+
+- publicKeyFromSuiBytes moved to /verify
+
+# TODO
 
 - Remove Input and Transaction exports?
 - Move helpers in inputs.ts
 - `getPureSerializationType` should be replaced
 - Should remove legacy BCS registry
 - Should remove BCS registry name exports
-- Remove all `export *` from index.ts
 - TransactionBlock constructor args?
 - Remove pure inputs without types
 - Need to export types for blockData
@@ -53,3 +56,7 @@ Removed `is` and `assert` helpers
 - Serialize should be updated to allow exporting v2 state
 - Define TypeTag output type rather than input type?
 - Use valibot parser in TypeTagSerializer
+- Figure out what bcs should still export
+- cleanup typescript/bcs exports
+- maybe remove intent exports from cryptography and just use bcs intent encoding/decoding directly
+- Should fromB64, toB64, fromHEX, toHEX still be exported from utils?

@@ -352,12 +352,12 @@ const Intent = bcs.struct('Intent', {
 	appId: AppId,
 });
 
-const IntentMessage = bcs.generic(['T'], (T) =>
-	bcs.struct('IntentMessage<T>', {
+function IntentMessage<T extends BcsType<any>>(T: T) {
+	return bcs.struct(`IntentMessage<${T.name}>`, {
 		intent: Intent,
 		value: T,
-	}),
-);
+	});
+}
 
 const CompressedSignature = bcs.enum('CompressedSignature', {
 	ED25519: bcs.fixedArray(64, bcs.u8()),

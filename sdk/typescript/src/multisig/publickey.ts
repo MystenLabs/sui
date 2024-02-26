@@ -13,7 +13,6 @@ import {
 } from '../cryptography/signature-scheme.js';
 import type { SignatureFlag, SignatureScheme } from '../cryptography/signature-scheme.js';
 import { parseSerializedSignature } from '../cryptography/signature.js';
-import type { SerializedSignature } from '../cryptography/signature.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 // eslint-disable-next-line import/no-cycle
 import { publicKeyFromRawBytes } from '../verify/index.js';
@@ -203,7 +202,7 @@ export class MultiSigPublicKey extends PublicKey {
 	/**
 	 * Verifies that the signature is valid for for the provided message
 	 */
-	async verify(message: Uint8Array, multisigSignature: SerializedSignature): Promise<boolean> {
+	async verify(message: Uint8Array, multisigSignature: string): Promise<boolean> {
 		// Multisig verification only supports serialized signature
 		const { signatureScheme, multisig } = parseSerializedSignature(multisigSignature);
 
@@ -237,7 +236,7 @@ export class MultiSigPublicKey extends PublicKey {
 	 * Combines multiple partial signatures into a single multisig, ensuring that each public key signs only once
 	 * and that all the public keys involved are known and valid, and then serializes multisig into the standard format
 	 */
-	combinePartialSignatures(signatures: SerializedSignature[]): SerializedSignature {
+	combinePartialSignatures(signatures: string[]): string {
 		if (signatures.length > MAX_SIGNER_IN_MULTISIG) {
 			throw new Error(`Max number of signatures in a multisig is ${MAX_SIGNER_IN_MULTISIG}`);
 		}
