@@ -190,6 +190,114 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[sim_test]
+async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Error> {
+    // Publish the package
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    // Check log output contains all object ids.
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("ptb_complex_args_test_functions");
+    let build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path: package_path.clone(),
+        build_config,
+        gas: Some(gas_obj_id),
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    // Print it out to CLI/logs
+    resp.print(true);
+
+    let SuiClientCommandResult::Publish(response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    let package = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+    let package_id_str = package.reference.object_id.to_string();
+
+    let start_call_result = SuiClientCommands::Call {
+        package: package.reference.object_id,
+        module: "test_module".to_string(),
+        function: "new_shared".to_string(),
+        type_args: vec![],
+        gas: None,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        args: vec![],
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    let shared_id_str = if let SuiClientCommandResult::Call(response) = start_call_result {
+        response.effects.unwrap().created().to_vec()[0]
+            .reference
+            .object_id
+            .to_string()
+    } else {
+        unreachable!("Invalid response");
+    };
+
+    let complex_ptb_string = format!(
+        r#"
+         --assign p @{package_id_str}
+         --assign s @{shared_id_str}
+         # Use the shared object by immutable reference first
+         --move-call "p::test_module::use_immut" s 
+         # Now use mutably -- we need to update the mutability of the object
+         --move-call "p::test_module::use_mut" s
+         # Make sure we handle different more complex pure arguments
+         --move-call "p::test_module::use_ascii_string" "'foo bar baz'" 
+         --move-call "p::test_module::use_utf8_string" "'foo †††˚˚¬¬'" 
+         --gas-budget 100000000
+        "#
+    );
+
+    let args = shlex::split(&complex_ptb_string).unwrap();
+    sui::client_ptb::ptb::PTB { args: args.clone() }
+        .execute(context)
+        .await?;
+
+    Ok(())
+}
+
 // fixing issue https://github.com/MystenLabs/sui/issues/6546
 #[tokio::test]
 async fn test_regression_6546() -> Result<(), anyhow::Error> {

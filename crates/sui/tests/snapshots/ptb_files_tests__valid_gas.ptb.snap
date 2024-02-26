@@ -1,0 +1,13 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭─────────────────────╮
+│ PTB Preview         │
+├────────────┬────────┤
+│ command    │ values │
+├────────────┼────────┤
+│ gas-budget │ 110000 │
+╰────────────┴────────╯
+ === BUILT PTB === 
