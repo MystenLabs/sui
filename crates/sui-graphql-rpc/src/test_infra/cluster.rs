@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::ConnectionConfig;
-use crate::config::Limits;
 use crate::config::ServerConfig;
 use crate::config::ServiceConfig;
 use crate::server::graphiql_server::start_graphiql_server;
@@ -158,11 +157,7 @@ pub async fn start_graphql_server_with_fn_rpc(
 ) -> JoinHandle<()> {
     let mut server_config = ServerConfig {
         connection: graphql_connection_config,
-        service: ServiceConfig {
-            // Use special limits for testing
-            limits: Limits::default_for_simulator_testing(),
-            ..ServiceConfig::default()
-        },
+        service: ServiceConfig::default(),
         ..ServerConfig::default()
     };
     if let Some(fn_rpc_url) = fn_rpc_url {

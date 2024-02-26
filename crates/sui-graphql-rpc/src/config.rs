@@ -10,13 +10,18 @@ use sui_json_rpc::name_service::NameServiceConfig;
 use crate::functional_group::FunctionalGroup;
 
 // TODO: calculate proper cost limits
-const MAX_QUERY_DEPTH: u32 = 15;
-const MAX_QUERY_NODES: u32 = 50;
+
+/// These values are set to support TS SDK shim layer queries for json-rpc compatibility.
+const MAX_QUERY_NODES: u32 = 300;
+const MAX_QUERY_PAYLOAD_SIZE: u32 = 5_000;
+
+const MAX_QUERY_DEPTH: u32 = 20;
 const MAX_OUTPUT_NODES: u64 = 100_000; // Maximum number of output nodes allowed in the response
-const MAX_QUERY_PAYLOAD_SIZE: u32 = 2_000;
 const MAX_DB_QUERY_COST: u64 = 20_000; // Max DB query cost (normally f64) truncated
 const DEFAULT_PAGE_SIZE: u64 = 20; // Default number of elements allowed on a page of a connection
 const MAX_PAGE_SIZE: u64 = 50; // Maximum number of elements allowed on a page of a connection
+
+/// The following limits reflect the max values set in the ProtocolConfig.
 const MAX_TYPE_ARGUMENT_DEPTH: u32 = 16;
 const MAX_TYPE_ARGUMENT_WIDTH: u32 = 32;
 const MAX_TYPE_NODES: u32 = 256;
@@ -93,15 +98,6 @@ pub struct Limits {
 }
 
 impl Limits {
-    pub fn default_for_simulator_testing() -> Self {
-        Self {
-            max_query_nodes: 500,
-            max_query_depth: 20,
-            max_query_payload_size: 5_000,
-            ..Self::default()
-        }
-    }
-
     /// Extract limits for the package resolver.
     pub fn package_resolver_limits(&self) -> sui_package_resolver::Limits {
         sui_package_resolver::Limits {
