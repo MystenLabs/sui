@@ -42,7 +42,7 @@ You can also build the documentation locally. To do so,
 
 1. Open a Terminal or Console and go to the `sui/crates/sui-sdk` directory.
 
-1. Run `cargo doc` to build the documentation into the `sui/target` directory. Take note of location of the generated file from the last line of the output, e.g. `Generated /Users/foo/sui/target/doc/sui_sdk/index.html`
+1. Run `cargo doc` to build the documentation into the `sui/target` directory. Take note of location of the generated file from the last line of the output, for example `Generated /Users/foo/sui/target/doc/sui_sdk/index.html`.
 
 1. Open the `sui/target/doc/sui_sdk/index.html` file from above with a browser, like Chrome.
 
