@@ -1076,7 +1076,7 @@ mod checked {
                     Type::TyParam(_) => {
                         invariant_violation!("TyParam should have been substituted")
                     }
-                    Type::Struct(_) | Type::StructInstantiation(_, _) if abilities.has_key() => {
+                    Type::Struct(_) | Type::StructInstantiation(_) if abilities.has_key() => {
                         let type_tag = context
                             .vm
                             .get_runtime()
@@ -1091,7 +1091,7 @@ mod checked {
                         }
                     }
                     Type::Struct(_)
-                    | Type::StructInstantiation(_, _)
+                    | Type::StructInstantiation(_)
                     | Type::Bool
                     | Type::U8
                     | Type::U64
@@ -1324,12 +1324,13 @@ mod checked {
                 }
 
                 // Now make sure the param type is a struct instantiation of the receiving struct
-                let Type::StructInstantiation(sidx, targs) = param_ty else {
+                let Type::StructInstantiation(struct_inst) = param_ty else {
                     return Err(command_argument_error(
                         CommandArgumentError::TypeMismatch,
                         idx,
                     ));
                 };
+                let (sidx, targs) = &**struct_inst;
                 let Some(s) = context.vm.get_runtime().get_struct_type(*sidx) else {
                     invariant_violation!("sui::transfer::Receiving struct not found in session")
                 };
@@ -1412,7 +1413,8 @@ mod checked {
                 let info_opt = primitive_serialization_layout(context, inner)?;
                 info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
             }
-            Type::StructInstantiation(idx, targs) => {
+            Type::StructInstantiation(struct_inst) => {
+                let (idx, targs) = &**struct_inst;
                 let Some(s) = context.vm.get_runtime().get_struct_type(*idx) else {
                     invariant_violation!("Loaded struct not found")
                 };

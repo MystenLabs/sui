@@ -611,7 +611,8 @@ pub fn primitive_type(
                 (false, None)
             }
         }
-        SignatureToken::StructInstantiation(idx, targs) => {
+        SignatureToken::StructInstantiation(struct_inst) => {
+            let (idx, targs) = &**struct_inst;
             let resolved_struct = resolve_struct(view, *idx);
             // is option of a primitive
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
@@ -744,7 +745,7 @@ fn resolve_call_arg(
     // of objects (but not, for example, vectors of references)
     match param {
         SignatureToken::Struct(_)
-        | SignatureToken::StructInstantiation(_, _)
+        | SignatureToken::StructInstantiation(_)
         | SignatureToken::TypeParameter(_)
         | SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_) => Ok(ResolvedCallArg::Object(resolve_object_arg(
@@ -752,7 +753,7 @@ fn resolve_call_arg(
             &arg.to_json_value(),
         )?)),
         SignatureToken::Vector(inner) => match &**inner {
-            SignatureToken::Struct(_) | SignatureToken::StructInstantiation(_, _) => {
+            SignatureToken::Struct(_) | SignatureToken::StructInstantiation(_) => {
                 Ok(ResolvedCallArg::ObjVec(resolve_object_vec_arg(idx, arg)?))
             }
             _ => {
@@ -785,7 +786,7 @@ pub fn is_receiving_argument(view: &BinaryIndexedView, arg_type: &SignatureToken
 
     matches!(
         token,
-        ST::StructInstantiation(idx, targs) if resolve_struct(view, *idx) == RESOLVED_RECEIVING_STRUCT && targs.len() == 1
+        ST::StructInstantiation(struct_inst) if resolve_struct(view, struct_inst.0) == RESOLVED_RECEIVING_STRUCT && struct_inst.1.len() == 1
     )
 }
 

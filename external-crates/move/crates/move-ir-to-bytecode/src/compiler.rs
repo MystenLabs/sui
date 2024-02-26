@@ -596,7 +596,7 @@ fn compile_type(
                 SignatureToken::Struct(sh_idx)
             } else {
                 let tokens = compile_types(context, type_parameters, tys)?;
-                SignatureToken::StructInstantiation(sh_idx, tokens)
+                SignatureToken::StructInstantiation(Box::new((sh_idx, tokens)))
             }
         }
         Type::TypeParameter(ty_var) => {
@@ -1034,11 +1034,11 @@ fn compile_expression(
                 function_frame.push()?;
             }
             CopyableVal_::U128(i) => {
-                push_instr!(exp.loc, Bytecode::LdU128(i));
+                push_instr!(exp.loc, Bytecode::LdU128(Box::new(i)));
                 function_frame.push()?;
             }
             CopyableVal_::U256(i) => {
-                push_instr!(exp.loc, Bytecode::LdU256(i));
+                push_instr!(exp.loc, Bytecode::LdU256(Box::new(i)));
                 function_frame.push()?;
             }
             CopyableVal_::ByteArray(buf) => {
@@ -1484,8 +1484,8 @@ fn compile_bytecode(
         IRBytecode_::LdU16(u) => Bytecode::LdU16(u),
         IRBytecode_::LdU32(u) => Bytecode::LdU32(u),
         IRBytecode_::LdU64(u) => Bytecode::LdU64(u),
-        IRBytecode_::LdU128(u) => Bytecode::LdU128(u),
-        IRBytecode_::LdU256(u) => Bytecode::LdU256(u),
+        IRBytecode_::LdU128(u) => Bytecode::LdU128(Box::new(u)),
+        IRBytecode_::LdU256(u) => Bytecode::LdU256(Box::new(u)),
         IRBytecode_::CastU8 => Bytecode::CastU8,
         IRBytecode_::CastU16 => Bytecode::CastU16,
         IRBytecode_::CastU32 => Bytecode::CastU32,

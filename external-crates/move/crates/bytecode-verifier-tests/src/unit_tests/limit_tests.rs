@@ -171,7 +171,7 @@ fn big_vec_unpacks() {
     const N_TYPE_PARAMS: usize = 16;
     let mut st = SignatureToken::Vector(Box::new(SignatureToken::U8));
     let type_params = vec![st; N_TYPE_PARAMS];
-    st = SignatureToken::StructInstantiation(StructHandleIndex(0), type_params);
+    st = SignatureToken::StructInstantiation(Box::new((StructHandleIndex(0), type_params)));
     const N_VEC_PUSH: u16 = 1000;
     let mut code = vec![];
     // 1. CopyLoc:     ...         -> ... st

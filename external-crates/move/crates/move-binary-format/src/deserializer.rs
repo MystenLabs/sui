@@ -1009,7 +1009,7 @@ fn load_signature_token(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Sign
                 } => {
                     ty_args.push(tok);
                     if ty_args.len() >= arity {
-                        T::Saturated(SignatureToken::StructInstantiation(sh_idx, ty_args))
+                        T::Saturated(SignatureToken::StructInstantiation(Box::new((sh_idx, ty_args))))
                     } else {
                         T::StructInst {
                             sh_idx,
@@ -1504,7 +1504,7 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             }
             Opcodes::LD_U128 => {
                 let value = read_u128_internal(cursor)?;
-                Bytecode::LdU128(value)
+                Bytecode::LdU128(Box::new(value))
             }
             Opcodes::CAST_U8 => Bytecode::CastU8,
             Opcodes::CAST_U64 => Bytecode::CastU64,
@@ -1577,7 +1577,7 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             }
             Opcodes::LD_U256 => {
                 let value = read_u256_internal(cursor)?;
-                Bytecode::LdU256(value)
+                Bytecode::LdU256(Box::new(value))
             }
             Opcodes::CAST_U16 => Bytecode::CastU16,
             Opcodes::CAST_U32 => Bytecode::CastU32,

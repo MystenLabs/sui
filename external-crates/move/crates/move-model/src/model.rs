@@ -1888,7 +1888,8 @@ impl<'env> ModuleEnv<'env> {
                     .expect("undefined struct");
                 Type::Struct(declaring_module_env.data.id, struct_env.get_id(), vec![])
             }
-            SignatureToken::StructInstantiation(handle_idx, args) => {
+            SignatureToken::StructInstantiation(struct_inst) => {
+                let (handle_idx, args) = &**struct_inst;
                 let struct_view = StructHandleView::new(
                     &self.data.module,
                     self.data.module.struct_handle_at(*handle_idx),

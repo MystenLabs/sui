@@ -141,7 +141,7 @@ fn big_signature_test() {
     }
     for _ in 0..INSTANTIATION_DEPTH {
         let type_params = vec![st; N_TYPE_PARAMS];
-        st = SignatureToken::StructInstantiation(StructHandleIndex(0), type_params);
+        st = SignatureToken::StructInstantiation(Box::new((StructHandleIndex(0), type_params)));
     }
 
     const N_READPOP: u16 = 7500;

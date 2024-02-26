@@ -877,11 +877,11 @@ impl Frame {
             }
             Bytecode::LdU128(int_const) => {
                 gas_meter.charge_simple_instr(S::LdU128)?;
-                interpreter.operand_stack.push(Value::u128(*int_const))?;
+                interpreter.operand_stack.push(Value::u128(**int_const))?;
             }
             Bytecode::LdU256(int_const) => {
                 gas_meter.charge_simple_instr(S::LdU256)?;
-                interpreter.operand_stack.push(Value::u256(*int_const))?;
+                interpreter.operand_stack.push(Value::u256(**int_const))?;
             }
             Bytecode::LdConst(idx) => {
                 let constant = resolver.constant_at(*idx);
@@ -1411,7 +1411,8 @@ impl Frame {
                     .ok_or_else(|| { PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED) })?
                     .solve(&[])?)
             }
-            Type::StructInstantiation(si, ty_args) => {
+            Type::StructInstantiation(struct_inst) => {
+                let (si, ty_args) = &**struct_inst;
                 // Calculate depth of all type arguments, and make sure they themselves are not too deep.
                 let ty_arg_depths = ty_args
                     .iter()

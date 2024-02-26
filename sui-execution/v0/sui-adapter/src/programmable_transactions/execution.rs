@@ -1152,7 +1152,7 @@ mod checked {
                     Type::TyParam(_) => {
                         invariant_violation!("TyParam should have been substituted")
                     }
-                    Type::Struct(_) | Type::StructInstantiation(_, _) if abilities.has_key() => {
+                    Type::Struct(_) | Type::StructInstantiation(_) if abilities.has_key() => {
                         let type_tag = context
                             .session
                             .get_type_tag(return_type)
@@ -1166,7 +1166,7 @@ mod checked {
                         }
                     }
                     Type::Struct(_)
-                    | Type::StructInstantiation(_, _)
+                    | Type::StructInstantiation(_)
                     | Type::Bool
                     | Type::U8
                     | Type::U64
@@ -1452,7 +1452,8 @@ mod checked {
                 let info_opt = primitive_serialization_layout(context, inner)?;
                 info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
             }
-            Type::StructInstantiation(idx, targs) => {
+            Type::StructInstantiation(struct_inst) => {
+                let (idx, targs) = &**struct_inst;
                 let Some(s) = context.session.get_struct_type(*idx) else {
                     invariant_violation!("Loaded struct not found")
                 };

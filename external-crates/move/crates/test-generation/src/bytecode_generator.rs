@@ -43,10 +43,10 @@ type U32ToBytecode = fn(u32) -> Bytecode;
 type U64ToBytecode = fn(u64) -> Bytecode;
 
 /// This type represents bytecode instructions that take a `u128`
-type U128ToBytecode = fn(u128) -> Bytecode;
+type U128ToBytecode = fn(Box<u128>) -> Bytecode;
 
 /// This type represents bytecode instructions that take a `u256`
-type U256ToBytecode = fn(U256) -> Bytecode;
+type U256ToBytecode = fn(Box<U256>) -> Bytecode;
 
 /// This type represents bytecode instructions that take a `AddressPoolIndex`
 type ConstantPoolIndexToBytecode = fn(ConstantPoolIndex) -> Bytecode;
@@ -376,12 +376,12 @@ impl<'a> BytecodeGenerator<'a> {
                 }
                 BytecodeType::U128(instruction) => {
                     // Generate a random u128 constant to load
-                    Some(instruction(self.rng.gen_range(0..u128::max_value())))
+                    Some(instruction(Box::new(self.rng.gen_range(0..u128::max_value()))))
                 }
                 BytecodeType::U256(instruction) => {
                     // Generate a random u256 constant to load
                     Some(instruction(
-                        self.rng.gen_range(U256::zero()..U256::max_value()),
+                        Box::new(self.rng.gen_range(U256::zero()..U256::max_value())),
                     ))
                 }
                 BytecodeType::ConstantPoolIndex(instruction) => {
@@ -865,10 +865,10 @@ impl<'a> BytecodeGenerator<'a> {
             SignatureToken::Address => vec![Bytecode::LdConst(ConstantPoolIndex(0))],
             SignatureToken::U64 => vec![Bytecode::LdU64(0)],
             SignatureToken::U8 => vec![Bytecode::LdU8(0)],
-            SignatureToken::U128 => vec![Bytecode::LdU128(0)],
+            SignatureToken::U128 => vec![Bytecode::LdU128(Box::new(0))],
             SignatureToken::U16 => vec![Bytecode::LdU16(0)],
             SignatureToken::U32 => vec![Bytecode::LdU32(0)],
-            SignatureToken::U256 => vec![Bytecode::LdU256(U256::zero())],
+            SignatureToken::U256 => vec![Bytecode::LdU256(Box::new(U256::zero()))],
             SignatureToken::Bool => vec![Bytecode::LdFalse],
             SignatureToken::Struct(handle_idx) => {
                 let struct_def_idx = module
@@ -898,7 +898,8 @@ impl<'a> BytecodeGenerator<'a> {
                 )));
                 bytecodes
             }
-            SignatureToken::StructInstantiation(handle_idx, instantiation) => {
+            SignatureToken::StructInstantiation(struct_inst) => {
+                let (handle_idx, instantiation) = &**struct_inst;
                 let struct_def_idx = module
                     .module
                     .struct_defs()

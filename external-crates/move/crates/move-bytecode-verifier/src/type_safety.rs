@@ -944,7 +944,7 @@ fn materialize_type(struct_handle: StructHandleIndex, type_args: &Signature) -> 
     if type_args.is_empty() {
         ST::Struct(struct_handle)
     } else {
-        ST::StructInstantiation(struct_handle, type_args.0.clone())
+        ST::StructInstantiation(Box::new((struct_handle, type_args.0.clone())))
     }
 }
 
@@ -967,13 +967,16 @@ fn instantiate(token: &SignatureToken, subst: &Signature) -> SignatureToken {
         Signer => Signer,
         Vector(ty) => Vector(Box::new(instantiate(ty, subst))),
         Struct(idx) => Struct(*idx),
-        StructInstantiation(idx, struct_type_args) => StructInstantiation(
-            *idx,
-            struct_type_args
-                .iter()
-                .map(|ty| instantiate(ty, subst))
-                .collect(),
-        ),
+        StructInstantiation(struct_inst) => {
+            let (idx, struct_type_args) = &**struct_inst;
+            StructInstantiation(Box::new((
+                *idx,
+                struct_type_args
+                    .iter()
+                    .map(|ty| instantiate(ty, subst))
+                    .collect(),
+            )))
+        },
         Reference(ty) => Reference(Box::new(instantiate(ty, subst))),
         MutableReference(ty) => MutableReference(Box::new(instantiate(ty, subst))),
         TypeParameter(idx) => {

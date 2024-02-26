@@ -286,7 +286,8 @@ pub fn is_primitive(
         S::Struct(idx) => [RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
             .contains(&resolve_struct(view, *idx)),
 
-        S::StructInstantiation(idx, targs) => {
+        S::StructInstantiation(s) => {
+            let (idx, targs) = &**s;
             let resolved_struct = resolve_struct(view, *idx);
             // option is a primitive
             resolved_struct == RESOLVED_STD_OPTION
@@ -348,7 +349,7 @@ fn is_object_struct(
             .get(*idx as usize)
             .map(|abs| abs.has_key())
             .unwrap_or(false)),
-        S::Struct(_) | S::StructInstantiation(_, _) => {
+        S::Struct(_) | S::StructInstantiation(_) => {
             let abilities = view
                 .abilities(s, function_type_args)
                 .map_err(|vm_err| vm_err.to_string())?;
