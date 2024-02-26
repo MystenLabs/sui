@@ -139,14 +139,15 @@ fn main() {
     runtimes.sui_node.spawn(async move {
         match &config.health_check_config {
             Some(health_config) => {
+                let config_clone = config.clone();
                 if health_config.enable.unwrap_or(false) == true {
                     let registry_service_clone = registry_service.clone();
                     tokio::spawn(async move {
-                        sui_node::health_check::start_health_checks(registry_service_clone, notify, health_check_config).await;
+                        sui_node::health_check::start_health_checks(registry_service_clone, notify, config_clone.health_check_config).await;
                     });
                 }
             },
-            None => { info!("health check configed not enabled"); },
+            None => { info!("health check config not enabled"); },
         }
         match sui_node::SuiNode::start_async(&config, registry_service, Some(rpc_runtime)).await {
             Ok(sui_node) => node_once_cell_clone

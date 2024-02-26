@@ -634,7 +634,7 @@ pub struct HealthCheckConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub health_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub listen_port: Option<i64>,
+    pub listen_address: Option<SocketAddr>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

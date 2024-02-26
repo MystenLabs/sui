@@ -130,21 +130,46 @@ pub async fn start_health_checks(
     notify: Arc<Notify>,
     config: Option<HealthCheckConfig>,
 ) {
+    // ensure we get a config
+    match config {
+        None => {
+            info!("None config recieved, cannot start health check service");
+            return;
+        }
+        _ => {}
+    }
+
     // start basic health check endpoints
     let mut health_service = HealthService::new(registry_service);
 
+    // we ensure config is Some() at fucntion call so the unwrap should be safe here
+    let ready_path = config
+        .clone()
+        .unwrap()
+        .ready_path
+        .unwrap_or("/ready".to_string());
+    let health_path = config
+        .clone()
+        .unwrap()
+        .ready_path
+        .unwrap_or("/healthy".to_string());
+
+    let addr: SocketAddr = config
+        .clone()
+        .unwrap()
+        .listen_address
+        .unwrap_or(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000));
     //tokio::spawn(async move {
-    let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
     let app = Router::new()
-        .route("/health", get(health_check_handler))
-        .route("/ready", get(ready_check_handler))
+        .route(&health_path, get(health_check_handler))
+        .route(&ready_path, get(ready_check_handler))
         .layer(Extension(health_service.clone()));
 
     tokio::spawn(async move {
         health_service.monitor_and_update_status(notify).await;
     });
 
-    axum::Server::bind(&socket)
+    axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await
         .unwrap()
