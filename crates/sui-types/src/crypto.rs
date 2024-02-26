@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::committee::CommitteeTrait;
+use crate::zk_login_authenticator::AddressSeed;
 use anyhow::{anyhow, Error};
 use derive_more::{AsMut, AsRef, From};
 use eyre::eyre;
@@ -25,7 +26,6 @@ pub use fastcrypto::traits::{
     AggregateAuthenticator, Authenticator, EncodeDecodeBase64, SigningKey, ToFromBytes,
     VerifyingKey,
 };
-use fastcrypto_zkp::bn254::utils::big_int_str_to_bytes;
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
@@ -266,13 +266,10 @@ impl ZkLoginPublicIdentifier {
         bytes.extend([iss_bytes.len() as u8]);
         bytes.extend(iss_bytes);
 
-        // pad 0 to make it 32 bytes.
-        let address_seed_bytes =
-            big_int_str_to_bytes(address_seed).map_err(|_| SuiError::InvalidAddress)?;
-        let mut padded = Vec::new();
-        padded.extend(vec![0; 32 - address_seed_bytes.len()]);
-        padded.extend(address_seed_bytes);
-        bytes.extend(padded.clone());
+        let address_seed =
+            AddressSeed::from_str(address_seed).map_err(|_| SuiError::InvalidAddress)?;
+
+        bytes.extend(address_seed.padded());
 
         Ok(Self(bytes))
     }
