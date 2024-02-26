@@ -542,7 +542,7 @@ fn check_valid_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> Result<(), 
     check_valid_homogeneous_rec(&mut next_q)
 }
 
-fn is_primitive_type_tag(t: &TypeTag) -> bool {
+pub fn is_primitive_type_tag(t: &TypeTag) -> bool {
     match t {
         TypeTag::Bool
         | TypeTag::U8
