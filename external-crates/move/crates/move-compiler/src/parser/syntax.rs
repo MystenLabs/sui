@@ -380,7 +380,7 @@ where
             println!("follow set break for {}", context.tokens.peek());
             break;
         } else {
-            context.env.add_diag(*unexpected_token_error(&context.tokens, &format_oxford_list!(",", "{}", item_first_set.iter().collect::<Vec<_>>())));
+            context.env.add_diag(*unexpected_token_error(&context.tokens, &format_oxford_list!("or", "{}", item_first_set.iter().collect::<Vec<_>>())));
             while !(context.tokens.at_any(item_first_set) ||
                     context.tokens.at(end_token) ||
                     context.tokens.at(Tok::EOF) ||
