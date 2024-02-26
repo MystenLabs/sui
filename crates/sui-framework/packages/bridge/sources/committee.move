@@ -15,7 +15,6 @@ module bridge::committee {
 
     use bridge::crypto;
     use bridge::message::{Self, Blocklist, BridgeMessage};
-    use bridge::message_types;
 
     #[test_only]
     use sui::hex;
@@ -60,7 +59,13 @@ module bridge::committee {
         last_committee_update_epoch: u64,
     }
 
-    struct CommitteeMember has drop, store {
+    struct CommitteeUpdateEvent has copy, drop {
+        // commitee pub key and weight
+        members: VecMap<vector<u8>, CommitteeMember>,
+        stake_participation_percentage: u64
+    }
+
+    struct CommitteeMember has copy, drop, store {
         /// The Sui Address of the validator
         sui_address: address,
         /// The public key bytes of the bridge key
@@ -164,12 +169,9 @@ module bridge::committee {
         ctx: &TxContext
     ) {
         let validators = sui_system::active_validator_addresses(system_state);
-        let total_member_stake = 0;
         let i = 0;
-
-        let total_stake_amount = (sui_system::total_stake_amount(system_state) as u128);
-
         let new_members = vec_map::empty();
+        let stake_participation_percentage = 0;
 
         while (i < vec_map::size(&self.member_registrations)) {
             // retrieve registration
@@ -178,9 +180,8 @@ module bridge::committee {
 
             // Process registration if it's active validator
             if (vector::contains(&validators, &registration.sui_address)) {
-                let stake_amount = sui_system::validator_stake_amount(system_state, registration.sui_address);
-                let voting_power = ((stake_amount as u128) * 10000) / total_stake_amount;
-                total_member_stake = total_member_stake + (stake_amount as u128);
+                let voting_power = sui_system::validator_voting_power(system_state, registration.sui_address);
+                stake_participation_percentage = stake_participation_percentage + voting_power;
                 let member = CommitteeMember {
                     sui_address: registration.sui_address,
                     bridge_pubkey_bytes: registration.bridge_pubkey_bytes,
@@ -194,17 +195,16 @@ module bridge::committee {
         };
 
         // Make sure the new committee represent enough stakes, percentage are accurate to 2DP
-        let stake_participation_percentage = ((total_member_stake * 10000 / (sui_system::total_stake_amount(
-            system_state
-        ) as u128)) as u64);
-
-        // Store new committee info
         if (stake_participation_percentage >= min_stake_participation_percentage) {
             // Clear registrations
             self.member_registrations = vec_map::empty();
+            // Store new committee info
             self.members = new_members;
             self.last_committee_update_epoch = tx_context::epoch(ctx);
-            // TODO: emit committee update event?
+            emit(CommitteeUpdateEvent {
+                members: new_members,
+                stake_participation_percentage
+            })
         }
     }
 
