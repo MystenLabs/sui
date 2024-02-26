@@ -707,7 +707,7 @@ impl AuthorityStore {
                     }
                     if !object.is_child_object() {
                         Self::initialize_locks(
-                            &perpetual_db.owned_object_transaction_locks,
+                            &perpetual_db.live_owned_object_markers,
                             &perpetual_db.owned_object_locked_transactions,
                             &mut batch,
                             &[object.compute_object_reference()],
@@ -956,7 +956,7 @@ impl AuthorityStore {
 
         let locks = self
             .perpetual_tables
-            .owned_object_transaction_locks
+            .live_owned_object_markers
             .multi_get(owned_input_objects)?;
 
         for ((i, lock), obj_ref) in locks.into_iter().enumerate().zip(owned_input_objects) {
@@ -1013,9 +1013,9 @@ impl AuthorityStore {
 
         if !locks_to_write.is_empty() {
             trace!(?locks_to_write, "Writing locks");
-            let mut batch = self.perpetual_tables.owned_object_transaction_locks.batch();
+            let mut batch = self.perpetual_tables.live_owned_object_markers.batch();
             batch.insert_batch(
-                &self.perpetual_tables.owned_object_transaction_locks,
+                &self.perpetual_tables.live_owned_object_markers,
                 locks_to_write,
             )?;
             batch.write()?;
@@ -1041,7 +1041,7 @@ impl AuthorityStore {
 
         let live_object_markers = self
             .perpetual_tables
-            .owned_object_transaction_locks
+            .live_owned_object_markers
             .multi_get(owned_input_objects)?;
 
         let locks = self
@@ -1155,7 +1155,7 @@ impl AuthorityStore {
     fn get_lock_v2(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult {
         if self
             .perpetual_tables
-            .owned_object_transaction_locks
+            .live_owned_object_markers
             .get(&obj_ref)?
             .is_none()
         {
@@ -1195,7 +1195,7 @@ impl AuthorityStore {
         Ok(
             if let Some(lock_info) = self
                 .perpetual_tables
-                .owned_object_transaction_locks
+                .live_owned_object_markers
                 .get(&obj_ref)?
             {
                 match lock_info {
@@ -1235,7 +1235,7 @@ impl AuthorityStore {
     ) -> SuiResult<ObjectRef> {
         let mut iterator = self
             .perpetual_tables
-            .owned_object_transaction_locks
+            .live_owned_object_markers
             .unbounded_iter()
             // Make the max possible entry for this object ID.
             .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
@@ -1264,7 +1264,7 @@ impl AuthorityStore {
     pub fn check_owned_object_locks_exist(&self, objects: &[ObjectRef]) -> SuiResult {
         let locks = self
             .perpetual_tables
-            .owned_object_transaction_locks
+            .live_owned_object_markers
             .multi_get(objects)?;
         for (lock, obj_ref) in locks.into_iter().zip(objects) {
             if lock.is_none() {
@@ -1289,7 +1289,7 @@ impl AuthorityStore {
     ) -> SuiResult {
         trace!(?objects, "initialize_locks");
         AuthorityStore::initialize_locks(
-            &self.perpetual_tables.owned_object_transaction_locks,
+            &self.perpetual_tables.live_owned_object_markers,
             &self.perpetual_tables.owned_object_locked_transactions,
             write_batch,
             objects,
@@ -1353,7 +1353,7 @@ impl AuthorityStore {
     ) -> SuiResult {
         trace!(?objects, "delete_locks");
         write_batch.delete_batch(
-            &self.perpetual_tables.owned_object_transaction_locks,
+            &self.perpetual_tables.live_owned_object_markers,
             objects.iter(),
         )?;
         write_batch.delete_batch(
@@ -1374,10 +1374,10 @@ impl AuthorityStore {
             epoch_store.delete_signed_transaction_for_test(tx);
         }
 
-        let mut batch = self.perpetual_tables.owned_object_transaction_locks.batch();
+        let mut batch = self.perpetual_tables.live_owned_object_markers.batch();
         batch
             .delete_batch(
-                &self.perpetual_tables.owned_object_transaction_locks,
+                &self.perpetual_tables.live_owned_object_markers,
                 objects.iter(),
             )
             .unwrap();
@@ -1389,7 +1389,7 @@ impl AuthorityStore {
             .unwrap();
         batch.write().unwrap();
 
-        let mut batch = self.perpetual_tables.owned_object_transaction_locks.batch();
+        let mut batch = self.perpetual_tables.live_owned_object_markers.batch();
         self.initialize_locks_impl(&mut batch, objects, false)
             .unwrap();
         batch.write().unwrap();
@@ -1487,7 +1487,7 @@ impl AuthorityStore {
 
         // Delete new locks
         write_batch.delete_batch(
-            &self.perpetual_tables.owned_object_transaction_locks,
+            &self.perpetual_tables.live_owned_object_markers,
             new_locks.flatten(),
         )?;
 
