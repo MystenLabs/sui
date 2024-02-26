@@ -179,9 +179,35 @@ The `swap` function checks that senders and recipients match and that each party
 
 ### Shared objects
 
-[Code Sample](https://github.com/MystenLabs/sui/blob/main/examples/move/escrow/sources/shared.move)
+[Code Sample](https://github.com/MystenLabs/sui/blob/93e6b4845a481300ed4a56ab4ac61c5ccb6aa008/examples/move/escrow/sources/shared.move)
 
-The protocol in the shared object case is less symmetric, but still starts with the first party locking the object they wish to swap. The second party can then view the object that was locked, and if they decide they want to swap with it, they indicate their interest by creating a swap request:
+The protocol in the shared object case is less symmetric, but still starts with the first party locking the object they want to swap. 
+```mermaid
+flowchart TB
+    B["Locked&ltfa:fa-coins B&gt, fa:fa-key key_b"]
+        
+    subgraph Buyer
+    direction TB
+    a1(fa:fa-coins B)--escrow::lock-->B
+    end
+```
+
+The second party can then view the object that was locked, and if they decide they want to swap with it, they indicate their interest by creating a swap request:
+
+```mermaid
+flowchart TB
+    S["fa:fa-wrench S,
+        exchange_key: fa:fa-key key_b,
+        recipient: Buyer
+    "]
+
+    id1(Shared Object)-->id2(Escrow&ltfa:fa-wrench S&gt)
+
+    subgraph Seller
+    direction TB
+    S--create-->id2
+    end
+```
 
 ```move
 public fun create<T: key + store>(
@@ -202,7 +228,21 @@ public fun create<T: key + store>(
 }
 ```
 
-This time the swap request is a shared object, and accepts the object being escrowed directly (not locked).  The request remembers the address that sent it (who is allowed to reclaim the object if the swap hasn't already happened), and the intended recipient, who is then expected to continue the swap by providing the object they initially locked:
+This time the `create` request accepts the object being escrowed directly (not locked), and creates a shared `Escrow` object.  The request remembers the address that sent it (who is allowed to reclaim the object if the swap hasn't already happened), and the intended recipient, who is then expected to continue the swap by providing the object they initially locked:
+
+```mermaid
+flowchart TB
+
+    subgraph Buyer
+    direction TB
+    id1(Escrow&ltfa:fa-wrench S&gt,\n fa:fa-key key_b,\n Locked&ltfa:fa-coins B&gt)
+    id2(fa:fa-wrench S)
+    id1-->swap-->id2
+    end
+
+    swap--fa:fa-coins B-->Seller
+```
+
 
 ```move
 public fun swap<T: key + store, U: key + store>(
@@ -230,7 +270,7 @@ public fun swap<T: key + store, U: key + store>(
 }
 ```
 
-Even though the `Escrow` request is a shared object that is accessible by anyone, the Move interface ensures that only the original sender and the intended recipient can successfully interact with it. `swap` checks that the locked object matches the object that was requested when the `Escrow` was created (again, by comparing key IDs) and assumes that the intended recipient wants the escrowed object (if they did not, they would not have called `swap`).
+Even though the `Escrow` object is a shared object that is accessible by anyone, the Move interface ensures that only the original sender and the intended recipient can successfully interact with it. `swap` checks that the locked object matches the object that was requested when the `Escrow` was created (again, by comparing key IDs) and assumes that the intended recipient wants the escrowed object (if they did not, they would not have called `swap`).
 
 Assuming all checks pass, the object held in `Escrow` is extracted, its wrapper is deleted and it is returned to the first party.  The locked object offered by the first party is also unlocked and sent to the second party, completing the swap.
 
