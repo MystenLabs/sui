@@ -263,14 +263,15 @@ pub fn ptb_description() -> clap::Command {
         )
         .long_help(
             "Assign a value to a variable name to use later in the PTB. \
-            If only a name is supplied, the result of \
-            the last transaction is binded to that name. If a name and value are \
-            supplied, then the name is binded to that value. \
+            \n If only a name is supplied, the result of \
+            the last transaction is bound to that name.\
+            \n If a name and value are \
+            supplied, then the name is bound to that value. \
             \n\nExamples: \
             \n --assign MYVAR 100 \
             \n --assign X [100,5000] \
             \n --split-coins gas [1000, 5000, 75000] \
-            \n --assign new_coins # bind new_coins to the result of previous transaction"
+            \n --assign new_coins # bound new_coins to the result of previous transaction"
         )
         .value_names(["NAME", "VALUE"]))
         .arg(arg!(
@@ -313,9 +314,9 @@ pub fn ptb_description() -> clap::Command {
         .long_help(
             "Make a move call to a function.\
             \n\nExamples:\
-            \n --move-call 0x1::option::is_none <u64> none\
+            \n --move-call std::option::is_none <u64> none\
             \n --assign a none\
-            \n --move-call 0x1::option::is_none <u64> a"
+            \n --move-call std::option::is_none <u64> a"
         )
         .value_names(["PACKAGE::MODULE::FUNCTION", "TYPE", "FUNCTION_ARGS"]))
         .arg(arg!(
@@ -326,7 +327,7 @@ pub fn ptb_description() -> clap::Command {
             "Split the coin into N coins as per the given array of amounts.\
             \n\nExamples:\
             \n --split-coins gas [1000, 5000, 75000]\
-            \n --assign new_coins # binds the result of split-coins command to variable new_coins\
+            \n --assign new_coins # bounds the result of split-coins command to variable new_coins\
             \n --split-coins @coin_object_id [100]"
         )
         .value_names(["COIN", "[AMOUNT]"]))
@@ -339,13 +340,21 @@ pub fn ptb_description() -> clap::Command {
             \n\nExamples:\
             \n --transfer-objects @address [obj1, obj2, obj3]\
             \n --split-coins gas [1000, 5000, 75000]\
-            \n --assign new_coins # bind new_coins to result of split-coins to use next\
+            \n --assign new_coins # bound new_coins to result of split-coins to use next\
             \n --transfer-objects @to_address [new_coins.0, new_coins.1, new_coins.2]"
         )
         .value_names(["TO", "[OBJECTS]"]))
         .arg(arg!(
             --"publish" <MOVE_PACKAGE_PATH>
-            "Publish the move package. It takes as input the folder where the package exists."
+            "Publish the Move package. It takes as input the folder where the package exists."
+        ).long_help(
+            "Publish the Move package. It takes as input the folder where the package exists.\
+            \n\nExample:\
+            \n --move-call sui::tx_context::sender\
+            \n --assign sender\
+            \n --publish \".\"\
+            \n --assign upgrade_cap\
+            \n --transfer-objects sender \"[upgrade_cap]\""
         ).value_hint(ValueHint::DirPath))
         .arg(arg!(
             --"upgrade" <MOVE_PACKAGE_PATH>
@@ -362,10 +371,10 @@ pub fn ptb_description() -> clap::Command {
         ))
         .arg(arg!(
             --"warn-shadows" 
-            "Enable shadow warning when including other PTB files. Off by default."
+            "Enable shadow warning when the same variable name is declared multiple times. Off by default."
         ))
         .arg(arg!(
             --"json" 
-            "Return command outputs in json format"
+            "Return command outputs in json format."
         ))
 }
