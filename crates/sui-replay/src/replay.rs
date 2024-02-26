@@ -7,7 +7,10 @@ use crate::{
     data_fetcher::{
         extract_epoch_and_version, DataFetcher, Fetchers, NodeStateDumpFetcher, RemoteFetcher,
     },
-    displays::{transaction_displays::FullPTB, Pretty, PrettyM},
+    displays::{
+        transaction_displays::{transform_command_results_to_annotated, FullPTB},
+        Pretty,
+    },
     types::*,
 };
 use futures::executor::block_on;
@@ -44,7 +47,7 @@ use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::inner_temporary_store::TemporaryPackageStore;
+use sui_types::execution::TypeLayoutStore;
 use sui_types::storage::{get_module, PackageObject};
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::{
@@ -142,6 +145,7 @@ pub struct ProtocolVersionSummary {
     pub epoch_change_tx: TransactionDigest,
 }
 
+#[derive(Clone)]
 pub struct Storage {
     /// These are objects at the frontier of the execution's view
     /// They might not be the latest object currently but they are the latest objects
@@ -212,6 +216,7 @@ impl Storage {
     }
 }
 
+#[derive(Clone)]
 pub struct LocalExec {
     pub client: Option<SuiClient>,
     // For a given protocol version, what TX created it, and what is the valid range of epochs
@@ -692,6 +697,10 @@ impl LocalExec {
         Ok((succeeded, num as u64))
     }
 
+    pub fn type_layout_store_factory(&self) -> Box<dyn TypeLayoutStore> {
+        Box::new(self.clone())
+    }
+
     pub async fn execution_engine_execute_with_tx_info_impl(
         &mut self,
         tx_info: &OnChainTransactionInfo,
@@ -780,27 +789,30 @@ impl LocalExec {
 
         trace!(target: "replay_gas_info", "{}", Pretty(&gas_status));
 
-        let cache = PassthroughCache::new_with_no_metrics(/* need an AuthorityStore */);
-        let mut layout_resolver = executor.type_layout_resolver(Box::new(cache));
-
         let skip_checks = true;
         if let ProgrammableTransaction(ref pt) = transaction_kind {
-            trace!(target: "replay_ptb_info", "{}", PrettyM(&mut FullPTB { ptb: pt.clone(), results: executor.dev_inspect_transaction(&self, protocol_config,
-                 metrics,
-                 expensive_checks,
-                 &certificate_deny_set,
-                &tx_info.executed_epoch,
-                 epoch_start_timestamp,
-                 CheckedInputObjects::new_for_replay(input_objects),
-                 tx_info.gas.clone(),
-                 SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)?,
-                 transaction_kind.clone(),
-                 tx_info.sender,
-                 *tx_digest,
-                 skip_checks
-             ).3.unwrap_or_else(|e| panic!("Error executing this transaction in dev-inspect mode, {e}")),
-            layout_resolver
-             }))
+            trace!(target: "replay_ptb_info", "{}",
+                Pretty(
+                    &mut FullPTB {
+                        ptb: pt.clone(),
+                        results: transform_command_results_to_annotated(
+                            &executor,
+                            &self.clone(),
+                            executor.dev_inspect_transaction(&self, protocol_config,
+                            metrics,
+                            expensive_checks,
+                            &certificate_deny_set,
+                           &tx_info.executed_epoch,
+                            epoch_start_timestamp,
+                            CheckedInputObjects::new_for_replay(input_objects),
+                            tx_info.gas.clone(),
+                            SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)?,
+                            transaction_kind.clone(),
+                            tx_info.sender,
+                            *tx_digest,
+                            skip_checks
+                            ).3.unwrap_or_else(|e| panic!("Error executing this transaction in dev-inspect mode, {e}")),)?
+            }))
         };
 
         let all_required_objects = self.storage.all_objects();

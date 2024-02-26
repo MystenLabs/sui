@@ -1,22 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::displays::{Pretty, PrettyM};
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
+use crate::displays::Pretty;
+use crate::replay::LocalExec;
 use move_core_types::annotated_value::{MoveTypeLayout, MoveValue};
-use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::language_storage::TypeTag;
 use std::fmt::{Display, Formatter};
-
-use sui_types::base_types::ObjectID;
-use sui_types::error::SuiResult;
+use std::sync::Arc;
+use sui_execution::Executor;
 use sui_types::execution_mode::ExecutionResult;
-use sui_types::storage::{BackingPackageStore, PackageObject};
 use sui_types::transaction::CallArg::Pure;
 use sui_types::transaction::{
     write_sep, Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
 };
-use sui_types::type_resolver::LayoutResolver;
 use tabled::{
     builder::Builder as TableBuilder,
     settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
@@ -24,20 +20,20 @@ use tabled::{
 
 pub struct FullPTB {
     pub ptb: ProgrammableTransaction,
-    pub results: Vec<ExecutionResult>,
-    pub layout_resolver: Box<dyn LayoutResolver>,
+    pub results: Vec<ResolvedResults>,
+}
+
+pub struct ResolvedResults {
+    pub mutable_reference_outputs: Vec<(Argument, MoveValue)>,
+    pub return_values: Vec<MoveValue>,
 }
 
 /// These Display implementations provide alternate displays that are used to format info contained
 /// in these Structs when calling the CLI replay command with an additional provided flag.
-impl<'a> Display for PrettyM<'a, FullPTB> {
+impl<'a> Display for Pretty<'a, FullPTB> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let PrettyM(mut full_ptb) = self;
-        let FullPTB {
-            ptb,
-            results,
-            layout_resolver,
-        } = full_ptb;
+        let Pretty(full_ptb) = self;
+        let FullPTB { ptb, results } = full_ptb;
 
         let mut builder = TableBuilder::default();
 
@@ -107,10 +103,10 @@ impl<'a> Display for PrettyM<'a, FullPTB> {
             for ((i, c), result) in commands.iter().enumerate().zip(results) {
                 if i == commands.len() - 1 {
                     builder.push_record(vec![format!("{i:<2} {}", Pretty(c),)]);
-                    display_result(f, result.clone(), layout_resolver)?;
+                    display_result(f, result.clone())?;
                 } else {
                     builder.push_record(vec![format!("{i:<2} {}\n", Pretty(c),)]);
-                    display_result(f, result.clone(), layout_resolver)?;
+                    display_result(f, result.clone())?;
                 }
             }
 
@@ -226,14 +222,13 @@ impl<'a> Display for Pretty<'a, Argument> {
     }
 }
 
-fn display_result(
-    f: &mut Formatter<'_>,
-    result: ExecutionResult,
-    layout_resolver: &mut Box<dyn LayoutResolver>,
-) -> std::fmt::Result {
-    let (mutable_ref_outputs, return_values) = result;
+fn display_result(f: &mut Formatter<'_>, result: &ResolvedResults) -> std::fmt::Result {
+    let ResolvedResults {
+        mutable_reference_outputs,
+        return_values,
+    } = result;
 
-    let len_m_ref = mutable_ref_outputs.len();
+    let len_m_ref = mutable_reference_outputs.len();
     let len_ret_vals = return_values.len();
     if len_ret_vals > 0 || len_m_ref > 0 {
         write!(f, "\n ┌ ")?;
@@ -241,18 +236,16 @@ fn display_result(
     if len_m_ref > 0 {
         write!(f, "\n │ Mutable Reference Outputs:")?;
     }
-    for (arg, bytes, type_tag) in mutable_ref_outputs {
+    for (arg, value) in mutable_reference_outputs {
         write!(f, "\n │   {} ", arg)?;
-        let value = resolve_value(&bytes, &type_tag, layout_resolver).unwrap();
         write!(f, "\n │   {} ", value)?;
     }
     if len_ret_vals > 0 {
         write!(f, "\n │ Return Values:")?;
     }
 
-    for (i, (bytes, type_tag)) in return_values.iter().enumerate() {
+    for (i, value) in return_values.iter().enumerate() {
         write!(f, "\n │   {i:<2} ")?;
-        let value = resolve_value(bytes, type_tag, layout_resolver).unwrap();
         write!(f, "\n │   {} ", value)?;
     }
     if len_ret_vals > 0 || len_m_ref > 0 {
@@ -280,13 +273,17 @@ impl<'a> Display for Pretty<'a, TypeTag> {
 
 fn resolve_to_layout(
     type_tag: &Box<TypeTag>,
-    layout_resolver: &mut Box<dyn LayoutResolver>,
+    executor: &Arc<dyn Executor + Send + Sync>,
+    store_factory: &LocalExec,
 ) -> MoveTypeLayout {
     match *type_tag.clone() {
-        TypeTag::Vector(inner) => {
-            MoveTypeLayout::Vector(Box::from(resolve_to_layout(&inner, layout_resolver)))
-        }
+        TypeTag::Vector(inner) => MoveTypeLayout::Vector(Box::from(resolve_to_layout(
+            &inner,
+            executor,
+            store_factory,
+        ))),
         TypeTag::Struct(inner) => {
+            let mut layout_resolver = executor.type_layout_resolver(Box::new(store_factory));
             MoveTypeLayout::Struct(layout_resolver.get_annotated_layout(&inner).unwrap())
         }
         TypeTag::Bool => MoveTypeLayout::Bool,
@@ -304,11 +301,13 @@ fn resolve_to_layout(
 fn resolve_value(
     bytes: &[u8],
     type_tag: &TypeTag,
-    layout_resolver: &mut Box<dyn LayoutResolver>,
+    executor: &Arc<dyn Executor + Send + Sync>,
+    store_factory: &LocalExec,
 ) -> anyhow::Result<MoveValue> {
+    let mut layout_resolver = executor.type_layout_resolver(Box::new(store_factory.clone()));
     match type_tag {
         TypeTag::Vector(inner_type_tag) => {
-            let inner_layout = resolve_to_layout(inner_type_tag, layout_resolver);
+            let inner_layout = resolve_to_layout(inner_type_tag, executor, store_factory);
             MoveValue::simple_deserialize(bytes, &MoveTypeLayout::Vector(Box::from(inner_layout)))
         }
         TypeTag::Struct(struct_tag) => {
@@ -325,4 +324,27 @@ fn resolve_value(
         TypeTag::U32 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U32),
         TypeTag::U256 => MoveValue::simple_deserialize(bytes, &MoveTypeLayout::U256),
     }
+}
+
+pub fn transform_command_results_to_annotated(
+    executor: &Arc<dyn Executor + Send + Sync>,
+    store_factory: &LocalExec,
+    results: Vec<ExecutionResult>,
+) -> anyhow::Result<Vec<ResolvedResults>> {
+    let mut output = Vec::new();
+    for (m_refs, return_vals) in results.iter() {
+        let mut m_refs_out = Vec::new();
+        let mut return_vals_out = Vec::new();
+        for (arg, bytes, tag) in m_refs {
+            m_refs_out.push((*arg, resolve_value(bytes, tag, executor, store_factory)?));
+        }
+        for (bytes, tag) in return_vals {
+            return_vals_out.push(resolve_value(bytes, tag, executor, store_factory)?);
+        }
+        output.push(ResolvedResults {
+            mutable_reference_outputs: m_refs_out,
+            return_values: return_vals_out,
+        });
+    }
+    Ok(output.into())
 }
