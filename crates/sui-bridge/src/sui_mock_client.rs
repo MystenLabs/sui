@@ -11,6 +11,7 @@ use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::{EventFilter, EventPage, SuiEvent};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
+use sui_types::bridge::MoveTypeBridgeCommittee;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
@@ -19,7 +20,7 @@ use sui_types::transaction::Transaction;
 use sui_types::Identifier;
 
 use crate::sui_client::SuiClientInner;
-use crate::types::{BridgeAction, BridgeActionDigest, BridgeActionStatus, MoveTypeBridgeCommittee};
+use crate::types::{BridgeAction, BridgeActionDigest, BridgeActionStatus};
 
 /// Mock client used in test environments.
 #[allow(clippy::type_complexity)]
