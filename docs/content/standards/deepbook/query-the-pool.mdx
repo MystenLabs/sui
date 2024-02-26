@@ -5,9 +5,9 @@ slug: /query-the-pool
 
 This section shows how to query the pool and order status.
 
-## 1. Order Status {#order-status}
+## Order status {#order-status}
 
-For limit order, users could query its info using the following API functions
+For limit order, query its data using the following API functions
 
 **Function signature for query order info in Move contract**
 
@@ -27,9 +27,9 @@ public fun get_order_status<BaseAsset, QuoteAsset>(
 ): &Order
 ```
 
-## 2. Pool Status {#pool-status}
+## Pool status {#pool-status}
 
-We provide API functions to query the depth of level2 orders on both ask-side and bid-side.
+API functions to query the depth of `level2` orders on both ask-side and bid-side.
 
 **Function signature for get depth of level2 order (ask side) in Move contract**
 
@@ -50,9 +50,9 @@ public fun get_level2_book_status_bid_side<BaseAsset, QuoteAsset>(
 ): (vector<u64>, vector<u64>)
 ```
 
-## 3 User Account Status {#user-account-status}
+## User account status {#user-account-status}
 
-### 3.1 Open Orders {#open-orders}
+### Open orders {#open-orders}
 
 We provide API function to list all open orders under one account
 
@@ -72,9 +72,9 @@ public fun list_open_orders<BaseAsset, QuoteAsset>(
 ): vector<Order>
 ```
 
-### 3.2 Account Balance {#order-status}
+### Account balance {#order-status}
 
-We provide API function to query the custodian account balance for users. Note that each pool will have its own custodian account.
+The API function to query the custodian account balance for users follows. Note that each pool has its own custodian account.
 
 **Function signature for query user balance in Move contract**
 

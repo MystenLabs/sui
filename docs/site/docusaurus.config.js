@@ -45,7 +45,7 @@ const config = {
         schema:
           "../../crates/sui-graphql-rpc/schema/current_progress_schema.graphql",
         rootPath: "../content", // docs will be generated under rootPath/baseURL
-        baseURL: "references/sui-graphql/reference",
+        baseURL: "references/sui-api/sui-graphql/reference",
         loaders: {
           GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
         },
