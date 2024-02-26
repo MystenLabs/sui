@@ -55,7 +55,8 @@ module bridge::committee {
         members: VecMap<vector<u8>, CommitteeMember>,
         // Committee member registrations for the next committee creation.
         member_registrations: VecMap<address, CommitteeMemberRegistration>,
-        // Epoch when the current committee was updated
+        // Epoch when the current committee was updated,
+        // the voting power for each of the committee members are snapshot from this epoch
         last_committee_update_epoch: u64,
     }
 
