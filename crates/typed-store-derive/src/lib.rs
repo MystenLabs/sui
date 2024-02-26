@@ -79,7 +79,7 @@ fn extract_struct_info(
             // Rough way to check that this is map_type_name
             if allowed_map_type_names.contains(&type_str) {
                 let field_name = f.ident.as_ref().unwrap().clone();
-                let path_name = if let Some(rename) = attrs.get(DB_OPTIONS_RENAME) {
+                let cf_name = if let Some(rename) = attrs.get(DB_OPTIONS_RENAME) {
                     match rename.parse_meta().expect("Cannot parse meta of attribute") {
                         Meta::NameValue(val) => {
                             if let Lit::Str(s) = val.lit {
@@ -95,7 +95,7 @@ fn extract_struct_info(
                     field_name.clone()
                 };
 
-                return ((field_name, path_name, type_str), (inner_type, options));
+                return ((field_name, cf_name, type_str), (inner_type, options));
             } else {
                 panic!("All struct members must be of type {allowed_strs}");
             }
@@ -104,7 +104,7 @@ fn extract_struct_info(
     });
 
     let (field_info, inner_types_with_opts): (Vec<_>, Vec<_>) = info.unzip();
-    let (field_names, path_names, simple_field_type_names): (Vec<_>, Vec<_>, Vec<_>) =
+    let (field_names, cf_names, simple_field_type_names): (Vec<_>, Vec<_>, Vec<_>) =
         field_info.into_iter().multiunzip();
 
     // Check for homogeneous types
@@ -122,7 +122,7 @@ fn extract_struct_info(
 
     (
         field_names,
-        path_names,
+        cf_names,
         inner_types,
         options,
         simple_field_type_names.first().unwrap().clone(),
@@ -317,7 +317,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
         .collect();
 
     // TODO: use `parse_quote` over `parse()`
-    let (field_names, path_names, inner_types, derived_table_options, simple_field_type_name_str) =
+    let (field_names, cf_names, inner_types, derived_table_options, simple_field_type_name_str) =
         extract_struct_info(input.clone(), allowed_strs);
 
     let (key_names, value_names): (Vec<_>, Vec<_>) = inner_types
@@ -379,7 +379,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
             pub fn build(&self) -> typed_store::rocks::DBMapTableConfigMap {
                 typed_store::rocks::DBMapTableConfigMap::new([
                     #(
-                        (stringify!(#path_names).to_owned(), self.#field_names.clone()),
+                        (stringify!(#cf_names).to_owned(), self.#field_names.clone()),
                     )*
                 ].into_iter().collect())
             }
@@ -427,12 +427,12 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                     let opt_cfs = match tables_db_options_override {
                         None => [
                             #(
-                                (stringify!(#path_names).to_owned(), #default_options_override_fn_names()),
+                                (stringify!(#cf_names).to_owned(), #default_options_override_fn_names()),
                             )*
                         ],
                         Some(o) => [
                             #(
-                                (stringify!(#path_names).to_owned(), o.to_map().get(stringify!(#path_names)).unwrap().clone()),
+                                (stringify!(#cf_names).to_owned(), o.to_map().get(stringify!(#cf_names)).unwrap().clone()),
                             )*
                         ]
                     };
@@ -451,7 +451,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                             #field_names
                         ),*
                 ) = (#(
-                        DBMap::#inner_types::reopen(&db, Some(stringify!(#path_names)), rwopt_cfs.get(stringify!(#path_names)).unwrap_or(&typed_store::rocks::ReadWriteOptions::default())).expect(&format!("Cannot open {} CF.", stringify!(#path_names))[..])
+                        DBMap::#inner_types::reopen(&db, Some(stringify!(#cf_names)), rwopt_cfs.get(stringify!(#cf_names)).unwrap_or(&typed_store::rocks::ReadWriteOptions::default())).expect(&format!("Cannot open {} CF.", stringify!(#cf_names))[..])
                     ),*);
 
                 Self {
@@ -686,7 +686,7 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
 
     // TODO: use `parse_quote` over `parse()`
     // TODO: Eventually this should return a Vec<Vec<GeneralTableOptions>> to capture default table options for each column type i.e. RockDB, TestDB, etc
-    let (field_names, path_names, inner_types, derived_table_options, simple_field_type_name_str) =
+    let (field_names, _path_names, inner_types, derived_table_options, simple_field_type_name_str) =
         extract_struct_info(input.clone(), allowed_strs);
 
     let (key_names, value_names): (Vec<_>, Vec<_>) = inner_types
