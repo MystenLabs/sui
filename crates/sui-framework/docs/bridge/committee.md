@@ -5,25 +5,62 @@
 
 
 
+-  [Struct `BlocklistValidatorEvent`](#0xb_committee_BlocklistValidatorEvent)
 -  [Struct `BridgeCommittee`](#0xb_committee_BridgeCommittee)
 -  [Struct `CommitteeMember`](#0xb_committee_CommitteeMember)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#0xb_committee_create)
 -  [Function `verify_signatures`](#0xb_committee_verify_signatures)
+-  [Function `execute_blocklist`](#0xb_committee_execute_blocklist)
 
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
 <b>use</b> <a href="dependencies/sui-framework/address.md#0x2_address">0x2::address</a>;
 <b>use</b> <a href="dependencies/sui-framework/ecdsa_k1.md#0x2_ecdsa_k1">0x2::ecdsa_k1</a>;
+<b>use</b> <a href="dependencies/sui-framework/event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="dependencies/sui-framework/hex.md#0x2_hex">0x2::hex</a>;
 <b>use</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map">0x2::vec_map</a>;
 <b>use</b> <a href="dependencies/sui-framework/vec_set.md#0x2_vec_set">0x2::vec_set</a>;
+<b>use</b> <a href="crypto.md#0xb_crypto">0xb::crypto</a>;
 <b>use</b> <a href="message.md#0xb_message">0xb::message</a>;
 <b>use</b> <a href="message_types.md#0xb_message_types">0xb::message_types</a>;
 </code></pre>
 
 
+
+<a name="0xb_committee_BlocklistValidatorEvent"></a>
+
+## Struct `BlocklistValidatorEvent`
+
+
+
+<pre><code><b>struct</b> <a href="committee.md#0xb_committee_BlocklistValidatorEvent">BlocklistValidatorEvent</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>blocklisted: bool</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>public_keys: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
 
 <a name="0xb_committee_BridgeCommittee"></a>
 
@@ -151,6 +188,15 @@
 
 
 
+<a name="0xb_committee_EValidatorBlocklistContainsUnknownKey"></a>
+
+
+
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_EValidatorBlocklistContainsUnknownKey">EValidatorBlocklistContainsUnknownKey</a>: u64 = 4;
+</code></pre>
+
+
+
 <a name="0xb_committee_SUI_MESSAGE_PREFIX"></a>
 
 
@@ -254,6 +300,56 @@
         <a href="dependencies/sui-framework/vec_set.md#0x2_vec_set_insert">vec_set::insert</a>(&<b>mut</b> seen_pub_key, pubkey);
     };
     <b>assert</b>!(threshold &gt;= required_threshold, <a href="committee.md#0xb_committee_ESignatureBelowThreshold">ESignatureBelowThreshold</a>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_committee_execute_blocklist"></a>
+
+## Function `execute_blocklist`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_execute_blocklist">execute_blocklist</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, blocklist: <a href="message.md#0xb_message_Blocklist">message::Blocklist</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_execute_blocklist">execute_blocklist</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>, blocklist: Blocklist) {
+    <b>let</b> blocklisted = <a href="message.md#0xb_message_blocklist_type">message::blocklist_type</a>(&blocklist) != 1;
+    <b>let</b> eth_addresses = <a href="message.md#0xb_message_blocklist_validator_addresses">message::blocklist_validator_addresses</a>(&blocklist);
+    <b>let</b> list_len = <a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(eth_addresses);
+    <b>let</b> list_idx = 0;
+    <b>let</b> member_idx = 0;
+    <b>let</b> pub_keys = <a href="dependencies/move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;();
+    <b>while</b> (list_idx &lt; list_len) {
+        <b>let</b> target_address = <a href="dependencies/move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(eth_addresses, list_idx);
+        <b>let</b> found = <b>false</b>;
+        <b>while</b> (member_idx &lt; <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_size">vec_map::size</a>(&self.members)) {
+            <b>let</b> (pub_key, member) = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get_entry_by_idx_mut">vec_map::get_entry_by_idx_mut</a>(&<b>mut</b> self.members, member_idx);
+            <b>let</b> eth_address = <a href="crypto.md#0xb_crypto_ecdsa_pub_key_to_eth_address">crypto::ecdsa_pub_key_to_eth_address</a>(*pub_key);
+            <b>if</b> (*target_address == eth_address) {
+                member.blocklisted = blocklisted;
+                <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> pub_keys, *pub_key);
+                found = <b>true</b>;
+                <b>break</b>
+            };
+            member_idx = member_idx + 1;
+        };
+        <b>assert</b>!(found, <a href="committee.md#0xb_committee_EValidatorBlocklistContainsUnknownKey">EValidatorBlocklistContainsUnknownKey</a>);
+        list_idx = list_idx + 1;
+    };
+    emit(<a href="committee.md#0xb_committee_BlocklistValidatorEvent">BlocklistValidatorEvent</a> {
+        blocklisted,
+        public_keys: pub_keys,
+    })
 }
 </code></pre>
 

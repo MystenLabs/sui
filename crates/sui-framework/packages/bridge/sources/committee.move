@@ -7,13 +7,17 @@ module bridge::committee {
 
     use sui::address;
     use sui::ecdsa_k1;
+    use sui::event::emit;
     use sui::hex;
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set;
+    use bridge::crypto;
 
-    use bridge::message::{Self, BridgeMessage};
+    use bridge::message::{Self, BridgeMessage, Blocklist};
     use bridge::message_types;
+    #[test_only]
+    use bridge::chain_ids;
 
     friend bridge::bridge;
 
@@ -21,8 +25,14 @@ module bridge::committee {
     const EDuplicatedSignature: u64 = 1;
     const EInvalidSignature: u64 = 2;
     const ENotSystemAddress: u64 = 3;
+    const EValidatorBlocklistContainsUnknownKey: u64 = 4;
 
     const SUI_MESSAGE_PREFIX: vector<u8> = b"SUI_BRIDGE_MESSAGE";
+
+    struct BlocklistValidatorEvent has copy, drop {
+        blocklisted: bool,
+        public_keys: vector<vector<u8>>,
+    }
 
     struct BridgeCommittee has store {
         // commitee pub key and weight
@@ -106,7 +116,40 @@ module bridge::committee {
         assert!(threshold >= required_threshold, ESignatureBelowThreshold);
     }
 
+    // This function applys the blocklist to the committee members, we won't need to run this very often so this is not gas optimised.
+    // TODO: add tests for this function
+    public(friend) fun execute_blocklist(self: &mut BridgeCommittee, blocklist: Blocklist) {
+        let blocklisted = message::blocklist_type(&blocklist) != 1;
+        let eth_addresses = message::blocklist_validator_addresses(&blocklist);
+        let list_len = vector::length(eth_addresses);
+        let list_idx = 0;
+        let member_idx = 0;
+        let pub_keys = vector::empty<vector<u8>>();
+        while (list_idx < list_len) {
+            let target_address = vector::borrow(eth_addresses, list_idx);
+            let found = false;
+            while (member_idx < vec_map::size(&self.members)) {
+                let (pub_key, member) = vec_map::get_entry_by_idx_mut(&mut self.members, member_idx);
+                let eth_address = crypto::ecdsa_pub_key_to_eth_address(*pub_key);
+                if (*target_address == eth_address) {
+                    member.blocklisted = blocklisted;
+                    vector::push_back(&mut pub_keys, *pub_key);
+                    found = true;
+                    break
+                };
+                member_idx = member_idx + 1;
+            };
+            assert!(found, EValidatorBlocklistContainsUnknownKey);
+            list_idx = list_idx + 1;
+        };
+        emit(BlocklistValidatorEvent {
+            blocklisted,
+            public_keys: pub_keys,
+        })
+    }
+
     #[test_only]
+    // This is a token transfer message for testing
     const TEST_MSG: vector<u8> =
         b"00010a0000000000000000200000000000000000000000000000000000000000000000000000000000000064012000000000000000000000000000000000000000000000000000000000000000c8033930000000000000";
 
@@ -180,6 +223,141 @@ module bridge::committee {
             )],
         );
         abort 0
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ESignatureBelowThreshold)]
+    fun test_verify_signatures_with_blocked_committee_member() {
+        let committee = setup_test();
+        let msg = message::deserialize_message_test_only(hex::decode(TEST_MSG));
+        // good path, this test should have passed in previous test
+        verify_signatures(
+            &committee,
+            msg,
+            vector[hex::decode(
+                b"8ba030a450cb1e36f61e572645fc9da1dea5f79b6db663a21ab63286d7fc29af447433abdd0c0b35ab751154ac5b612ae64d3be810f0d9e10ff68e764514ced300"
+            ), hex::decode(
+                b"439379cc7b3ee3ebe1ff59d011dafc1caac47da6919b089c90f6a24e8c284b963b20f1f5421385456e57ac6b69c4b5f0d345aa09b8bc96d88d87051c7349e83801"
+            )],
+        );
+
+        let (validator1, member) = vec_map::get_entry_by_idx(&committee.members, 0);
+        assert!(!member.blocklisted, 0);
+
+        // Block a member
+        let blocklist = message::create_blocklist_message(
+            chain_ids::sui_testnet(),
+            0,
+            0, // type 0 is block
+            vector[crypto::ecdsa_pub_key_to_eth_address(*validator1)]
+        );
+        let blocklist = message::extract_blocklist_payload(&blocklist);
+        execute_blocklist(&mut committee, blocklist);
+
+        let (_, blocked_member) = vec_map::get_entry_by_idx(&committee.members, 0);
+        assert!(blocked_member.blocklisted, 0);
+
+        // Verify signature should fail now
+        verify_signatures(
+            &committee,
+            msg,
+            vector[hex::decode(
+                b"8ba030a450cb1e36f61e572645fc9da1dea5f79b6db663a21ab63286d7fc29af447433abdd0c0b35ab751154ac5b612ae64d3be810f0d9e10ff68e764514ced300"
+            ), hex::decode(
+                b"439379cc7b3ee3ebe1ff59d011dafc1caac47da6919b089c90f6a24e8c284b963b20f1f5421385456e57ac6b69c4b5f0d345aa09b8bc96d88d87051c7349e83801"
+            )],
+        );
+
+        // Clean up
+        let BridgeCommittee {
+            members: _,
+            thresholds: _
+        } = committee;
+    }
+
+    #[test]
+    #[expected_failure(abort_code = EValidatorBlocklistContainsUnknownKey)]
+    fun test_execute_blocklist_abort_upon_unknown_validator() {
+        let committee = setup_test();
+
+        // // val0 and val1 are not blocked yet
+        let (validator0, _) = vec_map::get_entry_by_idx(&committee.members, 0);
+        // assert!(!member0.blocklisted, 0);
+        // let (validator1, member1) = vec_map::get_entry_by_idx(&committee.members, 1);
+        // assert!(!member1.blocklisted, 0);
+
+        let eth_address0 = crypto::ecdsa_pub_key_to_eth_address(*validator0);
+        let invalid_eth_address1 = x"0000000000000000000000000000000000000000";
+
+        // Blocklist both
+        let blocklist = message::create_blocklist_message(
+            chain_ids::sui_testnet(),
+            0, // seq
+            0, // type 0 is blocklist
+            vector[eth_address0, invalid_eth_address1]
+        );
+        let blocklist = message::extract_blocklist_payload(&blocklist);
+        execute_blocklist(&mut committee, blocklist);
+
+        // Clean up
+        let BridgeCommittee {
+            members: _,
+            thresholds: _
+        } = committee;
+    }
+
+    #[test]
+    fun test_execute_blocklist() {
+        let committee = setup_test();
+
+        // val0 and val1 are not blocked yet
+        let (validator0, member0) = vec_map::get_entry_by_idx(&committee.members, 0);
+        assert!(!member0.blocklisted, 0);
+        let (validator1, member1) = vec_map::get_entry_by_idx(&committee.members, 1);
+        assert!(!member1.blocklisted, 0);
+
+        let eth_address0 = crypto::ecdsa_pub_key_to_eth_address(*validator0);
+        let eth_address1 = crypto::ecdsa_pub_key_to_eth_address(*validator1);
+
+        // Blocklist both
+        let blocklist = message::create_blocklist_message(
+            chain_ids::sui_testnet(),
+            0, // seq
+            0, // type 0 is blocklist
+            vector[eth_address0, eth_address1]
+        );
+        let blocklist = message::extract_blocklist_payload(&blocklist);
+        execute_blocklist(&mut committee, blocklist);
+
+        // val 0 is blocklisted
+        let (_, blocked_member) = vec_map::get_entry_by_idx(&committee.members, 0);
+        assert!(blocked_member.blocklisted, 0);
+        // val 1 is too
+        let (_, blocked_member) = vec_map::get_entry_by_idx(&committee.members, 1);
+        assert!(blocked_member.blocklisted, 0);
+
+        // unblocklist val1
+        let blocklist = message::create_blocklist_message(
+            chain_ids::sui_testnet(),
+            1, // seq, this is supposed to increment, but we don't test it here
+            1, // type 1 is unblocklist
+            vector[eth_address1],
+        );
+        let blocklist = message::extract_blocklist_payload(&blocklist);
+        execute_blocklist(&mut committee, blocklist);
+
+        // val 0 is still blocklisted
+        let (_, blocked_member) = vec_map::get_entry_by_idx(&committee.members, 0);
+        assert!(blocked_member.blocklisted, 0);
+        // val 1 is not
+        let (_, blocked_member) = vec_map::get_entry_by_idx(&committee.members, 1);
+        assert!(!blocked_member.blocklisted, 0);
+
+        // Clean up
+        let BridgeCommittee {
+            members: _,
+            thresholds: _
+        } = committee;
     }
 
     #[test_only]
