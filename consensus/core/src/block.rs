@@ -27,10 +27,10 @@ use crate::error::ConsensusResult;
 use crate::{commit::CommitRef, context::Context};
 use crate::{ensure, error::ConsensusError};
 
+pub(crate) const GENESIS_ROUND: Round = 0;
+
 /// Round number of a block.
 pub type Round = u32;
-
-pub const GENESIS_ROUND: Round = 0;
 
 /// Block proposal timestamp in milliseconds.
 pub type BlockTimestampMs = u64;
@@ -82,6 +82,7 @@ pub trait BlockAPI {
     fn ancestors(&self) -> &[BlockRef];
     fn transactions(&self) -> &[Transaction];
     fn commit_votes(&self) -> &[CommitRef];
+    fn slot(&self) -> Slot;
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -157,6 +158,10 @@ impl BlockAPI for BlockV1 {
 
     fn commit_votes(&self) -> &[CommitRef] {
         &self.commit_votes
+    }
+
+    fn slot(&self) -> Slot {
+        Slot::new(self.round, self.author)
     }
 }
 
@@ -255,7 +260,7 @@ impl AsRef<[u8]> for BlockDigest {
 /// Slot is the position of blocks in the DAG. It can contain 0, 1 or multiple blocks
 /// from the same authority at the same round.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Default, Hash)]
-pub(crate) struct Slot {
+pub struct Slot {
     pub round: Round,
     pub authority: AuthorityIndex,
 }

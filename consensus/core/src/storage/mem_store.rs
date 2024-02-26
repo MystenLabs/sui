@@ -12,6 +12,7 @@ use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
 use super::{CommitInfo, Store, WriteBatch};
+use crate::block::Slot;
 use crate::commit::{CommitAPI as _, TrustedCommit};
 use crate::{
     block::{BlockAPI as _, BlockDigest, BlockRef, Round, VerifiedBlock},
@@ -127,11 +128,26 @@ impl Store for MemStore {
         Ok(blocks)
     }
 
+    fn contains_block_at_slot(&self, slot: Slot) -> ConsensusResult<bool> {
+        let inner = self.inner.read();
+        let found = inner
+            .digests_by_authorities
+            .range((
+                Included((slot.authority, slot.round, BlockDigest::MIN)),
+                Included((slot.authority, slot.round, BlockDigest::MAX)),
+            ))
+            .next()
+            .is_some();
+        Ok(found)
+    }
+
     fn scan_last_blocks_by_author(
         &self,
         author: AuthorityIndex,
         num_of_rounds: u64,
+        before_round: Option<Round>,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
+        let before_round = before_round.unwrap_or(Round::MAX);
         let mut refs = VecDeque::new();
         for &(author, round, digest) in self
             .inner
@@ -139,7 +155,7 @@ impl Store for MemStore {
             .digests_by_authorities
             .range((
                 Included((author, Round::MIN, BlockDigest::MIN)),
-                Included((author, Round::MAX, BlockDigest::MAX)),
+                Included((author, before_round, BlockDigest::MAX)),
             ))
             .rev()
             .take(num_of_rounds as usize)
