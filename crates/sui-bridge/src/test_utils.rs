@@ -341,7 +341,7 @@ pub fn get_certified_action_with_validator_secrets(
 /// Use `bridge_token` to do it.
 // TODO(bridge): It appears this function is very slow (particularly, `execute_transaction_must_succeed`).
 // Investigate why.
-pub async fn approve_token_bridge_with_validator_secrets(
+pub async fn approve_action_with_validator_secrets(
     wallet_context: &mut WalletContext,
     bridge_obj_org: ObjectArg,
     // TODO: add `token_recipient()` for `BridgeAction` so we don't need `expected_token_receiver`
