@@ -147,12 +147,13 @@ impl ObjectStatusTracker {
 
     fn get_object_status(&self, object_id: &ObjectID) -> Option<ObjectStatus> {
         if self.mutated.contains(object_id) {
-            Some(ObjectStatus::Created)
-        } else if self.deleted.contains(object_id) {
             Some(ObjectStatus::Mutated)
-        } else if self.created.contains(object_id) {
+        } else if self.deleted.contains(object_id) {
             Some(ObjectStatus::Deleted)
+        } else if self.created.contains(object_id) {
+            Some(ObjectStatus::Created)
         } else {
+            // nothign to do
             None
         }
     }
