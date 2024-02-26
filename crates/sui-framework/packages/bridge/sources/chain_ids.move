@@ -9,11 +9,15 @@ module bridge::chain_ids {
     const SuiMainnet: u8 = 0;
     const SuiTestnet: u8 = 1;
     const SuiDevnet: u8 = 2;
+    const SuiLocalTest: u8 = 3;
 
     const EthMainnet: u8 = 10;
     const EthSepolia: u8 = 11;
+    const EthLocalTest: u8 = 12;
 
-    struct BridgeRoute has drop {
+    const EInvalidBridgeRoute: u64 = 0;
+
+    struct BridgeRoute has copy, drop, store {
         source: u8,
         destination: u8,
     }
@@ -24,6 +28,10 @@ module bridge::chain_ids {
 
     public fun sui_testnet(): u8 {
         SuiTestnet
+    }
+
+    public fun sui_local_test(): u8 {
+        SuiLocalTest
     }
 
     public fun sui_devnet(): u8 {
@@ -38,18 +46,39 @@ module bridge::chain_ids {
         EthSepolia
     }
 
+    public fun eth_local_test(): u8 {
+        EthLocalTest
+    }
+
     public fun valid_routes(): vector<BridgeRoute> {
         vector[
             BridgeRoute { source: SuiMainnet, destination: EthMainnet },
-            BridgeRoute { source: SuiDevnet, destination: EthSepolia },
-            BridgeRoute { source: SuiTestnet, destination: EthSepolia },
             BridgeRoute { source: EthMainnet, destination: SuiMainnet },
+
+            BridgeRoute { source: SuiDevnet, destination: EthSepolia },
+            BridgeRoute { source: SuiDevnet, destination: EthLocalTest },
+            BridgeRoute { source: SuiTestnet, destination: EthSepolia },
+            BridgeRoute { source: SuiTestnet, destination: EthLocalTest },
+            BridgeRoute { source: SuiLocalTest, destination: EthLocalTest },
+            BridgeRoute { source: SuiLocalTest, destination: EthSepolia },
             BridgeRoute { source: EthSepolia, destination: SuiDevnet },
-            BridgeRoute { source: EthSepolia, destination: SuiTestnet }]
+            BridgeRoute { source: EthSepolia, destination: SuiTestnet },
+            BridgeRoute { source: EthSepolia, destination: SuiLocalTest },
+            BridgeRoute { source: EthLocalTest, destination: SuiDevnet },
+            BridgeRoute { source: EthLocalTest, destination: SuiTestnet },
+            BridgeRoute { source: EthLocalTest, destination: SuiLocalTest }
+        ]
     }
 
     public fun is_valid_route(source: u8, destination: u8): bool {
         let route = BridgeRoute { source, destination };
         return vector::contains(&valid_routes(), &route)
+    }
+
+    // Checks and return BridgeRoute if the route is supported by the bridge.
+    public fun get_route(source: u8, destination: u8): BridgeRoute {
+        let route = BridgeRoute { source, destination };
+        assert!(vector::contains(&valid_routes(), &route), EInvalidBridgeRoute);
+        route
     }
 }

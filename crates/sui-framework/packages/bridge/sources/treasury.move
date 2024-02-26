@@ -41,6 +41,21 @@ module bridge::treasury {
         }
     }
 
+    public fun decimal_multiplier<T>(): u64 {
+        let coin_type = type_name::get<T>();
+        if (coin_type == type_name::get<BTC>()) {
+            btc::multiplier()
+        } else if (coin_type == type_name::get<ETH>()) {
+            eth::multiplier()
+        } else if (coin_type == type_name::get<USDC>()) {
+            usdc::multiplier()
+        } else if (coin_type == type_name::get<USDT>()) {
+            usdt::multiplier()
+        } else {
+            abort EUnsupportedTokenType
+        }
+    }
+
     public(friend) fun create(ctx: &mut TxContext): BridgeTreasury {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         BridgeTreasury {
