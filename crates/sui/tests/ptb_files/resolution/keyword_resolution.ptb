@@ -1,0 +1,4 @@
+--assign gas @0x1
+--assign none @0x1
+
+--gas-budget 11
