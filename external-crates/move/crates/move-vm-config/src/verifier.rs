@@ -25,6 +25,7 @@ pub struct VerifierConfig {
     pub max_per_mod_meter_units: Option<u128>,
     pub max_idenfitier_len: Option<u64>,
     pub allow_receiving_object_id: bool,
+    pub reject_mutable_random_on_entry_functions: bool,
 }
 
 impl Default for VerifierConfig {
@@ -63,6 +64,7 @@ impl Default for VerifierConfig {
             max_constant_vector_len: Some(DEFAULT_MAX_CONSTANT_VECTOR_LEN),
             max_idenfitier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
             allow_receiving_object_id: true,
+            reject_mutable_random_on_entry_functions: true,
         }
     }
 }

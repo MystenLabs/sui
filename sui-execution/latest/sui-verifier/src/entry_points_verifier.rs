@@ -8,6 +8,8 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_bytecode_utils::format_signature_token;
+use move_vm_config::verifier::VerifierConfig;
+use sui_types::randomness_state::is_mutable_random;
 use sui_types::{
     base_types::{TxContext, TxContextKind, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     clock::Clock,
@@ -39,6 +41,7 @@ use crate::{verification_failure, INIT_FN_NAME};
 pub fn verify_module(
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
+    verifier_config: &VerifierConfig,
 ) -> Result<(), ExecutionError> {
     // When verifying test functions, a check preventing explicit calls to init functions is
     // disabled.
@@ -63,7 +66,8 @@ pub fn verify_module(
             // it's not an entry function
             continue;
         }
-        verify_entry_function_impl(module, func_def).map_err(verification_failure)?;
+        verify_entry_function_impl(module, func_def, verifier_config)
+            .map_err(verification_failure)?;
     }
     Ok(())
 }
@@ -172,6 +176,7 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
 fn verify_entry_function_impl(
     module: &CompiledModule,
     func_def: &FunctionDefinition,
+    verifier_config: &VerifierConfig,
 ) -> Result<(), String> {
     let view = &BinaryIndexedView::Module(module);
     let handle = view.function_handle_at(func_def.function);
@@ -184,7 +189,7 @@ fn verify_entry_function_impl(
         _ => &params.0,
     };
     for param in all_non_ctx_params {
-        verify_param_type(view, &handle.type_parameters, param)?;
+        verify_param_type(view, &handle.type_parameters, param, verifier_config)?;
     }
 
     for return_ty in &view.signature_at(handle.return_).0 {
@@ -223,12 +228,23 @@ fn verify_param_type(
     view: &BinaryIndexedView,
     function_type_args: &[AbilitySet],
     param: &SignatureToken,
+    verifier_config: &VerifierConfig,
 ) -> Result<(), String> {
     // Only `sui::sui_system` is allowed to expose entry functions that accept a mutable clock
     // parameter.
     if Clock::is_mutable(view, param) {
         return Err(format!(
             "Invalid entry point parameter type. Clock must be passed by immutable reference. got: \
+             {}",
+            format_signature_token(view, param),
+        ));
+    }
+
+    // Only `sui::sui_system` is allowed to expose entry functions that accept a mutable Random
+    // parameter.
+    if verifier_config.reject_mutable_random_on_entry_functions && is_mutable_random(view, param) {
+        return Err(format!(
+            "Invalid entry point parameter type. Random must be passed by immutable reference. got: \
              {}",
             format_signature_token(view, param),
         ));
