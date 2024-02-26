@@ -175,14 +175,14 @@ mod tests {
         events::EmittedSuiToEthTokenBridgeV1,
         server::mock_handler::BridgeRequestMockHandler,
         test_utils::{get_test_authority_and_key, get_test_sui_to_eth_bridge_action},
-        types::{SignedBridgeAction, TokenId},
+        types::SignedBridgeAction,
     };
     use ethers::types::Address as EthAddress;
     use ethers::types::TxHash;
     use fastcrypto::hash::{HashFunction, Keccak256};
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
-    use sui_types::bridge::BridgeChainId;
+    use sui_types::bridge::{BridgeChainId, TokenId};
     use sui_types::{base_types::SuiAddress, crypto::get_key_pair, digests::TransactionDigest};
 
     #[tokio::test]

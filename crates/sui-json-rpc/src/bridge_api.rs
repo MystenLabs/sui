@@ -33,11 +33,11 @@ impl BridgeReadApiServer for BridgeReadApi {
     #[instrument(skip(self))]
     async fn get_latest_bridge(&self) -> RpcResult<BridgeSummary> {
         with_tracing!(async move {
-            Ok(self
-                .state
+            self.state
                 .get_bridge()
                 .map_err(Error::from)?
-                .into_bridge_summary())
+                .try_into_bridge_summary()
+                .map_err(Error::from)
         })
     }
 

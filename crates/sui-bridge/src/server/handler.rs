@@ -328,13 +328,11 @@ mod tests {
         test_utils::{
             get_test_log_and_action, get_test_sui_to_eth_bridge_action, mock_last_finalized_block,
         },
-        types::{
-            BridgeActionType, EmergencyAction, EmergencyActionType, LimitUpdateAction, TokenId,
-        },
+        types::{BridgeActionType, EmergencyAction, EmergencyActionType, LimitUpdateAction},
     };
     use ethers::types::{Address as EthAddress, TransactionReceipt};
     use sui_json_rpc_types::SuiEvent;
-    use sui_types::bridge::BridgeChainId;
+    use sui_types::bridge::{BridgeChainId, TokenId};
     use sui_types::{base_types::SuiAddress, crypto::get_key_pair};
 
     #[tokio::test]
