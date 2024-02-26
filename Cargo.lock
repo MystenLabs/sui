@@ -25,20 +25,11 @@ dependencies = [
 
 [[package]]
 name = "addr2line"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a76fd60b23679b7d19bd066031410fb7e458ccc5e958eb5c325888ce4baedc97"
-dependencies = [
- "gimli 0.27.3",
-]
-
-[[package]]
-name = "addr2line"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a30b2e23b9e17a9f90641c7ab1549cd9b44f296d3ccbf309d2863cfe398a0cb"
 dependencies = [
- "gimli 0.28.1",
+ "gimli",
 ]
 
 [[package]]
@@ -1643,12 +1634,12 @@ version = "0.3.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2089b7e3f35b9dd2d0ed921ead4f6d318c27680d4a5bd167b3ee120edb105837"
 dependencies = [
- "addr2line 0.21.0",
+ "addr2line",
  "cc",
  "cfg-if",
  "libc",
- "miniz_oxide 0.7.1",
- "object 0.32.2",
+ "miniz_oxide",
+ "object",
  "rustc-demangle",
 ]
 
@@ -4704,7 +4695,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46303f565772937ffe1d394a4fac6f411c6013172fadde9dcdb1e147a086940e"
 dependencies = [
  "crc32fast",
- "miniz_oxide 0.7.1",
+ "miniz_oxide",
 ]
 
 [[package]]
@@ -4975,12 +4966,6 @@ dependencies = [
  "opaque-debug",
  "polyval",
 ]
-
-[[package]]
-name = "gimli"
-version = "0.27.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6c80984affa11d98d1b88b66ac8853f143217b399d3c74116778ff8fdb4ed2e"
 
 [[package]]
 name = "gimli"
@@ -6543,15 +6528,6 @@ name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
-
-[[package]]
-name = "miniz_oxide"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b275950c28b37e794e8c55d88aeb5e139d0ce23fdbbeda68f8d7174abdf9e8fa"
-dependencies = [
- "adler",
-]
 
 [[package]]
 name = "miniz_oxide"
@@ -8331,15 +8307,6 @@ name = "number_prefix"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
-
-[[package]]
-name = "object"
-version = "0.30.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03b4680b86d9cfafba8fc491dc9b6df26b68cf40e9e6cd73909194759a63c385"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "object"
@@ -16029,7 +15996,7 @@ version = "0.1.0"
 dependencies = [
  "Inflector",
  "addchain",
- "addr2line 0.19.0",
+ "addr2line",
  "adler",
  "aead",
  "aes",
@@ -16141,6 +16108,7 @@ dependencies = [
  "axum-server",
  "backoff",
  "backtrace",
+ "backtrace-ext",
  "base-x",
  "base16ct 0.1.1",
  "base16ct 0.2.0",
@@ -16420,7 +16388,7 @@ dependencies = [
  "getrandom 0.2.9",
  "gettid",
  "ghash",
- "gimli 0.27.3",
+ "gimli",
  "git-version",
  "git-version-macro",
  "glob",
@@ -16494,6 +16462,7 @@ dependencies = [
  "ipnetwork",
  "iri-string",
  "is-terminal",
+ "is_ci",
  "itertools 0.10.5",
  "itertools 0.11.0",
  "itoa",
@@ -16554,14 +16523,15 @@ dependencies = [
  "memoffset 0.6.5",
  "memoffset 0.7.1",
  "merlin",
+ "miette",
+ "miette-derive",
  "migrations_internals",
  "migrations_macros",
  "mime",
  "mime_guess",
  "minibytes",
  "minimal-lexical",
- "miniz_oxide 0.6.2",
- "miniz_oxide 0.7.1",
+ "miniz_oxide",
  "mio 0.7.14",
  "mio 0.8.5",
  "mockall",
@@ -16644,7 +16614,7 @@ dependencies = [
  "num_enum_derive 0.6.1",
  "num_threads",
  "number_prefix",
- "object 0.30.4",
+ "object",
  "oid-registry",
  "once_cell",
  "oorandom",
@@ -16670,6 +16640,7 @@ dependencies = [
  "outref",
  "overload",
  "owo-colors 3.5.0",
+ "owo-colors 4.0.0",
  "p256",
  "pairing",
  "papergrid",
@@ -16891,6 +16862,7 @@ dependencies = [
  "slab",
  "slip10_ed25519",
  "smallvec",
+ "smawk",
  "snap",
  "snowflake-api",
  "socket2 0.4.9",
@@ -16914,6 +16886,9 @@ dependencies = [
  "subprocess",
  "subtle",
  "subtle-ng",
+ "supports-color",
+ "supports-hyperlinks",
+ "supports-unicode",
  "symbolic-common",
  "symbolic-demangle",
  "syn 0.15.44",
@@ -16934,11 +16909,13 @@ dependencies = [
  "term",
  "termcolor",
  "terminal_size 0.2.6",
+ "terminal_size 0.3.0",
  "termtree",
  "test-fuzz",
  "test-fuzz-internal",
  "test-fuzz-macro",
  "test-fuzz-runtime",
+ "textwrap",
  "thiserror",
  "thiserror-impl",
  "thread_local",
@@ -17002,6 +16979,7 @@ dependencies = [
  "unicase",
  "unicode-bidi",
  "unicode-ident",
+ "unicode-linebreak",
  "unicode-normalization",
  "unicode-segmentation",
  "unicode-width",
