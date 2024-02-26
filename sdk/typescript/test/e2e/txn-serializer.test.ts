@@ -56,7 +56,7 @@ describe('Transaction Serialization and deserialization', () => {
 			arguments: [
 				tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
 				tx.object(coin.coinObjectId),
-				tx.pure(validatorAddress),
+				tx.pure.address(validatorAddress),
 			],
 		});
 		await serializeAndDeserialize(tx, [true]);

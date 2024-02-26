@@ -127,7 +127,7 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 	});
 
 	// Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
-	tx.transferObjects([cap], tx.pure(await toolbox.address()));
+	tx.transferObjects([cap], tx.pure.address(await toolbox.address()));
 
 	const publishTxn = await toolbox.client.signAndExecuteTransactionBlock({
 		transactionBlock: tx,
@@ -181,7 +181,7 @@ export async function upgradePackage(
 	const cap = tx.object(capId);
 	const ticket = tx.moveCall({
 		target: '0x2::package::authorize_upgrade',
-		arguments: [cap, tx.pure(UpgradePolicy.COMPATIBLE), tx.pure(digest)],
+		arguments: [cap, tx.pure.u8(UpgradePolicy.COMPATIBLE), tx.pure(digest)],
 	});
 
 	const receipt = tx.upgrade({
@@ -242,8 +242,8 @@ export async function paySui(
 		).data[0].coinObjectId;
 
 	recipients.forEach((recipient, i) => {
-		const coin = tx.splitCoins(coinId!, [tx.pure(amounts![i])]);
-		tx.transferObjects([coin], tx.pure(recipient));
+		const coin = tx.splitCoins(coinId!, [amounts![i]]);
+		tx.transferObjects([coin], tx.pure.address(recipient));
 	});
 
 	const txn = await client.signAndExecuteTransactionBlock({
