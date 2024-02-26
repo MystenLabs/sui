@@ -35,6 +35,7 @@ use crate::routing_layer::RpcRouter;
 pub mod authority_state;
 pub mod axum_router;
 mod balance_changes;
+pub mod bridge_api;
 pub mod coin_api;
 pub mod error;
 pub mod governance_api;

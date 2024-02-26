@@ -9,6 +9,7 @@ use crate::authority::{
 };
 use crate::transaction_outputs::TransactionOutputs;
 use async_trait::async_trait;
+use sui_types::bridge::Bridge;
 
 use futures::{future::BoxFuture, FutureExt};
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
@@ -416,6 +417,8 @@ pub trait ExecutionCacheRead: Send + Sync {
     }
 
     fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState>;
+
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge>;
 
     // Marker methods
 
