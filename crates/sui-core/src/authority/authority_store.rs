@@ -19,6 +19,7 @@ use futures::stream::FuturesUnordered;
 use itertools::izip;
 use move_core_types::resolver::ModuleResolver;
 use serde::{Deserialize, Serialize};
+use sui_macros::fail_point_arg;
 use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
 use sui_types::accumulator::Accumulator;
 use sui_types::digests::TransactionEventsDigest;
@@ -142,10 +143,18 @@ impl AuthorityStore {
         let epoch_start_configuration = if perpetual_tables.database_is_empty()? {
             info!("Creating new epoch start config from genesis");
 
+            #[allow(unused_mut)]
+            let mut initial_epoch_flags = None;
+            fail_point_arg!("initial_epoch_flags", |flags: Vec<EpochFlag>| {
+                info!("Setting initial epoch flags to {:?}", flags);
+                initial_epoch_flags = Some(flags);
+            });
+
             let epoch_start_configuration = EpochStartConfiguration::new(
                 genesis.sui_system_object().into_epoch_start_state(),
                 *genesis.checkpoint().digest(),
                 &genesis.objects(),
+                initial_epoch_flags,
             )?;
             perpetual_tables.set_epoch_start_configuration(&epoch_start_configuration)?;
             epoch_start_configuration

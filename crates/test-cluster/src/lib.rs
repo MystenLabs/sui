@@ -166,6 +166,13 @@ impl TestCluster {
             .collect()
     }
 
+    pub fn all_validator_handles(&self) -> Vec<SuiNodeHandle> {
+        self.swarm
+            .validator_nodes()
+            .map(|n| n.get_node_handle().unwrap())
+            .collect()
+    }
+
     pub fn get_validator_pubkeys(&self) -> Vec<AuthorityName> {
         self.swarm.active_validators().map(|v| v.name()).collect()
     }
