@@ -352,6 +352,20 @@ export class TransactionBlock {
 		return this.object(Inputs.SharedObjectRef(...args));
 	}
 
+	/**
+	 * Special case for Clock 0x6 object reference.
+	 */
+	clock() {
+		return this.object('0x6');
+	}
+
+	/**
+	 * Special case for Denylist 0x403 object reference.
+	 */
+	denylist() {
+		return this.object('0x403');
+	}
+
 	/** Add a transaction to the transaction block. */
 	add(transaction: TransactionType) {
 		const index = this.#blockData.transactions.push(transaction);
