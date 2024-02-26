@@ -2194,7 +2194,7 @@ mod tests {
                     output += "???\n";
                 }
             }
-            output += &format!("---\n");
+            output += "---\n";
         }
 
         insta::assert_snapshot!(output);
@@ -2232,10 +2232,9 @@ mod tests {
                     type_arguments: vec![T::U64],
                     arguments: (0..=6).map(Argument::Input).collect(),
                 })),
-
                 // This command is using the input that was previously used as a U64, but now as a
                 // U32, which will cause an error.
-                Command::MakeMoveVec(Some(T::U32), vec![Argument::Input(3)])
+                Command::MakeMoveVec(Some(T::U32), vec![Argument::Input(3)]),
             ],
         };
 
