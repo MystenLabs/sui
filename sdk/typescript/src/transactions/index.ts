@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getPureSerializationType } from './serializer.js';
+export {
+	getPureSerializationType,
+	normalizedTypeToMoveTypeSignature,
+	pureBcsSchemaFromOpenMoveTypeSignatureBody,
+} from './serializer.js';
 
 export { Inputs } from './Inputs.js';
 export {
@@ -18,5 +22,3 @@ export {
 	type TransactionObjectArgument,
 	type TransactionResult,
 } from './TransactionBlock.js';
-
-export { getPureSerializationType };
