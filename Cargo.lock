@@ -14403,6 +14403,7 @@ dependencies = [
  "narwhal-test-utils",
  "narwhal-types",
  "narwhal-worker",
+ "num-bigint 0.4.4",
  "num_cpus",
  "object_store 0.7.0",
  "once_cell",
