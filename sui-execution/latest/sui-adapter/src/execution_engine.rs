@@ -1052,17 +1052,13 @@ mod checked {
             })
             .expect("Unable to create Bridge object arg!");
         let system_state = builder
-            .obj(ObjectArg::SharedObject {
-                id: SUI_SYSTEM_STATE_OBJECT_ID,
-                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                mutable: true,
-            })
+            .obj(ObjectArg::SUI_SYSTEM_MUT)
             .expect("Unable to create System State object arg!");
 
-        // Hardcoding min stake participation to 60.00%
+        // Hardcoding min stake participation to 75.00%
         // TODO: We need to set a correct value or make this configurable.
         let min_stake_participation_percentage = builder
-            .input(CallArg::Pure(bcs::to_bytes(&6000u64).unwrap()))
+            .input(CallArg::Pure(bcs::to_bytes(&7500u64).unwrap()))
             .unwrap();
 
         builder.programmable_move_call(

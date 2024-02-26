@@ -6,7 +6,7 @@ use async_graphql::*;
 use move_binary_format::errors::PartialVMResult;
 use move_binary_format::CompiledModule;
 use sui_types::base_types::SequenceNumber;
-use sui_types::digests::ChainIdentifier as NativeChainIdentifier;
+use sui_types::digests::ChainIdentifier as SuiChainIdentifier;
 use sui_types::{
     digests::TransactionDigest,
     object::Object as NativeObject,
@@ -84,7 +84,7 @@ pub(crate) struct CoinDenyListStateCreateTransaction {
 
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct BridgeStateCreateTransaction {
-    pub native: NativeChainIdentifier,
+    pub native: SuiChainIdentifier,
     /// The checkpoint sequence number this was viewed at.
     pub checkpoint_viewed_at: u64,
 }

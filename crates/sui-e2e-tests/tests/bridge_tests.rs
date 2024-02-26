@@ -14,10 +14,7 @@ use sui_types::bridge::BridgeTrait;
 use sui_types::bridge::{get_bridge, get_bridge_obj_initial_shared_version, BRIDGE_MODULE_NAME};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
-use sui_types::{
-    BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
-    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-};
+use sui_types::{BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
 use test_cluster::TestClusterBuilder;
 
 #[sim_test]
@@ -110,13 +107,7 @@ async fn test_committee_registration() {
                 mutable: true,
             })
             .unwrap();
-        let system_state = builder
-            .obj(ObjectArg::SharedObject {
-                id: SUI_SYSTEM_STATE_OBJECT_ID,
-                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                mutable: true,
-            })
-            .unwrap();
+        let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
         let pub_key = [n as u8; 33].to_vec();
         let bridge_pubkey = builder
             .input(CallArg::Pure(bcs::to_bytes(&pub_key).unwrap()))
