@@ -3,9 +3,10 @@ name = "sui-replay-frontend"
 version = "0.1.0"
 edition = "2021"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
 publish = false
 
 [dependencies]
 include_dir.workspace = true
-open = "5.0.1"
+open.workspace = true
 

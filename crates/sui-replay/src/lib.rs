@@ -435,11 +435,11 @@ pub async fn execute_replay_command(
             }
 
             if html {
-                let network = network_from_url(rpc_url);
+                //let network = network_from_url(rpc_url);
                 generate_html_from_json(
                     &sandbox_state.output,
                     get_filepath(tx_digest, "html"),
-                    &network,
+                    &rpc_url.unwrap(),
                 );
             }
 
@@ -641,19 +641,4 @@ pub(crate) fn chain_from_chain_id(chain: &str) -> Chain {
     } else {
         Chain::Unknown
     }
-}
-
-fn network_from_url(url: Option<String>) -> String {
-    if let Some(url_str) = url {
-        if url_str.contains("mainnet") {
-            return "mainnet".into();
-        } else if url_str.contains("testnet") {
-            return "testnet".into();
-        } else if url_str.contains("devnet") {
-            return "devnet".into();
-        } else {
-            return "local".into();
-        }
-    }
-    "local".into()
 }
