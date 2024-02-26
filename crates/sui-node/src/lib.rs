@@ -743,7 +743,12 @@ impl SuiNode {
         info!("SuiNode started!");
         let node = Arc::new(node);
         let node_copy = node.clone();
-        spawn_monitored_task!(async move { Self::monitor_reconfiguration(node_copy).await });
+        spawn_monitored_task!(async move {
+            let result = Self::monitor_reconfiguration(node_copy).await;
+            if let Err(error) = result {
+                warn!("Reconfiguration finished with error {:?}", error);
+            }
+        });
 
         Ok(node)
     }
