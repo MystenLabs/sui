@@ -50,6 +50,14 @@ module bridge::chain_ids {
         EthLocalTest
     }
 
+    public fun route_source(route: &BridgeRoute): &u8 {
+        &route.source
+    }
+
+    public fun route_destination(route: &BridgeRoute): &u8 {
+        &route.destination
+    }
+
     public fun assert_valid_chain_id(id: u8) {
         assert!(
             id == SuiMainnet ||
