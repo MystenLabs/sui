@@ -251,7 +251,7 @@ module bridge::message {
         }
     }
 
-    /// Block list Message Format:
+    /// Blocklist Message Format:
     /// [message_type: u8]
     /// [version:u8]
     /// [nonce:u64]
@@ -259,7 +259,7 @@ module bridge::message {
     /// [blocklist_type: u8]
     /// [validator_length: u8]
     /// [validator_ecdsa_addresses: byte[][]]
-    public fun create_block_list_message(
+    public fun create_blocklist_message(
         source_chain: u8,
         seq_num: u64,
         // 0: block, 1: unblock
@@ -350,6 +350,10 @@ module bridge::message {
     }
 
     // BridgeMessage getters
+    public fun message_version(self: &BridgeMessage): u8 {
+        self.message_version
+    }
+
     public fun message_type(self: &BridgeMessage): u8 {
         self.message_type
     }
@@ -382,6 +386,34 @@ module bridge::message {
     // EmergencyOpPayload getters
     public fun emergency_op_type(self: &EmergencyOp): u8 {
         self.op_type
+    }
+
+    public fun blocklist_type(self: &Blocklist): u8 {
+        self.blocklist_type
+    }
+
+    public fun blocklist_validator_addresses(self: &Blocklist): &vector<vector<u8>> {
+        &self.validator_eth_addresses
+    }
+
+    public fun update_bridge_limit_payload_sending_chain(self: &UpdateBridgeLimit): u8 {
+        self.sending_chain
+    }
+
+    public fun update_bridge_limit_payload_receiving_chain(self: &UpdateBridgeLimit): u8 {
+        self.receiving_chain
+    }
+
+    public fun update_bridge_limit_payload_limit(self: &UpdateBridgeLimit): u64 {
+        self.limit
+    }
+
+    public fun update_asset_price_payload_token_id(self: &UpdateAssetPrice): u8 {
+        self.token_id
+    }
+
+    public fun update_asset_price_payload_new_price(self: &UpdateAssetPrice): u64 {
+        self.new_price
     }
 
     fun reverse_bytes(bytes: vector<u8>): vector<u8> {
@@ -543,7 +575,7 @@ module bridge::message {
         let validator_pub_key2 = hex::decode(b"f7e93cc543d97af6632c9b8864417379dba4bf15");
 
         let validator_eth_addresses = vector[validator_pub_key1, validator_pub_key2];
-        let blocklist_message = create_block_list_message(
+        let blocklist_message = create_blocklist_message(
             chain_ids::sui_testnet(), // source chain
             10, // seq_num
             0,
@@ -570,7 +602,7 @@ module bridge::message {
         let validator_eth_addr_2 = hex::decode(b"acaef39832cb995c4e049437a3e2ec6a7bad1ab5");
         // Test 1
         let validator_eth_addresses = vector[validator_eth_addr_1];
-        let blocklist_message = create_block_list_message(
+        let blocklist_message = create_blocklist_message(
             chain_ids::sui_local_test(), // source chain
             129, // seq_num
             0, // blocklist
@@ -591,7 +623,7 @@ module bridge::message {
 
         // Test 2
         let validator_eth_addresses = vector[validator_eth_addr_1, validator_eth_addr_2];
-        let blocklist_message = create_block_list_message(
+        let blocklist_message = create_blocklist_message(
             chain_ids::sui_devnet(), // source chain
             68, // seq_num
             1, // unblocklist
