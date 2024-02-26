@@ -50,6 +50,7 @@ impl EpochStartConfiguration {
         system_state: EpochStartSystemState,
         epoch_digest: CheckpointDigest,
         object_store: &dyn ObjectStore,
+        initial_epoch_flags: Option<Vec<EpochFlag>>,
     ) -> SuiResult<Self> {
         let authenticator_obj_initial_shared_version =
             get_authenticator_state_obj_initial_shared_version(object_store)?;
@@ -60,7 +61,7 @@ impl EpochStartConfiguration {
         Ok(Self::V5(EpochStartConfigurationV5 {
             system_state,
             epoch_digest,
-            flags: EpochFlag::default_flags_for_new_epoch(),
+            flags: initial_epoch_flags.unwrap_or_else(EpochFlag::default_flags_for_new_epoch),
             authenticator_obj_initial_shared_version,
             randomness_obj_initial_shared_version,
             coin_deny_list_obj_initial_shared_version,
