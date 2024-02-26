@@ -115,7 +115,8 @@ pub fn end_transaction(
 
     let object_runtime_state = object_runtime_ref.take_state();
     // Determine writes and deletes
-    // We pass an empty map as we do not expose dynamic field objects in the system
+    // We pass the received objects since they should be viewed as "loaded" for the purposes of of
+    // calculating the effects of the transaction.
     let results = object_runtime_state.finish(received, BTreeMap::new());
     let RuntimeResults {
         writes,
@@ -550,26 +551,6 @@ pub fn was_taken_shared(
     Ok(NativeResult::ok(
         legacy_test_cost(),
         smallvec![Value::bool(was_taken)],
-    ))
-}
-
-// native fun was_allocated_receiving_ticket(id: ID): bool;
-pub fn was_allocated_receiving_ticket(
-    context: &mut NativeContext,
-    ty_args: Vec<Type>,
-    mut args: VecDeque<Value>,
-) -> PartialVMResult<NativeResult> {
-    assert!(ty_args.is_empty());
-    let id = pop_id(&mut args)?;
-    assert!(args.is_empty());
-    let object_runtime: &ObjectRuntime = context.extensions().get();
-    let was_allocated = object_runtime
-        .test_inventories
-        .allocated_tickets
-        .contains_key(&id);
-    Ok(NativeResult::ok(
-        legacy_test_cost(),
-        smallvec![Value::bool(was_allocated)],
     ))
 }
 

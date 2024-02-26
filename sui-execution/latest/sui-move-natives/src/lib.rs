@@ -821,11 +821,6 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             make_native!(test_scenario::deallocate_receiving_ticket_for_object),
         ),
         (
-            "test_scenario",
-            "was_allocated_receiving_ticket",
-            make_native!(test_scenario::was_allocated_receiving_ticket),
-        ),
-        (
             "transfer",
             "transfer_impl",
             make_native!(transfer::transfer_internal),
