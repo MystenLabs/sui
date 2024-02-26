@@ -19,24 +19,15 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
-use sui_types::base_types::SuiAddress;
-use sui_types::base_types::SUI_ADDRESS_LENGTH;
-use sui_types::collection_types::{Bag, LinkedTable, LinkedTableNode, VecMap};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::StakeUnit;
 use sui_types::digests::{Digest, TransactionDigest};
-use sui_types::dynamic_field::Field;
+use sui_types::error::SuiResult;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 
 pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
 
 pub const USD_MULTIPLIER: u64 = 10000; // decimal places = 4
-
-pub type BridgeInnerDynamicField = Field<u64, MoveTypeBridgeInner>;
-pub type BridgeRecordDynamicField = Field<
-    MoveTypeBridgeMessageKey,
-    LinkedTableNode<MoveTypeBridgeMessageKey, MoveTypeBridgeRecord>,
->;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct BridgeAuthority {
@@ -627,71 +618,6 @@ pub struct EthLog {
     // TODO: pull necessary fields from `Log`.
     pub log: Log,
 }
-
-/////////////////////////// Move Types Start //////////////////////////
-
-/// Rust version of the Move bridge::BridgeInner type.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MoveTypeBridgeInner {
-    pub bridge_version: u64,
-    pub chain_id: u8,
-    pub sequence_nums: VecMap<u8, u64>,
-    pub committee: MoveTypeBridgeCommittee,
-    pub treasury: MoveTypeBridgeTreasury,
-    pub bridge_records: LinkedTable<MoveTypeBridgeMessageKey>,
-    pub frozen: bool,
-}
-
-/// Rust version of the Move treasury::BridgeTreasury type.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MoveTypeBridgeTreasury {
-    pub treasuries: Bag,
-}
-
-/// Rust version of the Move committee::BridgeCommittee type.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MoveTypeBridgeCommittee {
-    pub members: VecMap<Vec<u8>, MoveTypeCommitteeMember>,
-    pub thresholds: VecMap<u8, u64>,
-}
-
-/// Rust version of the Move committee::CommitteeMember type.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MoveTypeCommitteeMember {
-    pub sui_address: SuiAddress,
-    pub bridge_pubkey_bytes: Vec<u8>,
-    pub voting_power: u64,
-    pub http_rest_url: Vec<u8>,
-    pub blocklisted: bool,
-}
-
-/// Rust version of the Move message::BridgeMessageKey type.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MoveTypeBridgeMessageKey {
-    pub source_chain: u8,
-    pub message_type: u8,
-    pub bridge_seq_num: u64,
-}
-
-/// Rust version of the Move message::BridgeMessage type.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MoveTypeBridgeMessage {
-    pub message_type: u8,
-    pub message_version: u8,
-    pub seq_num: u64,
-    pub source_chain: u8,
-    pub payload: Vec<u8>,
-}
-
-/// Rust version of the Move message::BridgeMessage type.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MoveTypeBridgeRecord {
-    pub message: MoveTypeBridgeMessage,
-    pub verified_signatures: Option<Vec<Vec<u8>>>,
-    pub claimed: bool,
-}
-
-/////////////////////////// Move Types End //////////////////////////
 
 #[cfg(test)]
 mod tests {
