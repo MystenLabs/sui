@@ -29,6 +29,7 @@
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="dependencies/sui-framework/address.md#0x2_address">0x2::address</a>;
 <b>use</b> <a href="dependencies/sui-framework/balance.md#0x2_balance">0x2::balance</a>;
+<b>use</b> <a href="dependencies/sui-framework/clock.md#0x2_clock">0x2::clock</a>;
 <b>use</b> <a href="dependencies/sui-framework/coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="dependencies/sui-framework/event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table">0x2::linked_table</a>;
@@ -39,6 +40,7 @@
 <b>use</b> <a href="dependencies/sui-framework/versioned.md#0x2_versioned">0x2::versioned</a>;
 <b>use</b> <a href="chain_ids.md#0xb_chain_ids">0xb::chain_ids</a>;
 <b>use</b> <a href="committee.md#0xb_committee">0xb::committee</a>;
+<b>use</b> <a href="limiter.md#0xb_limiter">0xb::limiter</a>;
 <b>use</b> <a href="message.md#0xb_message">0xb::message</a>;
 <b>use</b> <a href="message_types.md#0xb_message_types">0xb::message_types</a>;
 <b>use</b> <a href="treasury.md#0xb_treasury">0xb::treasury</a>;
@@ -127,6 +129,12 @@
 </dd>
 <dt>
 <code>bridge_records: <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;<a href="message.md#0xb_message_BridgeMessageKey">message::BridgeMessageKey</a>, <a href="bridge.md#0xb_bridge_BridgeRecord">bridge::BridgeRecord</a>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code><a href="limiter.md#0xb_limiter">limiter</a>: <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a></code>
 </dt>
 <dd>
 
@@ -399,20 +407,11 @@
 
 
 
-<a name="0xb_bridge_EInvalidBridgeRoute"></a>
-
-
-
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EInvalidBridgeRoute">EInvalidBridgeRoute</a>: u64 = 10;
-</code></pre>
-
-
-
 <a name="0xb_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed"></a>
 
 
 
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed">EInvariantSuiInitializedTokenTransferShouldNotBeClaimed</a>: u64 = 11;
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed">EInvariantSuiInitializedTokenTransferShouldNotBeClaimed</a>: u64 = 10;
 </code></pre>
 
 
@@ -430,7 +429,7 @@
 
 
 
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>: u64 = 12;
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>: u64 = 11;
 </code></pre>
 
 
@@ -536,10 +535,11 @@
     <b>let</b> bridge_inner = <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
         bridge_version: <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>,
         chain_id,
-        sequence_nums: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>&lt;u8, u64&gt;(),
+        sequence_nums: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
         <a href="committee.md#0xb_committee">committee</a>: <a href="committee.md#0xb_committee_create">committee::create</a>(ctx),
         <a href="treasury.md#0xb_treasury">treasury</a>: <a href="treasury.md#0xb_treasury_create">treasury::create</a>(ctx),
-        bridge_records: <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_new">linked_table::new</a>&lt;BridgeMessageKey, <a href="bridge.md#0xb_bridge_BridgeRecord">BridgeRecord</a>&gt;(ctx),
+        bridge_records: <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_new">linked_table::new</a>(ctx),
+        <a href="limiter.md#0xb_limiter">limiter</a>: <a href="limiter.md#0xb_limiter_new">limiter::new</a>(),
         frozen: <b>false</b>,
     };
     <b>let</b> <a href="bridge.md#0xb_bridge">bridge</a> = <a href="bridge.md#0xb_bridge_Bridge">Bridge</a> {
@@ -577,8 +577,9 @@
     ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
-    <b>assert</b>!(<a href="chain_ids.md#0xb_chain_ids_is_valid_route">chain_ids::is_valid_route</a>(inner.chain_id, target_chain), <a href="bridge.md#0xb_bridge_EInvalidBridgeRoute">EInvalidBridgeRoute</a>);
     <b>assert</b>!(!inner.frozen, <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
+    <b>let</b> amount = <a href="dependencies/sui-framework/balance.md#0x2_balance_value">balance::value</a>(<a href="dependencies/sui-framework/coin.md#0x2_coin_balance">coin::balance</a>(&token));
+
     <b>let</b> bridge_seq_num = <a href="bridge.md#0xb_bridge_next_seq_num">next_seq_num</a>(inner, <a href="message_types.md#0xb_message_types_token">message_types::token</a>());
     <b>let</b> token_id = <a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;();
     <b>let</b> token_amount = <a href="dependencies/sui-framework/balance.md#0x2_balance_value">balance::value</a>(<a href="dependencies/sui-framework/coin.md#0x2_coin_balance">coin::balance</a>(&token));
@@ -591,7 +592,7 @@
         target_chain,
         target_address,
         token_id,
-        token_amount,
+        amount,
     );
 
     // burn / escrow token, unsupported coins will fail in this step
@@ -692,7 +693,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_claim_token">claim_token</a>&lt;T&gt;(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_claim_token">claim_token</a>&lt;T&gt;(<a href="dependencies/sui-framework/clock.md#0x2_clock">clock</a>: &<a href="dependencies/sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;
 </code></pre>
 
 
@@ -701,8 +702,8 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_claim_token">claim_token</a>&lt;T&gt;(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>, source_chain: u8, bridge_seq_num: u64, ctx: &<b>mut</b> TxContext): Coin&lt;T&gt; {
-    <b>let</b> (maybe_token, owner) = <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(self, source_chain, bridge_seq_num, ctx);
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_claim_token">claim_token</a>&lt;T&gt;(<a href="dependencies/sui-framework/clock.md#0x2_clock">clock</a>: &Clock, self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>, source_chain: u8, bridge_seq_num: u64, ctx: &<b>mut</b> TxContext): Coin&lt;T&gt; {
+    <b>let</b> (maybe_token, owner) = <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(<a href="dependencies/sui-framework/clock.md#0x2_clock">clock</a>, self, source_chain, bridge_seq_num, ctx);
     // Only token owner can claim the token
     <b>assert</b>!(<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == owner, <a href="bridge.md#0xb_bridge_EUnauthorisedClaim">EUnauthorisedClaim</a>);
     <b>assert</b>!(<a href="dependencies/move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&maybe_token), <a href="bridge.md#0xb_bridge_ETokenAlreadyClaimed">ETokenAlreadyClaimed</a>);
@@ -720,7 +721,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_claim_and_transfer_token">claim_and_transfer_token</a>&lt;T&gt;(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_claim_and_transfer_token">claim_and_transfer_token</a>&lt;T&gt;(<a href="dependencies/sui-framework/clock.md#0x2_clock">clock</a>: &<a href="dependencies/sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -730,12 +731,13 @@
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_claim_and_transfer_token">claim_and_transfer_token</a>&lt;T&gt;(
+    <a href="dependencies/sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
     self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
     source_chain: u8,
     bridge_seq_num: u64,
     ctx: &<b>mut</b> TxContext
 ) {
-    <b>let</b> (token, owner) = <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(self, source_chain, bridge_seq_num, ctx);
+    <b>let</b> (token, owner) = <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(<a href="dependencies/sui-framework/clock.md#0x2_clock">clock</a>, self, source_chain, bridge_seq_num, ctx);
     <b>if</b> (<a href="dependencies/move-stdlib/option.md#0x1_option_is_none">option::is_none</a>(&token)) {
         <a href="dependencies/move-stdlib/option.md#0x1_option_destroy_none">option::destroy_none</a>(token);
         <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(source_chain, <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), bridge_seq_num);
@@ -862,7 +864,7 @@
 
 
 
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;, <b>address</b>)
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(<a href="dependencies/sui-framework/clock.md#0x2_clock">clock</a>: &<a href="dependencies/sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64, ctx: &<b>mut</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="dependencies/sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;, <b>address</b>)
 </code></pre>
 
 
@@ -872,6 +874,7 @@
 
 
 <pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(
+    <a href="dependencies/sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
     self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
     source_chain: u8,
     bridge_seq_num: u64,
@@ -907,14 +910,19 @@
     // TODO: why do we check validity of the route here? what <b>if</b> inconsistency?
     // Ensure route is valid
     // TODO: add unit tests
-    <b>assert</b>!(<a href="chain_ids.md#0xb_chain_ids_is_valid_route">chain_ids::is_valid_route</a>(source_chain, target_chain), <a href="bridge.md#0xb_bridge_EInvalidBridgeRoute">EInvalidBridgeRoute</a>);
-
+    // `get_route` <b>abort</b> <b>if</b> route is invalid
+    <b>let</b> route = <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(source_chain, target_chain);
     // get owner <b>address</b>
     <b>let</b> owner = address::from_bytes(<a href="message.md#0xb_message_token_target_address">message::token_target_address</a>(&token_payload));
     // check token type
     <b>assert</b>!(<a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;() == <a href="message.md#0xb_message_token_type">message::token_type</a>(&token_payload), <a href="bridge.md#0xb_bridge_EUnexpectedTokenType">EUnexpectedTokenType</a>);
+    <b>let</b> amount = <a href="message.md#0xb_message_token_amount">message::token_amount</a>(&token_payload);
+    // Make sure <a href="dependencies/sui-framework/transfer.md#0x2_transfer">transfer</a> is within limit.
+    <b>if</b> (!<a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">limiter::check_and_record_sending_transfer</a>&lt;T&gt;(<a href="dependencies/sui-framework/clock.md#0x2_clock">clock</a>, &<b>mut</b> inner.<a href="limiter.md#0xb_limiter">limiter</a>, route, amount)){
+        <b>return</b> (<a href="dependencies/move-stdlib/option.md#0x1_option_none">option::none</a>(), owner)
+    };
     // claim from <a href="treasury.md#0xb_treasury">treasury</a>
-    <b>let</b> token = <a href="treasury.md#0xb_treasury_mint">treasury::mint</a>&lt;T&gt;(&<b>mut</b> inner.<a href="treasury.md#0xb_treasury">treasury</a>, <a href="message.md#0xb_message_token_amount">message::token_amount</a>(&token_payload), ctx);
+    <b>let</b> token = <a href="treasury.md#0xb_treasury_mint">treasury::mint</a>&lt;T&gt;(&<b>mut</b> inner.<a href="treasury.md#0xb_treasury">treasury</a>, amount, ctx);
     // Record changes
     record.claimed = <b>true</b>;
     emit(<a href="bridge.md#0xb_bridge_TokenTransferClaimed">TokenTransferClaimed</a> { message_key: key });
