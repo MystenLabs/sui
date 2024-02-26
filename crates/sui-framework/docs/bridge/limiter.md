@@ -261,7 +261,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_route_limit">get_route_limit</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, route: &<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>): &u64
+<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_route_limit">get_route_limit</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, route: &<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>): u64
 </code></pre>
 
 
@@ -270,8 +270,8 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_route_limit">get_route_limit</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>, route: &BridgeRoute): &u64 {
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get">vec_map::get</a>(&self.transfer_limits, route)
+<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_route_limit">get_route_limit</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>, route: &BridgeRoute): u64 {
+    *<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get">vec_map::get</a>(&self.transfer_limits, route)
 }
 </code></pre>
 
@@ -285,7 +285,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_asset_notional_price">get_asset_notional_price</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, token_id: &u8): &u64
+<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_asset_notional_price">get_asset_notional_price</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, token_id: &u8): u64
 </code></pre>
 
 
@@ -294,8 +294,8 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_asset_notional_price">get_asset_notional_price</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>, token_id: &u8): &u64 {
-    <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get">vec_map::get</a>(&self.notional_values, token_id)
+<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_asset_notional_price">get_asset_notional_price</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>, token_id: &u8): u64 {
+    *<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get">vec_map::get</a>(&self.notional_values, token_id)
 }
 </code></pre>
 
@@ -321,10 +321,10 @@
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="limiter.md#0xb_limiter_update_route_limit">update_route_limit</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>, route: &BridgeRoute, new_usd_limit: u64) {
     <b>if</b> (!<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.transfer_limits, route)) {
         <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.transfer_limits, *route, new_usd_limit);
-        <b>return</b>
+    } <b>else</b> {
+        <b>let</b> entry = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.transfer_limits, route);
+        *entry = new_usd_limit;
     };
-    <b>let</b> entry = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.transfer_limits, route);
-    *entry = new_usd_limit;
     emit(<a href="limiter.md#0xb_limiter_UpdateRouteLimitEvent">UpdateRouteLimitEvent</a> {
         sending_chain: *<a href="chain_ids.md#0xb_chain_ids_route_source">chain_ids::route_source</a>(route),
         receiving_chain: *<a href="chain_ids.md#0xb_chain_ids_route_destination">chain_ids::route_destination</a>(route),
@@ -355,12 +355,12 @@
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="limiter.md#0xb_limiter_update_asset_notional_price">update_asset_notional_price</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>, token_id: u8, new_usd_price: u64) {
     <b>if</b> (!<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.notional_values, &token_id)) {
         <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.notional_values, token_id, new_usd_price);
-        <b>return</b>
+    } <b>else</b> {
+        <b>let</b> entry = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.notional_values, &token_id);
+        *entry = new_usd_price;
     };
-    <b>let</b> entry = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.notional_values, &token_id);
-    *entry = new_usd_price;
     emit(<a href="limiter.md#0xb_limiter_UpdateAssetPriceEvent">UpdateAssetPriceEvent</a> {
-        token_id: token_id,
+        token_id,
         new_price: new_usd_price,
     })
 }

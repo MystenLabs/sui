@@ -495,7 +495,7 @@ module bridge::bridge {
         let inner = load_inner_mut(&mut bridge);
 
         // Assert the starting limit is a different value
-        assert!(*limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())) != 1, 0);
+        assert!(limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())) != 1, 0);
         // now shrink to 1 for SUI mainnet -> ETH mainnet
         let msg = message::create_update_bridge_limit_message(
             chain_ids::eth_mainnet(),
@@ -507,9 +507,9 @@ module bridge::bridge {
         execute_update_bridge_limit(inner, payload);
 
         // should be 1 now
-        assert_eq(*limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())), 1);
+        assert_eq(limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())), 1);
         // other routes are not impacted
-        assert!(*limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia())) != 1, 0);
+        assert!(limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia())) != 1, 0);
 
         destroy(bridge);
         test_scenario::end(scenario);
@@ -524,7 +524,7 @@ module bridge::bridge {
         let inner = load_inner_mut(&mut bridge);
 
         // Assert the starting limit is a different value
-        assert!(*limiter::get_asset_notional_price(&inner.limiter, &treasury::token_id<BTC>()) != 1_001_000_000, 0);
+        assert!(limiter::get_asset_notional_price(&inner.limiter, &treasury::token_id<BTC>()) != 1_001_000_000, 0);
         // now change it to 100_001_000
         let msg = message::create_update_asset_price_message<BTC>(
             chain_ids::sui_mainnet(),
@@ -535,9 +535,9 @@ module bridge::bridge {
         execute_update_asset_price(inner, payload);
 
         // should be 1_001_000_000 now
-        assert_eq(*limiter::get_asset_notional_price(&inner.limiter, &treasury::token_id<BTC>()), 1_001_000_000);
+        assert_eq(limiter::get_asset_notional_price(&inner.limiter, &treasury::token_id<BTC>()), 1_001_000_000);
         // other assets are not impacted
-        assert!(*limiter::get_asset_notional_price(&inner.limiter, &treasury::token_id<ETH>()) != 1_001_000_000, 0);
+        assert!(limiter::get_asset_notional_price(&inner.limiter, &treasury::token_id<ETH>()) != 1_001_000_000, 0);
 
         destroy(bridge);
         test_scenario::end(scenario);
