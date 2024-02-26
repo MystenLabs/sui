@@ -21,8 +21,8 @@ module bridge::bridge {
     use bridge::chain_ids;
     use bridge::committee::{Self, BridgeCommittee};
     use bridge::limiter::{Self, TransferLimiter};
-    use bridge::message::{Self, BridgeMessage, BridgeMessageKey, EmergencyOp, UpdateBridgeLimit,
-        UpdateAssetPrice
+    use bridge::message::{Self, BridgeMessage, BridgeMessageKey, EmergencyOp, UpdateAssetPrice,
+        UpdateBridgeLimit
     };
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury};
@@ -369,7 +369,7 @@ module bridge::bridge {
         assert!(treasury::token_id<T>() == message::token_type(&token_payload), EUnexpectedTokenType);
         let amount = message::token_amount(&token_payload);
         // Make sure transfer is within limit.
-        if (!limiter::check_and_record_sending_transfer<T>(clock, &mut inner.limiter, route, amount)){
+        if (!limiter::check_and_record_sending_transfer<T>(&mut inner.limiter, clock, route, amount)) {
             return (option::none(), owner)
         };
         // claim from treasury
