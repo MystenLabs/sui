@@ -18,7 +18,7 @@ use crate::handlers::{
 };
 
 use crate::package_store::{LocalDBPackageStore, PackageCache};
-use crate::tables::ObjectEntry;
+use crate::tables::{ObjectEntry, ObjectStatus};
 use crate::FileType;
 
 pub struct ObjectHandler {
@@ -96,6 +96,30 @@ impl ObjectHandler {
             )
             .await?;
         }
+        for (object_ref, _) in effects.all_removed_objects().iter() {
+            let entry = ObjectEntry {
+                object_id: object_ref.0.to_string(),
+                digest: object_ref.2.to_string(),
+                version: u64::from(object_ref.1),
+                type_: None,
+                checkpoint,
+                epoch,
+                timestamp_ms,
+                owner_type: None,
+                owner_address: None,
+                object_status: ObjectStatus::Deleted,
+                initial_shared_version: None,
+                previous_transaction: checkpoint_transaction.transaction.digest().base58_encode(),
+                has_public_transfer: false,
+                storage_rebate: None,
+                bcs: None,
+                coin_type: None,
+                coin_balance: None,
+                struct_tag: None,
+                object_json: None,
+            };
+            self.objects.push(entry);
+        }
         Ok(())
     }
     // Object data. Only called if there are objects in the transaction.
@@ -141,7 +165,7 @@ impl ObjectHandler {
             checkpoint,
             epoch,
             timestamp_ms,
-            owner_type: get_owner_type(object),
+            owner_type: Some(get_owner_type(object)),
             owner_address: get_owner_address(object),
             object_status: object_status_tracker
                 .get_object_status(&object_id)
@@ -149,8 +173,8 @@ impl ObjectHandler {
             initial_shared_version: initial_shared_version(object),
             previous_transaction: object.previous_transaction.base58_encode(),
             has_public_transfer,
-            storage_rebate: object.storage_rebate,
-            bcs: Base64::encode(bcs::to_bytes(object).unwrap()),
+            storage_rebate: Some(object.storage_rebate),
+            bcs: Some(Base64::encode(bcs::to_bytes(object).unwrap())),
             coin_type: object.coin_type_maybe().map(|t| t.to_string()),
             coin_balance: if object.coin_type_maybe().is_some() {
                 Some(object.get_coin_value_unsafe())
