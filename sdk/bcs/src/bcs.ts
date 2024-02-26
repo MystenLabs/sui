@@ -11,12 +11,7 @@ import {
 	stringLikeBcsType,
 	uIntBcsType,
 } from './bcs-type.js';
-import type {
-	EnumInputShape,
-	EnumOutputShape,
-	GenericPlaceholder,
-	ReplaceBcsGenerics,
-} from './types.js';
+import type { EnumInputShape, EnumOutputShape } from './types.js';
 import { ulebEncode } from './uleb.js';
 
 export const bcs = {
@@ -552,35 +547,6 @@ export const bcs = {
 				return result;
 			},
 		});
-	},
-
-	/**
-	 * @deprecated
-	 *
-	 * Generics should be implemented as generic typescript functions instead:
-	 *
-	 * ```ts
-	 * function VecMap<K, V>, (K: BcsType<K>, V: BcsType<V>) {
-	 *   return bcs.struct('VecMap<K, V>', {
-	 *     keys: bcs.vector(K),
-	 *     values: bcs.vector(V),
-	 *   })
-	 * }
-	 * ```
-	 */
-	generic<const Names extends readonly string[], const Type extends BcsType<any>>(
-		_names: Names,
-		cb: (...types: { [K in keyof Names]: BcsType<GenericPlaceholder<Names[K]>> }) => Type,
-	): <T extends { [K in keyof Names]: BcsType<any> }>(
-		...types: T
-	) => ReplaceBcsGenerics<Type, Names, T> {
-		return (...types) => {
-			return cb(...types).transform({
-				name: `${cb.name}<${types.map((t) => t.name).join(', ')}>`,
-				input: (value) => value,
-				output: (value) => value,
-			}) as never;
-		};
 	},
 
 	/**

@@ -107,7 +107,7 @@ export interface OrderArguments {
  */
 export type SuiClientOptions = NetworkOrTransport;
 
-export type NetworkOrTransport =
+type NetworkOrTransport =
 	| {
 			url: string;
 			transport?: never;
@@ -117,7 +117,7 @@ export type NetworkOrTransport =
 			url?: never;
 	  };
 
-export const SUI_CLIENT_BRAND = Symbol.for('@mysten/SuiClient');
+const SUI_CLIENT_BRAND = Symbol.for('@mysten/SuiClient');
 
 export function isSuiClient(client: unknown): client is SuiClient {
 	return (
