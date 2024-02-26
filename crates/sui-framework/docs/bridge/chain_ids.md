@@ -9,11 +9,14 @@
 -  [Constants](#@Constants_0)
 -  [Function `sui_mainnet`](#0xb_chain_ids_sui_mainnet)
 -  [Function `sui_testnet`](#0xb_chain_ids_sui_testnet)
+-  [Function `sui_local_test`](#0xb_chain_ids_sui_local_test)
 -  [Function `sui_devnet`](#0xb_chain_ids_sui_devnet)
 -  [Function `eth_mainnet`](#0xb_chain_ids_eth_mainnet)
 -  [Function `eth_sepolia`](#0xb_chain_ids_eth_sepolia)
+-  [Function `eth_local_test`](#0xb_chain_ids_eth_local_test)
 -  [Function `valid_routes`](#0xb_chain_ids_valid_routes)
 -  [Function `is_valid_route`](#0xb_chain_ids_is_valid_route)
+-  [Function `get_route`](#0xb_chain_ids_get_route)
 
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
@@ -27,7 +30,7 @@
 
 
 
-<pre><code><b>struct</b> <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> <b>has</b> drop
+<pre><code><b>struct</b> <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -59,6 +62,24 @@
 ## Constants
 
 
+<a name="0xb_chain_ids_EInvalidBridgeRoute"></a>
+
+
+
+<pre><code><b>const</b> <a href="chain_ids.md#0xb_chain_ids_EInvalidBridgeRoute">EInvalidBridgeRoute</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0xb_chain_ids_EthLocalTest"></a>
+
+
+
+<pre><code><b>const</b> <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>: u8 = 12;
+</code></pre>
+
+
+
 <a name="0xb_chain_ids_EthMainnet"></a>
 
 
@@ -82,6 +103,15 @@
 
 
 <pre><code><b>const</b> <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a>: u8 = 2;
+</code></pre>
+
+
+
+<a name="0xb_chain_ids_SuiLocalTest"></a>
+
+
+
+<pre><code><b>const</b> <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a>: u8 = 3;
 </code></pre>
 
 
@@ -145,6 +175,30 @@
 
 <pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_testnet">sui_testnet</a>(): u8 {
     <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_chain_ids_sui_local_test"></a>
+
+## Function `sui_local_test`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_local_test">sui_local_test</a>(): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_local_test">sui_local_test</a>(): u8 {
+    <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a>
 }
 </code></pre>
 
@@ -224,6 +278,30 @@
 
 </details>
 
+<a name="0xb_chain_ids_eth_local_test"></a>
+
+## Function `eth_local_test`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_eth_local_test">eth_local_test</a>(): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_eth_local_test">eth_local_test</a>(): u8 {
+    <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0xb_chain_ids_valid_routes"></a>
 
 ## Function `valid_routes`
@@ -242,11 +320,21 @@
 <pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a>&gt; {
     <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[
         <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiMainnet">SuiMainnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthMainnet">EthMainnet</a> },
-        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a> },
-        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a> },
         <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthMainnet">EthMainnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiMainnet">SuiMainnet</a> },
+
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a> },
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a> },
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a> },
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a> },
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a> },
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a> },
         <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a> },
-        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a> }]
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a> },
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a> },
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a> },
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a> },
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a> }
+    ]
 }
 </code></pre>
 
@@ -272,6 +360,35 @@
 <pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_is_valid_route">is_valid_route</a>(source: u8, destination: u8): bool {
     <b>let</b> route = <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source, destination };
     <b>return</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&<a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(), &route)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_chain_ids_get_route"></a>
+
+## Function `get_route`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_get_route">get_route</a>(source: u8, destination: u8): <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_get_route">get_route</a>(source: u8, destination: u8): <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> {
+    <b>let</b> route = <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source, destination };
+    <b>return</b> <b>if</b> (<a href="dependencies/move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&<a href="chain_ids.md#0xb_chain_ids_valid_routes">valid_routes</a>(), &route)) {
+        route
+    } <b>else</b> {
+        <b>abort</b> <a href="chain_ids.md#0xb_chain_ids_EInvalidBridgeRoute">EInvalidBridgeRoute</a>
+    }
 }
 </code></pre>
 

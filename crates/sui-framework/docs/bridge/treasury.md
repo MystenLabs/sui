@@ -8,6 +8,7 @@
 -  [Struct `BridgeTreasury`](#0xb_treasury_BridgeTreasury)
 -  [Constants](#@Constants_0)
 -  [Function `token_id`](#0xb_treasury_token_id)
+-  [Function `token_decimals`](#0xb_treasury_token_decimals)
 -  [Function `create`](#0xb_treasury_create)
 -  [Function `burn`](#0xb_treasury_burn)
 -  [Function `mint`](#0xb_treasury_mint)
@@ -101,6 +102,41 @@
         3
     } <b>else</b> <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;USDT&gt;()) {
         4
+    } <b>else</b> {
+        <b>abort</b> <a href="treasury.md#0xb_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_treasury_token_decimals"></a>
+
+## Function `token_decimals`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_token_decimals">token_decimals</a>&lt;T&gt;(): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_token_decimals">token_decimals</a>&lt;T&gt;(): u8 {
+    <b>let</b> coin_type = <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;();
+    <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;BTC&gt;()) {
+        <a href="btc.md#0xb_btc_decimal">btc::decimal</a>()
+    } <b>else</b> <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;ETH&gt;()) {
+        <a href="eth.md#0xb_eth_decimal">eth::decimal</a>()
+    } <b>else</b> <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;USDC&gt;()) {
+        <a href="usdc.md#0xb_usdc_decimal">usdc::decimal</a>()
+    } <b>else</b> <b>if</b> (coin_type == <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;USDT&gt;()) {
+        <a href="usdt.md#0xb_usdt_decimal">usdt::decimal</a>()
     } <b>else</b> {
         <b>abort</b> <a href="treasury.md#0xb_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>
     }

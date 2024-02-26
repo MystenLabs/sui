@@ -7,6 +7,7 @@ module bridge::bridge {
 
     use sui::address;
     use sui::balance;
+    use sui::clock::Clock;
     use sui::coin::{Self, Coin};
     use sui::event::emit;
     use sui::linked_table::{Self, LinkedTable};
@@ -18,6 +19,8 @@ module bridge::bridge {
 
     use bridge::chain_ids;
     use bridge::committee::{Self, BridgeCommittee};
+    use bridge::limiter;
+    use bridge::limiter::TransferLimiter;
     use bridge::message::{Self, BridgeMessage, BridgeMessageKey};
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury};
@@ -37,6 +40,7 @@ module bridge::bridge {
         // Bridge treasury for mint/burn bridged tokens
         treasury: BridgeTreasury,
         bridge_records: LinkedTable<BridgeMessageKey, BridgeRecord>,
+        limiter: TransferLimiter,
         frozen: bool,
     }
 
@@ -71,9 +75,8 @@ module bridge::bridge {
     const EWrongInnerVersion: u64 = 7;
     const EBridgeUnavailable: u64 = 8;
     const EUnexpectedOperation: u64 = 9;
-    const EInvalidBridgeRoute: u64 = 10;
-    const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 11;
-    const EMessageNotFoundInRecords: u64 = 12;
+    const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 10;
+    const EMessageNotFoundInRecords: u64 = 11;
     const ETokenAlreadyClaimed: u64 = 12;
 
     const CURRENT_VERSION: u64 = 1;
@@ -101,10 +104,11 @@ module bridge::bridge {
         let bridge_inner = BridgeInner {
             bridge_version: CURRENT_VERSION,
             chain_id,
-            sequence_nums: vec_map::empty<u8, u64>(),
+            sequence_nums: vec_map::empty(),
             committee: committee::create(ctx),
             treasury: treasury::create(ctx),
-            bridge_records: linked_table::new<BridgeMessageKey, BridgeRecord>(ctx),
+            bridge_records: linked_table::new(ctx),
+            limiter: limiter::new(),
             frozen: false,
         };
         let bridge = Bridge {
@@ -123,8 +127,9 @@ module bridge::bridge {
         ctx: &mut TxContext
     ) {
         let inner = load_inner_mut(self);
-        assert!(chain_ids::is_valid_route(inner.chain_id, target_chain), EInvalidBridgeRoute);
         assert!(!inner.frozen, EBridgeUnavailable);
+        let amount = balance::value(coin::balance(&token));
+
         let bridge_seq_num = next_seq_num(inner, message_types::token());
         let token_id = treasury::token_id<T>();
         let token_amount = balance::value(coin::balance(&token));
@@ -137,7 +142,7 @@ module bridge::bridge {
             target_chain,
             target_address,
             token_id,
-            token_amount,
+            amount,
         );
 
         // burn / escrow token, unsupported coins will fail in this step
@@ -209,11 +214,10 @@ module bridge::bridge {
         emit(TokenTransferApproved { message_key: key });
     }
 
-
     // This function can only be called by the token recipient
     // Abort if the token has already been claimed.
-    public fun claim_token<T>(self: &mut Bridge, source_chain: u8, bridge_seq_num: u64, ctx: &mut TxContext): Coin<T> {
-        let (maybe_token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
+    public fun claim_token<T>(self: &mut Bridge, clock: &Clock, source_chain: u8, bridge_seq_num: u64, ctx: &mut TxContext): Coin<T> {
+        let (maybe_token, owner) = claim_token_internal<T>(clock, self, source_chain, bridge_seq_num, ctx);
         // Only token owner can claim the token
         assert!(tx_context::sender(ctx) == owner, EUnauthorisedClaim);
         assert!(option::is_some(&maybe_token), ETokenAlreadyClaimed);
@@ -224,11 +228,12 @@ module bridge::bridge {
     // If the token has already been claimed, it will return instead of aborting.
     public fun claim_and_transfer_token<T>(
         self: &mut Bridge,
+        clock: &Clock,
         source_chain: u8,
         bridge_seq_num: u64,
         ctx: &mut TxContext
     ) {
-        let (token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
+        let (token, owner) = claim_token_internal<T>(clock, self, source_chain, bridge_seq_num, ctx);
         if (option::is_none(&token)) {
             option::destroy_none(token);
             let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
@@ -288,6 +293,7 @@ module bridge::bridge {
     // Claim token from approved bridge message
     // Returns Some(Coin) if coin can be claimed. If already claimed, return None
     fun claim_token_internal<T>(
+        clock: &Clock,
         self: &mut Bridge,
         source_chain: u8,
         bridge_seq_num: u64,
@@ -323,14 +329,19 @@ module bridge::bridge {
         // TODO: why do we check validity of the route here? what if inconsistency?
         // Ensure route is valid
         // TODO: add unit tests
-        assert!(chain_ids::is_valid_route(source_chain, target_chain), EInvalidBridgeRoute);
-
+        // `get_route` abort if route is invalid
+        let route = chain_ids::get_route(source_chain, target_chain);
         // get owner address
         let owner = address::from_bytes(message::token_target_address(&token_payload));
         // check token type
         assert!(treasury::token_id<T>() == message::token_type(&token_payload), EUnexpectedTokenType);
+        let amount = message::token_amount(&token_payload);
+        // Make sure transfer is within limit.
+        if (!limiter::check_and_record_sending_transfer<T>(&mut inner.limiter, clock, route, amount)) {
+            return (option::none(), owner)
+        };
         // claim from treasury
-        let token = treasury::mint<T>(&mut inner.treasury, message::token_amount(&token_payload), ctx);
+        let token = treasury::mint<T>(&mut inner.treasury, amount, ctx);
         // Record changes
         record.claimed = true;
         emit(TokenTransferClaimed { message_key: key });
