@@ -798,10 +798,8 @@ async fn test_concurrent_readers() {
     });
 
     let store = init_authority_store().await;
-    let cache = Arc::new(WritebackCache::new_for_tests(
-        store.clone(),
-        default_registry(),
-    ));
+    let registry = prometheus::Registry::new(); // One time registry for testing.
+    let cache = Arc::new(WritebackCache::new_for_tests(store.clone(), &registry));
 
     let mut s = Scenario::new_with_store_and_cache(store.clone(), cache.clone());
     let mut txns = Vec::new();
