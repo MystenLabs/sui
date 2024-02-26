@@ -3,7 +3,7 @@ title: Sui Client PTB CLI
 description: The Sui Client PTB CLI enables a user to construct a PTB and execute it from the command line or a file.
 ---
 
-The `client ptb` command allows users to specify the transactions to be executed in a Programmable Transaction Block directly from your CLI. For maximum flexibility, a file containing the transactions to be executed in a PTB can be passed as well, and the two can be mixed to create and run a complex PTB directly from your terminal.
+The `client ptb` command allows users to specify the transactions to be executed in a Programmable Transaction Block directly from your CLI or through bash scripts.
 
 ## Commands
 
@@ -27,7 +27,7 @@ Options:
       --upgrade <MOVE_PACKAGE_PATH>                                   Upgrade the move package. It takes as input the folder where the package exists.
       --preview                                                       Preview the list of PTB transactions instead of executing them.
       --summary                                                       Show only a short summary (digest, execution status, gas cost). Do not use this flag when you need all the transaction data and the execution effects.
-      --warn-shadows                                                  Enable shadow warning when including other PTB files. Off by default.
+      --warn-shadows                                                  Enable shadow warning when the same variable name is declared multiple times. Off by default.
       --json                                                          Return command outputs in json format
   -h, --help                                                          Print help (see more with '--help')
 ```
@@ -49,7 +49,7 @@ sui client ptb --transfer-objects @0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d
 ```
 
 :::tip
-For addresses that are in your local wallet, you can use their alias instead (passing them without '@', e.g., --transfer-objects my_address).
+For addresses that are in your local wallet, you can use their alias instead (passing them without '@', e.g., --transfer-objects my_alias).
 :::
 
 ### Assign
