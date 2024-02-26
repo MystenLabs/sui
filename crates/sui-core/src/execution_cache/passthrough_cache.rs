@@ -41,8 +41,9 @@ use tracing::instrument;
 use typed_store::Map;
 
 use super::{
-    implement_passthrough_traits, CheckpointCache, ExecutionCacheMetrics, ExecutionCacheRead,
-    ExecutionCacheReconfigAPI, ExecutionCacheWrite, NotifyReadWrapper, StateSyncAPI,
+    implement_passthrough_traits, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics,
+    ExecutionCacheRead, ExecutionCacheReconfigAPI, ExecutionCacheWrite, NotifyReadWrapper,
+    StateSyncAPI,
 };
 
 pub struct PassthroughCache {
@@ -341,6 +342,17 @@ impl AccumulatorStore for PassthroughCache {
         include_wrapped_tombstone: bool,
     ) -> Box<dyn Iterator<Item = crate::authority::authority_store_tables::LiveObject> + '_> {
         self.store.iter_live_object_set(include_wrapped_tombstone)
+    }
+}
+
+impl ExecutionCacheCommit for PassthroughCache {
+    fn commit_transaction_outputs(
+        &self,
+        _epoch: EpochId,
+        _digest: &TransactionDigest,
+    ) -> BoxFuture<'_, SuiResult> {
+        // Nothing needs to be done since they were already committed in write_transaction_outputs
+        async { Ok(()) }.boxed()
     }
 }
 
