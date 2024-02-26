@@ -101,6 +101,7 @@ more-asserts.workspace = true
 pretty_assertions.workspace = true
 serde-reflection.workspace = true
 serde_yaml.workspace = true
+num-bigint = "0.4.4"
 
 test-cluster.workspace = true
 move-symbol-pool.workspace = true

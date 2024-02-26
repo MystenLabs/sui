@@ -9,7 +9,9 @@ use std::ops::Deref;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::dbg_addr,
-    crypto::{get_key_pair, AccountKeyPair, Signature, SuiKeyPair},
+    crypto::{
+        get_key_pair, AccountKeyPair, PublicKey, Signature, SuiKeyPair, ZkLoginPublicIdentifier,
+    },
     error::{SuiError, UserInputError},
     multisig::{MultiSig, MultiSigPublicKey},
     signature::GenericSignature,
@@ -449,6 +451,48 @@ async fn test_zklogin_transfer_with_bad_ephemeral_sig() {
         },
     )
     .await;
+}
+#[sim_test]
+async fn test_zklogin_transfer_with_large_address_seed() {
+    telemetry_subscribers::init_for_testing();
+    let (object_ids, gas_object_ids, authority_state, _epoch_store, _, _, _server, client) =
+        setup_zklogin_network(|_| {}).await;
+
+    let ephemeral_key = Ed25519KeyPair::generate(&mut StdRng::from_seed([3; 32]));
+    let c = num_bigint::BigInt::from_bytes_be(num_bigint::Sign::Plus, &[1; 33]);
+
+    let large_address_seed =
+        num_bigint::BigInt::from_bytes_be(num_bigint::Sign::Plus, &[1; 33]).to_string();
+    let zklogin = ZkLoginInputs::from_json("{\"proofPoints\":{\"a\":[\"7351610957585487046328875967050889651854514987235893782501043846344306437586\",\"15901581830174345085102528605366245320934422564305327249129736514949843983391\",\"1\"],\"b\":[[\"8511334686125322419369086121569737536249817670014553268281989325333085952301\",\"4879445774811020644521006463993914729416121646921376735430388611804034116132\"],[\"17435652898871739253945717312312680537810513841582909477368887889905134847157\",\"14885460127400879557124294989610467103783286587437961743305395373299049315863\"],[\"1\",\"0\"]],\"c\":[\"18935582624804960299209074901817240117999581542763303721451852621662183299378\",\"5367019427921492326304024952457820199970536888356564030410757345854117465786\",\"1\"]},\"issBase64Details\":{\"value\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"indexMod4\":2},\"headerBase64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}", &large_address_seed).unwrap();
+    let pk = PublicKey::ZkLogin(
+        ZkLoginPublicIdentifier::new(&OIDCProvider::Twitch.get_config().iss, &large_address_seed)
+            .unwrap(),
+    );
+    let sender = SuiAddress::from(&pk);
+    let recipient = dbg_addr(2);
+
+    let tx = init_zklogin_transfer(
+        &authority_state,
+        object_ids[2],
+        gas_object_ids[2],
+        recipient,
+        sender,
+        |_| {},
+        &ephemeral_key,
+        &zklogin,
+    )
+    .await;
+
+    assert!(client.handle_transaction(tx).await.is_err());
+}
+fn zklogin_key_pair_and_inputs() -> Vec<(Ed25519KeyPair, ZkLoginInputs)> {
+    let key1 = Ed25519KeyPair::generate(&mut StdRng::from_seed([1; 32]));
+    let key2 = Ed25519KeyPair::generate(&mut StdRng::from_seed([2; 32]));
+
+    let inputs1 = ZkLoginInputs::from_json("{\"proofPoints\":{\"a\":[\"7351610957585487046328875967050889651854514987235893782501043846344306437586\",\"15901581830174345085102528605366245320934422564305327249129736514949843983391\",\"1\"],\"b\":[[\"8511334686125322419369086121569737536249817670014553268281989325333085952301\",\"4879445774811020644521006463993914729416121646921376735430388611804034116132\"],[\"17435652898871739253945717312312680537810513841582909477368887889905134847157\",\"14885460127400879557124294989610467103783286587437961743305395373299049315863\"],[\"1\",\"0\"]],\"c\":[\"18935582624804960299209074901817240117999581542763303721451852621662183299378\",\"5367019427921492326304024952457820199970536888356564030410757345854117465786\",\"1\"]},\"issBase64Details\":{\"value\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"indexMod4\":2},\"headerBase64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}", "20794788559620669596206457022966176986688727876128223628113916380927502737911").unwrap();
+    let inputs2 = ZkLoginInputs::from_json("{\"proofPoints\":{\"a\":[\"7351610957585487046328875967050889651854514987235893782501043846344306437586\",\"15901581830174345085102528605366245320934422564305327249129736514949843983391\",\"1\"],\"b\":[[\"8511334686125322419369086121569737536249817670014553268281989325333085952301\",\"4879445774811020644521006463993914729416121646921376735430388611804034116132\"],[\"17435652898871739253945717312312680537810513841582909477368887889905134847157\",\"14885460127400879557124294989610467103783286587437961743305395373299049315863\"],[\"1\",\"0\"]],\"c\":[\"18935582624804960299209074901817240117999581542763303721451852621662183299378\",\"5367019427921492326304024952457820199970536888356564030410757345854117465786\",\"1\"]},\"issBase64Details\":{\"value\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"indexMod4\":2},\"headerBase64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}", "20794788559620669596206457022966176986688727876128223628113916380927502737911").unwrap();
+
+    vec![(key1, inputs1), (key2, inputs2)]
 }
 
 #[sim_test]
