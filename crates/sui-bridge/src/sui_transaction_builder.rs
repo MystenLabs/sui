@@ -12,6 +12,7 @@ use sui_types::BRIDGE_PACKAGE_ID;
 
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
+    bridge::TokenId,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{ObjectArg, TransactionData},
     TypeTag,
@@ -19,7 +20,7 @@ use sui_types::{
 
 use crate::{
     error::{BridgeError, BridgeResult},
-    types::{BridgeAction, TokenId, VerifiedCertifiedBridgeAction},
+    types::{BridgeAction, VerifiedCertifiedBridgeAction},
 };
 
 // TODO: how do we generalize this thing more?
@@ -73,10 +74,10 @@ pub fn build_sui_transaction(
             bridge_object_arg,
         ),
         BridgeAction::BlocklistCommitteeAction(_) => build_committee_blocklist_approve_transaction(
-                client_address,
-                gas_object_ref,
-                action,
-                bridge_object_arg,
+            client_address,
+            gas_object_ref,
+            action,
+            bridge_object_arg,
         ),
         BridgeAction::EmergencyAction(_) => build_emergency_op_approve_transaction(
             client_address,
@@ -84,10 +85,12 @@ pub fn build_sui_transaction(
             action,
             bridge_object_arg,
         ),
-        BridgeAction::LimitUpdateAction(_) => {
-            // TODO: handle this case
-            unimplemented!()
-        }
+        BridgeAction::LimitUpdateAction(_) => build_limit_update_approve_transaction(
+            client_address,
+            gas_object_ref,
+            action,
+            bridge_object_arg,
+        ),
         BridgeAction::AssetPriceUpdateAction(_) => {
             // TODO: handle this case
             unimplemented!()
@@ -291,7 +294,9 @@ fn build_committee_blocklist_approve_transaction(
     let mut builder = ProgrammableTransactionBuilder::new();
 
     let (source_chain, seq_num, blocklist_type, blocklisted_members) = match bridge_action {
-        BridgeAction::BlocklistCommitteeAction(a) => (a.chain_id, a.nonce, a.blocklist_type, a.blocklisted_members),
+        BridgeAction::BlocklistCommitteeAction(a) => {
+            (a.chain_id, a.nonce, a.blocklist_type, a.blocklisted_members)
+        }
         _ => unreachable!(),
     };
 
@@ -299,7 +304,10 @@ fn build_committee_blocklist_approve_transaction(
     let source_chain = builder.pure(source_chain as u8).unwrap();
     let seq_num = builder.pure(seq_num).unwrap();
     let blocklist_type = builder.pure(blocklist_type as u8).unwrap();
-    let blocklisted_members = blocklisted_members.into_iter().map(|m| m.to_eth_address().as_bytes().to_vec()).collect::<Vec<_>>();
+    let blocklisted_members = blocklisted_members
+        .into_iter()
+        .map(|m| m.to_eth_address().as_bytes().to_vec())
+        .collect::<Vec<_>>();
     let blocklisted_members = builder.pure(blocklisted_members).unwrap();
     let arg_bridge = builder.obj(bridge_object_arg).unwrap();
 
@@ -342,20 +350,86 @@ fn build_committee_blocklist_approve_transaction(
     ))
 }
 
+// TODO: pass in gas price
+fn build_limit_update_approve_transaction(
+    client_address: SuiAddress,
+    gas_object_ref: &ObjectRef,
+    action: VerifiedCertifiedBridgeAction,
+    bridge_object_arg: ObjectArg,
+) -> BridgeResult<TransactionData> {
+    let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    let (receiving_chain_id, seq_num, sending_chain_id, new_usd_limit) = match bridge_action {
+        BridgeAction::LimitUpdateAction(a) => {
+            (a.chain_id, a.nonce, a.sending_chain_id, a.new_usd_limit)
+        }
+        _ => unreachable!(),
+    };
+
+    // Unwrap: these should not fail
+    let receiving_chain_id = builder.pure(receiving_chain_id as u8).unwrap();
+    let seq_num = builder.pure(seq_num).unwrap();
+    let sending_chain_id = builder.pure(sending_chain_id as u8).unwrap();
+    let new_usd_limit = builder.pure(new_usd_limit).unwrap();
+    let arg_bridge = builder.obj(bridge_object_arg).unwrap();
+
+    let arg_msg = builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        ident_str!("message").to_owned(),
+        ident_str!("create_update_bridge_limit_message").to_owned(),
+        vec![],
+        vec![receiving_chain_id, seq_num, sending_chain_id, new_usd_limit],
+    );
+
+    let mut sig_bytes = vec![];
+    for (_, sig) in sigs.signatures {
+        sig_bytes.push(sig.as_bytes().to_vec());
+    }
+    let arg_signatures = builder.pure(sig_bytes.clone()).map_err(|e| {
+        BridgeError::BridgeSerializationError(format!(
+            "Failed to serialize signatures: {:?}. Err: {:?}",
+            sig_bytes, e
+        ))
+    })?;
+
+    builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        ident_str!("bridge").to_owned(),
+        ident_str!("execute_system_message").to_owned(),
+        vec![],
+        vec![arg_bridge, arg_msg, arg_signatures],
+    );
+
+    let pt = builder.finish();
+
+    Ok(TransactionData::new_programmable(
+        client_address,
+        vec![*gas_object_ref],
+        pt,
+        100_000_000,
+        // TODO: use reference gas price
+        1500,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::sui_client::SuiClient;
+    use crate::types::*;
     use crate::{
-        crypto::BridgeAuthorityPublicKeyBytes, test_utils::{
-            approve_action_with_validator_secrets, bridge_token,
-            get_test_eth_to_sui_bridge_action, get_test_sui_to_eth_bridge_action,
-        }, types::TokenId
+        crypto::BridgeAuthorityPublicKeyBytes,
+        test_utils::{
+            approve_action_with_validator_secrets, bridge_token, get_test_eth_to_sui_bridge_action,
+            get_test_sui_to_eth_bridge_action,
+        },
     };
     use ethers::types::Address as EthAddress;
+    use sui_types::bridge::{BridgeChainId, TokenId};
+    use sui_types::crypto::ToFromBytes;
     use test_cluster::TestClusterBuilder;
-    use sui_types::bridge::BridgeChainId;
-    use crate::types::*;
-    use sui_types::crypto::ToFromBytes; 
-    use crate::sui_client::SuiClient;
 
     #[tokio::test]
     async fn test_build_sui_transaction_for_token_transfer() {
@@ -486,7 +560,6 @@ mod tests {
         assert!(!summary.is_frozen);
     }
 
-
     #[tokio::test]
     async fn test_build_sui_transaction_for_committee_blocklist() {
         telemetry_subscribers::init_for_testing();
@@ -520,7 +593,10 @@ mod tests {
             nonce: 0,
             chain_id: BridgeChainId::SuiLocalTest,
             blocklist_type: BlocklistType::Blocklist,
-            blocklisted_members: vec![BridgeAuthorityPublicKeyBytes::from_bytes(&victim.bridge_pubkey_bytes).unwrap()],
+            blocklisted_members: vec![BridgeAuthorityPublicKeyBytes::from_bytes(
+                &victim.bridge_pubkey_bytes,
+            )
+            .unwrap()],
         });
         // `approve_action_with_validator_secrets` covers transaction building
         approve_action_with_validator_secrets(
@@ -545,7 +621,10 @@ mod tests {
             nonce: 1,
             chain_id: BridgeChainId::SuiLocalTest,
             blocklist_type: BlocklistType::Unblocklist,
-            blocklisted_members: vec![BridgeAuthorityPublicKeyBytes::from_bytes(&victim.bridge_pubkey_bytes).unwrap()],
+            blocklisted_members: vec![BridgeAuthorityPublicKeyBytes::from_bytes(
+                &victim.bridge_pubkey_bytes,
+            )
+            .unwrap()],
         });
         // `approve_action_with_validator_secrets` covers transaction building
         approve_action_with_validator_secrets(
@@ -559,6 +638,69 @@ mod tests {
         let committee = sui_client.get_bridge_summary().await.unwrap().committee;
         for member in committee.members {
             assert!(!member.1.blocklisted);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_build_sui_transaction_for_limit_update() {
+        telemetry_subscribers::init_for_testing();
+        let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
+            .with_protocol_version(37.into())
+            .with_epoch_duration_ms(15000)
+            .build_with_bridge()
+            .await;
+        let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
+            .await
+            .unwrap();
+        let bridge_authority_keys = test_cluster.bridge_authority_keys.take().unwrap();
+
+        // Note: We don't call `sui_client.get_bridge_committee` here because it will err if the committee
+        // is not initialized during the construction of `BridgeCommittee`.
+        let committee = sui_client.get_bridge_summary().await.unwrap().committee;
+        if committee.members.is_empty() {
+            test_cluster.wait_for_epoch(None).await;
+        }
+        let transfer_limit = sui_client
+            .get_bridge_summary()
+            .await
+            .unwrap()
+            .limiter
+            .transfer_limit
+            .into_iter()
+            .map(|(s, d, l)| ((s, d), l))
+            .collect::<HashMap<_, _>>();
+
+        let context = &mut test_cluster.wallet;
+        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+
+        // update limit
+        let action = BridgeAction::LimitUpdateAction(LimitUpdateAction {
+            nonce: 0,
+            chain_id: BridgeChainId::SuiLocalTest,
+            sending_chain_id: BridgeChainId::EthLocalTest,
+            new_usd_limit: 6_666_666 * USD_MULTIPLIER, // $1M USD
+        });
+        // `approve_action_with_validator_secrets` covers transaction building
+        approve_action_with_validator_secrets(
+            context,
+            bridge_object_arg,
+            action.clone(),
+            &bridge_authority_keys,
+            None,
+        )
+        .await;
+        let new_transfer_limit = sui_client
+            .get_bridge_summary()
+            .await
+            .unwrap()
+            .limiter
+            .transfer_limit;
+        for limit in new_transfer_limit {
+            if limit.0 == BridgeChainId::EthLocalTest && limit.1 == BridgeChainId::SuiLocalTest {
+                assert_eq!(limit.2, 6_666_666 * USD_MULTIPLIER);
+            } else {
+                assert_eq!(limit.2, *transfer_limit.get(&(limit.0, limit.1)).unwrap());
+            }
         }
     }
 }
