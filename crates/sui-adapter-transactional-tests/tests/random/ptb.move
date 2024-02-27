@@ -11,7 +11,7 @@ module test::random {
     use sui::object;
     use sui::tx_context:: TxContext;
 
-    struct Obj has key, store {
+    public struct Obj has key, store {
         id: object::UID,
     }
 
