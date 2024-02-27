@@ -2,9 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::consistency::ConsistentIndexCursor;
-use crate::context_data::db_data_provider::PgManager;
+use crate::data::{Db, DbConnection, QueryExecutor};
 use crate::types::cursor::{JsonCursor, Page};
 use async_graphql::connection::{Connection, CursorType, Edge};
+use diesel::{ExpressionMethods, QueryDsl};
+use sui_indexer::models::objects::StoredObject;
+use sui_indexer::schema::objects;
+use sui_indexer::types::OwnerType;
+use sui_types::committee::EpochId;
+use sui_types::sui_system_state::PoolTokenExchangeRate;
 
 use super::big_int::BigInt;
 use super::move_object::MoveObject;
@@ -12,7 +18,9 @@ use super::object::ObjectLookupKey;
 use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
+use crate::error::Error;
 use async_graphql::*;
+use itertools::Itertools;
 use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary as NativeSuiValidatorSummary;
 
 #[derive(Clone, Debug)]
@@ -253,12 +261,71 @@ impl Validator {
 
     /// The APY of this validator in basis points.
     /// To get the APY in percentage, divide by 100.
-    async fn apy(&self, ctx: &Context<'_>) -> Result<Option<u64>, Error> {
-        Ok(ctx
-            .data_unchecked::<PgManager>()
-            .fetch_validator_apys(&self.validator_summary.sui_address)
-            .await?
-            .map(|x| (x * 10000.0) as u64))
+    async fn apy(&self, ctx: &Context<'_>) -> Result<Option<u64>> {
+        let db = ctx.data_unchecked::<Db>();
+        let mut rates = vec![];
+        let stake_subsidy_start_epoch = 20; // TODO: (wlmyng) how can we avoid hardcoding this
+        let exchange_rates_id = self.validator_summary.exchange_rates_id.to_vec();
+        let exchange_rates_size = self.validator_summary.exchange_rates_size as i64;
+
+        // Query for exchange rates dynamic fields, bounded by `exchange_rates_size`. We don't need
+        // to order by `object_id` as we will sort by `epoch` later. We can try optimizing this
+        // query by grabbing the last 30 records before a certain checkpoint, but for the query to
+        // be correct, we would need to sort by `checkpoint_sequence_number DESC`. This results in
+        // about the same cost as the current query below.
+        let dynamic_fields: Vec<StoredObject> = db
+            .execute(move |conn| {
+                conn.results(move || {
+                    objects::dsl::objects
+                        .filter(objects::dsl::owner_type.eq(OwnerType::Object as i16))
+                        .filter(objects::dsl::owner_id.eq(exchange_rates_id.clone()))
+                        .limit(exchange_rates_size)
+                })
+            })
+            .await?;
+
+        for df in dynamic_fields {
+            let dynamic_field = df
+                .to_dynamic_field::<EpochId, PoolTokenExchangeRate>()
+                .ok_or_else(|| {
+                    Error::Internal(format!(
+                        "Failed to deserialize PoolTokenExchangeRate for validator {}",
+                        self.validator_summary.sui_address
+                    ))
+                })?;
+
+            rates.push((dynamic_field.name, dynamic_field.value));
+
+            rates.sort_by(|(a, _), (b, _)| a.cmp(b).reverse());
+        }
+
+        let exchange_rates = rates.into_iter().filter_map(|(epoch, rate)| {
+            if epoch >= stake_subsidy_start_epoch {
+                Some(rate)
+            } else {
+                None
+            }
+        });
+
+        let average_apy = if exchange_rates.clone().count() >= 2 {
+            // rates are sorted by epoch in descending order.
+            let er_e = exchange_rates.clone().dropping(1);
+            // rate e+1
+            let er_e_1 = exchange_rates.dropping_back(1);
+            let apys = er_e
+                .zip(er_e_1)
+                .map(calculate_apy)
+                .filter(|apy| *apy > 0.0 && *apy < 0.1)
+                .take(30)
+                .collect::<Vec<_>>();
+
+            let apy_counts = apys.len() as f64;
+            apys.iter().sum::<f64>() / apy_counts
+        } else {
+            0.0
+        };
+
+        Ok(Some((average_apy * 10000.0) as u64))
     }
 }
 
@@ -272,4 +339,9 @@ impl Validator {
     pub fn exchange_rates_id(&self) -> SuiAddress {
         SuiAddress::from_array(**self.validator_summary.exchange_rates_id)
     }
+}
+
+// APY_e = (ER_e+1 / ER_e) ^ 365
+fn calculate_apy((rate_e, rate_e_1): (PoolTokenExchangeRate, PoolTokenExchangeRate)) -> f64 {
+    (rate_e.rate() / rate_e_1.rate()).powf(365.0) - 1.0
 }

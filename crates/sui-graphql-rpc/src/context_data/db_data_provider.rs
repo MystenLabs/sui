@@ -11,7 +11,6 @@ use sui_indexer::db::PgConnectionPoolConfig;
 use sui_indexer::{apis::GovernanceReadApi, indexer_reader::IndexerReader};
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress,
     governance::StakedSui as NativeStakedSui,
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
@@ -51,19 +50,6 @@ impl PgManager {
 
 /// Implement methods to be used by graphql resolvers
 impl PgManager {
-    /// Retrieve the validator APYs
-    pub(crate) async fn fetch_validator_apys(
-        &self,
-        address: &NativeSuiAddress,
-    ) -> Result<Option<f64>, Error> {
-        let governance_api = GovernanceReadApi::new(self.inner.clone());
-
-        governance_api
-            .get_validator_apy(address)
-            .await
-            .map_err(|e| Error::Internal(format!("{e}")))
-    }
-
     pub(crate) async fn available_range(&self) -> Result<(u64, u64), Error> {
         Ok(self
             .inner

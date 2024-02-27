@@ -12465,6 +12465,7 @@ dependencies = [
  "http",
  "hyper",
  "insta",
+ "itertools 0.10.5",
  "lru 0.10.0",
  "markdown-gen",
  "move-binary-format",
