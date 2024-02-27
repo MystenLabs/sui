@@ -584,7 +584,7 @@ mod test {
         }
 
         // Run commit rule.
-        core.try_commit();
+        core.try_commit().ok();
         let last_commit = store
             .read_last_commit()
             .unwrap()
@@ -691,7 +691,7 @@ mod test {
         }
 
         // Run commit rule.
-        core.try_commit();
+        core.try_commit().ok();
         let last_commit = store
             .read_last_commit()
             .unwrap()
