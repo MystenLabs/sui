@@ -70,7 +70,7 @@ jobs:
       - name: Wallet Extension Preview Package
         if: ${{ steps.wallet-diff.outcome == 'failure' }}
         run: pnpm --filter sui-wallet pack:zip
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: ${{ steps.wallet-diff.outcome == 'failure' }}
         with:
           name: wallet-extension
