@@ -8,9 +8,12 @@ use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_tbls::nodes::PartyId;
 use fastcrypto_tbls::{dkg, nodes};
+use futures::future::{ready, Either};
+use parking_lot::Mutex;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use std::collections::{BTreeMap, HashMap};
+use std::future::Future;
 use std::sync::{Arc, Weak};
 use std::time::Instant;
 use sui_types::base_types::AuthorityName;
@@ -19,7 +22,7 @@ use sui_types::crypto::{AuthorityKeyPair, RandomnessRound};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::OnceCell;
 use tracing::{debug, error, info};
 use typed_store::rocks::DBBatch;
 use typed_store::Map;
@@ -282,67 +285,61 @@ impl RandomnessManager {
 
     /// Sends the initial dkg::Message to begin the randomness DKG protocol.
     pub async fn start_dkg(&self) -> SuiResult {
-        self.inner.lock().await.start_dkg()
+        self.inner.lock().start_dkg()
     }
 
     /// Processes all received messages and advances the randomness DKG state machine when possible,
     /// sending out a dkg::Confirmation and generating final output.
     pub async fn advance_dkg(&self, batch: &mut DBBatch) -> SuiResult {
-        self.inner.lock().await.advance_dkg(batch).await
+        let fut = self.inner.lock().advance_dkg(batch);
+        fut.await
     }
 
     /// Adds a received dkg::Message to the randomness DKG state machine.
     // TODO-DNS: change to take raw bytes and skip deserialization if a message
     // was already received from the same validator.
-    pub async fn add_message(
-        &self,
-        batch: &mut DBBatch,
-        msg: dkg::Message<PkG, EncG>,
-    ) -> SuiResult {
-        self.inner.lock().await.add_message(batch, msg)
+    pub fn add_message(&self, batch: &mut DBBatch, msg: dkg::Message<PkG, EncG>) -> SuiResult {
+        self.inner.lock().add_message(batch, msg)
     }
 
     /// Adds a received dkg::Confirmation to the randomness DKG state machine.
     // TODO-DNS: change to take raw bytes and skip deserialization if a message
     // was already received from the same validator.
-    pub async fn add_confirmation(
+    pub fn add_confirmation(
         &self,
         batch: &mut DBBatch,
         conf: dkg::Confirmation<EncG>,
     ) -> SuiResult {
-        self.inner.lock().await.add_confirmation(batch, conf)
+        self.inner.lock().add_confirmation(batch, conf)
     }
 
     /// Reserves the next available round number for randomness generation. Once the given
     /// batch is written, `generate_randomness` must be called to start the process. On restart,
     /// any reserved rounds for which the batch was written will automatically be resumed.
-    pub async fn reserve_next_randomness(&self, batch: &mut DBBatch) -> SuiResult<RandomnessRound> {
-        self.inner.lock().await.reserve_next_randomness(batch).await
+    pub fn reserve_next_randomness(&self, batch: &mut DBBatch) -> SuiResult<RandomnessRound> {
+        self.inner.lock().reserve_next_randomness(batch)
     }
 
     /// Starts the process of generating the given RandomnessRound.
     pub async fn generate_randomness(&self, epoch: EpochId, randomness_round: RandomnessRound) {
-        self.inner
+        let fut = self
+            .inner
             .lock()
-            .await
-            .generate_randomness(epoch, randomness_round)
-            .await
+            .generate_randomness(epoch, randomness_round);
+        fut.await
     }
 
     /// Notifies the randomness manager that randomness for the given round has been durably
     /// committed in a checkpoint. This completes the process of generating randomness for the
     /// round.
     pub async fn notify_randomness_in_checkpoint(&self, round: RandomnessRound) -> SuiResult {
-        self.inner
-            .lock()
-            .await
-            .notify_randomness_in_checkpoint(round)
-            .await
+        let fut = self.inner.lock().notify_randomness_in_checkpoint(round);
+        fut.await
     }
 
     /// Returns true if DKG has completed.
-    pub async fn is_dkg_completed(&self) -> bool {
-        self.inner.lock().await.dkg_output.initialized()
+    pub fn is_dkg_completed(&self) -> bool {
+        self.inner.lock().dkg_output.initialized()
     }
 
     fn randomness_dkg_info_from_committee(
@@ -381,6 +378,15 @@ impl RandomnessManager {
     }
 }
 
+macro_rules! early_return_future {
+    ($expr:expr) => {
+        match $expr {
+            Ok(r) => r,
+            Err(err) => return Either::Left(ready(Err(err))),
+        }
+    };
+}
+
 impl Inner {
     pub fn start_dkg(&mut self) -> SuiResult {
         if self.used_messages.initialized() || self.dkg_output.initialized() {
@@ -404,42 +410,51 @@ impl Inner {
         Ok(())
     }
 
-    pub async fn advance_dkg(&mut self, batch: &mut DBBatch) -> SuiResult {
-        let epoch_store = self.epoch_store()?;
+    pub fn advance_dkg<'a>(
+        &mut self,
+        batch: &'a mut DBBatch,
+    ) -> impl Future<Output = SuiResult> + 'a {
+        let mut preamble = || {
+            let epoch_store = self.epoch_store()?;
 
-        // Once we have enough ProcessedMessages, send a Confirmation.
-        if !self.dkg_output.initialized() && !self.used_messages.initialized() {
-            match self.party.merge(
-                &self
-                    .processed_messages
-                    .values()
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            ) {
-                Ok((conf, used_msgs)) => {
-                    info!(
-                        "random beacon: sending DKG Confirmation with {} complaints",
-                        conf.complaints.len()
-                    );
-                    if self.used_messages.set(used_msgs.clone()).is_err() {
-                        error!("BUG: used_messages should only ever be set once");
+            // Once we have enough ProcessedMessages, send a Confirmation.
+            if !self.dkg_output.initialized() && !self.used_messages.initialized() {
+                match self.party.merge(
+                    &self
+                        .processed_messages
+                        .values()
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                ) {
+                    Ok((conf, used_msgs)) => {
+                        info!(
+                            "random beacon: sending DKG Confirmation with {} complaints",
+                            conf.complaints.len()
+                        );
+                        if self.used_messages.set(used_msgs.clone()).is_err() {
+                            error!("BUG: used_messages should only ever be set once");
+                        }
+                        batch.insert_batch(
+                            &self.tables()?.dkg_used_messages,
+                            std::iter::once((SINGLETON_KEY, used_msgs)),
+                        )?;
+
+                        let transaction = ConsensusTransaction::new_randomness_dkg_confirmation(
+                            epoch_store.name,
+                            &conf,
+                        );
+                        self.consensus_adapter
+                            .submit(transaction, None, &epoch_store)?;
                     }
-                    batch.insert_batch(
-                        &self.tables()?.dkg_used_messages,
-                        std::iter::once((SINGLETON_KEY, used_msgs)),
-                    )?;
-
-                    let transaction = ConsensusTransaction::new_randomness_dkg_confirmation(
-                        epoch_store.name,
-                        &conf,
-                    );
-                    self.consensus_adapter
-                        .submit(transaction, None, &epoch_store)?;
+                    Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
+                    Err(e) => debug!("random beacon: error while merging DKG Messages: {e:?}"),
                 }
-                Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
-                Err(e) => debug!("random beacon: error while merging DKG Messages: {e:?}"),
             }
-        }
+
+            Ok(epoch_store)
+        };
+
+        let epoch_store = early_return_future!(preamble());
 
         // Once we have enough Confirmations, process them and update shares.
         if !self.dkg_output.initialized() && self.used_messages.initialized() {
@@ -473,25 +488,32 @@ impl Inner {
                     self.dkg_output
                         .set(output.clone())
                         .expect("checked above that `dkg_output` is uninitialized");
-                    self.network_handle
-                        .update_epoch(
-                            epoch_store.committee().epoch(),
-                            self.authority_info.clone(),
-                            output.clone(),
-                            self.party.t(),
-                        )
-                        .await;
-                    batch.insert_batch(
-                        &self.tables()?.dkg_output,
-                        std::iter::once((SINGLETON_KEY, output)),
-                    )?;
+                    let network_handle = self.network_handle.clone();
+                    let tables = early_return_future!(self.tables()).clone();
+                    let authority_info = self.authority_info.clone();
+                    let t = self.party.t();
+                    return Either::Right(async move {
+                        network_handle
+                            .update_epoch(
+                                epoch_store.committee().epoch(),
+                                authority_info,
+                                output.clone(),
+                                t,
+                            )
+                            .await;
+                        batch.insert_batch(
+                            &tables.dkg_output,
+                            std::iter::once((SINGLETON_KEY, output)),
+                        )?;
+                        Ok(())
+                    });
                 }
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
                 Err(e) => error!("random beacon: error while processing DKG Confirmations: {e:?}"),
             }
         }
 
-        Ok(())
+        Either::Left(ready(Ok(())))
     }
 
     pub fn add_message(&mut self, batch: &mut DBBatch, msg: dkg::Message<PkG, EncG>) -> SuiResult {
@@ -532,10 +554,7 @@ impl Inner {
         Ok(())
     }
 
-    pub async fn reserve_next_randomness(
-        &mut self,
-        batch: &mut DBBatch,
-    ) -> SuiResult<RandomnessRound> {
+    pub fn reserve_next_randomness(&mut self, batch: &mut DBBatch) -> SuiResult<RandomnessRound> {
         let randomness_round = self.next_randomness_round;
         self.next_randomness_round = self
             .next_randomness_round
@@ -554,18 +573,37 @@ impl Inner {
         Ok(randomness_round)
     }
 
-    pub async fn generate_randomness(&self, epoch: EpochId, randomness_round: RandomnessRound) {
-        self.network_handle
-            .send_partial_signatures(epoch, randomness_round)
-            .await;
+    pub fn clone_network_handle(&self) -> sui_network::randomness::Handle {
+        self.network_handle.clone()
     }
 
-    pub async fn notify_randomness_in_checkpoint(&self, round: RandomnessRound) -> SuiResult {
-        self.tables()?.randomness_rounds_pending.remove(&round)?;
-        self.network_handle
-            .complete_round(self.epoch_store()?.committee().epoch(), round)
-            .await;
-        Ok(())
+    pub fn generate_randomness(
+        &self,
+        epoch: EpochId,
+        randomness_round: RandomnessRound,
+    ) -> impl Future<Output = ()> + 'static {
+        let network_handle = self.network_handle.clone();
+        async move {
+            network_handle
+                .send_partial_signatures(epoch, randomness_round)
+                .await
+        }
+    }
+
+    pub fn notify_randomness_in_checkpoint(
+        &self,
+        round: RandomnessRound,
+    ) -> impl Future<Output = SuiResult> + 'static {
+        let preamble = || {
+            self.tables()?.randomness_rounds_pending.remove(&round)?;
+            Ok(self.epoch_store()?.committee().epoch())
+        };
+        let epoch = early_return_future!(preamble());
+        let network_handle = self.network_handle.clone();
+        Either::Right(async move {
+            network_handle.complete_round(epoch, round).await;
+            Ok(())
+        })
     }
 
     fn epoch_store(&self) -> SuiResult<Arc<AuthorityPerEpochStore>> {
@@ -670,7 +708,6 @@ mod tests {
             for dkg_message in dkg_messages.iter().cloned() {
                 randomness_managers[i]
                     .add_message(&mut batch, dkg_message)
-                    .await
                     .unwrap();
             }
             randomness_managers[i]
@@ -698,7 +735,6 @@ mod tests {
             for dkg_confirmation in dkg_confirmations.iter().cloned() {
                 randomness_managers[i]
                     .add_confirmation(&mut batch, dkg_confirmation)
-                    .await
                     .unwrap();
             }
             randomness_managers[i]
@@ -710,12 +746,7 @@ mod tests {
 
         // Verify DKG completed.
         for randomness_manager in &randomness_managers {
-            assert!(randomness_manager
-                .inner
-                .lock()
-                .await
-                .dkg_output
-                .initialized());
+            assert!(randomness_manager.inner.lock().dkg_output.initialized());
         }
     }
 }

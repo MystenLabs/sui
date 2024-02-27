@@ -2530,8 +2530,7 @@ impl AuthorityPerEpochStore {
                     .randomness_manager
                     .get()
                     .expect("randomness manager should exist if randomness is enabled")
-                    .reserve_next_randomness(batch)
-                    .await?;
+                    .reserve_next_randomness(batch)?;
                 reserved_randomness_round = Some(round);
 
                 let version = shared_input_next_versions
@@ -2604,7 +2603,7 @@ impl AuthorityPerEpochStore {
             if randomness_state_updated {
                 randomness_manager.advance_dkg(batch).await?;
             }
-            is_dkg_completed = Some(randomness_manager.is_dkg_completed().await);
+            is_dkg_completed = Some(randomness_manager.is_dkg_completed());
         }
 
         batch.insert_batch(
@@ -2898,7 +2897,7 @@ impl AuthorityPerEpochStore {
                             authority.concise()
                         );
                         match bcs::from_bytes(bytes) {
-                            Ok(message) => randomness_manager.add_message(batch, message).await?,
+                            Ok(message) => randomness_manager.add_message(batch, message)?,
                             Err(e) => {
                                 warn!(
                                     "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
@@ -2932,9 +2931,7 @@ impl AuthorityPerEpochStore {
                         );
                         match bcs::from_bytes(bytes) {
                             Ok(confirmation) => {
-                                randomness_manager
-                                    .add_confirmation(batch, confirmation)
-                                    .await?
+                                randomness_manager.add_confirmation(batch, confirmation)?
                             }
                             Err(e) => {
                                 warn!(
