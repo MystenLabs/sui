@@ -15,6 +15,7 @@ const references = [
 	{
 		type: 'category',
 		label: 'Sui RPC',
+		collapsed: false,
 		link: {
 			type: 'doc',
 			id: 'references/sui-api',
@@ -45,6 +46,7 @@ const references = [
 	{
 		type: 'category',
 		label: 'Sui CLI',
+		collapsed: false,
 		link: {
 			type: 'doc',
 			id: 'references/cli',
@@ -61,6 +63,7 @@ const references = [
 	{
 		type: 'category',
 		label: 'Sui SDKs',
+		collapsed: false,
 		link: {
 			type: 'doc',
 			id: 'references/sui-sdks',
@@ -82,6 +85,7 @@ const references = [
 	{
 		type: 'category',
 		label: 'Move',
+		collapsed: false,
 		link: {
 			type: 'doc',
 			id: 'references/sui-move',

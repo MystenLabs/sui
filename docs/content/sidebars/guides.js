@@ -10,6 +10,7 @@ const guides = [
 	{
 		type: 'category',
 		label: 'Developer Guides',
+                collapsed: false,
 		link: {
 			type: 'doc',
 			id: 'guides/developer',
@@ -18,6 +19,7 @@ const guides = [
 			{
 				type: 'category',
 				label: 'Getting Started',
+                                collapsed: false,
 				link: {
 					type: 'doc',
 					id: 'guides/developer/getting-started',
