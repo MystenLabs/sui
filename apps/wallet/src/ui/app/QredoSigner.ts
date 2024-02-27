@@ -9,11 +9,7 @@ import {
 	type TransactionInfoResponse,
 } from '_src/shared/qredo-api';
 import { type SuiClient } from '@mysten/sui.js/client';
-import {
-	IntentScope,
-	messageWithIntent,
-	type SerializedSignature,
-} from '@mysten/sui.js/cryptography';
+import { IntentScope, messageWithIntent } from '@mysten/sui.js/cryptography';
 import { toB64 } from '@mysten/sui.js/utils';
 import mitt from 'mitt';
 
@@ -55,7 +51,7 @@ export class QredoSigner extends WalletSigner {
 		return this.#qredoAccount.address;
 	}
 
-	async signData(data: Uint8Array, clientIdentifier?: string): Promise<SerializedSignature> {
+	async signData(data: Uint8Array, clientIdentifier?: string): Promise<string> {
 		let txInfo = await this.#createQredoTransaction(data, false, clientIdentifier);
 		try {
 			txInfo = await this.#pollForQredoTransaction(
