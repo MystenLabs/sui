@@ -212,7 +212,10 @@ mod test {
             Broadcaster::new(context.clone(), network_client.clone(), &signals_receiver);
 
         let block = VerifiedBlock::new_for_test(TestBlock::new(9, 1).build());
-        core_signals.new_block(block.clone()).unwrap();
+        assert!(
+            core_signals.new_block(block.clone()),
+            "No subscriber active to receive the block"
+        );
 
         sleep(Duration::from_secs(1)).await;
 
