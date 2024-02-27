@@ -16,10 +16,12 @@ async-trait.workspace = true
 axum.workspace = true
 chrono.workspace = true
 clap.workspace = true
+const-str.workspace = true
 diesel.workspace = true
 either.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 futures.workspace = true
+git-version.workspace = true
 hex.workspace = true
 http.workspace = true
 hyper.workspace = true
