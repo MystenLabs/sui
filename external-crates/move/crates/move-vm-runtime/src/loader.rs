@@ -36,7 +36,7 @@ use move_vm_types::{
 };
 use parking_lot::RwLock;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, btree_map::Entry},
     fmt::Debug,
     hash::Hash,
     sync::Arc,
@@ -1271,11 +1271,14 @@ impl<'a> Resolver<'a> {
         idx: FunctionInstantiationIndex,
         type_params: &[Type],
     ) -> PartialVMResult<Vec<Type>> {
-        let func_inst = &self.binary.loaded.function_instantiation_at(idx.0);
-        let mut instantiation = vec![];
-        for ty in &func_inst.instantiation {
-            instantiation.push(self.subst(ty, type_params)?);
-        }
+        let loaded_module = &*self.binary.loaded;
+        let func_inst = loaded_module.function_instantiation_at(idx.0);
+        let instantiation: Vec<_> = loaded_module
+            .instantiation_signature_at(func_inst.instantiation_idx)?
+            .iter()
+            .map(|ty| self.subst(ty, type_params))
+            .collect::<PartialVMResult<_>>()?;
+
         // Check if the function instantiation over all generics is larger
         // than MAX_TYPE_INSTANTIATION_NODES.
         let mut sum_nodes = 1u64;
@@ -1302,14 +1305,16 @@ impl<'a> Resolver<'a> {
         idx: StructDefInstantiationIndex,
         ty_args: &[Type],
     ) -> PartialVMResult<Type> {
-        let struct_inst = self.binary.loaded.struct_instantiation_at(idx.0);
+        let loaded_module = &*self.binary.loaded;
+        let struct_inst = loaded_module.struct_instantiation_at(idx.0);
+        let instantiation = loaded_module.instantiation_signature_at(struct_inst.instantiation_idx)?;
 
         // Before instantiating the type, count the # of nodes of all type arguments plus
         // existing type instantiation.
         // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.
         // This prevents constructing larger and larger types via struct instantiation.
         let mut sum_nodes = 1u64;
-        for ty in ty_args.iter().chain(struct_inst.instantiation.iter()) {
+        for ty in ty_args.iter().chain(instantiation.iter()) {
             sum_nodes = sum_nodes.saturating_add(self.loader.count_type_nodes(ty));
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
                 return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
@@ -1318,8 +1323,7 @@ impl<'a> Resolver<'a> {
 
         Ok(Type::StructInstantiation(Box::new((
             struct_inst.def,
-            struct_inst
-                .instantiation
+            instantiation
                 .iter()
                 .map(|ty| self.subst(ty, ty_args))
                 .collect::<PartialVMResult<_>>()?,
@@ -1430,6 +1434,9 @@ pub(crate) struct LoadedModule {
     // `VecMutBorrow(SignatureIndex)`, the `SignatureIndex` maps to a single `SignatureToken`, and
     // hence, a single type.
     single_signature_token_map: BTreeMap<SignatureIndex, Type>,
+
+    // a map from signatures in instantiations to the `Vec<Type>` that reperesent it.
+    instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>>,
 }
 
 impl LoadedModule {
@@ -1441,7 +1448,27 @@ impl LoadedModule {
         cache: &ModuleCache,
     ) -> Result<Self, PartialVMError> {
         let self_id = module.self_id();
-        let module_view = BinaryIndexedView::Module(module);
+
+        let mut instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>> = BTreeMap::new();
+        // helper to build the sparse signature vector
+        fn cache_signatures(
+            instantiation_signatures: &mut BTreeMap<SignatureIndex, Vec<Type>>,
+            module: &CompiledModule,
+            instantiation_idx: SignatureIndex,
+            cache: &ModuleCache,
+        ) -> Result<(), PartialVMError> {
+            if let Entry::Vacant(e) = instantiation_signatures.entry(instantiation_idx) {
+                let module_view = BinaryIndexedView::Module(module);
+                let instantiation = module
+                    .signature_at(instantiation_idx)
+                    .0
+                    .iter()
+                    .map(|ty| cache.make_type(module_view, ty))
+                    .collect::<Result<Vec<_>, _>>()?;
+                e.insert(instantiation);
+            }
+            Ok(())
+        }
 
         let mut struct_refs = vec![];
         let mut structs = vec![];
@@ -1470,14 +1497,18 @@ impl LoadedModule {
             let def = struct_inst.def.0 as usize;
             let struct_def = &structs[def];
             let field_count = struct_def.field_count;
-            let mut instantiation = vec![];
-            for ty in &module.signature_at(struct_inst.type_parameters).0 {
-                instantiation.push(cache.make_type(module_view, ty)?);
-            }
+
+            let instantiation_idx = struct_inst.type_parameters;
+            cache_signatures(
+                &mut instantiation_signatures,
+                module,
+                instantiation_idx,
+                cache,
+            )?;
             struct_instantiations.push(StructInstantiation {
                 field_count,
                 def: struct_def.idx,
-                instantiation,
+                instantiation_idx,
             });
         }
 
@@ -1509,6 +1540,7 @@ impl LoadedModule {
             }
         }
 
+        let module_view = BinaryIndexedView::Module(module);
         for func_def in module.function_defs() {
             let idx = function_refs[func_def.function.0 as usize];
             let name = module.identifier_at(module.function_handle_at(func_def.function).name);
@@ -1551,13 +1583,17 @@ impl LoadedModule {
 
         for func_inst in module.function_instantiations() {
             let handle = function_refs[func_inst.handle.0 as usize];
-            let mut instantiation = vec![];
-            for ty in &module.signature_at(func_inst.type_parameters).0 {
-                instantiation.push(cache.make_type(module_view, ty)?);
-            }
+
+            let instantiation_idx = func_inst.type_parameters;
+            cache_signatures(
+                &mut instantiation_signatures,
+                module,
+                instantiation_idx,
+                cache,
+            )?;
             function_instantiations.push(FunctionInstantiation {
                 handle,
-                instantiation,
+                instantiation_idx
             });
         }
 
@@ -1587,6 +1623,7 @@ impl LoadedModule {
             field_instantiations,
             function_map,
             single_signature_token_map,
+            instantiation_signatures,
         })
     }
 
@@ -1624,6 +1661,16 @@ impl LoadedModule {
 
     fn single_type_at(&self, idx: SignatureIndex) -> &Type {
         self.single_signature_token_map.get(&idx).unwrap()
+    }
+
+    fn instantiation_signature_at(&self, idx: SignatureIndex) -> Result<&Vec<Type>, PartialVMError> {
+        self
+            .instantiation_signatures
+            .get(&idx)
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Instantiation signature not found".to_string())
+            })
     }
 }
 
@@ -1801,7 +1848,7 @@ impl Function {
 struct FunctionInstantiation {
     // index to `ModuleCache::functions` global table
     handle: usize,
-    instantiation: Vec<Type>,
+    instantiation_idx: SignatureIndex,
 }
 
 #[derive(Debug)]
@@ -1818,7 +1865,7 @@ struct StructInstantiation {
     field_count: u16,
     // `ModuleCache::structs` global table index. It is the generic type.
     def: CachedStructIndex,
-    instantiation: Vec<Type>,
+    instantiation_idx: SignatureIndex,
 }
 
 // A field handle. The offset is the only used information when operating on a field
