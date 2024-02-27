@@ -1939,6 +1939,88 @@ async fn test_handle_overload_response() {
     .await;
 }
 
+// Tests that authority aggregator can aggregate SuiError::ValidatorOverloadedRetryAfter into
+// AggregatorProcessTransactionError::SystemOverloadRetryAfter.
+#[tokio::test]
+async fn test_handle_overload_retry_response() {
+    let mut authorities = BTreeMap::new();
+    let mut clients = BTreeMap::new();
+    let mut authority_keys = Vec::new();
+    for _ in 0..4 {
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        authority_keys.push((name, sec));
+        clients.insert(name, HandleTransactionTestAuthorityClient::new());
+    }
+
+    let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = random_object_ref();
+    let txn = make_transfer_sui_transaction(
+        gas_object,
+        SuiAddress::default(),
+        None,
+        sender,
+        &sender_kp,
+        666, // this is a dummy value which does not matter
+    );
+
+    let overload_error = SuiError::ValidatorOverloadedRetryAfter {
+        retry_after_secs: 0,
+    };
+    let rpc_error = SuiError::RpcError("RPC".into(), "Error".into());
+
+    // Have 2f + 1 validators return the overload error and we should get the `SystemOverload` error.
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+    set_tx_info_response_with_error(&mut clients, authority_keys.iter().skip(1), overload_error);
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        txn.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::SystemOverloadRetryAfter { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::ValidatorOverloadedRetryAfter { .. } | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+
+    // Change one of the valdiators' errors to RPC error so the system is considered not overloaded now and a `RetryableTransaction`
+    // should be returned.
+    clients
+        .get_mut(&authority_keys[1].0)
+        .unwrap()
+        .set_tx_info_response_error(rpc_error);
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+
+    assert_resp_err(
+        &agg,
+        txn.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::ValidatorOverloadedRetryAfter { .. } | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+}
+
 #[tokio::test]
 async fn test_early_exit_with_too_many_conflicts() {
     let mut authorities = BTreeMap::new();
@@ -2250,6 +2332,10 @@ async fn assert_resp_err<E, F>(
             }
 
             AggregatorProcessTransactionError::SystemOverload { errors, .. } => {
+                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+            }
+
+            AggregatorProcessTransactionError::SystemOverloadRetryAfter { errors, .. } => {
                 assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
             }
         },

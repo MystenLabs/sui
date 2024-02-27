@@ -44,7 +44,6 @@ mysten-metrics.workspace = true
 
 anemo.workspace = true
 anemo-tower.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 dashmap.workspace = true

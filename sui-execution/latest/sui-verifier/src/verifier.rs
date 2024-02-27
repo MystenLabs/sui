@@ -25,7 +25,7 @@ pub fn sui_verify_module_metered(
     global_storage_access_verifier::verify_module(module)?;
     id_leak_verifier::verify_module(module, meter)?;
     private_generics::verify_module(module, verifier_config)?;
-    entry_points_verifier::verify_module(module, fn_info_map)?;
+    entry_points_verifier::verify_module(module, fn_info_map, verifier_config)?;
     one_time_witness_verifier::verify_module(module, fn_info_map)
 }
 

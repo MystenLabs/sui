@@ -12,8 +12,8 @@ module test::m {
     use sui::tx_context::TxContext;
     use sui::object::{Self, UID};
 
-    struct S has store, key { id: UID }
-    struct Cup<phantom T: store> has store, key { id: UID }
+    public struct S has store, key { id: UID }
+    public struct Cup<phantom T: store> has store, key { id: UID }
 
     public entry fun mint_s(ctx: &mut TxContext) {
         let id = object::new(ctx);

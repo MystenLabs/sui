@@ -29,7 +29,6 @@ ouroboros.workspace = true
 rand.workspace = true
 async-trait.workspace = true
 itertools.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

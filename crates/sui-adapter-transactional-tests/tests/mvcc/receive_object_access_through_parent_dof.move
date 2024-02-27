@@ -14,12 +14,12 @@ module tto::M1 {
     const KEY: u64 = 0;
     const BKEY: u64 = 1;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
         value: vector<u8>,
     }
 
-    struct Wrapper<T: key + store> has key, store {
+    public struct Wrapper<T: key + store> has key, store {
         id: UID, 
         value: T,
     }
@@ -27,13 +27,13 @@ module tto::M1 {
     public fun start(ctx: &mut TxContext) {
         let a_parent = A { id: object::new(ctx), value: b"a_parent" };
 
-        let b_parent = A { id: object::new(ctx), value: b"b_parent" };
-        let b_child = A { id: object::new(ctx), value: b"b_child" };
+        let mut b_parent = A { id: object::new(ctx), value: b"b_parent" };
+        let mut b_child = A { id: object::new(ctx), value: b"b_child" };
         let b_child_child = A { id: object::new(ctx), value: b"b_child_child" };
         let b_child_child_df = A { id: object::new(ctx), value: b"b_child_child_df" };
 
         let wrapped_dof = A { id: object::new(ctx), value: b"wrapped_df" };
-        let to_wrap = A { id: object::new(ctx), value: b"wrapped" };
+        let mut to_wrap = A { id: object::new(ctx), value: b"wrapped" };
         dof::add(&mut to_wrap.id, KEY, wrapped_dof);
         let wrapped = Wrapper { id: object::new(ctx), value: to_wrap };
 

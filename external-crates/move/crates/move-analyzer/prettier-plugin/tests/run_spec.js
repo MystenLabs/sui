@@ -31,7 +31,7 @@ global.run_spec = function(dirname) {
                 }
                 const exp_prog = fs.readFileSync(exp_path, { encoding: 'utf8'});
                 if (formatted_prog != exp_prog) {
-                    const out_diff = new linediff(formatted_prog, exp_prog);
+                    const out_diff = new linediff(exp_prog, formatted_prog);
                     assert.fail(out_diff.toString() + 'Current output does not match the expected one (run with UB=1 to save the current output)');
                 }
             });

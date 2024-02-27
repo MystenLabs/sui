@@ -102,20 +102,12 @@ const guides = [
 			{
 				type: 'category',
 				label: 'Advanced Topics',
-				items: [
-					'guides/developer/advanced/asset-tokenization',
-					'guides/developer/advanced/graphql-migration',
-				],
-			},
-			/*{
-				type: 'category',
-				label: 'Advanced Topics',
 				link: {
 					type: 'doc',
 					id: 'guides/developer/advanced',
 				},
 				items: [
-					{
+					/*{
 						type: 'category',
 						label: 'Efficient Smart Contracts',
 						link: {
@@ -123,13 +115,12 @@ const guides = [
 							id: 'guides/developer/advanced/efficient-smart-contracts',
 						},
 						items: ['guides/developer/advanced/min-gas-fees'],
-					},
-					'guides/developer/advanced/wallet-integrations',
-					'guides/developer/advanced/security-best-practices',
-					'guides/developer/advanced/maximize-reach',
+					},*/
 					'guides/developer/advanced/asset-tokenization',
+					'guides/developer/advanced/graphql-migration',
+					'guides/developer/advanced/custom-indexer',
 				],
-			},*/
+			},
 			{
 				type: 'category',
 				label: 'App Examples',
@@ -140,7 +131,19 @@ const guides = [
 				items: [
 					'guides/developer/app-examples/e2e-counter',
 					'guides/developer/app-examples/auction',
-					'guides/developer/app-examples/escrow',
+					{
+						type: 'category',
+						label: 'Trading',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/app-examples/trading',
+						},
+						items: [
+							'guides/developer/app-examples/trading/backend',
+							'guides/developer/app-examples/trading/indexer-api',
+							'guides/developer/app-examples/trading/frontend',
+						],
+					},
 					'guides/developer/app-examples/trusted-swap',
 					'guides/developer/app-examples/tic-tac-toe',
 					'guides/developer/app-examples/recaptcha',

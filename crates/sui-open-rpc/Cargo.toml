@@ -12,7 +12,6 @@ serde.workspace = true
 serde_json.workspace = true
 bcs.workspace = true
 versions.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

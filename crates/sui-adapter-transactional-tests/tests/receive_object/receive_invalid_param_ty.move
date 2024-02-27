@@ -9,17 +9,17 @@ module tto::M1 {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer::{Self, Receiving};
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
     }
 
-    struct B has key, store {
+    public struct B has key, store {
         id: UID,
     }
 
-    struct Fake<phantom T> has drop { }
+    public struct Fake<phantom T> has drop { }
 
-    struct FakeSameLayout<phantom T> has drop {
+    public struct FakeSameLayout<phantom T> has drop {
         id: ID, 
         version: u64,
     }

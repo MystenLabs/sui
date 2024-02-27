@@ -14,10 +14,10 @@ module test::first_coin {
     use sui::tx_context;
     use sui::tx_context::TxContext;
 
-    struct FIRST_COIN has drop {}
+    public struct FIRST_COIN has drop {}
 
     fun init(otw: FIRST_COIN, ctx: &mut TxContext) {
-        let (treasury_cap, deny_cap, metadata) = coin::create_regulated_currency(
+        let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency(
             otw,
             9,
             b"RC",
@@ -41,10 +41,10 @@ module test::second_coin {
     use sui::tx_context;
     use sui::tx_context::TxContext;
 
-    struct SECOND_COIN has drop {}
+    public struct SECOND_COIN has drop {}
 
     fun init(otw: SECOND_COIN, ctx: &mut TxContext) {
-        let (treasury_cap, deny_cap, metadata) = coin::create_regulated_currency(
+        let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency(
             otw,
             9,
             b"RC",

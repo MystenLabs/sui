@@ -152,13 +152,11 @@ def do_cut(args):
         exit(result.returncode)
 
     clean_up_cut(args.feature)
-    update_toml(args.feature)
+    update_toml(args.feature, Path() / "sui-execution" / "Cargo.toml")
     generate_impls(args.feature, impl_module)
 
     with open(Path() / "sui-execution" / "src" / "lib.rs", mode="w") as lib:
         generate_lib(lib)
-
-    run(["cargo", "hakari", "generate"])
 
 
 def do_generate_lib(args):
@@ -419,9 +417,8 @@ def delete_cut_crates(feature):
         rmtree(module)
 
 
-def update_toml(feature):
+def update_toml(feature, toml_path):
     """Add dependencies for 'feature' to sui-execution's manifest."""
-    toml_path = Path() / "sui-execution" / "Cargo.toml"
 
     # Read all the lines
     with open(toml_path) as toml:
@@ -605,7 +602,7 @@ def discover_cuts():
 
 
 if __name__ == "__main__":
-    for bin in ["git", "cargo", "cargo-hakari"]:
+    for bin in ["git", "cargo"]:
         if not which(bin):
             print(f"Please install '{bin}'", file=stderr)
 

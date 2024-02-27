@@ -34,6 +34,12 @@ num-bigint.workspace = true
 regex.workspace = true
 reqwest.workspace = true
 im.workspace = true
+async-recursion.workspace = true
+thiserror.workspace = true
+miette.workspace = true
+datatest-stable.workspace = true
+insta.workspace = true
+shlex.workspace = true
 
 sui-config.workspace = true
 sui-execution = { path = "../../sui-execution" }
@@ -51,6 +57,8 @@ sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 shared-crypto.workspace = true
 sui-replay.workspace = true
+sui-transaction-builder.workspace = true
+move-binary-format.workspace = true
 
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
@@ -67,8 +75,8 @@ telemetry-subscribers.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
 csv.workspace = true
-workspace-hack.workspace = true
 move-vm-profiler.workspace = true
+move-command-line-common.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true
@@ -85,6 +93,9 @@ sui-simulator.workspace = true
 sui-test-transaction-builder.workspace = true
 serde_json.workspace = true
 
+[target.'cfg(msim)'.dependencies]
+msim.workspace = true
+
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]
 
@@ -92,6 +103,10 @@ normal = ["jemalloc-ctl"]
 name = "generate-genesis-checkpoint"
 path = "src/generate_genesis_checkpoint.rs"
 test = false
+
+[[test]]
+name = "ptb_files_tests"
+harness = false
 
 [features]
 gas-profiler = [

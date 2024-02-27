@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 36;
+const MAX_PROTOCOL_VERSION: u64 = 37;
 
 // Record history of protocol version allocations here:
 //
@@ -108,6 +108,7 @@ const MAX_PROTOCOL_VERSION: u64 = 36;
 // Version 36: Enable group operations native functions in devnet.
 //             Enable shared object deletion in mainnet.
 //             Set the consensus accepted transaction size and the included transactions size in the proposed block.
+// Version 37: Reject entry functions with mutable Random.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -382,6 +383,10 @@ struct FeatureFlags {
     // Enable native functions for group operations.
     #[serde(skip_serializing_if = "is_false")]
     enable_group_ops_native_functions: bool,
+
+    // Reject functions with mutable Random.
+    #[serde(skip_serializing_if = "is_false")]
+    reject_mutable_random_on_entry_functions: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1150,6 +1155,10 @@ impl ProtocolConfig {
     pub fn enable_group_ops_native_functions(&self) -> bool {
         self.feature_flags.enable_group_ops_native_functions
     }
+
+    pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
+        self.feature_flags.reject_mutable_random_on_entry_functions
+    }
 }
 
 #[cfg(not(msim))]
@@ -1886,6 +1895,9 @@ impl ProtocolConfig {
                     cfg.consensus_max_transactions_in_block_bytes = Some(6 * 1_024 * 1024);
                     // 6 MB
                 }
+                37 => {
+                    cfg.feature_flags.reject_mutable_random_on_entry_functions = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -1940,6 +1952,9 @@ impl ProtocolConfig {
     }
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val
+    }
+    pub fn set_accept_zklogin_in_multisig_for_testing(&mut self, val: bool) {
+        self.feature_flags.accept_zklogin_in_multisig = val
     }
     #[cfg(msim)]
     pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {

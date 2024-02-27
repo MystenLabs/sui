@@ -65,7 +65,7 @@ impl FromStr for DebugCommand {
         if s.starts_with(PrintStack.debug_string()) {
             return Ok(PrintStack);
         }
-        if s.starts_with(Step.debug_string())  || s.eq(StepSC.debug_string()) {
+        if s.starts_with(Step.debug_string()) || s.eq(StepSC.debug_string()) {
             return Ok(Step);
         }
         if s.starts_with(Continue.debug_string()) || s.eq(ContinueSC.debug_string()) {
@@ -128,7 +128,13 @@ impl DebugContext {
             .collect();
     }
 
-    fn print_stack(function_desc: &Function, locals: &Locals, pc: u16, interp: &Interpreter, resolver: &Loader ) {
+    fn print_stack(
+        function_desc: &Function,
+        locals: &Locals,
+        pc: u16,
+        interp: &Interpreter,
+        resolver: &Loader,
+    ) {
         let function_string = function_desc.pretty_short_string();
         let mut s = String::new();
         interp.debug_print_stack_trace(&mut s, resolver).unwrap();
@@ -203,7 +209,8 @@ impl DebugContext {
                                 self.should_take_input = false;
                                 break;
                             }
-                            DebugCommand::Breakpoint(breakpoint) | DebugCommand::BreakpointSC(breakpoint)=> {
+                            DebugCommand::Breakpoint(breakpoint)
+                            | DebugCommand::BreakpointSC(breakpoint) => {
                                 self.breakpoints.insert(breakpoint.to_string());
                             }
                             DebugCommand::DeleteBreakpoint(breakpoint) => {

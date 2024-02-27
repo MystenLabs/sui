@@ -42,16 +42,19 @@ With the dependency added, you can use the `emit` function to fire an event when
 /// Take coin from `DonutShop` and transfer it to tx sender.
 /// Requires authorization with `ShopOwnerCap`.
 public fun collect_profits( _: &ShopOwnerCap, shop: &mut DonutShop, ctx: &mut TxContext ) {
-let amount = balance::value(&shop.balance);
-let profits = coin::take(&mut shop.balance, amount, ctx);
-// simply create new type instance and emit it event::emit(ProfitsCollected { amount }); transfer::public_transfer(profits, tx_context::sender(ctx)) }
+    let amount = balance::value(&shop.balance);
+    let profits = coin::take(&mut shop.balance, amount, ctx);
+    // simply create new type instance and emit it.
+    event::emit(ProfitsCollected { amount });
+    transfer::public_transfer(profits, tx_context::sender(ctx));
+}
 ```
 
 ## Subscribe to events in Move
 
 Firing events is not very useful in a vacuum. You also need the ability to listen for those events so that you can act on them. In Sui, you subscribe to those events and provide logic that triggers when the event fires.
 
-Sui Full nodes support subscribe functionality using JSON-RPC notifications transmitted through the WebSocket API. You can interact with the RPC directly ([suix_subscribeEvent](/sui-api-ref#suix_subscribeEvent), [suix_subscribeTransaction](/sui-api-ref#suix_subscribeTransaction) or you can use an SDK like the Sui TypeScript SDK. The following excerpt from one of the examples uses the TypeScript SDK to create an asynchronous subscription to the filter identified in the filter.
+Sui Full nodes support subscribe functionality using JSON-RPC notifications transmitted through the WebSocket API. You can interact with the RPC directly ([suix_subscribeEvent](/sui-api-ref#suix_subscribeEvent), [suix_subscribeTransaction](/sui-api-ref#suix_subscribeTransaction)) or you can use an SDK like the Sui TypeScript SDK. The following excerpt from one of the examples uses the TypeScript SDK to create an asynchronous subscription to the filter identified in the filter.
 
 ```move
 let unsubscribe = await provider.subscribeEvent({
@@ -190,15 +193,17 @@ subscribeEvent {
 
 ```rust
 use futures::StreamExt;
-use sui_sdk::rpc_types::SuiEventFilter;
-use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_sdk::rpc_types::EventFilter;
+use sui_sdk::SuiClientBuilder;
+use anyhow::Result;
 
 #[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClientBuilder::default().build(
-      "https://fullnode.devnet.sui.io:443",
-    ).await.unwrap();
-    let mut subscribe_all = sui.event_api().subscribe_event(SuiEventFilter::All(vec![])).await?;
+async fn main() -> Result<()> {
+    let sui = SuiClientBuilder::default()
+        .ws_url("wss://fullnode.mainnet.sui.io:443")
+        .build("https://fullnode.mainnet.sui.io:443")
+        .await.unwrap();
+    let mut subscribe_all = sui.event_api().subscribe_event(EventFilter::All(vec![])).await?;
     loop {
         println!("{:?}", subscribe_all.next().await);
     }

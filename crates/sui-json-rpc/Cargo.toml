@@ -50,7 +50,6 @@ mysten-metrics.workspace = true
 shared-crypto.workspace = true
 typed-store-error.workspace = true
 cached.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true

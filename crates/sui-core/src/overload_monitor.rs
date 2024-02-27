@@ -17,6 +17,10 @@ use tokio::time::sleep;
 use tracing::{debug, info};
 use twox_hash::XxHash64;
 
+#[cfg(test)]
+#[path = "unit_tests/overload_monitor_tests.rs"]
+pub mod overload_monitor_tests;
+
 #[derive(Default)]
 pub struct AuthorityOverloadInfo {
     /// Whether the authority is overloaded.
@@ -42,6 +46,9 @@ impl AuthorityOverloadInfo {
 const STEADY_OVERLOAD_REDUCTION_PERCENTAGE: u32 = 10;
 const EXECUTION_RATE_RATIO_FOR_COMPARISON: f64 = 0.9;
 const ADDITIONAL_LOAD_SHEDDING: f64 = 0.1;
+
+// The update interval of the random seed used to determine whether a txn should be rejected.
+const SEED_UPDATE_DURATION_SECS: u64 = 30;
 
 // Monitors the overload signals in `authority_state` periodically, and updates its `overload_info`
 // when the signals indicates overload.
@@ -215,11 +222,11 @@ fn check_overload_signals(
 fn should_reject_tx(
     load_shedding_percentage: u32,
     tx_digest: TransactionDigest,
-    minutes_since_epoch: u64,
+    temporal_seed: u64,
 ) -> bool {
     // TODO: we also need to add a secret salt (e.g. first consensus commit in the current epoch),
     // to prevent gaming the system.
-    let mut hasher = XxHash64::with_seed(minutes_since_epoch);
+    let mut hasher = XxHash64::with_seed(temporal_seed);
     hasher.write(tx_digest.inner());
     let value = hasher.finish();
     value % 100 < load_shedding_percentage as u64
@@ -230,17 +237,23 @@ pub fn overload_monitor_accept_tx(
     load_shedding_percentage: u32,
     tx_digest: TransactionDigest,
 ) -> SuiResult {
-    // Using the minutes_since_epoch as the hash seed to allow rejected transaction's
-    // retry to have a chance to go through in the future.
-    let minutes_since_epoch = SystemTime::now()
+    // Derive a random seed from the epoch time for transaction selection. Changing the seed every
+    // `SEED_UPDATE_DURATION_SECS` interval allows rejected transaction's retry to have a chance
+    // to go through in the future.
+    // Also, using the epoch time instead of randomly generating a seed allows that all validators
+    // makes the same decision.
+    let temporal_seed = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Sui did not exist prior to 1970")
         .as_secs()
-        / 60;
+        / SEED_UPDATE_DURATION_SECS;
 
-    if should_reject_tx(load_shedding_percentage, tx_digest, minutes_since_epoch) {
-        // TODO: complete the suggestion for client retry deadline.
-        fp_bail!(SuiError::ValidatorOverloadedRetryAfter { retry_after_sec: 0 });
+    if should_reject_tx(load_shedding_percentage, tx_digest, temporal_seed) {
+        // TODO: using `SEED_UPDATE_DURATION_SECS` is a safe suggestion that the time based seed
+        // is definitely different by then. However, a shorter suggestion may be available.
+        fp_bail!(SuiError::ValidatorOverloadedRetryAfter {
+            retry_after_secs: SEED_UPDATE_DURATION_SECS
+        });
     }
     Ok(())
 }
@@ -433,6 +446,20 @@ mod tests {
         assert!(!check_authority_overload(&authority, &config));
     }
 
+    // Creates an AuthorityState and starts an overload monitor that monitors its metrics.
+    async fn start_overload_monitor() -> (Arc<AuthorityState>, JoinHandle<()>) {
+        let overload_config = AuthorityOverloadConfig::default();
+        let state = TestAuthorityBuilder::new()
+            .with_authority_overload_config(overload_config.clone())
+            .build()
+            .await;
+        let authority_state = Arc::downgrade(&state);
+        let monitor_handle = tokio::spawn(async move {
+            overload_monitor(authority_state, overload_config).await;
+        });
+        (state, monitor_handle)
+    }
+
     // Starts a load generator that generates a steady workload, and also allow it to accept
     // burst of request through `burst_rx`.
     // Request tracking is done by the overload monitor inside `authority`.
@@ -556,7 +583,7 @@ mod tests {
         min_dropping_rate: f64,
         max_dropping_rate: f64,
     ) {
-        let state = TestAuthorityBuilder::new().build().await;
+        let (state, monitor_handle) = start_overload_monitor().await;
 
         let (tx, rx) = unbounded_channel();
         let (_burst_tx, burst_rx) = unbounded_channel();
@@ -584,6 +611,9 @@ mod tests {
             / total_requests.load(Ordering::SeqCst) as f64;
         assert!(min_dropping_rate <= dropped_ratio);
         assert!(dropped_ratio <= max_dropping_rate);
+
+        monitor_handle.abort();
+        let _ = monitor_handle.await;
     }
 
     // Tests that when request generation rate is slower than execution rate, no requests should be dropped.
@@ -615,7 +645,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     pub async fn test_workload_single_spike() {
         telemetry_subscribers::init_for_testing();
-        let state = TestAuthorityBuilder::new().build().await;
+        let (state, monitor_handle) = start_overload_monitor().await;
 
         let (tx, rx) = unbounded_channel();
         let (burst_tx, burst_rx) = unbounded_channel();
@@ -644,6 +674,9 @@ mod tests {
 
         // No requests should be dropped.
         assert_eq!(dropped_requests.load(Ordering::SeqCst), 0);
+
+        monitor_handle.abort();
+        let _ = monitor_handle.await;
     }
 
     // Tests that when there are regular spikes that keep queueing latency consistently high,
@@ -651,7 +684,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     pub async fn test_workload_consistent_short_spike() {
         telemetry_subscribers::init_for_testing();
-        let state = TestAuthorityBuilder::new().build().await;
+        let (state, monitor_handle) = start_overload_monitor().await;
 
         let (tx, rx) = unbounded_channel();
         let (burst_tx, burst_rx) = unbounded_channel();
@@ -686,6 +719,9 @@ mod tests {
         // execution rate.
         assert!(0.4 < dropped_ratio);
         assert!(dropped_ratio < 0.6);
+
+        monitor_handle.abort();
+        let _ = monitor_handle.await;
     }
 
     // Tests that the ratio of rejected transactions created randomly matches load shedding percentage in
@@ -712,31 +748,31 @@ mod tests {
     async fn test_txn_rejection_over_time() {
         let start_time = Instant::now();
         let mut digest = TransactionDigest::random();
-        let mut minutes_since_epoch = 28455473;
+        let mut temporal_seed = 1708108277 / SEED_UPDATE_DURATION_SECS;
         let load_shedding_percentage = 50;
 
         // Find a rejected transaction with 50% rejection rate.
-        while !should_reject_tx(load_shedding_percentage, digest, minutes_since_epoch)
+        while !should_reject_tx(load_shedding_percentage, digest, temporal_seed)
             && start_time.elapsed() < Duration::from_secs(30)
         {
             digest = TransactionDigest::random();
         }
 
-        // It should always be rejected in the current minute.
+        // It should always be rejected using the current temporal_seed.
         for _ in 0..100 {
             assert!(should_reject_tx(
                 load_shedding_percentage,
                 digest,
-                minutes_since_epoch
+                temporal_seed
             ));
         }
 
         // It will be accepted in the future.
-        minutes_since_epoch += 1;
-        while should_reject_tx(load_shedding_percentage, digest, minutes_since_epoch)
+        temporal_seed += 1;
+        while should_reject_tx(load_shedding_percentage, digest, temporal_seed)
             && start_time.elapsed() < Duration::from_secs(30)
         {
-            minutes_since_epoch += 1;
+            temporal_seed += 1;
         }
 
         // Make sure that the tests can finish within 30 seconds.

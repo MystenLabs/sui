@@ -14,16 +14,16 @@ use sui::dynamic_field::{add, exists_, borrow, borrow_mut};
 use sui::object::{Self, UID};
 use sui::tx_context::{sender, TxContext};
 
-struct Wrapper has key {
+public struct Wrapper has key {
     id: UID,
     old: UID,
 }
 
-struct Obj has key, store {
+public struct Obj has key, store {
     id: UID,
 }
 
-struct Counter has key, store {
+public struct Counter has key, store {
     id: UID,
     count: u64,
 }

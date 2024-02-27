@@ -15,4 +15,3 @@ sui-types.workspace = true
 tracing.workspace = true
 sui-execution.workspace = true
 fastcrypto-zkp.workspace = true
-workspace-hack.workspace = true

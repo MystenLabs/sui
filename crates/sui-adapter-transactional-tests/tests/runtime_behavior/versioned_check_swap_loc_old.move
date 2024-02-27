@@ -8,8 +8,8 @@
 //# publish
 module test::m {
     public fun t1(cond: bool) {
-        let x: vector<u64>;
-        let r: &vector<u64>;
+        let mut x: vector<u64>;
+        let mut r: &vector<u64>;
         if (cond) {
             x = vector[];
             r = &x;
@@ -26,7 +26,7 @@ module test::m {
 
     public fun t2(cond: bool) {
         let x: vector<u64> = vector[];
-        let r: &vector<u64>;
+        let mut r: &vector<u64>;
         if (cond) {
             r = &x;
             // use r in ways to disable optimizations or moving

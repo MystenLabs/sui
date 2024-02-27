@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::client_ptb::ptb::{ptb_description, PTB};
 use std::{
+    collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
 };
 
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{anyhow, bail, ensure, Context};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
@@ -16,7 +19,6 @@ use fastcrypto::{
     traits::ToFromBytes,
 };
 
-use json_to_table::json_to_table;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
@@ -30,21 +32,21 @@ use shared_crypto::intent::Intent;
 use sui_execution::verifier::VerifierOverrides;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    DynamicFieldPage, SuiData, SuiObjectData, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    Coin, DynamicFieldPage, SuiCoinMetadata, SuiData, SuiExecutionStatus, SuiObjectData,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData, SuiRawData,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
-use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
     gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
 use sui_replay::ReplayToolCommand;
-use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
-use sui_sdk::SuiClient;
 use sui_sdk::{
-    wallet_context::WalletContext, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
+    apis::ReadApi,
+    sui_client_config::{SuiClientConfig, SuiEnv},
+    wallet_context::WalletContext,
+    SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -62,6 +64,7 @@ use sui_types::{
     transaction::{SenderSignedData, Transaction, TransactionData, TransactionDataAPI},
 };
 
+use json_to_table::json_to_table;
 use tabled::{
     builder::Builder as TableBuilder,
     settings::{
@@ -132,6 +135,20 @@ pub enum SuiClientCommands {
         /// Sort by alias instead of address
         #[clap(long, short = 's')]
         sort_by_alias: bool,
+    },
+    /// List the coin balance of an address
+    #[clap(name = "balance")]
+    Balance {
+        /// Address (or its alias)
+        #[arg(value_parser)]
+        address: Option<KeyIdentity>,
+        /// Show balance for the specified coin (e.g., 0x2::sui::SUI).
+        /// All coins will be shown if none is passed.
+        #[clap(long, required = false)]
+        coin_type: Option<String>,
+        /// Show a list with each coin's object ID and balance
+        #[clap(long, required = false)]
+        with_coins: bool,
     },
     /// Call Move function
     #[clap(name = "call")]
@@ -416,6 +433,10 @@ pub enum SuiClientCommands {
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
+
+    /// Run a PTB either from file or from the provided args
+    #[clap(name = "ptb")]
+    PTB(PTB),
 
     /// Publish Move modules
     #[clap(name = "publish")]
@@ -840,6 +861,81 @@ impl SuiClientCommands {
                 };
                 SuiClientCommandResult::Addresses(output)
             }
+            SuiClientCommands::Balance {
+                address,
+                coin_type,
+                with_coins,
+            } => {
+                let address = get_identity_address(address, context)?;
+                let client = context.get_client().await?;
+
+                let mut objects: Vec<Coin> = Vec::new();
+                let mut cursor = None;
+                loop {
+                    let response = match coin_type {
+                        Some(ref coin_type) => {
+                            client
+                                .coin_read_api()
+                                .get_coins(address, Some(coin_type.clone()), cursor, None)
+                                .await?
+                        }
+                        None => {
+                            client
+                                .coin_read_api()
+                                .get_all_coins(address, cursor, None)
+                                .await?
+                        }
+                    };
+
+                    objects.extend(response.data);
+
+                    if response.has_next_page {
+                        cursor = response.next_cursor;
+                    } else {
+                        break;
+                    }
+                }
+
+                fn canonicalize_type(type_: &str) -> Result<String, anyhow::Error> {
+                    Ok(TypeTag::from_str(type_)
+                        .context("Cannot parse coin type")?
+                        .to_canonical_string(/* with_prefix */ true))
+                }
+
+                let mut coins_by_type = BTreeMap::new();
+                for c in objects {
+                    let coins = match coins_by_type.entry(canonicalize_type(&c.coin_type)?) {
+                        Entry::Vacant(entry) => {
+                            let metadata = client
+                                .coin_read_api()
+                                .get_coin_metadata(c.coin_type.clone())
+                                .await
+                                .with_context(|| {
+                                    format!(
+                                        "Cannot fetch the coin metadata for coin {}",
+                                        c.coin_type
+                                    )
+                                })?;
+
+                            &mut entry.insert((metadata, vec![])).1
+                        }
+                        Entry::Occupied(entry) => &mut entry.into_mut().1,
+                    };
+
+                    coins.push(c);
+                }
+                let sui_type_tag = canonicalize_type(SUI_COIN_TYPE)?;
+
+                // show SUI first
+                let ordered_coins_sui_first = coins_by_type
+                    .remove(&sui_type_tag)
+                    .into_iter()
+                    .chain(coins_by_type.into_values())
+                    .collect();
+
+                SuiClientCommandResult::Balance(ordered_coins_sui_first, with_coins)
+            }
+
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
                 let client = context.get_client().await?;
                 let df_read = client
@@ -864,56 +960,17 @@ impl SuiClientCommands {
                 let sender = sender.unwrap_or(context.active_address()?);
 
                 let client = context.get_client().await?;
-                let (dependencies, compiled_modules, compiled_package, package_id) =
-                    compile_package(
-                        &client,
+
+                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
+                    upgrade_package(
+                        client.read_api(),
                         build_config,
                         package_path,
+                        upgrade_capability,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
                     )
                     .await?;
-
-                let package_id = package_id.map_err(|e| match e {
-                    PublishedAtError::NotPresent => {
-                        anyhow!("No 'published-at' field in manifest for package to be upgraded.")
-                    }
-                    PublishedAtError::Invalid(v) => anyhow!(
-                        "Invalid 'published-at' field in manifest of package to be upgraded. \
-                         Expected an on-chain address, but found: {v:?}"
-                    ),
-                })?;
-
-                let resp = context
-                    .get_client()
-                    .await?
-                    .read_api()
-                    .get_object_with_options(
-                        upgrade_capability,
-                        SuiObjectDataOptions::default().with_bcs().with_owner(),
-                    )
-                    .await?;
-
-                let Some(data) = resp.data else {
-                    return Err(anyhow!(
-                        "Could not find upgrade capability at {upgrade_capability}"
-                    ));
-                };
-
-                let upgrade_cap: UpgradeCap = data
-                    .bcs
-                    .ok_or_else(|| {
-                        anyhow!("Fetch upgrade capability object but no data was returned")
-                    })?
-                    .try_as_move()
-                    .ok_or_else(|| anyhow!("Upgrade capability is not a Move Object"))?
-                    .deserialize()?;
-                // We keep the existing policy -- no fancy policies or changing the upgrade
-                // policy at the moment. To change the policy you can call a Move function in the
-                // `package` module to change this policy.
-                let upgrade_policy = upgrade_cap.policy;
-                let package_digest =
-                    compiled_package.get_package_digest(with_unpublished_dependencies);
 
                 let data = client
                     .transaction_builder()
@@ -967,7 +1024,7 @@ impl SuiClientCommands {
 
                 let client = context.get_client().await?;
                 let (dependencies, compiled_modules, _, _) = compile_package(
-                    &client,
+                    client.read_api(),
                     build_config,
                     package_path,
                     with_unpublished_dependencies,
@@ -1536,6 +1593,16 @@ impl SuiClientCommands {
 
                 SuiClientCommandResult::VerifySource
             }
+            SuiClientCommands::PTB(ptb) => {
+                if ptb.args.contains(&"--help".to_string()) {
+                    ptb_description().print_long_help().unwrap();
+                } else if ptb.args.contains(&"-h".to_string()) || ptb.args.is_empty() {
+                    ptb_description().print_help().unwrap();
+                } else {
+                    ptb.execute(context).await?;
+                }
+                SuiClientCommandResult::NoOutput
+            }
         });
         ret
     }
@@ -1567,8 +1634,69 @@ fn compile_package_simple(
     )?)
 }
 
-async fn compile_package(
-    client: &SuiClient,
+pub(crate) async fn upgrade_package(
+    read_api: &ReadApi,
+    build_config: MoveBuildConfig,
+    package_path: PathBuf,
+    upgrade_capability: ObjectID,
+    with_unpublished_dependencies: bool,
+    skip_dependency_verification: bool,
+) -> Result<(ObjectID, Vec<Vec<u8>>, PackageDependencies, [u8; 32], u8), anyhow::Error> {
+    let (dependencies, compiled_modules, compiled_package, package_id) = compile_package(
+        read_api,
+        build_config,
+        package_path,
+        with_unpublished_dependencies,
+        skip_dependency_verification,
+    )
+    .await?;
+
+    let package_id = package_id.map_err(|e| match e {
+        PublishedAtError::NotPresent => {
+            anyhow!("No 'published-at' field in manifest for package to be upgraded.")
+        }
+        PublishedAtError::Invalid(v) => anyhow!(
+            "Invalid 'published-at' field in manifest of package to be upgraded. \
+                         Expected an on-chain address, but found: {v:?}"
+        ),
+    })?;
+
+    let resp = read_api
+        .get_object_with_options(
+            upgrade_capability,
+            SuiObjectDataOptions::default().with_bcs().with_owner(),
+        )
+        .await?;
+
+    let Some(data) = resp.data else {
+        return Err(anyhow!(
+            "Could not find upgrade capability at {upgrade_capability}"
+        ));
+    };
+
+    let upgrade_cap: UpgradeCap = data
+        .bcs
+        .ok_or_else(|| anyhow!("Fetch upgrade capability object but no data was returned"))?
+        .try_as_move()
+        .ok_or_else(|| anyhow!("Upgrade capability is not a Move Object"))?
+        .deserialize()?;
+    // We keep the existing policy -- no fancy policies or changing the upgrade
+    // policy at the moment. To change the policy you can call a Move function in the
+    // `package` module to change this policy.
+    let upgrade_policy = upgrade_cap.policy;
+    let package_digest = compiled_package.get_package_digest(with_unpublished_dependencies);
+
+    Ok((
+        package_id,
+        compiled_modules,
+        dependencies,
+        package_digest,
+        upgrade_policy,
+    ))
+}
+
+pub(crate) async fn compile_package(
+    read_api: &ReadApi,
     build_config: MoveBuildConfig,
     package_path: PathBuf,
     with_unpublished_dependencies: bool,
@@ -1619,7 +1747,7 @@ async fn compile_package(
     }
     let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     if !skip_dependency_verification {
-        let verifier = BytecodeSourceVerifier::new(client.read_api());
+        let verifier = BytecodeSourceVerifier::new(read_api);
         if let Err(e) = verifier.verify_package_deps(&compiled_package).await {
             return Err(SuiError::ModulePublishFailure {
                 error: format!(
@@ -1668,6 +1796,20 @@ impl Display for SuiClientCommandResult {
                 let style = TableStyle::rounded();
                 table.with(style);
                 write!(f, "{}", table)?
+            }
+            SuiClientCommandResult::Balance(coins, with_coins) => {
+                if coins.is_empty() {
+                    return write!(f, "No coins found for this address.");
+                }
+                let mut builder = TableBuilder::default();
+                pretty_print_balance(coins, &mut builder, *with_coins);
+                let mut table = builder.build();
+                table.with(TablePanel::header("Balance of coins owned by this address"));
+                table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+                    1,
+                    TableStyle::modern().get_horizontal(),
+                )]));
+                write!(f, "{}", table)?;
             }
             SuiClientCommandResult::DynamicFieldQuery(df_refs) => {
                 let df_refs = DynamicFieldOutput {
@@ -1919,6 +2061,7 @@ impl Display for SuiClientCommandResult {
                 writeln!(f, "{}", table)?;
             }
             SuiClientCommandResult::NoOutput => {}
+            SuiClientCommandResult::PTB(_) => {} // this is handled in PTB execute
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -2159,6 +2302,7 @@ pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
     Addresses(AddressesOutput),
+    Balance(Vec<(Option<SuiCoinMetadata>, Vec<Coin>)>, bool),
     Call(SuiTransactionBlockResponse),
     ChainIdentifier(String),
     DynamicFieldQuery(DynamicFieldPage),
@@ -2174,6 +2318,7 @@ pub enum SuiClientCommandResult {
     Pay(SuiTransactionBlockResponse),
     PayAllSui(SuiTransactionBlockResponse),
     PaySui(SuiTransactionBlockResponse),
+    PTB(SuiTransactionBlockResponse),
     Publish(SuiTransactionBlockResponse),
     RawObject(SuiObjectResponse),
     SerializedSignedTransaction(SenderSignedData),
@@ -2246,4 +2391,50 @@ pub async fn request_tokens_from_faucet(
         println!("Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins.");
     }
     Ok(())
+}
+
+fn pretty_print_balance(
+    coins_by_type: &Vec<(Option<SuiCoinMetadata>, Vec<Coin>)>,
+    builder: &mut TableBuilder,
+    with_coins: bool,
+) {
+    let mut table_builder = TableBuilder::default();
+    for (metadata, coins) in coins_by_type {
+        let name = metadata
+            .as_ref()
+            .map(|x| x.name.as_str())
+            .unwrap_or_else(|| "unknown");
+        if with_coins {
+            let coin_numbers = if coins.len() != 1 { "coins" } else { "coin" };
+            builder.push_record(vec![format!(
+                "{}: {} {coin_numbers}, Balance: {}\n ┌",
+                name,
+                coins.len(),
+                coins.iter().map(|x| x.balance as u128).sum::<u128>(),
+            )]);
+
+            let mut table_builder = TableBuilder::default();
+            for c in coins {
+                table_builder.push_record(vec![
+                    "│",
+                    c.coin_object_id.to_string().as_str(),
+                    format!("{}", c.balance).as_str(),
+                ]);
+            }
+            builder.push_record(vec![table_builder
+                .build()
+                .with(TableStyle::empty())
+                .to_string()]);
+            builder.push_record(vec![format!(" └")]);
+        } else {
+            table_builder.push_record(vec![
+                name,
+                format!("{}", coins.iter().map(|x| x.balance as u128).sum::<u128>()).as_str(),
+            ]);
+        }
+    }
+    builder.push_record(vec![table_builder
+        .build()
+        .with(TableStyle::blank())
+        .to_string()]);
 }

@@ -1,0 +1,632 @@
+---
+title: Escrow Indexing and API Service
+sidebar_label: Indexing and API Service
+---
+
+:::note Multi-Page Guide
+
+This is the second in a [three-part guide](../trading.mdx) on how to build a trustless atomic swap on Sui.
+
+:::
+
+In most cases where you want to enhance a dApp and ensure it is production ready, you need to have an indexing service (indexer) listening to the blockchain for on-chain events, shaping the data to fit your application needs, and storing the transformed data into the local off-chain database so you can query them in the most efficient way. Joining hands with an indexer, you expose an API allowing the frontend to query the indexed data and update the screen as escrows are made and swaps are fulfilled.
+
+Architecturally, the service does the heavy lifting of indexing the data, while the other service exposes the data through an API convention for external consumption.
+
+## Prerequisites
+
+{@include: ../../../../snippets/app-examples-trading-source.mdx}
+
+Before getting started, make sure you:
+
+- Understand [the mechanism behind the Trading backend](../trading.mdx).
+- Install [`pnpm` through this guide](https://pnpm.io/installation) as this example uses it as the package manager.
+- Check out the [indexer's README](https://github.com/MystenLabs/sui/tree/main/examples/trading/api) to setup the development environment.
+- Check out [Prisma](https://www.prisma.io/) to get an overall sense of the technology that facilitates all the database interactions.
+- Check out [Express](https://expressjs.com/) to learn how to set up a web server application in Node.js. This server bootstraps your API service.
+- Check out [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui with TypeScript.
+
+## Indexing service
+
+The indexing service fetches `Escrow` objects by `sender` and `recipient`.  
+
+### Data model
+
+In most cases, when you're working with a database directly from a backend service, you might want to use some sort of database libraries and toolings to abstract away database creation and management complexity. In this case, the example uses [Prisma](https://www.prisma.io/) to manage all the database interactions, such as defining data models and database migrations.
+
+First of all, design what data to index:
+
+```ts title='prisma/schema.prisma'
+/// Our `Locked` objects list
+model Locked {
+  // Keeping an ID to use as a pagination cursor
+  // There's an issue with BigInt for sqlite, so use a plain ID.
+  id Int @id @default(autoincrement())
+  objectId String @unique
+  keyId String?
+  creator String?
+  itemId String?
+  deleted Boolean @default(false)
+
+  @@index([creator])
+  @@index([deleted])
+}
+
+/// Swap objects list
+model Escrow {
+  // Keeping an ID to use as a pagination cursor
+  // There's an issue with BigInt for sqlite, so use a plain ID.
+  id Int @id @default(autoincrement())
+  objectId String @unique
+  sender String?
+  recipient String?
+  keyId String?
+  itemId String?
+  swapped Boolean @default(false)
+  cancelled Boolean @default(false)
+
+  @@index([recipient])
+  @@index([sender])
+}
+```
+
+These data models represent the `Locked` and `Escrow` object. Compared to their on-chain version, which contains much less attributes due to initial smart contract design, they have additional fields providing extra information that helps to facilitate any queries at a later stage.
+
+```ts title='prisma/schema.prisma'
+/// Saves the latest cursor for a given key.
+model Cursor {
+  id String @id
+  eventSeq String
+  txDigest String
+}
+```
+
+Most indexing services need to implement some sort of checkpoint mechanism to ensure it picks up the progress where it left off even after it returns from a crash. `Cursor` is the checkpoint that you store in your persistent database to ensure the data remains and is unaffected by incidents.
+
+Next, let's explore the logic keeping the service listening to blockchain signals and reacting accordingly.
+
+### `event-indexer.ts`
+
+Let's first examine `event-indexer.ts`:
+
+#### Imports
+
+```ts title='event-indexer.ts'
+import { EventId, SuiClient, SuiEvent, SuiEventFilter } from '@mysten/sui.js/client';
+
+import { CONFIG } from '../config';
+import { prisma } from '../db';
+import { getClient } from '../sui-utils';
+import { handleEscrowObjects } from './escrow-handler';
+import { handleLockObjects } from './locked-handler';
+```
+
+These lines import the necessary modules and dependencies for the script. The `EventId`, `SuiClient`, `SuiEvent`, and `SuiEventFilter` types are imported from the `@mysten/sui.js/client` package. The `CONFIG` constant is imported from the local `config` module, `prisma` from the local `db` module, `getClient` from the local `sui-utils` module, and the `handleEscrowObjects` and `handleLockObjects` functions from the local `escrow-handler` and `locked-handler` modules respectively.
+
+#### Type definitions
+
+```ts title='event-indexer.ts'
+type SuiEventsCursor = EventId | null | undefined;
+
+type EventExecutionResult = {
+	cursor: SuiEventsCursor;
+	hasNextPage: boolean;
+};
+
+type EventTracker = {
+	// The module that defines the type, with format `package::module`
+	type: string;
+	filter: SuiEventFilter;
+	callback: (events: SuiEvent[], type: string) => any;
+};
+```
+
+Three custom types are defined here: `SuiEventsCursor`, `EventExecutionResult`, and `EventTracker`. `SuiEventsCursor` is a type alias for `EventId | null | undefined`, representing the possible states of a cursor pointing to events on the Sui network. `EventExecutionResult` represents the result of executing an event job, including the updated cursor and a flag indicating whether there are more pages of events to process. `EventTracker` represents an event tracker, which includes the type of the event, a filter for the event, and a callback function to handle the event.
+
+#### Constants
+
+```ts title='event-indexer.ts'
+const EVENTS_TO_TRACK: EventTracker[] = [
+	{
+		type: `${CONFIG.SWAP_CONTRACT.packageId}::lock`,
+		filter: {
+			MoveEventModule: {
+				module: 'lock',
+				package: CONFIG.SWAP_CONTRACT.packageId,
+			},
+		},
+		callback: handleLockObjects,
+	},
+	{
+		type: `${CONFIG.SWAP_CONTRACT.packageId}::shared`,
+		filter: {
+			MoveEventModule: {
+				module: 'shared',
+				package: CONFIG.SWAP_CONTRACT.packageId,
+			},
+		},
+		callback: handleEscrowObjects,
+	},
+];
+```
+
+The `EVENTS_TO_TRACK` constant is an array of `EventTracker` objects. Each `EventTracker` specifies a type of event to track, a filter for the event, and a callback function to handle the event. In this case, the script tracks two types of events: lock events and shared events. The filter for each event specifies the module and package ID for the event. The callback function for each event is either `handleLockObjects` or `handleEscrowObjects`, depending on the type of event.
+
+#### Functions
+
+```ts title='event-indexer.ts'
+const executeEventJob = async (
+	client: SuiClient,
+	tracker: EventTracker,
+	cursor: SuiEventsCursor,
+): Promise<EventExecutionResult> => {
+	try {
+		// Get the events from the chain.
+		// This implementation goes from start to finish.
+		// This also allows filling in a database from scratch!
+		const { data, hasNextPage, nextCursor } = await client.queryEvents({
+			query: tracker.filter,
+			cursor,
+			order: 'ascending',
+		});
+
+		// Handle the data transformations defined for each event.
+		await tracker.callback(data, tracker.type);
+
+		// Only update the cursor if extra data is fetched (which means there was a change).
+		if (nextCursor && data.length > 0) {
+			await saveLatestCursor(tracker, nextCursor);
+
+			return {
+				cursor: nextCursor,
+				hasNextPage,
+			};
+		}
+	} catch (e) {
+		console.error(e);
+	}
+	// By default, return the same cursor as passed in.
+	return {
+		cursor,
+		hasNextPage: false,
+	};
+};
+```
+
+This function executes an event job. It takes a `SuiClient`, an `EventTracker`, and a `SuiEventsCursor` as arguments, and returns a promise that resolves to an `EventExecutionResult`. The function tries to get the events from the chain according to the filter defined in the `EventTracker`. If successful, it handles the data transformations defined for each event and updates the cursor if there were changes. If an error occurs during execution, it logs the error and returns the original cursor without updating it.
+
+```ts title='event-indexer.ts'
+const runEventJob = async (client: SuiClient, tracker: EventTracker, cursor: SuiEventsCursor) => {
+	const result = await executeEventJob(client, tracker, cursor);
+
+	// Trigger a timeout. Depending on the result, we either wait 0ms or the polling interval.
+	setTimeout(
+		() => {
+			runEventJob(client, tracker, result.cursor);
+		},
+		result.hasNextPage ? 0 : CONFIG.POLLING_INTERVAL_MS,
+	);
+};
+```
+
+This function runs an event job. It takes a `SuiClient`, an `EventTracker`, and a `SuiEventsCursor` as arguments. It calls `executeEventJob` and schedules another call to `runEventJob` based on the result of the execution. If there are more pages of events to process, it waits for the polling interval defined in `CONFIG.POLLING_INTERVAL_MS` before making the next call. Otherwise, it makes the call immediately.
+
+```ts title='event-indexer.ts'
+const getLatestCursor = async (tracker: EventTracker) => {
+	const cursor = await prisma.cursor.findUnique({
+		where: {
+			id: tracker.type,
+		},
+	});
+
+	return cursor || undefined;
+};
+```
+
+This function gets the latest cursor for an event tracker. It takes an `EventTracker` as an argument and returns a promise that resolves to the cursor. If the cursor is undefined, it retrieves the cursor from the database.
+
+```ts title='event-indexer.ts'
+const saveLatestCursor = async (tracker: EventTracker, cursor: EventId) => {
+	const data = {
+		eventSeq: cursor.eventSeq,
+		txDigest: cursor.txDigest,
+	};
+
+	return prisma.cursor.upsert({
+		where: {
+			id: tracker.type,
+		},
+		update: data,
+		create: { id: tracker.type, ...data },
+	});
+};
+```
+
+This function saves the latest cursor for an event tracker to the database. It takes an `EventTracker` and a `SuiEventsCursor` as arguments and returns a promise that resolves to the saved cursor. If the cursor already exists in the database, it updates the existing entry. Otherwise, it creates a new entry.
+
+```ts title='event-indexer.ts'
+export const setupListeners = async () => {
+	for (const event of EVENTS_TO_TRACK) {
+		runEventJob(getClient(CONFIG.NETWORK), event, await getLatestCursor(event));
+	}
+};
+```
+
+This function sets up all the listeners for the events to track. It iterates over the `EVENTS_TO_TRACK` array and calls `runEventJob` for each event tracker, passing the `SuiClient`, the event tracker, and the latest cursor for the event tracker as arguments.
+
+Now let’s take a look at `escrow-handler.ts`:
+
+### `escrow-handler.ts`
+
+#### Imports
+
+```ts title='escrow-handler.ts'
+import { SuiEvent } from '@mysten/sui.js/client';
+import { Prisma } from '@prisma/client';
+
+import { prisma } from '../db';
+```
+
+These lines import the necessary modules and dependencies for the script. The `SuiEvent` type is imported from the `@mysten/sui.js/client` package. The `Prisma` namespace is imported from the `@prisma/client package`. The `prisma` instance is imported from the local `db` module.
+
+#### Type definitions
+
+```ts title='escrow-handler.ts'
+type EscrowEvent = EscrowCreated | EscrowCancelled | EscrowSwapped;
+
+type EscrowCreated = {
+	sender: string;
+	recipient: string;
+	escrow_id: string;
+	key_id: string;
+	item_id: string;
+};
+
+type EscrowSwapped = {
+	escrow_id: string;
+};
+
+type EscrowCancelled = {
+	escrow_id: string;
+};
+```
+
+Four custom types are defined here: `EscrowEvent`, `EscrowCreated`, `EscrowSwapped`, and `EscrowCancelled`. `EscrowEvent` is a union type that can be any of `EscrowCreated`, `EscrowCancelled`, or `EscrowSwapped`. `EscrowCreated` represents the data associated with an escrow creation event. `EscrowSwapped` represents the data associated with an escrow swap event. `EscrowCancelled` represents the data associated with an escrow cancellation event.
+
+#### Functions
+
+```ts title='escrow-handler.ts'
+export const handleEscrowObjects = async (events: SuiEvent[], type: string) => {
+	const updates: Record<string, Prisma.EscrowCreateInput> = {};
+
+	for (const event of events) {
+		if (!event.type.startsWith(type)) throw new Error('Invalid event module origin');
+		const data = event.parsedJson as EscrowEvent;
+
+		if (!Object.hasOwn(updates, data.escrow_id)) {
+			updates[data.escrow_id] = {
+				objectId: data.escrow_id,
+			};
+		}
+
+		// Escrow cancellation case
+		if (event.type.endsWith('::EscrowCancelled')) {
+			const data = event.parsedJson as EscrowCancelled;
+			updates[data.escrow_id].cancelled = true;
+			continue;
+		}
+
+		// Escrow swap case
+		if (event.type.endsWith('::EscrowSwapped')) {
+			const data = event.parsedJson as EscrowSwapped;
+			updates[data.escrow_id].swapped = true;
+			continue;
+		}
+
+		const creationData = event.parsedJson as EscrowCreated;
+
+		// Handle creation event
+		updates[data.escrow_id].sender = creationData.sender;
+		updates[data.escrow_id].recipient = creationData.recipient;
+		updates[data.escrow_id].keyId = creationData.key_id;
+		updates[data.escrow_id].itemId = creationData.item_id;
+	}
+
+	//  As part of the demo and to avoid having external dependencies, we use SQLite as our database.
+	// 	Prisma + SQLite does not support bulk insertion & conflict handling, so we have to insert these 1 by 1
+	// 	(resulting in multiple round-trips to the database).
+	//  Always use a single `bulkInsert` query with proper `onConflict` handling in production databases (e.g Postgres)
+	const promises = Object.values(updates).map((update) =>
+		prisma.escrow.upsert({
+			where: {
+				objectId: update.objectId,
+			},
+			create: update,
+			update,
+		}),
+	);
+	await Promise.all(promises);
+};
+```
+
+This function handles all events emitted by the `escrow` module. It takes an array of `SuiEvent` objects and a string representing the type of the events as arguments. The function processes each event and updates the corresponding escrow object in the database accordingly. If an event indicates that an escrow was canceled or swapped, the function marks the corresponding escrow object as canceled or swapped. If an event indicates that an escrow was created, the function creates a new escrow object with the details from the event.
+
+### `locked-handler.ts`
+
+#### Imports
+
+```ts title='locked-handler.ts'
+import { SuiEvent } from '@mysten/sui.js/client';
+import { Prisma } from '@prisma/client';
+
+import { prisma } from '../db';
+```
+
+These lines import the necessary modules and dependencies for the script. The `SuiEvent` type is imported from the `@mysten/sui.js/client` package. The `Prisma` namespace is imported from the `@prisma/client package`. The `prisma` instance is imported from the local `db` module.
+
+#### Type definitions
+
+```ts title='locked-handler.ts'
+type LockEvent = LockCreated | LockDestroyed;
+
+type LockCreated = {
+	creator: string;
+	lock_id: string;
+	key_id: string;
+	item_id: string;
+};
+
+type LockDestroyed = {
+	lock_id: string;
+};
+```
+
+Three custom types are defined here: `LockEvent`, `LockCreated`, and `LockDestroyed`. `LockEvent` is a union type that can be either `LockCreated` or `LockDestroyed`. `LockCreated` represents the data associated with a lock creation event. `LockDestroyed` represents the data associated with a lock destruction event.
+
+#### Functions
+
+```ts title='locked-handler.ts'
+export const handleLockObjects = async (events: SuiEvent[], type: string) => {
+	const updates: Record<string, Prisma.LockedCreateInput> = {};
+
+	for (const event of events) {
+		if (!event.type.startsWith(type)) throw new Error('Invalid event module origin');
+		const data = event.parsedJson as LockEvent;
+		const isDeletionEvent = !('key_id' in data);
+
+		if (!Object.hasOwn(updates, data.lock_id)) {
+			updates[data.lock_id] = {
+				objectId: data.lock_id,
+			};
+		}
+
+		// Handle deletion
+		if (isDeletionEvent) {
+			updates[data.lock_id].deleted = true;
+			continue;
+		}
+
+		// Handle creation event
+		updates[data.lock_id].keyId = data.key_id;
+		updates[data.lock_id].creator = data.creator;
+		updates[data.lock_id].itemId = data.item_id;
+	}
+
+	//  As part of the demo and to avoid having external dependencies, we use SQLite as our database.
+	// 	Prisma + SQLite does not support bulk insertion & conflict handling, so we have to insert these 1 by 1
+	// 	(resulting in multiple round-trips to the database).
+	//  Always use a single `bulkInsert` query with proper `onConflict` handling in production databases (e.g Postgres)
+	const promises = Object.values(updates).map((update) =>
+		prisma.locked.upsert({
+			where: {
+				objectId: update.objectId,
+			},
+			create: {
+				...update,
+			},
+			update,
+		}),
+	);
+	await Promise.all(promises);
+};
+```
+
+This function handles all events emitted by the `lock` module. It takes an array of `SuiEvent` objects and a string representing the type of the events as arguments. The function processes each event and updates the corresponding locked object in the database accordingly. If an event indicates that a lock was destroyed, the function marks the corresponding locked object as deleted. If an event indicates that a lock was created, the function creates a new locked object with the details from the event.
+
+## API service
+
+As we mentioned earlier, we should expose the indexed data for external consumption through an API service. Particularly, the example uses [Express](https://expressjs.com/) to build a Node.js HTTP API.
+
+### API design
+
+#### Query parameters
+
+You want your API to accept the query string in the URL as the parameters for database `WHERE` query. Hence, you want a utility that can extract and parse the URL query string into valid query parameters for Prisma. With the `parseWhereStatement()` function, the callers filter the set of keys from the URL query string and transforms those corresponding key-value pairs into the correct format for Prisma.
+
+```ts title='utils/api-queries.ts'
+export enum WhereParamTypes {
+	STRING,
+	NUMBER,
+	BOOLEAN,
+}
+
+export type WhereParam = {
+	key: string;
+	type: WhereParamTypes;
+};
+
+/** Parses a where statement based on the query params. */
+export const parseWhereStatement = (query: Record<string, any>, acceptedParams: WhereParam[]) => {
+	const params: Record<string, any> = {};
+	for (const key of Object.keys(query)) {
+		const whereParam = acceptedParams.find((x) => x.key === key);
+		if (!whereParam) continue;
+
+		const value = query[key];
+		if (whereParam.type === WhereParamTypes.STRING) {
+			params[key] = value;
+		}
+		if (whereParam.type === WhereParamTypes.NUMBER) {
+			const number = Number(value);
+			if (isNaN(number)) throw new Error(`Invalid number for ${key}`);
+
+			params[key] = number;
+		}
+
+		// Handle boolean expected values.
+		if (whereParam.type === WhereParamTypes.BOOLEAN) {
+			let boolValue;
+			if (value === 'true') boolValue = true;
+			else if (value === 'false') boolValue = false;
+			else throw new Error(`Invalid boolean for ${key}`);
+
+			params[key] = boolValue;
+		}
+	}
+	return params;
+};
+```
+
+#### Query pagination
+
+Pagination is another crucial part to ensure your API returns sufficient and/or ordered chunk of information instead of all the data that might be the vector for a DDOS attack. Similar to **WHERE parameters**, define a set of keys in the URL query string to be accepted as valid pagination parameters. The `parsePaginationForQuery()` utility function helps to achieve this by filtering the pre-determined keys `sort`, `limit`, `cursor` and parsing corresponding key-value pairs into `ApiPagination` that Prisma can consume.
+
+In this example, the `id` field of the model in the database as the cursor that allows clients to continue subsequent queries with the next page.
+
+```ts title='utils/api-queries.ts'
+export type ApiPagination = {
+	take?: number;
+	orderBy: {
+		id: 'asc' | 'desc';
+	};
+	cursor?: {
+		id: number;
+	};
+	skip?: number;
+};
+
+/**
+ * A helper to prepare pagination based on `req.query`.
+ * Only primary key cursor + ordering for this example.
+ */
+export const parsePaginationForQuery = (body: Record<string, any>) => {
+	const pagination: ApiPagination = {
+		orderBy: {
+			id: Object.hasOwn(body, 'sort') && ['asc', 'desc'].includes(body.sort) ? body.sort : 'desc',
+		},
+	};
+
+	// Prepare pagination limit (how many items to return)
+	if (Object.hasOwn(body, 'limit')) {
+		const requestLimit = Number(body.limit);
+
+		if (isNaN(requestLimit)) throw new Error('Invalid limit value');
+
+		pagination.take = requestLimit > CONFIG.DEFAULT_LIMIT ? CONFIG.DEFAULT_LIMIT : requestLimit;
+	} else {
+		pagination.take = CONFIG.DEFAULT_LIMIT;
+	}
+
+	// Prepare cursor pagination (which page to return)
+	if (Object.hasOwn(body, 'cursor')) {
+		const cursor = Number(body.cursor);
+		if (isNaN(cursor)) throw new Error('Invalid cursor');
+		pagination.skip = 1;
+		pagination.cursor = {
+			id: cursor,
+		};
+	}
+
+	return pagination;
+};
+```
+
+### API endpoints
+
+All the endpoints are defined in `server.ts`, particularly, there are two endpoints:
+
+- `/locked` to query `Locked` objects.
+- `/escrows` to query `Escrow` objects.
+
+The implementation for both endpoints is pretty straightforward. You define a list of valid query keys, such as `deleted`, `creator`, `keyId`, and `objectId` for `Locked` data and `cancelled`, `swapped`, `recipient`, and `sender` for `Escrow` data. Pass the URL query string into the pre-defined utilities to output the correct parameters that Prisma can use.
+
+```ts title='server.ts'
+import { prisma } from './db';
+import {
+	formatPaginatedResponse,
+	parsePaginationForQuery,
+	parseWhereStatement,
+	WhereParam,
+	WhereParamTypes,
+} from './utils/api-queries';
+
+app.get('/locked', async (req, res) => {
+	const acceptedQueries: WhereParam[] = [
+		{
+			key: 'deleted',
+			type: WhereParamTypes.BOOLEAN,
+		},
+		{
+			key: 'creator',
+			type: WhereParamTypes.STRING,
+		},
+		{
+			key: 'keyId',
+			type: WhereParamTypes.STRING,
+		},
+		{
+			key: 'objectId',
+			type: WhereParamTypes.STRING,
+		},
+	];
+
+	try {
+		const locked = await prisma.locked.findMany({
+			where: parseWhereStatement(req.query, acceptedQueries)!,
+			...parsePaginationForQuery(req.query),
+		});
+
+		return res.send(formatPaginatedResponse(locked));
+	} catch (e) {
+		console.error(e);
+		return res.status(400).send(e);
+	}
+});
+
+app.get('/escrows', async (req, res) => {
+	const acceptedQueries: WhereParam[] = [
+		{
+			key: 'cancelled',
+			type: WhereParamTypes.BOOLEAN,
+		},
+		{
+			key: 'swapped',
+			type: WhereParamTypes.BOOLEAN,
+		},
+		{
+			key: 'recipient',
+			type: WhereParamTypes.STRING,
+		},
+		{
+			key: 'sender',
+			type: WhereParamTypes.STRING,
+		},
+	];
+
+	try {
+		const escrows = await prisma.escrow.findMany({
+			where: parseWhereStatement(req.query, acceptedQueries)!,
+			...parsePaginationForQuery(req.query),
+		});
+
+		return res.send(formatPaginatedResponse(escrows));
+	} catch (e) {
+		console.error(e);
+		return res.status(400).send(e);
+	}
+});
+```
+
+## Next steps
+
+With the code successfully deployed on Testnet, you can now [create a frontend](./frontend.mdx) to display the trading data and to allow users to interact with the Move modules.

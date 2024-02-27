@@ -81,6 +81,8 @@ mod checked {
             max_per_mod_meter_units,
             max_idenfitier_len: protocol_config.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
             allow_receiving_object_id: protocol_config.allow_receiving_object_id(),
+            reject_mutable_random_on_entry_functions: protocol_config
+                .reject_mutable_random_on_entry_functions(),
         }
     }
 
