@@ -9,3 +9,5 @@ out/
 !remappings.txt
 lcov.info
 broadcast/**/31337
+
+lib/*

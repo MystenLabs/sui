@@ -57,7 +57,8 @@ library BridgeMessage {
     uint32 public constant UNFREEZING_STAKE_REQUIRED = 5001;
     uint32 public constant UPGRADE_STAKE_REQUIRED = 5001;
     uint16 public constant BLOCKLIST_STAKE_REQUIRED = 5001;
-    uint32 public constant TOKEN_LIMIT_STAKE_REQUIRED = 5001;
+    uint32 public constant BRIDGE_LIMIT_STAKE_REQUIRED = 5001;
+    uint32 public constant TOKEN_PRICE_STAKE_REQUIRED = 5001;
 
     // token Ids
     uint8 public constant SUI = 0;
@@ -102,9 +103,9 @@ library BridgeMessage {
             if (isFreezing) return FREEZING_STAKE_REQUIRED;
             return UNFREEZING_STAKE_REQUIRED;
         } else if (_message.messageType == UPDATE_BRIDGE_LIMIT) {
-            return TOKEN_LIMIT_STAKE_REQUIRED;
+            return BRIDGE_LIMIT_STAKE_REQUIRED;
         } else if (_message.messageType == UPDATE_TOKEN_PRICE) {
-            return TOKEN_LIMIT_STAKE_REQUIRED;
+            return TOKEN_PRICE_STAKE_REQUIRED;
         } else if (_message.messageType == UPGRADE) {
             return UPGRADE_STAKE_REQUIRED;
         } else {
