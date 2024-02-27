@@ -470,9 +470,8 @@ export function SwapPageContent() {
 									<GasFeeSection
 										totalGas={totalGas || ''}
 										activeCoinType={activeCoinType}
-										amount={amount}
 										isValid={isValid}
-										averages={averages}
+										balanceChanges={balanceChanges}
 									/>
 								</div>
 							</Form>
