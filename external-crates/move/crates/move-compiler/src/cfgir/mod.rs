@@ -22,10 +22,12 @@ use crate::{
 };
 use cfg::*;
 use move_ir_types::location::Loc;
+use move_symbol_pool::Symbol;
 use optimize::optimize;
 use std::collections::BTreeSet;
 
 pub struct CFGContext<'a> {
+    pub package: Option<Symbol>,
     pub module: ModuleIdent,
     pub member: MemberName,
     pub struct_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,

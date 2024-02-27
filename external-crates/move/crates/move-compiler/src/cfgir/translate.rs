@@ -462,6 +462,7 @@ fn constant_(
     };
     let fake_infinite_loop_starts = BTreeSet::new();
     let function_context = super::CFGContext {
+        package: context.current_package,
         module,
         member: cfgir::MemberName::Constant(name.0),
         struct_declared_abilities: &context.struct_declared_abilities,
@@ -618,6 +619,7 @@ fn function_body(
             context.env.add_diags(diags);
 
             let function_context = super::CFGContext {
+                package: context.current_package,
                 module,
                 member: cfgir::MemberName::Function(name.0),
                 struct_declared_abilities: &context.struct_declared_abilities,
@@ -958,6 +960,7 @@ fn visit_function(
     context.env.add_warning_filter_scope(warning_filter.clone());
     let (cfg, infinite_loop_starts) = ImmForwardCFG::new(*start, blocks, block_info.iter());
     let function_context = super::CFGContext {
+        package: context.current_package,
         module: mident,
         member: cfgir::MemberName::Function(name.0),
         struct_declared_abilities: &context.struct_declared_abilities,
