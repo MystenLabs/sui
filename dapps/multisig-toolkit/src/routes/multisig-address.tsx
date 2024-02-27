@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { PublicKey } from '@mysten/sui.js/cryptography';
-import { MultiSigPublicKey, publicKeyFromSuiBytes } from '@mysten/sui.js/multisig';
+import { MultiSigPublicKey } from '@mysten/sui.js/multisig';
+import { publicKeyFromSuiBytes } from '@mysten/sui.js/verify';
 import { useState } from 'react';
 import { FieldValues, useFieldArray, useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';

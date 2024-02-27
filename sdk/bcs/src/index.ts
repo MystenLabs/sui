@@ -18,7 +18,7 @@ import { BcsType, isSerializedBcs, SerializedBcs } from './bcs-type.js';
 import { bcs } from './bcs.js';
 import { fromHEX, toHEX } from './hex.js';
 import { BcsReader } from './reader.js';
-import type { InferBcsInput, InferBcsType } from './types.js';
+import type { EnumInputShape, EnumOutputShape, InferBcsInput, InferBcsType } from './types.js';
 import { decodeStr, encodeStr, splitGenericParameters } from './utils.js';
 import type { BcsWriterOptions } from './writer.js';
 import { BcsWriter } from './writer.js';
@@ -46,4 +46,6 @@ export {
 	type BcsWriterOptions,
 	type InferBcsInput,
 	type InferBcsType,
+	type EnumOutputShape,
+	type EnumInputShape,
 };

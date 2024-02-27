@@ -1,0 +1,62 @@
+# Changes
+
+## /bcs
+
+### Types
+
+- `SuiObjectRef`: removing bigint from `version` should we remove this completely
+- `ObjectArg`: `ImmOrOwned` -> `ImmOrOwnedObject` and `Shared` -> `SharedObject`
+- Added `ObjectCallArg`
+- `PureArg` Changed ArrayLike to Array not sure if this is correct
+
+### Bcs Types
+
+- `CallArg` removed `ObjVec`
+- `Argument` enumKind to enum\, Removed nested structs to align with Rust definitions
+- `ProgrammableMoveCall` Split target into `package`\, `module` and `function`\, typeArguments now
+  TypeTag instead of String
+- `Transaction` enumKind to enum\, replaced nested structs with tuples to align with Rust
+  definitions
+
+## /transactions
+
+### Types
+
+- `TransactionObjectArgument` shape changed
+- `TransactionResult` shape changed
+- `TransactionObjectInput` shape changed
+- `TransactionArgument` shape changed
+- `TransactionBlockInput` shape changed
+
+### TransactionBlock
+
+- `blockData` is deprecated\, returns snapshot of v1 blockData\, should this be removed?
+- added getBlockData that returns new v2 blockData
+
+## /utils
+
+Removed `is` and `assert` helpers
+
+## /mutltisig
+
+- publicKeyFromSuiBytes moved to /verify
+
+# TODO
+
+- Remove Input and Transaction exports?
+- Move helpers in inputs.ts
+- `getPureSerializationType` should be replaced
+- Should remove legacy BCS registry
+- Should remove BCS registry name exports
+- TransactionBlock constructor args?
+- Remove pure inputs without types
+- Need to export types for blockData
+- Remove all type-exports from bcs\, only export export implementations and helper types to get type
+  from implementation
+- Serialize should be updated to allow exporting v2 state
+- Define TypeTag output type rather than input type?
+- Use valibot parser in TypeTagSerializer
+- Figure out what bcs should still export
+- cleanup typescript/bcs exports
+- maybe remove intent exports from cryptography and just use bcs intent encoding/decoding directly
+- Should fromB64, toB64, fromHEX, toHEX still be exported from utils?

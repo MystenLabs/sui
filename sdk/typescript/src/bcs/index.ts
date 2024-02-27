@@ -14,9 +14,7 @@ import {
 	toHEX,
 } from '@mysten/bcs';
 
-import type { MoveCallTransaction } from '../transactions/Transactions.js';
 import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
-import { TypeTagSerializer } from './type-tag-serializer.js';
 
 export { TypeTagSerializer } from './type-tag-serializer.js';
 
@@ -38,7 +36,7 @@ export type SuiObjectRef = {
 	/** Base64 string representing the object digest */
 	objectId: string;
 	/** Object version */
-	version: number | string | bigint;
+	version: number | string;
 	/** Hex code as string representing the object id */
 	digest: string;
 };
@@ -47,14 +45,18 @@ export type SuiObjectRef = {
  * An object argument.
  */
 export type ObjectArg =
-	| { ImmOrOwned: SuiObjectRef }
-	| { Shared: SharedObjectRef }
+	| { ImmOrOwnedObject: SuiObjectRef }
+	| { SharedObject: SharedObjectRef }
 	| { Receiving: SuiObjectRef };
+
+export type ObjectCallArg = {
+	Object: ObjectArg;
+};
 
 /**
  * A pure argument.
  */
-export type PureArg = { Pure: ArrayLike<number> };
+export type PureArg = { Pure: Array<number> };
 
 export function isPureArg(arg: any): arg is PureArg {
 	return (arg as PureArg).Pure !== undefined;
@@ -83,7 +85,7 @@ export function isPureArg(arg: any): arg is PureArg {
  * For `Pure` arguments BCS is required. You must encode the values with BCS according
  * to the type required by the called function. Pure accepts only serialized values
  */
-export type CallArg = PureArg | { Object: ObjectArg };
+export type CallArg = PureArg | ObjectCallArg;
 
 /**
  * Kind of a TypeTag which is represented by a Move type identifier.
@@ -149,7 +151,7 @@ function unsafe_u64(options?: BcsTypeOptions<number>) {
 			...(options as object),
 		})
 		.transform({
-			input: (val: number) => val,
+			input: (val: number | string) => val,
 			output: (val) => Number(val),
 		});
 }
@@ -214,15 +216,15 @@ const SharedObjectRef = bcs.struct('SharedObjectRef', {
 });
 
 const ObjectArg = bcs.enum('ObjectArg', {
-	ImmOrOwned: SuiObjectRef,
-	Shared: SharedObjectRef,
+	ImmOrOwnedObject: SuiObjectRef,
+	SharedObject: SharedObjectRef,
 	Receiving: SuiObjectRef,
 });
 
 const CallArg = bcs.enum('CallArg', {
 	Pure: bcs.vector(bcs.u8()),
 	Object: ObjectArg,
-	ObjVec: bcs.vector(ObjectArg),
+	// ObjVec: bcs.vector(ObjectArg),
 });
 
 const TypeTag: BcsType<TypeTag> = bcs.enum('TypeTag', {
@@ -239,98 +241,53 @@ const TypeTag: BcsType<TypeTag> = bcs.enum('TypeTag', {
 	u256: null,
 }) as never;
 
-const Argument = enumKind(
-	bcs.enum('Argument', {
-		GasCoin: null,
-		Input: bcs.struct('Input', { index: bcs.u16() }),
-		Result: bcs.struct('Result', { index: bcs.u16() }),
-		NestedResult: bcs.struct('NestedResult', { index: bcs.u16(), resultIndex: bcs.u16() }),
-	}),
-);
+const Argument = bcs.enum('Argument', {
+	GasCoin: null,
+	Input: bcs.u16(),
+	Result: bcs.u16(),
+	NestedResult: bcs.tuple([bcs.u16(), bcs.u16()]),
+});
 
-/** Custom serializer for decoding package, module, function easier */
-const ProgrammableMoveCall = bcs
-	.struct('ProgrammableMoveCall', {
-		package: Address,
-		module: bcs.string(),
-		function: bcs.string(),
-		type_arguments: bcs.vector(TypeTag),
-		arguments: bcs.vector(Argument),
-	})
-	.transform({
-		input: (data: MoveCallTransaction) => {
-			const [pkg, module, fun] = data.target.split('::');
-			const type_arguments = data.typeArguments.map((tag) =>
-				TypeTagSerializer.parseFromStr(tag, true),
-			);
+const ProgrammableMoveCall = bcs.struct('ProgrammableMoveCall', {
+	package: Address,
+	module: bcs.string(),
+	function: bcs.string(),
+	typeArguments: bcs.vector(TypeTag),
+	arguments: bcs.vector(Argument),
+});
 
-			return {
-				package: normalizeSuiAddress(pkg),
-				module,
-				function: fun,
-				type_arguments,
-				arguments: data.arguments,
-			};
-		},
-		output: (data) => {
-			return {
-				target: [data.package, data.module, data.function].join(
-					'::',
-				) as `${string}::${string}::${string}`,
-				arguments: data.arguments,
-				typeArguments: data.type_arguments.map(TypeTagSerializer.tagToString),
-			};
-		},
-	});
-
-const Transaction = enumKind(
-	bcs.enum('Transaction', {
-		/**
-		 * A Move Call - any public Move function can be called via
-		 * this transaction. The results can be used that instant to pass
-		 * into the next transaction.
-		 */
-		MoveCall: ProgrammableMoveCall,
-		/**
-		 * Transfer vector of objects to a receiver.
-		 */
-		TransferObjects: bcs.struct('TransferObjects', {
-			objects: bcs.vector(Argument),
-			address: Argument,
-		}),
-		/**
-		 * Split `amount` from a `coin`.
-		 */
-		SplitCoins: bcs.struct('SplitCoins', { coin: Argument, amounts: bcs.vector(Argument) }),
-		/**
-		 * Merge Vector of Coins (`sources`) into a `destination`.
-		 */
-		MergeCoins: bcs.struct('MergeCoins', { destination: Argument, sources: bcs.vector(Argument) }),
-		/**
-		 * Publish a Move module.
-		 */
-		Publish: bcs.struct('Publish', {
-			modules: bcs.vector(bcs.vector(bcs.u8())),
-			dependencies: bcs.vector(Address),
-		}),
-		/**
-		 * Build a vector of objects using the input arguments.
-		 * It is impossible to construct a `vector<T: key>` otherwise,
-		 * so this call serves a utility function.
-		 */
-		MakeMoveVec: bcs.struct('MakeMoveVec', {
-			type: optionEnum(TypeTag),
-			objects: bcs.vector(Argument),
-		}),
-		/**  */
-		Upgrade: bcs.struct('Upgrade', {
-			modules: bcs.vector(bcs.vector(bcs.u8())),
-			dependencies: bcs.vector(Address),
-			packageId: Address,
-			ticket: Argument,
-		}),
-	}),
-);
+const Transaction = bcs.enum('Transaction', {
+	/**
+	 * A Move Call - any public Move function can be called via
+	 * this transaction. The results can be used that instant to pass
+	 * into the next transaction.
+	 */
+	MoveCall: ProgrammableMoveCall,
+	/**
+	 * Transfer vector of objects to a receiver.
+	 */
+	TransferObjects: bcs.tuple([bcs.vector(Argument), Argument]),
+	// /**
+	//  * Split `amount` from a `coin`.
+	//  */
+	SplitCoins: bcs.tuple([Argument, bcs.vector(Argument)]),
+	// /**
+	//  * Merge Vector of Coins (`sources`) into a `destination`.
+	//  */
+	MergeCoins: bcs.tuple([Argument, bcs.vector(Argument)]),
+	// /**
+	//  * Publish a Move module.
+	//  */
+	Publish: bcs.tuple([bcs.vector(bcs.vector(bcs.u8())), bcs.vector(Address)]),
+	// /**
+	//  * Build a vector of objects using the input arguments.
+	//  * It is impossible to construct a `vector<T: key>` otherwise,
+	//  * so this call serves a utility function.
+	//  */
+	MakeMoveVec: bcs.tuple([optionEnum(TypeTag), bcs.vector(Argument)]),
+	// /**  */
+	Upgrade: bcs.tuple([bcs.vector(bcs.vector(bcs.u8())), bcs.vector(Address), Address, Argument]),
+});
 
 const ProgrammableTransaction = bcs.struct('ProgrammableTransaction', {
 	inputs: bcs.vector(CallArg),
@@ -395,12 +352,12 @@ const Intent = bcs.struct('Intent', {
 	appId: AppId,
 });
 
-const IntentMessage = bcs.generic(['T'], (T) =>
-	bcs.struct('IntentMessage<T>', {
+function IntentMessage<T extends BcsType<any>>(T: T) {
+	return bcs.struct(`IntentMessage<${T.name}>`, {
 		intent: Intent,
 		value: T,
-	}),
-);
+	});
+}
 
 const CompressedSignature = bcs.enum('CompressedSignature', {
 	ED25519: bcs.fixedArray(64, bcs.u8()),

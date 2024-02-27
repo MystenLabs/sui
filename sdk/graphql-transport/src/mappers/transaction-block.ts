@@ -221,60 +221,57 @@ export function mapProgramableTransaction(
 }
 
 function mapTransactionInput(input: typeof bcs.CallArg.$inferType): SuiCallArg {
-	if ('Pure' in input) {
+	if (input.Pure) {
 		return {
 			type: 'pure',
 			value: Uint8Array.from(input.Pure),
 		};
 	}
 
-	if ('Object' in input) {
-		if ('ImmOrOwned' in input.Object) {
-			return {
-				type: 'object',
-				digest: input.Object.ImmOrOwned.digest,
-				version: input.Object.ImmOrOwned.version,
-				objectId: input.Object.ImmOrOwned.objectId,
-				objectType: 'immOrOwnedObject',
-			};
-		}
-		if ('Shared' in input.Object) {
-			return {
-				type: 'object',
-				initialSharedVersion: input.Object.Shared.initialSharedVersion,
-				objectId: input.Object.Shared.objectId,
-				mutable: input.Object.Shared.mutable,
-				objectType: 'sharedObject',
-			};
-		}
-
-		if ('Receiving' in input.Object) {
-			return {
-				type: 'object',
-				digest: input.Object.Receiving.digest,
-				version: input.Object.Receiving.version,
-				objectId: input.Object.Receiving.objectId,
-				objectType: 'receiving',
-			};
-		}
-
-		throw new Error(`Unknown object type: ${input.Object}`);
+	if (input.Object.ImmOrOwnedObject) {
+		return {
+			type: 'object',
+			digest: input.Object.ImmOrOwnedObject.digest,
+			version: input.Object.ImmOrOwnedObject.version,
+			objectId: input.Object.ImmOrOwnedObject.objectId,
+			objectType: 'immOrOwnedObject',
+		};
+	}
+	if (input.Object.SharedObject) {
+		return {
+			type: 'object',
+			initialSharedVersion: input.Object.SharedObject.initialSharedVersion,
+			objectId: input.Object.SharedObject.objectId,
+			mutable: input.Object.SharedObject.mutable,
+			objectType: 'sharedObject',
+		};
 	}
 
-	throw new Error(`Unknown input type ${input}`);
+	if (input.Object.Receiving) {
+		return {
+			type: 'object',
+			digest: input.Object.Receiving.digest,
+			version: input.Object.Receiving.version,
+			objectId: input.Object.Receiving.objectId,
+			objectType: 'receiving',
+		};
+	}
+
+	throw new Error(`Unknown object type: ${input.Object}`);
 }
 
 function mapTransaction(transaction: typeof bcs.Transaction.$inferType): SuiTransaction {
-	switch (transaction.kind) {
+	switch (transaction.$kind) {
 		case 'MoveCall': {
-			const [pkg, module, fn] = transaction.target.split('::');
 			return {
 				MoveCall: {
-					arguments: transaction.arguments.map(mapTransactionArgument),
-					function: fn,
-					module,
-					package: pkg,
-					type_arguments: transaction.typeArguments,
+					arguments: transaction.MoveCall.arguments.map(mapTransactionArgument),
+					function: transaction.MoveCall.function,
+					module: transaction.MoveCall.module,
+					package: transaction.MoveCall.package,
+					type_arguments: transaction.MoveCall.typeArguments.map((type) =>
+						TypeTagSerializer.tagToString(type),
+					),
 				},
 			};
 		}
@@ -282,46 +279,48 @@ function mapTransaction(transaction: typeof bcs.Transaction.$inferType): SuiTran
 		case 'MakeMoveVec': {
 			return {
 				MakeMoveVec: [
-					'Some' in transaction.type ? TypeTagSerializer.tagToString(transaction.type.Some) : null,
-					transaction.objects.map(mapTransactionArgument),
+					transaction.MakeMoveVec[0].Some
+						? TypeTagSerializer.tagToString(transaction.MakeMoveVec[0].Some)
+						: null,
+					transaction.MakeMoveVec[1].map(mapTransactionArgument),
 				],
 			};
 		}
 		case 'MergeCoins': {
 			return {
 				MergeCoins: [
-					mapTransactionArgument(transaction.destination),
-					transaction.sources.map(mapTransactionArgument),
+					mapTransactionArgument(transaction.MergeCoins[0]),
+					transaction.MergeCoins[1].map(mapTransactionArgument),
 				],
 			};
 		}
 		case 'Publish': {
 			return {
-				Publish: transaction.modules.map((module) => toB64(Uint8Array.from(module))),
+				Publish: transaction.Publish[0].map((module) => toB64(Uint8Array.from(module))),
 			};
 		}
 		case 'SplitCoins': {
 			return {
 				SplitCoins: [
-					mapTransactionArgument(transaction.coin),
-					transaction.amounts.map(mapTransactionArgument),
+					mapTransactionArgument(transaction.SplitCoins[0]),
+					transaction.SplitCoins[1].map(mapTransactionArgument),
 				],
 			};
 		}
 		case 'TransferObjects': {
 			return {
 				TransferObjects: [
-					transaction.objects.map(mapTransactionArgument),
-					mapTransactionArgument(transaction.address),
+					transaction.TransferObjects[0].map(mapTransactionArgument),
+					mapTransactionArgument(transaction.TransferObjects[1]),
 				],
 			};
 		}
 		case 'Upgrade': {
 			return {
 				Upgrade: [
-					transaction.modules.map((module) => toB64(Uint8Array.from(module))),
-					transaction.packageId,
-					mapTransactionArgument(transaction.ticket),
+					transaction.Upgrade[0].map((module) => toB64(Uint8Array.from(module))),
+					transaction.Upgrade[2],
+					mapTransactionArgument(transaction.Upgrade[3]),
 				],
 			};
 		}
@@ -331,23 +330,23 @@ function mapTransaction(transaction: typeof bcs.Transaction.$inferType): SuiTran
 }
 
 function mapTransactionArgument(arg: typeof bcs.Argument.$inferType): SuiArgument {
-	switch (arg.kind) {
+	switch (arg.$kind) {
 		case 'GasCoin': {
 			return 'GasCoin';
 		}
 		case 'Input': {
 			return {
-				Input: arg.index,
+				Input: arg.Input,
 			};
 		}
 		case 'Result': {
 			return {
-				Result: arg.index,
+				Result: arg.Result,
 			};
 		}
 		case 'NestedResult': {
 			return {
-				NestedResult: [arg.index, arg.resultIndex],
+				NestedResult: arg.NestedResult,
 			};
 		}
 	}
