@@ -4,7 +4,6 @@
 
 use crate::{
     account_address::AccountAddress,
-    fmt_list,
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
     runtime_value as R, u256,
@@ -410,7 +409,15 @@ impl fmt::Display for MoveValue {
             MoveValue::Bool(true) => write!(f, "true"),
             MoveValue::Address(a) => write!(f, "{}", a.to_hex_literal()),
             MoveValue::Signer(a) => write!(f, "signer({})", a.to_hex_literal()),
-            MoveValue::Vector(v) => fmt_list(f, "vector[", v, "]"),
+            MoveValue::Vector(v) => {
+                use DebugAsDisplay as DD;
+                write!(f, "vector")?;
+                let mut list = f.debug_list();
+                for val in v {
+                    list.entry(&DD(val));
+                }
+                list.finish()
+            }
             MoveValue::Struct(s) => fmt::Display::fmt(s, f),
         }
     }
@@ -418,16 +425,13 @@ impl fmt::Display for MoveValue {
 
 impl fmt::Display for MoveStruct {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use DebugAsDisplay as DD;
         fmt::Display::fmt(&self.type_, f)?;
-        fmt_list(f, " {", self.fields.iter().map(DisplayFieldBinding), "}")
-    }
-}
-
-struct DisplayFieldBinding<'a>(&'a (Identifier, MoveValue));
-
-impl fmt::Display for DisplayFieldBinding<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let DisplayFieldBinding((field, value)) = self;
-        write!(f, "{}: {}", field, value)
+        write!(f, " ")?;
+        let mut map = f.debug_map();
+        for (field, value) in &self.fields {
+            map.entry(&DD(field), &DD(value));
+        }
+        map.finish()
     }
 }
