@@ -20,7 +20,7 @@ use super::{
 };
 
 /// Parse a program
-pub struct ProgramParser<'a, I: Iterator<Item = &'a str>> {
+pub struct ProgramParser<'a, I: Iterator<Item = &'a str> + Clone> {
     tokens: Peekable<Lexer<'a, I>>,
     state: ProgramParsingState,
 }
@@ -28,6 +28,7 @@ pub struct ProgramParser<'a, I: Iterator<Item = &'a str>> {
 struct ProgramParsingState {
     parsed: Vec<Spanned<ParsedPTBCommand>>,
     errors: Vec<PTBError>,
+    help_set: bool,
     preview_set: bool,
     summary_set: bool,
     warn_shadows_set: bool,
@@ -36,17 +37,25 @@ struct ProgramParsingState {
     gas_budget: Option<Spanned<u64>>,
 }
 
-impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
+impl<'a, I: Iterator<Item = &'a str> + Clone> ProgramParser<'a, I> {
     /// Create a PTB program parser from a sequence of string.
     pub fn new(tokens: I) -> PTBResult<Self> {
         let Some(tokens) = Lexer::new(tokens) else {
             error!(Span { start: 0, end: 0 }, "No tokens")
         };
+
+        let help_set = tokens.clone().any(|tk| match tk.value {
+            Lexeme(Token::Command, A::HELP) => true,
+            Lexeme(Token::Command, A::SHORT_HELP) => true,
+            _ => false,
+        });
+
         Ok(Self {
             tokens: tokens.peekable(),
             state: ProgramParsingState {
                 parsed: Vec::new(),
                 errors: Vec::new(),
+                help_set,
                 preview_set: false,
                 summary_set: false,
                 warn_shadows_set: false,
@@ -55,6 +64,12 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 gas_budget: None,
             },
         })
+    }
+
+    /// Return if help was set.
+    /// This is used to return early after tokenization and before parsing when help is requested.
+    pub fn is_help_set(&self) -> bool {
+        self.state.help_set
     }
 
     /// Parse the sequence of strings into a PTB program. We continue to parse even if an error is
@@ -182,6 +197,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     warn_shadows_set: self.state.warn_shadows_set,
                 },
                 A::ProgramMetadata {
+                    help_set: self.state.help_set,
                     preview_set: self.state.preview_set,
                     summary_set: self.state.summary_set,
                     gas_object_id: self.state.gas_object_id,
@@ -196,7 +212,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 }
 
 /// Iterator convenience methods over tokens
-impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
+impl<'a, I: Iterator<Item = &'a str> + Clone> ProgramParser<'a, I> {
     /// Advance the iterator and return the next lexeme. If the next lexeme's token is not the
     /// expected one, return an error, and don't advance the token stream.
     fn expect(&mut self, expected: Token) -> PTBResult<Spanned<Lexeme<'a>>> {
@@ -236,7 +252,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 }
 
 /// Methods for parsing commands
-impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
+impl<'a, I: Iterator<Item = &'a str> + Clone> ProgramParser<'a, I> {
     /// Parse a transfer-objects command.
     /// The expected format is: `--transfer-objects <to> [<from>, ...]`
     fn parse_transfer_objects(&mut self) -> PTBResult<Spanned<ParsedPTBCommand>> {
@@ -353,7 +369,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 }
 
 /// Methods for parsing arguments and types in commands
-impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
+impl<'a, I: Iterator<Item = &'a str> + Clone> ProgramParser<'a, I> {
     /// Parse a single PTB argument from the beginning of the token stream.
     fn parse_argument(&mut self) -> PTBResult<Spanned<Argument>> {
         use Argument as V;

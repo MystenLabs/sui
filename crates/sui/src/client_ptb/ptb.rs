@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::client_ptb::{
-    ast::{ParsedProgram, Program},
+    ast::{ParsedProgram, Program, ProgramMetadata},
     builder::PTBBuilder,
     displays::Pretty,
     error::{build_error_reports, PTBError},
+    parser::ProgramParser,
 };
 
 use anyhow::{anyhow, Error};
@@ -25,8 +26,6 @@ use sui_types::{
     quorum_driver_types::ExecuteTransactionRequestType,
     transaction::{ProgrammableTransaction, Transaction, TransactionData},
 };
-
-use super::{ast::ProgramMetadata, parser::ProgramParser};
 
 #[derive(Clone, Debug, Args)]
 #[clap(disable_help_flag = true)]
@@ -51,12 +50,16 @@ impl PTB {
     /// Parses and executes the PTB with the sender as the current active address
     pub async fn execute(self, context: &mut WalletContext) -> Result<(), Error> {
         let source_string = to_source_string(self.args.clone());
+        let tokens = ProgramParser::new(self.args.iter().map(|s| s.as_str()));
 
-        let (program, program_metadata) = match crate::client_ptb::parser::ProgramParser::new(
-            self.args.iter().map(|s| s.as_str()),
-        )
-        .map_err(|e| vec![e])
-        .and_then(|parser| parser.parse())
+        if tokens.as_ref().is_ok_and(|f| f.is_help_set()) {
+            ptb_description();
+            return Ok(());
+        }
+
+        let (program, program_metadata) = match tokens
+            .map_err(|e| vec![e])
+            .and_then(|parser| parser.parse())
         {
             Err(errors) => {
                 let suffix = if errors.len() > 1 { "s" } else { "" };

@@ -8,14 +8,18 @@ use super::{
     token::{Lexeme, Token as T},
 };
 
-pub struct Lexer<'l, I: Iterator<Item = &'l str>> {
+#[derive(Clone)]
+pub struct Lexer<'l, I: Iterator<Item = &'l str>>
+where
+    I: Clone,
+{
     pub buf: &'l str,
     pub tokens: I,
     pub offset: usize,
     pub done: Option<Spanned<Lexeme<'l>>>,
 }
 
-impl<'l, I: Iterator<Item = &'l str>> Lexer<'l, I> {
+impl<'l, I: Iterator<Item = &'l str> + Clone> Lexer<'l, I> {
     pub fn new(mut tokens: I) -> Option<Self> {
         let Some(buf) = tokens.next() else {
             return None;
@@ -206,7 +210,7 @@ impl<'l, I: Iterator<Item = &'l str>> Lexer<'l, I> {
     }
 }
 
-impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
+impl<'l, I: Iterator<Item = &'l str> + Clone> Iterator for Lexer<'l, I> {
     type Item = Spanned<Lexeme<'l>>;
 
     fn next(&mut self) -> Option<Self::Item> {

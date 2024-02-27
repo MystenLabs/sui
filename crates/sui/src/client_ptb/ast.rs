@@ -31,6 +31,8 @@ pub const GAS_BUDGET: &str = "gas-budget";
 pub const SUMMARY: &str = "summary";
 pub const GAS_COIN: &str = "gas-coin";
 pub const JSON: &str = "json";
+pub const HELP: &str = "help";
+pub const SHORT_HELP: &str = "h";
 
 // Types
 pub const U8: &str = "u8";
@@ -78,6 +80,7 @@ pub struct Program {
 /// flag was set, json output was set, etc.
 #[derive(Debug, Clone)]
 pub struct ProgramMetadata {
+    pub help_set: bool,
     pub preview_set: bool,
     pub summary_set: bool,
     pub gas_object_id: Option<Spanned<ObjectID>>,
