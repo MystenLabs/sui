@@ -668,6 +668,10 @@ impl DagState {
         self.genesis.values().cloned().collect()
     }
 
+    pub(crate) fn genesis_block_refs(&self) -> Vec<BlockRef> {
+        self.genesis.keys().cloned().collect()
+    }
+
     /// The last round that got evicted after a cache clean up operation. After this round we are
     /// guaranteed to have all the produced blocks from that authority. For any round that is
     /// <= `last_evicted_round` we don't have such guarantees as out of order blocks might exist.

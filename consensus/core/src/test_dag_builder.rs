@@ -1,0 +1,449 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use core::ops::Range;
+use std::{collections::BTreeMap, sync::Arc};
+
+use consensus_config::AuthorityIndex;
+use parking_lot::RwLock;
+use rand::{seq::SliceRandom, thread_rng};
+
+use crate::{
+    block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, TestBlock, VerifiedBlock},
+    commit::DEFAULT_WAVE_LENGTH,
+    context::Context,
+    dag_state::DagState,
+    leader_schedule::LeaderSchedule,
+    storage::mem_store::MemStore,
+};
+
+/// DagBuilder
+// todo: Add usage doc comment
+
+#[allow(unused)]
+pub(crate) struct DagBuilder {
+    pub context: Arc<Context>,
+    pub dag_state: Arc<RwLock<DagState>>,
+    pub leader_schedule: LeaderSchedule,
+    wave_length: Round,
+    number_of_leaders: u32,
+    pipeline: bool,
+
+    // The current set of ancestors that any new layer will attempt to connect to.
+    pub last_ancestors: Vec<BlockRef>,
+
+    // All blocks written to dag state to pretty print or to be retreived for testing.
+    pub blocks: BTreeMap<BlockRef, VerifiedBlock>,
+}
+
+#[allow(unused)]
+impl DagBuilder {
+    pub(crate) fn new(num_authorities: usize) -> Self {
+        let context = Arc::new(Context::new_for_test(num_authorities).0);
+        let leader_schedule = LeaderSchedule::new(context.clone());
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let genesis_references = dag_state.read().genesis_block_refs();
+        Self {
+            context,
+            leader_schedule,
+            dag_state,
+            wave_length: DEFAULT_WAVE_LENGTH,
+            number_of_leaders: 1,
+            pipeline: false,
+            last_ancestors: genesis_references,
+            blocks: BTreeMap::new(),
+        }
+    }
+
+    pub(crate) fn with_wave_length(mut self, wave_length: Round) -> Self {
+        self.wave_length = wave_length;
+        self
+    }
+
+    pub(crate) fn with_number_of_leaders(mut self, number_of_leaders: u32) -> Self {
+        self.number_of_leaders = number_of_leaders;
+        self
+    }
+
+    pub(crate) fn with_pipeline(mut self, pipeline: bool) -> Self {
+        self.pipeline = pipeline;
+        self
+    }
+
+    pub(crate) fn layer(&mut self, round: Round) -> LayerBuilder {
+        LayerBuilder::new(self, round)
+    }
+
+    pub(crate) fn layers(&mut self, rounds: Range<Round>) -> LayerBuilder {
+        let mut builder = LayerBuilder::new(self, rounds.start);
+        builder.end_round = Some(rounds.end);
+        builder
+    }
+
+    pub(crate) fn print(&self) {
+        let mut dag_str = "DAG {\n".to_string();
+
+        let mut round = 0;
+        for block in self.blocks.values() {
+            if block.round() > round {
+                round = block.round();
+                dag_str.push_str(&format!("Round {round} : \n"));
+            }
+            dag_str.push_str(&format!("    Block {block:#?}\n"));
+        }
+        dag_str.push_str("}\n");
+
+        tracing::info!("{dag_str}");
+    }
+
+    // TODO: confirm pipelined & multi-leader cases work properly
+    pub(crate) fn get_all_leader_blocks(&mut self, num_rounds: u32) -> Vec<VerifiedBlock> {
+        let mut blocks = Vec::new();
+        for round in 1..=num_rounds {
+            for leader_offset in 0..self.number_of_leaders {
+                if self.pipeline || round % self.wave_length == 0 {
+                    let slot = Slot::new(
+                        round,
+                        self.leader_schedule.elect_leader(round, leader_offset),
+                    );
+                    let uncommitted_blocks =
+                        self.dag_state.read().get_uncommitted_blocks_at_slot(slot);
+                    blocks.extend(uncommitted_blocks);
+                }
+            }
+        }
+        blocks
+    }
+
+    // TODO: merge into layer builder?
+    pub(crate) fn layer_with_connections(
+        &mut self,
+        connections: Vec<(AuthorityIndex, Vec<BlockRef>)>,
+        round: Round,
+    ) {
+        let mut references = Vec::new();
+        for (authority, ancestors) in connections {
+            let author = authority.value() as u32;
+            let base_ts = round as BlockTimestampMs * 1000;
+            let block = VerifiedBlock::new_for_test(
+                TestBlock::new(round, author)
+                    .set_ancestors(ancestors)
+                    .set_timestamp_ms(base_ts + (author + round) as u64)
+                    .build(),
+            );
+            references.push(block.reference());
+            self.blocks.insert(block.reference(), block.clone());
+            self.dag_state.write().accept_block(block);
+        }
+        self.last_ancestors = references;
+    }
+}
+
+/// LayerBuilder
+// todo: Add usage doc comment
+pub struct LayerBuilder<'a> {
+    dag_builder: &'a mut DagBuilder,
+
+    start_round: Round,
+    end_round: Option<Round>,
+
+    // Configuration options applied to specified authorities
+    specified_authorities: Option<Vec<AuthorityIndex>>,
+    // Number of equivocating blocks per specified authority
+    equivocations: Option<usize>,
+    // Skip block proposal for specified authorities
+    skip_block: bool,
+    // Skip specified ancestor links for specified authorities
+    skip_ancestor_links: Option<Vec<AuthorityIndex>>,
+    // Skip leader link for specified authorities
+    no_leader_link: bool,
+
+    // Skip leader block proposal
+    no_leader_block: bool,
+    // Used for leader based configurations
+    leader_offset: Option<u32>,
+    leader_round: Option<Round>,
+
+    // All ancestors will be linked to the current layer
+    fully_linked_ancestors: bool,
+    // Only 2f+1 ancestors will be linked to the current layer
+    min_ancestor_links: bool,
+    // Add random weak links to the current layer
+    random_weak_links: bool,
+
+    // Ancestors to link to the current layer
+    ancestors: Vec<BlockRef>,
+
+    // Accumulated blocks to write to dag state
+    blocks: Vec<VerifiedBlock>,
+}
+
+#[allow(unused)]
+impl<'a> LayerBuilder<'a> {
+    fn new(dag_builder: &'a mut DagBuilder, start_round: Round) -> Self {
+        assert!(start_round > 0, "genesis round is created by default");
+        let ancestors = dag_builder.last_ancestors.clone();
+        Self {
+            dag_builder,
+            start_round,
+            end_round: None,
+            specified_authorities: None,
+            equivocations: None,
+            skip_block: false,
+            skip_ancestor_links: None,
+            no_leader_link: false,
+            no_leader_block: false,
+            leader_offset: None,
+            leader_round: None,
+            fully_linked_ancestors: true,
+            min_ancestor_links: false,
+            random_weak_links: false,
+            ancestors,
+            blocks: vec![],
+        }
+    }
+
+    // Configuration methods
+
+    // Only link 2f+1 ancestors to the current layer round
+    pub fn min_ancestor_links(mut self) -> Self {
+        self.min_ancestor_links = true;
+        self.fully_linked_ancestors = false;
+        self
+    }
+
+    // No links will be created between the specified ancestors and the specified
+    // authorities at the layer round.
+    pub fn skip_ancestor_links(mut self, ancestors_to_skip: Vec<AuthorityIndex>) -> Self {
+        // authorities must be specified for this to apply
+        assert!(self.specified_authorities.is_some());
+        self.skip_ancestor_links = Some(ancestors_to_skip);
+        self.fully_linked_ancestors = false;
+        self
+    }
+
+    // Add random weak links to the current layer round
+    pub fn random_weak_links(mut self) -> Self {
+        self.random_weak_links = true;
+        self
+    }
+
+    // Should be called when building a leader round. Will ensure leader block is missing.
+    pub fn no_leader_block(mut self, leader_offset: u32) -> Self {
+        self.no_leader_block = true;
+        self.leader_offset = Some(leader_offset);
+        self
+    }
+
+    // Should be called when building a voting round. Will ensure vote is missing.
+    pub fn no_leader_link(mut self, leader_round: Round, leader_offset: u32) -> Self {
+        self.no_leader_link = true;
+        self.leader_offset = Some(leader_offset);
+        self.leader_round = Some(leader_round);
+        self.fully_linked_ancestors = false;
+        self
+    }
+
+    pub fn authorities(mut self, authorities: Vec<AuthorityIndex>) -> Self {
+        self.specified_authorities = Some(authorities);
+        self
+    }
+
+    // Multiple blocks will be created for the specified authorities at the layer round.
+    pub fn equivocate(mut self, equivocations: usize) -> Self {
+        // authorities must be specified for this to apply
+        assert!(self.specified_authorities.is_some());
+        self.equivocations = Some(equivocations);
+        self
+    }
+
+    // No blocks will be created for the specified authorities at the layer round.
+    pub fn skip_block(mut self) -> Self {
+        // authorities must be specified for this to apply
+        assert!(self.specified_authorities.is_some());
+        self.skip_block = true;
+        self
+    }
+
+    // Apply the configurations & build the dag layer(s).
+    // todo: add an option to control wether to write to dag state.
+    pub fn build(mut self) {
+        for round in self.start_round..=self.end_round.unwrap_or(self.start_round) {
+            tracing::info!("BUILDING LAYER ROUND {round}...");
+
+            let authorities = if self.specified_authorities.is_some() {
+                self.specified_authorities.clone().unwrap()
+            } else {
+                self.dag_builder
+                    .context
+                    .committee
+                    .authorities()
+                    .map(|x| x.0)
+                    .collect()
+            };
+
+            // todo: investigate if these configurations can be called for the same layer
+            let mut connections = if self.fully_linked_ancestors {
+                self.configure_fully_linked_ancestors()
+            } else if self.min_ancestor_links {
+                self.configure_min_parent_links()
+            } else if self.no_leader_link {
+                self.configure_no_leader_links(authorities.clone(), round)
+            } else if self.skip_ancestor_links.is_some() {
+                self.configure_skipped_ancestor_links(
+                    authorities,
+                    self.skip_ancestor_links.clone().unwrap(),
+                )
+            } else {
+                vec![]
+            };
+
+            if self.random_weak_links {
+                connections.append(&mut self.configure_random_weak_links());
+            }
+
+            self.create_blocks(round, connections);
+        }
+
+        self.dag_builder
+            .dag_state
+            .write()
+            .accept_blocks(self.blocks);
+        self.dag_builder.last_ancestors = self.ancestors;
+    }
+
+    // Layer round is minimally and randomly connected with ancestors.
+    pub fn configure_min_parent_links(&mut self) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
+        let quorum_threshold = self.dag_builder.context.committee.quorum_threshold() as usize;
+
+        let mut authorities: Vec<_> = self
+            .dag_builder
+            .context
+            .committee
+            .authorities()
+            .map(|authority| authority.0)
+            .collect();
+        authorities.shuffle(&mut thread_rng());
+
+        authorities
+            .into_iter()
+            .take(quorum_threshold)
+            .map(|authority| (authority, self.ancestors.clone()))
+            .collect()
+    }
+
+    // TODO: configure layer round randomly connected with weak links.
+    fn configure_random_weak_links(&mut self) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
+        vec![]
+    }
+
+    // Layer round misses link to leader, but other blocks are fully connected with ancestors.
+    fn configure_no_leader_links(
+        &mut self,
+        authorities: Vec<AuthorityIndex>,
+        round: Round,
+    ) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
+        let missing_leader = self.dag_builder.leader_schedule.elect_leader(
+            self.leader_round.expect("leader round should be set"),
+            self.leader_offset.expect("leader_offset should be set"),
+        );
+
+        self.configure_skipped_ancestor_links(authorities, vec![missing_leader])
+    }
+
+    fn configure_fully_linked_ancestors(&mut self) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
+        self.dag_builder
+            .context
+            .committee
+            .authorities()
+            .map(|authority| (authority.0, self.ancestors.clone()))
+            .collect::<Vec<_>>()
+    }
+
+    fn configure_skipped_ancestor_links(
+        &mut self,
+        authorities: Vec<AuthorityIndex>,
+        ancestors_to_skip: Vec<AuthorityIndex>,
+    ) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
+        let filtered_ancestors = self
+            .ancestors
+            .clone()
+            .into_iter()
+            .filter(|ancestor| !ancestors_to_skip.contains(&ancestor.author))
+            .collect::<Vec<_>>();
+        authorities
+            .into_iter()
+            .map(|authority| (authority, filtered_ancestors.clone()))
+            .collect::<Vec<_>>()
+    }
+
+    // Creates the blocks for the new layer based on configured connections, also
+    // sets the ancestors for future layers to be linked to
+    fn create_blocks(&mut self, round: Round, connections: Vec<(AuthorityIndex, Vec<BlockRef>)>) {
+        let mut references = Vec::new();
+        for (authority, ancestors) in connections {
+            if self.should_skip_block(round, authority) {
+                continue;
+            };
+            let num_blocks = self.num_blocks_to_create(authority);
+
+            for num_block in 0..num_blocks {
+                let author = authority.value() as u32;
+                let base_ts = round as BlockTimestampMs * 1000;
+                let block = VerifiedBlock::new_for_test(
+                    TestBlock::new(round, author)
+                        .set_ancestors(ancestors.clone())
+                        .set_timestamp_ms(base_ts + (author + round + num_block) as u64)
+                        .build(),
+                );
+                references.push(block.reference());
+                self.dag_builder
+                    .blocks
+                    .insert(block.reference(), block.clone());
+                self.blocks.push(block);
+            }
+        }
+        self.ancestors = references;
+    }
+
+    fn num_blocks_to_create(&self, authority: AuthorityIndex) -> u32 {
+        if self.equivocations.is_some()
+            && self
+                .specified_authorities
+                .clone()
+                .unwrap()
+                .contains(&authority)
+        {
+            self.equivocations.unwrap() as u32
+        } else {
+            1
+        }
+    }
+
+    fn should_skip_block(&self, round: Round, authority: AuthorityIndex) -> bool {
+        // Safe to unwrap as specified authorites has to be set before skip
+        // is specified.
+        if self.skip_block
+            && self
+                .specified_authorities
+                .clone()
+                .unwrap()
+                .contains(&authority)
+        {
+            return true;
+        }
+        if self.no_leader_block {
+            let leader = self.dag_builder.leader_schedule.elect_leader(
+                round,
+                self.leader_offset.expect("leader_offset should be set"),
+            );
+            return leader == authority;
+        }
+        false
+    }
+}
+
+// todo: add unit tests
