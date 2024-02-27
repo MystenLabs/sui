@@ -12,11 +12,11 @@ module t2::o2 {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    struct Obj2 has key, store {
+    public struct Obj2 has key, store {
         id: UID,
     }
 
-    struct Wrapper has key {
+    public struct Wrapper has key {
         id: UID,
         o2: Obj2
     }

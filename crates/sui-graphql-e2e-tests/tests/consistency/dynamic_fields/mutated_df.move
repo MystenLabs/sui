@@ -19,7 +19,7 @@ module Test::M1 {
     use sui::transfer;
     use std::string::{String, utf8};
 
-    struct Parent has key, store {
+    public struct Parent has key, store {
         id: UID,
         count: u64
     }

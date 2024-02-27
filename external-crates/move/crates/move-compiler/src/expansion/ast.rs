@@ -289,11 +289,11 @@ pub type LambdaLValues = Spanned<LambdaLValues_>;
 pub enum ExpDotted_ {
     Exp(Box<Exp>),
     Dot(Box<ExpDotted>, Name),
+    Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-
 pub enum DottedUsage {
     Move(Loc),
     Copy(Loc),
@@ -524,6 +524,12 @@ impl Attributes {
     pub fn is_test_or_test_only(&self) -> bool {
         self.contains_key_(&known_attributes::TestingAttribute::TestOnly.into())
             || self.contains_key_(&known_attributes::TestingAttribute::Test.into())
+    }
+}
+
+impl Default for UseFuns {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -1538,6 +1544,12 @@ impl AstDebug for ExpDotted_ {
             D::Dot(e, n) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n))
+            }
+            D::Index(e, rhs) => {
+                e.ast_debug(w);
+                w.write("[");
+                w.comma(&rhs.value, |w, e| e.ast_debug(w));
+                w.write("]");
             }
         }
     }

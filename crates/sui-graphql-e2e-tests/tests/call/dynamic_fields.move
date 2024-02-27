@@ -17,16 +17,16 @@ module Test::m {
     use sui::object;
     use sui::tx_context::{sender, TxContext};
 
-    struct Wrapper has key {
+    public struct Wrapper has key {
         id: object::UID,
         o: Parent
     }
 
-    struct Parent has key, store {
+    public struct Parent has key, store {
         id: object::UID,
     }
 
-    struct Child has key, store {
+    public struct Child has key, store {
         id: object::UID,
     }
 

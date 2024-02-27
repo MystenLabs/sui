@@ -7,14 +7,14 @@
 
 //# publish
 module test::m1 {
-    struct Potato {}
+    public struct Potato {}
 
     public fun potato(): Potato { Potato {} }
     public fun otatop(tater: Potato) { let Potato {} = tater; }
 
     public fun pass(tater: Potato): Potato { tater }
     public fun imm(_: &Potato) {}
-    public fun mut(_: &mut Potato) {}
+    public fun mut_(_: &mut Potato) {}
 
 }
 
@@ -22,5 +22,5 @@ module test::m1 {
 //> 0: test::m1::potato();
 //> 1: test::m1::pass(Result(0));
 //> test::m1::imm(Result(1));
-//> test::m1::mut(Result(1));
+//> test::m1::mut_(Result(1));
 //> test::m1::otatop(Result(1));

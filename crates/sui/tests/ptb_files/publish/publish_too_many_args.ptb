@@ -1,0 +1,3 @@
+--gas-budget 1000
+# too many args
+--publish too many args

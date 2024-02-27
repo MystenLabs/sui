@@ -12,7 +12,7 @@ module tto::M1 {
 
     const KEY: u64 = 0;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
         value: u64,
     }
@@ -20,7 +20,7 @@ module tto::M1 {
     public fun start(ctx: &mut TxContext) {
         let a = A { id: object::new(ctx), value: 0 };
         let a_address = object::id_address(&a);
-        let b = A { id: object::new(ctx), value: 0 };
+        let mut b = A { id: object::new(ctx), value: 0 };
         dof::add(&mut b.id, KEY, A { id: object::new(ctx), value: 0 });
         transfer::public_transfer(a, tx_context::sender(ctx));
         transfer::public_transfer(b, a_address);

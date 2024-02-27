@@ -1,0 +1,11 @@
+error[E04034]: 'syntax' method types differ
+  ┌─ tests/move_2024/typing/primitive_index_invalid_2.move:5:64
+  │
+5 │     native public fun vborrow<Element>(v: &vector<Element>, i: u64): &Element;
+  │                                                                ^^^ This index function expects type 'u64'
+6 │     #[syntax(index)]
+7 │     native public fun vborrow_mut<Element>(v: &mut vector<Element>, i: u32): &mut Element;
+  │                                                                        --- This mutable index function expects type 'u32'
+  │
+  = Index operation non-subject parameter types must match exactly
+

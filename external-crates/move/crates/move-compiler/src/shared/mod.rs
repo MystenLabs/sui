@@ -170,6 +170,12 @@ pub struct NamedAddressMapIndex(usize);
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NamedAddressMaps(Vec<NamedAddressMap>);
 
+impl Default for NamedAddressMaps {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NamedAddressMaps {
     pub fn new() -> Self {
         Self(vec![])
@@ -514,8 +520,8 @@ impl CompilationEnv {
     // supported, and `true` otherwise.
     pub fn check_feature(
         &mut self,
-        feature: FeatureGate,
         package: Option<Symbol>,
+        feature: FeatureGate,
         loc: Loc,
     ) -> bool {
         edition_check_feature(self, self.package_config(package).edition, feature, loc)

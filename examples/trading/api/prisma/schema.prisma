@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+/// We can setup the provider to our database
+/// For this DEMO, we're using sqlite, which allows us to not
+/// have external dependencies.
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+/// Our `Locked` objects list
+model Locked {
+  // Keeping an ID so we can use as a pagination cursor
+  // There's an issue with BigInt for sqlite, so we're using a plain ID.
+  id Int @id @default(autoincrement())
+  objectId String @unique
+  keyId String?
+  creator String?
+  itemId String?
+  deleted Boolean @default(false)
+
+  @@index([creator])
+  @@index([deleted])
+}
+
+/// Our swap objects list
+model Escrow {
+  // Keeping an ID so we can use as a pagination cursor
+  // There's an issue with BigInt for sqlite, so we're using a plain ID.
+  id Int @id @default(autoincrement())
+  objectId String @unique
+  sender String?
+  recipient String?
+  keyId String?
+  itemId String?
+  swapped Boolean @default(false)
+  cancelled Boolean @default(false)
+  
+  @@index([recipient])
+  @@index([sender])
+}
+
+/// Saves the latest cursor for a given key.
+model Cursor {
+  id String @id
+  eventSeq String
+  txDigest String
+}

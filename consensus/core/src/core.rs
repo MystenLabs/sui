@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     sync::Arc,
 };
 
@@ -126,21 +126,24 @@ impl Core {
 
         // Accept all blocks but make sure that only the last quorum round blocks and onwards are kept.
         self.add_accepted_blocks(all_blocks, Some(0));
+
+        // TODO: run commit and propose logic, or just use add_blocks() instead of add_accepted_blocks().
+
         self
     }
 
     /// Processes the provided blocks and accepts them if possible when their causal history exists.
     /// The method returns the references of parents that are unknown and need to be fetched.
-    pub(crate) fn add_blocks(&mut self, blocks: Vec<VerifiedBlock>) -> Vec<BlockRef> {
+    pub(crate) fn add_blocks(&mut self, blocks: Vec<VerifiedBlock>) -> BTreeSet<BlockRef> {
         let _scope = monitored_scope("Core::add_blocks");
 
         // Try to accept them via the block manager
-        let accepted_blocks = self
+        let (accepted_blocks, missing_blocks) = self
             .block_manager
             .try_accept_blocks(blocks)
             .unwrap_or_else(|err| panic!("Fatal error while accepting blocks: {err}"));
 
-        // Now process them, basically move the threshold clock and add them to pending list
+        // Now add accepted blocks to the threshold clock and pending ancestors list.
         self.add_accepted_blocks(accepted_blocks, None);
 
         // TODO: Add optimization for added blocks that do not achieve quorum for a round.
@@ -154,8 +157,7 @@ impl Core {
             }
         }
 
-        // TODO: we don't deal for now with missed references, will address later.
-        vec![]
+        missing_blocks
     }
 
     /// Adds/processed all the newly `accepted_blocks`. We basically try to move the threshold clock and add them to the
@@ -242,21 +244,18 @@ impl Core {
             let now = timestamp_utc_ms();
             let ancestors = self.ancestors_to_propose(clock_round, now);
 
-            //2. consume the next transactions to be included.
-            let payload = self.transaction_consumer.next();
+            // 2. Consume the next transactions to be included.
+            let transactions = self.transaction_consumer.next();
 
-            //3. create the block and insert to storage.
+            // 3. Create the block and insert to storage.
             // TODO: take a decision on whether we want to flush to disk at this point the DagState.
-
-            // TODO: this will be refactored once the signing path/approach has been introduced. Adding as is for now
-            // to keep things rolling in the implementation.
             let block = Block::V1(BlockV1::new(
                 self.context.committee.epoch(),
                 clock_round,
                 self.context.own_index,
                 now,
                 ancestors,
-                payload,
+                transactions,
             ));
             let signed_block =
                 SignedBlock::new(block, &self.block_signer).expect("Block signing failed.");
@@ -275,10 +274,12 @@ impl Core {
                 .or_default()
                 .push(verified_block.clone());
 
-            let _ = self
+            let (accepted_blocks, missing) = self
                 .block_manager
                 .try_accept_blocks(vec![verified_block.clone()])
                 .unwrap_or_else(|err| panic!("Fatal error while accepting our own block: {err}"));
+            assert_eq!(accepted_blocks.len(), 1);
+            assert!(missing.is_empty());
 
             self.last_proposed_block = verified_block.clone();
 
@@ -287,8 +288,6 @@ impl Core {
             //5. emit an event that a new block is ready
             let _ = self.signals.new_block_ready(verified_block.reference());
             // TODO: propagate shutdown or ensure this will never return error?
-
-            self.try_commit();
 
             return Some(verified_block);
         }
@@ -314,6 +313,10 @@ impl Core {
             .collect::<Vec<_>>();
 
         self.commit_observer.handle_commit(committed_leaders);
+    }
+
+    pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
+        self.block_manager.missing_blocks()
     }
 
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round. Also the `block_timestamp` is provided
@@ -343,15 +346,14 @@ impl Core {
             .flat_map(|block| block.ancestors())
             .collect();
 
-        let mut to_propose = HashSet::new();
+        // Keep block refs to propose in a map, so even if somehow a byzantine node managed to provide blocks that don't
+        // form a valid chain we can still pick one block per author.
+        let mut to_propose = BTreeMap::new();
         for block in ancestors.into_iter() {
             if !all_ancestors_parents.contains(&block.reference()) {
-                to_propose.insert(block.reference());
+                to_propose.insert(block.author(), block.reference());
             }
         }
-
-        // always include our last block to ensure that is not somehow excluded by the DAG compression
-        to_propose.insert(self.last_proposed_block.reference());
 
         assert!(!to_propose.is_empty());
 
@@ -359,7 +361,16 @@ impl Core {
         self.pending_ancestors
             .retain(|round, _blocks| *round >= clock_round);
 
-        to_propose.into_iter().collect()
+        // always include our last proposed block in front of the vector and make sure that we do not
+        // double insert.
+        let mut result = vec![self.last_proposed_block.reference()];
+        for (authority_index, block_ref) in to_propose {
+            if authority_index != self.context.own_index {
+                result.push(block_ref);
+            }
+        }
+
+        result
     }
 
     /// Checks whether all the leaders of the previous quorum exist.
@@ -535,6 +546,11 @@ mod test {
             store.clone(),
         );
 
+        // Check no commits have been persisted to dag_state or store.
+        let last_commit = store.read_last_commit().unwrap();
+        assert!(last_commit.is_none());
+        assert_eq!(dag_state.read().last_commit_index(), 0);
+
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new();
         let mut core = Core::new(
@@ -552,11 +568,6 @@ mod test {
         let mut new_round = signal_receivers.new_round_receiver();
         assert_eq!(*new_round.borrow_and_update(), 5);
 
-        // Check no commits have been persisted to dag_state & store
-        let last_commit = store.read_last_commit().unwrap();
-        assert!(last_commit.is_none());
-        assert_eq!(dag_state.read().last_commit_index(), 0);
-
         // When trying to propose now we should propose block for round 5
         let proposed_block = core
             .try_new_block(true)
@@ -570,11 +581,13 @@ mod test {
             assert_eq!(ancestor.round, 4);
         }
 
-        // Check commits have been persisted to dag state & store
+        // Run commit rule.
+        core.try_commit();
         let last_commit = store
             .read_last_commit()
             .unwrap()
             .expect("last commit should be set");
+
         // There were no commits prior to the core starting up but there was completed
         // rounds up to and including round 4. So we should commit leaders in round 1 & 2
         // as soon as the new block for round 5 is proposed.
@@ -596,7 +609,7 @@ mod test {
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
-        // Create test blocks for all authorities except our's (index = 0) .
+        // Create test blocks for all authorities except our's (index = 0).
         let (_, mut last_round_blocks) = Block::genesis(context.clone());
         let mut all_blocks = last_round_blocks.clone();
         for round in 1..=4 {
@@ -636,6 +649,11 @@ mod test {
             store.clone(),
         );
 
+        // Check no commits have been persisted to dag_state & store
+        let last_commit = store.read_last_commit().unwrap();
+        assert!(last_commit.is_none());
+        assert_eq!(dag_state.read().last_commit_index(), 0);
+
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new();
         let mut core = Core::new(
@@ -653,11 +671,6 @@ mod test {
         let mut new_round = signal_receivers.new_round_receiver();
         assert_eq!(*new_round.borrow_and_update(), 4);
 
-        // Check no commits have been persisted to dag_state & store
-        let last_commit = store.read_last_commit().unwrap();
-        assert!(last_commit.is_none());
-        assert_eq!(dag_state.read().last_commit_index(), 0);
-
         // When trying to propose now we should propose block for round 4
         let proposed_block = core
             .try_new_block(true)
@@ -674,11 +687,13 @@ mod test {
             }
         }
 
-        // Check commits have been persisted to dag state & store
+        // Run commit rule.
+        core.try_commit();
         let last_commit = store
             .read_last_commit()
             .unwrap()
             .expect("last commit should be set");
+
         // There were no commits prior to the core starting up but there was completed
         // rounds up to round 4. So we should commit leaders in round 1 & 2 as soon
         // as the new block for round 4 is proposed.

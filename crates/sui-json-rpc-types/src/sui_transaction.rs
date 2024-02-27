@@ -927,10 +927,10 @@ impl Display for SuiTransactionBlockEffects {
         let gas_cost_summary = self.gas_cost_summary();
         builder.push_record(vec![format!(
             "Gas Cost Summary:\n   \
-             Storage Cost: {}\n   \
-             Computation Cost: {}\n   \
-             Storage Rebate: {}\n   \
-             Non-refundable Storage Fee: {}",
+             Storage Cost: {} MIST\n   \
+             Computation Cost: {} MIST\n   \
+             Storage Rebate: {} MIST\n   \
+             Non-refundable Storage Fee: {} MIST",
             gas_cost_summary.storage_cost,
             gas_cost_summary.computation_cost,
             gas_cost_summary.storage_rebate,

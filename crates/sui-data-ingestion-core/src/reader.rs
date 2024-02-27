@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::executor::MAX_CHECKPOINTS_IN_PROGRESS;
-use anyhow::anyhow;
 use anyhow::Result;
 use futures::future::try_join_all;
 use notify::RecursiveMode;
@@ -55,10 +54,7 @@ impl CheckpointReader {
         files.sort();
         debug!("unprocessed local files {:?}", files);
         let mut checkpoints = vec![];
-        for (idx, (sequence_number, filename)) in files.iter().enumerate() {
-            if self.current_checkpoint_number + idx as u64 != *sequence_number {
-                return Err(anyhow!("checkpoint sequence should not have any gaps"));
-            }
+        for (_, filename) in files.iter().take(MAX_CHECKPOINTS_IN_PROGRESS) {
             let checkpoint = Blob::from_bytes::<CheckpointData>(&fs::read(filename)?)?;
             checkpoints.push(checkpoint);
         }
@@ -101,7 +97,9 @@ impl CheckpointReader {
         })
         .await?;
 
-        if checkpoints.is_empty() {
+        if checkpoints.is_empty()
+            || checkpoints[0].checkpoint_summary.sequence_number > self.current_checkpoint_number
+        {
             checkpoints = self.remote_fetch().await?;
         }
 
@@ -216,13 +214,13 @@ impl CheckpointReader {
 
         loop {
             tokio::select! {
-                Ok(Some(_)) | Err(_) = timeout(Duration::from_millis(timeout_ms), inotify_recv.recv())  => {
-                    self.sync().await.expect("Failed to read checkpoint files");
-                }
+                _ = &mut self.exit_receiver => break,
                 Some(gc_checkpoint_number) = self.processed_receiver.recv() => {
                     self.gc_processed_files(gc_checkpoint_number).expect("Failed to clean the directory");
                 }
-                _ = &mut self.exit_receiver => break,
+                Ok(Some(_)) | Err(_) = timeout(Duration::from_millis(timeout_ms), inotify_recv.recv())  => {
+                    self.sync().await.expect("Failed to read checkpoint files");
+                }
             }
         }
         Ok(())

@@ -10,7 +10,7 @@ module Test::M1 {
     use sui::transfer;
     use sui::coin::Coin;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         value: u64,
     }

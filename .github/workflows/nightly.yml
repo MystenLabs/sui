@@ -32,9 +32,9 @@ jobs:
     name: build release binaries
     runs-on: [ubuntu-ghcloud]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - name: cargo build
-        uses: actions-rs/cargo@v1
+        uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b # pin@v1.0.3
         with:
           command: build
           args: --all-targets --all-features --release --profile=release
@@ -43,19 +43,19 @@ jobs:
   # cargo-udeps:
   #   runs-on: [ubuntu-ghcloud]
   #   steps:
-  #     - uses: actions/checkout@v3
+  #     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
   #     # Enable caching of the 'librocksdb-sys' crate by additionally caching the
   #     # 'librocksdb-sys' src directory which is managed by cargo
   #     - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
   #       with:
   #         path: ~/.cargo/registry/src/**/librocksdb-sys-*
   #     - name: Install cargo-udeps, and cache the binary
-  #       uses: baptiste0928/cargo-install@v1
+  #       uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
   #       with:
   #         crate: cargo-udeps
   #         locked: true
   #     - name: Install cargo-hakari, and cache the binary
-  #       uses: baptiste0928/cargo-install@v1
+  #       uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
   #       with:
   #         crate: cargo-hakari
   #         locked: true
@@ -76,7 +76,7 @@ jobs:
     if: always()
     needs: [release]
     steps:
-      - uses: technote-space/workflow-conclusion-action@v3
+      - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
 
       - name: Post to slack
         uses: slackapi/slack-github-action@v1.24.0

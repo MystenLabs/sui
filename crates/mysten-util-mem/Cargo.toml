@@ -23,7 +23,6 @@ ed25519-consensus.workspace = true
 smallvec = { workspace = true, optional = true }
 parking_lot = { workspace = true, optional = true }
 once_cell.workspace = true
-workspace-hack.workspace = true
 
 [features]
 default = ["std", "hashbrown", "smallvec", "estimate-heapsize"]

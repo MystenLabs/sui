@@ -7,7 +7,6 @@ edition = "2021"
 version = "0.1.0"
 
 [dependencies]
-workspace-hack.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
@@ -59,4 +58,3 @@ sui.workspace = true
 sui-sdk.workspace = true
 sui-keys.workspace = true
 shared-crypto.workspace = true
-workspace-hack.workspace = true

@@ -20,7 +20,7 @@ outputs:
 runs:
   using: composite
   steps:
-  - uses: actions/checkout@v3
+  - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
   - name: Detect Changes
     uses: dorny/paths-filter@v2.10.2
     id: diff
@@ -32,7 +32,6 @@ runs:
           - 'external-crates/**'
           - 'narwhal/**'
           - 'sui-execution/**'
-          - '.github/workflows/bench.yml'
           - '.github/workflows/codecov.yml'
           - '.github/workflows/rust.yml'
           - '.github/workflows/external.yml'

@@ -122,7 +122,7 @@
 
 //# publish
 module P0::m {
-    struct S0<T> {
+    public struct S0<T> {
         xs: vector<vector<vector<vector<
             vector<vector<vector<vector<
                 T
@@ -130,7 +130,7 @@ module P0::m {
             >>>>
     }
 
-    struct S1<T> {
+    public struct S1<T> {
         xss: S0<S0<S0<S0<S0<S0<S0<S0<
              S0<S0<S0<S0<S0<S0<S0<S0<
                  T

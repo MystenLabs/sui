@@ -8,7 +8,7 @@
 
 use crate::error::BridgeResult;
 use crate::eth_client::EthClient;
-use crate::retry_with_max_delay;
+use crate::retry_with_max_elapsed_time;
 use crate::types::EthLog;
 use ethers::types::Address as EthAddress;
 use mysten_metrics::spawn_logged_monitored_task;
@@ -17,8 +17,6 @@ use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::{self, Duration};
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
-use tokio_retry::Retry;
 use tracing::error;
 
 const ETH_LOG_QUERY_MAX_BLOCK_RANGE: u64 = 1000;
@@ -94,9 +92,9 @@ where
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
-            let Ok(new_value) = retry_with_max_delay!(
+            let Ok(Ok(new_value)) = retry_with_max_elapsed_time!(
                 eth_client.get_last_finalized_block_id(),
-                Duration::from_secs(600)
+                time::Duration::from_secs(10)
             ) else {
                 error!("Failed to get last finalized block from eth client after retry");
                 continue;
@@ -149,9 +147,9 @@ where
                 new_finalized_block,
             );
             more_blocks = end_block < new_finalized_block;
-            let Ok(events) = retry_with_max_delay!(
+            let Ok(Ok(events)) = retry_with_max_elapsed_time!(
                 eth_client.get_events_in_range(contract_address, start_block, end_block),
-                Duration::from_secs(600)
+                Duration::from_secs(30)
             ) else {
                 error!("Failed to get events from eth client after retry");
                 continue;

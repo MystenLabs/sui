@@ -138,16 +138,14 @@ use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_cache::{
-    CheckpointCache, ExecutionCache, ExecutionCacheRead, ExecutionCacheReconfigAPI,
-    ExecutionCacheWrite, StateSyncAPI,
+    CheckpointCache, ExecutionCache, ExecutionCacheCommit, ExecutionCacheRead,
+    ExecutionCacheReconfigAPI, ExecutionCacheWrite, StateSyncAPI,
 };
 use crate::execution_driver::execution_process;
 use crate::metrics::LatencyObserver;
 use crate::metrics::RateTracker;
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::overload_monitor::{
-    overload_monitor, overload_monitor_accept_tx, AuthorityOverloadInfo,
-};
+use crate::overload_monitor::{overload_monitor_accept_tx, AuthorityOverloadInfo};
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::{AccumulatorStore, StateAccumulator, WrappedObject};
 use crate::subscription_handler::SubscriptionHandler;
@@ -678,6 +676,7 @@ struct ExecutionCacheTraitPointers {
     accumulator_store: Arc<dyn AccumulatorStore>,
     checkpoint_cache: Arc<dyn CheckpointCache>,
     state_sync_store: Arc<dyn StateSyncAPI>,
+    cache_commit: Arc<dyn ExecutionCacheCommit>,
 }
 
 impl ExecutionCacheTraitPointers {
@@ -692,6 +691,7 @@ impl ExecutionCacheTraitPointers {
             accumulator_store: cache.clone(),
             checkpoint_cache: cache.clone(),
             state_sync_store: cache.clone(),
+            cache_commit: cache.clone(),
         }
     }
 }
@@ -2566,12 +2566,6 @@ impl AuthorityState {
             rx_execution_shutdown,
         ));
 
-        // Don't start the overload monitor when max_load_shedding_percentage is 0.
-        if authority_overload_config.max_load_shedding_percentage > 0 {
-            let authority_state = Arc::downgrade(&state);
-            spawn_monitored_task!(overload_monitor(authority_state, authority_overload_config));
-        }
-
         // TODO: This doesn't belong to the constructor of AuthorityState.
         state
             .create_owner_index_if_empty(genesis_objects, &epoch_store)
@@ -2582,7 +2576,7 @@ impl AuthorityState {
 
     // Use this method only if one of the trait-specific methods below does not work.
     // (For instance if you need an implementation of more than one of these traits
-    // simulatenously).
+    // simultaneously).
     pub fn get_execution_cache(&self) -> Arc<ExecutionCache> {
         self.execution_cache.clone()
     }
@@ -2624,6 +2618,10 @@ impl AuthorityState {
         &self.execution_cache_trait_pointers.state_sync_store
     }
 
+    pub fn get_cache_commit(&self) -> &Arc<dyn ExecutionCacheCommit> {
+        &self.execution_cache_trait_pointers.cache_commit
+    }
+
     pub fn database_for_testing(&self) -> &Arc<AuthorityStore> {
         self.execution_cache.store_for_testing()
     }
@@ -2661,17 +2659,6 @@ impl AuthorityState {
     ) -> SuiResult<()> {
         self.transaction_manager
             .enqueue_certificates(certs, epoch_store)
-    }
-
-    // NB: This must only be called at time of reconfiguration. We take the execution lock write
-    // guard as an argument to ensure that this is the case.
-    fn clear_object_per_epoch_marker_table(
-        &self,
-        execution_guard: &ExecutionLockWriteGuard<'_>,
-    ) -> SuiResult<()> {
-        self.execution_cache
-            .clear_object_per_epoch_marker_table(execution_guard);
-        Ok(())
     }
 
     fn create_owner_index_if_empty(
@@ -2763,8 +2750,12 @@ impl AuthorityState {
 
         self.committee_store.insert_new_committee(&new_committee)?;
         let mut execution_lock = self.execution_lock_for_reconfiguration().await;
+        // TODO: revert_uncommitted_epoch_transactions will soon be unnecessary -
+        // clear_state_end_of_epoch() can simply drop all uncommitted transactions
         self.revert_uncommitted_epoch_transactions(cur_epoch_store)
             .await?;
+        self.execution_cache
+            .clear_state_end_of_epoch(&execution_lock);
         self.check_system_consistency(
             cur_epoch_store,
             checkpoint_executor,
@@ -2777,7 +2768,6 @@ impl AuthorityState {
                 .epoch_start_state()
                 .protocol_version(),
         );
-        self.clear_object_per_epoch_marker_table(&execution_lock)?;
         self.execution_cache
             .set_epoch_start_configuration(&epoch_start_configuration)?;
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {

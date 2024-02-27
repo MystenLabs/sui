@@ -85,6 +85,11 @@
       { "source": "/learn/exchange-integration-faq", "destination": "/guides/operator/exchange-integration", "permanent": true },
       { "source": "/learn/how-sui-works", "destination": "/concepts/components", "permanent": true },
       { "source": "/learn/sui-compared", "destination": "/concepts/components", "permanent": true },
-      { "source": "/learn/sui-bridging", "destination": "/concepts/tokenomics/sui-bridging", "permanent": true }
+      { "source": "/learn/sui-bridging", "destination": "/concepts/tokenomics/sui-bridging", "permanent": true },
+      { "source": "/concepts/transactions/transaction-lifecycle", "destination": "/concepts/sui-architecture/transaction-lifecycle", "permanent": true},
+      { "source": "standards/closed-loop-token/overview", "destination": "standards/closed-loop-token", "permanent": true},
+      { "source": "concepts/dynamic-fields/transfers/custom-rules", "destination": "concepts/transfers/custom-rules", "permanent": true},
+      { "source": "concepts/dynamic-fields/transfers/transfer-to-object", "destination": "concepts/transfers/transfer-to-object", "permanent": true},
+      { "source": "references/sui-graphql/:path*", "destination": "references/sui-api/sui-graphql/:path*", "permanent": true}
     ]
   }
