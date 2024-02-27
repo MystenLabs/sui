@@ -22,6 +22,9 @@ pub enum Error {
     #[error("Package has no modules: {0}")]
     EmptyPackage(AccountAddress),
 
+    #[error("Function not found: {0}::{1}::{2}")]
+    FunctionNotFound(AccountAddress, String, String),
+
     #[error("Linkage not found for package: {0}")]
     LinkageNotFound(AccountAddress),
 
