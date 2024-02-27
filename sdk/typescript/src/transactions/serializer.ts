@@ -166,3 +166,36 @@ function normalizedTypeToMoveTypeSignatureBody(
 
 	throw new Error(`Unexpected type ${JSON.stringify(type)}`);
 }
+
+export function pureBcsSchemaFromOpenMoveTypeSignatureBody(
+	typeSignature: OpenMoveTypeSignatureBody,
+): BcsType<any> {
+	if (typeof typeSignature === 'string') {
+		switch (typeSignature) {
+			case 'address':
+				return bcs.Address;
+			case 'bool':
+				return bcs.Bool;
+			case 'u8':
+				return bcs.U8;
+			case 'u16':
+				return bcs.U16;
+			case 'u32':
+				return bcs.U32;
+			case 'u64':
+				return bcs.U64;
+			case 'u128':
+				return bcs.U128;
+			case 'u256':
+				return bcs.U256;
+			default:
+				throw new Error(`Unknown type signature ${typeSignature}`);
+		}
+	}
+
+	if ('vector' in typeSignature) {
+		return bcs.vector(pureBcsSchemaFromOpenMoveTypeSignatureBody(typeSignature.vector));
+	}
+
+	throw new Error(`Expected pure typeSignature, but got ${JSON.stringify(typeSignature)}`);
+}
