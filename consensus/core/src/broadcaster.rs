@@ -29,7 +29,7 @@ const BROADCAST_CONCURRENCY: usize = 10;
 /// For a peer that lags behind or is disconnected, blocks are buffered and retried until
 /// a limit is reached, then old blocks will get dropped from the buffer.
 pub(crate) struct Broadcaster {
-    // Background tasks sending blocks to peers.
+    // Background tasks listening for new blocks and pushing them to peers.
     senders: JoinSet<()>,
 }
 
@@ -39,7 +39,6 @@ impl Broadcaster {
         network_client: Arc<C>,
         signals_receiver: &CoreSignalsReceivers,
     ) -> Self {
-        // Initialize sender tasks.
         let mut senders = JoinSet::new();
         for (index, _authority) in context.committee.authorities() {
             // Skip sending Block to self.
@@ -53,6 +52,14 @@ impl Broadcaster {
                 index,
             ));
         }
+        // When there is no peer (in tests), keep a subscriber to the block broadcast channel
+        // so Core can continue to function.
+        if senders.is_empty() {
+            senders.spawn(Self::drop_blocks(
+                signals_receiver.block_broadcast_receiver(),
+            ));
+        }
+
         Self { senders }
     }
 
@@ -145,6 +152,26 @@ impl Broadcaster {
                 .broadcaster_rtt_estimate_ms
                 .with_label_values(&[&peer_hostname])
                 .set(rtt_estimate.as_millis() as i64);
+        }
+    }
+
+    /// Runs in a loop to continuously listen for and drop blocks.
+    /// This is useful for keeping the block broadcaster happy when there is no peer
+    /// to push blocks to.
+    async fn drop_blocks(mut rx_block_broadcast: broadcast::Receiver<VerifiedBlock>) {
+        loop {
+            match rx_block_broadcast.recv().await {
+                Ok(_) => {}
+                Err(broadcast::error::RecvError::Closed) => {
+                    trace!("Broadcaster is shutting down!");
+                    return;
+                }
+                Err(broadcast::error::RecvError::Lagged(e)) => {
+                    warn!("Broadcaster is lagging! {e}");
+                    // Re-run the loop to receive again.
+                    continue;
+                }
+            }
         }
     }
 }

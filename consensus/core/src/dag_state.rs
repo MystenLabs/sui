@@ -189,6 +189,12 @@ impl DagState {
             .store
             .read_blocks(&missing_refs)
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
+        self.context
+            .metrics
+            .node_metrics
+            .dag_state_store_read_count
+            .with_label_values(&[&"get_blocks"])
+            .inc();
 
         for ((index, _), result) in missing.into_iter().zip(store_results.into_iter()) {
             blocks[index] = result;
@@ -283,10 +289,15 @@ impl DagState {
         let mut missing = Vec::new();
 
         for (index, block_ref) in block_refs.into_iter().enumerate() {
-            if self.recent_refs[block_ref.author].contains(&block_ref)
-                || self.genesis.contains_key(&block_ref)
-            {
+            let recent_refs = &self.recent_refs[block_ref.author];
+            if recent_refs.contains(&block_ref) || self.genesis.contains_key(&block_ref) {
                 exist[index] = true;
+            } else if recent_refs.is_empty() || recent_refs.last().unwrap().round < block_ref.round
+            {
+                // Optimization: recent_refs contain the most recent blocks known to this authority.
+                // If a block ref is not found there and has a higher round, it definitely is
+                // missing from this authority and there is no need to check disk.
+                exist[index] = false;
             } else {
                 missing.push((index, block_ref));
             }
@@ -304,6 +315,12 @@ impl DagState {
             .store
             .contains_blocks(&missing_refs)
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
+        self.context
+            .metrics
+            .node_metrics
+            .dag_state_store_read_count
+            .with_label_values(&[&"contains_blocks"])
+            .inc();
 
         for ((index, _), result) in missing.into_iter().zip(store_results.into_iter()) {
             exist[index] = result;
@@ -383,6 +400,12 @@ impl DagState {
         self.store
             .write(blocks, commits, self.last_committed_rounds.clone())
             .unwrap_or_else(|e| panic!("Failed to write to storage: {:?}", e));
+        self.context
+            .metrics
+            .node_metrics
+            .dag_state_store_write_count
+            .inc();
+
         // Clean up old cached data. After flushing, all cached blocks are guaranteed to be persisted.
         for (authority_refs, last_committed_round) in self
             .recent_refs
@@ -420,7 +443,7 @@ mod test {
     };
 
     #[test]
-    fn get_blocks() {
+    fn test_get_blocks() {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -526,7 +549,7 @@ mod test {
     }
 
     #[test]
-    fn ancestors_at_uncommitted_round() {
+    fn test_ancestors_at_uncommitted_round() {
         // Initialize DagState.
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -788,5 +811,101 @@ mod test {
         // Then all should be found apart from the last one
         expected.insert(3, None);
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_flush_and_recovery() {
+        let num_authorities: u32 = 4;
+        let (context, _) = Context::new_for_test(num_authorities as usize);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Create test blocks and commits for round 1 ~ 10
+        let num_rounds: u32 = 10;
+        let mut blocks = Vec::new();
+        let mut commits = Vec::new();
+        for round in 1..=num_rounds {
+            for author in 0..num_authorities {
+                let block = VerifiedBlock::new_for_test(TestBlock::new(round, author).build());
+                blocks.push(block);
+            }
+            commits.push(Commit {
+                index: round as CommitIndex,
+                leader: blocks.last().unwrap().reference(),
+                ..Default::default()
+            });
+        }
+
+        // Add the blocks from first 5 rounds and first 5 commits to the dag state
+        let i = blocks.iter().position(|b| b.round() == 5).unwrap();
+        let temp_blocks = blocks.split_off(i);
+        dag_state.accept_blocks(blocks.clone());
+        let temp_commits = commits.split_off(5);
+        for commit in commits.clone() {
+            dag_state.add_commit(commit);
+        }
+
+        // Flush the dag state
+        dag_state.flush();
+
+        // Add the rest of the blocks and commits to the dag state
+        dag_state.accept_blocks(temp_blocks.clone());
+        for commit in temp_commits.clone() {
+            dag_state.add_commit(commit);
+        }
+
+        // All blocks should be found in DagState.
+        let all_blocks = blocks
+            .clone()
+            .into_iter()
+            .chain(temp_blocks.clone())
+            .collect::<Vec<_>>();
+        let block_refs = all_blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<Vec<_>>();
+        let result = dag_state
+            .get_blocks(&block_refs)
+            .into_iter()
+            .map(|b| b.unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(result, all_blocks);
+
+        // Last commit index should be 10.
+        assert_eq!(dag_state.last_commit_index(), 10);
+
+        // Destroy the dag state.
+        drop(dag_state);
+
+        // Recover the state from the store
+        let dag_state = DagState::new(context.clone(), store.clone());
+
+        // Blocks of first 5 rounds should be found in DagState.
+        let block_refs = blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<Vec<_>>();
+        let result = dag_state
+            .get_blocks(&block_refs)
+            .into_iter()
+            .map(|b| b.unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(result, blocks);
+
+        // Blocks above round 5 should not be in DagState, because they are not flushed.
+        let block_refs = temp_blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<Vec<_>>();
+        let retrieved_blocks = dag_state
+            .get_blocks(&block_refs)
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        assert!(retrieved_blocks.is_empty());
+
+        // Last commit index should be 5.
+        assert_eq!(dag_state.last_commit_index(), 5);
     }
 }

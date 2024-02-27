@@ -129,8 +129,10 @@ impl Core {
             .expect("At least one block - even genesis - should be present");
 
         // Accept all blocks but make sure that only the last quorum round blocks and onwards are kept.
-        // TODO: run commit and propose logic, or just use add_blocks() instead of add_accepted_blocks().
         self.add_accepted_blocks(all_blocks, Some(0));
+        // Try to commit and propose, since they may not have run after last storage write and crash.
+        self.try_commit().unwrap();
+        self.try_propose(false).unwrap();
         self
     }
 
@@ -149,7 +151,6 @@ impl Core {
             // Now add accepted blocks to the threshold clock and pending ancestors list.
             self.add_accepted_blocks(accepted_blocks, None);
 
-            // TODO: Add optimization for added blocks that do not achieve quorum for a round.
             self.try_commit()?;
 
             // Try to propose now since there are new blocks accepted.
@@ -223,10 +224,7 @@ impl Core {
         ignore_leaders_check: bool,
     ) -> ConsensusResult<Option<VerifiedBlock>> {
         if let Some(block) = self.try_new_block(ignore_leaders_check) {
-            // TODO: Add optimization for added blocks that do not achieve quorum for a round.
             self.try_commit()?;
-            // Signal that a new block is created, and broadcast it.
-            self.signals.new_block_ready(block.reference());
             self.signals.new_block(block.clone())?;
             return Ok(Some(block));
         }
@@ -304,6 +302,7 @@ impl Core {
 
     /// Runs commit rule to attempt to commit additional blocks from the DAG.
     fn try_commit(&mut self) -> ConsensusResult<Vec<CommittedSubDag>> {
+        // TODO: Add optimization to abort early without quorum for a round.
         let sequenced_leaders = self.committer.try_commit(self.last_decided_leader);
 
         if let Some(last) = sequenced_leaders.last() {
@@ -422,7 +421,6 @@ impl Core {
 pub(crate) struct CoreSignals {
     tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
     new_round_sender: watch::Sender<Round>,
-    block_ready_sender: watch::Sender<Option<BlockRef>>,
 }
 
 impl CoreSignals {
@@ -433,18 +431,15 @@ impl CoreSignals {
     pub fn new() -> (Self, CoreSignalsReceivers) {
         let (tx_block_broadcast, _rx_block_broadcast) =
             broadcast::channel::<VerifiedBlock>(Self::BROADCAST_BACKLOG_CAPACITY);
-        let (block_ready_sender, block_ready_receiver) = watch::channel(None);
         let (new_round_sender, new_round_receiver) = watch::channel(0);
 
         let me = Self {
             tx_block_broadcast: tx_block_broadcast.clone(),
-            block_ready_sender,
             new_round_sender,
         };
 
         let receivers = CoreSignalsReceivers {
             tx_block_broadcast,
-            block_ready_receiver,
             new_round_receiver,
         };
 
@@ -461,11 +456,6 @@ impl CoreSignals {
         Ok(())
     }
 
-    /// Sends a signal to all the waiters that a new block has been produced.
-    pub fn new_block_ready(&mut self, block: BlockRef) {
-        let _ = self.block_ready_sender.send_replace(Some(block));
-    }
-
     /// Sends a signal that threshold clock has advanced to new round. The `round_number` is the round at which the
     /// threshold clock has advanced to.
     pub fn new_round(&mut self, round_number: Round) {
@@ -478,7 +468,6 @@ impl CoreSignals {
 pub(crate) struct CoreSignalsReceivers {
     tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
     #[allow(dead_code)]
-    block_ready_receiver: watch::Receiver<Option<BlockRef>>,
     new_round_receiver: watch::Receiver<Round>,
 }
 
@@ -486,11 +475,6 @@ impl CoreSignalsReceivers {
     #[allow(dead_code)]
     pub(crate) fn block_broadcast_receiver(&self) -> broadcast::Receiver<VerifiedBlock> {
         self.tx_block_broadcast.subscribe()
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn block_ready_receiver(&self) -> watch::Receiver<Option<BlockRef>> {
-        self.block_ready_receiver.clone()
     }
 
     pub(crate) fn new_round_receiver(&self) -> watch::Receiver<Round> {
@@ -561,6 +545,8 @@ mod test {
 
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new();
+        // Need at least one subscriber to the block broadcast channel.
+        let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let mut core = Core::new(
             context.clone(),
             transaction_consumer,
@@ -576,10 +562,10 @@ mod test {
         let mut new_round = signal_receivers.new_round_receiver();
         assert_eq!(*new_round.borrow_and_update(), 5);
 
-        // When trying to propose now we should propose block for round 5
-        let proposed_block = core
-            .try_propose(true)
-            .unwrap()
+        // Block for round 5 should have been proposed.
+        let proposed_block = block_receiver
+            .recv()
+            .await
             .expect("A block should have been created");
         assert_eq!(proposed_block.round(), 5);
         let ancestors = proposed_block.ancestors();
@@ -667,6 +653,8 @@ mod test {
 
         // Now spin up core
         let (signals, signal_receivers) = CoreSignals::new();
+        // Need at least one subscriber to the block broadcast channel.
+        let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let mut core = Core::new(
             context.clone(),
             transaction_consumer,
@@ -683,9 +671,9 @@ mod test {
         assert_eq!(*new_round.borrow_and_update(), 4);
 
         // When trying to propose now we should propose block for round 4
-        let proposed_block = core
-            .try_propose(true)
-            .unwrap()
+        let proposed_block = block_receiver
+            .recv()
+            .await
             .expect("A block should have been created");
         assert_eq!(proposed_block.round(), 4);
         let ancestors = proposed_block.ancestors();
@@ -732,7 +720,9 @@ mod test {
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
-        let (signals, _signal_receivers) = CoreSignals::new();
+        let (signals, signal_receivers) = CoreSignals::new();
+        // Need at least one subscriber to the block broadcast channel.
+        let mut block_receiver = signal_receivers.block_broadcast_receiver();
 
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
@@ -771,9 +761,9 @@ mod test {
         }
 
         // trigger the try_new_block - that should return now a new block
-        let block = core
-            .try_propose(false)
-            .unwrap()
+        let block = block_receiver
+            .recv()
+            .await
             .expect("A new block should have been created");
 
         // A new block created - assert the details
@@ -826,7 +816,9 @@ mod test {
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
-        let (signals, _signal_receivers) = CoreSignals::new();
+        let (signals, signal_receivers) = CoreSignals::new();
+        // Need at least one subscriber to the block broadcast channel.
+        let _block_receiver = signal_receivers.block_broadcast_receiver();
 
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
@@ -885,20 +877,20 @@ mod test {
     async fn test_core_try_new_block_leader_timeout() {
         telemetry_subscribers::init_for_testing();
         // Create the cores for all authorities
-        let cores = create_cores(vec![1, 1, 1, 1]);
+        let mut all_cores = create_cores(vec![1, 1, 1, 1]);
 
-        // Create blocks for rounds 1..=3 from all Cores except Core of authority 3, so we miss the block from it. As
+        // Create blocks for rounds 1..=3 from all Cores except last Core of authority 3, so we miss the block from it. As
         // it will be the leader of round 3 then no-one will be able to progress to round 4 unless we explicitly trigger
         // the block creation.
         // create the cores and their signals for all the authorities
-        let mut cores = cores.into_iter().take(3).collect::<Vec<_>>();
+        let (_last_core, cores) = all_cores.split_last_mut().unwrap();
 
         // Now iterate over a few rounds and ensure the corresponding signals are created while network advances
         let mut last_round_blocks = Vec::new();
         for round in 1..=3 {
             let mut this_round_blocks = Vec::new();
 
-            for (core, _signal_receivers, _) in &mut cores {
+            for (core, _signal_receivers, _, _) in cores.iter_mut() {
                 core.add_blocks(last_round_blocks.clone()).unwrap();
 
                 assert_eq!(core.last_proposed_round(), round);
@@ -911,13 +903,13 @@ mod test {
 
         // Try to create the blocks for round 4 by calling the try_new_block method. No block should be created as the
         // leader - authority 3 - hasn't proposed any block.
-        for (core, _, _) in &mut cores {
+        for (core, _, _, _) in cores.iter_mut() {
             core.add_blocks(last_round_blocks.clone()).unwrap();
             assert!(core.try_propose(false).unwrap().is_none());
         }
 
         // Now try to create the blocks for round 4 via the leader timeout method which should ignore any leader checks
-        for (core, _, _) in &mut cores {
+        for (core, _, _, _) in cores.iter_mut() {
             assert!(core.force_new_block(4).unwrap().is_some());
             assert_eq!(core.last_proposed_round(), 4);
 
@@ -946,7 +938,7 @@ mod test {
         for round in 1..=10 {
             let mut this_round_blocks = Vec::new();
 
-            for (core, signal_receivers, _) in &mut cores {
+            for (core, signal_receivers, block_receiver, _) in &mut cores {
                 // add the blocks from last round
                 // this will trigger a block creation for the round and a signal should be emitted
                 core.add_blocks(last_round_blocks.clone()).unwrap();
@@ -959,15 +951,13 @@ mod test {
                 .await;
                 assert_eq!(new_round, round);
 
-                // Check that a new block has been proposed
-                let block_ref = receive(
-                    Duration::from_secs(1),
-                    signal_receivers.block_ready_receiver(),
-                )
-                .await
-                .unwrap();
-                assert_eq!(block_ref.round, round);
-                assert_eq!(block_ref.author, core.context.own_index);
+                // Check that a new block has been proposed.
+                let block = tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(block.round(), round);
+                assert_eq!(block.author(), core.context.own_index);
 
                 // append the new block to this round blocks
                 this_round_blocks.push(core.last_proposed_block().clone());
@@ -992,7 +982,7 @@ mod test {
             last_round_blocks = this_round_blocks;
         }
 
-        for (core, _, _) in cores {
+        for (core, _, _, _) in cores {
             // Check commits have been persisted to store
             let last_commit = core
                 .store
@@ -1022,7 +1012,7 @@ mod test {
         for round in 1..=10 {
             let mut this_round_blocks = Vec::new();
 
-            for (core, _, _) in &mut cores {
+            for (core, _, _, _) in &mut cores {
                 // do not produce any block for authority 3
                 if core.context.own_index == excluded_authority {
                     continue;
@@ -1046,17 +1036,17 @@ mod test {
         // Now send all the produced blocks to core of authority 3. It should produce a new block. If no compression would
         // be applied the we should expect all the previous blocks to be referenced from round 0..=10. However, since compression
         // is applied only the last round's (10) blocks should be referenced + the authority's block of round 0.
-        let (core, _, _) = &mut cores[excluded_authority];
+        let (core, _, _, _) = &mut cores[excluded_authority];
         core.add_blocks(all_blocks).unwrap();
 
         // Assert that a block has been created for round 11 and it references to blocks of round 10 for the other peers, and
-        // to round 0 for its own block.
+        // to round 1 for its own block (created after recovery).
         let block = core.last_proposed_block();
         assert_eq!(block.round(), 11);
         assert_eq!(block.ancestors().len(), 4);
         for block_ref in block.ancestors() {
             if block_ref.author == excluded_authority {
-                assert_eq!(block_ref.round, 0);
+                assert_eq!(block_ref.round, 1);
             } else {
                 assert_eq!(block_ref.round, 10);
             }
@@ -1078,11 +1068,13 @@ mod test {
 
     /// Creates cores for the specified number of authorities for their corresponding stakes. The method returns the
     /// cores and their respective signal receivers are returned in `AuthorityIndex` order asc.
+    // TODO: return a test fixture instead.
     fn create_cores(
         authorities: Vec<Stake>,
     ) -> Vec<(
         Core,
         CoreSignalsReceivers,
+        broadcast::Receiver<VerifiedBlock>,
         UnboundedReceiver<CommittedSubDag>,
     )> {
         let mut cores = Vec::new();
@@ -1102,11 +1094,13 @@ mod test {
             let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
             let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
             let (signals, signal_receivers) = CoreSignals::new();
+            // Need at least one subscriber to the block broadcast channel.
+            let block_receiver = signal_receivers.block_broadcast_receiver();
 
-            let (sender, receiver) = unbounded_channel();
+            let (commit_sender, commit_receiver) = unbounded_channel();
             let commit_observer = CommitObserver::new(
                 context.clone(),
-                sender.clone(),
+                commit_sender.clone(),
                 0, // last_processed_index
                 dag_state.clone(),
                 store.clone(),
@@ -1125,7 +1119,7 @@ mod test {
                 store,
             );
 
-            cores.push((core, signal_receivers, receiver));
+            cores.push((core, signal_receivers, block_receiver, commit_receiver));
         }
         cores
     }
