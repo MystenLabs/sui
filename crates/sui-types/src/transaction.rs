@@ -391,7 +391,7 @@ impl EndOfEpochTransactionKind {
     }
 
     fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
-        let m = match self {
+        match self {
             Self::ChangeEpoch(_) => {
                 Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
             }
@@ -418,8 +418,7 @@ impl EndOfEpochTransactionKind {
                 ]
                 .into_iter(),
             ),
-        };
-        m
+        }
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {

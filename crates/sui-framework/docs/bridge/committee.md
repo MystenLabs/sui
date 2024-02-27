@@ -7,6 +7,7 @@
 
 -  [Struct `BlocklistValidatorEvent`](#0xb_committee_BlocklistValidatorEvent)
 -  [Struct `BridgeCommittee`](#0xb_committee_BridgeCommittee)
+-  [Struct `CommitteeUpdateEvent`](#0xb_committee_CommitteeUpdateEvent)
 -  [Struct `CommitteeMember`](#0xb_committee_CommitteeMember)
 -  [Struct `CommitteeMemberRegistration`](#0xb_committee_CommitteeMemberRegistration)
 -  [Constants](#@Constants_0)
@@ -103,13 +104,46 @@
 
 </details>
 
+<a name="0xb_committee_CommitteeUpdateEvent"></a>
+
+## Struct `CommitteeUpdateEvent`
+
+
+
+<pre><code><b>struct</b> <a href="committee.md#0xb_committee_CommitteeUpdateEvent">CommitteeUpdateEvent</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>members: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="committee.md#0xb_committee_CommitteeMember">committee::CommitteeMember</a>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake_participation_percentage: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
 <a name="0xb_committee_CommitteeMember"></a>
 
 ## Struct `CommitteeMember`
 
 
 
-<pre><code><b>struct</b> <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a> <b>has</b> drop, store
+<pre><code><b>struct</b> <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -433,12 +467,9 @@
     ctx: &TxContext
 ) {
     <b>let</b> validators = <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_active_validator_addresses">sui_system::active_validator_addresses</a>(system_state);
-    <b>let</b> total_member_stake = 0;
     <b>let</b> i = 0;
-
-    <b>let</b> total_stake_amount = (<a href="dependencies/sui-system/sui_system.md#0x3_sui_system_total_stake_amount">sui_system::total_stake_amount</a>(system_state) <b>as</b> u128);
-
     <b>let</b> new_members = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
+    <b>let</b> stake_participation_percentage = 0;
 
     <b>while</b> (i &lt; <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_size">vec_map::size</a>(&self.member_registrations)) {
         // retrieve registration
@@ -447,9 +478,8 @@
 
         // Process registration <b>if</b> it's active <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a>
         <b>if</b> (<a href="dependencies/move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&validators, &registration.sui_address)) {
-            <b>let</b> stake_amount = <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_validator_stake_amount">sui_system::validator_stake_amount</a>(system_state, registration.sui_address);
-            <b>let</b> <a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a> = ((stake_amount <b>as</b> u128) * 10000) / total_stake_amount;
-            total_member_stake = total_member_stake + (stake_amount <b>as</b> u128);
+            <b>let</b> <a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a> = <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_validator_voting_power">sui_system::validator_voting_power</a>(system_state, registration.sui_address);
+            stake_participation_percentage = stake_participation_percentage + <a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a>;
             <b>let</b> member = <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a> {
                 sui_address: registration.sui_address,
                 bridge_pubkey_bytes: registration.bridge_pubkey_bytes,
@@ -463,17 +493,16 @@
     };
 
     // Make sure the new <a href="committee.md#0xb_committee">committee</a> represent enough stakes, percentage are accurate <b>to</b> 2DP
-    <b>let</b> stake_participation_percentage = ((total_member_stake * 10000 / (<a href="dependencies/sui-system/sui_system.md#0x3_sui_system_total_stake_amount">sui_system::total_stake_amount</a>(
-        system_state
-    ) <b>as</b> u128)) <b>as</b> u64);
-
-    // Store new <a href="committee.md#0xb_committee">committee</a> info
     <b>if</b> (stake_participation_percentage &gt;= min_stake_participation_percentage) {
         // Clear registrations
         self.member_registrations = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
+        // Store new <a href="committee.md#0xb_committee">committee</a> info
         self.members = new_members;
         self.last_committee_update_epoch = <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx);
-        // TODO: emit <a href="committee.md#0xb_committee">committee</a> <b>update</b> <a href="dependencies/sui-framework/event.md#0x2_event">event</a>?
+        emit(<a href="committee.md#0xb_committee_CommitteeUpdateEvent">CommitteeUpdateEvent</a> {
+            members: new_members,
+            stake_participation_percentage
+        })
     }
 }
 </code></pre>
