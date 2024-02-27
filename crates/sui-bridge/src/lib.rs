@@ -28,6 +28,9 @@ pub(crate) mod sui_mock_client;
 #[cfg(test)]
 pub(crate) mod test_utils;
 
+#[cfg(test)]
+pub mod eth_test_utils;
+
 // TODO: can we log the error very time it gets retried?
 #[macro_export]
 macro_rules! retry_with_max_delay {

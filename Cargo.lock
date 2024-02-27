@@ -154,6 +154,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-consensus"
+version = "0.1.0"
+source = "git+https://github.com/alloy-rs/alloy#6f8ebb45afca1a201a11d421ec46db0f7a1d8d08"
+dependencies = [
+ "alloy-eips",
+ "alloy-network",
+ "alloy-primitives",
+ "alloy-rlp",
+]
+
+[[package]]
 name = "alloy-dyn-abi"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -363,6 +374,7 @@ source = "git+https://github.com/alloy-rs/alloy#6f8ebb45afca1a201a11d421ec46db0f
 dependencies = [
  "alloy-network",
  "alloy-primitives",
+ "alloy-sol-types",
  "async-trait",
  "auto_impl",
  "coins-bip32",
@@ -663,6 +675,125 @@ checksum = "58f54d10c6dfa51283a066ceab3ec1ab78d13fae00aa49243a45e4571fb79dfd"
 dependencies = [
  "anstyle",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "anvil"
+version = "0.2.0"
+source = "git+https://github.com/foundry-rs/foundry.git?rev=474591aa1e6922a0d5691ae1e2dcc355d8fcb92d#474591aa1e6922a0d5691ae1e2dcc355d8fcb92d"
+dependencies = [
+ "alloy-chains",
+ "alloy-consensus",
+ "alloy-dyn-abi",
+ "alloy-genesis",
+ "alloy-network",
+ "alloy-primitives",
+ "alloy-providers",
+ "alloy-rlp",
+ "alloy-rpc-trace-types",
+ "alloy-rpc-types",
+ "alloy-signer",
+ "alloy-sol-types",
+ "alloy-transport",
+ "anvil-core",
+ "anvil-rpc",
+ "anvil-server",
+ "async-trait",
+ "auto_impl",
+ "axum",
+ "bytes",
+ "chrono",
+ "clap",
+ "clap_complete",
+ "clap_complete_fig",
+ "ctrlc",
+ "ethereum-forkid",
+ "ethers",
+ "eyre",
+ "fdlimit 0.3.0",
+ "flate2",
+ "foundry-common",
+ "foundry-config",
+ "foundry-evm",
+ "futures",
+ "hash-db",
+ "hyper",
+ "itertools 0.11.0",
+ "k256 0.13.1",
+ "memory-db",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "trie-db",
+ "vergen",
+ "yansi 0.5.1",
+]
+
+[[package]]
+name = "anvil-core"
+version = "0.2.0"
+source = "git+https://github.com/foundry-rs/foundry.git?rev=474591aa1e6922a0d5691ae1e2dcc355d8fcb92d#474591aa1e6922a0d5691ae1e2dcc355d8fcb92d"
+dependencies = [
+ "alloy-consensus",
+ "alloy-dyn-abi",
+ "alloy-eips",
+ "alloy-network",
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-rpc-trace-types",
+ "alloy-rpc-types",
+ "bytes",
+ "foundry-common",
+ "foundry-evm",
+ "hash-db",
+ "hash256-std-hasher",
+ "keccak-hasher",
+ "rand 0.8.5",
+ "reference-trie",
+ "revm",
+ "serde",
+ "serde_json",
+ "triehash",
+]
+
+[[package]]
+name = "anvil-rpc"
+version = "0.2.0"
+source = "git+https://github.com/foundry-rs/foundry.git?rev=474591aa1e6922a0d5691ae1e2dcc355d8fcb92d#474591aa1e6922a0d5691ae1e2dcc355d8fcb92d"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "anvil-server"
+version = "0.2.0"
+source = "git+https://github.com/foundry-rs/foundry.git?rev=474591aa1e6922a0d5691ae1e2dcc355d8fcb92d#474591aa1e6922a0d5691ae1e2dcc355d8fcb92d"
+dependencies = [
+ "anvil-rpc",
+ "async-trait",
+ "axum",
+ "bytes",
+ "clap",
+ "futures",
+ "hyper",
+ "parity-tokio-ipc",
+ "parking_lot 0.12.1",
+ "pin-project",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio-util 0.7.4",
+ "tower-http 0.4.0",
+ "tracing",
 ]
 
 [[package]]
@@ -3511,6 +3642,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crc"
+version = "1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d663548de7f5cca343f1e0a48d14dcfb0e9eb4e079ec58883b7251539fa10aeb"
+dependencies = [
+ "build_const",
+]
+
+[[package]]
 name = "crc32c"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3780,6 +3920,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0369ee1ad671834580515889b80f2ea915f23b8be8d0daa4bbaf2ac5c7590835"
 dependencies = [
  "cipher",
+]
+
+[[package]]
+name = "ctrlc"
+version = "3.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b467862cc8610ca6fc9a1532d7777cee0804e678ab45410897b9396495994a0b"
+dependencies = [
+ "nix 0.27.1",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4917,6 +5067,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethereum-forkid"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcace6f36a8fd79d06c535444b42c8966e10733165fca6dec3542abfc3e00318"
+dependencies = [
+ "crc",
+ "fastrlp",
+ "maplit",
+ "primitive-types 0.12.2",
+ "thiserror",
+]
+
+[[package]]
 name = "ethereum-types"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5457,6 +5620,19 @@ dependencies = [
  "arrayvec 0.7.2",
  "auto_impl",
  "bytes",
+ "fastrlp-derive",
+]
+
+[[package]]
+name = "fastrlp-derive"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4caf31122bfc780557fdcd80897e95f12cc4d7217f8ac6b9d150df828a38ee8"
+dependencies = [
+ "bytes",
+ "proc-macro2 1.0.78",
+ "quote 1.0.35",
+ "syn 2.0.51",
 ]
 
 [[package]]
@@ -5477,6 +5653,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c4c9e43643f5a3be4ca5b67d26b98031ff9db6806c3440ae32e02e3ceac3f1b"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "fdlimit"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e182f7dbc2ef73d9ef67351c5fbbea084729c48362d3ce9dd44c28e32e277fe5"
+dependencies = [
+ "libc",
+ "thiserror",
 ]
 
 [[package]]
@@ -6882,6 +7068,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "hash-db"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d23bd4e7b5eda0d0f3a307e8b381fdc8ba9000f26fbe912250c0a4cc3956364a"
+
+[[package]]
+name = "hash256-std-hasher"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92c171d55b98633f4ed3860808f004099b36c1cc29c42cfc53aa8591b21efcf2"
+dependencies = [
+ "crunchy",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7875,6 +8076,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "keccak-hasher"
+version = "0.15.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "711adba9940a039f4374fc5724c0a5eaca84a2d558cce62256bfe26f0dbef05e"
+dependencies = [
+ "hash-db",
+ "hash256-std-hasher",
+ "tiny-keccak",
+]
+
+[[package]]
 name = "kqueue"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8348,6 +8560,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "memory-db"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6566c70c1016f525ced45d7b7f97730a2bafb037c788211d0c186ef5b2189f0a"
+dependencies = [
+ "hash-db",
+ "hashbrown 0.12.3",
+ "parity-util-mem",
 ]
 
 [[package]]
@@ -9723,7 +9946,7 @@ version = "0.1.0"
 dependencies = [
  "anemo",
  "fastcrypto",
- "fdlimit",
+ "fdlimit 0.2.1",
  "indexmap 2.1.0",
  "itertools 0.10.5",
  "mysten-metrics",
@@ -9955,6 +10178,17 @@ dependencies = [
  "libc",
  "memoffset 0.7.1",
  "pin-utils",
+]
+
+[[package]]
+name = "nix"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2eb04e9c688eff1c89d72b407f168cf79bb9e867a9d3323ed6c01519eb9cc053"
+dependencies = [
+ "bitflags 2.4.1",
+ "cfg-if",
+ "libc",
 ]
 
 [[package]]
@@ -10734,6 +10968,45 @@ dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "parity-tokio-ipc"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9981e32fb75e004cc148f5fb70342f393830e0a4aa62e3cc93b50976218d42b6"
+dependencies = [
+ "futures",
+ "libc",
+ "log",
+ "rand 0.7.3",
+ "tokio",
+ "winapi",
+]
+
+[[package]]
+name = "parity-util-mem"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c32561d248d352148124f036cac253a644685a21dc9fea383eb4907d7bd35a8f"
+dependencies = [
+ "cfg-if",
+ "hashbrown 0.12.3",
+ "impl-trait-for-tuples",
+ "parity-util-mem-derive",
+ "parking_lot 0.12.1",
+ "winapi",
+]
+
+[[package]]
+name = "parity-util-mem-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f557c32c6d268a07c921471619c0295f5efad3a0e76d4f97a05c091a51d110b2"
+dependencies = [
+ "proc-macro2 1.0.78",
+ "syn 1.0.107",
+ "synstructure",
 ]
 
 [[package]]
@@ -12101,6 +12374,20 @@ dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "reference-trie"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f63dfce83d1e0e80cf2dc5222df5c2bc30992b30c44d1e66e7c9793d3a418e4"
+dependencies = [
+ "hash-db",
+ "hash256-std-hasher",
+ "keccak-hasher",
+ "parity-scale-codec 3.6.5",
+ "trie-db",
+ "trie-root",
 ]
 
 [[package]]
@@ -14360,6 +14647,7 @@ dependencies = [
 name = "sui-bridge"
 version = "0.1.0"
 dependencies = [
+ "anvil",
  "anyhow",
  "arc-swap",
  "async-trait",
@@ -17702,6 +17990,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "trie-db"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d32d034c0d3db64b43c31de38e945f15b40cd4ca6d2dcfc26d4798ce8de4ab83"
+dependencies = [
+ "hash-db",
+ "hashbrown 0.12.3",
+ "log",
+ "rustc-hex",
+ "smallvec",
+]
+
+[[package]]
+name = "trie-root"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a36c5ca3911ed3c9a5416ee6c679042064b93fc637ded67e25f92e68d783891"
+dependencies = [
+ "hash-db",
+]
+
+[[package]]
+name = "triehash"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1631b201eb031b563d2e85ca18ec8092508e262a3196ce9bd10a67ec87b9f5c"
+dependencies = [
+ "hash-db",
+ "rlp",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17756,7 +18076,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
@@ -17769,7 +18089,7 @@ dependencies = [
  "bincode",
  "collectable",
  "eyre",
- "fdlimit",
+ "fdlimit 0.2.1",
  "hdrhistogram",
  "itertools 0.10.5",
  "msim",
@@ -19010,7 +19330,7 @@ dependencies = [
  "fastrand 1.8.0",
  "fastrand 2.0.0",
  "fd-lock",
- "fdlimit",
+ "fdlimit 0.2.1",
  "ff 0.12.1",
  "ff 0.13.0",
  "ff_derive",
