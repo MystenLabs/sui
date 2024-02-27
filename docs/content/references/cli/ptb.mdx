@@ -66,7 +66,7 @@ sui client ptb \
 ```
 
 :::tip
-CLI PTB uses name resolution works for common packages like `sui`, `std`, `deepbook`, so you can use them directly instead of their addresses: `0x2`, `0x1`, or `0xdee9`.
+CLI PTB uses name resolution for common packages like `sui`, `std`, `deepbook`, so you can use them directly instead of their addresses: `0x2`, `0x1`, or `0xdee9`.
 :::
 
 In the second case, if a previous command outputs some result, it can be bound to a variable in order to be accessed later. Let's see an example where we want a new coin with 1000 MIST, which we can achieve by using the `split-coins` command. Once we do that, we want to transfer the new coin to another address. Without the `--assign` argument, we would not be able to instruct the CLI to transfer that new coin object as we would not have a way to refer to it.
