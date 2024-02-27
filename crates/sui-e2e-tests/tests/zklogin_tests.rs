@@ -88,17 +88,17 @@ async fn test_legacy_zklogin_address_accept() {
 async fn zklogin_end_to_end_test() {
     run_zklogin_end_to_end_test(TestClusterBuilder::new().with_default_jwks().build().await).await;
 
-    // wait for current epoch to 11
+    // wait for current epoch to 4
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(1000)
         .build()
         .await;
     test_cluster
-        .wait_for_epoch_with_timeout(Some(11), Duration::from_secs(300))
+        .wait_for_epoch_with_timeout(Some(4), Duration::from_secs(300))
         .await;
     let rgp = test_cluster.get_reference_gas_price().await;
 
-    // zklogin sig tx fails to execute bc it has max_epoch set to 10.
+    // zklogin sig tx fails to execute bc it has max_epoch set to 3.
     let context = &test_cluster.wallet;
 
     let (eph_kp, pk_zklogin, zklogin_inputs) =
@@ -124,7 +124,7 @@ async fn zklogin_end_to_end_test() {
     assert!(res
         .unwrap_err()
         .to_string()
-        .contains("ZKLogin expired at epoch 10"));
+        .contains("ZKLogin expired at epoch 3"));
 }
 
 #[sim_test]

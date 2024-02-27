@@ -16,6 +16,7 @@ use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentMessage;
+use tracing::info;
 use std::hash::Hash;
 use std::hash::Hasher;
 
@@ -156,6 +157,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         // Use flag || pk_bytes.
         let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
         extended_pk_bytes.extend(self.user_signature.public_key_bytes());
+        info!("self.max_epoch: {:?}", self.max_epoch);
         verify_zk_login(
             &self.inputs,
             self.max_epoch,

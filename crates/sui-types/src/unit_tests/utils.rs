@@ -33,6 +33,7 @@ use std::collections::BTreeMap;
 
 #[derive(Deserialize)]
 pub struct TestData {
+    pub case: String,
     pub zklogin_inputs: String,
     pub kp: String,
     pub pk_bigint: String,

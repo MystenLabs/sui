@@ -637,7 +637,7 @@ async fn test_multisig_with_zklogin_scenerios() {
 #[ignore]
 #[sim_test]
 async fn test_expired_epoch_zklogin_in_multisig() {
-    // 17. expired zklogin sig fails to execute. wait till epoch 11, the zklogin input committed to max_epoch 10 fails to execute.
+    // 17. expired zklogin sig fails to execute. wait till epoch 4, the zklogin input committed to max_epoch 3 fails to execute.
     let test_cluster = TestClusterBuilder::new()
         .with_default_jwks()
         .with_epoch_duration_ms(1000)
@@ -645,20 +645,21 @@ async fn test_expired_epoch_zklogin_in_multisig() {
         .await;
     test_cluster.wait_for_authenticator_state_update().await;
     test_cluster
-        .wait_for_epoch_with_timeout(Some(11), Duration::from_secs(300))
+        .wait_for_epoch_with_timeout(Some(4), Duration::from_secs(300))
         .await;
     let tx = construct_simple_zklogin_multisig_tx(&test_cluster).await;
     let res = test_cluster.wallet.execute_transaction_may_fail(tx).await;
+    tracing::info!("tktkres: {:?}", res);
     assert!(res
         .unwrap_err()
         .to_string()
-        .contains("ZKLogin expired at epoch 10"));
+        .contains("ZKLogin expired at epoch 3"));
 }
 
 #[sim_test]
 async fn test_random_zklogin_in_multisig() {
     let test_vectors =
-        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1..11];
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1..];
     let test_cluster = TestClusterBuilder::new().with_default_jwks().build().await;
     test_cluster.wait_for_authenticator_state_update().await;
     let rgp = test_cluster.get_reference_gas_price().await;
