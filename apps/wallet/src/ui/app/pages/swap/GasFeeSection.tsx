@@ -2,15 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Text } from '_app/shared/text';
 import { DescriptionItem } from '_pages/approval-request/transaction-request/DescriptionList';
-import {
-	DEFAULT_WALLET_FEE_ADDRESS,
-	WALLET_FEES_PERCENTAGE,
-} from '_pages/swap/constants';
+import { DEFAULT_WALLET_FEE_ADDRESS, WALLET_FEES_PERCENTAGE } from '_pages/swap/constants';
 import { getUSDCurrency } from '_pages/swap/utils';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { FEATURES } from '_shared/experimentation/features';
 import { useFeatureValue } from '@growthbook/growthbook-react';
-import {useBalanceInUSD, useCoinMetadata, useFormatCoin} from '@mysten/core';
+import { useBalanceInUSD, useFormatCoin } from '@mysten/core';
 import { type BalanceChange } from '@mysten/sui.js/client';
 
 export function GasFeeSection({
@@ -25,7 +22,6 @@ export function GasFeeSection({
 	balanceChanges: BalanceChange[];
 }) {
 	const walletFeeAddress = useFeatureValue(FEATURES.WALLET_FEE_ADDRESS, DEFAULT_WALLET_FEE_ADDRESS);
-	const { data: activeCoinData } = useCoinMetadata(activeCoinType);
 	const estimatedAccessFeesBalance = balanceChanges.find(
 		(change) =>
 			'owner' in change &&
@@ -33,7 +29,10 @@ export function GasFeeSection({
 			'AddressOwner' in change.owner &&
 			change.owner.AddressOwner === walletFeeAddress,
 	)?.amount;
-	const [formattedEstimatedFees, balanceSymbol] = useFormatCoin(estimatedAccessFeesBalance, activeCoinType);
+	const [formattedEstimatedFees, balanceSymbol] = useFormatCoin(
+		estimatedAccessFeesBalance,
+		activeCoinType,
+	);
 	const usdValue = useBalanceInUSD(activeCoinType || '', estimatedAccessFeesBalance || '');
 	const [gas, symbol] = useFormatCoin(totalGas, GAS_TYPE_ARG);
 
@@ -48,7 +47,7 @@ export function GasFeeSection({
 			>
 				<Text variant="bodySmall" weight="medium" color="steel-darker">
 					{formattedEstimatedFees
-						? `${formattedEstimatedFees} ${activeCoinData?.symbol} (${getUSDCurrency(usdValue)})`
+						? `${formattedEstimatedFees} ${balanceSymbol} (${getUSDCurrency(usdValue)})`
 						: '--'}
 				</Text>
 			</DescriptionItem>
