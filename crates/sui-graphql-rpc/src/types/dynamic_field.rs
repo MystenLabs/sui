@@ -319,10 +319,9 @@ pub fn extract_field_from_move_struct(
 /// [`lhs`, `rhs`] is returned, conditioned on the fact that there is not a more recent version of
 /// the field.
 ///
-/// If `parent_version` is provided, the latest version that is less than or equal to the parent
-/// version is returned, conditioned on the fact that there is not a more recent `WrappedOrDeleted`
-/// version of the field that is greater than the matched child but less than or equal to the parent
-/// version.
+/// If `parent_version` is provided, it is used to bound both the `candidates` and `newer` objects
+/// subqueries. This is because the dynamic fields of a parent at version v are dynamic fields owned
+/// by the parent whose versions are <= v.
 fn dynamic_fields_query(
     parent: SuiAddress,
     parent_version: Option<u64>,
@@ -358,19 +357,8 @@ fn dynamic_fields_query(
         format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
     );
 
-    // Even though the `parent_version` is provided, because it serves as an upper bound instead of
-    // a strict equality, it is possible for the dynamic field to have been deleted but still show
-    // up in the results. This is because deleted objects only have `object_id`, `object_status, and
-    // `checkpoint_sequence_number`. We need to additionally left join on any objects that have a
-    // more recent version and where the `object_status` is `WrappedOrDeleted`. However, because we
-    // know the `parent_version`, we know that if a more recent deleted version exists, that it was
-    // deleted while a child of the parent.
     if let Some(parent_version) = parent_version {
         newer = filter!(newer, format!("object_version <= {}", parent_version));
-        // newer = filter!(
-        // newer,
-        // format!("object_status = {}", ObjectStatus::WrappedOrDeleted as i16)
-        // );
 
         let query = query!(
             r#"SELECT candidates.*
@@ -383,7 +371,6 @@ fn dynamic_fields_query(
             candidates,
             newer
         );
-        // return filter!(query, "newer.object_status IS NULL");
         return filter!(query, "newer.object_version IS NULL");
     }
 
