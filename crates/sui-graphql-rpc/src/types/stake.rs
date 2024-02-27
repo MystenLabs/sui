@@ -345,6 +345,7 @@ impl StakedSui {
     ///
     /// This value is only available if the stake is active.
     async fn estimated_reward(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, Error> {
+        // I just need to know the exchange rate at activation epoch and current epoch
         let RpcStakeStatus::Active { estimated_reward } = self.rpc_stake(ctx).await?.status else {
             return Ok(None);
         };

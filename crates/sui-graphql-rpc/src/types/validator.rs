@@ -285,19 +285,15 @@ impl Validator {
             .await?;
 
         for df in dynamic_fields {
-            let dynamic_field = df
-                .to_dynamic_field::<EpochId, PoolTokenExchangeRate>()
-                .ok_or_else(|| {
-                    Error::Internal(format!(
-                        "Failed to deserialize PoolTokenExchangeRate for validator {}",
-                        self.validator_summary.sui_address
-                    ))
-                })?;
+            // Operate only on `PoolTokenExchangeRate` dynamic fields.
+            let dynamic_field = df.to_dynamic_field::<EpochId, PoolTokenExchangeRate>();
 
-            rates.push((dynamic_field.name, dynamic_field.value));
-
-            rates.sort_by(|(a, _), (b, _)| a.cmp(b).reverse());
+            if let Some(dynamic_field) = dynamic_field {
+                rates.push((dynamic_field.name, dynamic_field.value));
+            }
         }
+
+        rates.sort_by(|(a, _), (b, _)| a.cmp(b).reverse());
 
         let exchange_rates = rates.into_iter().filter_map(|(epoch, rate)| {
             if epoch >= stake_subsidy_start_epoch {
