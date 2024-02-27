@@ -40,11 +40,11 @@ async fn main() -> Result<(), anyhow::Error> {
 
 You can also build the documentation locally. To do so,
 
-1. Open a Terminal or Console and go to the `sui/crates/sui-sdk` directory.
+1. Clone the `sui` repo locally. Open a Terminal or Console and go to the `sui/crates/sui-sdk` directory.
 
 1. Run `cargo doc` to build the documentation into the `sui/target` directory. Take note of location of the generated file from the last line of the output, for example `Generated /Users/foo/sui/target/doc/sui_sdk/index.html`.
 
-1. Use a web browser, like Chrome, to open the `index.html` file at the location your console reported in the previous step.
+1. Use a web browser, like Chrome, to open the `.../target/doc/sui_sdk/index.html` file at the location your console reported in the previous step.
 
 ## Rust SDK examples
 
