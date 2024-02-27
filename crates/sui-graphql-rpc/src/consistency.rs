@@ -100,6 +100,7 @@ pub(crate) fn build_objects_query(
     rhs: i64,
     page: &Page<Cursor>,
     filter_fn: impl Fn(RawQuery) -> RawQuery,
+    newer_criteria: impl Fn(RawQuery) -> RawQuery,
 ) -> RawQuery {
     // Subquery to be used in `LEFT JOIN` against the inner queries for more recent object versions
     let mut newer = query!("SELECT object_id, object_version FROM objects_history");
@@ -107,6 +108,7 @@ pub(crate) fn build_objects_query(
         newer,
         format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
     );
+    newer = newer_criteria(newer);
 
     let mut snapshot_objs_inner = query!("SELECT * FROM objects_snapshot");
     snapshot_objs_inner = filter_fn(snapshot_objs_inner);

@@ -15,7 +15,7 @@ use super::type_filter::ExactTypeFilter;
 use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
 };
-use crate::consistency::consistent_range;
+use crate::consistency::{build_objects_query, consistent_range, View};
 use crate::context_data::package_cache::PackageCache;
 use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
@@ -211,7 +211,8 @@ impl DynamicField {
                 let result = page.paginate_raw_query::<StoredHistoryObject>(
                     conn,
                     rhs,
-                    dynamic_fields_query(parent, parent_version, lhs as i64, rhs as i64),
+                    // dynamic_fields_query(parent, parent_version, lhs as i64, rhs as i64),
+                    dynamic_fields_query_v2(parent, parent_version, lhs as i64, rhs as i64, &page),
                 )?;
 
                 Ok(Some((result, rhs)))
@@ -321,7 +322,9 @@ pub fn extract_field_from_move_struct(
 ///
 /// If `parent_version` is provided, it is used to bound both the `candidates` and `newer` objects
 /// subqueries. This is because the dynamic fields of a parent at version v are dynamic fields owned
-/// by the parent whose versions are <= v.
+/// by the parent whose versions are <= v. Unlike object ownership, where owned and owner objects
+/// can have arbitrary `object_version`s, dynamic fields on a parent cannot have a version greater
+/// than its parent.
 fn dynamic_fields_query(
     parent: SuiAddress,
     parent_version: Option<u64>,
@@ -386,6 +389,29 @@ fn dynamic_fields_query(
         newer
     );
     filter!(query, "newer.object_version IS NULL")
+}
+
+fn dynamic_fields_query_v2(
+    parent: SuiAddress,
+    parent_version: Option<u64>,
+    lhs: i64,
+    rhs: i64,
+    page: &Page<object::Cursor>,
+) -> RawQuery {
+    build_objects_query(
+        View::Consistent,
+        lhs,
+        rhs,
+        page,
+        move |query| apply_filter(query, parent, parent_version),
+        move |newer| {
+            if let Some(parent_version) = parent_version {
+                filter!(newer, format!("object_version <= {}", parent_version))
+            } else {
+                newer
+            }
+        },
+    )
 }
 
 fn apply_filter(query: RawQuery, parent: SuiAddress, parent_version: Option<u64>) -> RawQuery {
