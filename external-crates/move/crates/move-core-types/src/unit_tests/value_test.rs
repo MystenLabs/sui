@@ -43,6 +43,37 @@ fn struct_deserialization() {
     );
 }
 
+#[test]
+fn struct_formatted_display() {
+    let struct_type = StructTag {
+        address: AccountAddress::ZERO,
+        name: ident_str!("MyStruct").to_owned(),
+        module: ident_str!("MyModule").to_owned(),
+        type_params: vec![],
+    };
+    let values = vec![R::MoveValue::U64(7), R::MoveValue::Bool(true)];
+    let avalues = vec![A::MoveValue::U64(7), A::MoveValue::Bool(true)];
+    let fields = vec![ident_str!("f").to_owned(), ident_str!("g").to_owned()];
+    let field_values: Vec<(Identifier, A::MoveValue)> =
+        fields.into_iter().zip(avalues.clone()).collect();
+
+    // test each deserialization scheme
+    let runtime_value = R::MoveStruct(values);
+    assert_eq!(
+        serde_json::to_value(runtime_value).unwrap(),
+        json!([7, true])
+    );
+
+    let typed_value = A::MoveStruct::new(struct_type, field_values);
+    assert_eq!(
+        format!("{:#}", typed_value),
+        r#"0x0::MyModule::MyStruct {
+    f: 7u64,
+    g: true,
+}"#
+    );
+}
+
 /// A test which verifies that the BCS representation of
 /// a struct with a single field is equivalent to the BCS
 /// of the value in this field. It also tests
@@ -116,5 +147,43 @@ fn nested_typed_struct_deserialization() {
             },
             "type": "0x0::MyModule::MyStruct"
         })
+    );
+}
+
+#[test]
+fn nested_typed_struct_formatted_display() {
+    let struct_type = StructTag {
+        address: AccountAddress::ZERO,
+        name: ident_str!("MyStruct").to_owned(),
+        module: ident_str!("MyModule").to_owned(),
+        type_params: vec![],
+    };
+    let nested_struct_type = StructTag {
+        address: AccountAddress::ZERO,
+        name: ident_str!("NestedStruct").to_owned(),
+        module: ident_str!("NestedModule").to_owned(),
+        type_params: vec![TypeTag::U8],
+    };
+
+    // test each deserialization scheme
+    let nested_runtime_struct = R::MoveValue::Struct(R::MoveStruct(vec![R::MoveValue::U64(7)]));
+    let runtime_value = R::MoveStruct(vec![nested_runtime_struct]);
+    assert_eq!(serde_json::to_value(runtime_value).unwrap(), json!([[7]]));
+
+    let nested_typed_struct = A::MoveValue::Struct(A::MoveStruct::new(
+        nested_struct_type,
+        vec![(ident_str!("f").to_owned(), A::MoveValue::U64(7))],
+    ));
+    let typed_value = A::MoveStruct::new(
+        struct_type,
+        vec![(ident_str!("inner").to_owned(), nested_typed_struct)],
+    );
+    assert_eq!(
+        format!("{:#}", typed_value),
+        r#"0x0::MyModule::MyStruct {
+    inner: 0x0::NestedModule::NestedStruct<u8> {
+        f: 7u64,
+    },
+}"#
     );
 }
