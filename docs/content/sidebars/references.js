@@ -100,7 +100,6 @@ const references = [
 			},
 		],
 	},
-	'references/research-papers',
 	'references/sui-glossary',
 	{
 		type: 'category',
