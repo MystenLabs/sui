@@ -38,6 +38,7 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
+use std::iter::once;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
@@ -755,7 +756,7 @@ impl ProgrammableMoveCall {
         Ok(())
     }
 
-    fn is_arg_used(&self, arg: u16) -> bool {
+    fn is_input_arg_used(&self, arg: u16) -> bool {
         self.arguments
             .iter()
             .any(|a| matches!(a, Argument::Input(inp) if *inp == arg))
@@ -868,16 +869,22 @@ impl Command {
         Ok(())
     }
 
-    fn is_arg_used(&self, arg: u16) -> bool {
+    fn is_input_arg_used(&self, input_arg: u16) -> bool {
         match self {
-            Command::MoveCall(c) => c.is_arg_used(arg),
-            Command::TransferObjects(args, _)
-            | Command::MergeCoins(_, args)
-            | Command::SplitCoins(_, args)
-            | Command::MakeMoveVec(_, args) => args
+            Command::MoveCall(c) => c.is_input_arg_used(input_arg),
+            Command::TransferObjects(args, arg)
+            | Command::MergeCoins(arg, args)
+            | Command::SplitCoins(arg, args) => args
                 .iter()
-                .any(|a| matches!(a, Argument::Input(inp) if *inp == arg)),
-            Command::Publish(_, _) | Command::Upgrade(_, _, _, _) => false,
+                .chain(once(arg))
+                .any(|a| matches!(a, Argument::Input(inp) if *inp == input_arg)),
+            Command::MakeMoveVec(_, args) => args
+                .iter()
+                .any(|a| matches!(a, Argument::Input(inp) if *inp == input_arg)),
+            Command::Upgrade(_, _, _, arg) => {
+                matches!(arg, Argument::Input(inp) if *inp == input_arg)
+            }
+            Command::Publish(_, _) => false,
         }
     }
 }
@@ -977,7 +984,7 @@ impl ProgrammableTransaction {
                 let random_index = random_index as u16;
                 for command in commands {
                     if !used_random_object {
-                        used_random_object = command.is_arg_used(random_index);
+                        used_random_object = command.is_input_arg_used(random_index);
                     } else {
                         fp_ensure!(
                             matches!(
