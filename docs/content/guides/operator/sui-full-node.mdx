@@ -119,7 +119,9 @@ Open a terminal or console to the `sui` directory you downloaded in the previous
     - [Mainnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob):
         `curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob`
 1. For Testnet or Mainnet: Edit the `fullnode.yaml` file to include peer nodes for state synchronization. Append the following to the end of the current configuration:
+
 <Tabs groupId="network">
+
 <TabItem label="Mainnet" value="mainnet">
 ```shell
     p2p-config:
@@ -162,6 +164,7 @@ Open a terminal or console to the `sui` directory you downloaded in the previous
           peer-id: c88742f46e66a11cb8c84aca488065661401ef66f726cb9afeb8a5786d83456e
 ```
 </TabItem>
+
 </Tabs>
     
 1. Optional: Skip this step to accept the default paths to resources. Edit the fullnode.yaml file to use custom paths.
