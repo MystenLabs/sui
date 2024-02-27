@@ -1405,12 +1405,12 @@ importers:
       graphql:
         specifier: ^16.8.1
         version: 16.8.1
-      superstruct:
-        specifier: ^1.0.3
-        version: 1.0.3
       tweetnacl:
         specifier: ^1.0.3
         version: 1.0.3
+      valibot:
+        specifier: ^0.25.0
+        version: 0.25.0
     devDependencies:
       '@0no-co/graphqlsp':
         specifier: ^1.7.1
@@ -12956,10 +12956,6 @@ packages:
     resolution: {integrity: sha512-ARGC7vbufOHfpvyGcZZXFaXCMZ9A4fffOGC5ucOW7+WHDGlAe8LJdf3Jts1sWhDeiI1RSWrKy5Hodl+JWGdW2A==}
     engines: {node: '>=8'}
     hasBin: true
-
-  superstruct@1.0.3:
-    resolution: {integrity: sha512-8iTn3oSS8nRGn+C2pgXSKPI3jmpm6FExNazNpjvqS6ZUJQCej3PUXEKM8NjHBOs54ExM+LPW/FBRhymrdcCiSg==}
-    engines: {node: '>=14.0.0'}
 
   supports-color@4.5.0:
     resolution: {integrity: sha512-ycQR/UbvI9xIlEdQT1TQqwoXtEldExbCEAJgRo5YXlmSKjv6ThHnP9/vwGa1gr19Gfw+LkFd7KqYMhzrRC5JYw==}
@@ -28593,8 +28589,6 @@ snapshots:
       mz: 2.7.0
       pirates: 4.0.6
       ts-interface-checker: 0.1.13
-
-  superstruct@1.0.3: {}
 
   supports-color@4.5.0:
     dependencies:

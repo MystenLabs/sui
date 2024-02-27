@@ -362,11 +362,13 @@ describe('Publickey', () => {
 			bitmap: 3,
 			sigs: [
 				{
+					$kind: 'ED25519',
 					ED25519: Array.from(
 						parseSerializedSignature((await k1.signPersonalMessage(data)).signature).signature!,
 					),
 				},
 				{
+					$kind: 'Secp256k1',
 					Secp256k1: Array.from(
 						parseSerializedSignature((await k2.signPersonalMessage(data)).signature).signature!,
 					),

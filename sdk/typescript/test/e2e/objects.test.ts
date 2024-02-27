@@ -117,7 +117,7 @@ describe('Object Reading API', () => {
 
 		const tx = new TransactionBlock();
 		// Transfer the entire gas object:
-		tx.transferObjects([tx.gas], tx.pure(normalizeSuiAddress('0x2')));
+		tx.transferObjects([tx.gas], normalizeSuiAddress('0x2'));
 
 		await toolbox.client.signAndExecuteTransactionBlock({
 			signer: toolbox.keypair,

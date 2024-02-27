@@ -59,8 +59,8 @@ describe('ed25519-keypair', () => {
 			expect(kp.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
 			// Exported keypair matches the Bech32 encoded secret key.
-			const exported = kp.export();
-			expect(exported.privateKey).toEqual(t[1]);
+			const exported = kp.getSecretKey();
+			expect(exported).toEqual(t[1]);
 		}
 	});
 
@@ -71,10 +71,10 @@ describe('ed25519-keypair', () => {
 		);
 	});
 
-	it('signature of data is valid', () => {
+	it('signature of data is valid', async () => {
 		const keypair = new Ed25519Keypair();
 		const signData = new TextEncoder().encode('hello world');
-		const signature = keypair.signData(signData);
+		const signature = await keypair.sign(signData);
 		const isValid = nacl.sign.detached.verify(
 			signData,
 			signature,
@@ -84,11 +84,11 @@ describe('ed25519-keypair', () => {
 		expect(keypair.getPublicKey().verify(signData, signature));
 	});
 
-	it('incorrect coin type node for ed25519 derivation path', () => {
+	it('incorrect coin type node for ed25519 derivation path', async () => {
 		const keypair = Ed25519Keypair.deriveKeypair(TEST_CASES[0][0], `m/44'/784'/0'/0'/0'`);
 
 		const signData = new TextEncoder().encode('hello world');
-		const signature = keypair.signData(signData);
+		const signature = await keypair.sign(signData);
 		const isValid = nacl.sign.detached.verify(
 			signData,
 			signature,

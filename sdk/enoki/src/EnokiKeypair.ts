@@ -56,10 +56,6 @@ export class EnokiKeypair extends Keypair {
 		});
 	}
 
-	signData(data: Uint8Array) {
-		return this.#ephemeralKeypair.signData(data);
-	}
-
 	async sign(data: Uint8Array) {
 		return this.#ephemeralKeypair.sign(data);
 	}

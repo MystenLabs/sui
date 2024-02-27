@@ -88,7 +88,7 @@ describe('secp256r1-keypair', () => {
 		const signData = new TextEncoder().encode('hello world');
 
 		const msgHash = sha256(signData);
-		const sig = keypair.signData(signData);
+		const sig = await keypair.sign(signData);
 		expect(
 			secp256r1.verify(
 				secp256r1.Signature.fromCompact(sig),
@@ -104,7 +104,7 @@ describe('secp256r1-keypair', () => {
 		const signData = new TextEncoder().encode('Hello, world!');
 
 		const msgHash = sha256(signData);
-		const sig = keypair.signData(signData);
+		const sig = await keypair.sign(signData);
 
 		// Assert the signature is the same as the rust implementation.
 		expect(Buffer.from(sig).toString('hex')).toEqual(
@@ -137,8 +137,8 @@ describe('secp256r1-keypair', () => {
 			expect(kp.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
 			// Exported keypair matches the Bech32 encoded secret key.
-			const exported = kp.export();
-			expect(exported.privateKey).toEqual(t[1]);
+			const exported = kp.getSecretKey();
+			expect(exported).toEqual(t[1]);
 		}
 	});
 
