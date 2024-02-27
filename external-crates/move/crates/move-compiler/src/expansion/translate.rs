@@ -5,7 +5,7 @@
 use crate::{
     diag,
     diagnostics::{codes::WarningFilter, Diagnostic, WarningFilters},
-    editions::{self, create_feature_error, FeatureGate, Flavor},
+    editions::{self, create_feature_error, Edition, FeatureGate, Flavor},
     expansion::{
         alias_map_builder::{
             AliasEntry, AliasMapBuilder, NameSpace, ParserExplicitUseFun, UseFunsBuilder,
@@ -3578,16 +3578,16 @@ fn assign_unpack_fields(
 }
 
 fn mutability(context: &mut Context, _loc: Loc, pmut: P::Mutability) -> E::Mutability {
-    let supports_let_mut = {
-        let pkg = context.current_package;
-        context.env().supports_feature(pkg, FeatureGate::LetMut)
-    };
+    let pkg = context.current_package;
+    let supports_let_mut = context.env().supports_feature(pkg, FeatureGate::LetMut);
     match pmut {
         Some(loc) => {
             assert!(supports_let_mut, "ICE mut should not parse without let mut");
             E::Mutability::Mut(loc)
         }
         None if supports_let_mut => E::Mutability::Imm,
+        // Mark as imm to force errors during migration
+        None if context.env().edition(pkg) == Edition::E2024_MIGRATION => E::Mutability::Imm,
         // without let mut enabled, all locals are mutable and do not need the annotation
         None => E::Mutability::Either,
     }

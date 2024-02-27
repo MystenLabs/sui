@@ -2715,10 +2715,11 @@ fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context
                 context
                     .env
                     .add_diag(diag!(Migration::NeedsPublic, (loc, msg.clone())))
+            } else {
+                let mut err = diag!(Syntax::InvalidModifier, (loc, msg));
+                err.add_note(note);
+                context.env.add_diag(err);
             }
-            let mut err = diag!(Syntax::InvalidModifier, (loc, msg));
-            err.add_note(note);
-            context.env.add_diag(err);
         }
     } else if let Some(vis) = visibility {
         let msg = format!(

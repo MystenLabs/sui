@@ -13,7 +13,7 @@ module a::m {
 
     public fun t3(cond: bool): u64 {
         let x;
-        while (cond) x = 1;
+        while (cond) { x = 1; x; };
         x = 1;
         x
     }

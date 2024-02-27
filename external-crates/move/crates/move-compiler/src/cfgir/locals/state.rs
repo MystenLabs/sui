@@ -58,6 +58,7 @@ impl LocalStates {
             states.set_state(var, local_state)
         }
         for (_, var, _) in function_arguments {
+            debug_assert!(states.local_states.contains_key(var));
             let local_state = LocalState::Available(var.loc());
             states.set_state(*var, local_state)
         }
