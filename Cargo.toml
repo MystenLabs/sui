@@ -363,8 +363,8 @@ mime = "0.3"
 mockall = "0.11.4"
 moka = { version = "0.12", default-features = false, features = ["sync", "atomic64"] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "1a52783d6600ecc22e15253a982f77881bd47c77", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "1a52783d6600ecc22e15253a982f77881bd47c77", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
@@ -466,11 +466,11 @@ tempfile = "3.3.0"
 test-fuzz = "3.0.4"
 thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
-tokio = "1.28.1"
+tokio = "1.36.0"
 tokio-retry = "0.3"
 tokio-rustls = "0.24"
 tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
-tokio-util = "0.7.4"
+tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
 tonic = { version = "0.10", features = ["transport", "tls"] }
