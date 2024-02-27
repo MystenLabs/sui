@@ -2,13 +2,15 @@ error[E04034]: 'syntax' method types differ
   ┌─ tests/move_2024/typing/syntax_methods_args_polymorphic_invalid_positional.move:6:45
   │
 6 │     public fun borrow_a<Q,T>(_s: &A<Q>, _j: T): &Q { abort 0 }
-  │                           -                 ^ This index function expects type 'T'
+  │                           -                 ^ This parameter has type 'T'
   │                           │                  
   │                           Type parameter T appears in position 2 here
   ·
 9 │     public fun borrow_mut_a<T,Q>(_s: &mut A<T>, _j: T): &mut T { abort 0 }
-  │                             -                       - This mutable index function expects type 'T'
-  │                             │                        
+  │                             -                       -
+  │                             │                       │
+  │                             │                       Expected this parameter to have type 'Q'
+  │                             │                       It has type 'T'
   │                             Type parameter T appears in position 1 here
   │
   = Type parameters must be used the same by position, not name
@@ -23,8 +25,10 @@ error[E04034]: 'syntax' method types differ
    │                           Type parameter T appears in position 2 here
    ·
 17 │     public fun borrow_mut_b<T,Q>(_s: &mut B<T>, _j: T): &mut T { abort 0 }
-   │                             -                           ------ This mutable index function returns type '&mut T'
-   │                             │                            
+   │                             -                           ------
+   │                             │                           │
+   │                             │                           Expected this mutable index function to return type '&mut Q'
+   │                             │                           It returns type '&mut T'
    │                             Type parameter T appears in position 1 here
    │
    = Type parameters must be used the same by position, not name
@@ -39,8 +43,10 @@ error[E04034]: 'syntax' method types differ
    │                           Type parameter T appears in position 2 here
    ·
 25 │     public fun borrow_mut_c<T,Q>(_s: &mut C<T>, _j: T): &mut T { abort 0 }
-   │                             -        --------- This mutable index function subject has type '&mut a::invalid::C<T>'
-   │                             │         
+   │                             -        ---------
+   │                             │        │
+   │                             │        Expected this mutable index function subject to have type '&mut a::invalid::C<Q>'
+   │                             │        It has type '&mut a::invalid::C<T>'
    │                             Type parameter T appears in position 1 here
    │
    = Type parameters must be used the same by position, not name
