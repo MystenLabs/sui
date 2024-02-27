@@ -367,10 +367,10 @@ fn dynamic_fields_query(
     // deleted while a child of the parent.
     if let Some(parent_version) = parent_version {
         newer = filter!(newer, format!("object_version <= {}", parent_version));
-        newer = filter!(
-            newer,
-            format!("object_status = {}", ObjectStatus::WrappedOrDeleted as i16)
-        );
+        // newer = filter!(
+        // newer,
+        // format!("object_status = {}", ObjectStatus::WrappedOrDeleted as i16)
+        // );
 
         let query = query!(
             r#"SELECT candidates.*
@@ -383,7 +383,8 @@ fn dynamic_fields_query(
             candidates,
             newer
         );
-        return filter!(query, "newer.object_status IS NULL");
+        // return filter!(query, "newer.object_status IS NULL");
+        return filter!(query, "newer.object_version IS NULL");
     }
 
     let query = query!(
