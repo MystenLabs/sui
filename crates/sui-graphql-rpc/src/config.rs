@@ -97,6 +97,9 @@ pub struct Limits {
     pub max_move_value_depth: u32,
 }
 
+#[derive(Debug)]
+pub struct Version(pub &'static str);
+
 impl Limits {
     /// Extract limits for the package resolver.
     pub fn package_resolver_limits(&self) -> sui_package_resolver::Limits {

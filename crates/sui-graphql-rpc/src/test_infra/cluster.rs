@@ -4,6 +4,7 @@
 use crate::config::ConnectionConfig;
 use crate::config::ServerConfig;
 use crate::config::ServiceConfig;
+use crate::config::Version;
 use crate::server::graphiql_server::start_graphiql_server;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -166,7 +167,9 @@ pub async fn start_graphql_server_with_fn_rpc(
 
     // Starts graphql server
     tokio::spawn(async move {
-        start_graphiql_server(&server_config).await.unwrap();
+        start_graphiql_server(&server_config, &Version("test"))
+            .await
+            .unwrap();
     })
 }
 
