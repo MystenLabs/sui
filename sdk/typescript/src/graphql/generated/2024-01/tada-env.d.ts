@@ -434,7 +434,16 @@ export type introspection = {
               "name": "String",
               "ofType": null
             },
-            "args": []
+            "args": [
+              {
+                "name": "format",
+                "type": {
+                  "kind": "ENUM",
+                  "name": "DomainFormat",
+                  "ofType": null
+                }
+              }
+            ]
           },
           {
             "name": "suinsRegistrations",
@@ -1699,7 +1708,16 @@ export type introspection = {
               "name": "String",
               "ofType": null
             },
-            "args": []
+            "args": [
+              {
+                "name": "format",
+                "type": {
+                  "kind": "ENUM",
+                  "name": "DomainFormat",
+                  "ofType": null
+                }
+              }
+            ]
           },
           {
             "name": "suinsRegistrations",
@@ -2355,7 +2373,16 @@ export type introspection = {
               "name": "String",
               "ofType": null
             },
-            "args": []
+            "args": [
+              {
+                "name": "format",
+                "type": {
+                  "kind": "ENUM",
+                  "name": "DomainFormat",
+                  "ofType": null
+                }
+              }
+            ]
           },
           {
             "name": "suinsRegistrations",
@@ -2889,6 +2916,18 @@ export type introspection = {
           }
         ],
         "interfaces": []
+      },
+      {
+        "kind": "ENUM",
+        "name": "DomainFormat",
+        "enumValues": [
+          {
+            "name": "AT"
+          },
+          {
+            "name": "DOT"
+          }
+        ]
       },
       {
         "kind": "OBJECT",
@@ -4700,7 +4739,16 @@ export type introspection = {
               "name": "String",
               "ofType": null
             },
-            "args": []
+            "args": [
+              {
+                "name": "format",
+                "type": {
+                  "kind": "ENUM",
+                  "name": "DomainFormat",
+                  "ofType": null
+                }
+              }
+            ]
           },
           {
             "name": "suinsRegistrations",
@@ -5839,7 +5887,16 @@ export type introspection = {
               "name": "String",
               "ofType": null
             },
-            "args": []
+            "args": [
+              {
+                "name": "format",
+                "type": {
+                  "kind": "ENUM",
+                  "name": "DomainFormat",
+                  "ofType": null
+                }
+              }
+            ]
           },
           {
             "name": "suinsRegistrations",
@@ -6506,7 +6563,16 @@ export type introspection = {
               "name": "String",
               "ofType": null
             },
-            "args": []
+            "args": [
+              {
+                "name": "format",
+                "type": {
+                  "kind": "ENUM",
+                  "name": "DomainFormat",
+                  "ofType": null
+                }
+              }
+            ]
           },
           {
             "name": "suinsRegistrations",
@@ -7498,7 +7564,16 @@ export type introspection = {
               "name": "String",
               "ofType": null
             },
-            "args": []
+            "args": [
+              {
+                "name": "format",
+                "type": {
+                  "kind": "ENUM",
+                  "name": "DomainFormat",
+                  "ofType": null
+                }
+              }
+            ]
           },
           {
             "name": "suinsRegistrations",
@@ -8507,7 +8582,16 @@ export type introspection = {
               "name": "String",
               "ofType": null
             },
-            "args": []
+            "args": [
+              {
+                "name": "format",
+                "type": {
+                  "kind": "ENUM",
+                  "name": "DomainFormat",
+                  "ofType": null
+                }
+              }
+            ]
           },
           {
             "name": "suinsRegistrations",
@@ -10643,7 +10727,16 @@ export type introspection = {
               "name": "String",
               "ofType": null
             },
-            "args": []
+            "args": [
+              {
+                "name": "format",
+                "type": {
+                  "kind": "ENUM",
+                  "name": "DomainFormat",
+                  "ofType": null
+                }
+              }
+            ]
           },
           {
             "name": "suinsRegistrations",
@@ -11360,7 +11453,16 @@ export type introspection = {
               "name": "String",
               "ofType": null
             },
-            "args": []
+            "args": [
+              {
+                "name": "format",
+                "type": {
+                  "kind": "ENUM",
+                  "name": "DomainFormat",
+                  "ofType": null
+                }
+              }
+            ]
           },
           {
             "name": "suinsRegistrations",
