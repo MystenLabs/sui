@@ -19,7 +19,7 @@ export function useTransactionData(sender?: string | null, transaction?: Transac
 			}
 			// Build the transaction to bytes, which will ensure that the transaction data is fully populated:
 			await clonedTransaction!.build({ client });
-			return clonedTransaction!.blockData;
+			return clonedTransaction!.getBlockData();
 		},
 		enabled: !!transaction,
 	});
@@ -31,7 +31,7 @@ export function useTransactionGasBudget(
 ) {
 	const { data, ...rest } = useTransactionData(sender, transaction);
 
-	const [formattedGas] = useFormatCoin(data?.gasConfig.budget, SUI_TYPE_ARG);
+	const [formattedGas] = useFormatCoin(data?.gasData.budget, SUI_TYPE_ARG);
 
 	return {
 		data: formattedGas,

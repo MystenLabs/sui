@@ -3,9 +3,8 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { SharedObjectRef } from '../../src/bcs';
 import { SuiTransactionBlockResponse } from '../../src/client';
-import { BuilderCallArg, TransactionBlock } from '../../src/transactions';
+import { TransactionBlock } from '../../src/transactions';
 import { TransactionBlockDataBuilder } from '../../src/transactions/TransactionBlockData';
 import { SUI_SYSTEM_STATE_OBJECT_ID } from '../../src/utils';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
@@ -37,8 +36,8 @@ describe('Transaction Serialization and deserialization', () => {
 		const deserializedTxnBuilder = TransactionBlockDataBuilder.fromBytes(transactionBlockBytes);
 		expect(
 			deserializedTxnBuilder.inputs
-				.filter((i) => isSharedObjectInput(i.value))
-				.map((i) => isMutableSharedObjectInput(i.value)),
+				.filter((i) => i.Object?.SharedObject)
+				.map((i) => i.Object?.SharedObject?.mutable),
 		).toStrictEqual(mutable);
 		const reserializedTxnBytes = await deserializedTxnBuilder.build();
 		expect(reserializedTxnBytes).toEqual(transactionBlockBytes);
@@ -57,7 +56,7 @@ describe('Transaction Serialization and deserialization', () => {
 			arguments: [
 				tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
 				tx.object(coin.coinObjectId),
-				tx.pure(validatorAddress),
+				tx.pure.address(validatorAddress),
 			],
 		});
 		await serializeAndDeserialize(tx, [true]);
@@ -91,17 +90,3 @@ describe('Transaction Serialization and deserialization', () => {
 		await serializeAndDeserialize(tx, []);
 	});
 });
-
-export function getSharedObjectInput(arg: BuilderCallArg): SharedObjectRef | undefined {
-	return typeof arg === 'object' && 'Object' in arg && 'Shared' in arg.Object
-		? arg.Object.Shared
-		: undefined;
-}
-
-export function isSharedObjectInput(arg: BuilderCallArg): boolean {
-	return !!getSharedObjectInput(arg);
-}
-
-export function isMutableSharedObjectInput(arg: BuilderCallArg): boolean {
-	return getSharedObjectInput(arg)?.mutable ?? false;
-}

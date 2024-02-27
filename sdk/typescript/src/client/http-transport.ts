@@ -11,7 +11,7 @@ import { WebsocketClient } from './rpc-websocket-client.js';
  */
 export type HttpHeaders = { [header: string]: string };
 
-interface SuiHTTPTransportOptions {
+export interface SuiHTTPTransportOptions {
 	fetch?: typeof fetch;
 	WebSocketConstructor?: typeof WebSocket;
 	url: string;

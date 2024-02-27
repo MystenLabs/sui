@@ -67,8 +67,8 @@
 			"require": "./dist/cjs/multisig/index.js"
 		},
 		"./transactions": {
-			"import": "./dist/esm/transactions/export.js",
-			"require": "./dist/cjs/transactions/export.js"
+			"import": "./dist/esm/transactions/index.js",
+			"require": "./dist/cjs/transactions/index.js"
 		},
 		"./utils": {
 			"import": "./dist/esm/utils/index.js",
@@ -155,7 +155,7 @@
 		"bech32": "^2.0.0",
 		"gql.tada": "^1.7.0",
 		"graphql": "^16.8.1",
-		"superstruct": "^1.0.3",
-		"tweetnacl": "^1.0.3"
+		"tweetnacl": "^1.0.3",
+		"valibot": "^0.25.0"
 	}
 }
