@@ -20,8 +20,8 @@ function convertCommandArgumentToString(
 		| number[]
 		| TransactionArgument
 		| TransactionArgument[]
-		| MakeMoveVecTransaction['type']
-		| PublishTransaction['modules'],
+		| MakeMoveVecTransaction['MakeMoveVec'][0]
+		| PublishTransaction['Publish'][0],
 ): string | null {
 	if (!arg) return null;
 
@@ -36,7 +36,7 @@ function convertCommandArgumentToString(
 			// MakeMoveVecTransaction['type'] is TypeTag type
 			return TypeTagSerializer.tagToString(arg.Some as TypeTag);
 		}
-		return arg.Some;
+		return arg;
 	}
 
 	if (Array.isArray(arg)) {
@@ -48,15 +48,15 @@ function convertCommandArgumentToString(
 		return `[${arg.map((argVal) => convertCommandArgumentToString(argVal)).join(', ')}]`;
 	}
 
-	switch (arg.kind) {
+	switch (arg.$kind) {
 		case 'GasCoin':
 			return 'GasCoin';
 		case 'Input':
-			return `Input(${arg.index})`;
+			return `Input(${arg.Input})`;
 		case 'Result':
-			return `Result(${arg.index})`;
+			return `Result(${arg.Result})`;
 		case 'NestedResult':
-			return `NestedResult(${arg.index}, ${arg.resultIndex})`;
+			return `NestedResult(${arg.NestedResult[0]}, ${arg.NestedResult[1]})`;
 		default:
 			// eslint-disable-next-line no-console
 			console.warn('Unexpected command argument type.', arg);
@@ -64,7 +64,7 @@ function convertCommandArgumentToString(
 	}
 }
 
-function convertCommandToString({ kind, ...command }: TransactionType) {
+function convertCommandToString({ $kind, ...command }: TransactionType) {
 	const commandArguments = Object.entries(command);
 
 	return commandArguments
@@ -102,7 +102,7 @@ export function Command({ command }: CommandProps) {
 				className="flex items-center gap-2 w-full bg-transparent border-none p-0"
 			>
 				<Text variant="body" weight="semibold" color="steel-darker">
-					{command.kind}
+					{command.$kind}
 				</Text>
 				<div className="h-px bg-gray-40 flex-1" />
 				<div className="text-steel">{expanded ? <ChevronDown12 /> : <ChevronRight12 />}</div>
