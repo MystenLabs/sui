@@ -35,12 +35,14 @@ export const TransactionBlockInput = union([
 		index: integer(),
 		value: optional(any()),
 		type: optional(literal('object')),
+		normalizedType: optional(any()),
 	}),
 	object({
 		kind: literal('Input'),
 		index: integer(),
 		value: optional(any()),
 		type: literal('pure'),
+		normalizedType: optional(any()),
 	}),
 ]);
 export type TransactionBlockInput = Infer<typeof TransactionBlockInput>;
