@@ -8,9 +8,12 @@ use move_binary_format::file_format::{
     StructTypeParameter, Visibility,
 };
 use std::collections::btree_map::Entry;
+use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::{borrow::Cow, collections::BTreeMap};
+use sui_types::base_types::is_primitive_type_tag;
+use sui_types::transaction::{Argument, CallArg, Command, ProgrammableTransaction};
 
 use crate::error::Error;
 use move_binary_format::errors::Location;
@@ -355,6 +358,96 @@ impl<S: PackageStore> Resolver<S> {
         }
 
         Ok(sigs)
+    }
+
+    /// Attempts to infer the type layouts for pure inputs to the programmable transaction.
+    ///
+    /// The returned vector contains an element for each input to `tx`. Elements corresponding to
+    /// pure inputs that are used as arguments to transaction commands will contain `Some(layout)`.
+    /// Elements for other inputs (non-pure inputs, and unused pure inputs) will be `None`.
+    ///
+    /// Layout resolution can fail if a type/module/package doesn't exist, if layout resolution hits
+    /// a limit, or if a pure input is somehow used in multiple conflicting occasions (with
+    /// different types).
+    pub async fn pure_input_layouts(
+        &self,
+        tx: &ProgrammableTransaction,
+    ) -> Result<Vec<Option<MoveTypeLayout>>> {
+        let mut tags = vec![None; tx.inputs.len()];
+        let mut register_type = |arg: &Argument, tag: &TypeTag| {
+            let &Argument::Input(ix) = arg else {
+                return Ok(());
+            };
+
+            if !matches!(tx.inputs.get(ix as usize), Some(CallArg::Pure(_))) {
+                return Ok(());
+            }
+
+            let Some(type_) = tags.get_mut(ix as usize) else {
+                return Ok(());
+            };
+
+            if let Some(prev) = type_.replace(tag.clone()) {
+                // SAFETY: We just inserted `tag` in here.
+                let curr = type_.take().unwrap();
+                return Err(Error::InputTypeConflict(ix, prev, curr));
+            };
+
+            Ok(())
+        };
+
+        // (1). Infer type tags for pure inputs from their uses.
+        for cmd in &tx.commands {
+            match cmd {
+                Command::MoveCall(call) => {
+                    let params = self
+                        .function_parameters(
+                            call.package.into(),
+                            call.module.as_str(),
+                            call.function.as_str(),
+                        )
+                        .await?;
+
+                    for (open_sig, arg) in params.iter().zip(call.arguments.iter()) {
+                        let sig = open_sig.instantiate(&call.type_arguments)?;
+                        register_type(arg, &sig.body)?;
+                    }
+                }
+
+                Command::TransferObjects(_, arg) => register_type(arg, &TypeTag::Address)?,
+
+                Command::SplitCoins(_, amounts) => {
+                    for amount in amounts {
+                        register_type(amount, &TypeTag::U64)?;
+                    }
+                }
+
+                Command::MakeMoveVec(Some(tag), elems) if is_primitive_type_tag(tag) => {
+                    for elem in elems {
+                        register_type(elem, tag)?;
+                    }
+                }
+
+                _ => { /* nop */ }
+            }
+        }
+
+        // (2). Gather all the unique type tags to convert into layouts. There are relatively few
+        // primitive types so this is worth doing to avoid redundant work.
+        let unique_tags: BTreeSet<_> = tags.iter().filter_map(|t| t.clone()).collect();
+
+        // (3). Convert the type tags into layouts.
+        let mut layouts = BTreeMap::new();
+        for tag in unique_tags {
+            let layout = self.type_layout(tag.clone()).await?;
+            layouts.insert(tag, layout);
+        }
+
+        // (4) Prepare the result vector.
+        Ok(tags
+            .iter()
+            .map(|t| t.as_ref().and_then(|t| layouts.get(t).cloned()))
+            .collect())
     }
 }
 
@@ -1262,8 +1355,11 @@ fn read_signature(idx: SignatureIndex, bytecode: &CompiledModule) -> Result<Vec<
 mod tests {
     use async_trait::async_trait;
     use move_binary_format::file_format::Ability;
+    use move_core_types::ident_str;
     use std::sync::Arc;
     use std::{path::PathBuf, str::FromStr, sync::RwLock};
+    use sui_types::base_types::random_object_ref;
+    use sui_types::transaction::{ObjectArg, ProgrammableMoveCall};
 
     use move_compiler::compiled_unit::NamedCompiledModule;
     use sui_move_build::{BuildConfig, CompiledPackage};
@@ -2026,6 +2122,128 @@ mod tests {
         assert!(matches!(err, Error::TypeParamNesting(2, _)));
     }
 
+    #[tokio::test]
+    async fn test_pure_input_layouts() {
+        use CallArg as I;
+        use ObjectArg::ImmOrOwnedObject as O;
+        use TypeTag as T;
+
+        let (_, cache) = package_cache([
+            (1, build_package("std"), std_types()),
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("e0"), e0_types()),
+        ]);
+
+        let resolver = Resolver::new(cache);
+
+        // Helper function to generate a PTB calling 0xe0::m::foo.
+        fn ptb(t: TypeTag, y: CallArg) -> ProgrammableTransaction {
+            ProgrammableTransaction {
+                inputs: vec![
+                    I::Object(O(random_object_ref())),
+                    I::Pure(bcs::to_bytes(&42u64).unwrap()),
+                    I::Object(O(random_object_ref())),
+                    y,
+                    I::Object(O(random_object_ref())),
+                    I::Pure(bcs::to_bytes("hello").unwrap()),
+                    I::Pure(bcs::to_bytes("world").unwrap()),
+                ],
+                commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+                    package: addr("0xe0").into(),
+                    module: ident_str!("m").to_owned(),
+                    function: ident_str!("foo").to_owned(),
+                    type_arguments: vec![t],
+                    arguments: (0..=6).map(Argument::Input).collect(),
+                }))],
+            }
+        }
+
+        let ptb_u64 = ptb(T::U64, I::Pure(bcs::to_bytes(&1u64).unwrap()));
+
+        let ptb_opt = ptb(
+            TypeTag::Struct(Box::new(StructTag {
+                address: addr("0x1"),
+                module: ident_str!("option").to_owned(),
+                name: ident_str!("Option").to_owned(),
+                type_params: vec![TypeTag::U64],
+            })),
+            I::Pure(bcs::to_bytes(&[vec![1u64], vec![], vec![3]]).unwrap()),
+        );
+
+        let ptb_obj = ptb(
+            TypeTag::Struct(Box::new(StructTag {
+                address: addr("0xe0"),
+                module: ident_str!("m").to_owned(),
+                name: ident_str!("O").to_owned(),
+                type_params: vec![],
+            })),
+            I::Object(O(random_object_ref())),
+        );
+
+        let inputs_u64 = resolver.pure_input_layouts(&ptb_u64).await.unwrap();
+        let inputs_opt = resolver.pure_input_layouts(&ptb_opt).await.unwrap();
+        let inputs_obj = resolver.pure_input_layouts(&ptb_obj).await.unwrap();
+
+        // Make the output format a little nicer for the snapshot
+        let mut output = "---\n".to_string();
+        for inputs in [inputs_u64, inputs_opt, inputs_obj] {
+            for input in inputs {
+                if let Some(layout) = input {
+                    output += &format!("{layout:#}\n");
+                } else {
+                    output += "???\n";
+                }
+            }
+            output += "---\n";
+        }
+
+        insta::assert_snapshot!(output);
+    }
+
+    #[tokio::test]
+    async fn test_pure_input_layouts_conflicting() {
+        use CallArg as I;
+        use ObjectArg::ImmOrOwnedObject as O;
+        use TypeTag as T;
+
+        let (_, cache) = package_cache([
+            (1, build_package("std"), std_types()),
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("e0"), e0_types()),
+        ]);
+
+        let resolver = Resolver::new(cache);
+
+        let ptb = ProgrammableTransaction {
+            inputs: vec![
+                I::Object(O(random_object_ref())),
+                I::Pure(bcs::to_bytes(&42u64).unwrap()),
+                I::Object(O(random_object_ref())),
+                I::Pure(bcs::to_bytes(&43u64).unwrap()),
+                I::Object(O(random_object_ref())),
+                I::Pure(bcs::to_bytes("hello").unwrap()),
+                I::Pure(bcs::to_bytes("world").unwrap()),
+            ],
+            commands: vec![
+                Command::MoveCall(Box::new(ProgrammableMoveCall {
+                    package: addr("0xe0").into(),
+                    module: ident_str!("m").to_owned(),
+                    function: ident_str!("foo").to_owned(),
+                    type_arguments: vec![T::U64],
+                    arguments: (0..=6).map(Argument::Input).collect(),
+                })),
+                // This command is using the input that was previously used as a U64, but now as a
+                // U32, which will cause an error.
+                Command::MakeMoveVec(Some(T::U32), vec![Argument::Input(3)]),
+            ],
+        };
+
+        insta::assert_display_snapshot!(
+            resolver.pure_input_layouts(&ptb).await.unwrap_err(),
+            @"Conflicting types for input 3: u64 and u32"
+        );
+    }
+
     /***** Test Helpers ***************************************************************************/
 
     type TypeOriginTable = Vec<DatatypeKey>;
@@ -2070,6 +2288,10 @@ mod tests {
         ]
     }
 
+    fn e0_types() -> TypeOriginTable {
+        vec![struct_("0xe0", "m", "O")]
+    }
+
     fn s0_types() -> TypeOriginTable {
         vec![struct_("0x1", "m", "T0")]
     }
@@ -2084,6 +2306,14 @@ mod tests {
 
     fn sui_types() -> TypeOriginTable {
         vec![struct_("0x2", "object", "UID")]
+    }
+
+    fn std_types() -> TypeOriginTable {
+        vec![
+            struct_("0x1", "ascii", "String"),
+            struct_("0x1", "option", "Option"),
+            struct_("0x1", "string", "String"),
+        ]
     }
 
     /// Build an in-memory package cache from locally compiled packages.  Assumes that all packages

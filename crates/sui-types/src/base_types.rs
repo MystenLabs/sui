@@ -25,6 +25,7 @@ use crate::gas_coin::GAS;
 use crate::governance::StakedSui;
 use crate::governance::STAKED_SUI_STRUCT_NAME;
 use crate::governance::STAKING_POOL_MODULE_NAME;
+use crate::id::RESOLVED_SUI_ID;
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
@@ -402,6 +403,34 @@ impl From<MoveObjectType> for TypeTag {
     fn from(o: MoveObjectType) -> TypeTag {
         let s: StructTag = o.into();
         TypeTag::Struct(Box::new(s))
+    }
+}
+
+/// Whether this type is valid as a primitive (pure) transaction input.
+pub fn is_primitive_type_tag(t: &TypeTag) -> bool {
+    use TypeTag as T;
+
+    match t {
+        T::Bool | T::U8 | T::U16 | T::U32 | T::U64 | T::U128 | T::U256 | T::Address => true,
+        T::Vector(inner) => is_primitive_type_tag(inner),
+        T::Struct(st) => {
+            let StructTag {
+                address,
+                module,
+                name,
+                type_params: type_args,
+            } = &**st;
+            let resolved_struct = (address, module.as_ident_str(), name.as_ident_str());
+            // is id or..
+            if resolved_struct == RESOLVED_SUI_ID {
+                return true;
+            }
+            // is option of a primitive
+            resolved_struct == RESOLVED_STD_OPTION
+                && type_args.len() == 1
+                && is_primitive_type_tag(&type_args[0])
+        }
+        T::Signer => false,
     }
 }
 
