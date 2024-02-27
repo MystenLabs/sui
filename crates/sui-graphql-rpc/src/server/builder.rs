@@ -252,9 +252,7 @@ impl ServerBuilder {
         let registry = registry_service.default_registry();
         registry
             .register(mysten_metrics::uptime_metric(
-                "graphql",
-                version.version,
-                "unknown",
+                "graphql", version.0, "unknown",
             ))
             .unwrap();
 

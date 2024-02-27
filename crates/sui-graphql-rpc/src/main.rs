@@ -18,7 +18,7 @@ use tracing::error;
 // WARNING!!!
 //
 // Do not move or use similar logic to generate git revision information outside of a binary entry
-// point (e.g. main.rs). Placing the below logic into a library can result in unessesary builds.
+// point (e.g. main.rs). Placing the below logic into a library can result in unnecessary builds.
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
         revision
@@ -31,7 +31,11 @@ const GIT_REVISION: &str = {
 };
 
 // VERSION mimics what other sui binaries use for the same const
-static VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
+static VERSION: Version = Version(const_str::concat!(
+    env!("CARGO_PKG_VERSION"),
+    "-",
+    GIT_REVISION
+));
 
 #[tokio::main]
 async fn main() {
@@ -108,13 +112,13 @@ async fn main() {
                 ..ServerConfig::default()
             };
 
-            start_graphiql_server(&server_config, &version(VERSION))
+            start_graphiql_server(&server_config, &VERSION)
                 .await
                 .unwrap();
         }
         Command::FromConfig { path } => {
             println!("Starting server...");
-            start_graphiql_server_from_cfg_path(path.to_str().unwrap(), &version(VERSION))
+            start_graphiql_server_from_cfg_path(path.to_str().unwrap(), &VERSION)
                 .await
                 .map_err(|x| {
                     error!("Error: {:?}", x);
@@ -132,8 +136,4 @@ fn service_config(path: Option<PathBuf>) -> ServiceConfig {
 
     let contents = fs::read_to_string(path).expect("Reading configuration");
     ServiceConfig::read(&contents).expect("Deserializing configuration")
-}
-
-fn version(version: &'static str) -> Version {
-    Version { version }
 }

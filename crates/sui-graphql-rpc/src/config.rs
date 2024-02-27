@@ -93,9 +93,7 @@ pub struct Limits {
 }
 
 #[derive(Debug)]
-pub struct Version {
-    pub version: &'static str,
-}
+pub struct Version(pub &'static str);
 
 impl Limits {
     pub fn default_for_simulator_testing() -> Self {

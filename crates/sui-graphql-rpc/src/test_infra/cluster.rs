@@ -172,7 +172,7 @@ pub async fn start_graphql_server_with_fn_rpc(
 
     // Starts graphql server
     tokio::spawn(async move {
-        start_graphiql_server(&server_config, &Version { version: "test" })
+        start_graphiql_server(&server_config, &Version("test"))
             .await
             .unwrap();
     })
