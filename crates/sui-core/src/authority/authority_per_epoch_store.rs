@@ -52,7 +52,7 @@ use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfigura
 use crate::authority::ResolverWrapper;
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointCommitHeight, CheckpointServiceNotify, EpochStats,
-    PendingCheckpoint, PendingCheckpointInfo, PendingCheckpointV2,
+    PendingCheckpoint, PendingCheckpointInfo, PendingCheckpointV2, PendingCheckpointV2Contents,
 };
 
 use crate::consensus_handler::{
@@ -2324,14 +2324,14 @@ impl AuthorityPerEpochStore {
             } else {
                 commit_round
             };
-            let pending_checkpoint = PendingCheckpointV2 {
+            let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
                 roots: roots.into_iter().collect(),
                 details: PendingCheckpointInfo {
                     timestamp_ms: commit_timestamp,
                     last_of_epoch: final_round && randomness_round.is_none(),
                     commit_height,
                 },
-            };
+            });
 
             self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
             checkpoint_service.notify_checkpoint(&pending_checkpoint)?;
@@ -2342,14 +2342,14 @@ impl AuthorityPerEpochStore {
                     randomness_round,
                 ));
 
-                let pending_checkpoint = PendingCheckpointV2 {
+                let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
                     roots: randomness_roots.into_iter().collect(),
                     details: PendingCheckpointInfo {
                         timestamp_ms: commit_timestamp,
                         last_of_epoch: final_round,
                         commit_height: commit_height + 1,
                     },
-                };
+                });
 
                 self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
                 checkpoint_service.notify_checkpoint(&pending_checkpoint)?;
@@ -2988,8 +2988,8 @@ impl AuthorityPerEpochStore {
         checkpoint: &PendingCheckpointV2,
     ) -> SuiResult {
         if let Some(pending) = self.get_pending_checkpoint(&checkpoint.height())? {
-            if pending.roots != checkpoint.roots {
-                panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old digests: {:?}, new digests: {:?}", checkpoint.height(), pending.roots, checkpoint.roots);
+            if pending.roots() != checkpoint.roots() {
+                panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old roots: {:?}, new roots: {:?}", checkpoint.height(), pending.roots(), checkpoint.roots());
             }
             debug!(
                 checkpoint_commit_height = checkpoint.height(),
@@ -3000,12 +3000,12 @@ impl AuthorityPerEpochStore {
         debug!(
             checkpoint_commit_height = checkpoint.height(),
             "Pending checkpoint has {} roots",
-            checkpoint.roots.len(),
+            checkpoint.roots().len(),
         );
         trace!(
             checkpoint_commit_height = checkpoint.height(),
             "Transaction roots for pending checkpoint: {:?}",
-            checkpoint.roots
+            checkpoint.roots()
         );
 
         if self.randomness_state_enabled() {
