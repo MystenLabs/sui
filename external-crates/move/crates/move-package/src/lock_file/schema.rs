@@ -5,7 +5,10 @@
 //! [move] table).  This module does not support serialization because of limitations in the `toml`
 //! crate related to serializing types as inline tables.
 
-use std::io::{Read, Seek, Write};
+use std::{
+    collections::BTreeMap,
+    io::{Read, Seek, Write},
+};
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -16,6 +19,11 @@ use toml_edit::{Item::Value as EItem, Value as EValue};
 use move_compiler::editions::{Edition, Flavor};
 
 use super::LockFile;
+
+use crate::{
+    package_hooks::PackageIdentifier,
+    resolution::dependency_graph::Package as DependencyGraphPackage,
+};
 
 /// Lock file version written by this version of the compiler.  Backwards compatibility is
 /// guaranteed (the compiler can read lock files with older versions), forward compatibility is not
@@ -36,7 +44,7 @@ pub struct Packages {
     pub root_dev_dependencies: Option<Vec<Dependency>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Package {
     /// The name of the package (corresponds to the name field from its source manifest).
     pub name: String,
@@ -53,7 +61,22 @@ pub struct Package {
     pub dev_dependencies: Option<Vec<Dependency>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
+pub struct PackageSer {
+    /// The name of the package (corresponds to the name field from its source manifest).
+    pub name: String,
+
+    pub source: String,
+
+    /// The version resolved from the version resolution hook.
+    pub version: Option<String>,
+
+    pub dependencies: Option<Vec<Dependency>>,
+    #[serde(rename = "dev-dependencies")]
+    pub dev_dependencies: Option<Vec<Dependency>>,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Dependency {
     /// The name of the dependency (corresponds to the key for the dependency in the depending
     /// package's source manifest).
@@ -184,6 +207,39 @@ pub(crate) fn write_prologue(
 
     write!(file, "{}", prologue)?;
 
+    Ok(())
+}
+
+pub fn write_packages(
+    file: &mut LockFile,
+    // root_package_id: PackageIdentifier,
+    package_table: BTreeMap<PackageIdentifier, DependencyGraphPackage>,
+) -> Result<()> {
+    let mut toml_string = String::new();
+    file.read_to_string(&mut toml_string)?;
+    panic!("{:#?}", toml_string);
+    let mut toml = toml_string.parse::<toml_edit::Document>()?;
+    /*
+        if toml["package"].is_none() {
+            panic!("what");
+            //        toml["move"]["package"] = toml_edit::Item::ArrayOfTables(toml_edit::ArrayOfTables::new());
+    }
+        */
+    /*
+        let toml_package_array = toml["move"]["package"]
+            .as_array_of_tables_mut()
+            .ok_or(std::fmt::Error)?;
+        for (id, pkg) in package_table {
+            let mut package = toml_edit::Table::new();
+            package["name"] = toml_edit::value(id.to_string());
+            package["source"] = {
+                let mut source = toml_edit::InlineTable::default();
+                source.get_or_insert("local", "FIXME");
+                toml_edit::value(source)
+            };
+            toml_package_array.push(package);
+        }
+    */
     Ok(())
 }
 

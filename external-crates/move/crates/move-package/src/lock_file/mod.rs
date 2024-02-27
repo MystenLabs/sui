@@ -74,6 +74,7 @@ impl LockFile {
             .tempfile_in(locks_dir)
             .context("Creating lock file")?;
         let lock_string = std::fs::read_to_string(lock_file)?;
+        println!("Writing {} to {:#?}", lock_string, lock);
         lock.write_all(lock_string.as_bytes())?;
 
         Ok(LockFile { file: lock })
