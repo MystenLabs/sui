@@ -47,7 +47,6 @@ use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::execution::TypeLayoutStore;
 use sui_types::storage::{get_module, PackageObject};
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::{
@@ -695,10 +694,6 @@ impl LocalExec {
             succeeded += 1;
         }
         Ok((succeeded, num as u64))
-    }
-
-    pub fn type_layout_store_factory(&self) -> Box<dyn TypeLayoutStore> {
-        Box::new(self.clone())
     }
 
     pub async fn execution_engine_execute_with_tx_info_impl(

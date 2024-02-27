@@ -5,7 +5,7 @@ use crate::displays::Pretty;
 use crate::replay::LocalExec;
 use move_core_types::annotated_value::{MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::TypeTag;
-use std::fmt::{Display, Formatter};
+use std::fmt::{format, Display, Formatter};
 use std::sync::Arc;
 use sui_execution::Executor;
 use sui_types::execution_mode::ExecutionResult;
@@ -38,6 +38,8 @@ impl<'a> Display for Pretty<'a, FullPTB> {
         let mut builder = TableBuilder::default();
 
         let ProgrammableTransaction { inputs, commands } = ptb;
+
+        // write input objects section
         if !inputs.is_empty() {
             let mut builder = TableBuilder::default();
             for (i, input) in inputs.iter().enumerate() {
@@ -90,23 +92,34 @@ impl<'a> Display for Pretty<'a, FullPTB> {
             write!(f, "\n  No input objects for this transaction")?;
         }
 
-        let mut table = builder.build();
-        table.with(TablePanel::header("Input Objects"));
-        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
-            1,
-            TableStyle::modern().get_horizontal(),
-        )]));
-        write!(f, "\n{}\n", table)?;
+        // write command results section
+        if results.len() > 0 {
+            write!(f, "\n\n")?;
+        }
+        for (i, result) in results.iter().enumerate() {
+            if i == results.len() - 1 {
+                write!(
+                    f,
+                    "╭───────────────────╮\n│ Command {i:<2} Output │\n╰───────────────────╯{}\n\n\n",
+                    Pretty(result)
+                )?
+            } else {
+                write!(
+                    f,
+                    "╭───────────────────╮\n│ Command {i:<2} Output │\n╰───────────────────╯{}\n",
+                    Pretty(result)
+                )?
+            }
+        }
 
+        // write ptb functions section
+        let mut builder = TableBuilder::default();
         if !commands.is_empty() {
-            let mut builder = TableBuilder::default();
-            for ((i, c), result) in commands.iter().enumerate().zip(results) {
+            for (i, c) in commands.iter().enumerate() {
                 if i == commands.len() - 1 {
-                    builder.push_record(vec![format!("{i:<2} {}", Pretty(c),)]);
-                    display_result(f, result.clone())?;
+                    builder.push_record(vec![format!("{i:<2} {}", Pretty(c))]);
                 } else {
-                    builder.push_record(vec![format!("{i:<2} {}\n", Pretty(c),)]);
-                    display_result(f, result.clone())?;
+                    builder.push_record(vec![format!("{i:<2} {}\n", Pretty(c))]);
                 }
             }
 
@@ -116,10 +129,12 @@ impl<'a> Display for Pretty<'a, FullPTB> {
                 1,
                 TableStyle::modern().get_horizontal(),
             )]));
-            write!(f, "\n{}\n", table)
+            write!(f, "\n{}\n", table)?;
         } else {
             write!(f, "\n  No commands for this transaction")
         }
+
+        Ok(())
     }
 }
 
@@ -221,37 +236,43 @@ impl<'a> Display for Pretty<'a, Argument> {
         write!(f, "{}", output)
     }
 }
+impl<'a> Display for Pretty<'a, ResolvedResults> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let Pretty(ResolvedResults {
+            mutable_reference_outputs,
+            return_values,
+        }) = self;
 
-fn display_result(f: &mut Formatter<'_>, result: &ResolvedResults) -> std::fmt::Result {
-    let ResolvedResults {
-        mutable_reference_outputs,
-        return_values,
-    } = result;
+        let len_m_ref = mutable_reference_outputs.len();
+        let len_ret_vals = return_values.len();
 
-    let len_m_ref = mutable_reference_outputs.len();
-    let len_ret_vals = return_values.len();
-    if len_ret_vals > 0 || len_m_ref > 0 {
-        write!(f, "\n ┌ ")?;
-    }
-    if len_m_ref > 0 {
-        write!(f, "\n │ Mutable Reference Outputs:")?;
-    }
-    for (arg, value) in mutable_reference_outputs {
-        write!(f, "\n │   {} ", arg)?;
-        write!(f, "\n │   {} ", value)?;
-    }
-    if len_ret_vals > 0 {
-        write!(f, "\n │ Return Values:")?;
-    }
+        if len_ret_vals > 0 {
+            write!(f, "\n Return Values:\n ──────────────")?;
+        }
 
-    for (i, value) in return_values.iter().enumerate() {
-        write!(f, "\n │   {i:<2} ")?;
-        write!(f, "\n │   {} ", value)?;
+        for (i, value) in return_values.iter().enumerate() {
+            write!(f, "\n • Result {i:<2} ")?;
+            write!(f, "\n{}\n", value)?;
+        }
+
+        if len_m_ref > 0 {
+            write!(
+                f,
+                "\n Mutable Reference Outputs:\n ──────────────────────────"
+            )?;
+        }
+
+        for (arg, value) in mutable_reference_outputs {
+            write!(f, "\n • {} ", arg)?;
+            write!(f, "\n{}\n", value)?;
+        }
+
+        if len_ret_vals == 0 && len_m_ref == 0 {
+            write!(f, "\n No return values")?;
+        }
+
+        Ok(())
     }
-    if len_ret_vals > 0 || len_m_ref > 0 {
-        write!(f, "\n └")?;
-    }
-    Ok(())
 }
 
 impl<'a> Display for Pretty<'a, TypeTag> {
