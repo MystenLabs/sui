@@ -9,9 +9,9 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, ensure, Ok};
 use async_trait::async_trait;
 use futures::future::join_all;
+use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::SignatureToken;
-use move_binary_format::file_format_common::VERSION_MAX;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 
@@ -395,7 +395,7 @@ impl TransactionBuilder {
 
         let mut args = Vec::new();
         let mut objects = BTreeMap::new();
-        let module = package.deserialize_module(module, VERSION_MAX, true)?;
+        let module = package.deserialize_module(module, &BinaryConfig::standard())?;
         let view = BinaryIndexedView::Module(&module);
         for (arg, expected_type) in json_args_and_tokens {
             args.push(match arg {

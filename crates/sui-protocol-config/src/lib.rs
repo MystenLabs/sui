@@ -109,6 +109,7 @@ const MAX_PROTOCOL_VERSION: u64 = 37;
 //             Enable shared object deletion in mainnet.
 //             Set the consensus accepted transaction size and the included transactions size in the proposed block.
 // Version 37: Reject entry functions with mutable Random.
+//             Introduce limits for binary tables size.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -497,6 +498,21 @@ pub struct ProtocolConfig {
     // ==== Move VM, Move bytecode verifier, and execution limits ===
     /// Maximum Move bytecode version the VM understands. All older versions are accepted.
     move_binary_format_version: Option<u32>,
+    /// Configuration controlling binary tables size.
+    binary_module_handles: Option<u16>,
+    binary_struct_handles: Option<u16>,
+    binary_function_handles: Option<u16>,
+    binary_function_instantiations: Option<u16>,
+    binary_signatures: Option<u16>,
+    binary_constant_pool: Option<u16>,
+    binary_identifiers: Option<u16>,
+    binary_address_identifiers: Option<u16>,
+    binary_struct_defs: Option<u16>,
+    binary_struct_def_instantiations: Option<u16>,
+    binary_function_defs: Option<u16>,
+    binary_field_handles: Option<u16>,
+    binary_field_instantiations: Option<u16>,
+    binary_friend_decls: Option<u16>,
 
     /// Maximum size of the `contents` part of an object, in bytes. Enforced by the Sui adapter when effects are produced.
     max_move_object_size: Option<u64>,
@@ -1284,6 +1300,20 @@ impl ProtocolConfig {
             max_pure_argument_size: Some(16 * 1024),
             max_programmable_tx_commands: Some(1024),
             move_binary_format_version: Some(6),
+            binary_module_handles: None,
+            binary_struct_handles: None,
+            binary_function_handles: None,
+            binary_function_instantiations: None,
+            binary_signatures: None,
+            binary_constant_pool: None,
+            binary_identifiers: None,
+            binary_address_identifiers: None,
+            binary_struct_defs: None,
+            binary_struct_def_instantiations: None,
+            binary_function_defs: None,
+            binary_field_handles: None,
+            binary_field_instantiations: None,
+            binary_friend_decls: None,
             max_move_object_size: Some(250 * 1024),
             max_move_package_size: Some(100 * 1024),
             max_publish_or_upgrade_per_ptb: None,
@@ -1902,6 +1932,21 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.include_consensus_digest_in_prologue = true;
                     }
+
+                    cfg.binary_module_handles = Some(u16::MAX);
+                    cfg.binary_struct_handles = Some(u16::MAX);
+                    cfg.binary_function_handles = Some(u16::MAX);
+                    cfg.binary_function_instantiations = Some(u16::MAX);
+                    cfg.binary_signatures = Some(u16::MAX);
+                    cfg.binary_constant_pool = Some(u16::MAX);
+                    cfg.binary_identifiers = Some(u16::MAX);
+                    cfg.binary_address_identifiers = Some(u16::MAX);
+                    cfg.binary_struct_defs = Some(u16::MAX);
+                    cfg.binary_struct_def_instantiations = Some(u16::MAX);
+                    cfg.binary_function_defs = Some(u16::MAX);
+                    cfg.binary_field_handles = Some(u16::MAX);
+                    cfg.binary_field_instantiations = Some(u16::MAX);
+                    cfg.binary_friend_decls = Some(u16::MAX);
                 }
                 // Use this template when making changes:
                 //

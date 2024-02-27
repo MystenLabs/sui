@@ -30,6 +30,7 @@ mod checked {
 
     use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::execution_config_utils::to_binary_config;
     use sui_types::{
         base_types::*,
         error::ExecutionError,
@@ -120,6 +121,7 @@ mod checked {
                 error_execution_state: false,
 
                 profiler_config: vm_profiler_config,
+                binary_config: to_binary_config(protocol_config),
             },
         )
         .map_err(|_| SuiError::ExecutionInvariantViolation)

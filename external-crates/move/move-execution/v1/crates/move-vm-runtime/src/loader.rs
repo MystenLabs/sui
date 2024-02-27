@@ -9,6 +9,7 @@ use crate::{
 };
 use move_binary_format::{
     access::{ModuleAccess, ScriptAccess},
+    binary_config::BinaryConfig,
     binary_views::BinaryIndexedView,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
@@ -1097,9 +1098,11 @@ impl Loader {
         // It is an invariant violation if they don't.
         let module = CompiledModule::deserialize_with_config(
             &bytes,
-            self.vm_config.max_binary_format_version,
-            self.vm_config()
-                .check_no_extraneous_bytes_during_deserialization,
+            &BinaryConfig::legacy(
+                self.vm_config.max_binary_format_version,
+                self.vm_config()
+                    .check_no_extraneous_bytes_during_deserialization,
+            ),
         )
         .map_err(|err| {
             let msg = format!("Deserialization error: {:?}", err);

@@ -8,8 +8,8 @@ use std::str::FromStr;
 use anyhow::{anyhow, bail};
 use fastcrypto::encoding::{Encoding, Hex};
 use move_binary_format::{
-    access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
-    file_format_common::VERSION_MAX,
+    access::ModuleAccess, binary_config::BinaryConfig, binary_views::BinaryIndexedView,
+    file_format::SignatureToken,
 };
 use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
@@ -814,7 +814,7 @@ pub fn resolve_move_function_args(
     combined_args_json: Vec<SuiJsonValue>,
 ) -> Result<Vec<(ResolvedCallArg, SignatureToken)>, anyhow::Error> {
     // Extract the expected function signature
-    let module = package.deserialize_module(&module_ident, VERSION_MAX, true)?;
+    let module = package.deserialize_module(&module_ident, &BinaryConfig::standard())?;
     let function_str = function.as_ident_str();
     let fdef = module
         .function_defs
