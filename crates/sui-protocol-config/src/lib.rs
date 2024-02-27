@@ -1933,20 +1933,23 @@ impl ProtocolConfig {
                         cfg.feature_flags.include_consensus_digest_in_prologue = true;
                     }
 
-                    cfg.binary_module_handles = Some(u16::MAX);
-                    cfg.binary_struct_handles = Some(u16::MAX);
-                    cfg.binary_function_handles = Some(u16::MAX);
-                    cfg.binary_function_instantiations = Some(u16::MAX);
-                    cfg.binary_signatures = Some(u16::MAX);
-                    cfg.binary_constant_pool = Some(u16::MAX);
-                    cfg.binary_identifiers = Some(u16::MAX);
-                    cfg.binary_address_identifiers = Some(u16::MAX);
-                    cfg.binary_struct_defs = Some(u16::MAX);
-                    cfg.binary_struct_def_instantiations = Some(u16::MAX);
-                    cfg.binary_function_defs = Some(u16::MAX);
-                    cfg.binary_field_handles = Some(u16::MAX);
-                    cfg.binary_field_instantiations = Some(u16::MAX);
-                    cfg.binary_friend_decls = Some(u16::MAX);
+                    cfg.binary_module_handles = Some(100);
+                    cfg.binary_struct_handles = Some(300);
+                    cfg.binary_function_handles = Some(1500);
+                    cfg.binary_function_instantiations = Some(750);
+                    cfg.binary_signatures = Some(1000);
+                    // constants and identifiers are proportional to the binary size,
+                    // and they vastly depend on the code, so we are leaving them
+                    // reasonably high
+                    cfg.binary_constant_pool = Some(4000);
+                    cfg.binary_identifiers = Some(10000);
+                    cfg.binary_address_identifiers = Some(100);
+                    cfg.binary_struct_defs = Some(200);
+                    cfg.binary_struct_def_instantiations = Some(100);
+                    cfg.binary_function_defs = Some(1000);
+                    cfg.binary_field_handles = Some(500);
+                    cfg.binary_field_instantiations = Some(250);
+                    cfg.binary_friend_decls = Some(100);
                 }
                 // Use this template when making changes:
                 //
