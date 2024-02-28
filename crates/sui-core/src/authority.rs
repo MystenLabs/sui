@@ -4715,23 +4715,6 @@ impl RandomnessRoundReceiver {
         let transaction = VerifiedExecutableTransaction::new_system(transaction, epoch);
         let digest = *transaction.digest();
 
-        // RandomnessStateUpdates are not sent through consensus, so we have to add the user
-        // signatures here once the digest becomes known.
-        let Ok(tables) = epoch_store.tables() else {
-            debug!("dropping randomness because current epoch is ending");
-            return;
-        };
-        let mut batch = tables.pending_execution.batch();
-        // TODO-DNS: don't call this, change checkpoint builder to special-case out unwritten user signatures for anything that's not UserCertificate
-        // and it doesn't need to go into pending execution
-        if let Err(e) =
-            epoch_store.finish_consensus_certificate_process_with_batch(&mut batch, &transaction)
-        {
-            warn!("dropping randomness: {e:?}");
-            return;
-        }
-        batch.write().expect("storage should not fail");
-
         // Send transaction to TransactionManager for execution.
         if let Err(e) = self
             .authority_state

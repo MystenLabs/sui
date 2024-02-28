@@ -1048,7 +1048,8 @@ impl CheckpointBuilder {
             .get_cache_reader()
             .get_transactions_and_serialized_sizes(&all_digests)?;
         let mut all_effects_and_transaction_sizes = Vec::with_capacity(all_effects.len());
-        let mut transaction_keys = Vec::new();
+        let mut transactions = Vec::with_capacity(all_effects.len());
+        let mut transaction_keys = Vec::with_capacity(all_effects.len());
         {
             let _guard = monitored_scope("CheckpointBuilder::wait_for_transactions_sequenced");
             debug!(
@@ -1076,6 +1077,7 @@ impl CheckpointBuilder {
                         ConsensusTransactionKey::Certificate(*effects.transaction_digest()),
                     ));
                 }
+                transactions.push(transaction);
                 all_effects_and_transaction_sizes.push((effects, size));
             }
 
@@ -1086,7 +1088,7 @@ impl CheckpointBuilder {
 
         let signatures = self
             .epoch_store
-            .user_signatures_for_checkpoint(&all_digests)?;
+            .user_signatures_for_checkpoint(&transactions, &all_digests)?;
         debug!(
             ?last_checkpoint_seq,
             "Received {} checkpoint user signatures from consensus",

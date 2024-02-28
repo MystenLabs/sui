@@ -1673,22 +1673,36 @@ impl AuthorityPerEpochStore {
     /// Note: caller usually need to call consensus_message_processed_notify before this call
     pub fn user_signatures_for_checkpoint(
         &self,
+        transactions: &[VerifiedTransaction],
         digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Vec<GenericSignature>>> {
+        assert_eq!(transactions.len(), digests.len());
         let signatures = self
             .tables()?
             .user_signatures_for_checkpoints
             .multi_get(digests)?;
         let mut result = Vec::with_capacity(digests.len());
-        for (signatures, digest) in signatures.into_iter().zip(digests.iter()) {
-            let Some(signatures) = signatures else {
-                return Err(SuiError::from(
-                    format!(
-                        "Can not find user signature for checkpoint for transaction {:?}",
-                        digest
-                    )
-                    .as_str(),
-                ));
+        for (signatures, transaction) in signatures.into_iter().zip(transactions.iter()) {
+            let signatures = if let Some(signatures) = signatures {
+                signatures
+            } else {
+                if matches!(
+                    transaction.inner().transaction_data().kind(),
+                    TransactionKind::RandomnessStateUpdate(_)
+                ) {
+                    // RandomnessStateUpdate transactions don't go through consensus, but
+                    // have system-generated signatures that are guaranteed to be the same,
+                    // so we can just pull it from the transaction.
+                    transaction.tx_signatures().to_vec()
+                } else {
+                    return Err(SuiError::from(
+                        format!(
+                            "Can not find user signature for checkpoint for transaction {:?}",
+                            transaction.key()
+                        )
+                        .as_str(),
+                    ));
+                }
             };
             result.push(signatures);
         }
