@@ -287,7 +287,7 @@ impl<'a> Compiler<'a> {
             let Some(current_dir) = std::env::current_dir().ok() else {
                 return path;
             };
-            let Ok(current_dir_vfs) = vsf_root.join(&current_dir.to_string_lossy()) else {
+            let Ok(current_dir_vfs) = vsf_root.join(current_dir.to_string_lossy()) else {
                 return path;
             };
             let Some(new_path) = diff_paths(path.to_string(), current_dir_vfs.as_str()) else {
