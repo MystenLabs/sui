@@ -116,6 +116,9 @@ impl<A: Clone> QuorumDriver<A> {
                 debug!(?task, "Enqueued task.");
                 self.metrics.current_requests_in_flight.inc();
                 self.metrics.total_enqueued.inc();
+                if task.retry_times == 1 {
+                    self.metrics.current_transactions_in_retry.inc();
+                }
             })
             .map_err(|e| SuiError::QuorumDriverCommunicationError {
                 error: e.to_string(),
@@ -199,6 +202,9 @@ impl<A: Clone> QuorumDriver<A> {
                 Err((*tx_digest, err.clone()))
             }
         };
+        if total_attempts > 1 {
+            self.metrics.current_transactions_in_retry.dec();
+        }
         // On fullnode we expect the send to always succeed because TransactionOrchestrator should be subscribing
         // to this queue all the time. However the if QuorumDriver is used elsewhere log may be noisy.
         if let Err(err) = self.effects_subscribe_sender.send(effects_queue_result) {

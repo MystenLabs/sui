@@ -5,7 +5,7 @@
 use crate::{
     diag,
     diagnostics::{codes::WarningFilter, Diagnostic, WarningFilters},
-    editions::{create_feature_error, FeatureGate, Flavor},
+    editions::{self, create_feature_error, FeatureGate, Flavor},
     expansion::{
         alias_map_builder::{
             AliasEntry, AliasMapBuilder, NameSpace, ParserExplicitUseFun, UseFunsBuilder,
@@ -206,14 +206,19 @@ impl<'env, 'map> Context<'env, 'map> {
     }
 
     pub fn spec_deprecated(&mut self, loc: Loc, is_error: bool) {
-        self.env().add_diag(diag!(
+        let diag = self.spec_deprecated_diag(loc, is_error);
+        self.env().add_diag(diag);
+    }
+
+    pub fn spec_deprecated_diag(&mut self, loc: Loc, is_error: bool) -> Diagnostic {
+        diag!(
             if is_error {
                 Uncategorized::DeprecatedSpecItem
             } else {
                 Uncategorized::DeprecatedWillBeRemoved
             },
             (loc, "Specification blocks are deprecated")
-        ));
+        )
     }
 }
 
@@ -827,7 +832,7 @@ fn check_visibility_modifiers(
             E::Visibility::Package(loc) => {
                 context
                     .env()
-                    .check_feature(FeatureGate::PublicPackage, package_name, loc);
+                    .check_feature(package_name, FeatureGate::PublicPackage, loc);
                 public_package_usage = Some(loc);
             }
             _ => (),
@@ -2186,7 +2191,7 @@ fn use_(
             method,
         } => {
             let pkg = context.current_package;
-            context.env().check_feature(FeatureGate::DotCall, pkg, loc);
+            context.env().check_feature(pkg, FeatureGate::DotCall, loc);
             let is_public = match visibility {
                 P::Visibility::Public(vis_loc) => Some(vis_loc),
                 P::Visibility::Internal => None,
@@ -2670,7 +2675,7 @@ fn function_(
         let current_package = context.current_package;
         context
             .env()
-            .check_feature(FeatureGate::MacroFuns, current_package, macro_loc);
+            .check_feature(current_package, FeatureGate::MacroFuns, macro_loc);
     }
     let visibility = visibility(pvisibility);
     let signature = function_signature(context, macro_, psignature);
@@ -2911,15 +2916,19 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
     use E::Exp_ as EE;
     use P::Exp_ as PE;
     let sp!(loc, pe_) = *pe;
-    let e_ = match pe_ {
-        PE::Unit => EE::Unit { trailing: false },
-        PE::Value(pv) => match value(&mut context.defn_context, pv) {
-            Some(v) => EE::Value(v),
-            None => {
+    macro_rules! unwrap_or_error_exp {
+        ($opt_exp:expr) => {
+            if let Some(value) = $opt_exp {
+                value
+            } else {
                 assert!(context.env().has_errors());
                 EE::UnresolvedError
             }
-        },
+        };
+    }
+    let e_ = match pe_ {
+        PE::Unit => EE::Unit { trailing: false },
+        PE::Value(pv) => unwrap_or_error_exp!(value(&mut context.defn_context, pv).map(EE::Value)),
         PE::Name(_, Some(_)) => {
             let msg = "Expected name to be followed by a brace-enclosed list of field expressions \
                 or a parenthesized list of arguments for a function call";
@@ -2931,25 +2940,13 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         PE::Name(pn, ptys_opt) => {
             let en_opt = context.name_access_chain_to_module_access(Access::Term, pn);
             let tys_opt = optional_types(context, ptys_opt);
-            match en_opt {
-                Some(en) => EE::Name(en, tys_opt),
-                None => {
-                    assert!(context.env().has_errors());
-                    EE::UnresolvedError
-                }
-            }
+            unwrap_or_error_exp!(en_opt.map(|en| EE::Name(en, tys_opt)))
         }
         PE::Call(pn, is_macro, ptys_opt, sp!(rloc, prs)) => {
             let tys_opt = optional_types(context, ptys_opt);
             let ers = sp(rloc, exps(context, prs));
             let en_opt = context.name_access_chain_to_module_access(Access::ApplyPositional, pn);
-            match en_opt {
-                Some(en) => EE::Call(en, is_macro, tys_opt, ers),
-                None => {
-                    assert!(context.env().has_errors());
-                    EE::UnresolvedError
-                }
-            }
+            unwrap_or_error_exp!(en_opt.map(|en| EE::Call(en, is_macro, tys_opt, ers)))
         }
         PE::Pack(pn, ptys_opt, pfields) => {
             let en_opt = context.name_access_chain_to_module_access(Access::ApplyNamed, pn);
@@ -2959,13 +2956,7 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 .map(|(f, pe)| (f, *exp(context, Box::new(pe))))
                 .collect();
             let efields = named_fields(context, loc, "construction", "argument", efields_vec);
-            match en_opt {
-                Some(en) => EE::Pack(en, tys_opt, efields),
-                None => {
-                    assert!(context.env().has_errors());
-                    EE::UnresolvedError
-                }
-            }
+            unwrap_or_error_exp!(en_opt.map(|en| EE::Pack(en, tys_opt, efields)))
         }
         PE::Vector(vec_loc, ptys_opt, sp!(args_loc, pargs_)) => {
             let tys_opt = optional_types(context, ptys_opt);
@@ -3077,11 +3068,46 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 EE::UnresolvedError
             }
         },
+
+        pdotted_ @ PE::Index(_, _) => {
+            let cur_pkg = context.current_package;
+            let supports_paths = context
+                .env()
+                .supports_feature(cur_pkg, FeatureGate::Move2024Paths);
+            let supports_syntax_methods = context
+                .env()
+                .supports_feature(cur_pkg, FeatureGate::SyntaxMethods);
+            if !supports_paths || !supports_syntax_methods {
+                let mut diag = context.spec_deprecated_diag(loc, /* is_error */ true);
+                let valid_editions =
+                    editions::valid_editions_for_feature(FeatureGate::SyntaxMethods)
+                        .into_iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                diag.add_note(format!(
+                    "If this was intended to be a 'syntax' index call, \
+                    consider updating your Move edition to '{valid_editions}'"
+                ));
+                diag.add_note(editions::UPGRADE_NOTE);
+                context.env().add_diag(diag);
+                EE::UnresolvedError
+            } else {
+                match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
+                    Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, edotted),
+                    None => {
+                        assert!(context.env().has_errors());
+                        EE::UnresolvedError
+                    }
+                }
+            }
+        }
+
         PE::DotCall(pdotted, n, is_macro, ptys_opt, sp!(rloc, prs)) => {
             match exp_dotted(context, pdotted) {
                 Some(edotted) => {
                     let pkg = context.current_package;
-                    context.env().check_feature(FeatureGate::DotCall, pkg, loc);
+                    context.env().check_feature(pkg, FeatureGate::DotCall, loc);
                     let tys_opt = optional_types(context, ptys_opt);
                     let ers = sp(rloc, exps(context, prs));
                     EE::MethodCall(edotted, n, is_macro, tys_opt, ers)
@@ -3093,11 +3119,6 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
             }
         }
         PE::Cast(e, ty) => EE::Cast(exp(context, e), type_(context, ty)),
-        PE::Index(..) => {
-            // TODO index syntax will be added
-            context.spec_deprecated(loc, /* is_error */ true);
-            EE::UnresolvedError
-        }
         PE::Annotate(e, ty) => EE::Annotate(exp(context, e), type_(context, ty)),
         PE::Spec(_) => {
             context.spec_deprecated(loc, /* is_error */ false);
@@ -3202,11 +3223,11 @@ fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: Box<P::Exp>) ->
                 return None;
             }
         }
-        E::ExpDotted_::Dot(_, _) => {
+        E::ExpDotted_::Dot(_, _) | E::ExpDotted_::Index(_, _) => {
             let current_package = context.current_package;
             context
                 .env()
-                .check_feature(FeatureGate::Move2024Paths, current_package, cloc);
+                .check_feature(current_package, FeatureGate::Move2024Paths, cloc);
         }
     }
     Some(match case {
@@ -3223,6 +3244,21 @@ fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpD
         PE::Dot(plhs, field) => {
             let lhs = exp_dotted(context, plhs)?;
             EE::Dot(lhs, field)
+        }
+        PE::Index(plhs, sp!(argloc, args)) => {
+            let cur_pkg = context.current_package;
+            context
+                .env()
+                .check_feature(cur_pkg, FeatureGate::Move2024Paths, loc);
+            context
+                .env()
+                .check_feature(cur_pkg, FeatureGate::SyntaxMethods, loc);
+            let lhs = exp_dotted(context, plhs)?;
+            let args = args
+                .into_iter()
+                .map(|arg| *exp(context, Box::new(arg)))
+                .collect::<Vec<_>>();
+            EE::Index(lhs, sp(argloc, args))
         }
         pe_ => EE::Exp(exp(context, Box::new(sp(loc, pe_)))),
     };
@@ -3437,6 +3473,16 @@ fn lvalues(context: &mut Context, e: Box<P::Exp>) -> Option<LValue> {
             let dotted = exp_dotted(context, Box::new(sp(loc, pdotted_)))?;
             L::FieldMutate(dotted)
         }
+        PE::Index(_, _) => {
+            context.env().add_diag(diag!(
+                Syntax::InvalidLValue,
+                (
+                    loc,
+                    "Index syntax it not yet supported in left-hand positions"
+                )
+            ));
+            return None;
+        }
         _ => L::Assigns(sp(loc, vec![assign(context, sp(loc, e_))?])),
     };
     Some(al)
@@ -3490,7 +3536,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
             let pkg = context.current_package;
             context
                 .env()
-                .check_feature(FeatureGate::PositionalFields, pkg, loc);
+                .check_feature(pkg, FeatureGate::PositionalFields, loc);
             let en = context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
             let tys_opt = optional_types(context, ptys_opt);
             let pfields: Option<_> = exprs.into_iter().map(|e| assign(context, e)).collect();

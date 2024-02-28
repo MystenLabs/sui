@@ -14,17 +14,17 @@ module test::object_basics {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         value: u64,
     }
 
-    struct Wrapper has key {
+    public struct Wrapper has key {
         id: UID,
         o: Object
     }
 
-    struct NewValueEvent has copy, drop {
+    public struct NewValueEvent has copy, drop {
         new_value: u64
     }
 
@@ -35,7 +35,7 @@ module test::object_basics {
         )
     }
 
-    public entry fun transfer(o: Object, recipient: address) {
+    public entry fun transfer_(o: Object, recipient: address) {
         transfer::transfer(o, recipient)
     }
 

@@ -6,13 +6,36 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use sui_graphql_rpc::commands::Command;
-use sui_graphql_rpc::config::{ConnectionConfig, ServerConfig, ServiceConfig};
-use sui_graphql_rpc::config::{Ide, TxExecFullNodeConfig};
+use sui_graphql_rpc::config::{
+    ConnectionConfig, Ide, ServerConfig, ServiceConfig, TxExecFullNodeConfig, Version,
+};
 use sui_graphql_rpc::server::builder::export_schema;
 use sui_graphql_rpc::server::graphiql_server::{
     start_graphiql_server, start_graphiql_server_from_cfg_path,
 };
 use tracing::error;
+
+// WARNING!!!
+//
+// Do not move or use similar logic to generate git revision information outside of a binary entry
+// point (e.g. main.rs). Placing the below logic into a library can result in unnecessary builds.
+const GIT_REVISION: &str = {
+    if let Some(revision) = option_env!("GIT_REVISION") {
+        revision
+    } else {
+        git_version::git_version!(
+            args = ["--always", "--abbrev=12", "--dirty", "--exclude", "*"],
+            fallback = "DIRTY"
+        )
+    }
+};
+
+// VERSION mimics what other sui binaries use for the same const
+static VERSION: Version = Version(const_str::concat!(
+    env!("CARGO_PKG_VERSION"),
+    "-",
+    GIT_REVISION
+));
 
 #[tokio::main]
 async fn main() {
@@ -89,11 +112,13 @@ async fn main() {
                 ..ServerConfig::default()
             };
 
-            start_graphiql_server(&server_config).await.unwrap();
+            start_graphiql_server(&server_config, &VERSION)
+                .await
+                .unwrap();
         }
         Command::FromConfig { path } => {
             println!("Starting server...");
-            start_graphiql_server_from_cfg_path(path.to_str().unwrap())
+            start_graphiql_server_from_cfg_path(path.to_str().unwrap(), &VERSION)
                 .await
                 .map_err(|x| {
                     error!("Error: {:?}", x);

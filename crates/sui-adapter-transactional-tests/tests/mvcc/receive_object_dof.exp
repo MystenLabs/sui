@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 6-61:
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 10548800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 10533600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 63-63:
 created: object(2,0), object(2,1), object(2,2), object(2,3)
@@ -14,89 +14,89 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 7273200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3 'view-object'. lines 65-65:
-Owner: Object ID: ( fake(2,2) )
+Owner: Object ID: ( fake(2,1) )
 Version: 2
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,1)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,3)}}
 
 task 4 'view-object'. lines 67-67:
 Owner: Object ID: ( fake(2,0) )
 Version: 2
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}, value: 0u64}
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}, value: 0u64}
 
 task 5 'view-object'. lines 69-69:
-Owner: Account Address ( fake(2,3) )
+Owner: Account Address ( fake(2,2) )
 Version: 2
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, value: 0u64}
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}, value: 0u64}
 
 task 6 'view-object'. lines 71-71:
 Owner: Account Address ( A )
 Version: 2
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}, value: 0u64}
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, value: 0u64}
 
 task 7 'run'. lines 73-73:
 created: object(7,0)
-mutated: object(0,0), object(2,2), object(2,3)
+mutated: object(0,0), object(2,1), object(2,2)
 gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
 
 task 8 'view-object'. lines 75-77:
-Owner: Object ID: ( fake(2,2) )
+Owner: Object ID: ( fake(2,1) )
 Version: 2
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,1)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,3)}}
 
 task 9 'view-object'. lines 78-78:
 Owner: Object ID: ( fake(2,0) )
 Version: 2
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}, value: 0u64}
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}, value: 0u64}
 
 task 10 'view-object'. lines 80-80:
 Owner: Object ID: ( fake(7,0) )
 Version: 3
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, value: 0u64}
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}, value: 0u64}
 
 task 11 'view-object'. lines 82-82:
 Owner: Account Address ( A )
 Version: 3
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}, value: 0u64}
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, value: 0u64}
 
 task 12 'programmable'. lines 84-85:
 mutated: object(0,0), object(2,1), object(2,2), object(2,3)
 gas summary: computation_cost: 1000000, storage_cost: 4818400,  storage_rebate: 4770216, non_refundable_storage_fee: 48184
 
 task 13 'view-object'. lines 87-89:
-Owner: Object ID: ( fake(2,2) )
+Owner: Object ID: ( fake(2,1) )
 Version: 2
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,1)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(2,3)}}
 
 task 14 'view-object'. lines 90-90:
 Owner: Object ID: ( fake(2,0) )
 Version: 4
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}, value: 3u64}
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}, value: 3u64}
 
 task 15 'view-object'. lines 92-92:
 Owner: Object ID: ( fake(7,0) )
 Version: 4
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, value: 2u64}
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}, value: 2u64}
 
 task 16 'view-object'. lines 94-94:
 Owner: Account Address ( A )
 Version: 4
-Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}, value: 1u64}
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}, value: 1u64}
 
 task 17 'programmable'. lines 96-99:
-mutated: object(0,0), object(2,3)
-deleted: object(2,0), object(2,1)
+mutated: object(0,0), object(2,2)
+deleted: object(2,0), object(2,3)
 gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 5936436, non_refundable_storage_fee: 59964
 
 task 18 'programmable'. lines 101-102:
-mutated: object(_), object(2,3)
+mutated: object(_), object(2,2)
 gas summary: computation_cost: 500000, storage_cost: 2264800,  storage_rebate: 1264032, non_refundable_storage_fee: 12768
 
 task 19 'programmable'. lines 104-105:
-mutated: object(_), object(2,3)
+mutated: object(_), object(2,2)
 gas summary: computation_cost: 500000, storage_cost: 2264800,  storage_rebate: 1264032, non_refundable_storage_fee: 12768
 
 task 20 'programmable'. lines 107-110:
-mutated: object(_), object(2,3)
+mutated: object(_), object(2,2)
 gas summary: computation_cost: 500000, storage_cost: 2264800,  storage_rebate: 1264032, non_refundable_storage_fee: 12768
 
 task 21 'programmable'. lines 112-113:

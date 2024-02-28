@@ -17,6 +17,10 @@ use tokio::time::sleep;
 use tracing::{debug, info};
 use twox_hash::XxHash64;
 
+#[cfg(test)]
+#[path = "unit_tests/overload_monitor_tests.rs"]
+pub mod overload_monitor_tests;
+
 #[derive(Default)]
 pub struct AuthorityOverloadInfo {
     /// Whether the authority is overloaded.
@@ -442,6 +446,20 @@ mod tests {
         assert!(!check_authority_overload(&authority, &config));
     }
 
+    // Creates an AuthorityState and starts an overload monitor that monitors its metrics.
+    async fn start_overload_monitor() -> (Arc<AuthorityState>, JoinHandle<()>) {
+        let overload_config = AuthorityOverloadConfig::default();
+        let state = TestAuthorityBuilder::new()
+            .with_authority_overload_config(overload_config.clone())
+            .build()
+            .await;
+        let authority_state = Arc::downgrade(&state);
+        let monitor_handle = tokio::spawn(async move {
+            overload_monitor(authority_state, overload_config).await;
+        });
+        (state, monitor_handle)
+    }
+
     // Starts a load generator that generates a steady workload, and also allow it to accept
     // burst of request through `burst_rx`.
     // Request tracking is done by the overload monitor inside `authority`.
@@ -565,7 +583,7 @@ mod tests {
         min_dropping_rate: f64,
         max_dropping_rate: f64,
     ) {
-        let state = TestAuthorityBuilder::new().build().await;
+        let (state, monitor_handle) = start_overload_monitor().await;
 
         let (tx, rx) = unbounded_channel();
         let (_burst_tx, burst_rx) = unbounded_channel();
@@ -593,6 +611,9 @@ mod tests {
             / total_requests.load(Ordering::SeqCst) as f64;
         assert!(min_dropping_rate <= dropped_ratio);
         assert!(dropped_ratio <= max_dropping_rate);
+
+        monitor_handle.abort();
+        let _ = monitor_handle.await;
     }
 
     // Tests that when request generation rate is slower than execution rate, no requests should be dropped.
@@ -624,7 +645,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     pub async fn test_workload_single_spike() {
         telemetry_subscribers::init_for_testing();
-        let state = TestAuthorityBuilder::new().build().await;
+        let (state, monitor_handle) = start_overload_monitor().await;
 
         let (tx, rx) = unbounded_channel();
         let (burst_tx, burst_rx) = unbounded_channel();
@@ -653,6 +674,9 @@ mod tests {
 
         // No requests should be dropped.
         assert_eq!(dropped_requests.load(Ordering::SeqCst), 0);
+
+        monitor_handle.abort();
+        let _ = monitor_handle.await;
     }
 
     // Tests that when there are regular spikes that keep queueing latency consistently high,
@@ -660,7 +684,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     pub async fn test_workload_consistent_short_spike() {
         telemetry_subscribers::init_for_testing();
-        let state = TestAuthorityBuilder::new().build().await;
+        let (state, monitor_handle) = start_overload_monitor().await;
 
         let (tx, rx) = unbounded_channel();
         let (burst_tx, burst_rx) = unbounded_channel();
@@ -695,6 +719,9 @@ mod tests {
         // execution rate.
         assert!(0.4 < dropped_ratio);
         assert!(dropped_ratio < 0.6);
+
+        monitor_handle.abort();
+        let _ = monitor_handle.await;
     }
 
     // Tests that the ratio of rejected transactions created randomly matches load shedding percentage in

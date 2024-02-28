@@ -38,33 +38,13 @@ async fn main() -> Result<(), anyhow::Error> {
 
 ### Building documentation locally
 
-You can also build the documentation locally. To do so, open a Terminal or Console to the `sui/crates/sui-sdk` directory:
+You can also build the documentation locally. To do so,
 
-1. Use the `rustup toolchain` command to install the `nightly` release channel.
+1. Clone the `sui` repo locally. Open a Terminal or Console and go to the `sui/crates/sui-sdk` directory.
 
-   ```rust
-   rustup toolchain install nightly
-   ```
+1. Run `cargo doc` to build the documentation into the `sui/target` directory. Take note of location of the generated file from the last line of the output, for example `Generated /Users/foo/sui/target/doc/sui_sdk/index.html`.
 
-1. Use the `rustup override` command to set the `nightly` release channel as active.
-
-   ```rust
-   rustup override set nightly
-   ```
-
-1. Use `cargo doc` with the following `RUSTDOCFLAGS` set to build the documentation into the `sui/target` directory.  
-
-   ```rust
-   RUSTDOCFLAGS="--enable-index-page -Zunstable-options" cargo doc --no-deps
-   ```
-
-1. Open the `sui/target/doc/sui_sdk/index.html` file with a browser, like Chrome.
-
-1. After building the docs, use the `rustup override` command again to return to the default toolchain.
-
-   ```rust
-   rustup override unset
-   ```
+1. Use a web browser, like Chrome, to open the `.../target/doc/sui_sdk/index.html` file at the location your console reported in the previous step.
 
 ## Rust SDK examples
 

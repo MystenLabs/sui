@@ -3,6 +3,7 @@
 
 use move_binary_format::errors::VMError;
 use move_core_types::account_address::AccountAddress;
+use sui_types::TypeTag;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -21,6 +22,16 @@ pub enum Error {
 
     #[error("Package has no modules: {0}")]
     EmptyPackage(AccountAddress),
+
+    #[error("Function not found: {0}::{1}::{2}")]
+    FunctionNotFound(AccountAddress, String, String),
+
+    #[error(
+        "Conflicting types for input {0}: {} and {}",
+        .1.to_canonical_display(/* with_prefix */ true),
+        .2.to_canonical_display(/* with_prefix */ true),
+    )]
+    InputTypeConflict(u16, TypeTag, TypeTag),
 
     #[error("Linkage not found for package: {0}")]
     LinkageNotFound(AccountAddress),

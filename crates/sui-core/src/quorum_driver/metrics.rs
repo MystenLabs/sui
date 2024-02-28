@@ -35,6 +35,7 @@ pub struct QuorumDriverMetrics {
     pub(crate) total_times_conflicting_transaction_already_finalized_when_retrying: IntCounter,
     pub(crate) total_retryable_overload_errors: IntCounter,
     pub(crate) transaction_retry_count: Histogram,
+    pub(crate) current_transactions_in_retry: IntGauge,
 
     pub(crate) settlement_finality_latency: HistogramVec,
 }
@@ -113,6 +114,12 @@ impl QuorumDriverMetrics {
                 "Histogram of transaction retry count",
                 registry,
             ),
+            current_transactions_in_retry: register_int_gauge_with_registry!(
+                "current_transactions_in_retry",
+                "Current number of transactions in retry loop in QuorumDriver",
+                registry,
+            )
+            .unwrap(),
             settlement_finality_latency: register_histogram_vec_with_registry!(
                 "quorum_driver_settlement_finality_latency",
                 "Settlement finality latency observed from quorum driver",

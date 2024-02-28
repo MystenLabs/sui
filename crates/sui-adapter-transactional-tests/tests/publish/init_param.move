@@ -11,7 +11,7 @@ module Test::M1 {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         value: u64,
     }

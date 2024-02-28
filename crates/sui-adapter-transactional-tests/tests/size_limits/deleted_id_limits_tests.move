@@ -15,8 +15,8 @@ module Test::M1 {
     use std::vector;
 
     public entry fun delete_n_ids(n: u64, ctx: &mut TxContext) {
-        let v: vector<UID> = vector::empty();
-        let i = 0;
+        let mut v: vector<UID> = vector::empty();
+        let mut i = 0;
         while (i < n) {
             let id = object::new(ctx);
             vector::push_back(&mut v, id);

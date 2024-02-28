@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::progress_store::{ExecutorProgress, ProgressStore, ProgressStoreWrapper};
+use crate::progress_store::{
+    ExecutorProgress, ProgressStore, ProgressStoreWrapper, ShimProgressStore,
+};
 use crate::reader::CheckpointReader;
 use crate::worker_pool::WorkerPool;
 use crate::DataIngestionMetrics;
@@ -9,6 +11,7 @@ use crate::Worker;
 use anyhow::Result;
 use futures::Future;
 use mysten_metrics::spawn_monitored_task;
+use prometheus::Registry;
 use std::path::PathBuf;
 use std::pin::Pin;
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -98,4 +101,31 @@ impl<P: ProgressStore> IndexerExecutor<P> {
         }
         Ok(self.progress_store.stats())
     }
+}
+
+pub async fn setup_single_workflow<W: Worker + 'static>(
+    worker: W,
+    remote_store_url: String,
+    initial_checkpoint_number: CheckpointSequenceNumber,
+    concurrency: usize,
+) -> Result<(
+    impl Future<Output = Result<ExecutorProgress>>,
+    oneshot::Sender<()>,
+)> {
+    let (exit_sender, exit_receiver) = oneshot::channel();
+    let metrics = DataIngestionMetrics::new(&Registry::new());
+    let progress_store = ShimProgressStore(initial_checkpoint_number);
+    let mut executor = IndexerExecutor::new(progress_store, 1, metrics);
+    let worker_pool = WorkerPool::new(worker, "workflow".to_string(), concurrency);
+    executor.register(worker_pool).await?;
+    Ok((
+        executor.run(
+            tempfile::tempdir()?.into_path(),
+            Some(remote_store_url),
+            vec![],
+            100,
+            exit_receiver,
+        ),
+        exit_sender,
+    ))
 }

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod client_commands;
+pub mod client_ptb;
 pub mod console;
 pub mod fire_drill;
 pub mod genesis_ceremony;

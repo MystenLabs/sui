@@ -1,0 +1,22 @@
+
+# Out-of-bounds integers
+--assign a 0xfffu8
+--assign b 0xffffffffu16
+--assign c 0xfffffffffffffu32
+--assign d 0xffffffffffffffffffffffffffffffu64
+--assign e 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu128
+--assign f 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu256
+
+# invalid integer types 
+--make-move-vec <string> ['foo']
+--make-move-vec <String> ['foo']
+--make-move-vec <Bool> [true, false]
+--make-move-vec <i8> [0]
+--make-move-vec <i16> [0]
+--make-move-vec <i32> [0]
+--make-move-vec <i64> [0]
+--make-move-vec <i128> [0]
+--make-move-vec <i256> [0]
+--make-move-vec <Vector<u8>> [vector[0]]
+--make-move-vec <vector<U256>> [vector[0]]
+--make-move-vec <vector<i256>> [vector[0]]

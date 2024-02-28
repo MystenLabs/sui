@@ -83,6 +83,7 @@ use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::execution_cache::{ExecutionCache, ExecutionCacheReconfigAPI};
 use sui_core::module_cache_metrics::ResolverMetrics;
+use sui_core::overload_monitor::overload_monitor;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
@@ -99,6 +100,7 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::JsonRpcServerBuilder;
+use sui_macros::fail_point;
 use sui_macros::{fail_point_async, replay_log};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
@@ -134,6 +136,7 @@ pub mod metrics;
 
 pub struct ValidatorComponents {
     validator_server_handle: JoinHandle<Result<()>>,
+    validator_overload_monitor_handle: Option<JoinHandle<()>>,
     consensus_manager: ConsensusManager,
     consensus_epoch_data_remover: EpochDataRemover,
     consensus_adapter: Arc<ConsensusAdapter>,
@@ -765,7 +768,12 @@ impl SuiNode {
         info!("SuiNode started!");
         let node = Arc::new(node);
         let node_copy = node.clone();
-        spawn_monitored_task!(async move { Self::monitor_reconfiguration(node_copy).await });
+        spawn_monitored_task!(async move {
+            let result = Self::monitor_reconfiguration(node_copy).await;
+            if let Err(error) = result {
+                warn!("Reconfiguration finished with error {:?}", error);
+            }
+        });
 
         Ok(node)
     }
@@ -1132,6 +1140,24 @@ impl SuiNode {
         )
         .await?;
 
+        // Starts an overload monitor that monitors the execution of the authority.
+        // Don't start the overload monitor when max_load_shedding_percentage is 0.
+        let validator_overload_monitor_handle = if config
+            .authority_overload_config
+            .max_load_shedding_percentage
+            > 0
+        {
+            let authority_state = Arc::downgrade(&state);
+            let overload_config = config.authority_overload_config.clone();
+            fail_point!("starting_overload_monitor");
+            Some(spawn_monitored_task!(overload_monitor(
+                authority_state,
+                overload_config,
+            )))
+        } else {
+            None
+        };
+
         Self::start_epoch_specific_validator_components(
             config,
             state.clone(),
@@ -1144,6 +1170,7 @@ impl SuiNode {
             consensus_epoch_data_remover,
             accumulator,
             validator_server_handle,
+            validator_overload_monitor_handle,
             checkpoint_metrics,
             sui_node_metrics,
             sui_tx_validator_metrics,
@@ -1163,6 +1190,7 @@ impl SuiNode {
         consensus_epoch_data_remover: EpochDataRemover,
         accumulator: Arc<StateAccumulator>,
         validator_server_handle: JoinHandle<Result<()>>,
+        validator_overload_monitor_handle: Option<JoinHandle<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
@@ -1250,6 +1278,7 @@ impl SuiNode {
 
         Ok(ValidatorComponents {
             validator_server_handle,
+            validator_overload_monitor_handle,
             consensus_manager,
             consensus_epoch_data_remover,
             consensus_adapter,
@@ -1535,6 +1564,7 @@ impl SuiNode {
             // in the new epoch.
             let new_validator_components = if let Some(ValidatorComponents {
                 validator_server_handle,
+                validator_overload_monitor_handle,
                 consensus_manager,
                 consensus_epoch_data_remover,
                 consensus_adapter,
@@ -1578,6 +1608,7 @@ impl SuiNode {
                             consensus_epoch_data_remover,
                             self.accumulator.clone(),
                             validator_server_handle,
+                            validator_overload_monitor_handle,
                             checkpoint_metrics,
                             self.metrics.clone(),
                             sui_tx_validator_metrics,

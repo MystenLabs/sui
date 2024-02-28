@@ -12,11 +12,11 @@ module test::m {
     use sui::tx_context::TxContext;
     use sui::dynamic_field as field;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
     }
 
-    struct B has key, store {
+    public struct B has key, store {
         id: UID,
     }
 
@@ -27,7 +27,7 @@ module test::m {
     }
 
     public fun b(ctx: &mut TxContext): B {
-        let b = B { id: object::new(ctx) };
+        let mut b = B { id: object::new(ctx) };
         field::add(&mut b.id, KEY, 0);
         b
 

@@ -1371,7 +1371,14 @@ where
         View::Consistent
     };
 
-    build_objects_query(view, lhs, rhs, page, move |query| filter.apply(query))
+    build_objects_query(
+        view,
+        lhs,
+        rhs,
+        page,
+        move |query| filter.apply(query),
+        move |newer| newer,
+    )
 }
 
 #[cfg(test)]

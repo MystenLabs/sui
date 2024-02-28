@@ -51,7 +51,7 @@ async fn read_and_contain_blocks(
         VerifiedBlock::new_for_test(TestBlock::new(1, 2).build()),
         VerifiedBlock::new_for_test(TestBlock::new(2, 3).build()),
     ];
-    store.write(written_blocks.clone(), vec![]).unwrap();
+    store.write(written_blocks.clone(), vec![], vec![]).unwrap();
 
     {
         let refs = vec![written_blocks[0].reference()];
@@ -118,7 +118,7 @@ async fn scan_blocks(
         VerifiedBlock::new_for_test(TestBlock::new(13, 2).build()),
         VerifiedBlock::new_for_test(TestBlock::new(13, 1).build()),
     ];
-    store.write(written_blocks.clone(), vec![]).unwrap();
+    store.write(written_blocks.clone(), vec![], vec![]).unwrap();
 
     {
         let scanned_blocks = store
@@ -144,7 +144,9 @@ async fn scan_blocks(
         VerifiedBlock::new_for_test(TestBlock::new(15, 1).build()),
         VerifiedBlock::new_for_test(TestBlock::new(16, 3).build()),
     ];
-    store.write(additional_blocks.clone(), vec![]).unwrap();
+    store
+        .write(additional_blocks.clone(), vec![], vec![])
+        .unwrap();
 
     {
         let scanned_blocks = store
@@ -216,7 +218,9 @@ async fn read_and_scan_commits(
             ..Default::default()
         },
     ];
-    store.write(vec![], written_commits.clone()).unwrap();
+    store
+        .write(vec![], written_commits.clone(), vec![])
+        .unwrap();
 
     {
         let last_commit = store

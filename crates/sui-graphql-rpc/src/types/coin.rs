@@ -381,9 +381,14 @@ fn coins_query(
     rhs: i64,
     page: &Page<object::Cursor>,
 ) -> RawQuery {
-    build_objects_query(View::Consistent, lhs, rhs, page, move |query| {
-        apply_filter(query, &coin_type, owner)
-    })
+    build_objects_query(
+        View::Consistent,
+        lhs,
+        rhs,
+        page,
+        move |query| apply_filter(query, &coin_type, owner),
+        move |newer| newer,
+    )
 }
 
 fn apply_filter(mut query: RawQuery, coin_type: &TypeTag, owner: Option<SuiAddress>) -> RawQuery {

@@ -26,6 +26,7 @@ struct Inner {
     blocks: BTreeMap<(Round, AuthorityIndex, BlockDigest), VerifiedBlock>,
     digests_by_authorities: BTreeSet<(AuthorityIndex, Round, BlockDigest)>,
     commits: BTreeMap<CommitIndex, Commit>,
+    last_committed_rounds: Vec<Round>,
 }
 
 impl MemStore {
@@ -36,6 +37,7 @@ impl MemStore {
                 blocks: BTreeMap::new(),
                 digests_by_authorities: BTreeSet::new(),
                 commits: BTreeMap::new(),
+                last_committed_rounds: vec![],
             }),
         }
     }
@@ -43,7 +45,12 @@ impl MemStore {
 
 #[allow(unused)]
 impl Store for MemStore {
-    fn write(&self, blocks: Vec<VerifiedBlock>, commits: Vec<Commit>) -> ConsensusResult<()> {
+    fn write(
+        &self,
+        blocks: Vec<VerifiedBlock>,
+        commits: Vec<Commit>,
+        last_committed_rounds: Vec<Round>,
+    ) -> ConsensusResult<()> {
         let mut inner = self.inner.write();
 
         for block in blocks {
@@ -60,6 +67,8 @@ impl Store for MemStore {
         for commit in commits {
             inner.commits.insert(commit.index, commit);
         }
+        inner.last_committed_rounds = last_committed_rounds;
+
         Ok(())
     }
 
@@ -153,5 +162,10 @@ impl Store for MemStore {
             commits.push(commit.clone());
         }
         Ok(commits)
+    }
+
+    fn read_last_committed_rounds(&self) -> ConsensusResult<Vec<Round>> {
+        let inner = self.inner.read();
+        Ok(inner.last_committed_rounds.clone())
     }
 }

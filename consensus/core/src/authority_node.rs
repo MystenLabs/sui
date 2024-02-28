@@ -103,7 +103,11 @@ where
         commit_consumer: CommitConsumer,
         registry: Registry,
     ) -> Self {
-        info!("Starting authority with index {}", own_index);
+        info!(
+            "Starting authority {}\n{:#?}\n{:#?}\n{:?}",
+            own_index, committee, parameters, protocol_config.version
+        );
+        assert!(committee.is_valid_index(own_index));
         let context = Arc::new(Context::new(
             own_index,
             committee,
@@ -113,12 +117,18 @@ where
         ));
         let start_time = Instant::now();
 
-        // Create the transactions client and the transactions consumer
         let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
-        // Construct Core components.
         let (core_signals, signals_receivers) = CoreSignals::new();
+
+        let network_manager = N::new(context.clone());
+        let network_client = network_manager.client();
+
+        // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
+        let broadcaster =
+            Broadcaster::new(context.clone(), network_client.clone(), &signals_receivers);
+
         let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
@@ -147,15 +157,6 @@ where
         let leader_timeout_handle =
             LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
 
-        // Create network manager and client.
-        let network_manager = N::new(context.clone());
-        let network_client = network_manager.client();
-
-        // Create Broadcaster.
-        let broadcaster =
-            Broadcaster::new(context.clone(), network_client.clone(), &signals_receivers);
-
-        // Start network service.
         let block_verifier = Arc::new(SignedBlockVerifier::new(
             context.clone(),
             transaction_verifier,
@@ -166,6 +167,7 @@ where
             core_dispatcher.clone(),
             block_verifier.clone(),
         );
+
         let network_service = Arc::new(AuthorityService {
             context: context.clone(),
             block_verifier,
@@ -326,7 +328,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         }
 
         // For now ask dag state directly
-        let blocks = self.dag_state.read().get_blocks(block_refs)?;
+        let blocks = self.dag_state.read().get_blocks(&block_refs);
 
         // Return the serialised blocks
         let result = blocks
@@ -345,8 +347,8 @@ mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
-    use consensus_config::{local_committee_and_keys, NetworkKeyPair, Parameters, ProtocolKeyPair};
-    use fastcrypto::traits::ToFromBytes;
+    use consensus_config::{local_committee_and_keys, Parameters};
+    use fastcrypto::traits::KeyPair;
     use parking_lot::Mutex;
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
@@ -423,7 +425,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn start_and_stop() {
+    async fn test_authority_start_and_stop() {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
         let registry = Registry::new();
 
@@ -434,9 +436,9 @@ mod tests {
         };
         let txn_verifier = NoopTransactionVerifier {};
 
-        let (own_index, _) = committee.authorities().last().unwrap();
-        let protocol_keypair = ProtocolKeyPair::from_bytes(keypairs[0].1.as_bytes()).unwrap();
-        let network_keypair = NetworkKeyPair::from_bytes(keypairs[0].0.as_bytes()).unwrap();
+        let own_index = committee.to_authority_index(0).unwrap();
+        let protocol_keypair = keypairs[own_index].1.copy();
+        let network_keypair = keypairs[own_index].0.copy();
 
         let (sender, _receiver) = unbounded_channel();
         let commit_consumer = CommitConsumer::new(
@@ -511,5 +513,85 @@ mod tests {
         let blocks = core_dispatcher.get_blocks();
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0], input_block);
+    }
+
+    // TODO: build AuthorityFixture.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_authority_committee() {
+        let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
+        let mut output_receivers = vec![];
+        let mut authorities = vec![];
+        for (index, _authority_info) in committee.authorities() {
+            let registry = Registry::new();
+
+            let temp_dir = TempDir::new().unwrap();
+            let parameters = Parameters {
+                db_path: Some(temp_dir.into_path()),
+                ..Default::default()
+            };
+            let txn_verifier = NoopTransactionVerifier {};
+
+            let protocol_keypair = keypairs[index].1.copy();
+            let network_keypair = keypairs[index].0.copy();
+
+            let (sender, receiver) = unbounded_channel();
+            let commit_consumer = CommitConsumer::new(
+                sender, 0, // last_processed_index
+            );
+            output_receivers.push(receiver);
+
+            let authority = ConsensusAuthority::start(
+                index,
+                committee.clone(),
+                parameters,
+                ProtocolConfig::get_for_max_version_UNSAFE(),
+                protocol_keypair,
+                network_keypair,
+                Arc::new(txn_verifier),
+                commit_consumer,
+                registry,
+            )
+            .await;
+            authorities.push(authority);
+        }
+
+        const NUM_TRANSACTIONS: u8 = 15;
+        let mut submitted_transactions = BTreeSet::<Vec<u8>>::new();
+        for i in 0..NUM_TRANSACTIONS {
+            let txn = vec![i; 16];
+            submitted_transactions.insert(txn.clone());
+            authorities[i as usize % authorities.len()]
+                .transaction_client()
+                .submit(txn)
+                .await
+                .unwrap();
+        }
+
+        for mut receiver in output_receivers {
+            let mut expected_transactions = submitted_transactions.clone();
+            loop {
+                let committed_subdag =
+                    tokio::time::timeout(Duration::from_secs(1), receiver.recv())
+                        .await
+                        .unwrap()
+                        .unwrap();
+                for b in committed_subdag.blocks {
+                    for txn in b.transactions().iter().map(|t| t.data().to_vec()) {
+                        assert!(
+                            expected_transactions.remove(&txn),
+                            "Transaction not submitted or already seen: {:?}",
+                            txn
+                        );
+                    }
+                }
+                if expected_transactions.is_empty() {
+                    break;
+                }
+            }
+        }
+
+        for authority in authorities {
+            authority.stop().await;
+        }
     }
 }
