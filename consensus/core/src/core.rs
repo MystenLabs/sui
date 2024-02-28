@@ -130,9 +130,9 @@ impl Core {
 
         // Accept all blocks but make sure that only the last quorum round blocks and onwards are kept.
         self.add_accepted_blocks(all_blocks, Some(0));
-        // Try to commit and propose, since they may not have run after last storage write and crash.
+        // Try to commit and propose, since they may not have run after the last storage write.
         self.try_commit().unwrap();
-        self.try_propose(false).unwrap();
+        self.try_propose(true).unwrap();
         self
     }
 
@@ -224,8 +224,13 @@ impl Core {
         ignore_leaders_check: bool,
     ) -> ConsensusResult<Option<VerifiedBlock>> {
         if let Some(block) = self.try_new_block(ignore_leaders_check) {
+            // When there is only one authority in committee, it is unnecessary to broadcast
+            // the block which will fail anyway without subscribers to the signal.
+            if self.context.committee.size() > 1 {
+                self.signals.new_block(block.clone())?;
+            }
+            // The new block may help commit.
             self.try_commit()?;
-            self.signals.new_block(block.clone())?;
             return Ok(Some(block));
         }
         Ok(None)

@@ -107,6 +107,7 @@ where
             "Starting authority {}\n{:#?}\n{:#?}\n{:?}",
             own_index, committee, parameters, protocol_config.version
         );
+        assert!(committee.is_valid_index(own_index));
         let context = Arc::new(Context::new(
             own_index,
             committee,
