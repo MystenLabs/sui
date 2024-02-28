@@ -1680,24 +1680,22 @@ impl AuthorityPerEpochStore {
         for (signatures, transaction) in signatures.into_iter().zip(transactions.iter()) {
             let signatures = if let Some(signatures) = signatures {
                 signatures
+            } else if matches!(
+                transaction.inner().transaction_data().kind(),
+                TransactionKind::RandomnessStateUpdate(_)
+            ) {
+                // RandomnessStateUpdate transactions don't go through consensus, but
+                // have system-generated signatures that are guaranteed to be the same,
+                // so we can just pull it from the transaction.
+                transaction.tx_signatures().to_vec()
             } else {
-                if matches!(
-                    transaction.inner().transaction_data().kind(),
-                    TransactionKind::RandomnessStateUpdate(_)
-                ) {
-                    // RandomnessStateUpdate transactions don't go through consensus, but
-                    // have system-generated signatures that are guaranteed to be the same,
-                    // so we can just pull it from the transaction.
-                    transaction.tx_signatures().to_vec()
-                } else {
-                    return Err(SuiError::from(
-                        format!(
-                            "Can not find user signature for checkpoint for transaction {:?}",
-                            transaction.key()
-                        )
-                        .as_str(),
-                    ));
-                }
+                return Err(SuiError::from(
+                    format!(
+                        "Can not find user signature for checkpoint for transaction {:?}",
+                        transaction.key()
+                    )
+                    .as_str(),
+                ));
             };
             result.push(signatures);
         }
