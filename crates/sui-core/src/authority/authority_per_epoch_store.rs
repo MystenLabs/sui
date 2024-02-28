@@ -488,11 +488,6 @@ pub struct AuthorityEpochTables {
 // that multiple rounds can efficiently defer to the same future round).
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum DeferralKey {
-    // TODO-DNS Is it safe to just delete this? I think nothing is deferred outside devnet
-    // RandomnessRound {
-    //     future_round: RandomnessRound,
-    //     deferred_from_round: Round,
-    // },
     ConsensusRound {
         future_round: Round,
         deferred_from_round: Round,

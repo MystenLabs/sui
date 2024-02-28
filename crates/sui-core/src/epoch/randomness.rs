@@ -292,8 +292,6 @@ impl RandomnessManager {
     }
 
     /// Adds a received dkg::Message to the randomness DKG state machine.
-    // TODO-DNS: change to take raw bytes and skip deserialization if a message
-    // was already received from the same validator.
     pub async fn add_message(
         &self,
         batch: &mut DBBatch,
@@ -303,8 +301,6 @@ impl RandomnessManager {
     }
 
     /// Adds a received dkg::Confirmation to the randomness DKG state machine.
-    // TODO-DNS: change to take raw bytes and skip deserialization if a message
-    // was already received from the same validator.
     pub async fn add_confirmation(
         &self,
         batch: &mut DBBatch,
