@@ -22,16 +22,16 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         uint8 senderAddressLength = 32;
         bytes memory senderAddress = abi.encode(0);
         uint8 targetChain = chainID;
-        uint8 targetAddressLength = 20;
-        address targetAddress = bridgerA;
+        uint8 recipientAddressLength = 20;
+        address recipientAddress = bridgerA;
         uint8 tokenID = BridgeMessage.ETH;
         uint64 amount = 100000000000000;
         bytes memory payload = abi.encodePacked(
             senderAddressLength,
             senderAddress,
             targetChain,
-            targetAddressLength,
-            targetAddress,
+            recipientAddressLength,
+            recipientAddress,
             tokenID,
             amount
         );
@@ -60,16 +60,16 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         uint8 senderAddressLength = 32;
         bytes memory senderAddress = abi.encode(0);
         uint8 targetChain = 0;
-        uint8 targetAddressLength = 20;
-        address targetAddress = bridgerA;
+        uint8 recipientAddressLength = 20;
+        address recipientAddress = bridgerA;
         uint8 tokenID = BridgeMessage.ETH;
         uint64 amount = 10000;
         bytes memory payload = abi.encodePacked(
             senderAddressLength,
             senderAddress,
             targetChain,
-            targetAddressLength,
-            targetAddress,
+            recipientAddressLength,
+            recipientAddress,
             tokenID,
             amount
         );
@@ -100,8 +100,8 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
             senderAddressLength: 0,
             senderAddress: abi.encode(0),
             targetChain: 1,
-            targetAddressLength: 0,
-            targetAddress: bridgerA,
+            recipientAddressLength: 0,
+            recipientAddress: bridgerA,
             tokenID: BridgeMessage.ETH,
             // This is Sui amount (eth decimal 8)
             amount: 100_000_000
@@ -128,8 +128,8 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
             senderAddressLength: 0,
             senderAddress: abi.encode(0),
             targetChain: 1,
-            targetAddressLength: 0,
-            targetAddress: bridgerA,
+            recipientAddressLength: 0,
+            recipientAddress: bridgerA,
             tokenID: BridgeMessage.ETH,
             // This is Sui amount (eth decimal 8)
             amount: 100_000_000
@@ -160,16 +160,16 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         uint8 senderAddressLength = 32;
         bytes memory senderAddress = abi.encode(0);
         uint8 targetChain = chainID;
-        uint8 targetAddressLength = 20;
-        address targetAddress = bridgerA;
+        uint8 recipientAddressLength = 20;
+        address recipientAddress = bridgerA;
         uint8 tokenID = BridgeMessage.ETH;
         uint64 amount = 100000000; // 1 ether in sui decimals
         bytes memory payload = abi.encodePacked(
             senderAddressLength,
             senderAddress,
             targetChain,
-            targetAddressLength,
-            targetAddress,
+            recipientAddressLength,
+            recipientAddress,
             tokenID,
             amount
         );
@@ -212,16 +212,16 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         uint8 senderAddressLength = 32;
         bytes memory senderAddress = abi.encode(0);
         uint8 targetChain = chainID;
-        uint8 targetAddressLength = 20;
-        address targetAddress = bridgerA;
+        uint8 recipientAddressLength = 20;
+        address recipientAddress = bridgerA;
         uint8 tokenID = BridgeMessage.USDC;
         uint64 amount = 1_000_000;
         bytes memory payload = abi.encodePacked(
             senderAddressLength,
             senderAddress,
             targetChain,
-            targetAddressLength,
-            targetAddress,
+            recipientAddressLength,
+            recipientAddress,
             tokenID,
             amount
         );
@@ -512,7 +512,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         changePrank(deployer);
         IWETH9(wETH).deposit{value: 10 ether}();
         IERC20(wETH).transfer(address(vault), 10 ether);
-        address targetAddress = 0xb18f79Fe671db47393315fFDB377Da4Ea1B7AF96;
+        address recipientAddress = 0xb18f79Fe671db47393315fFDB377Da4Ea1B7AF96;
 
         bytes memory payload =
             hex"2080ab1ee086210a3a37355300ca24672e81062fcdb5ced6618dab203f6a3b291c0b14b18f79fe671db47393315ffdb377da4ea1b7af960200000000000186a0";
@@ -537,11 +537,11 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         signatures[1] =
             hex"8ba9ec92c2d5a44ecc123182f689b901a93921fd35f581354fea20b25a0ded6d055b96a64bdda77dd5a62b93d29abe93640aa3c1a136348093cd7a2418c6bfa301";
 
-        uint256 aBalance = targetAddress.balance;
+        uint256 aBalance = recipientAddress.balance;
         committee.verifySignatures(signatures, message);
 
         bridge.transferBridgedTokensWithSignatures(signatures, message);
-        assertEq(targetAddress.balance, aBalance + 0.001 ether);
+        assertEq(recipientAddress.balance, aBalance + 0.001 ether);
     }
 
     // An e2e emergency op regression test covering message ser/de and signature verification
