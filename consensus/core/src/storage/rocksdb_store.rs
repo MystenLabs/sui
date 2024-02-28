@@ -74,7 +74,7 @@ impl RocksDBStore {
         let (blocks, digests_by_authorities, commits, last_committed_rounds) = reopen!(&rocksdb,
             Self::BLOCKS_CF;<(Round, AuthorityIndex, BlockDigest), bytes::Bytes>,
             Self::DIGESTS_BY_AUTHORITIES_CF;<(AuthorityIndex, Round, BlockDigest), ()>,
-            Self::COMMITS_CF;<u64, Commit>,
+            Self::COMMITS_CF;<CommitIndex, Commit>,
             Self::LAST_COMMITTED_ROUNDS_CF;<(), Vec<Round>>
         );
 

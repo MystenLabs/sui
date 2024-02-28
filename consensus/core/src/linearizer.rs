@@ -191,7 +191,7 @@ mod tests {
             for block in subdag.blocks.iter() {
                 assert!(block.round() <= leaders[idx].round());
             }
-            assert_eq!(subdag.commit_index, idx as u64 + 1);
+            assert_eq!(subdag.commit_index, idx as CommitIndex + 1);
         }
     }
 

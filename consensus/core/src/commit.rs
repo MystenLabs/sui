@@ -26,7 +26,7 @@ pub(crate) const MINIMUM_WAVE_LENGTH: Round = 3;
 pub(crate) type WaveNumber = u32;
 
 /// Index of the commit.
-pub(crate) type CommitIndex = u64;
+pub type CommitIndex = u32;
 
 /// Specifies one consensus commit.
 /// It is stored on disk, so it does not contain blocks which are stored individually.
@@ -148,12 +148,14 @@ pub struct CommitConsumer {
     pub sender: UnboundedSender<CommittedSubDag>,
     // The last commit index that the consumer has processed. This is useful for
     // crash/recovery so mysticeti can replay the commits from `last_processed_index + 1`.
-    pub last_processed_index: u64,
+    pub last_processed_index: CommitIndex,
 }
 
-#[allow(unused)]
 impl CommitConsumer {
-    pub fn new(sender: UnboundedSender<CommittedSubDag>, last_processed_index: u64) -> Self {
+    pub fn new(
+        sender: UnboundedSender<CommittedSubDag>,
+        last_processed_index: CommitIndex,
+    ) -> Self {
         Self {
             sender,
             last_processed_index,

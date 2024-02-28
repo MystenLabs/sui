@@ -242,7 +242,7 @@ mod tests {
                 expected_stored_refs.push(block.reference());
                 assert!(block.round() <= leaders[idx].round());
             }
-            assert_eq!(subdag.commit_index, idx as u64 + 1);
+            assert_eq!(subdag.commit_index, idx as CommitIndex + 1);
         }
 
         // Check commits sent over consensus output channel is accurate
