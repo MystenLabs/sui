@@ -883,6 +883,8 @@ pub struct IndexedVfsPackagePath {
 }
 
 pub fn vfs_path_from_str(path: String, vfs_path: &VfsPath) -> Result<VfsPath, VfsError> {
+    // we need to canonicalized paths for virtual file systems as some of them (e.g., implementation
+    // of the physical one) cannot handle relative paths
     fn canonicalize(p: String) -> String {
         match dunce::canonicalize(&p) {
             Ok(s) => s.to_string_lossy().to_string(),

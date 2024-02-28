@@ -178,12 +178,3 @@ fn parse_file(
     files.insert(file_hash, (fname, source_buffer));
     Ok((defs, comments, file_hash))
 }
-
-/// Canonicalize a file path.
-pub fn canonicalize(path: &Symbol) -> String {
-    let p = path.as_str();
-    match std::fs::canonicalize(p) {
-        Ok(s) => s.to_string_lossy().to_string(),
-        Err(_) => p.to_owned(),
-    }
-}

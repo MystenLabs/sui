@@ -823,7 +823,7 @@ pub fn generate_interface_files(
                 .to_string_lossy()
                 .to_string(),
         );
-        let vfs_path = deps_out_vfs.join(&canonicalize(&file_path))?;
+        let vfs_path = deps_out_vfs.join(&file_path)?;
         vfs_path.parent().create_dir_all()?;
         vfs_path
             .create_file()?
