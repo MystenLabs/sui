@@ -83,7 +83,7 @@ fn analyze(
 fn command(state: &mut LivenessState, sp!(_, cmd_): &Command) {
     use Command_ as C;
     match cmd_ {
-        C::Assign(ls, e) => {
+        C::Assign(_, ls, e) => {
             lvalues(state, ls);
             exp(state, e);
         }
@@ -259,7 +259,7 @@ mod last_usage {
     fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
         use Command_ as C;
         match cmd_ {
-            C::Assign(ls, e) => {
+            C::Assign(_, ls, e) => {
                 lvalues(context, ls);
                 exp(context, e);
             }

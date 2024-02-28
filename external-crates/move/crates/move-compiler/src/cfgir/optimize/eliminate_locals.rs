@@ -112,7 +112,7 @@ mod count {
     pub fn command(context: &mut Context, sp!(_, cmd_): &Command) {
         use Command_ as C;
         match cmd_ {
-            C::Assign(ls, e) => {
+            C::Assign(_, ls, e) => {
                 exp(context, e);
                 let substitutable_rvalues = can_subst_exp(ls.len(), e);
                 lvalues(context, ls, substitutable_rvalues);
@@ -275,7 +275,7 @@ mod eliminate {
     pub fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
         use Command_ as C;
         match cmd_ {
-            C::Assign(ls, e) => {
+            C::Assign(_, ls, e) => {
                 exp(context, e);
                 let eliminated = lvalues(context, ls);
                 remove_eliminated(context, eliminated, e)

@@ -202,7 +202,7 @@ fn unused_let_muts<T>(
 fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
     use Command_ as C;
     match cmd_ {
-        C::Assign(ls, e) => {
+        C::Assign(_, ls, e) => {
             exp(context, e);
             lvalues(context, ls);
         }

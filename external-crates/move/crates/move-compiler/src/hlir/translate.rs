@@ -1592,7 +1592,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         E::Assign(assigns, lvalue_ty, rhs) => {
             let expected_type = expected_types(context, eloc, lvalue_ty);
             let exp = value(context, block, Some(&expected_type), *rhs);
-            make_assignments(context, block, eloc, assigns, exp);
+            make_assignments(context, block, eloc, H::AssignCase::Update, assigns, exp);
         }
 
         E::Mutate(lhs_in, rhs_in) => {
@@ -1658,7 +1658,7 @@ fn statement_block(context: &mut Context, block: &mut Block, seq: VecDeque<T::Se
                 let expected_tys = expected_types(context, sloc, ty);
                 let rhs_exp = value(context, block, Some(&expected_tys), *expr);
                 declare_bind_list(context, &bindings);
-                make_assignments(context, block, sloc, bindings, rhs_exp);
+                make_assignments(context, block, sloc, H::AssignCase::Let, bindings, rhs_exp);
             }
         }
     }
@@ -1832,6 +1832,7 @@ fn make_assignments(
     context: &mut Context,
     result: &mut Block,
     loc: Loc,
+    case: H::AssignCase,
     sp!(_, assigns): T::LValueList,
     rvalue: H::Exp,
 ) {
@@ -1840,17 +1841,21 @@ fn make_assignments(
     let mut after = Block::new();
     for (idx, a) in assigns.into_iter().enumerate() {
         let a_ty = rvalue.ty.value.type_at_index(idx);
-        let (ls, mut af) = assign(context, a, a_ty);
+        let (ls, mut af) = assign(context, case, a, a_ty);
 
         lvalues.push(ls);
         after.append(&mut af);
     }
-    result.push_back(sp(loc, S::Command(sp(loc, C::Assign(lvalues, rvalue)))));
+    result.push_back(sp(
+        loc,
+        S::Command(sp(loc, C::Assign(case, lvalues, rvalue))),
+    ));
     result.append(&mut after);
 }
 
 fn assign(
     context: &mut Context,
+    case: H::AssignCase,
     sp!(loc, ta_): T::LValue,
     rvalue_ty: &H::SingleType,
 ) -> (H::LValue, Block) {
@@ -1876,7 +1881,7 @@ fn assign(
             for (decl_idx, f, bt, tfa) in assign_fields(context, &m, &s, tfields) {
                 assert!(fields.len() == decl_idx);
                 let st = &H::SingleType_::base(bt);
-                let (fa, mut fafter) = assign(context, tfa, st);
+                let (fa, mut fafter) = assign(context, case, tfa, st);
                 after.append(&mut fafter);
                 fields.push((f, fa))
             }
@@ -1908,7 +1913,7 @@ fn assign(
                 let borrow_ = E::Borrow(mut_, Box::new(copy_tmp()), f, from_unpack);
                 let borrow_ty = H::Type_::single(sp(floc, H::SingleType_::Ref(mut_, bt)));
                 let borrow = H::exp(borrow_ty, sp(floc, borrow_));
-                make_assignments(context, &mut after, floc, sp(floc, vec![tfa]), borrow);
+                make_assignments(context, &mut after, floc, case, sp(floc, vec![tfa]), borrow);
             }
             L::Var(tmp, Box::new(rvalue_ty.clone()))
         }
@@ -2069,7 +2074,10 @@ fn bind_value_in_block(
     }
     let rhs_exp = maybe_freeze(context, stmts, binders_type, value_exp);
     let loc = rhs_exp.exp.loc;
-    stmts.push_back(sp(loc, S::Command(sp(loc, C::Assign(binders, rhs_exp)))));
+    stmts.push_back(sp(
+        loc,
+        S::Command(sp(loc, C::Assign(H::AssignCase::Let, binders, rhs_exp))),
+    ));
 }
 
 fn make_binders(context: &mut Context, loc: Loc, ty: H::Type) -> (Vec<H::LValue>, H::Exp) {

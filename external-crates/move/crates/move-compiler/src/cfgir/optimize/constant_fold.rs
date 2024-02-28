@@ -55,7 +55,7 @@ fn optimize_cmd(
 ) -> Option<bool> {
     use Command_ as C;
     Some(match cmd_ {
-        C::Assign(_ls, e) => optimize_exp(consts, e),
+        C::Assign(_, _ls, e) => optimize_exp(consts, e),
         C::Mutate(el, er) => {
             let c1 = optimize_exp(consts, er);
             let c2 = optimize_exp(consts, el);

@@ -153,7 +153,7 @@ fn unused_mut_borrows(
 fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
     use Command_ as C;
     match cmd_ {
-        C::Assign(ls, e) => {
+        C::Assign(_, ls, e) => {
             let values = exp(context, e);
             lvalues(context, ls, values);
         }

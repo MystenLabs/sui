@@ -244,7 +244,7 @@ pub trait SimpleAbsInt: Sized {
         }
         let sp!(_, cmd_) = cmd;
         match cmd_ {
-            C::Assign(ls, e) => {
+            C::Assign(_, ls, e) => {
                 let values = self.exp(context, state, e);
                 self.lvalues(context, state, ls, values);
             }

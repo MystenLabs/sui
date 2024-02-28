@@ -214,7 +214,7 @@ pub struct Label(pub usize);
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Command_ {
-    Assign(Vec<LValue>, Exp),
+    Assign(AssignCase, Vec<LValue>, Exp),
     Mutate(Box<Exp>, Box<Exp>),
     Abort(Exp),
     Return {
@@ -246,6 +246,14 @@ pub enum LValue_ {
     Unpack(StructName, Vec<BaseType>, Vec<(Field, LValue)>),
 }
 pub type LValue = Spanned<LValue_>;
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum AssignCase {
+    // from a let binding
+    Let,
+    // from an actual assignment
+    Update,
+}
 
 //**************************************************************************************************
 // Expressions
@@ -396,7 +404,7 @@ impl Command_ {
         use Command_::*;
         match self {
             Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
-            Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
+            Assign(_, _, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
             Abort(_) | Return { .. } | Jump { .. } | JumpIf { .. } => true,
         }
     }
@@ -405,7 +413,7 @@ impl Command_ {
         use Command_::*;
         match self {
             Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
-            Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } | Jump { .. } | JumpIf { .. } => {
+            Assign(_, _, _) | Mutate(_, _) | IgnoreAndPop { .. } | Jump { .. } | JumpIf { .. } => {
                 false
             }
             Abort(_) | Return { .. } => true,
@@ -416,7 +424,7 @@ impl Command_ {
         use Command_::*;
         match self {
             Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
-            Assign(ls, e) => ls.is_empty() && e.is_unit(),
+            Assign(_, ls, e) => ls.is_empty() && e.is_unit(),
             IgnoreAndPop { exp: e, .. } => e.is_unit(),
 
             Mutate(_, _) | Return { .. } | Abort(_) | JumpIf { .. } | Jump { .. } => false,
@@ -429,7 +437,7 @@ impl Command_ {
         let mut successors = BTreeSet::new();
         match self {
             Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
-            Mutate(_, _) | Assign(_, _) | IgnoreAndPop { .. } => {
+            Mutate(_, _) | Assign(_, _, _) | IgnoreAndPop { .. } => {
                 panic!("ICE Should not be last command in block")
             }
             Abort(_) | Return { .. } => (),
@@ -449,7 +457,7 @@ impl Command_ {
     pub fn is_hlir_terminal(&self) -> bool {
         use Command_::*;
         match self {
-            Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
+            Assign(_, _, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
             Break(_) | Continue(_) | Abort(_) | Return { .. } => true,
             Jump { .. } | JumpIf { .. } => panic!("ICE found jump/jump-if in hlir"),
         }
@@ -1153,7 +1161,11 @@ impl AstDebug for Command_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use Command_ as C;
         match self {
-            C::Assign(lvalues, rhs) => {
+            C::Assign(case, lvalues, rhs) => {
+                match case {
+                    AssignCase::Let => w.write("let "),
+                    AssignCase::Update => w.write("update "),
+                };
                 lvalues.ast_debug(w);
                 w.write(" = ");
                 rhs.ast_debug(w);
