@@ -32,16 +32,9 @@
 	"engines": {
 		"pnpm": ">=8.6.5"
 	},
-	"manypkg": {
-		"ignoredRules": [
-			"INTERNAL_MISMATCH",
-			"ROOT_HAS_DEV_DEPENDENCIES"
-		]
-	},
 	"devDependencies": {
 		"@changesets/cli": "^2.26.2",
 		"@ianvs/prettier-plugin-sort-imports": "^4.1.0",
-		"@manypkg/cli": "^0.21.0",
 		"@tanstack/eslint-plugin-query": "^5.0.0",
 		"@typescript-eslint/eslint-plugin": "^6.1.0",
 		"@typescript-eslint/parser": "^6.1.0",

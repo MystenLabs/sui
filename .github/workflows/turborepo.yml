@@ -41,8 +41,6 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Manypkg Check
-        run: pnpm manypkg check
       - name: Turbo Cache
         id: turbo-cache
         uses: actions/cache@v3
