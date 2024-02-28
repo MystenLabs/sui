@@ -15,8 +15,9 @@ use crate::{
     expansion, hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
-        find_filenames, CompilationEnv, Flags, IndexedPackagePath, IndexedVfsPackagePath,
-        NamedAddressMap, NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths,
+        canonicalize, find_filenames, CompilationEnv, Flags, IndexedPackagePath,
+        IndexedVfsPackagePath, NamedAddressMap, NamedAddressMaps, NumericalAddress, PackageConfig,
+        PackagePaths,
     },
     to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
@@ -823,7 +824,7 @@ pub fn generate_interface_files(
                 .to_string_lossy()
                 .to_string(),
         );
-        let vfs_path = deps_out_vfs.join(file_path)?;
+        let vfs_path = deps_out_vfs.join(canonicalize(file_path.as_str().to_owned()))?;
         vfs_path.parent().create_dir_all()?;
         vfs_path
             .create_file()?
