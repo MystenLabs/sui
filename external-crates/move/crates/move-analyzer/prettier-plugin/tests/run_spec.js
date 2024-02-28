@@ -30,12 +30,12 @@ global.run_spec = function(dirname) {
                     return;
                 }
                 if (!fs.existsSync(exp_path)) {
-                    assert.fail('\n' + formatted_prog + "No expected output file")
+                    assert.fail(`\n${formatted_prog}\nNo expected output file`)
                 }
                 const exp_prog = fs.readFileSync(exp_path, { encoding: 'utf8'});
                 if (formatted_prog != exp_prog) {
-                    const out_diff = new linediff(exp_prog, formatted_prog);
-                    assert.fail(out_diff.toString() + 'Current output does not match the expected one (run with UB=1 to save the current output)');
+                    const out_diff = new linediff(exp_prog, formatted_prog).toString();
+                    assert.fail(`${out_diff}\nCurrent output does not match the expected one (run with UB=1 to save the current output)`);
                 }
             });
         });
