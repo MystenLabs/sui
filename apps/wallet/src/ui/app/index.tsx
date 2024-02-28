@@ -160,6 +160,7 @@ const App = () => {
 	}
 	if (storageMigration.data !== 'ready') {
 		return <StorageMigrationPage />;
+
 	}
 	return (
 		<Routes>
