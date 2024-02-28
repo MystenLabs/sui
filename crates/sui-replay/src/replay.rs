@@ -788,7 +788,7 @@ impl LocalExec {
         if let ProgrammableTransaction(ref pt) = transaction_kind {
             trace!(target: "replay_ptb_info", "{}",
                 Pretty(
-                    &mut FullPTB {
+                    &FullPTB {
                         ptb: pt.clone(),
                         results: transform_command_results_to_annotated(
                             &executor,
