@@ -7,8 +7,8 @@ use anyhow::anyhow;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use once_cell::sync::Lazy;
 use prometheus::{
-    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
-    Registry,
+    register_histogram_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use rocksdb::LiveFile;
 use std::cmp::{max, min};
@@ -61,7 +61,12 @@ pub struct AuthorityStorePruningMetrics {
     pub last_pruned_effects_checkpoint: IntGauge,
     pub num_epochs_to_retain_for_objects: IntGauge,
     pub num_epochs_to_retain_for_checkpoints: IntGauge,
+    pub delete_range_version_range: Histogram,
 }
+
+const POSITIVE_INT_BUCKETS: &[f64] = &[
+    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
+];
 
 impl AuthorityStorePruningMetrics {
     pub fn new(registry: &Registry) -> Arc<Self> {
@@ -100,6 +105,13 @@ impl AuthorityStorePruningMetrics {
                 "num_epochs_to_retain_for_checkpoints",
                 "Number of epochs to retain for checkpoints",
                 registry
+            )
+            .unwrap(),
+            delete_range_version_range: register_histogram_with_registry!(
+                "delete_range_version_range",
+                "The time taken between block creation and block commit.",
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
         };
@@ -178,6 +190,7 @@ impl AuthorityStorePruner {
                 .or_insert((seq_number, seq_number));
         }
 
+        let mut iii = 0;
         for (object_id, (min_version, max_version)) in updates {
             debug!(
                 "Pruning object {:?} versions {:?} - {:?}",
@@ -186,6 +199,12 @@ impl AuthorityStorePruner {
             let start_range = ObjectKey(object_id, min_version);
             let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
             wb.schedule_delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+            iii += 1;
+            if iii % 10 == 0 {
+                metrics
+                    .delete_range_version_range
+                    .observe((max_version.value() - min_version.value() + 1) as f64);
+            }
         }
 
         // When enable_pruning_tombstones is enabled, instead of using range deletes, we need to do a scan of all the keys
@@ -382,6 +401,7 @@ impl AuthorityStorePruner {
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
     ) -> anyhow::Result<()> {
+        let _scope = monitored_scope("pruner::prune_for_eligible_epochs");
         let mut checkpoint_number = starting_checkpoint_number;
         let current_epoch = checkpoint_store
             .get_highest_executed_checkpoint()?
@@ -393,6 +413,7 @@ impl AuthorityStorePruner {
         let mut effects_to_prune = vec![];
 
         loop {
+            let _scopepe = monitored_scope("pruner::prune_for_eligible_epochs_inner");
             let Some(ckpt) = checkpoint_store
                 .certified_checkpoints
                 .get(&(checkpoint_number + 1))?

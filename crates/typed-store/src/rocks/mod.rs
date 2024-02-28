@@ -2320,6 +2320,13 @@ impl DBOptions {
         self
     }
 
+    pub fn turn_on_statistics(mut self) -> DBOptions {
+        self.options.enable_statistics();
+        self.options.set_stats_dump_period_sec(30);
+        self.options.set_log_level(rocksdb::LogLevel::Debug);
+        self
+    }
+
     // Optimize DB receiving significant insertions.
     pub fn optimize_db_for_write_throughput(mut self, db_max_write_buffer_gb: u64) -> DBOptions {
         self.options
@@ -2435,6 +2442,10 @@ pub fn default_db_options() -> DBOptions {
 
     // Set memtable bloomfilter.
     opt.set_memtable_prefix_bloom_ratio(0.02);
+
+    opt.enable_statistics();
+    opt.set_stats_dump_period_sec(30);
+    opt.set_log_level(rocksdb::LogLevel::Debug);
 
     DBOptions {
         options: opt,
