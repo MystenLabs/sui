@@ -198,9 +198,6 @@ pub enum FunctionBody_ {
 }
 pub type FunctionBody = Spanned<FunctionBody_>;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct SpecId(usize);
-
 #[derive(PartialEq, Clone, Debug)]
 pub struct Function {
     pub warning_filter: WarningFilters,
