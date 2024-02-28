@@ -167,7 +167,7 @@ pub fn verify(
     } = context;
     let initial_state = LocalStates::initial(&signature.parameters, locals);
     let mut locals_safety = LocalsSafety::new(
-        &compilation_env,
+        compilation_env,
         context.package,
         struct_declared_abilities,
         locals,
