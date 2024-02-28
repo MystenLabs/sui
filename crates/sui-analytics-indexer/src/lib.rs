@@ -406,6 +406,12 @@ impl From<OwnerType> for ParquetValue {
     }
 }
 
+impl From<Option<OwnerType>> for ParquetValue {
+    fn from(value: Option<OwnerType>) -> Self {
+        value.map(|v| v.to_string()).into()
+    }
+}
+
 impl From<ObjectStatus> for ParquetValue {
     fn from(value: ObjectStatus) -> Self {
         Self::Str(value.to_string())
