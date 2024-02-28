@@ -279,12 +279,24 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
             }
 
             sp!(_, "-") => 'command: {
-                let Some(prefix) = self.eat_prefix("--") else {
+                self.bump();
+                let Some(next) = self.peek() else {
                     break 'command self.unexpected(c);
                 };
 
+                match next {
+                    sp!(_, "-") => {
+                        self.bump();
+                    }
+                    sp!(_, flag) if is_flag(flag.chars().next().unwrap()) => {
+                        self.bump();
+                        break 'command next.widen(c).map(|src| Lexeme(T::Flag, src));
+                    }
+                    sp!(_, _) => break 'command self.unexpected(next),
+                }
+
                 let Some(ident) = self.eat_while(is_ident_continue) else {
-                    break 'command self.unexpected(prefix);
+                    break 'command self.unexpected(c);
                 };
 
                 match ident {
@@ -297,7 +309,7 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                             break 'command self.done(T::EarlyEof);
                         };
 
-                        file.widen(prefix).map(|src| Lexeme(T::Publish, src))
+                        file.widen(c).map(|src| Lexeme(T::Publish, src))
                     }
 
                     sp!(_, "upgrade") => {
@@ -309,16 +321,20 @@ impl<'l, I: Iterator<Item = &'l str>> Iterator for Lexer<'l, I> {
                             break 'command self.done(T::EarlyEof);
                         };
 
-                        file.widen(prefix).map(|src| Lexeme(T::Upgrade, src))
+                        file.widen(c).map(|src| Lexeme(T::Upgrade, src))
                     }
 
-                    sp!(_, _) => ident.widen(prefix).map(|src| Lexeme(T::Command, src)),
+                    sp!(_, _) => ident.widen(c).map(|src| Lexeme(T::Command, src)),
                 }
             }
 
             sp!(_, _) => self.unexpected(c),
         })
     }
+}
+
+fn is_flag(c: char) -> bool {
+    c.is_ascii_alphanumeric()
 }
 
 fn is_ident_start(c: char) -> bool {
@@ -406,6 +422,20 @@ mod tests {
         ];
 
         insta::assert_debug_snapshot!(lex(addrs));
+    }
+
+    #[test]
+    fn tokenize_commands() {
+        let cmds = vec!["--f00", "--Bar_baz", "--qux-quy"];
+
+        insta::assert_debug_snapshot!(lex(cmds));
+    }
+
+    #[test]
+    fn tokenize_flags() {
+        let flags = vec!["-h", "-a", "-Z", "-1"];
+
+        insta::assert_debug_snapshot!(lex(flags));
     }
 
     #[test]

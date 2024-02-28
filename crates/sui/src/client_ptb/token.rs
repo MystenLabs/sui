@@ -15,6 +15,8 @@ pub struct Lexeme<'t>(
 pub enum Token {
     /// --[a-zA-Z0-9_-]+
     Command,
+    /// -[a-zA-Z0-9]
+    Flag,
     /// [a-zA-Z_][a-zA-Z0-9_-]*
     Ident,
     /// [1-9][0-9_]*
@@ -84,6 +86,7 @@ impl<'a> fmt::Display for Lexeme<'a> {
 
         match self.0 {
             T::Command => write!(f, "command '--{}'", self.1),
+            T::Flag => write!(f, "flag '-{}'", self.1),
             T::Ident => write!(f, "identifier '{}'", self.1),
             T::Number => write!(f, "number '{}'", self.1),
             T::HexNumber => write!(f, "hexadecimal number '0x{}'", self.1),
@@ -112,6 +115,7 @@ impl fmt::Display for Token {
         use Token as T;
         match self {
             T::Command => write!(f, "a command"),
+            T::Flag => write!(f, "a flag"),
             T::Ident => write!(f, "an identifier"),
             T::Number => write!(f, "a number"),
             T::HexNumber => write!(f, "a hexadecimal number"),

@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_ptb::{
-    ast::{ParsedProgram, Program},
-    builder::PTBBuilder,
-    displays::Pretty,
-    error::{build_error_reports, PTBError},
+use crate::{
+    client_ptb::{
+        ast::{ParsedProgram, Program},
+        builder::PTBBuilder,
+        displays::Pretty,
+        error::{build_error_reports, PTBError},
+        token::{Lexeme, Token},
+    },
+    sp,
 };
 
 use anyhow::{anyhow, Error};
@@ -26,7 +30,7 @@ use sui_types::{
     transaction::{ProgrammableTransaction, Transaction, TransactionData},
 };
 
-use super::{ast::ProgramMetadata, parser::ProgramParser};
+use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
 
 #[derive(Clone, Debug, Args)]
 #[clap(disable_help_flag = true)]
@@ -52,11 +56,21 @@ impl PTB {
     pub async fn execute(self, context: &mut WalletContext) -> Result<(), Error> {
         let source_string = to_source_string(self.args.clone());
 
-        let (program, program_metadata) = match crate::client_ptb::parser::ProgramParser::new(
-            self.args.iter().map(|s| s.as_str()),
-        )
-        .map_err(|e| vec![e])
-        .and_then(|parser| parser.parse())
+        // Tokenize once to detect help flags
+        let tokens = self.args.iter().map(|s| s.as_str());
+        for sp!(_, lexeme) in Lexer::new(tokens.clone()).into_iter().flatten() {
+            match lexeme {
+                Lexeme(Token::Command, "help") => return Ok(ptb_description().print_long_help()?),
+                Lexeme(Token::Flag, "h") => return Ok(ptb_description().print_help()?),
+                lexeme if lexeme.is_terminal() => break,
+                _ => continue,
+            }
+        }
+
+        // Tokenize and parse to get the program
+        let (program, program_metadata) = match ProgramParser::new(tokens)
+            .map_err(|e| vec![e])
+            .and_then(|parser| parser.parse())
         {
             Err(errors) => {
                 let suffix = if errors.len() > 1 { "s" } else { "" };
@@ -349,7 +363,7 @@ pub fn ptb_description() -> clap::Command {
             "Publish the Move package. It takes as input the folder where the package exists."
         ).long_help(
             "Publish the Move package. It takes as input the folder where the package exists.\
-            \n\nExample:\
+            \n\nExamples:\
             \n --move-call sui::tx_context::sender\
             \n --assign sender\
             \n --publish \".\"\
@@ -361,20 +375,20 @@ pub fn ptb_description() -> clap::Command {
             "Upgrade the move package. It takes as input the folder where the package exists."
         ).value_hint(ValueHint::DirPath))
         .arg(arg!(
-            --"preview" 
+            --"preview"
             "Preview the list of PTB transactions instead of executing them."
         ))
         .arg(arg!(
-            --"summary" 
+            --"summary"
             "Show only a short summary (digest, execution status, gas cost). \
             Do not use this flag when you need all the transaction data and the execution effects."
         ))
         .arg(arg!(
-            --"warn-shadows" 
+            --"warn-shadows"
             "Enable shadow warning when the same variable name is declared multiple times. Off by default."
         ))
         .arg(arg!(
-            --"json" 
+            --"json"
             "Return command outputs in json format."
         ))
 }
