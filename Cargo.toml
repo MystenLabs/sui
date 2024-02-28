@@ -129,7 +129,6 @@ members = [
   "crates/sui-protocol-config-macros",
   "crates/sui-proxy",
   "crates/sui-replay",
-  "crates/sui-replay-frontend",
   "crates/sui-rest-api",
   "crates/sui-rosetta",
   "crates/sui-rpc-loadgen",
@@ -614,7 +613,6 @@ sui-protocol-config = { path = "crates/sui-protocol-config" }
 sui-protocol-config-macros = { path = "crates/sui-protocol-config-macros" }
 sui-proxy = { path = "crates/sui-proxy" }
 sui-replay = { path = "crates/sui-replay" }
-sui-replay-frontend = { path = "crates/sui-replay-frontend" }
 sui-rosetta = { path = "crates/sui-rosetta" }
 sui-rpc-loadgen = { path = "crates/sui-rpc-loadgen" }
 sui-sdk = { path = "crates/sui-sdk" }
