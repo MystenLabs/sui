@@ -141,12 +141,6 @@ Changes complete
 Wrote patchfile out to: ./migration.patch
 
 External Command `diff -s migration.patch expected_migration.patch`:
-69,70c69,70
-< --- sources/mod5.move
-< +++ sources/mod5.move
----
-> --- ./sources/mod5.move
-> +++ ./sources/mod5.move
 Files migration.patch and expected_migration.patch are identical
 External Command `diff -r -s sources migration_sources`:
 Files sources/mod0.move and migration_sources/mod0.move are identical
