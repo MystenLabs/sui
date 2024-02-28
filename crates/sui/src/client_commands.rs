@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_ptb::ptb::{ptb_description, PTB};
+use crate::client_ptb::ptb::PTB;
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
@@ -1594,13 +1594,7 @@ impl SuiClientCommands {
                 SuiClientCommandResult::VerifySource
             }
             SuiClientCommands::PTB(ptb) => {
-                if ptb.args.contains(&"--help".to_string()) {
-                    ptb_description().print_long_help().unwrap();
-                } else if ptb.args.contains(&"-h".to_string()) || ptb.args.is_empty() {
-                    ptb_description().print_help().unwrap();
-                } else {
-                    ptb.execute(context).await?;
-                }
+                ptb.execute(context).await?;
                 SuiClientCommandResult::NoOutput
             }
         });
