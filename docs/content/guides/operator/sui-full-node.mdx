@@ -120,11 +120,11 @@ Open a terminal or console to the `sui` directory you downloaded in the previous
         `curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob`
 1. For Testnet or Mainnet: Edit the `fullnode.yaml` file to include peer nodes for state synchronization. Append the following to the end of the current configuration:
 
-<Tabs groupId="network">
+  <Tabs groupId="network">
 
-<TabItem label="Mainnet" value="mainnet">
+  <TabItem label="Mainnet" value="mainnet">
 
-```shell
+  ```shell
     p2p-config:
       seed-peers:
         - address: /dns/icn-00.mainnet.sui.io/udp/8084
@@ -147,12 +147,12 @@ Open a terminal or console to the `sui` directory you downloaded in the previous
           peer-id: c619a5e0f8f36eac45118c1f8bda28f0f508e2839042781f1d4a9818043f732c
         - address: /dns/lhr-01.mainnet.sui.io/udp/8084
           peer-id: 53dcedf250f73b1ec83250614498947db00d17c0181020fcdb7b6db12afbc175
-```
+  ```
 
-</TabItem>
-<TabItem label="Testnet" value="testnet">
+  </TabItem>
+  <TabItem label="Testnet" value="testnet">
 
-```shell
+  ```shell
     p2p-config:
       seed-peers:
         - address: /dns/nrt-tnt-ssfn-00.testnet.sui.io/udp/8084
@@ -165,7 +165,7 @@ Open a terminal or console to the `sui` directory you downloaded in the previous
           peer-id: 9393d6056bb9c9d8475a3cf3525c747257f17c6a698a7062cbbd1875bc6ef71e
         - address: /dns/mel-tnt-ssfn-00.testnet.sui.io/udp/8084
           peer-id: c88742f46e66a11cb8c84aca488065661401ef66f726cb9afeb8a5786d83456e
-```
+  ```
 
 </TabItem>
 
