@@ -12,14 +12,13 @@ use crate::{
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
-
 pub mod coin_field;
 pub mod collection_equality;
+mod custom_rules;
 pub mod custom_state_change;
 pub mod freeze_wrapped;
 pub mod self_transfer;
 pub mod share_owned;
-
 pub const SUI_PKG_NAME: &str = "sui";
 pub const INCLUDE_NEW_RULES: bool = true;
 
@@ -69,7 +68,8 @@ pub const CUSTOM_STATE_CHANGE_FILTER_NAME: &str = "custom_state_change";
 pub const COIN_FIELD_FILTER_NAME: &str = "coin_field";
 pub const FREEZE_WRAPPED_FILTER_NAME: &str = "freeze_wrapped";
 pub const COLLECTION_EQUALITY_FILTER_NAME: &str = "collection_equality";
-
+pub const CONSTANT_NAMING_FILTER_NAME: &str = "constant_naming";
+pub const SHILF_OVERFLOW_NAME: &str = "shift_overflow";
 pub const INVALID_LOC: Loc = Loc::invalid();
 
 pub enum LinterDiagCategory {
@@ -79,6 +79,8 @@ pub enum LinterDiagCategory {
     CoinField,
     FreezeWrapped,
     CollectionEquality,
+    ConstantNaming,
+    ShiftOperationOverflow,
 }
 
 /// A default code for each linter category (as long as only one code per category is used, no other
@@ -133,7 +135,20 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
 }
 
 pub fn custom_filters() -> Vec<WarningFilter> {
-    let filters = vec![];
+    let filters = vec![
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagCategory::ConstantNaming as u8,
+            LINTER_DEFAULT_DIAG_CODE,
+            Some(CONSTANT_NAMING_FILTER_NAME),
+        ),
+        WarningFilter::code(
+            Some(LINT_WARNING_PREFIX),
+            LinterDiagCategory::ShiftOperationOverflow as u8,
+            LINTER_DEFAULT_DIAG_CODE,
+            Some(SHILF_OVERFLOW_NAME),
+        ),
+    ];
     filters
 }
 pub fn linter_visitors() -> Vec<Visitor> {
@@ -153,7 +168,10 @@ pub fn linter_visitors() -> Vec<Visitor> {
 }
 
 pub fn custom_linter_visitors() -> Vec<Visitor> {
-    vec![]
+    vec![
+        custom_rules::constant_naming::ConstantNamingVisitor.visitor(),
+        custom_rules::shift_overflow::ShiftOperationOverflowVisitor.visitor(),
+    ]
 }
 
 pub fn base_type(t: &N::Type) -> Option<&N::Type> {
