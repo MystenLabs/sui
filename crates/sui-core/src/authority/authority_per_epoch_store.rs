@@ -2295,7 +2295,8 @@ impl AuthorityPerEpochStore {
         let roots: BTreeSet<_> = system_transactions
             .iter()
             .chain(sequenced_transactions.iter())
-            // no need to include end_of_publish_transactions here
+            // no need to include end_of_publish_transactions here because they would be
+            // filtered out below by `executable_transaction_digest` anyway
             .filter_map(|transaction| {
                 transaction
                     .0
@@ -2358,6 +2359,10 @@ impl AuthorityPerEpochStore {
         let should_accept_tx = if let Some(lock) = &lock {
             lock.should_accept_tx()
         } else {
+            // It is ok to just release lock here as functions called by this one are the
+            // only place that transition reconfig state, and this function itself is always
+            // executed from consensus task. At this point if the lock was not already provided
+            // above, we know we won't be transitioning state for this commit.
             self.get_reconfig_state_read_lock_guard().should_accept_tx()
         };
         let make_checkpoint = should_accept_tx || final_round;
@@ -2542,6 +2547,9 @@ impl AuthorityPerEpochStore {
                     .epoch_start_config()
                     .randomness_obj_initial_shared_version()
                 {
+                    // It is ok to just release lock here as functions called by this one are the
+                    // only place that transition into RejectAllCerts state, and this function
+                    // itself is always executed from consensus task.
                     if self.protocol_config().random_beacon()
                         && self
                             .get_reconfig_state_read_lock_guard()

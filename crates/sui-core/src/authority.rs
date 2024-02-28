@@ -4693,8 +4693,8 @@ impl RandomnessRoundReceiver {
     fn handle_new_randomness(&self, epoch: EpochId, round: RandomnessRound, bytes: Vec<u8>) {
         let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
         if epoch_store.epoch() != epoch {
-            error!(
-                "BUG: dropping randomness for epoch {epoch}, round {round}, because we are in epoch {}",
+            warn!(
+                "dropping randomness for epoch {epoch}, round {round}, because we are in epoch {}",
                 epoch_store.epoch()
             );
             return;

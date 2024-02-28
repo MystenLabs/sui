@@ -919,7 +919,9 @@ fn get_unexecuted_transactions(
         assert!(change_epoch_tx.data().intent_message().value.is_end_of_epoch_tx());
     });
 
-    // Look for a randomness state update tx, which must be first if it exists.
+    // Look for a randomness state update tx. It must be first if it exists, because all other
+    // transactions in a checkpoint that includes a randomness state update are causally
+    // dependent on it.
     let randomness_round = if let Some(first_digest) = execution_digests.first() {
         let maybe_randomness_tx = cache_reader.get_transaction_block(&first_digest.transaction)
             .expect("read cannot fail")
