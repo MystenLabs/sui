@@ -944,7 +944,7 @@ pub fn find_filenames<Predicate: FnMut(&VfsPath) -> bool>(
         if !p.is_dir()? {
             continue;
         }
-        for entry in p.walk_dir()?.into_iter().filter_map(|e| e.ok()) {
+        for entry in p.walk_dir()?.filter_map(|e| e.ok()) {
             if !entry.is_file()? || !is_file_desired(&entry) {
                 continue;
             }

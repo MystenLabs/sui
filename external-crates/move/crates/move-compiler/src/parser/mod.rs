@@ -51,7 +51,7 @@ pub(crate) fn parse_program(
         }
         // sort the filenames so errors about redefinitions, or other inter-file conflicts, are
         // deterministic
-        res.sort_by(|p1, p2| p1.path.as_str().cmp(&p2.path.as_str()));
+        res.sort_by(|p1, p2| p1.path.as_str().cmp(p2.path.as_str()));
         Ok(res)
     }
 
