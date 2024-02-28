@@ -12114,6 +12114,7 @@ dependencies = [
  "serde_json",
  "sui-storage",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "tempfile",
  "tokio",
