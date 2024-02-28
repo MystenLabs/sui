@@ -21,6 +21,7 @@ pub mod self_transfer;
 pub mod share_owned;
 
 pub const SUI_PKG_NAME: &str = "sui";
+pub const INCLUDE_NEW_RULES: bool = true;
 
 pub const TRANSFER_MOD_NAME: &str = "transfer";
 pub const TRANSFER_FUN: &str = "transfer";
@@ -85,7 +86,7 @@ pub enum LinterDiagCategory {
 pub const LINTER_DEFAULT_DIAG_CODE: u8 = 1;
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
-    let filters = vec![
+    let mut filters = vec![
         WarningFilter::All(Some(LINT_WARNING_PREFIX)),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
@@ -124,18 +125,35 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
             Some(COLLECTION_EQUALITY_FILTER_NAME),
         ),
     ];
+    if INCLUDE_NEW_RULES {
+        let mut custom_filters_list = custom_filters();
+        filters.append(&mut custom_filters_list);
+    }
     (Some(ALLOW_ATTR_CATEGORY.into()), filters)
 }
 
+pub fn custom_filters() -> Vec<WarningFilter> {
+    let filters = vec![];
+    filters
+}
 pub fn linter_visitors() -> Vec<Visitor> {
-    vec![
+    let mut visitors = vec![
         share_owned::ShareOwnedVerifier.visitor(),
         self_transfer::SelfTransferVerifier.visitor(),
         custom_state_change::CustomStateChangeVerifier.visitor(),
         coin_field::CoinFieldVisitor.visitor(),
         freeze_wrapped::FreezeWrappedVisitor.visitor(),
         collection_equality::CollectionEqualityVisitor.visitor(),
-    ]
+    ];
+    if INCLUDE_NEW_RULES {
+        let mut custom_visitor_list = custom_linter_visitors();
+        visitors.append(&mut custom_visitor_list);
+    }
+    visitors
+}
+
+pub fn custom_linter_visitors() -> Vec<Visitor> {
+    vec![]
 }
 
 pub fn base_type(t: &N::Type) -> Option<&N::Type> {
