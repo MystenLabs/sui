@@ -5,7 +5,7 @@ use crate::displays::Pretty;
 use crate::replay::LocalExec;
 use move_core_types::annotated_value::{MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::TypeTag;
-use std::fmt::{format, Display, Formatter};
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use sui_execution::Executor;
 use sui_types::execution_mode::ExecutionResult;
@@ -34,8 +34,6 @@ impl<'a> Display for Pretty<'a, FullPTB> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let Pretty(full_ptb) = self;
         let FullPTB { ptb, results } = full_ptb;
-
-        let mut builder = TableBuilder::default();
 
         let ProgrammableTransaction { inputs, commands } = ptb;
 
@@ -93,7 +91,7 @@ impl<'a> Display for Pretty<'a, FullPTB> {
         }
 
         // write command results section
-        if results.len() > 0 {
+        if !results.is_empty() {
             write!(f, "\n\n")?;
         }
         for (i, result) in results.iter().enumerate() {
@@ -131,7 +129,7 @@ impl<'a> Display for Pretty<'a, FullPTB> {
             )]));
             write!(f, "\n{}\n", table)?;
         } else {
-            write!(f, "\n  No commands for this transaction")
+            write!(f, "\n  No commands for this transaction")?;
         }
 
         Ok(())
@@ -252,7 +250,7 @@ impl<'a> Display for Pretty<'a, ResolvedResults> {
 
         for (i, value) in return_values.iter().enumerate() {
             write!(f, "\n • Result {i:<2} ")?;
-            write!(f, "\n{}\n", value)?;
+            write!(f, "\n{:#}\n", value)?;
         }
 
         if len_m_ref > 0 {
@@ -264,7 +262,7 @@ impl<'a> Display for Pretty<'a, ResolvedResults> {
 
         for (arg, value) in mutable_reference_outputs {
             write!(f, "\n • {} ", arg)?;
-            write!(f, "\n{}\n", value)?;
+            write!(f, "\n{:#}\n", value)?;
         }
 
         if len_ret_vals == 0 && len_m_ref == 0 {
@@ -293,19 +291,17 @@ impl<'a> Display for Pretty<'a, TypeTag> {
 }
 
 fn resolve_to_layout(
-    type_tag: &Box<TypeTag>,
+    type_tag: &TypeTag,
     executor: &Arc<dyn Executor + Send + Sync>,
     store_factory: &LocalExec,
 ) -> MoveTypeLayout {
-    match *type_tag.clone() {
-        TypeTag::Vector(inner) => MoveTypeLayout::Vector(Box::from(resolve_to_layout(
-            &inner,
-            executor,
-            store_factory,
-        ))),
+    match type_tag {
+        TypeTag::Vector(inner) => {
+            MoveTypeLayout::Vector(Box::from(resolve_to_layout(inner, executor, store_factory)))
+        }
         TypeTag::Struct(inner) => {
             let mut layout_resolver = executor.type_layout_resolver(Box::new(store_factory));
-            MoveTypeLayout::Struct(layout_resolver.get_annotated_layout(&inner).unwrap())
+            MoveTypeLayout::Struct(layout_resolver.get_annotated_layout(inner).unwrap())
         }
         TypeTag::Bool => MoveTypeLayout::Bool,
         TypeTag::U8 => MoveTypeLayout::U8,
@@ -367,5 +363,5 @@ pub fn transform_command_results_to_annotated(
             return_values: return_vals_out,
         });
     }
-    Ok(output.into())
+    Ok(output)
 }
