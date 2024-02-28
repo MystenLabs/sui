@@ -996,9 +996,10 @@ impl AuthorityState {
             .metrics
             .execute_certificate_with_effects_latency
             .start_timer();
+        let digest = *transaction.digest();
         debug!("execute_certificate_with_effects");
         fp_ensure!(
-            effects.data().transaction_digest() == transaction.digest(),
+            *effects.data().transaction_digest() == digest,
             SuiError::ErrorWhileProcessingCertificate {
                 err: "effects/tx digest mismatch".to_string()
             }
@@ -1021,7 +1022,7 @@ impl AuthorityState {
 
         let observed_effects = self
             .execution_cache
-            .notify_read_executed_effects(&[transaction.key()])
+            .notify_read_executed_effects(&[digest])
             .instrument(tracing::debug_span!(
                 "notify_read_effects_in_execute_certificate_with_effects"
             ))
@@ -1093,6 +1094,7 @@ impl AuthorityState {
         debug!("execute_certificate_internal");
 
         let tx_digest = certificate.digest();
+        let tx_key = certificate.key();
         let input_objects = {
             let _scope = monitored_scope("Execution::load_input_objects");
             let input_objects = &certificate.data().transaction_data().input_objects()?;
@@ -1108,7 +1110,7 @@ impl AuthorityState {
                 self.input_loader
                     .read_objects_for_execution(
                         epoch_store.as_ref(),
-                        &certificate.inner().key(),
+                        &tx_key,
                         input_objects,
                         epoch_store.epoch(),
                     )
@@ -1156,7 +1158,7 @@ impl AuthorityState {
         certificate: &VerifiedCertificate,
     ) -> SuiResult<TransactionEffects> {
         self.execution_cache
-            .notify_read_executed_effects(&[certificate.key()])
+            .notify_read_executed_effects(&[*certificate.digest()])
             .await
             .map(|mut r| r.pop().expect("must return correct number of effects"))
     }
@@ -1362,10 +1364,10 @@ impl AuthorityState {
             monitored_scope("Execution::commit_certificate");
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
 
+        let tx_key = certificate.key();
         let tx_digest = certificate.digest();
         let input_object_count = inner_temporary_store.input_objects.len();
         let shared_object_count = effects.input_shared_objects().len();
-        let digest = *certificate.digest();
 
         let output_keys = inner_temporary_store.get_output_keys(effects);
 
@@ -1394,6 +1396,7 @@ impl AuthorityState {
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
         epoch_store.insert_tx_cert_and_effects_signature(
+            &tx_key,
             tx_digest,
             certificate.certificate_sig(),
             effects_sig.as_ref(),
@@ -1425,7 +1428,7 @@ impl AuthorityState {
         // This provides necessary information to transaction manager to start executing
         // additional ready transactions.
         self.transaction_manager
-            .notify_commit(&digest, output_keys, epoch_store);
+            .notify_commit(tx_digest, output_keys, epoch_store);
 
         self.update_metrics(certificate, input_object_count, shared_object_count);
 
@@ -4710,7 +4713,7 @@ impl RandomnessRoundReceiver {
             transaction.digest()
         );
         let transaction = VerifiedExecutableTransaction::new_system(transaction, epoch);
-        let key = transaction.key();
+        let digest = *transaction.digest();
 
         // RandomnessStateUpdates are not sent through consensus, so we have to add the user
         // signatures here once the digest becomes known.
@@ -4745,7 +4748,7 @@ impl RandomnessRoundReceiver {
             // output of the RandomnessStateUpdate from the previous round.)
             let Ok(mut effects) = authority_state
                 .execution_cache
-                .notify_read_executed_effects(&[key])
+                .notify_read_executed_effects(&[digest])
                 .await
             else {
                 panic!("failed to get effects for randomness state update transaction at epoch {epoch}, round {round}");
@@ -4781,9 +4784,8 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
             vec![]
         };
 
-        let fx_keys: Vec<_> = effects.iter().map(|d| TransactionKey::Digest(*d)).collect();
         let fx = if !effects.is_empty() {
-            self.execution_cache.multi_get_executed_effects(&fx_keys)?
+            self.execution_cache.multi_get_executed_effects(effects)?
         } else {
             vec![]
         };

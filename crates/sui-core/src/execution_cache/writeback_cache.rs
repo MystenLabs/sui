@@ -78,7 +78,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
-use sui_types::transaction::{TransactionKey, VerifiedTransaction};
+use sui_types::transaction::VerifiedTransaction;
 use tracing::{info, instrument};
 
 use super::ExecutionCacheAPI;
@@ -170,7 +170,7 @@ struct UncommittedData {
     transaction_events:
         DashMap<TransactionEventsDigest, (BTreeSet<TransactionDigest>, TransactionEvents)>,
 
-    executed_effects_digests: DashMap<TransactionKey, TransactionEffectsDigest>,
+    executed_effects_digests: DashMap<TransactionDigest, TransactionEffectsDigest>,
 
     // Transaction outputs that have not yet been written to the DB. Items are removed from this
     // table as they are flushed to the db.
@@ -251,7 +251,7 @@ pub struct WritebackCache {
     // - note that we removed any unfinalized packages from the cache during revert_state_update().
     packages: MokaCache<ObjectID, PackageObject>,
 
-    executed_effects_digests_notify_read: NotifyRead<TransactionKey, TransactionEffectsDigest>,
+    executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
     store: Arc<AuthorityStore>,
     metrics: Arc<ExecutionCacheMetrics>,
 }
@@ -545,7 +545,6 @@ impl WritebackCache {
         }
 
         let tx_digest = *transaction.digest();
-        let tx_key = transaction.key();
         let effects_digest = effects.digest();
 
         self.dirty
@@ -568,7 +567,7 @@ impl WritebackCache {
 
         self.dirty
             .executed_effects_digests
-            .remove(&tx_key)
+            .remove(&tx_digest)
             .expect("executed effects must exist");
 
         Ok(())
@@ -920,12 +919,12 @@ impl ExecutionCacheRead for WritebackCache {
 
     fn multi_get_executed_effects_digests(
         &self,
-        keys: &[TransactionKey],
+        digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
         do_fallback_lookup(
-            keys,
-            |key| {
-                if let Some(digest) = self.dirty.executed_effects_digests.get(key) {
+            digests,
+            |digest| {
+                if let Some(digest) = self.dirty.executed_effects_digests.get(digest) {
                     CacheResult::Hit(Some(*digest))
                 } else {
                     CacheResult::Miss
@@ -954,12 +953,14 @@ impl ExecutionCacheRead for WritebackCache {
 
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
-        keys: &'a [TransactionKey],
+        digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffectsDigest>>> {
         async move {
-            let registrations = self.executed_effects_digests_notify_read.register_all(keys);
+            let registrations = self
+                .executed_effects_digests_notify_read
+                .register_all(digests);
 
-            let executed_effects_digests = self.multi_get_executed_effects_digests(keys)?;
+            let executed_effects_digests = self.multi_get_executed_effects_digests(digests)?;
 
             let results = executed_effects_digests
                 .into_iter()
@@ -1105,8 +1106,6 @@ impl ExecutionCacheWrite for WritebackCache {
             }
 
             let tx_digest = *transaction.digest();
-            let tx_key = transaction.key();
-            let tx_secondary_key = transaction.non_digest_key();
             let effects_digest = effects.digest();
 
             self.dirty
@@ -1126,18 +1125,14 @@ impl ExecutionCacheWrite for WritebackCache {
 
             self.dirty
                 .executed_effects_digests
-                .insert(tx_key, effects_digest);
+                .insert(tx_digest, effects_digest);
 
             self.dirty
                 .pending_transaction_writes
                 .insert(tx_digest, tx_outputs);
 
             self.executed_effects_digests_notify_read
-                .notify(&TransactionKey::Digest(tx_digest), &effects_digest);
-            if let Some(key) = tx_secondary_key {
-                self.executed_effects_digests_notify_read
-                    .notify(&key, &effects_digest);
-            }
+                .notify(&tx_digest, &effects_digest);
 
             self.metrics
                 .pending_notify_read

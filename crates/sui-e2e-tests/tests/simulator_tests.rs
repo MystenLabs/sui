@@ -14,7 +14,6 @@ use std::collections::{HashMap, HashSet};
 use sui_core::authority::EffectsNotifyRead;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
-use sui_types::transaction::TransactionKey;
 use tokio::time::{sleep, Duration, Instant};
 use tracing::{debug, trace};
 
@@ -150,7 +149,7 @@ async fn test_net_determinism() {
         .sui_node
         .state()
         .get_effects_notify_read()
-        .notify_read_executed_effects(vec![TransactionKey::Digest(digest)])
+        .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
 }

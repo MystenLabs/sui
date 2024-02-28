@@ -28,11 +28,11 @@ use sui_types::storage::{
     ObjectStore, PackageObject, ParentSync,
 };
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::transaction::VerifiedTransaction;
 use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber},
     object::Owner,
     storage::InputKey,
-    transaction::{TransactionKey, VerifiedTransaction},
 };
 use tracing::instrument;
 
@@ -295,11 +295,11 @@ pub trait ExecutionCacheRead: Send + Sync {
 
     fn multi_get_executed_effects_digests(
         &self,
-        keys: &[TransactionKey],
+        digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>>;
 
     fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
-        self.multi_get_executed_effects_digests(&[TransactionKey::Digest(*digest)])
+        self.multi_get_executed_effects_digests(&[*digest])
             .map(|mut digests| {
                 digests
                     .pop()
@@ -310,14 +310,14 @@ pub trait ExecutionCacheRead: Send + Sync {
 
     fn multi_get_executed_effects(
         &self,
-        keys: &[TransactionKey],
+        digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        let effects_digests = self.multi_get_executed_effects_digests(keys)?;
-        assert_eq!(effects_digests.len(), keys.len());
+        let effects_digests = self.multi_get_executed_effects_digests(digests)?;
+        assert_eq!(effects_digests.len(), digests.len());
 
-        let mut results = vec![None; keys.len()];
-        let mut fetch_digests = Vec::with_capacity(keys.len());
-        let mut fetch_indices = Vec::with_capacity(keys.len());
+        let mut results = vec![None; digests.len()];
+        let mut fetch_digests = Vec::with_capacity(digests.len());
+        let mut fetch_indices = Vec::with_capacity(digests.len());
 
         for (i, digest) in effects_digests.into_iter().enumerate() {
             if let Some(digest) = digest {
@@ -338,7 +338,7 @@ pub trait ExecutionCacheRead: Send + Sync {
         &self,
         digest: &TransactionDigest,
     ) -> SuiResult<Option<TransactionEffects>> {
-        self.multi_get_executed_effects(&[TransactionKey::Digest(*digest)])
+        self.multi_get_executed_effects(&[*digest])
             .map(|mut effects| {
                 effects
                     .pop()
@@ -377,15 +377,15 @@ pub trait ExecutionCacheRead: Send + Sync {
 
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
-        keys: &'a [TransactionKey],
+        digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffectsDigest>>>;
 
     fn notify_read_executed_effects<'a>(
         &'a self,
-        keys: &'a [TransactionKey],
+        digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult<Vec<TransactionEffects>>> {
         async move {
-            let digests = self.notify_read_executed_effects_digests(keys).await?;
+            let digests = self.notify_read_executed_effects_digests(digests).await?;
             // once digests are available, effects must be present as well
             self.multi_get_effects(&digests).map(|effects| {
                 effects
@@ -584,23 +584,23 @@ impl<T> Clone for NotifyReadWrapper<T> {
 impl<T: ExecutionCacheRead + 'static> EffectsNotifyRead for NotifyReadWrapper<T> {
     async fn notify_read_executed_effects(
         &self,
-        keys: Vec<TransactionKey>,
+        digests: Vec<TransactionDigest>,
     ) -> SuiResult<Vec<TransactionEffects>> {
-        self.0.notify_read_executed_effects(&keys).await
+        self.0.notify_read_executed_effects(&digests).await
     }
 
     async fn notify_read_executed_effects_digests(
         &self,
-        keys: Vec<TransactionKey>,
+        digests: Vec<TransactionDigest>,
     ) -> SuiResult<Vec<TransactionEffectsDigest>> {
-        self.0.notify_read_executed_effects_digests(&keys).await
+        self.0.notify_read_executed_effects_digests(&digests).await
     }
 
     fn multi_get_executed_effects(
         &self,
-        keys: &[TransactionKey],
+        digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        self.0.multi_get_executed_effects(keys)
+        self.0.multi_get_executed_effects(digests)
     }
 }
 

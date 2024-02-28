@@ -35,7 +35,7 @@ use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
-use sui_types::transaction::{TransactionKey, TransactionKind};
+use sui_types::transaction::TransactionKind;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
@@ -538,12 +538,7 @@ impl CheckpointExecutor {
 
                     let effects = self
                         .cache_reader
-                        .notify_read_executed_effects(
-                            &all_tx_digests
-                                .iter()
-                                .map(|d| TransactionKey::Digest(*d))
-                                .collect::<Vec<_>>(),
-                        )
+                        .notify_read_executed_effects(&all_tx_digests)
                         .await
                         .expect("Failed to get executed effects for finalizing checkpoint");
 
@@ -667,18 +662,13 @@ async fn handle_execution_effects(
     local_execution_timeout_sec: u64,
     data_ingestion_dir: Option<PathBuf>,
 ) {
-    let all_tx_keys: Vec<_> = all_tx_digests
-        .iter()
-        .map(|d| TransactionKey::Digest(*d))
-        .collect();
-
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
     let log_timeout_sec = Duration::from_secs(local_execution_timeout_sec);
     // Whether the checkpoint is next to execute and blocking additional executions.
     let mut blocking_execution = false;
     loop {
-        let effects_future = cache_reader.notify_read_executed_effects(&all_tx_keys);
+        let effects_future = cache_reader.notify_read_executed_effects(&all_tx_digests);
 
         match timeout(log_timeout_sec, effects_future).await {
             Err(_elapsed) => {
@@ -714,7 +704,7 @@ async fn handle_execution_effects(
                 // Only log details when the checkpoint is next to execute, but has not finished
                 // execution within log_timeout_sec.
                 let missing_digests: Vec<TransactionDigest> = cache_reader
-                    .multi_get_executed_effects_digests(&all_tx_keys)
+                    .multi_get_executed_effects_digests(&all_tx_digests)
                     .expect("multi_get_executed_effects cannot fail")
                     .iter()
                     .zip(all_tx_digests.clone())
@@ -953,13 +943,11 @@ fn get_unexecuted_transactions(
         None
     };
 
-    let (all_tx_digests, all_tx_keys): (Vec<_>, Vec<_>) = execution_digests
-        .iter()
-        .map(|tx| (tx.transaction, TransactionKey::Digest(tx.transaction)))
-        .unzip();
+    let all_tx_digests: Vec<TransactionDigest> =
+        execution_digests.iter().map(|tx| tx.transaction).collect();
 
     let executed_effects_digests = cache_reader
-        .multi_get_executed_effects_digests(&all_tx_keys)
+        .multi_get_executed_effects_digests(&all_tx_digests)
         .expect("failed to read executed_effects from store");
 
     let (unexecuted_txns, expected_effects_digests): (Vec<_>, Vec<_>) =

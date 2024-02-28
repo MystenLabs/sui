@@ -13,7 +13,6 @@ use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::storage::ObjectKey;
-use sui_types::transaction::TransactionKey;
 
 pub(crate) fn store_checkpoint_locally(
     path: PathBuf,
@@ -26,11 +25,6 @@ pub(crate) fn store_checkpoint_locally(
         .get_checkpoint_contents(&checkpoint.content_digest)?
         .expect("checkpoint content has to be stored");
 
-    let transaction_keys: Vec<_> = transaction_digests
-        .iter()
-        .map(|d| TransactionKey::Digest(*d))
-        .collect();
-
     let transactions = cache_reader
         .multi_get_transaction_blocks(&transaction_digests)?
         .into_iter()
@@ -39,7 +33,7 @@ pub(crate) fn store_checkpoint_locally(
         .collect::<SuiResult<Vec<_>>>()?;
 
     let effects = cache_reader
-        .multi_get_executed_effects(&transaction_keys)?
+        .multi_get_executed_effects(&transaction_digests)?
         .into_iter()
         .zip(transaction_digests)
         .map(|(effects, digest)| effects.ok_or(SuiError::TransactionNotFound { digest }))

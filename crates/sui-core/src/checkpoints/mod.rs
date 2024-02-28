@@ -33,7 +33,7 @@ use crate::consensus_handler::SequencedConsensusTransactionKey;
 use chrono::Utc;
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
@@ -855,11 +855,40 @@ impl CheckpointBuilder {
         self.metrics
             .checkpoint_roots_count
             .inc_by(pending.roots.len() as u64);
+
+        // First wait for digests to become available for any non-digest keys.
+        let non_digest_keys: Vec<_> = pending
+            .roots
+            .iter()
+            .filter_map(|root| {
+                if !matches!(root, TransactionKey::Digest(_)) {
+                    Some(*root)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let mut executed_digests = VecDeque::from(
+            self.epoch_store
+                .notify_read_executed_digests(&non_digest_keys)
+                .in_monitored_scope("CheckpointNotifyDigests")
+                .await?,
+        );
+
+        // Then wait for effects for all tx to be available.
+        let root_digests: Vec<_> = pending.roots.iter().map(|root| {
+            if let TransactionKey::Digest(digest) = root {
+                *digest
+            } else {
+                executed_digests.pop_front().expect("number of returned executed_digests should match number of non-digest roots")
+            }
+        }).collect();
         let roots = self
             .effects_store
-            .notify_read_executed_effects(pending.roots)
+            .notify_read_executed_effects(root_digests)
             .in_monitored_scope("CheckpointNotifyRead")
             .await?;
+
         let _scope = monitored_scope("CheckpointBuilder");
         let unsorted = self.complete_checkpoint_effects(roots)?;
         let sorted = {
@@ -1292,18 +1321,16 @@ impl CheckpointBuilder {
             if pending.is_empty() {
                 break;
             }
-            let pending = pending
-                .into_iter()
-                .map(TransactionKey::Digest)
-                .collect::<Vec<_>>();
+            let pending = pending.into_iter().collect::<Vec<_>>();
             let effects = self.effects_store.multi_get_executed_effects(&pending)?;
             let effects = effects
                 .into_iter()
                 .zip(pending)
-                .map(|(opt, key)| match opt {
+                .map(|(opt, digest)| match opt {
                     Some(x) => x,
                     None => panic!(
-                        "Can not find effect for transaction {key:?}, however transaction that depend on it was already executed",
+                        "Can not find effect for transaction {:?}, however transaction that depend on it was already executed",
+                        digest
                     ),
                 })
                 .collect::<Vec<_>>();
@@ -1997,7 +2024,7 @@ mod tests {
                 .unwrap();
         }
 
-        let mut store = HashMap::<TransactionKey, TransactionEffects>::new();
+        let mut store = HashMap::<TransactionDigest, TransactionEffects>::new();
         commit_cert_for_test(
             &mut store,
             state.clone(),
@@ -2044,7 +2071,7 @@ mod tests {
                 GasCostSummary::new(51, 52, 51, 1),
             );
         }
-        let all_digests: Vec<_> = store.keys().map(|k| *k.expect_digest()).collect();
+        let all_digests: Vec<_> = store.keys().copied().collect();
         for digest in all_digests {
             let signature = Signature::Ed25519SuiSignature(Default::default()).into();
             state
@@ -2163,25 +2190,25 @@ mod tests {
     }
 
     #[async_trait]
-    impl EffectsNotifyRead for HashMap<TransactionKey, TransactionEffects> {
+    impl EffectsNotifyRead for HashMap<TransactionDigest, TransactionEffects> {
         async fn notify_read_executed_effects(
             &self,
-            keys: Vec<TransactionKey>,
+            digests: Vec<TransactionDigest>,
         ) -> SuiResult<Vec<TransactionEffects>> {
-            Ok(keys
+            Ok(digests
                 .into_iter()
-                .map(|k| self.get(&k).expect("effects not found").clone())
+                .map(|d| self.get(&d).expect("effects not found").clone())
                 .collect())
         }
 
         async fn notify_read_executed_effects_digests(
             &self,
-            keys: Vec<TransactionKey>,
+            digests: Vec<TransactionDigest>,
         ) -> SuiResult<Vec<TransactionEffectsDigest>> {
-            Ok(keys
+            Ok(digests
                 .into_iter()
-                .map(|k| {
-                    self.get(&k)
+                .map(|d| {
+                    self.get(&d)
                         .map(|fx| fx.digest())
                         .expect("effects not found")
                 })
@@ -2190,9 +2217,9 @@ mod tests {
 
         fn multi_get_executed_effects(
             &self,
-            keys: &[TransactionKey],
+            digests: &[TransactionDigest],
         ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-            Ok(keys.iter().map(|k| self.get(k).cloned()).collect())
+            Ok(digests.iter().map(|d| self.get(d).cloned()).collect())
         }
     }
 
@@ -2253,7 +2280,7 @@ mod tests {
     }
 
     fn commit_cert_for_test(
-        store: &mut HashMap<TransactionKey, TransactionEffects>,
+        store: &mut HashMap<TransactionDigest, TransactionEffects>,
         state: Arc<AuthorityState>,
         digest: TransactionDigest,
         dependencies: Vec<TransactionDigest>,
@@ -2261,9 +2288,10 @@ mod tests {
     ) {
         let epoch_store = state.epoch_store_for_testing();
         let effects = e(digest, dependencies, gas_used);
-        store.insert(TransactionKey::Digest(digest), effects.clone());
+        store.insert(digest, effects.clone());
         epoch_store
             .insert_tx_cert_and_effects_signature(
+                &TransactionKey::Digest(digest),
                 &digest,
                 None,
                 Some(&AuthoritySignInfo::new(

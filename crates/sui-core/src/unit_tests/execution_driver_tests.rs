@@ -264,7 +264,7 @@ pub async fn do_cert_with_shared_objects(
     send_consensus(authority, cert).await;
     authority
         .get_effects_notify_read()
-        .notify_read_executed_effects(vec![cert.key()])
+        .notify_read_executed_effects(vec![*cert.digest()])
         .await
         .unwrap()
         .pop()
@@ -440,14 +440,14 @@ async fn test_execution_with_dependencies() {
     }
 
     // All certs should get executed eventually.
-    let keys = executed_shared_certs
+    let digests = executed_shared_certs
         .iter()
         .chain(executed_owned_certs.iter())
-        .map(|cert| cert.key())
+        .map(|cert| *cert.digest())
         .collect();
     authorities[3]
         .get_effects_notify_read()
-        .notify_read_executed_effects(keys)
+        .notify_read_executed_effects(digests)
         .await
         .unwrap();
 }
@@ -505,7 +505,7 @@ async fn test_per_object_overload() {
     for authority in authorities.iter().take(3) {
         authority
             .get_effects_notify_read()
-            .notify_read_executed_effects(vec![create_counter_cert.key()])
+            .notify_read_executed_effects(vec![*create_counter_cert.digest()])
             .await
             .unwrap()
             .pop()
@@ -520,7 +520,7 @@ async fn test_per_object_overload() {
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
         .get_effects_notify_read()
-        .notify_read_executed_effects(vec![create_counter_cert.key()])
+        .notify_read_executed_effects(vec![*create_counter_cert.digest()])
         .await
         .unwrap()
         .pop()
@@ -631,7 +631,7 @@ async fn test_txn_age_overload() {
     for authority in authorities.iter().take(3) {
         authority
             .get_effects_notify_read()
-            .notify_read_executed_effects(vec![create_counter_cert.key()])
+            .notify_read_executed_effects(vec![*create_counter_cert.digest()])
             .await
             .unwrap()
             .pop()
@@ -646,7 +646,7 @@ async fn test_txn_age_overload() {
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
         .get_effects_notify_read()
-        .notify_read_executed_effects(vec![create_counter_cert.key()])
+        .notify_read_executed_effects(vec![*create_counter_cert.digest()])
         .await
         .unwrap()
         .pop()

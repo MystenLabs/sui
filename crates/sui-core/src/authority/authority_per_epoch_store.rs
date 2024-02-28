@@ -253,6 +253,7 @@ pub struct AuthorityPerEpochStore {
     pub(crate) signature_verifier: SignatureVerifier,
 
     pub(crate) checkpoint_state_notify_read: NotifyRead<CheckpointSequenceNumber, Accumulator>,
+    executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
 
     /// This is used to notify all epoch specific tasks that epoch has ended.
     epoch_alive_notify: NotifyOnce,
@@ -401,10 +402,15 @@ pub struct AuthorityEpochTables {
     /// the sequence number of checkpoint does not match height here.
     #[default_options_override_fn = "pending_checkpoints_table_default_config"]
     pending_checkpoints: DBMap<CheckpointCommitHeight, PendingCheckpoint>,
+    #[default_options_override_fn = "pending_checkpoints_table_default_config"]
     pending_checkpoints_v2: DBMap<CheckpointCommitHeight, PendingCheckpointV2>,
 
     /// Checkpoint builder maintains internal list of transactions it included in checkpoints here
     builder_digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
+
+    /// Maps non-digest TransactionKeys to the corresponding digest after execution, for use
+    /// by checkpoint builder.
+    transaction_key_to_digest: DBMap<TransactionKey, TransactionDigest>,
 
     /// Stores pending signatures
     /// The key in this table is checkpoint sequence number and an arbitrary integer
@@ -457,7 +463,7 @@ pub struct AuthorityEpochTables {
     #[allow(dead_code)]
     randomness_rounds_written: DBMap<narwhal_types::RandomnessRound, ()>,
 
-    /// Tables for recording DKG state for RandomnessManager.
+    /// Tables for recording state for RandomnessManager.
 
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
     /// via consensus.
@@ -785,6 +791,7 @@ impl AuthorityPerEpochStore {
             consensus_notify_read: NotifyRead::new(),
             signature_verifier,
             checkpoint_state_notify_read: NotifyRead::new(),
+            executed_digests_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
             mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
@@ -1019,6 +1026,7 @@ impl AuthorityPerEpochStore {
     #[instrument(level = "trace", skip_all)]
     pub fn insert_tx_cert_and_effects_signature(
         &self,
+        tx_key: &TransactionKey,
         tx_digest: &TransactionDigest,
         cert_sig: Option<&AuthorityStrongQuorumSignInfo>,
         effects_signature: Option<&AuthoritySignInfo>,
@@ -1036,7 +1044,17 @@ impl AuthorityPerEpochStore {
                 [(tx_digest, effects_signature)],
             )?;
         }
+        if !matches!(tx_key, TransactionKey::Digest(_)) {
+            batch.insert_batch(
+                &self.tables()?.transaction_key_to_digest,
+                [(tx_key, tx_digest)],
+            )?;
+        }
         batch.write()?;
+
+        if !matches!(tx_key, TransactionKey::Digest(_)) {
+            self.executed_digests_notify_read.notify(tx_key, tx_digest);
+        }
         Ok(())
     }
 
@@ -1632,6 +1650,24 @@ impl AuthorityPerEpochStore {
             .try_lock()
             .expect("No contention on end_of_publish lock")
             .contains_key(authority))
+    }
+
+    pub async fn notify_read_executed_digests(
+        &self,
+        keys: &[TransactionKey],
+    ) -> SuiResult<Vec<TransactionDigest>> {
+        let registrations = self.executed_digests_notify_read.register_all(keys);
+        let executed_digests = self.tables()?.transaction_key_to_digest.multi_get(keys)?;
+        let results = executed_digests
+            .into_iter()
+            .zip(registrations)
+            .map(|(d, r)| match d {
+                // Note that Some() clause also drops registration that is already fulfilled
+                Some(ready) => Either::Left(futures::future::ready(ready)),
+                None => Either::Right(r),
+            });
+
+        Ok(join_all(results).await)
     }
 
     /// Note: caller usually need to call consensus_message_processed_notify before this call

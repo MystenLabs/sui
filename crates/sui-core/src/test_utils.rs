@@ -28,10 +28,10 @@ use sui_types::crypto::{
 use sui_types::crypto::{AuthorityKeyPair, Signer};
 use sui_types::effects::{SignedTransactionEffects, TransactionEffects};
 use sui_types::error::SuiError;
+use sui_types::transaction::ObjectArg;
 use sui_types::transaction::{
     CallArg, SignedTransaction, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use sui_types::transaction::{ObjectArg, TransactionKey};
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -125,7 +125,7 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
         WAIT_FOR_TX_TIMEOUT,
         state
             .get_cache_reader()
-            .notify_read_executed_effects(&[TransactionKey::Digest(digest)]),
+            .notify_read_executed_effects(&[digest]),
     )
     .await
     {
@@ -138,16 +138,17 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
 }
 
 pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
-    let keys: Vec<_> = digests.into_iter().map(TransactionKey::Digest).collect();
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
-        state.get_cache_reader().notify_read_executed_effects(&keys),
+        state
+            .get_cache_reader()
+            .notify_read_executed_effects(&digests),
     )
     .await
     {
-        Ok(_) => info!(?keys, "all digests found"),
+        Ok(_) => info!(?digests, "all digests found"),
         Err(e) => {
-            warn!(?keys, "some digests not found!");
+            warn!(?digests, "some digests not found!");
             panic!("timed out waiting for effects of digests! {e}");
         }
     }

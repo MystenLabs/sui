@@ -45,9 +45,8 @@ use sui_types::quorum_driver_types::{
 };
 use sui_types::storage::ObjectStore;
 use sui_types::transaction::{
-    CallArg, GasData, TransactionData, TransactionKey, TransactionKind,
-    TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    CallArg, GasData, TransactionData, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+    TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
@@ -74,7 +73,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     fullnode
         .state()
         .get_effects_notify_read()
-        .notify_read_executed_effects(vec![TransactionKey::Digest(digest)])
+        .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
 
@@ -120,7 +119,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
         .sui_node
         .state()
         .get_effects_notify_read()
-        .notify_read_executed_effects(vec![TransactionKey::Digest(digest)])
+        .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
 
@@ -513,7 +512,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     fullnode
         .state()
         .get_effects_notify_read()
-        .notify_read_executed_effects(vec![TransactionKey::Digest(digest)])
+        .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
 
@@ -623,17 +622,16 @@ async fn do_test_full_node_sync_flood() {
     }
 
     // make sure the node syncs up to the last digest sent by each task.
-    let keys = future::join_all(futures)
+    let digests = future::join_all(futures)
         .await
         .iter()
         .map(|r| r.clone().unwrap())
         .flat_map(|(a, b)| std::iter::once(a).chain(std::iter::once(b)))
-        .map(TransactionKey::Digest)
         .collect();
     fullnode
         .state()
         .get_effects_notify_read()
-        .notify_read_executed_effects(keys)
+        .notify_read_executed_effects(digests)
         .await
         .unwrap();
 }
@@ -669,7 +667,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
     let (sender, object_id, digest) = create_devnet_nft(context, package_id).await;
     node.state()
         .get_effects_notify_read()
-        .notify_read_executed_effects(vec![TransactionKey::Digest(digest)])
+        .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
 
@@ -910,7 +908,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     fullnode
         .state()
         .get_effects_notify_read()
-        .notify_read_executed_effects(vec![TransactionKey::Digest(digest)])
+        .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
     fullnode.state().get_executed_transaction_and_effects(digest, kv_store).await
@@ -1210,7 +1208,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
 
     node.state()
         .get_effects_notify_read()
-        .notify_read_executed_effects(vec![TransactionKey::Digest(digest)])
+        .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
 
@@ -1230,7 +1228,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
         transfer_coin(&test_cluster.wallet).await?;
     node.state()
         .get_effects_notify_read()
-        .notify_read_executed_effects(vec![TransactionKey::Digest(digest_after_restore)])
+        .notify_read_executed_effects(vec![digest_after_restore])
         .await
         .unwrap();
     Ok(())
