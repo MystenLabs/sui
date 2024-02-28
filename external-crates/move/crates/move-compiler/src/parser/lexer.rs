@@ -222,7 +222,7 @@ impl<'input> Lexer<'input> {
     }
 
     pub fn at_set(&self, set: &TokenSet) -> bool {
-        set.contains(*&self.token, &self.content())
+        set.contains(self.token, self.content())
     }
 
     pub fn content(&self) -> &'input str {

@@ -3,10 +3,10 @@
 
 use crate::parser::lexer::{Tok, TOK_COUNT};
 
-use std::collections::HashMap;
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
 
-use super::ast::{MACRO_MODIFIER, ENTRY_MODIFIER, NATIVE_MODIFIER};
+use super::ast::{ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER};
 
 #[derive(Clone, Debug)]
 pub struct TokenSet {
@@ -34,20 +34,19 @@ const MEMBER_VISIBILITY_TOKENS: [Tok; 1] = [Tok::Public];
 const MEMBER_MODIFIER_TOKENS: [Tok; 2] = [Tok::Native, Tok::Identifier];
 
 pub static MODULE_MEMBER_START_SET: Lazy<TokenSet> = Lazy::new(|| {
-        let mut token_set = TokenSet::new();
-        token_set.add_all(&MODULE_MEMBER_TOKENS);
-        token_set.add_all(&MEMBER_VISIBILITY_TOKENS);
-        token_set.add_all(&MEMBER_MODIFIER_TOKENS);
-        token_set.add_identifier(MACRO_MODIFIER);
-        token_set.add_identifier(ENTRY_MODIFIER);
-        token_set.add_identifier(NATIVE_MODIFIER);
-        token_set
-    }
-);
+    let mut token_set = TokenSet::new();
+    token_set.add_all(&MODULE_MEMBER_TOKENS);
+    token_set.add_all(&MEMBER_VISIBILITY_TOKENS);
+    token_set.add_all(&MEMBER_MODIFIER_TOKENS);
+    token_set.add_identifier(MACRO_MODIFIER);
+    token_set.add_identifier(ENTRY_MODIFIER);
+    token_set.add_identifier(NATIVE_MODIFIER);
+    token_set
+});
 
 const PARAM_STARTS: [Tok; 3] = [Tok::Identifier, Tok::Mut, Tok::SyntaxIdentifier];
 
-pub static PARAM_START_SET: Lazy<TokenSet> = Lazy::new(||  TokenSet::from(&PARAM_STARTS) );
+pub static PARAM_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(&PARAM_STARTS));
 
 const EXP_STARTS: [Tok; 27] = [
     Tok::NumValue,
@@ -79,7 +78,7 @@ const EXP_STARTS: [Tok; 27] = [
     Tok::BlockLabel,
 ];
 
-pub static EXP_START_SET: Lazy<TokenSet> = Lazy::new(||  TokenSet::from(&EXP_STARTS) );
+pub static EXP_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(&EXP_STARTS));
 
 const TYPE_STARTS: [Tok; 6] = [
     Tok::Identifier,
@@ -90,7 +89,7 @@ const TYPE_STARTS: [Tok; 6] = [
     Tok::SyntaxIdentifier,
 ];
 
-pub static TYPE_START_SET: Lazy<TokenSet> = Lazy::new(||  TokenSet::from(&TYPE_STARTS) );
+pub static TYPE_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(&TYPE_STARTS));
 
 //**************************************************************************************************
 // IMPLS

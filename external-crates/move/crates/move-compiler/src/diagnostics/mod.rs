@@ -488,7 +488,7 @@ impl Diagnostic {
         self.info.category() == MIGRATION_CATEGORY
     }
 
-    pub fn primary_loc(&self) ->  Loc {
+    pub fn primary_loc(&self) -> Loc {
         self.primary_label.0
     }
 }

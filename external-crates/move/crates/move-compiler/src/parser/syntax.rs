@@ -211,17 +211,6 @@ fn consume_expected_token_or_follow_set(context: &mut Context, tok: Tok) -> bool
     }
 }
 
-// Check for the specified token, or add an error to the context. Returns true if it found it.
-fn consume_expected_token(context: &mut Context, tok: Tok) -> bool {
-    match consume_token(context, tok) {
-        Err(err) => {
-            context.env.add_diag(*err);
-            false
-        }
-        Ok(()) => true,
-    }
-}
-
 // Check for the specified token and return an error if it does not match.
 fn consume_token(context: &mut Context, tok: Tok) -> Result<(), Box<Diagnostic>> {
     consume_token_(context, tok, context.tokens.start_loc(), "")
@@ -305,11 +294,16 @@ fn parse_comma_list<F, R>(
 where
     F: Fn(&mut Context) -> Result<R, Box<Diagnostic>>,
 {
-    let (list_items, _end_loc) = parse_comma_list_with_end_loc(context, start_token, end_token, item_first_set, parse_list_item, item_description);
+    let (list_items, _end_loc) = parse_comma_list_with_end_loc(
+        context,
+        start_token,
+        end_token,
+        item_first_set,
+        parse_list_item,
+        item_description,
+    );
     list_items
 }
-
-
 
 // FIXME: the return type including the usize is a bit of a hack. The problem is that if we are at
 // the stop set, we might have discarded extra things to get there, and therefore
@@ -385,7 +379,7 @@ where
         } else {
             context
                 .env
-                .add_diag(*unexpected_token_error(&context.tokens, item_description));
+                .add_diag(*unexpected_token_error(context.tokens, item_description));
             while !(context.tokens.at_set(item_first_set)
                 || context.tokens.at(end_token)
                 || context.tokens.at(Tok::EOF)
@@ -1134,7 +1128,6 @@ fn maybe_parse_value(context: &mut Context) -> Result<Option<Value>, Box<Diagnos
 fn parse_value(context: &mut Context) -> Result<Value, Box<Diagnostic>> {
     Ok(maybe_parse_value(context)?.expect("parse_value called with invalid token"))
 }
-
 
 //**************************************************************************************************
 // Sequences
@@ -2254,7 +2247,7 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let (t, end_loc) = match context.tokens.peek() {
         Tok::LParen => {
-            let (mut ts, end_loc)  = parse_comma_list_with_end_loc(
+            let (mut ts, end_loc) = parse_comma_list_with_end_loc(
                 context,
                 Tok::LParen,
                 Tok::RParen,
@@ -2272,12 +2265,18 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
             context.tokens.advance()?;
             let is_mut = match_token(context.tokens, Tok::Mut)?;
             let t = parse_type(context)?;
-            (Type_::Ref(is_mut, Box::new(t)), context.tokens.previous_end_loc())
+            (
+                Type_::Ref(is_mut, Box::new(t)),
+                context.tokens.previous_end_loc(),
+            )
         }
         Tok::AmpMut => {
             context.tokens.advance()?;
             let t = parse_type(context)?;
-            (Type_::Ref(true, Box::new(t)), context.tokens.previous_end_loc())
+            (
+                Type_::Ref(true, Box::new(t)),
+                context.tokens.previous_end_loc(),
+            )
         }
         tok @ Tok::PipePipe | tok @ Tok::Pipe => {
             let args = if tok == Tok::PipePipe {
@@ -2335,7 +2334,10 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
             } else {
                 vec![]
             };
-            (Type_::Apply(Box::new(tn), tys), context.tokens.previous_end_loc())
+            (
+                Type_::Apply(Box::new(tn), tys),
+                context.tokens.previous_end_loc(),
+            )
         }
     };
     // let end_loc = context.tokens.previous_end_loc();
@@ -2627,7 +2629,7 @@ fn parse_parameter(context: &mut Context) -> Result<(Mutability, Var, Type), Box
     // Handle a special case if someone tried to use `mut` as a variable name.
     let v: Var = if context.tokens.peek() == Tok::Colon {
         context.env.add_diag(*unexpected_token_error(
-            &context.tokens,
+            context.tokens,
             "an identifier after 'mut'",
         ));
         let loc = context.tokens.current_token_loc();
@@ -3663,7 +3665,8 @@ fn parse_condition(context: &mut Context) -> Result<SpecBlockMember, Box<Diagnos
             &EXP_START_SET,
             parse_exp,
             "an aborts code or modifies target",
-        ).0
+        )
+        .0
     } else if kind_ == SpecConditionKind_::Emits {
         consume_identifier(context.tokens, "to")?;
         let mut additional_exps = vec![parse_exp(context)?];
@@ -4064,7 +4067,8 @@ fn parse_spec_pragma(context: &mut Context) -> Result<SpecBlockMember, Box<Diagn
         &TokenSet::from([Tok::Identifier]),
         parse_spec_property,
         "a pragma property",
-    ).0;
+    )
+    .0;
     Ok(spanned(
         context.tokens.file_hash(),
         start_loc,
