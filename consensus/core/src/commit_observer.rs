@@ -76,13 +76,17 @@ impl CommitObserver {
                     "Failed to send committed sub-dag, probably due to shutdown: {err:?}"
                 );
                 return Err(ConsensusError::Shutdown);
-            } else {
-                sent_sub_dags.push(committed_sub_dag);
             }
+            tracing::debug!(
+                "Sending to execution commit {} leader {}",
+                committed_sub_dag.commit_index,
+                committed_sub_dag.leader
+            );
+            sent_sub_dags.push(committed_sub_dag);
         }
 
         self.report_metrics(&sent_sub_dags);
-        tracing::debug!("Committed & sent {sent_sub_dags:#?}");
+        tracing::trace!("Committed & sent {sent_sub_dags:#?}");
         Ok(sent_sub_dags)
     }
 

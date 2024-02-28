@@ -7,7 +7,6 @@ use std::sync::Arc;
 use crate::block::{BlockAPI, BlockRef, VerifiedBlock};
 use crate::context::Context;
 use crate::dag_state::DagState;
-use crate::error::ConsensusResult;
 
 struct SuspendedBlock {
     block: VerifiedBlock,
@@ -61,13 +60,13 @@ impl BlockManager {
     pub(crate) fn try_accept_blocks(
         &mut self,
         mut blocks: Vec<VerifiedBlock>,
-    ) -> ConsensusResult<(Vec<VerifiedBlock>, BTreeSet<BlockRef>)> {
+    ) -> (Vec<VerifiedBlock>, BTreeSet<BlockRef>) {
         let mut accepted_blocks = vec![];
         let missing_blocks_before = self.missing_blocks.clone();
 
         blocks.sort_by_key(|b| b.round());
         for block in blocks {
-            if let Some(block) = self.try_accept_block(block)? {
+            if let Some(block) = self.try_accept_block(block) {
                 // Try to unsuspend and accept any children blocks
                 let mut unsuspended_blocks = self.try_unsuspend_children_blocks(&block);
                 unsuspended_blocks.push(block);
@@ -93,27 +92,27 @@ impl BlockManager {
             .collect();
 
         // Figure out the new missing blocks
-        Ok((accepted_blocks, missing_blocks_after))
+        (accepted_blocks, missing_blocks_after)
     }
 
     /// Tries to accept the provided block. To accept a block its ancestors must have been already successfully accepted. If
     /// block is accepted then Some result is returned. None is returned when either the block is suspended or the block
     /// has been already accepted before.
-    fn try_accept_block(&mut self, block: VerifiedBlock) -> ConsensusResult<Option<VerifiedBlock>> {
+    fn try_accept_block(&mut self, block: VerifiedBlock) -> Option<VerifiedBlock> {
         let block_ref = block.reference();
         let mut missing_ancestors = BTreeSet::new();
         let dag_state = self.dag_state.read();
 
         // If block has been already received and suspended, or already processed and stored, or is a genesis block, then skip it.
-        if self.suspended_blocks.contains_key(&block_ref) || dag_state.contains_block(&block_ref)? {
-            return Ok(None);
+        if self.suspended_blocks.contains_key(&block_ref) || dag_state.contains_block(&block_ref) {
+            return None;
         }
 
         let ancestors = block.ancestors();
 
         // make sure that we have all the required ancestors in store
         for (found, ancestor) in dag_state
-            .contains_blocks(ancestors.to_vec())?
+            .contains_blocks(ancestors.to_vec())
             .into_iter()
             .zip(ancestors.iter())
         {
@@ -153,10 +152,10 @@ impl BlockManager {
                 .inc();
             self.suspended_blocks
                 .insert(block_ref, SuspendedBlock::new(block, missing_ancestors));
-            return Ok(None);
+            return None;
         }
 
-        Ok(Some(block))
+        Some(block)
     }
 
     /// Given an accepted block `accepted_block` it attempts to accept all the suspended children blocks assuming such exist.
@@ -277,9 +276,7 @@ mod tests {
             .collect::<Vec<VerifiedBlock>>();
 
         // WHEN
-        let (accepted_blocks, missing) = block_manager
-            .try_accept_blocks(round_2_blocks.clone())
-            .expect("No error was expected");
+        let (accepted_blocks, missing) = block_manager.try_accept_blocks(round_2_blocks.clone());
 
         // THEN
         assert!(accepted_blocks.is_empty());
@@ -324,9 +321,7 @@ mod tests {
             .enumerate()
         {
             // WHEN
-            let (accepted_blocks, missing) = block_manager
-                .try_accept_blocks(vec![block.clone()])
-                .expect("No error was expected");
+            let (accepted_blocks, missing) = block_manager.try_accept_blocks(vec![block.clone()]);
 
             // THEN
             assert!(accepted_blocks.is_empty());
@@ -355,9 +350,7 @@ mod tests {
         let all_blocks = dag(context, 2);
 
         // WHEN
-        let (accepted_blocks, missing) = block_manager
-            .try_accept_blocks(all_blocks.clone())
-            .expect("No error was expected");
+        let (accepted_blocks, missing) = block_manager.try_accept_blocks(all_blocks.clone());
 
         // THEN
         assert!(accepted_blocks.len() == 8);
@@ -372,9 +365,7 @@ mod tests {
         assert!(missing.is_empty());
 
         // WHEN trying to accept same blocks again, then none will be returned as those have been already accepted
-        let (accepted_blocks, _) = block_manager
-            .try_accept_blocks(all_blocks)
-            .expect("No error was expected");
+        let (accepted_blocks, _) = block_manager.try_accept_blocks(all_blocks);
         assert!(accepted_blocks.is_empty());
     }
 
@@ -405,9 +396,7 @@ mod tests {
             // WHEN
             let mut all_accepted_blocks = vec![];
             for block in &all_blocks {
-                let (accepted_blocks, _) = block_manager
-                    .try_accept_blocks(vec![block.clone()])
-                    .expect("No error was expected");
+                let (accepted_blocks, _) = block_manager.try_accept_blocks(vec![block.clone()]);
 
                 all_accepted_blocks.extend(accepted_blocks);
             }

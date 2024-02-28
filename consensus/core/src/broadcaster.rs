@@ -29,7 +29,7 @@ const BROADCAST_CONCURRENCY: usize = 10;
 /// For a peer that lags behind or is disconnected, blocks are buffered and retried until
 /// a limit is reached, then old blocks will get dropped from the buffer.
 pub(crate) struct Broadcaster {
-    // Background tasks sending blocks to peers.
+    // Background tasks listening for new blocks and pushing them to peers.
     senders: JoinSet<()>,
 }
 
@@ -39,7 +39,6 @@ impl Broadcaster {
         network_client: Arc<C>,
         signals_receiver: &CoreSignalsReceivers,
     ) -> Self {
-        // Initialize sender tasks.
         let mut senders = JoinSet::new();
         for (index, _authority) in context.committee.authorities() {
             // Skip sending Block to self.
@@ -53,6 +52,7 @@ impl Broadcaster {
                 index,
             ));
         }
+
         Self { senders }
     }
 
@@ -213,7 +213,7 @@ mod test {
 
         let block = VerifiedBlock::new_for_test(TestBlock::new(9, 1).build());
         assert!(
-            core_signals.new_block(block.clone()),
+            core_signals.new_block(block.clone()).is_ok(),
             "No subscriber active to receive the block"
         );
 

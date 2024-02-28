@@ -30,7 +30,7 @@ pub(crate) type CommitIndex = u64;
 
 /// Specifies one consensus commit.
 /// It is stored on disk, so it does not contain blocks which are stored individually.
-#[allow(unused)]
+// TODO: store internal data in a refcounted and versioned struct. Remove last_committed_rounds.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct Commit {
     /// Index of the commit.
@@ -262,7 +262,7 @@ mod tests {
             })
             .map(|block| (block.reference(), block))
             .unzip();
-        store.write(genesis, vec![]).unwrap();
+        store.write(genesis, vec![], vec![]).unwrap();
         blocks.append(&mut genesis_references.clone());
 
         let mut ancestors = genesis_references;
@@ -277,7 +277,7 @@ mod tests {
                         .set_ancestors(ancestors.clone())
                         .build(),
                 );
-                store.write(vec![block.clone()], vec![]).unwrap();
+                store.write(vec![block.clone()], vec![], vec![]).unwrap();
                 new_ancestors.push(block.reference());
                 blocks.push(block.reference());
 

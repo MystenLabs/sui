@@ -107,6 +107,7 @@ where
             "Starting authority {}\n{:#?}\n{:#?}\n{:?}",
             own_index, committee, parameters, protocol_config.version
         );
+        assert!(committee.is_valid_index(own_index));
         let context = Arc::new(Context::new(
             own_index,
             committee,
@@ -116,12 +117,18 @@ where
         ));
         let start_time = Instant::now();
 
-        // Create the transactions client and the transactions consumer
         let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
-        // Construct Core components.
         let (core_signals, signals_receivers) = CoreSignals::new();
+
+        let network_manager = N::new(context.clone());
+        let network_client = network_manager.client();
+
+        // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
+        let broadcaster =
+            Broadcaster::new(context.clone(), network_client.clone(), &signals_receivers);
+
         let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
@@ -150,15 +157,6 @@ where
         let leader_timeout_handle =
             LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
 
-        // Create network manager and client.
-        let network_manager = N::new(context.clone());
-        let network_client = network_manager.client();
-
-        // Create Broadcaster.
-        let broadcaster =
-            Broadcaster::new(context.clone(), network_client.clone(), &signals_receivers);
-
-        // Start network service.
         let block_verifier = Arc::new(SignedBlockVerifier::new(
             context.clone(),
             transaction_verifier,
@@ -169,6 +167,7 @@ where
             core_dispatcher.clone(),
             block_verifier.clone(),
         );
+
         let network_service = Arc::new(AuthorityService {
             context: context.clone(),
             block_verifier,
@@ -329,7 +328,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         }
 
         // For now ask dag state directly
-        let blocks = self.dag_state.read().get_blocks(block_refs)?;
+        let blocks = self.dag_state.read().get_blocks(&block_refs);
 
         // Return the serialised blocks
         let result = blocks

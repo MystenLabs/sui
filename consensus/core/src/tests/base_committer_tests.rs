@@ -36,8 +36,8 @@ fn try_direct_commit() {
     let incomplete_wave_leader_round = 6;
     build_dag(context, dag_state, None, voting_round_wave_2);
 
-    // Leader rounds are the first rounds of each wave. In this case rounds 0, 3 & 6.
-    let mut leader_rounds: Vec<u32> = (0..num_rounds_in_dag)
+    // Leader rounds are the first rounds of each wave. In this case rounds 3 & 6.
+    let mut leader_rounds: Vec<u32> = (1..num_rounds_in_dag)
         .map(|r| committer.leader_round(r))
         .collect::<HashSet<_>>()
         .into_iter()
@@ -57,7 +57,7 @@ fn try_direct_commit() {
             if let LeaderStatus::Commit(ref committed_block) = leader_status {
                 assert_eq!(committed_block.author(), leader.authority)
             } else {
-                panic!("Expected a committed leader")
+                panic!("Expected a committed leader at round {}", round)
             };
         } else {
             // The base committer should mark the potential leader in r6 as undecided
