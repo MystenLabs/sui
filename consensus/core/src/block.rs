@@ -27,10 +27,10 @@ use crate::context::Context;
 use crate::error::ConsensusResult;
 use crate::{ensure, error::ConsensusError};
 
-const GENESIS_ROUND: Round = 0;
-
 /// Round number of a block.
 pub type Round = u32;
+
+pub const GENESIS_ROUND: Round = 0;
 
 /// Block proposal timestamp in milliseconds.
 pub type BlockTimestampMs = u64;
@@ -74,36 +74,6 @@ pub enum Block {
     V1(BlockV1),
 }
 
-impl Block {
-    /// Generate the genesis blocks for the latest Block version. The tuple contains (my_genesis_block, all_genesis_blocks).
-    /// The blocks are returned in authority index order.
-    pub(crate) fn genesis(context: Arc<Context>) -> (VerifiedBlock, Vec<VerifiedBlock>) {
-        let blocks = context
-            .committee
-            .authorities()
-            .map(|(authority_index, _)| {
-                let signed_block = SignedBlock::new_genesis(Block::V1(BlockV1::genesis(
-                    authority_index,
-                    context.committee.epoch(),
-                )));
-                let serialized = signed_block
-                    .serialize()
-                    .expect("Genesis block serialization failed.");
-                // Unnecessary to verify genesis blocks.
-                VerifiedBlock::new_verified(signed_block, serialized)
-            })
-            .collect::<Vec<VerifiedBlock>>();
-        (
-            blocks
-                .iter()
-                .find(|b| b.author() == context.own_index)
-                .cloned()
-                .expect("We should have found our own genesis block"),
-            blocks,
-        )
-    }
-}
-
 #[enum_dispatch]
 pub trait BlockAPI {
     fn epoch(&self) -> Epoch;
@@ -126,7 +96,6 @@ pub struct BlockV1 {
 }
 
 impl BlockV1 {
-    #[allow(dead_code)]
     pub(crate) fn new(
         epoch: Epoch,
         round: Round,
@@ -145,8 +114,7 @@ impl BlockV1 {
         }
     }
 
-    /// Generate the block that is meant to be used for genesis
-    pub(crate) fn genesis(author: AuthorityIndex, epoch: Epoch) -> BlockV1 {
+    fn genesis_block(epoch: Epoch, author: AuthorityIndex) -> Self {
         Self {
             round: GENESIS_ROUND,
             author,
@@ -159,6 +127,10 @@ impl BlockV1 {
 }
 
 impl BlockAPI for BlockV1 {
+    fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+
     fn round(&self) -> Round {
         self.round
     }
@@ -177,10 +149,6 @@ impl BlockAPI for BlockV1 {
 
     fn transactions(&self) -> &[Transaction] {
         &self.transactions
-    }
-
-    fn epoch(&self) -> Epoch {
-        self.epoch
     }
 }
 
@@ -533,6 +501,26 @@ impl fmt::Debug for VerifiedBlock {
             self.transactions().len()
         )
     }
+}
+
+/// Generates the genesis blocks for the current Committee.
+/// The blocks are returned in authority index order.
+pub(crate) fn genesis_blocks(context: Arc<Context>) -> Vec<VerifiedBlock> {
+    context
+        .committee
+        .authorities()
+        .map(|(authority_index, _)| {
+            let signed_block = SignedBlock::new_genesis(Block::V1(BlockV1::genesis_block(
+                context.committee.epoch(),
+                authority_index,
+            )));
+            let serialized = signed_block
+                .serialize()
+                .expect("Genesis block serialization failed.");
+            // Unnecessary to verify genesis blocks.
+            VerifiedBlock::new_verified(signed_block, serialized)
+        })
+        .collect::<Vec<VerifiedBlock>>()
 }
 
 /// Creates fake blocks for testing.
