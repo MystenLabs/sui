@@ -1091,28 +1091,7 @@ impl AuthorityState {
         debug!("execute_certificate_internal");
 
         let tx_digest = certificate.digest();
-        let input_objects = {
-            let _scope = monitored_scope("Execution::load_input_objects");
-            let input_objects = &certificate.data().transaction_data().input_objects()?;
-            if certificate.data().transaction_data().is_end_of_epoch_tx() {
-                self.input_loader
-                    .read_objects_for_synchronous_execution(
-                        tx_digest,
-                        input_objects,
-                        epoch_store.protocol_config(),
-                    )
-                    .await?
-            } else {
-                self.input_loader
-                    .read_objects_for_execution(
-                        epoch_store.as_ref(),
-                        tx_digest,
-                        input_objects,
-                        epoch_store.epoch(),
-                    )
-                    .await?
-            }
-        };
+        let input_objects = self.read_objects(certificate, epoch_store).await?;
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -1129,6 +1108,42 @@ impl AuthorityState {
         )
         .await
         .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
+    }
+
+    async fn read_objects(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<InputObjects> {
+        let _scope = monitored_scope("Execution::load_input_objects");
+        let tx_digest = certificate.digest();
+        let input_objects = &certificate.data().transaction_data().input_objects()?;
+        if certificate.data().transaction_data().is_end_of_epoch_tx() {
+            self.input_loader
+                .read_objects_for_synchronous_execution(
+                    tx_digest,
+                    input_objects,
+                    epoch_store.protocol_config(),
+                )
+                .await
+        } else {
+            self.input_loader
+                .read_objects_for_execution(
+                    epoch_store.as_ref(),
+                    tx_digest,
+                    input_objects,
+                    epoch_store.epoch(),
+                )
+                .await
+        }
+    }
+
+    pub async fn read_objects_for_benchmarking(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<InputObjects> {
+        self.read_objects(certificate, epoch_store).await
     }
 
     /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
@@ -1159,7 +1174,7 @@ impl AuthorityState {
             .map(|mut r| r.pop().expect("must return correct number of effects"))
     }
 
-    async fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
+    fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
         self.execution_cache
             .check_owned_object_locks_exist(owned_object_refs)
     }
@@ -1249,10 +1264,12 @@ impl AuthorityState {
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (inner_temporary_store, effects, execution_error_opt) = match self
-            .prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)
-            .await
-        {
+        let (inner_temporary_store, effects, execution_error_opt) = match self.prepare_certificate(
+            &execution_guard,
+            certificate,
+            input_objects,
+            epoch_store,
+        ) {
             Err(e) => {
                 info!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
                 tx_guard.release();
@@ -1480,7 +1497,7 @@ impl AuthorityState {
     /// locks are not held, etc. However, this is not entirely true, as a transient db read error
     /// may also cause this function to fail.
     #[instrument(level = "trace", skip_all)]
-    async fn prepare_certificate(
+    fn prepare_certificate(
         &self,
         _execution_guard: &ExecutionLockReadGuard<'_>,
         certificate: &VerifiedExecutableTransaction,
@@ -1508,7 +1525,7 @@ impl AuthorityState {
         )?;
 
         let owned_object_refs = input_objects.inner().filter_owned_objects();
-        self.check_owned_locks(&owned_object_refs).await?;
+        self.check_owned_locks(&owned_object_refs)?;
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
@@ -1544,6 +1561,22 @@ impl AuthorityState {
         });
 
         Ok((inner_temp_store, effects, execution_error_opt.err()))
+    }
+
+    pub fn prepare_certificate_for_benchmark(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        input_objects: InputObjects,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<(
+        InnerTemporaryStore,
+        TransactionEffects,
+        Option<ExecutionError>,
+    )> {
+        let lock: RwLock<EpochId> = RwLock::new(epoch_store.epoch());
+        let execution_guard = lock.try_read().unwrap();
+
+        self.prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)
     }
 
     pub async fn dry_exec_transaction(
@@ -4494,9 +4527,8 @@ impl AuthorityState {
             )
             .await?;
 
-        let (temporary_store, effects, _execution_error_opt) = self
-            .prepare_certificate(&execution_guard, &executable_tx, input_objects, epoch_store)
-            .await?;
+        let (temporary_store, effects, _execution_error_opt) =
+            self.prepare_certificate(&execution_guard, &executable_tx, input_objects, epoch_store)?;
         let system_obj = get_sui_system_state(&temporary_store.written)
             .expect("change epoch tx must write to system object");
 

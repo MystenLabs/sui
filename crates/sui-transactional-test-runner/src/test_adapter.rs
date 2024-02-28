@@ -9,6 +9,7 @@ use crate::{TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
+use criterion::Criterion;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::traits::ToFromBytes;
@@ -33,7 +34,7 @@ use move_symbol_pool::Symbol;
 use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
 use move_transactional_test_runner::{
     framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
-    tasks::{InitCommand, SyntaxChoice, TaskInput},
+    tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
 };
 use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
@@ -170,9 +171,9 @@ struct TxnSummary {
 impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
     type ExtraPublishArgs = SuiPublishArgs;
     type ExtraRunArgs = SuiRunArgs;
-    type Subcommand = SuiSubcommand;
     type ExtraInitArgs = SuiInitArgs;
     type ExtraValueArgs = SuiExtraValueArgs;
+    type Subcommand = SuiSubcommand<Self::ExtraValueArgs, Self::ExtraRunArgs>;
 
     fn compiled_state(&mut self) -> &mut CompiledState<'a> {
         &mut self.compiled_state
@@ -476,33 +477,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         extra: Self::ExtraRunArgs,
     ) -> anyhow::Result<(Option<String>, SerializedReturnValues)> {
         self.next_task();
-        assert!(signers.is_empty(), "signers are not used");
-        let SuiRunArgs {
-            sender,
-            gas_price,
-            summarize,
-        } = extra;
-        let mut builder = ProgrammableTransactionBuilder::new();
-        let arguments = args
-            .into_iter()
-            .map(|arg| arg.into_argument(&mut builder, self))
-            .collect::<anyhow::Result<_>>()?;
-        let package_id = ObjectID::from(*module_id.address());
-
-        let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
-        let gas_price = gas_price.unwrap_or(self.gas_price);
-        let data = |sender, gas| {
-            builder.command(Command::move_call(
-                package_id,
-                module_id.name().to_owned(),
-                function.to_owned(),
-                type_args,
-                arguments,
-            ));
-            let pt = builder.finish();
-            TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
-        };
-        let transaction = self.sign_txn(sender, data);
+        let SuiRunArgs { summarize, .. } = extra;
+        let transaction = self.build_function_call_tx(
+            module_id, function, type_args, signers, args, gas_budget, extra,
+        )?;
         let summary = self.execute_txn(transaction).await?;
         let output = self.object_summary_output(&summary, summarize);
         let empty = SerializedReturnValues {
@@ -1040,6 +1018,72 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
                 Ok(None)
             }
+            SuiSubcommand::Bench(
+                RunCommand {
+                    signers,
+                    args,
+                    type_args,
+                    gas_budget,
+                    syntax,
+                    name,
+                },
+                extra_args,
+            ) => {
+                let (raw_addr, module_name, name) = name.unwrap();
+
+                assert!(
+                    syntax.is_none(),
+                    "syntax flag meaningless with function execution"
+                );
+
+                let addr = self.compiled_state().resolve_address(&raw_addr);
+                let module_id = ModuleId::new(addr, module_name);
+                let type_args = self.compiled_state().resolve_type_args(type_args)?;
+                let args = self.compiled_state().resolve_args(args)?;
+
+                let tx = self
+                    .build_function_call_tx(
+                        &module_id,
+                        name.as_ident_str(),
+                        type_args.clone(),
+                        signers.clone(),
+                        args.clone(),
+                        gas_budget,
+                        extra_args.clone(),
+                    )
+                    .unwrap();
+
+                let objects = self.executor.read_input_objects(tx.clone()).await?;
+
+                // only run benchmarks in release mode
+                if !cfg!(debug_assertions) {
+                    let mut c = Criterion::default();
+
+                    c.bench_function("benchmark_tx", |b| {
+                        let tx = tx.clone();
+                        let objects = objects.clone();
+                        b.iter(|| {
+                            self.executor
+                                .prepare_txn(tx.clone(), objects.clone())
+                                .unwrap();
+                        })
+                    });
+                }
+
+                // Run the tx for real after the benchmark, so that its effects are persisted and
+                // available to subsequent commands
+                self.call_function(
+                    &module_id,
+                    name.as_ident_str(),
+                    type_args,
+                    signers,
+                    args,
+                    gas_budget,
+                    extra_args,
+                )
+                .await?;
+                Ok(merge_output(None, None))
+            }
         }
     }
 
@@ -1304,6 +1348,43 @@ impl<'a> SuiTestAdapter<'a> {
             },
             None => &self.default_account,
         }
+    }
+
+    fn build_function_call_tx(
+        &mut self,
+        module_id: &ModuleId,
+        function: &IdentStr,
+        type_args: Vec<TypeTag>,
+        signers: Vec<ParsedAddress>,
+        args: Vec<SuiValue>,
+        gas_budget: Option<u64>,
+        extra: SuiRunArgs,
+    ) -> anyhow::Result<Transaction> {
+        assert!(signers.is_empty(), "signers are not used");
+        let SuiRunArgs {
+            sender, gas_price, ..
+        } = extra;
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let arguments = args
+            .into_iter()
+            .map(|arg| arg.into_argument(&mut builder, self))
+            .collect::<anyhow::Result<_>>()?;
+        let package_id = ObjectID::from(*module_id.address());
+
+        let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+        let gas_price = gas_price.unwrap_or(self.gas_price);
+        let data = |sender, gas| {
+            builder.command(Command::move_call(
+                package_id,
+                module_id.name().to_owned(),
+                function.to_owned(),
+                type_args,
+                arguments,
+            ));
+            let pt = builder.finish();
+            TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
+        };
+        Ok(self.sign_txn(sender, data))
     }
 
     async fn execute_txn(&mut self, transaction: Transaction) -> anyhow::Result<TxnSummary> {
