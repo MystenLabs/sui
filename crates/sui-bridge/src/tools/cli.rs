@@ -6,6 +6,7 @@ use clap::*;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::secp256k1::Secp256k1KeyPair;
 use fastcrypto::traits::EncodeDecodeBase64;
+use sui_bridge::eth_transaction_builder::foo;
 use std::path::PathBuf;
 use sui_bridge::config::BridgeNodeConfig;
 use sui_bridge::crypto::BridgeAuthorityKeyPair;
@@ -40,6 +41,8 @@ pub enum BridgeValidatorCommand {
         #[clap(name = "run-client", long)]
         run_client: bool,
     },
+    #[clap(name = "foo")]
+    Foo,
 }
 
 #[tokio::main]
@@ -60,6 +63,9 @@ async fn main() -> anyhow::Result<()> {
                 "Bridge node config template generated at {}",
                 path.display()
             );
+        }
+        BridgeValidatorCommand::Foo => {
+            foo().await;
         }
     }
 

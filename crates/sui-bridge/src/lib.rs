@@ -9,6 +9,7 @@ pub mod crypto;
 pub mod error;
 pub mod eth_client;
 pub mod eth_syncer;
+pub mod eth_transaction_builder;
 pub mod events;
 pub mod node;
 pub mod orchestrator;
