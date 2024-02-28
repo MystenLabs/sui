@@ -61,7 +61,7 @@ module 42::m {
     }
 
     entry fun t08() {
-        let mut i = 0;
+        let i = 0;
         'a: while (i < 10) {
             i = i + 1;
             'b: { break 'a }
@@ -69,7 +69,7 @@ module 42::m {
     }
 
     entry fun t09() {
-        let mut i = 0;
+        let i = 0;
         'a: while (i < 10) {
             i = i + 1;
             ('b: { break 'a } : ())
@@ -115,7 +115,7 @@ module 42::m {
     }
 
     entry fun t15() {
-        let mut i = 0;
+        let i = 0;
         'a: while (i < 10) {
             i = i + 1;
             'b: { break 'a }
@@ -123,7 +123,7 @@ module 42::m {
     }
 
     entry fun t16() {
-        let mut i = 0;
+        let i = 0;
         'a: while (i < 10) {
             i = i + 1;
             ('b: { break 'a } : ())
