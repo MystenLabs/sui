@@ -228,7 +228,10 @@ impl IndexerApiServer for IndexerApi {
         parent_object_id: ObjectID,
         name: DynamicFieldName,
     ) -> RpcResult<SuiObjectResponse> {
-        let name_bcs_value = self.inner.bcs_name_from_dynamic_field_name(&name)?;
+        let name_bcs_value = self
+            .inner
+            .bcs_name_from_dynamic_field_name_in_blocking_task(&name)
+            .await?;
 
         // Try as Dynamic Field
         let id = sui_types::dynamic_field::derive_dynamic_field_id(
