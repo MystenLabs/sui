@@ -685,7 +685,7 @@ fn is_mut_clock(param_ty: &Type) -> bool {
 fn is_mut_random(param_ty: &Type) -> bool {
     match &param_ty.value {
         Type_::Ref(/* mut */ false, _) => false,
-        Type_::Ref(/* mut */ true, t) => crate::sui_mode::typing::is_mut_random(t),
+        Type_::Ref(/* mut */ true, t) => is_mut_random(t),
         Type_::Apply(_, sp!(_, n_), _) => n_.is(
             SUI_ADDR_NAME,
             RANDOMNESS_MODULE_NAME,
