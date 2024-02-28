@@ -59,7 +59,7 @@ fn func_def(env: &mut CompilationEnv, fname: Symbol, fdef: &T::Function, sloc: L
         if is_random_or_random_generator(t) {
             let msg = format!("Public function '{fname}' accepts sui::random::Random or sui::random::RandomGenerator as a parameter.");
             let uid_msg = "Functions that accept sui::random::Random or sui::random::RandomGenerator as a parameter might be abused by attackers. Private functions are preferred.";
-            let d = diag!(RANDOM_OBJECTS_DIAG, (sloc, msg), (sloc, uid_msg)); // TODO: fix
+            let d = diag!(RANDOM_OBJECTS_DIAG, (sloc, msg), (sloc, uid_msg)); // same location
             env.add_diag(d);
         }
     }
