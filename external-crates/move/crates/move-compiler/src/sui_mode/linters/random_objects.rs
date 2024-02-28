@@ -73,7 +73,7 @@ fn func_def(env: &mut CompilationEnv, fname: Symbol, fdef: &T::Function, sloc: L
 fn is_random_or_random_generator(sp!(_, t): &N::Type) -> bool {
     use N::Type_ as T;
 
-    let res = match t {
+    match t {
         T::Ref(_, inner_t) => is_random_or_random_generator(inner_t),
         T::Apply(_, tname, _) => {
             let sp!(_, tname) = tname;
@@ -83,8 +83,5 @@ fn is_random_or_random_generator(sp!(_, t): &N::Type) -> bool {
         T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError | T::Fun(_, _) => {
             false
         }
-    };
-    // println!("type  {:?} {} ---", t, res);
-
-    res
+    }
 }
