@@ -103,11 +103,11 @@ impl Linearizer {
             // [Optional] sort the sub-dag using a deterministic algorithm.
             sub_dag.sort();
 
-            // Update last commit in dag state
-            let commit = Commit {
-                index: sub_dag.commit_index,
-                leader: sub_dag.leader,
-                blocks: sub_dag
+            // Buffer commit in dag state for persistence later.
+            let commit = Commit::new(
+                sub_dag.commit_index,
+                sub_dag.leader,
+                sub_dag
                     .blocks
                     .iter()
                     .map(|block| {
@@ -115,9 +115,8 @@ impl Linearizer {
                         last_committed_rounds[block_ref.author.value()] = block_ref.round;
                         block_ref
                     })
-                    .collect::<Vec<_>>(),
-                last_committed_rounds,
-            };
+                    .collect(),
+            );
             self.dag_state.write().add_commit(commit.clone());
             committed_sub_dags.push(sub_dag);
         }
@@ -247,12 +246,8 @@ mod tests {
 
         let first_leader = leaders[0].clone();
         let mut last_commit_index = 1;
-        let first_commit_data = Commit {
-            index: last_commit_index,
-            leader: first_leader.reference(),
-            blocks: blocks.clone(),
-            last_committed_rounds,
-        };
+        let first_commit_data =
+            Commit::new(last_commit_index, first_leader.reference(), blocks.clone());
         dag_state.write().add_commit(first_commit_data);
 
         blocks.clear();
@@ -298,12 +293,8 @@ mod tests {
 
         last_commit_index += 1;
         let second_leader = leaders[1].clone();
-        let expected_second_commit_data = Commit {
-            index: last_commit_index,
-            leader: second_leader.reference(),
-            blocks: blocks.clone(),
-            last_committed_rounds: vec![],
-        };
+        let expected_second_commit_data =
+            Commit::new(last_commit_index, second_leader.reference(), blocks.clone());
 
         let commit = linearizer.handle_commit(vec![second_leader.clone()]);
         assert_eq!(commit.len(), 1);

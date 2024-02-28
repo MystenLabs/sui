@@ -390,10 +390,7 @@ impl DagState {
 
     /// Last committed round per authority.
     pub(crate) fn last_committed_rounds(&self) -> Vec<Round> {
-        match &self.last_commit {
-            Some(commit) => commit.last_committed_rounds.clone(),
-            None => vec![0; self.context.committee.size()],
-        }
+        self.last_committed_rounds.clone()
     }
 
     /// After each flush, DagState becomes persisted in storage and it expected to recover
@@ -838,11 +835,11 @@ mod test {
                 let block = VerifiedBlock::new_for_test(TestBlock::new(round, author).build());
                 blocks.push(block);
             }
-            commits.push(Commit {
-                index: round as CommitIndex,
-                leader: blocks.last().unwrap().reference(),
-                ..Default::default()
-            });
+            commits.push(Commit::new(
+                round as CommitIndex,
+                blocks.last().unwrap().reference(),
+                vec![],
+            ));
         }
 
         // Add the blocks from first 5 rounds and first 5 commits to the dag state

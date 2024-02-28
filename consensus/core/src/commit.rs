@@ -30,7 +30,7 @@ pub type CommitIndex = u32;
 
 /// Specifies one consensus commit.
 /// It is stored on disk, so it does not contain blocks which are stored individually.
-// TODO: store internal data in a refcounted and versioned struct. Remove last_committed_rounds.
+// TODO: store internal data in a refcounted and versioned struct.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct Commit {
     /// Index of the commit.
@@ -40,8 +40,17 @@ pub struct Commit {
     pub leader: BlockRef,
     /// Refs to committed blocks, in the commit order.
     pub blocks: Vec<BlockRef>,
-    /// Last committed round per authority.
-    pub last_committed_rounds: Vec<Round>,
+}
+
+impl Commit {
+    /// Create a new commit.
+    pub fn new(index: CommitIndex, leader: BlockRef, blocks: Vec<BlockRef>) -> Self {
+        Self {
+            index,
+            leader,
+            blocks,
+        }
+    }
 }
 
 /// The output of consensus is an ordered list of [`CommittedSubDag`]. The application
@@ -296,14 +305,9 @@ mod tests {
         let leader_block = leader.unwrap();
         let leader_ref = leader_block.reference();
         let commit_index = 1;
-        let commit_data = Commit {
-            index: commit_index,
-            leader: leader_ref,
-            blocks: blocks.clone(),
-            last_committed_rounds: vec![],
-        };
+        let commit = Commit::new(commit_index, leader_ref, blocks.clone());
 
-        let subdag = load_committed_subdag_from_store(store.as_ref(), commit_data);
+        let subdag = load_committed_subdag_from_store(store.as_ref(), commit);
         assert_eq!(subdag.leader, leader_ref);
         assert_eq!(subdag.timestamp_ms, leader_block.timestamp_ms());
         assert_eq!(
