@@ -259,8 +259,8 @@ mod last_usage {
     fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
         use Command_ as C;
         match cmd_ {
-            C::Assign(_, ls, e) => {
-                lvalues(context, ls);
+            C::Assign(case, ls, e) => {
+                lvalues(context, *case, ls);
                 exp(context, e);
             }
             C::Mutate(el, er) => {
@@ -277,11 +277,11 @@ mod last_usage {
         }
     }
 
-    fn lvalues(context: &mut Context, ls: &mut [LValue]) {
-        ls.iter_mut().for_each(|l| lvalue(context, l))
+    fn lvalues(context: &mut Context, case: AssignCase, ls: &mut [LValue]) {
+        ls.iter_mut().for_each(|l| lvalue(context, case, l))
     }
 
-    fn lvalue(context: &mut Context, l: &mut LValue) {
+    fn lvalue(context: &mut Context, case: AssignCase, l: &mut LValue) {
         use LValue_ as L;
         match &mut l.value {
             L::Ignore => (),
@@ -290,26 +290,33 @@ mod last_usage {
                 if !context.next_live.contains(v) {
                     match display_var(v.value()) {
                         DisplayVar::Tmp => (),
-                        DisplayVar::Orig(v_str) => {
+                        DisplayVar::Orig(vstr) => {
                             if !v.starts_with_underscore() {
+                                let case_msg = match case {
+                                    AssignCase::Update => "assignment for ",
+                                    AssignCase::Let => "",
+                                };
                                 let msg = format!(
-                                    "Unused assignment for variable '{}'. Consider \
+                                    "Unused {case_msg}variable '{vstr}'. Consider \
                                      removing, replacing with '_', or prefixing with '_' (e.g., \
-                                     '_{}')",
-                                    v_str, v_str
+                                     '_{vstr}')",
                                 );
                                 context
                                     .env
                                     .add_diag(diag!(UnusedItem::Assignment, (l.loc, msg)));
                             }
-                            if context.has_drop(v) {
+                            let should_ignore =
+                                v.starts_with_underscore() || case == AssignCase::Update;
+                            if context.has_drop(v) && should_ignore {
                                 l.value = L::Ignore
                             }
                         }
                     }
                 }
             }
-            L::Unpack(_, _, fields) => fields.iter_mut().for_each(|(_, l)| lvalue(context, l)),
+            L::Unpack(_, _, fields) => fields
+                .iter_mut()
+                .for_each(|(_, l)| lvalue(context, case, l)),
         }
     }
 

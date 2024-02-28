@@ -2,7 +2,7 @@ warning[W09003]: unused assignment
   ┌─ tests/move_check/liveness/unused_assignment.move:3:13
   │
 3 │         let x = 0;
-  │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
+  │             ^ Unused variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
   │
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -10,7 +10,7 @@ warning[W09003]: unused assignment
   ┌─ tests/move_check/liveness/unused_assignment.move:7:13
   │
 7 │         let x = 0;
-  │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
+  │             ^ Unused variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
   │
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -26,7 +26,7 @@ warning[W09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:13:17
    │
 13 │             let x = 0;
-   │                 ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
+   │                 ^ Unused variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
    │
    = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -42,7 +42,7 @@ warning[W09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:26:13
    │
 26 │         let x = 0;
-   │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
+   │             ^ Unused variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
    │
    = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

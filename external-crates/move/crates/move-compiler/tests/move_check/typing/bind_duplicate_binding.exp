@@ -2,7 +2,7 @@ warning[W09003]: unused assignment
   ┌─ tests/move_check/typing/bind_duplicate_binding.move:5:14
   │
 5 │         let (x, x) = (0, 0); x;
-  │              ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
+  │              ^ Unused variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
   │
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -18,7 +18,7 @@ warning[W09003]: unused assignment
   ┌─ tests/move_check/typing/bind_duplicate_binding.move:6:14
   │
 6 │         let (f, R{f}, f) = (0, R { f: 0 }, 0); f;
-  │              ^ Unused assignment for variable 'f'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_f')
+  │              ^ Unused variable 'f'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_f')
   │
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -34,7 +34,7 @@ warning[W09003]: unused assignment
   ┌─ tests/move_check/typing/bind_duplicate_binding.move:6:19
   │
 6 │         let (f, R{f}, f) = (0, R { f: 0 }, 0); f;
-  │                   ^ Unused assignment for variable 'f'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_f')
+  │                   ^ Unused variable 'f'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_f')
   │
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
