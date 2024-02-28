@@ -3073,6 +3073,9 @@ impl Display for CertifiedTransaction {
     }
 }
 
+/// TransactionKey uniquely identifies a transaction across all epochs.
+/// Note that a single transaction may have multiple keys, for example a RandomnessStateUpdate
+/// could be identified by both `Digest` and `RandomnessRound`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum TransactionKey {
     Digest(TransactionDigest),
