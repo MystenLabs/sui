@@ -923,6 +923,10 @@ pub struct ProtocolConfig {
     /// protocol.
     random_beacon_reduction_allowed_delta: Option<u16>,
 
+    /// Minimum number of shares below wich voting weights will not be reduced for the
+    /// random beacon protocol.
+    random_beacon_reduction_lower_bound: Option<u32>,
+
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
     /// `max_tx_size_bytes` with some additional headroom.
     consensus_max_transaction_size_bytes: Option<u64>,
@@ -1561,6 +1565,8 @@ impl ProtocolConfig {
 
             random_beacon_reduction_allowed_delta: None,
 
+            random_beacon_reduction_lower_bound: None,
+
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
@@ -1808,6 +1814,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.narwhal_header_v2 = true;
                         cfg.feature_flags.random_beacon = true;
+                        cfg.random_beacon_reduction_lower_bound = Some(1600);
                     }
                     // Only enable consensus digest in consensus commit prologue in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
