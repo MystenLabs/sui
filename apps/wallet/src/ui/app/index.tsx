@@ -163,6 +163,7 @@ const App = () => {
 	}
 	return (
 		<Routes>
+
 			<Route path="restricted" element={<RestrictedPage />} />
 			<Route path="/*" element={<HomePage />}>
 				<Route path="apps/*" element={<AppsPage />} />
