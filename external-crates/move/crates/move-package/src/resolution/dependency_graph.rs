@@ -127,7 +127,7 @@ pub struct Package {
     pub kind: PM::DependencyKind,
     pub version: Option<Symbol>,
     /// Optional field set if the package was externally resolved.
-    resolver: Option<Symbol>,
+    pub resolver: Option<Symbol>, // FIXME
 }
 
 impl PartialEq for Package {

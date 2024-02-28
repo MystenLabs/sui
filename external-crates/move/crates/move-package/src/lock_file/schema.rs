@@ -5,7 +5,10 @@
 //! [move] table).  This module does not support serialization because of limitations in the `toml`
 //! crate related to serializing types as inline tables.
 
-use std::io::{Read, Seek, Write};
+use std::{
+    collections::BTreeMap,
+    io::{Read, Seek, Write},
+};
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -16,6 +19,12 @@ use toml_edit::{Item::Value as EItem, Value as EValue};
 use move_compiler::editions::{Edition, Flavor};
 
 use super::LockFile;
+
+use crate::{
+    package_hooks::{self, PackageIdentifier},
+    resolution::dependency_graph::Package as DependencyGraphPackage,
+    source_package::parsed_manifest::{CustomDepInfo, DependencyKind, GitInfo},
+};
 
 /// Lock file version written by this version of the compiler.  Backwards compatibility is
 /// guaranteed (the compiler can read lock files with older versions), forward compatibility is not
@@ -36,7 +45,7 @@ pub struct Packages {
     pub root_dev_dependencies: Option<Vec<Dependency>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Package {
     /// The name of the package (corresponds to the name field from its source manifest).
     pub name: String,
@@ -53,7 +62,22 @@ pub struct Package {
     pub dev_dependencies: Option<Vec<Dependency>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
+pub struct PackageSer {
+    /// The name of the package (corresponds to the name field from its source manifest).
+    pub name: String,
+
+    pub source: String,
+
+    /// The version resolved from the version resolution hook.
+    pub version: Option<String>,
+
+    pub dependencies: Option<Vec<Dependency>>,
+    #[serde(rename = "dev-dependencies")]
+    pub dev_dependencies: Option<Vec<Dependency>>,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Dependency {
     /// The name of the dependency (corresponds to the key for the dependency in the depending
     /// package's source manifest).
@@ -184,6 +208,68 @@ pub(crate) fn write_prologue(
 
     write!(file, "{}", prologue)?;
 
+    Ok(())
+}
+
+pub fn write_package_dependencies() -> Result<()> {
+    Ok(())
+}
+
+pub fn write_packages(
+    file: &mut LockFile,
+    // root_package_id: PackageIdentifier,
+    package_table: BTreeMap<PackageIdentifier, DependencyGraphPackage>,
+) -> Result<()> {
+    let mut toml_string = String::new();
+    file.read_to_string(&mut toml_string)?;
+    let mut toml = toml_string.parse::<toml_edit::Document>()?;
+    toml["move"]["package"] = toml_edit::Item::ArrayOfTables(toml_edit::ArrayOfTables::new());
+    let toml_package_array = toml["move"]["package"]
+        .as_array_of_tables_mut()
+        .ok_or(std::fmt::Error)?;
+    for (id, pkg) in package_table {
+        let mut package = toml_edit::Table::new();
+        package["name"] = toml_edit::value(id.to_string());
+        package["source"] = {
+            let mut source = toml_edit::InlineTable::default();
+            // FIXME unwraps / escape / whatever
+            match pkg.kind {
+                DependencyKind::Local(v) => {
+                    source.get_or_insert("local", v.to_str().unwrap());
+                }
+                DependencyKind::Git(GitInfo {
+                    git_url,
+                    git_rev,
+                    subdir,
+                }) => {
+                    source.get_or_insert("git", git_url.to_string());
+                    source.get_or_insert("rev", git_rev.to_string());
+                    source.get_or_insert("subdir", subdir.to_str().unwrap());
+                }
+                DependencyKind::Custom(CustomDepInfo {
+                    node_url,
+                    package_address,
+                    subdir,
+                    package_name: _,
+                }) => {
+                    let custom_key =
+                        package_hooks::custom_dependency_key().ok_or(std::fmt::Error)?;
+                    source.get_or_insert(custom_key.as_str(), node_url.as_str());
+                    source.get_or_insert("address", package_address.as_str());
+                    source.get_or_insert("subdir", subdir.to_str().unwrap());
+                }
+            };
+            toml_edit::value(source)
+        };
+        if let Some(version) = pkg.version {
+            package["version"] = toml_edit::value(version.to_string());
+        }
+        toml_package_array.push(package);
+    }
+    file.set_len(0)?;
+    file.rewind()?;
+    write!(file, "{}", toml)?;
+    file.flush()?;
     Ok(())
 }
 
