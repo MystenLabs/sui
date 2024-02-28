@@ -621,10 +621,8 @@ module sui_system::sui_system {
     /// Returns the voting power of the active validator, values are voting power in the scale of 10000.
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_voting_power(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
-        let validator_stake_amount = (validator_stake_amount(wrapper, validator_addr) as u128);
         let self = load_system_state(wrapper);
-        let total_stake = (sui_system_state_inner::total_stake_amount(self) as u128);
-        ((validator_stake_amount * 10000) / total_stake as u64)
+        sui_system_state_inner::validator_voting_power(self, validator_addr)
     }
 
     #[test_only]
