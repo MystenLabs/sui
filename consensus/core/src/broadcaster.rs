@@ -52,8 +52,8 @@ impl Broadcaster {
                 index,
             ));
         }
-        // When there is no peer (in tests), keep a subscriber to the block broadcast channel
-        // so Core can continue to function.
+        // When there is only one authority in committee (in tests), add a noop subscriber to the
+        // block broadcast channel so Core can continue to function.
         if senders.is_empty() {
             senders.spawn(Self::drop_blocks(
                 signals_receiver.block_broadcast_receiver(),

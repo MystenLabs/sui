@@ -160,7 +160,9 @@ impl DagState {
     /// Gets a block by checking cached recent blocks then storage.
     /// Returns None when the block is not found.
     pub(crate) fn get_block(&self, reference: &BlockRef) -> Option<VerifiedBlock> {
-        self.get_blocks(&[*reference]).pop().unwrap()
+        self.get_blocks(&[*reference])
+            .pop()
+            .expect("Exactly one element should be returned")
     }
 
     /// Gets blocks by checking cached recent blocks in memory then storage.
@@ -206,8 +208,8 @@ impl DagState {
     /// Gets all uncommitted blocks in a slot.
     /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
     pub(crate) fn get_uncommitted_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
-        // TODO: either panic below when the slot is below the last committed round,
-        // or support reading from storage and limit storage usage only to edge cases.
+        // TODO: either panic below when the slot is at or below the last committed round,
+        // or support reading from storage while limiting storage reads to edge cases.
 
         let mut blocks = vec![];
         for (block_ref, block) in self.recent_blocks.range((
