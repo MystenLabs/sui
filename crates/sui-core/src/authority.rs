@@ -4353,6 +4353,11 @@ impl AuthorityState {
         if !epoch_store.bridge_exists() {
             return None;
         }
+
+        if epoch_store.bridge_committee_initiated() {
+            return None;
+        }
+
         let bridge_initial_shared_version = epoch_store
             .epoch_start_config()
             .bridge_obj_initial_shared_version()
