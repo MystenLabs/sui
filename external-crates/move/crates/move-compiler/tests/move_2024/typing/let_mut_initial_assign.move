@@ -10,19 +10,4 @@ module a::m {
         if (cond) x = 1 else x = 2;
         x
     }
-
-    public fun t3(cond: bool): u64 {
-        let x;
-        while (cond) { x = 1; x; };
-        x = 1;
-        x
-    }
-
-    public fun t4(): u64 {
-        let x;
-        loop {
-            x = 0;
-            move x;
-        }
-    }
 }

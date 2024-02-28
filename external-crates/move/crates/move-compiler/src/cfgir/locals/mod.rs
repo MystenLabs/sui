@@ -123,6 +123,14 @@ impl<'a, 'b> Context<'a, 'b> {
         self.local_types.get(local).unwrap().0
     }
 
+    fn get_first_assignment(&self, local: &Var) -> Option<Loc> {
+        self.local_states.get_first_assignment(local)
+    }
+
+    fn maybe_set_first_assignment(&mut self, local: Var, loc: Loc) {
+        self.local_states.maybe_set_first_assignment(local, loc)
+    }
+
     fn mark_mutable_usage(&mut self, _eloc: Loc, v: &Var) {
         self.unused_mut.remove(v);
     }
@@ -202,9 +210,9 @@ fn unused_let_muts<T>(
 fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
     use Command_ as C;
     match cmd_ {
-        C::Assign(_, ls, e) => {
+        C::Assign(case, ls, e) => {
             exp(context, e);
-            lvalues(context, ls);
+            lvalues(context, *case, ls);
         }
         C::Mutate(el, er) => {
             exp(context, er);
@@ -263,24 +271,24 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
     }
 }
 
-fn lvalues(context: &mut Context, ls: &[LValue]) {
-    ls.iter().for_each(|l| lvalue(context, l))
+fn lvalues(context: &mut Context, case: AssignCase, ls: &[LValue]) {
+    ls.iter().for_each(|l| lvalue(context, case, l))
 }
 
-fn lvalue(context: &mut Context, sp!(loc, l_): &LValue) {
+fn lvalue(context: &mut Context, case: AssignCase, sp!(loc, l_): &LValue) {
     use LValue_ as L;
     match l_ {
         L::Ignore => (),
         L::Var(v, _) => {
-            let mut_ = context.local_mutability(v);
-            if !matches!(
-                context.get_state(v),
-                LocalState::Unavailable(_, UnavailableReason::Unassigned)
-            ) {
-                // If it has already been assigned, it is a mutation.
-                // This will trigger even if it was assigned and then moved
-                check_mutability(context, *loc, "assignment", v, mut_);
+            if case == AssignCase::Update {
+                let mut_ = context.local_mutability(v);
+                if let Some(assign_loc) = context.get_first_assignment(v) {
+                    // If it has already been assigned, it is a mutation.
+                    // This will trigger even if it was assigned and then moved
+                    check_mutability(context, *loc, "assignment", v, mut_, Some(assign_loc));
+                }
             }
+            context.maybe_set_first_assignment(*v, *loc);
             let ty = context.local_type(v);
             let abilities = ty.value.abilities(ty.loc);
             let old_state = context.get_state(v);
@@ -331,7 +339,7 @@ fn lvalue(context: &mut Context, sp!(loc, l_): &LValue) {
             }
             context.set_state(*v, LocalState::Available(*loc))
         }
-        L::Unpack(_, _, fields) => fields.iter().for_each(|(_, l)| lvalue(context, l)),
+        L::Unpack(_, _, fields) => fields.iter().for_each(|(_, l)| lvalue(context, case, l)),
     }
 }
 
@@ -344,7 +352,7 @@ fn exp(context: &mut Context, parent_e: &Exp) {
         E::BorrowLocal(mut_, var) => {
             if *mut_ {
                 let mutability = context.local_mutability(var);
-                check_mutability(context, *eloc, "mutable borrow", var, mutability)
+                check_mutability(context, *eloc, "mutable borrow", var, mutability, None)
             }
             use_local(context, eloc, var)
         }
@@ -445,7 +453,14 @@ fn use_local(context: &mut Context, loc: &Loc, local: &Var) {
     }
 }
 
-fn check_mutability(context: &mut Context, eloc: Loc, usage: &str, v: &Var, mut_: Mutability) {
+fn check_mutability(
+    context: &mut Context,
+    eloc: Loc,
+    usage: &str,
+    v: &Var,
+    mut_: Mutability,
+    prev_assignment: Option<Loc>,
+) {
     context.mark_mutable_usage(eloc, v);
     if mut_ == Mutability::Imm {
         let vstr = match display_var(v.value()) {
@@ -459,11 +474,22 @@ fn check_mutability(context: &mut Context, eloc: Loc, usage: &str, v: &Var, mut_
         if context.env.edition(context.package) == Edition::E2024_MIGRATION {
             context.add_diag(diag!(Migration::NeedsLetMut, (decl_loc, decl_msg.clone())))
         }
-        context.add_diag(diag!(
+        let mut diag = diag!(
             TypeSafety::InvalidImmVariableUsage,
             (eloc, usage_msg),
             (decl_loc, decl_msg),
-        ))
+        );
+        if let Some(prev) = prev_assignment {
+            if prev != decl_loc {
+                let msg = if eloc == prev {
+                    "The variable is assigned multiple times here in a loop"
+                } else {
+                    "The variable was initially assigned here"
+                };
+                diag.add_secondary_label((prev, msg));
+            }
+        }
+        context.add_diag(diag)
     }
 }
 
