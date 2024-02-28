@@ -125,7 +125,7 @@ impl PendingCheckpointV2 {
             roots: v2
                 .roots
                 .into_iter()
-                .map(|root| *root.expect_digest())
+                .map(|root| *root.unwrap_digest())
                 .collect(),
             details: v2.details,
         }

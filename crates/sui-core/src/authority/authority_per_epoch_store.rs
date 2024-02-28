@@ -1418,7 +1418,7 @@ impl AuthorityPerEpochStore {
         } else {
             self.tables()?
                 .assigned_shared_object_versions
-                .insert(tx_key.expect_digest(), assigned_versions)?;
+                .insert(tx_key.unwrap_digest(), assigned_versions)?;
         }
         Ok(())
     }
@@ -1957,7 +1957,7 @@ impl AuthorityPerEpochStore {
         } else {
             write_batch.insert_batch(
                 &self.tables()?.assigned_shared_object_versions,
-                iter::once((tx_key.expect_digest(), assigned_versions.clone())),
+                iter::once((tx_key.unwrap_digest(), assigned_versions.clone())),
             )?;
         }
 
@@ -3331,7 +3331,7 @@ impl GetSharedLocks for AuthorityPerEpochStore {
             Ok(self
                 .tables()?
                 .assigned_shared_object_versions
-                .get(key.expect_digest())?
+                .get(key.unwrap_digest())?
                 .unwrap_or_default())
         }
     }

@@ -3083,17 +3083,10 @@ pub enum TransactionKey {
 }
 
 impl TransactionKey {
-    pub fn expect_digest(&self) -> &TransactionDigest {
+    pub fn unwrap_digest(&self) -> &TransactionDigest {
         match self {
             TransactionKey::Digest(d) => d,
             _ => panic!("called expect_digest on a non-Digest TransactionKey: {self:?}"),
-        }
-    }
-
-    pub fn as_digest_or_default(&self) -> TransactionDigest {
-        match self {
-            TransactionKey::Digest(d) => *d,
-            _ => TransactionDigest::default(),
         }
     }
 }
