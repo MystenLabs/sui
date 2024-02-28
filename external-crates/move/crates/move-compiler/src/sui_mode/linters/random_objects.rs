@@ -36,7 +36,6 @@ impl TypingVisitor for RandomObjectsVisitor {
         _program_info: &TypingProgramInfo,
         program: &mut T::Program_,
     ) {
-        println!("starting");
         for (_, _, mdef) in program.modules.iter() {
             if mdef.attributes.is_test_or_test_only() {
                 continue;
@@ -49,16 +48,13 @@ impl TypingVisitor for RandomObjectsVisitor {
                         && matches!(fdef.visibility, Visibility::Public(_))
                 })
                 .for_each(|(sloc, fname, fdef)| func_def(env, *fname, fdef, sloc));
-
             env.pop_warning_filter_scope();
         }
     }
 }
 
 fn func_def(env: &mut CompilationEnv, fname: Symbol, fdef: &T::Function, sloc: Loc) {
-    // println!("function {} ---", fname);
     env.add_warning_filter_scope(fdef.warning_filter.clone());
-
     for (_, _, t) in &fdef.signature.parameters {
         if is_random_or_random_generator(t) {
             let msg = format!("Public function '{fname}' accepts sui::random::Random or sui::random::RandomGenerator as a parameter.");
