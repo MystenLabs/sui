@@ -17,9 +17,9 @@ pub mod coin_field;
 pub mod collection_equality;
 pub mod custom_state_change;
 pub mod freeze_wrapped;
+pub mod random_objects;
 pub mod self_transfer;
 pub mod share_owned;
-pub mod random_objects;
 
 pub const SUI_PKG_NAME: &str = "sui";
 
