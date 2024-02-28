@@ -15,7 +15,7 @@ use crate::{
     expansion, hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
-        canonicalize, CompilationEnv, Flags, IndexedPackagePath, IndexedVfsPackagePath,
+        find_filenames, CompilationEnv, Flags, IndexedPackagePath, IndexedVfsPackagePath,
         NamedAddressMap, NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths,
     },
     to_bytecode,
@@ -23,7 +23,7 @@ use crate::{
     unit_test,
 };
 use move_command_line_common::files::{
-    extension_equals, find_filenames, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
+    MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_symbol_pool::Symbol;
@@ -280,12 +280,17 @@ impl<'a> Compiler<'a> {
     )> {
         /// Path relativization after parsing is needed as paths are initially canonicalized when
         /// converted to virtual file system paths and would show up as absolute in the test output
-        /// which wouldn't be machine-agnostic.
-        fn relativize_path(path: Symbol) -> Symbol {
+        /// which wouldn't be machine-agnostic. We need to relativize using `vfs_root` beacuse it
+        /// was also used during canonicalization and might have altered path prefix in a
+        /// non-standard way (e.g., this can happen on Windows).
+        fn relativize_path(vsf_root: &VfsPath, path: Symbol) -> Symbol {
             let Some(current_dir) = std::env::current_dir().ok() else {
                 return path;
             };
-            let Some(new_path) = diff_paths(path.to_string(), current_dir) else {
+            let Ok(current_dir_vfs) = vsf_root.join(&current_dir.to_string_lossy()) else {
+                return path;
+            };
+            let Some(new_path) = diff_paths(path.to_string(), current_dir_vfs.as_str()) else {
                 return path;
             };
             Symbol::from(new_path.to_string_lossy().to_string())
@@ -345,7 +350,7 @@ impl<'a> Compiler<'a> {
 
         source_text
             .iter_mut()
-            .for_each(|(_, (path, _))| *path = relativize_path(*path));
+            .for_each(|(_, (path, _))| *path = relativize_path(&vfs_root, *path));
 
         let res: Result<_, Diagnostics> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
@@ -758,18 +763,17 @@ pub fn generate_interface_files(
         } in other_file_locations
         {
             v.extend(
-                find_filenames(&[path.as_str()], |path| {
-                    extension_equals(path, MOVE_COMPILED_EXTENSION)
+                find_filenames(&[path], |path| {
+                    path.extension()
+                        .map(|e| e.as_str() == MOVE_COMPILED_EXTENSION)
+                        .unwrap_or(false)
                 })?
                 .into_iter()
-                .map(|p| {
-                    Ok(IndexedVfsPackagePath {
-                        package,
-                        path: path.root().join(p)?,
-                        named_address_map,
-                    })
-                })
-                .collect::<Result<Vec<_>, anyhow::Error>>()?,
+                .map(|path| IndexedVfsPackagePath {
+                    package,
+                    path,
+                    named_address_map,
+                }),
             );
         }
         v
@@ -824,7 +828,7 @@ pub fn generate_interface_files(
                 .to_string_lossy()
                 .to_string(),
         );
-        let vfs_path = deps_out_vfs.join(canonicalize(file_path.as_str().to_owned()))?;
+        let vfs_path = deps_out_vfs.join(file_path)?;
         vfs_path.parent().create_dir_all()?;
         vfs_path
             .create_file()?
