@@ -625,6 +625,8 @@ fn entry_param_ty(
     param_ty: &Type,
 ) {
     let is_mut_clock = is_mut_clock(param_ty);
+    let is_mut_random = is_mut_random(param_ty);
+
     // TODO better error message for cases such as `MyObject<InnerTypeWithoutStore>`
     // which should give a contextual error about `MyObject` having `key`, but the instantiation
     // `MyObject<InnerTypeWithoutStore>` not having `key` due to `InnerTypeWithoutStore` not having
@@ -632,7 +634,7 @@ fn entry_param_ty(
     let is_valid = is_entry_primitive_ty(param_ty)
         || is_entry_object_ty(param_ty)
         || is_entry_receiving_ty(param_ty);
-    if is_mut_clock || !is_valid {
+    if is_mut_clock || is_mut_random || !is_valid {
         let pmsg = format!(
             "Invalid 'entry' parameter type for parameter '{}'",
             param.value.name
@@ -643,6 +645,13 @@ fn entry_param_ty(
                 a = SUI_ADDR_NAME,
                 m = CLOCK_MODULE_NAME,
                 n = CLOCK_TYPE_NAME,
+            )
+        } else if is_mut_random {
+            format!(
+                "{a}::{m}::{n} must be passed by immutable reference, e.g. '&{a}::{m}::{n}'",
+                a = SUI_ADDR_NAME,
+                m = RANDOMNESS_MODULE_NAME,
+                n = RANDOMNESS_STATE_TYPE_NAME,
             )
         } else {
             "'entry' parameters must be primitives (by-value), vectors of primitives, objects \
@@ -664,6 +673,24 @@ fn is_mut_clock(param_ty: &Type) -> bool {
         Type_::Ref(/* mut */ false, _) => false,
         Type_::Ref(/* mut */ true, t) => is_mut_clock(t),
         Type_::Apply(_, sp!(_, n_), _) => n_.is(SUI_ADDR_NAME, CLOCK_MODULE_NAME, CLOCK_TYPE_NAME),
+        Type_::Unit
+        | Type_::Param(_)
+        | Type_::Var(_)
+        | Type_::Anything
+        | Type_::UnresolvedError
+        | Type_::Fun(_, _) => false,
+    }
+}
+
+fn is_mut_random(param_ty: &Type) -> bool {
+    match &param_ty.value {
+        Type_::Ref(/* mut */ false, _) => false,
+        Type_::Ref(/* mut */ true, t) => crate::sui_mode::typing::is_mut_random(t),
+        Type_::Apply(_, sp!(_, n_), _) => n_.is(
+            SUI_ADDR_NAME,
+            RANDOMNESS_MODULE_NAME,
+            RANDOMNESS_STATE_TYPE_NAME,
+        ),
         Type_::Unit
         | Type_::Param(_)
         | Type_::Var(_)
