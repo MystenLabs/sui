@@ -81,7 +81,7 @@ native struct NativeGenericWithAbilities
     :
             store
        + drop + key
-    ,
+    , T3
     >
  has
          key

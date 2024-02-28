@@ -43,5 +43,6 @@ module test::structs {
     struct NativeGenericWithAbilities<
         T1: key,
         T2: store + drop + key,
+        T3,
     > has key, drop;
 }

@@ -109,7 +109,7 @@ export function print(path: AstPath, options: ParserOptions, print: printFn) {
             }
             return [
                 path.call(print, 'firstNamedChild'),
-                ': ',
+                node.namedChildren.length > 1 ? ': ' : '' ,
                 join(' + ', abilities),
             ];
         case 'struct_def_fields':
