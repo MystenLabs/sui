@@ -13,11 +13,11 @@ pub(crate) mod verification_attribute_filter;
 use crate::{
     diagnostics::FilesSourceText,
     parser::{self, ast::PackageDefinition, syntax::parse_file_string},
-    shared::{find_move_filenames, CompilationEnv, IndexedVfsPackagePath, NamedAddressMaps},
+    shared::{CompilationEnv, IndexedVfsPackagePath, NamedAddressMaps},
 };
 use anyhow::anyhow;
 use comments::*;
-use move_command_line_common::files::FileHash;
+use move_command_line_common::files::{find_move_filenames, FileHash};
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeSet, HashMap};
 use vfs::VfsPath;
@@ -41,13 +41,18 @@ pub(crate) fn parse_program(
             named_address_map: named_address_mapping,
         } in paths_with_mapping
         {
-            res.extend(find_move_filenames(&[path], true)?.into_iter().map(|s| {
-                IndexedVfsPackagePath {
-                    package,
-                    path: s,
-                    named_address_map: named_address_mapping,
-                }
-            }));
+            res.extend(
+                find_move_filenames(&[path.as_str()], true)?
+                    .into_iter()
+                    .map(|s| {
+                        Ok(IndexedVfsPackagePath {
+                            package,
+                            path: path.root().join(s)?,
+                            named_address_map: named_address_mapping,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, anyhow::Error>>()?,
+            );
         }
         // sort the filenames so errors about redefinitions, or other inter-file conflicts, are
         // deterministic

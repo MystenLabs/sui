@@ -15,16 +15,15 @@ use crate::{
     expansion, hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
-        canonicalize, find_filenames, CompilationEnv, Flags, IndexedPackagePath,
-        IndexedVfsPackagePath, NamedAddressMap, NamedAddressMaps, NumericalAddress, PackageConfig,
-        PackagePaths,
+        canonicalize, CompilationEnv, Flags, IndexedPackagePath, IndexedVfsPackagePath,
+        NamedAddressMap, NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths,
     },
     to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
     unit_test,
 };
 use move_command_line_common::files::{
-    MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
+    extension_equals, find_filenames, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_symbol_pool::Symbol;
@@ -759,17 +758,18 @@ pub fn generate_interface_files(
         } in other_file_locations
         {
             v.extend(
-                find_filenames(&[path], |path| {
-                    path.extension()
-                        .map(|e| e.as_str() == MOVE_COMPILED_EXTENSION)
-                        .unwrap_or(false)
+                find_filenames(&[path.as_str()], |path| {
+                    extension_equals(path, MOVE_COMPILED_EXTENSION)
                 })?
                 .into_iter()
-                .map(|path| IndexedVfsPackagePath {
-                    package,
-                    path,
-                    named_address_map,
-                }),
+                .map(|p| {
+                    Ok(IndexedVfsPackagePath {
+                        package,
+                        path: path.root().join(p)?,
+                        named_address_map,
+                    })
+                })
+                .collect::<Result<Vec<_>, anyhow::Error>>()?,
             );
         }
         v
