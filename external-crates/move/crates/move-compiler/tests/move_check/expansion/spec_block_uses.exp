@@ -5,5 +5,5 @@ warning[W00001]: DEPRECATED. will be removed
 11 │ │         use 0x2::M::{S as R, R as S};
 12 │ │         ensures exists<S<u64>>(0x1) == exists<R>(0x1);
 13 │ │     }
-   │ ╰─────^ Specification blocks are deprecated
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
 

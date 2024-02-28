@@ -217,7 +217,7 @@ impl<'env, 'map> Context<'env, 'map> {
             } else {
                 Uncategorized::DeprecatedWillBeRemoved
             },
-            (loc, "Specification blocks are deprecated")
+            (loc, "Specification blocks are deprecated and are no longer used")
         )
     }
 }
@@ -2018,7 +2018,6 @@ fn module_members(
     }
     let mut cur_members = members.remove(&mident).unwrap_or_default();
     for mem in &m.members {
-        use P::{SpecBlockMember_ as SBM, SpecBlockTarget_ as SBT, SpecBlock_ as SB};
         match mem {
             P::ModuleMember::Function(f) => {
                 cur_members.insert(f.name.0, ModuleMemberKind::Function);
@@ -2029,28 +2028,7 @@ fn module_members(
             P::ModuleMember::Struct(s) => {
                 cur_members.insert(s.name.0, ModuleMemberKind::Struct);
             }
-            P::ModuleMember::Spec(
-                sp!(
-                    _,
-                    SB {
-                        target,
-                        members,
-                        ..
-                    }
-                ),
-            ) => match &target.value {
-                SBT::Schema(n, _) => {
-                    cur_members.insert(*n, ModuleMemberKind::Schema);
-                }
-                SBT::Module => {
-                    for sp!(_, smember_) in members {
-                        if let SBM::Function { name, .. } = smember_ {
-                            cur_members.insert(name.0, ModuleMemberKind::Function);
-                        }
-                    }
-                }
-                _ => (),
-            },
+            P::ModuleMember::Spec(_) => (),
             P::ModuleMember::Use(_) | P::ModuleMember::Friend(_) => (),
         };
     }
@@ -2085,7 +2063,6 @@ fn aliases_from_member(
     current_module: &ModuleIdent,
     member: P::ModuleMember,
 ) -> Option<P::ModuleMember> {
-    use P::{SpecBlockMember_ as SBM, SpecBlockTarget_ as SBT, SpecBlock_ as SB};
     macro_rules! check_name_and_add_implicit_alias {
         ($kind:expr, $name:expr) => {{
             if let Some(n) = check_valid_module_member_name(context, $kind, $name) {
@@ -2125,31 +2102,8 @@ fn aliases_from_member(
             check_name_and_add_implicit_alias!(ModuleMemberKind::Struct, n);
             Some(P::ModuleMember::Struct(s))
         }
-        P::ModuleMember::Spec(s) => {
-            let sp!(
-                _,
-                SB {
-                    target,
-                    members,
-                    ..
-                }
-            ) = &s;
-            match &target.value {
-                SBT::Schema(n, _) => {
-                    check_name_and_add_implicit_alias!(ModuleMemberKind::Schema, *n);
-                }
-                SBT::Module => {
-                    for sp!(_, smember_) in members {
-                        if let SBM::Function { name, .. } = smember_ {
-                            let n = name.0;
-                            check_name_and_add_implicit_alias!(ModuleMemberKind::Function, n);
-                        }
-                    }
-                }
-                _ => (),
-            };
-            Some(P::ModuleMember::Spec(s))
-        }
+        P::ModuleMember::Spec(s) => Some(P::ModuleMember::Spec(s)),
+
     }
 }
 
@@ -3676,7 +3630,6 @@ pub enum ModuleMemberKind {
     Constant,
     Function,
     Struct,
-    Schema,
 }
 
 impl ModuleMemberKind {
@@ -3685,7 +3638,6 @@ impl ModuleMemberKind {
             ModuleMemberKind::Constant => NameCase::Constant,
             ModuleMemberKind::Function => NameCase::Function,
             ModuleMemberKind::Struct => NameCase::Struct,
-            ModuleMemberKind::Schema => NameCase::Schema,
         }
     }
 }
@@ -3695,7 +3647,6 @@ pub enum NameCase {
     Constant,
     Function,
     Struct,
-    Schema,
     Module,
     ModuleMemberAlias(ModuleMemberKind),
     ModuleAlias,
@@ -3710,12 +3661,10 @@ impl NameCase {
             NameCase::Constant => "constant",
             NameCase::Function => "function",
             NameCase::Struct => "struct",
-            NameCase::Schema => "schema",
             NameCase::Module => "module",
             NameCase::ModuleMemberAlias(ModuleMemberKind::Function) => "function alias",
             NameCase::ModuleMemberAlias(ModuleMemberKind::Constant) => "constant alias",
             NameCase::ModuleMemberAlias(ModuleMemberKind::Struct) => "struct alias",
-            NameCase::ModuleMemberAlias(ModuleMemberKind::Schema) => "schema alias",
             NameCase::ModuleAlias => "module alias",
             NameCase::Variable => "variable",
             NameCase::Address => "address",
@@ -3780,7 +3729,7 @@ fn check_valid_module_member_name_impl(
                 return Err(());
             }
         }
-        M::Constant | M::Struct | M::Schema => {
+        M::Constant | M::Struct => {
             if !is_valid_struct_or_constant_name(&n.value) {
                 let msg = format!(
                     "Invalid {} name '{}'. {} names must start with 'A'..'Z'",
@@ -3891,7 +3840,6 @@ fn check_restricted_name_all_cases(
         NameCase::Constant
         | NameCase::Function
         | NameCase::Struct
-        | NameCase::Schema
         | NameCase::Module
         | NameCase::ModuleMemberAlias(_)
         | NameCase::ModuleAlias
