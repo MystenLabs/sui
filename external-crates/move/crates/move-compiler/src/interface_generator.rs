@@ -34,17 +34,17 @@ macro_rules! push {
 /// publically visible contents of the CompiledModule, represented in source language syntax
 /// Additionally, it returns the module id (address+name) of the module that was deserialized
 pub fn write_file_to_string(
-    vfs: VfsPath,
     named_address_mapping: &BTreeMap<ModuleId, impl AsRef<str>>,
-    compiled_module_file_input_path: &str,
+    compiled_module_file_input_path: &VfsPath,
 ) -> Result<(ModuleId, String)> {
-    let mut f = vfs.join(compiled_module_file_input_path)?.open_file()?;
     let mut file_contents = vec![];
-    f.read_to_end(&mut file_contents)?;
+    compiled_module_file_input_path
+        .open_file()?
+        .read_to_end(&mut file_contents)?;
     let module = CompiledModule::deserialize_with_defaults(&file_contents).map_err(|e| {
         anyhow!(
             "Unable to deserialize module at '{}': {}",
-            compiled_module_file_input_path,
+            compiled_module_file_input_path.as_str(),
             e
         )
     })?;

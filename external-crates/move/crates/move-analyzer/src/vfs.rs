@@ -50,7 +50,7 @@ impl VirtualFileSystem {
 
 /// Updates the given virtual file system based on the text document sync notification that was sent.
 pub fn on_text_document_sync_notification(
-    ide_files: VfsPath,
+    ide_files_root: VfsPath,
     symbolicator_runner: &symbols::SymbolicatorRunner,
     notification: &Notification,
 ) {
@@ -103,9 +103,11 @@ pub fn on_text_document_sync_notification(
                 );
                 return;
             };
-            let Some(mut vfs_file) =
-                vfs_file_create(&ide_files, file_path.clone(), /* first_access */ true)
-            else {
+            let Some(mut vfs_file) = vfs_file_create(
+                &ide_files_root,
+                file_path.clone(),
+                /* first_access */ true,
+            ) else {
                 return;
             };
             if vfs_file
@@ -127,9 +129,11 @@ pub fn on_text_document_sync_notification(
                 );
                 return;
             };
-            let Some(mut vfs_file) =
-                vfs_file_create(&ide_files, file_path.clone(), /* first_access */ false)
-            else {
+            let Some(mut vfs_file) = vfs_file_create(
+                &ide_files_root,
+                file_path.clone(),
+                /* first_access */ false,
+            ) else {
                 return;
             };
             let Some(changes) = parameters.content_changes.last() else {
@@ -151,9 +155,11 @@ pub fn on_text_document_sync_notification(
                 );
                 return;
             };
-            let Some(mut vfs_file) =
-                vfs_file_create(&ide_files, file_path.clone(), /* first_access */ false)
-            else {
+            let Some(mut vfs_file) = vfs_file_create(
+                &ide_files_root,
+                file_path.clone(),
+                /* first_access */ false,
+            ) else {
                 return;
             };
             let Some(content) = parameters.text else {
@@ -163,7 +169,7 @@ pub fn on_text_document_sync_notification(
             if vfs_file.write_all(content.as_bytes()).is_err() {
                 // try to remove file from the file system and schedule symbolicator to pick up
                 // changes from the file system
-                vfs_file_remove(&ide_files, file_path.clone());
+                vfs_file_remove(&ide_files_root, file_path.clone());
                 symbolicator_runner.run(file_path);
             }
         }
@@ -178,7 +184,7 @@ pub fn on_text_document_sync_notification(
                 );
                 return;
             };
-            vfs_file_remove(&ide_files, file_path.clone());
+            vfs_file_remove(&ide_files_root, file_path.clone());
         }
         _ => eprintln!("invalid notification '{}'", notification.method),
     }

@@ -661,7 +661,7 @@ impl SymbolicatorRunner {
 
     /// Create a new runner
     pub fn new(
-        ide_files: VfsPath,
+        ide_files_root: VfsPath,
         symbols: Arc<Mutex<Symbols>>,
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
         lint: bool,
@@ -721,7 +721,8 @@ impl SymbolicatorRunner {
                             continue;
                         }
                         eprintln!("symbolication started");
-                        match get_symbols(ide_files.clone(), root_dir.unwrap().as_path(), lint) {
+                        match get_symbols(ide_files_root.clone(), root_dir.unwrap().as_path(), lint)
+                        {
                             Ok((symbols_opt, lsp_diagnostics)) => {
                                 eprintln!("symbolication finished");
                                 if let Some(new_symbols) = symbols_opt {
@@ -959,7 +960,7 @@ impl Symbols {
 /// actually (re)computed and the diagnostics are returned, the old symbolic information should
 /// be retained even if it's getting out-of-date.
 pub fn get_symbols(
-    ide_files: VfsPath,
+    ide_files_root: VfsPath,
     pkg_path: &Path,
     lint: bool,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
@@ -978,11 +979,14 @@ pub fn get_symbols(
     let resolution_graph = build_config.resolution_graph_for_package(pkg_path, &mut Vec::new())?;
 
     let physical_root = VfsPath::new(PhysicalFS::new("/"));
-    let overlay_fs = VfsPath::new(OverlayFS::new(&[ide_files.clone(), physical_root.clone()]));
+    let overlay_fs_root = VfsPath::new(OverlayFS::new(&[
+        ide_files_root.clone(),
+        physical_root.clone(),
+    ]));
 
     // get source files to be able to correlate positions (in terms of byte offsets) with actual
     // file locations (in terms of line/column numbers)
-    let source_files = file_sources(&resolution_graph, overlay_fs.clone());
+    let source_files = file_sources(&resolution_graph, overlay_fs_root.clone());
     let mut files = SimpleFiles::new();
     let mut file_id_mapping = HashMap::new();
     let mut file_id_to_lines = HashMap::new();
@@ -1000,7 +1004,7 @@ pub fn get_symbols(
     let mut typed_ast = None;
     let mut diagnostics = None;
     build_plan.compile_with_driver(&mut std::io::sink(), |mut compiler| {
-        compiler = compiler.set_vfs(overlay_fs.clone());
+        compiler = compiler.set_vfs_root(overlay_fs_root.clone());
         // extract expansion AST
         let (files, compilation_result) = compiler.run::<PASS_PARSER>()?;
         let (_, compiler) = match compilation_result {

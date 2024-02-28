@@ -47,7 +47,7 @@ fn main() {
 
     let (connection, io_threads) = Connection::stdio();
     let symbols = Arc::new(Mutex::new(symbols::empty_symbols()));
-    let ide_files: VfsPath = MemoryFS::new().into();
+    let ide_files_root: VfsPath = MemoryFS::new().into();
     let context = Context {
         connection,
         symbols: symbols.clone(),
@@ -124,8 +124,12 @@ fn main() {
                 .unwrap_or(false);
         }
 
-        symbolicator_runner =
-            symbols::SymbolicatorRunner::new(ide_files.clone(), symbols.clone(), diag_sender, lint);
+        symbolicator_runner = symbols::SymbolicatorRunner::new(
+            ide_files_root.clone(),
+            symbols.clone(),
+            diag_sender,
+            lint,
+        );
 
         // If initialization information from the client contains a path to the directory being
         // opened, try to initialize symbols before sending response to the client. Do not bother
@@ -135,7 +139,7 @@ fn main() {
         if let Some(uri) = initialize_params.root_uri {
             if let Some(p) = symbols::SymbolicatorRunner::root_dir(&uri.to_file_path().unwrap()) {
                 if let Ok((Some(new_symbols), _)) =
-                    symbols::get_symbols(ide_files.clone(), p.as_path(), lint)
+                    symbols::get_symbols(ide_files_root.clone(), p.as_path(), lint)
                 {
                     let mut old_symbols = symbols.lock().unwrap();
                     (*old_symbols).merge(new_symbols);
@@ -202,7 +206,7 @@ fn main() {
                         // a chance of completing pending requests (but should not accept new requests
                         // either which is handled inside on_requst) - instead it quits after receiving
                         // the exit notification from the client, which is handled below
-                        shutdown_req_received = on_request(&context, &request, ide_files.clone(), shutdown_req_received);
+                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), shutdown_req_received);
                     }
                     Ok(Message::Response(response)) => on_response(&context, &response),
                     Ok(Message::Notification(notification)) => {
@@ -213,7 +217,7 @@ fn main() {
                                 // It ought to, especially once it begins processing requests that may
                                 // take a long time to respond to.
                             }
-                            _ => on_notification(ide_files.clone(), &symbolicator_runner, &notification),
+                            _ => on_notification(ide_files_root.clone(), &symbolicator_runner, &notification),
                         }
                     }
                     Err(error) => eprintln!("IDE message error: {:?}", error),
@@ -234,7 +238,7 @@ fn main() {
 fn on_request(
     context: &Context,
     request: &Request,
-    ide_files: VfsPath,
+    ide_files_root: VfsPath,
     shutdown_request_received: bool,
 ) -> bool {
     if shutdown_request_received {
@@ -256,7 +260,7 @@ fn on_request(
         lsp_types::request::Completion::METHOD => on_completion_request(
             context,
             request,
-            ide_files.clone(),
+            ide_files_root.clone(),
             &context.symbols.lock().unwrap(),
         ),
         lsp_types::request::GotoDefinition::METHOD => {
@@ -297,7 +301,7 @@ fn on_response(_context: &Context, _response: &Response) {
 }
 
 fn on_notification(
-    ide_files: VfsPath,
+    ide_files_root: VfsPath,
     symbolicator_runner: &symbols::SymbolicatorRunner,
     notification: &Notification,
 ) {
@@ -306,7 +310,7 @@ fn on_notification(
         | lsp_types::notification::DidChangeTextDocument::METHOD
         | lsp_types::notification::DidSaveTextDocument::METHOD
         | lsp_types::notification::DidCloseTextDocument::METHOD => {
-            on_text_document_sync_notification(ide_files, symbolicator_runner, notification)
+            on_text_document_sync_notification(ide_files_root, symbolicator_runner, notification)
         }
         _ => eprintln!("handle notification '{}' from client", notification.method),
     }
