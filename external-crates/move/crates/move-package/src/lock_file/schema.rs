@@ -25,6 +25,19 @@ use super::LockFile;
 pub const VERSION: u64 = 0;
 
 #[derive(Deserialize)]
+pub struct ManagedAddress {
+    /// The original address (Object ID) where this package is published.
+    #[serde(rename = "original-id")]
+    pub original_id: String,
+    /// The most recent address (Object ID) where this package is published.
+    #[serde(rename = "latest-id")]
+    pub latest_id: String,
+    #[serde(rename = "version-number")]
+    /// The version number of the published package.
+    pub version_number: u64,
+}
+
+#[derive(Deserialize)]
 pub struct Packages {
     #[serde(rename = "package")]
     pub packages: Option<Vec<Package>>,
@@ -207,6 +220,50 @@ pub fn update_compiler_toolchain(
     file.rewind()?;
     write!(file, "{}", toml)?;
     file.flush()?;
+    Ok(())
+}
+
+pub enum ManagedAddressUpdate {
+    Published { original_id: String },
+    Upgraded { latest_id: String, version: u64 },
+}
+
+/// Saves published or upgraded package addresses in the lock file.
+pub fn update_managed_address(
+    file: &mut LockFile,
+    chain_identifier: String,
+    managed_address_update: ManagedAddressUpdate,
+) -> Result<()> {
+    let mut toml_string = String::new();
+    file.read_to_string(&mut toml_string)?;
+    let mut toml = toml_string.parse::<toml_edit::Document>()?;
+    let env_key = format!("move.env.{}.managed-addresses", chain_identifier);
+
+    let existing_table = toml[&env_key].as_table_mut();
+    let mut managed_address_table = if let Some(table) = existing_table {
+        table.clone()
+    } else {
+        toml_edit::Table::new()
+    };
+
+    match managed_address_update {
+        ManagedAddressUpdate::Published { original_id } => {
+            managed_address_table["original-id"] = toml_edit::value(original_id.to_string());
+            managed_address_table["latest-id"] = toml_edit::value(original_id);
+            managed_address_table["version"] = toml_edit::value("1");
+        }
+        ManagedAddressUpdate::Upgraded { latest_id, version } => {
+            managed_address_table["latest-id"] = toml_edit::value(latest_id);
+            managed_address_table["version"] = toml_edit::value(version.to_string());
+        }
+    }
+
+    toml[&env_key] = toml_edit::Item::Table(managed_address_table);
+    file.set_len(0)?;
+    file.rewind()?;
+    write!(file, "{}", toml)?;
+    file.flush()?;
+    file.rewind()?;
     Ok(())
 }
 
