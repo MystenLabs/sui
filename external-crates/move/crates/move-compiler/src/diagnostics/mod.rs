@@ -487,6 +487,10 @@ impl Diagnostic {
         const MIGRATION_CATEGORY: u8 = codes::Category::Migration as u8;
         self.info.category() == MIGRATION_CATEGORY
     }
+
+    pub fn primary_loc(&self) ->  Loc {
+        self.primary_label.0
+    }
 }
 
 #[macro_export]

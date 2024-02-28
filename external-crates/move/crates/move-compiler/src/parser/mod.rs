@@ -5,10 +5,10 @@
 pub mod ast;
 pub mod comments;
 pub(crate) mod filter;
-mod follow_set;
 pub mod keywords;
 pub mod lexer;
 pub(crate) mod syntax;
+mod token_set;
 pub(crate) mod verification_attribute_filter;
 
 use crate::{

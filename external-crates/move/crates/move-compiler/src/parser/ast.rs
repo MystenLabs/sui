@@ -244,8 +244,6 @@ pub const NATIVE_MODIFIER: &str = "native";
 pub const ENTRY_MODIFIER: &str = "entry";
 pub const MACRO_MODIFIER: &str = "macro";
 
-pub const MODIFIERS: [&str; 3] = [NATIVE_MODIFIER, ENTRY_MODIFIER, MACRO_MODIFIER];
-
 #[derive(PartialEq, Clone, Debug)]
 pub struct FunctionSignature {
     pub type_parameters: Vec<(Name, Vec<Ability>)>,

@@ -6,15 +6,13 @@ use crate::{
     diag,
     diagnostics::Diagnostic,
     editions::{create_feature_error, Edition, FeatureGate},
-    parser::syntax::make_loc,
+    parser::{syntax::make_loc, token_set::TokenSet},
     shared::CompilationEnv,
     FileCommentMap, MatchedFileCommentMap,
 };
 use move_command_line_common::{character_sets::DisplayChar, files::FileHash};
 use move_ir_types::location::Loc;
 use std::{collections::BTreeSet, fmt};
-
-use super::ast::MODIFIERS;
 
 // This should be replaced with std::mem::variant::count::<Tok>() if it ever comes out of nightly.
 pub const TOK_COUNT: usize = 75;
@@ -97,22 +95,6 @@ pub enum Tok {
     Match,
     BlockLabel,
     MinusGreater,
-}
-
-pub const MODULE_MEMBER_TOKENS: [Tok; 6] = [
-    Tok::Fun,
-    Tok::Spec,
-    Tok::Struct,
-    Tok::Use,
-    Tok::Const,
-    Tok::Friend,
-];
-pub const MEMBER_VISIBILITY_TOKENS: [Tok; 1] = [Tok::Public];
-// Note the valid Identifiers are the MODIFIER keywords. We need to take care to filter them when
-// appropriate.
-pub const MEMBER_MODIFIER_TOKENS: [Tok; 2] = [Tok::Native, Tok::Identifier];
-pub fn valid_member_modifier_ident(ident: &str) -> bool {
-    MODIFIERS.iter().any(|modifier| modifier == &ident)
 }
 
 impl fmt::Display for Tok {
@@ -199,6 +181,7 @@ impl fmt::Display for Tok {
     }
 }
 
+#[derive(Debug)]
 pub struct Lexer<'input> {
     text: &'input str,
     file_hash: FileHash,
@@ -236,6 +219,10 @@ impl<'input> Lexer<'input> {
 
     pub fn at_any(&self, toks: &BTreeSet<Tok>) -> bool {
         toks.contains(&self.token)
+    }
+
+    pub fn at_set(&self, set: &TokenSet) -> bool {
+        set.contains(*&self.token, &self.content())
     }
 
     pub fn content(&self) -> &'input str {

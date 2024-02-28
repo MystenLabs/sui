@@ -1,5 +1,5 @@
 module 0x42::M {
-    struct R {}
+    public struct R {}
 
     fun exists(): u64 { 0 }
     fun move_to(): u64 { 0 }
