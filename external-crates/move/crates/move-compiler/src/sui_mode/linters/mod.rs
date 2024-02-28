@@ -13,15 +13,14 @@ use crate::{
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
-
 pub mod coin_field;
 pub mod collection_equality;
+mod custom_rules;
 pub mod custom_state_change;
 pub mod freeze_wrapped;
 pub mod public_random;
 pub mod self_transfer;
 pub mod share_owned;
-
 pub const SUI_PKG_NAME: &str = "sui";
 pub const INCLUDE_NEW_RULES: bool = true;
 
@@ -74,6 +73,8 @@ pub const RANDOM_MOD_NAME: &str = "random";
 pub const RANDOM_STRUCT_NAME: &str = "Random";
 pub const RANDOM_GENERATOR_STRUCT_NAME: &str = "RandomGenerator";
 
+pub const CONSTANT_NAMING_FILTER_NAME: &str = "constant_naming";
+pub const SHILF_OVERFLOW_NAME: &str = "shift_overflow";
 pub const INVALID_LOC: Loc = Loc::invalid();
 
 pub enum LinterDiagCategory {
@@ -84,6 +85,8 @@ pub enum LinterDiagCategory {
     FreezeWrapped,
     CollectionEquality,
     PublicRandom,
+    ConstantNaming,
+    ShiftOperationOverflow,
 }
 
 /// A default code for each linter category (as long as only one code per category is used, no other
