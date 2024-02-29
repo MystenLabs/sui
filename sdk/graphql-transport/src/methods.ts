@@ -1335,6 +1335,7 @@ export const RPC_METHODS: {
 			max_type_arguments: 'u32',
 			move_binary_format_version: 'u32',
 			random_beacon_reduction_allowed_delta: 'u16',
+			random_beacon_reduction_lower_bound: 'u32',
 			scoring_decision_cutoff_value: 'f64',
 			scoring_decision_mad_divisor: 'f64',
 			group_ops_bls12381_msm_max_len: 'u32',
