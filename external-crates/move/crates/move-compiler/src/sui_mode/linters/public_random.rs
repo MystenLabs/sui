@@ -15,7 +15,6 @@ use crate::{
     shared::{program_info::TypingProgramInfo, CompilationEnv},
     typing::ast as T,
 };
-use move_symbol_pool::Symbol;
 
 use super::{
     LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
