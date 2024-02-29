@@ -110,7 +110,7 @@ fn is_sui_module(module: ModuleIdent) -> bool {
             name: Some(sp!(_, name)),
             ..
         }
-        | Address::NamedUnassigned(sp!(_, name)) => Symbol::from(name) == symbol!("sui"),
+        | Address::NamedUnassigned(sp!(_, name)) => name == symbol!("sui"),
         _ => false,
     }
 }
