@@ -22,11 +22,12 @@ export type PageLayoutProps = {
 	isError?: boolean;
 	content: ReactNode;
 	loading?: boolean;
+	hideHeader?: boolean;
 };
 
 const DEFAULT_HEADER_HEIGHT = 68;
 
-export function PageLayout({ gradient, content, loading, isError }: PageLayoutProps) {
+export function PageLayout({ gradient, content, hideHeader, loading, isError }: PageLayoutProps) {
 	const [network] = useNetworkContext();
 	const { request } = useAppsBackend();
 	const outageOverride = useFeatureIsOn('network-outage-override');
@@ -61,7 +62,7 @@ export function PageLayout({ gradient, content, loading, isError }: PageLayoutPr
 						<div className="break-normal">{networkDegradeBannerCopy}</div>
 					</Banner>
 				)}
-				<Header />
+				{!hideHeader && <Header />}
 			</section>
 			{loading && (
 				<div className="absolute left-1/2 right-0 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform justify-center">

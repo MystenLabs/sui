@@ -17,14 +17,89 @@ import { useNetwork } from '~/context';
 import { Card } from '~/ui/Card';
 import { TabHeader } from '~/ui/Tabs';
 import { Network } from '~/utils/api/DefaultRpcClient';
+import { Image } from '~/ui/image/Image';
+import { Heading, Text } from '@mysten/ui';
+import { ArrowRight12, Sui, SuiLogoTxt } from '../../../../icons';
+import { ButtonOrLink } from '~/ui/utils/ButtonOrLink';
+import suiscanImg from '../../assets/explorer-suiscan.jpg';
+import suiscanImg2x from '../../assets/explorer-suiscan@2x.jpg'
+import suivisionImg from '../../assets/explorer-suivision.jpg'
+import suivisionImg2x from '../../assets/explorer-suivision@2x.jpg'
 
 const ValidatorMap = lazy(() => import('../../components/validator-map'));
 
 const TRANSACTIONS_LIMIT = 25;
 
+function ExternalLink({ href, label }: { href: string; label: string }) {
+	return (
+		<ButtonOrLink
+			className="flex w-full items-center justify-center gap-2 rounded-3xl bg-sui-dark px-3 py-2"
+			href={href}
+			target="_blank"
+			rel="noopener noreferrer"
+		>
+			<Text variant="body/semibold" color="white">
+				{label}
+			</Text>
+			<ArrowRight12 className="h-3 w-3 -rotate-45 text-white" />
+		</ButtonOrLink>
+	);
+}
+
 function Home() {
 	const [network] = useNetwork();
 	const isSuiTokenCardEnabled = network === Network.MAINNET;
+	// const enableExplorerRedirect = useFeatureIsOn('explorer-redirect');
+	// TODO: Change back to use feature flag before merging
+	const enableExplorerRedirect = true;
+
+	if (enableExplorerRedirect) {
+		return (
+			<PageLayout
+				hideHeader
+				content={
+					<section className="flex flex-col gap-24">
+						<section
+							className="flex flex-col items-center justify-center gap-5 py-20"
+							style={{
+								background: 'linear-gradient(159deg, #FAF8D2 50.65%, #F7DFD5 86.82%)',
+							}}
+						>
+							<div className="flex items-center gap-1">
+								<Sui className="h-11 w-9" />
+								<SuiLogoTxt className="h-7 w-11" />
+							</div>
+
+							<Heading variant="heading2/bold">
+								Experience two amazing blockchain explorers on Sui!
+							</Heading>
+						</section>
+						<section className="flex justify-center gap-10">
+							<div className="relative">
+								<Image
+									src={suivisionImg}
+									srcSet={suivisionImg2x}
+								/>
+								<div className="absolute bottom-14 left-1/2 right-0 flex w-96 -translate-x-1/2">
+									<ExternalLink href="https://suivision.xyz/" label="Visit Suivision.xyz" />
+								</div>
+							</div>
+							<div className="relative">
+								<Image
+									src={suiscanImg}
+									srcSet={suiscanImg2x}
+								/>
+								<div className="absolute bottom-14 left-1/2 right-0 flex w-96 -translate-x-1/2">
+									<ExternalLink href="https://suiscan.xyz" label="Visit Suiscan.xyz" />
+								</div>
+							</div>
+						</section>
+					</section>
+				}
+			/>
+		);
+	}
+
 	return (
 		<PageLayout
 			gradient={{
