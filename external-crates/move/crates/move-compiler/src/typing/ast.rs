@@ -939,7 +939,7 @@ impl AstDebug for UnannotatedPat_ {
             }
             UnannotatedPat_::At(x, inner) => {
                 x.ast_debug(w);
-                w.write("@");
+                w.write(" @ ");
                 inner.ast_debug(w);
             }
             UnannotatedPat_::Binder(mut_, x) => {

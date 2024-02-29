@@ -2074,7 +2074,7 @@ fn match_arm(
         .collect();
 
     let ploc = pattern.loc;
-    let pattern = match_pattern(context, pattern, ref_mut);
+    let pattern = match_pattern(context, pattern, ref_mut, &rhs_binders);
 
     subtype(
         context,
@@ -2135,8 +2135,25 @@ fn match_arm(
 
 fn match_pattern(
     context: &mut Context,
+    pat: N::MatchPattern,
+    mut_ref: &Option<bool>, /* None -> value, Some(false) -> imm ref, Some(true) -> mut ref */
+    rhs_binders: &BTreeSet<N::Var>,
+) -> T::MatchPattern {
+    match_pattern_(
+        context,
+        pat,
+        mut_ref,
+        rhs_binders,
+        /* wildcard_needs_drop */ true,
+    )
+}
+
+fn match_pattern_(
+    context: &mut Context,
     sp!(loc, pat_): N::MatchPattern,
     mut_ref: &Option<bool>, /* None -> value, Some(false) -> imm ref, Some(true) -> mut ref */
+    rhs_binders: &BTreeSet<N::Var>,
+    wildcard_needs_drop: bool, // are we matching under an at pattern, such as `x @ Some(y)`
 ) -> T::MatchPattern {
     use N::MatchPattern_ as P;
     use T::UnannotatedPat_ as TP;
@@ -2165,7 +2182,7 @@ fn match_pattern(
                 fields,
             );
             let tfields = typed_fields.map(|f, (idx, (fty, tpat))| {
-                let tpat = match_pattern(context, tpat, mut_ref);
+                let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
                 let fty_ref = rtype!(fty);
                 let fty_out = subtype(
                     context,
@@ -2194,7 +2211,11 @@ fn match_pattern(
             };
             T::pat(bt, sp(loc, pat_))
         }
-        P::Binder(mut_, x) => {
+        P::Binder(mut_, x, /* unused binding */ true) => {
+            let x_ty = context.get_local_type(&x);
+            T::pat(x_ty, sp(loc, TP::Wildcard))
+        }
+        P::Binder(mut_, x, /* unused binding */ false) => {
             let x_ty = context.get_local_type(&x);
             T::pat(x_ty, sp(loc, TP::Binder(mut_, x)))
         }
@@ -2217,7 +2238,7 @@ fn match_pattern(
         }
         P::Wildcard => {
             let ty = core::make_tvar(context, loc);
-            if mut_ref.is_none() {
+            if mut_ref.is_none() && wildcard_needs_drop {
                 // If the thing we are matching isn't a ref, a wildcard drops it.
                 context.add_ability_constraint(
                     loc,
@@ -2233,8 +2254,8 @@ fn match_pattern(
             T::pat(rtype!(ty), sp(loc, TP::Wildcard))
         }
         P::Or(lhs, rhs) => {
-            let lpat = match_pattern(context, *lhs, mut_ref);
-            let rpat = match_pattern(context, *rhs, mut_ref);
+            let lpat = match_pattern_(context, *lhs, mut_ref, rhs_binders, wildcard_needs_drop);
+            let rpat = match_pattern_(context, *rhs, mut_ref, rhs_binders, wildcard_needs_drop);
             let ty = join(
                 context,
                 loc,
@@ -2245,8 +2266,65 @@ fn match_pattern(
             let pat = sp(loc, TP::Or(Box::new(lpat), Box::new(rpat)));
             T::pat(ty, pat)
         }
-        P::At(x, inner) => {
-            let inner = match_pattern(context, *inner, mut_ref);
+
+        // At patterns are a bit of a mess for typing. The rules are as follows:
+        //
+        //       x in rhs_binders       rhs_binders(inner) /= {}
+        //                   t = ret(t') \/ t in COPY
+        //        Γ, true |- inner : t        Γ, wnd |- x : t
+        //  -------------------------------------------------------- [at-with-binders]
+        //               Γ, wnd |- x @ inner : t -> x @ inner
+        //
+        //      x in rhs_binders        rhs_binders(inner) = {}
+        //      Γ, false |- inner : t    Γ, wnd |- x : t
+        //  -------------------------------------------------------- [at-no-inner-binders]
+        //               Γ, wnd |- x @ inner : t ~> x @ inner
+        //
+        //      x not in rhs_binders
+        //      Γ, true |- inner : t    Γ, wnd |- x : t
+        //  -------------------------------------------------------- [at-no-at-binders]
+        //               Γ, wnd |- x @ inner : t ~> x @ inner
+        //
+        //          Γ, true |- inner : t    Γ, wnd |- x : t
+        //  -------------------------------------------------------- [at-unused]
+        //               Γ, wnd |- x#unused @ inner : t ~> inner
+        //
+        // If we find an `@` expression where both the binding variable and the inner pattern are
+        // used on the pattern RHS (right-hand side, i.e., not just the guard), we will need to
+        // copy the value (in the value case). To this end, we require that the subject type has
+        // Copy if it's not a reference. Moreover, any wildcard values inside the inner pattern
+        // will neeed to be dropped, so we require that as well in our recursion.
+        //
+        // If we find an `@` whose binding variable is live on the RHS with no RHS binders in the
+        // inner pattern, we know we can move this value to that binder after matching, discarding
+        // the unpack. To this end, wildcards may be discarded without dropping them in the inner
+        // pattern.
+        //
+        // If we find an `@` pattern whose binding variable is not live on the RHS, we know the
+        // binder will only be immutably borrowed for the guard. This means we won't copy it, but
+        // the inner pattern will be used to truly unpack the value case so we require the
+        // wildcards be droppable.
+        //
+        // Finally, if the binder is unused, we discard it and we don't need to worry about this.
+        P::At(x, /* unused_binding */ false, inner) => {
+            let x_in_rhs_binders = rhs_binders.contains(&x);
+            let inner_has_rhs_binders = match_pattern_has_rhs_binders(&inner, rhs_binders);
+
+            let (inner_wildcards_need_drop, type_needs_copy) =
+                match (x_in_rhs_binders, inner_has_rhs_binders) {
+                    (true, true) => (true, true),    // need drop and copy
+                    (true, false) => (false, false), // no drop, no copy
+                    (false, true) => (true, false),  // drop but no copy
+                    (false, false) => (true, false), // drop but no copy
+                };
+
+            let inner = match_pattern_(
+                context,
+                *inner,
+                mut_ref,
+                rhs_binders,
+                inner_wildcards_need_drop,
+            );
             let x_ty = context.get_local_type(&x);
             let ty = subtype(
                 context,
@@ -2255,9 +2333,62 @@ fn match_pattern(
                 inner.ty.clone(),
                 x_ty.clone(),
             );
+            if type_needs_copy && mut_ref.is_none() {
+                context.add_ability_constraint(
+                    loc,
+                    Some(
+                        "`@` patterns will copy non-reference values during unpacking if necessary",
+                    ),
+                    ty.clone(),
+                    Ability_::Copy,
+                );
+            }
             T::pat(ty, sp(loc, TP::At(x, Box::new(inner))))
         }
+
+        P::At(x, /* unused_binding */ true, inner) => {
+            let inner = match_pattern_(
+                context,
+                *inner,
+                mut_ref,
+                rhs_binders,
+                /* `_` needs drop */ wildcard_needs_drop,
+            );
+            let x_ty = context.get_local_type(&x);
+            // ensure subtype for posterity
+            subtype(
+                context,
+                inner.pat.loc,
+                || "Invalid inner pattern type".to_string(),
+                inner.ty.clone(),
+                x_ty.clone(),
+            );
+            inner
+        }
+
         P::ErrorPat => T::pat(core::make_tvar(context, loc), sp(loc, TP::ErrorPat)),
+    }
+}
+
+fn match_pattern_has_rhs_binders(
+    sp!(_, pat_): &N::MatchPattern,
+    rhs_binders: &BTreeSet<N::Var>,
+) -> bool {
+    match pat_ {
+        N::MatchPattern_::Binder(_mut, x, _) => rhs_binders.contains(x),
+        N::MatchPattern_::At(x, _, inner) => {
+            rhs_binders.contains(x) || match_pattern_has_rhs_binders(inner, rhs_binders)
+        }
+        N::MatchPattern_::Constructor(_, _, _, _, fields) => fields
+            .iter()
+            .any(|(_, _, (_, x))| match_pattern_has_rhs_binders(x, rhs_binders)),
+        N::MatchPattern_::Or(lhs, rhs) => {
+            match_pattern_has_rhs_binders(lhs, rhs_binders)
+                || match_pattern_has_rhs_binders(rhs, rhs_binders)
+        }
+        N::MatchPattern_::Literal(_) => false,
+        N::MatchPattern_::Wildcard => false,
+        N::MatchPattern_::ErrorPat => false,
     }
 }
 

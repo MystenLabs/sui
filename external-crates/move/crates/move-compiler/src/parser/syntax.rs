@@ -1822,7 +1822,7 @@ fn parse_match_arm(context: &mut Context) -> Result<MatchArm, Box<Diagnostic>> {
 
 fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagnostic>> {
     const INVALID_PAT_ERROR_MSG: &str = "Invalid pattern";
-    const WILDCARD_AT_ERROR_MSG: &str = "Cannot use '_' as an at-pattern";
+    const WILDCARD_AT_ERROR_MSG: &str = "Cannot use '_' as a binder in an '@' pattern";
 
     use MatchPattern_ as MP;
 

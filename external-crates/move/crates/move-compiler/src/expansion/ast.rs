@@ -300,7 +300,7 @@ pub enum Mutability {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FieldBindings {
-    Named(Fields<LValue>, Option<Loc>),
+    Named(Fields<LValue>, Option<Loc>), /* Loc indicates ellipsis presence */
     Positional(Vec<Ellipsis<LValue>>),
 }
 
@@ -457,7 +457,7 @@ pub enum MatchPattern_ {
         Option<Vec<Type>>,
         Spanned<Vec<Ellipsis<MatchPattern>>>,
     ),
-    FieldConstructor(
+    NamedConstructor(
         ModuleAccess,
         Option<Vec<Type>>,
         Fields<MatchPattern>,
@@ -1783,7 +1783,7 @@ impl AstDebug for MatchPattern_ {
                 });
                 w.write(") ");
             }
-            FieldConstructor(name, tys_opt, fields, ellipsis) => {
+            NamedConstructor(name, tys_opt, fields, ellipsis) => {
                 name.ast_debug(w);
                 if let Some(ss) = tys_opt {
                     w.write("<");
@@ -1820,7 +1820,7 @@ impl AstDebug for MatchPattern_ {
                 rhs.ast_debug(w);
             }
             At(x, pat) => {
-                w.write(format!("{}@", x));
+                w.write(format!("{} @ ", x));
                 pat.ast_debug(w);
             }
         }

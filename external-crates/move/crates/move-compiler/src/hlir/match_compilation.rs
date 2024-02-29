@@ -307,6 +307,8 @@ impl PatternMatrix {
                 }
                 TP::At(x, inner) => {
                     let xloc = x.loc;
+                    // Since we are only applying the guard environment, this may be unused here.
+                    // If it is, we simply elide the `@` form.
                     if let Some(y) = env.get(&x) {
                         TP::At(
                             sp(xloc, y.value),
@@ -652,7 +654,7 @@ pub fn compile_match(
     let mut compilation_results: BTreeMap<usize, WorkResult> = BTreeMap::new();
 
     let (mut initial_binders, init_subject, match_subject) = {
-        let subject_var = context.new_match_var("match_subject".to_string(), arms_loc);
+        let subject_var = context.new_match_var("unpack_subject".to_string(), arms_loc);
         let subject_loc = subject.exp.loc;
         let match_var = context.new_match_var("match_subject".to_string(), arms_loc);
 
@@ -1202,16 +1204,21 @@ fn make_arm_unpack(
             TP::Wildcard => (),
             TP::Or(_, _) => unreachable!(),
             TP::At(x, inner) => {
-                if rhs_binders.contains(&x) {
-                    let bind_entry = entry.clone();
-                    seq.push_back(make_move_binding(
-                        x,
-                        Mutability::Imm,
-                        bind_entry.ty.clone(),
-                        bind_entry,
-                    ));
+                // See comment in typing/translate.rs at pattern typing for more information.
+                let x_in_rhs_binders = rhs_binders.contains(&x);
+                let inner_has_rhs_binders = match_pattern_has_binders(&inner, rhs_binders);
+                match (x_in_rhs_binders, inner_has_rhs_binders) {
+                    // make a copy of the value (or ref) and do both sides
+                    (true, true) => {
+                        let bind_entry = entry.clone();
+                        seq.push_back(make_copy_binding(x, Mutability::Imm, bind_entry.ty.clone(), bind_entry));
+                        queue.push_front((entry, *inner));
+                    }
+                    // no unpack needed, just move the value to the x
+                    (true, false) => seq.push_back(make_move_binding(x, Mutability::Imm, entry.ty.clone(), entry)),
+                    // we need to unpack either way, handling wildcards and the like
+                    (false, _) => queue.push_front((entry, *inner)),
                 }
-                queue.push_front((entry, *inner));
             }
             TP::ErrorPat => (),
         }
@@ -1223,6 +1230,25 @@ fn make_arm_unpack(
 
     let body = T::UnannotatedExp_::Block((UseFuns::new(0), seq));
     T::exp(out_type, sp(ploc, body))
+}
+
+fn match_pattern_has_binders(pat: &T::MatchPattern, rhs_binders: &BTreeSet<Var>) -> bool {
+    match &pat.pat.value {
+        TP::Binder(_, x) => rhs_binders.contains(x),
+        TP::At(x, inner) => {
+            rhs_binders.contains(x) || match_pattern_has_binders(inner, rhs_binders)
+        }
+        TP::Constructor(_, _, _, _, fields) | TP::BorrowConstructor(_, _, _, _, fields) => fields
+            .iter()
+            .any(|(_, _, (_, (_, pat)))| match_pattern_has_binders(pat, rhs_binders)),
+        TP::Or(lhs, rhs) => {
+            match_pattern_has_binders(lhs, rhs_binders)
+                || match_pattern_has_binders(rhs, rhs_binders)
+        }
+        TP::Literal(_) => false,
+        TP::Wildcard => false,
+        TP::ErrorPat => false,
+    }
 }
 
 //------------------------------------------------

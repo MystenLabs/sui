@@ -2160,7 +2160,7 @@ impl AstDebug for MatchPattern_ {
                 rhs.ast_debug(w);
             }
             At(x, pat) => {
-                w.write(format!("{}@", x));
+                w.write(format!("{} @ ", x));
                 pat.ast_debug(w);
             }
         }

@@ -13,7 +13,7 @@ use crate::{
         ast::{self as E, Address, ModuleIdent, ModuleIdent_},
         legacy_aliases,
         translate::{
-            is_valid_struct_or_constant_name, make_address, module_ident, top_level_address,
+            is_valid_datatype_or_constant_name, make_address, module_ident, top_level_address,
             top_level_address_opt, value, DefnContext,
         },
     },
@@ -629,7 +629,7 @@ impl PathExpander for Move2024PathExpander {
             }
             Access::Term | Access::Variant => match chain.value {
                 PN::Single(path_entry!(name, tyargs, is_macro))
-                    if !is_valid_struct_or_constant_name(&name.to_string()) =>
+                    if !is_valid_datatype_or_constant_name(&name.to_string()) =>
                 {
                     (EN::Name(name), tyargs, is_macro)
                 }
@@ -964,7 +964,7 @@ impl PathExpander for LegacyPathExpander {
                 make_access_result(sp(name.loc, access), tyargs, is_macro)
             }
             (Access::Term, single_entry!(name, tyargs, is_macro))
-                if is_valid_struct_or_constant_name(name.value.as_str()) =>
+                if is_valid_datatype_or_constant_name(name.value.as_str()) =>
             {
                 let access = match self.aliases.member_alias_get(&name) {
                     Some((mident, mem)) => EN::ModuleAccess(mident, mem),

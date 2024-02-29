@@ -958,15 +958,17 @@ fn tail(
             }
         }
 
+        // FIXME: print is left intentionally for development.
+        // Remove before merging into main.
         E::Match(subject, arms) => {
-            println!("compiling match!");
-            print!("subject:");
-            subject.print_verbose();
-            println!("\narms:");
-            for arm in &arms.value {
-                arm.value.print_verbose();
-            }
-            let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
+            // println!("compiling match!");
+            // print!("subject:");
+            // subject.print_verbose();
+            // println!("\narms:");
+            // for arm in &arms.value {
+            //     arm.value.print_verbose();
+            // }
+            // let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
             // println!("-----\ncompiled:");
             // compiled.print();
             // let result = tail(context, block, expected_type, compiled);
@@ -975,6 +977,8 @@ fn tail(
             // print!("result: ");
             // result.clone().unwrap().print_verbose();
             // result
+
+            let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
             tail(context, block, expected_type, compiled)
         }
 

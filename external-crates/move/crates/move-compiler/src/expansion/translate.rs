@@ -3038,7 +3038,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                     let ellipsis = ellipsis_locs.first().copied();
                     sp(
                         loc,
-                        EP::FieldConstructor(head_ctor_name, tys, fields, ellipsis),
+                        EP::NamedConstructor(head_ctor_name, tys, fields, ellipsis),
                     )
                 }
                 _ => error_pattern!(),
@@ -3056,7 +3056,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                     if !valid_local_variable_name(name_value) {
                         let msg = format!(
                             "Invalid pattern variable name '{}'. Pattern variable names must start \
-                            with 'a'..'z' (or '_')",
+                            with 'a'..'z' or '_'",
                             name_value,
                         );
                         context
@@ -3100,7 +3100,6 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
             if let Some(v) = value(&mut context.defn_context, v) {
                 sp(loc, EP::Literal(v))
             } else {
-                assert!(context.env().has_errors());
                 error_pattern!()
             }
         }
@@ -3117,9 +3116,6 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                     NameResolution::InvalidPattern,
                     (x.loc(), "Can't use '_' as a binder in an '@' pattern")
                 ));
-                match_pattern(context, *inner)
-            } else if x.starts_with_underscore() {
-                // Explicitly ignoring the at binding is okay?
                 match_pattern(context, *inner)
             } else {
                 sp(loc, EP::At(x, Box::new(match_pattern(context, *inner))))
@@ -3707,7 +3703,7 @@ fn check_valid_module_member_name_impl(
             }
         }
         M::Constant | M::Struct | M::Enum => {
-            if !is_valid_struct_or_constant_name(&n.value) {
+            if !is_valid_datatype_or_constant_name(&n.value) {
                 let msg = format!(
                     "Invalid {} name '{}'. {} names must start with 'A'..'Z'",
                     case.name(),
@@ -3802,7 +3798,7 @@ fn check_valid_type_parameter_name(
     check_restricted_name_all_cases(&mut context.defn_context, NameCase::TypeParameter, n)
 }
 
-pub fn is_valid_struct_or_constant_name(s: &str) -> bool {
+pub fn is_valid_datatype_or_constant_name(s: &str) -> bool {
     s.starts_with(|c: char| c.is_ascii_uppercase())
 }
 

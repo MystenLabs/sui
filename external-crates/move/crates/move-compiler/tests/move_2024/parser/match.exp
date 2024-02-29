@@ -1,12 +1,24 @@
-error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_2024/parser/match.move:53:14
+error[E13003]: feature is under active development
+  ┌─ tests/move_2024/parser/match.move:2:17
+  │
+2 │     public enum Temperature {
+  │                 ^^^^^^^^^^^ Enums are not supported in bytecode.
+  │
+  = This feature is currently in development.
+
+error[E13003]: feature is under active development
+   ┌─ tests/move_2024/parser/match.move:23:17
    │
 23 │     public enum Option<T> {
-   │                 ------ To satisfy the constraint, the 'drop' ability would need to be added here
-   ·
-51 │     public fun option_default<T: drop>(o: Option<T>, default: T): Option<T> {
-   │                                           --------- The type '0x42::m::Option<T>' does not have the ability 'drop'
-52 │        match (o) {
-53 │          x @ _ => x,
-   │              ^ Cannot ignore values without the 'drop' ability. '_' patterns discard their values
+   │                 ^^^^^^ Enums are not supported in bytecode.
+   │
+   = This feature is currently in development.
+
+error[E13003]: feature is under active development
+   ┌─ tests/move_2024/parser/match.move:58:17
+   │
+58 │     public enum Expression has drop {
+   │                 ^^^^^^^^^^ Enums are not supported in bytecode.
+   │
+   = This feature is currently in development.
 
