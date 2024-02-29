@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/struct_ellipsis_invalid.move:9:13
+  │
+9 │         let .. = y;
+  │             ^^
+  │             │
+  │             Unexpected '..'
+  │             Expected a variable or struct name
+

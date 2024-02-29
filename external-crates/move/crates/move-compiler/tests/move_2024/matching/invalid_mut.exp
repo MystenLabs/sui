@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/invalid_mut.move:11:18
+   │
+11 │             mut x<u64> => (),
+   │                  ^
+   │                  │
+   │                  Unexpected '<'
+   │                  Expected '=>'
+

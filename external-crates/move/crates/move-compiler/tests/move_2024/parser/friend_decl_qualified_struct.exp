@@ -10,5 +10,5 @@ error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/parser/friend_decl_qualified_struct.move:7:12
   │
 7 │     friend 0x42::A::A;
-  │            ^^^^^^^^^^ Unexpected module member identifier. A module member identifier is not a valid module
+  │            ^^^^^^^^^^ Unexpected module member. A module member identifier is not a valid module
 
