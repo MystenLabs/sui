@@ -80,3 +80,32 @@
 @@ -15,1 +15,1 @@
 -        let i = 0;
 +        let mut i = 0;
+--- ./tests/test0.move
++++ ./tests/test0.move
+@@ -5,1 +5,1 @@
+-    struct R has store { }
++    public struct R has store { }
+@@ -6,1 +6,1 @@
+-    struct Droppable has drop {}
++    public struct Droppable has drop {}
+@@ -7,1 +7,1 @@
+-    struct NotDroppable {}
++    public struct NotDroppable {}
+@@ -85,1 +85,1 @@
+-        let i = 0;
++        let mut i = 0;
+@@ -444,1 +444,1 @@
+-        let i = 0;
++        let mut i = 0;
+@@ -456,1 +456,1 @@
+-        let i = 0;
++        let mut i = 0;
+@@ -471,1 +471,1 @@
+-    fun test_natives_with_type<T>(x1: T, x2: T): (T, T) {
++    fun test_natives_with_type<T>(mut x1: T, mut x2: T): (T, T) {
+@@ -546,1 +546,1 @@
+-        let i = 0;
++        let mut i = 0;
+@@ -560,1 +560,1 @@
+-        let i = 0;
++        let mut i = 0;
