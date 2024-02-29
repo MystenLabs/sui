@@ -436,11 +436,11 @@ pub async fn execute_replay_command(
             if html {
                 // TODO(Laura) open up the URL with params `?network=rpc_url#<URL Encoded JSON object>`
                 //let network = network_from_url(rpc_url);
-                generate_html_from_json(
-                    &sandbox_state.output,
-                    get_filepath(tx_digest, "html"),
-                    &rpc_url.unwrap(),
-                );
+                // generate_html_from_json(
+                //     &sandbox_state.output,
+                //     get_filepath(tx_digest, "html"),
+                //     &rpc_url.unwrap(),
+                // );
             }
 
             sandbox_state.check_effects()?;
