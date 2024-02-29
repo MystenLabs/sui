@@ -2,11 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import type { CoinStruct, ObjectOwner, SuiObjectChange } from '@mysten/sui.js/client';
+import type {
+	CoinStruct,
+	DynamicFieldInfo,
+	ObjectOwner,
+	SuiObjectChange,
+} from '@mysten/sui.js/client';
 import { decodeSuiPrivateKey } from '@mysten/sui.js/cryptography';
 import type { Keypair, Signer } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import type { TransactionObjectInput } from '@mysten/sui.js/transactions';
+import type {
+	TransactionObjectArgument,
+	TransactionObjectInput,
+} from '@mysten/sui.js/transactions';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import {
 	fromB64,
@@ -18,6 +26,8 @@ import {
 	toB64,
 } from '@mysten/sui.js/utils';
 
+import { ZkBag } from './zk-bag.js';
+
 interface ZkSendLinkRedirect {
 	url: string;
 	name?: string;
@@ -26,16 +36,23 @@ interface ZkSendLinkRedirect {
 export interface ZkSendLinkBuilderOptions {
 	host?: string;
 	path?: string;
-	mist?: number;
 	keypair?: Keypair;
 	client?: SuiClient;
 	sender: string;
 	redirect?: ZkSendLinkRedirect;
+	contract?: ZkBagContractOptions;
 }
 
 export interface ZkSendLinkOptions {
 	keypair?: Keypair;
 	client?: SuiClient;
+	contract?: ZkBagContractOptions;
+}
+
+export interface ZkBagContractOptions {
+	packageId: string;
+	bagStoreId: string;
+	bagStoreTableId: string;
 }
 
 const DEFAULT_ZK_SEND_LINK_OPTIONS = {
@@ -62,11 +79,12 @@ export class ZkSendLinkBuilder {
 	#keypair: Keypair;
 	#client: SuiClient;
 	#redirect?: ZkSendLinkRedirect;
-	#objects = new Set<TransactionObjectInput>();
+	#objects = new Set<string>();
 	#balances = new Map<string, bigint>();
 	#sender: string;
 
 	#coinsByType = new Map<string, CoinStruct[]>();
+	#contract?: ZkBag<ZkBagContractOptions>;
 
 	constructor({
 		host = DEFAULT_ZK_SEND_LINK_OPTIONS.host,
@@ -75,6 +93,7 @@ export class ZkSendLinkBuilder {
 		client = DEFAULT_ZK_SEND_LINK_OPTIONS.client,
 		sender,
 		redirect,
+		contract,
 	}: ZkSendLinkBuilderOptions) {
 		this.#host = host;
 		this.#path = path;
@@ -82,6 +101,10 @@ export class ZkSendLinkBuilder {
 		this.#keypair = keypair;
 		this.#client = client;
 		this.#sender = normalizeSuiAddress(sender);
+
+		if (contract) {
+			this.#contract = new ZkBag(contract.packageId, contract);
+		}
 	}
 
 	addClaimableMist(amount: bigint) {
@@ -120,12 +143,96 @@ export class ZkSendLinkBuilder {
 	}) {
 		const txb = await this.createSendTransaction(options);
 
-		return this.#client.signAndExecuteTransactionBlock({
+		const result = await this.#client.signAndExecuteTransactionBlock({
 			transactionBlock: await txb.build({ client: this.#client }),
 			signer,
 		});
+
+		await this.#client.waitForTransactionBlock({ digest: result.digest });
+
+		return result;
 	}
 	async createSendTransaction({
+		transactionBlock: txb = new TransactionBlock(),
+		calculateGas,
+	}: CreateZkSendLinkOptions = {}) {
+		if (!this.#contract) {
+			return this.#createSendTransactionWithoutContract({ transactionBlock: txb, calculateGas });
+		}
+		const receiver = txb.pure.address(this.#keypair.toSuiAddress());
+		const store = txb.object(this.#contract.ids.bagStoreId);
+
+		this.#contract.new(txb, { arguments: [store, receiver] });
+		txb.setSenderIfNotSet(this.#sender);
+
+		const objectsToTransfer = await this.#objectsToTransfer(txb);
+
+		for (const object of objectsToTransfer) {
+			this.#contract.add(txb, {
+				arguments: [store, receiver, object.ref],
+				typeArguments: [object.type],
+			});
+		}
+
+		return txb;
+	}
+
+	async #objectsToTransfer(txb: TransactionBlock) {
+		const objectIDs = [...this.#objects];
+		const refsWithType: {
+			ref: TransactionObjectArgument;
+			type: string;
+		}[] = (
+			await this.#client.multiGetObjects({
+				ids: objectIDs,
+				options: {
+					showType: true,
+				},
+			})
+		).map((res, i) => {
+			if (!res.data || res.error) {
+				throw new Error(`Failed to load object ${objectIDs[i]} (${res.error?.code})`);
+			}
+
+			return {
+				ref: txb.objectRef({
+					version: res.data.version,
+					digest: res.data.digest,
+					objectId: res.data.objectId,
+				}),
+				type: res.data.type!,
+			};
+		});
+
+		// [...this.#objects].map((id) => txb.object(id));
+
+		txb.setSenderIfNotSet(this.#sender);
+
+		for (const [coinType, amount] of this.#balances) {
+			if (coinType === SUI_COIN_TYPE) {
+				const [sui] = txb.splitCoins(txb.gas, [amount]);
+				refsWithType.push({
+					ref: sui,
+					type: `0x::coin::Coin<${coinType}>`,
+				});
+			} else {
+				const coins = (await this.#getCoinsByType(coinType)).map((coin) => coin.coinObjectId);
+
+				if (coins.length > 1) {
+					txb.mergeCoins(coins[0], coins.slice(1));
+				}
+				const [split] = txb.splitCoins(coins[0], [amount]);
+				refsWithType.push({
+					ref: split,
+					type: `0x2::coin:Coin<${coinType}>`,
+				});
+			}
+		}
+
+		return refsWithType;
+	}
+
+	async #createSendTransactionWithoutContract({
 		transactionBlock: txb = new TransactionBlock(),
 		calculateGas,
 	}: CreateZkSendLinkOptions = {}) {
@@ -144,27 +251,11 @@ export class ZkSendLinkBuilder {
 		const roundedGasAmount = gasWithBuffer - (gasWithBuffer % 1000n) - 13n;
 
 		const address = this.#keypair.toSuiAddress();
-		const objectsToTransfer = [...this.#objects].map((id) => txb.object(id));
+		const objectsToTransfer = (await this.#objectsToTransfer(txb)).map((obj) => obj.ref);
 		const [gas] = txb.splitCoins(txb.gas, [roundedGasAmount]);
 		objectsToTransfer.push(gas);
 
 		txb.setSenderIfNotSet(this.#sender);
-
-		for (const [coinType, amount] of this.#balances) {
-			if (coinType === SUI_COIN_TYPE) {
-				const [sui] = txb.splitCoins(txb.gas, [amount]);
-				objectsToTransfer.push(sui);
-			} else {
-				const coins = (await this.#getCoinsByType(coinType)).map((coin) => coin.coinObjectId);
-
-				if (coins.length > 1) {
-					txb.mergeCoins(coins[0], coins.slice(1));
-				}
-				const [split] = txb.splitCoins(coins[0], [amount]);
-				objectsToTransfer.push(split);
-			}
-		}
-
 		txb.transferObjects(objectsToTransfer, address);
 
 		return txb;
@@ -236,16 +327,23 @@ export class ZkSendLink {
 		digest: string;
 		type: string;
 	}> = [];
+	#bagObjects: Array<DynamicFieldInfo> = [];
 	#gasCoin?: CoinStruct;
 	#hasSui = false;
 	#creatorAddress?: string;
+	#contract?: ZkBag<ZkBagContractOptions>;
 
 	constructor({
 		client = DEFAULT_ZK_SEND_LINK_OPTIONS.client,
 		keypair = new Ed25519Keypair(),
+		contract,
 	}: ZkSendLinkOptions & { linkAddress?: string }) {
 		this.#client = client;
 		this.#keypair = keypair;
+
+		if (contract) {
+			this.#contract = new ZkBag(contract.packageId, contract);
+		}
 	}
 
 	static async fromUrl(url: string, options?: Omit<ZkSendLinkOptions, 'keypair'>) {
@@ -263,7 +361,11 @@ export class ZkSendLink {
 	}
 
 	async loadOwnedData() {
-		await Promise.all([this.#loadInitialTransactionData(), this.#loadOwnedObjects()]);
+		await Promise.all([
+			this.#loadInitialTransactionData(),
+			this.#loadOwnedObjects(),
+			this.#loadBag(),
+		]);
 	}
 
 	async listClaimableAssets(
@@ -322,6 +424,7 @@ export class ZkSendLink {
 		});
 
 		return {
+			bag: this.#bagObjects,
 			balances,
 			nfts,
 		};
@@ -342,6 +445,45 @@ export class ZkSendLink {
 	}
 
 	createClaimTransaction(
+		address: string,
+		options?: {
+			claimObjectsAddedAfterCreation?: boolean;
+			coinTypes?: string[];
+			objects?: string[];
+		},
+	) {
+		if (!this.#contract) {
+			return this.#createNonContractClaimTransaction(address, options);
+		}
+
+		const txb = new TransactionBlock();
+		const sender = this.#keypair.toSuiAddress();
+		txb.setSender(sender);
+
+		const store = txb.object(this.#contract.ids.bagStoreId);
+
+		const [bag, proof] = this.#contract.init_claim(txb, { arguments: [store, sender] });
+
+		const objectsToTransfer = [];
+
+		for (const object of this.#bagObjects) {
+			objectsToTransfer.push(
+				this.#contract.claim(txb, {
+					arguments: [bag, proof, txb.pure.u64(object.name.value as string)],
+					typeArguments: [object.objectType],
+				}),
+			);
+		}
+
+		this.#contract.finalize(txb, { arguments: [bag, proof] });
+		if (objectsToTransfer.length > 0) {
+			txb.transferObjects(objectsToTransfer, address);
+		}
+
+		return txb;
+	}
+
+	#createNonContractClaimTransaction(
 		address: string,
 		options?: {
 			claimObjectsAddedAfterCreation?: boolean;
@@ -451,6 +593,37 @@ export class ZkSendLink {
 		});
 
 		this.#creatorAddress = result.data[0]?.transaction?.data.sender;
+	}
+
+	async #loadBag() {
+		if (!this.#contract) {
+			return;
+		}
+
+		const bagField = await this.#client.getDynamicFieldObject({
+			parentId: this.#contract.ids.bagStoreTableId,
+			name: {
+				type: 'address',
+				value: this.#keypair.toSuiAddress(),
+			},
+		});
+
+		if (!bagField.data) {
+			return;
+		}
+
+		const bagId: string | undefined = (bagField as any).data?.content?.fields?.value?.fields?.items
+			?.fields?.id?.id;
+
+		if (!bagId) {
+			throw new Error('Invalid bag field');
+		}
+
+		const objectsResponse = await this.#client.getDynamicFields({
+			parentId: bagId,
+		});
+
+		this.#bagObjects = objectsResponse.data;
 	}
 }
 
