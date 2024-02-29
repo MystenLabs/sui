@@ -13318,7 +13318,6 @@ dependencies = [
  "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-protocol-config",
- "sui-replay-frontend",
  "sui-sdk",
  "sui-storage",
  "sui-types",
@@ -13327,14 +13326,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "sui-replay-frontend"
-version = "0.1.0"
-dependencies = [
- "include_dir",
- "open",
 ]
 
 [[package]]

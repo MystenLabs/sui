@@ -25,7 +25,6 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_protocol_config::Chain;
-use sui_replay_frontend::generate_html_from_json;
 use sui_types::digests::TransactionDigest;
 use tracing::{error, info};
 pub mod config;
@@ -435,12 +434,13 @@ pub async fn execute_replay_command(
             }
 
             if html {
+                // TODO(Laura) open up the URL with params `?network=rpc_url#<URL Encoded JSON object>`
                 //let network = network_from_url(rpc_url);
-                generate_html_from_json(
-                    &sandbox_state.output,
-                    get_filepath(tx_digest, "html"),
-                    &rpc_url.unwrap(),
-                );
+                // generate_html_from_json(
+                //     &sandbox_state.output,
+                //     get_filepath(tx_digest, "html"),
+                //     &rpc_url.unwrap(),
+                // );
             }
 
             sandbox_state.check_effects()?;
