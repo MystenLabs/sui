@@ -11,7 +11,7 @@ use fastcrypto_tbls::{dkg, nodes};
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Instant;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, EpochId, StakeUnit};
@@ -19,7 +19,7 @@ use sui_types::crypto::{AuthorityKeyPair, RandomnessRound};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::OnceCell;
 use tracing::{debug, error, info};
 use typed_store::rocks::DBBatch;
 use typed_store::Map;
@@ -212,15 +212,12 @@ impl RandomnessManager {
                 .dkg_output
                 .set(dkg_output.clone())
                 .expect("setting new OnceCell should succeed");
-            inner
-                .network_handle
-                .update_epoch(
-                    committee.epoch(),
-                    inner.authority_info.clone(),
-                    dkg_output,
-                    inner.party.t(),
-                )
-                .await;
+            inner.network_handle.update_epoch(
+                committee.epoch(),
+                inner.authority_info.clone(),
+                dkg_output,
+                inner.party.t(),
+            );
         } else {
             info!(
                 "random beacon: no existing DKG output found for epoch {}",
@@ -272,8 +269,7 @@ impl RandomnessManager {
             );
             inner
                 .network_handle
-                .send_partial_signatures(committee.epoch(), round)
-                .await;
+                .send_partial_signatures(committee.epoch(), round);
         }
 
         Some(RandomnessManager {
@@ -282,64 +278,58 @@ impl RandomnessManager {
     }
 
     /// Sends the initial dkg::Message to begin the randomness DKG protocol.
-    pub async fn start_dkg(&self) -> SuiResult {
-        self.inner.lock().await.start_dkg()
+    pub fn start_dkg(&self) -> SuiResult {
+        self.inner.lock().unwrap().start_dkg()
     }
 
     /// Processes all received messages and advances the randomness DKG state machine when possible,
     /// sending out a dkg::Confirmation and generating final output.
-    pub async fn advance_dkg(&self, batch: &mut DBBatch) -> SuiResult {
-        self.inner.lock().await.advance_dkg(batch).await
+    pub fn advance_dkg(&self, batch: &mut DBBatch) -> SuiResult {
+        self.inner.lock().unwrap().advance_dkg(batch)
     }
 
     /// Adds a received dkg::Message to the randomness DKG state machine.
-    pub async fn add_message(
-        &self,
-        batch: &mut DBBatch,
-        msg: dkg::Message<PkG, EncG>,
-    ) -> SuiResult {
-        self.inner.lock().await.add_message(batch, msg)
+    pub fn add_message(&self, batch: &mut DBBatch, msg: dkg::Message<PkG, EncG>) -> SuiResult {
+        self.inner.lock().unwrap().add_message(batch, msg)
     }
 
     /// Adds a received dkg::Confirmation to the randomness DKG state machine.
-    pub async fn add_confirmation(
+    pub fn add_confirmation(
         &self,
         batch: &mut DBBatch,
         conf: dkg::Confirmation<EncG>,
     ) -> SuiResult {
-        self.inner.lock().await.add_confirmation(batch, conf)
+        self.inner.lock().unwrap().add_confirmation(batch, conf)
     }
 
     /// Reserves the next available round number for randomness generation. Once the given
     /// batch is written, `generate_randomness` must be called to start the process. On restart,
     /// any reserved rounds for which the batch was written will automatically be resumed.
-    pub async fn reserve_next_randomness(&self, batch: &mut DBBatch) -> SuiResult<RandomnessRound> {
-        self.inner.lock().await.reserve_next_randomness(batch).await
+    pub fn reserve_next_randomness(&self, batch: &mut DBBatch) -> SuiResult<RandomnessRound> {
+        self.inner.lock().unwrap().reserve_next_randomness(batch)
     }
 
     /// Starts the process of generating the given RandomnessRound.
-    pub async fn generate_randomness(&self, epoch: EpochId, randomness_round: RandomnessRound) {
+    pub fn generate_randomness(&self, epoch: EpochId, randomness_round: RandomnessRound) {
         self.inner
             .lock()
-            .await
+            .unwrap()
             .generate_randomness(epoch, randomness_round)
-            .await
     }
 
     /// Notifies the randomness manager that randomness for the given round has been durably
     /// committed in a checkpoint. This completes the process of generating randomness for the
     /// round.
-    pub async fn notify_randomness_in_checkpoint(&self, round: RandomnessRound) -> SuiResult {
+    pub fn notify_randomness_in_checkpoint(&self, round: RandomnessRound) -> SuiResult {
         self.inner
             .lock()
-            .await
+            .unwrap()
             .notify_randomness_in_checkpoint(round)
-            .await
     }
 
     /// Returns true if DKG has completed.
-    pub async fn is_dkg_completed(&self) -> bool {
-        self.inner.lock().await.dkg_output.initialized()
+    pub fn is_dkg_completed(&self) -> bool {
+        self.inner.lock().unwrap().dkg_output.initialized()
     }
 
     fn randomness_dkg_info_from_committee(
@@ -401,7 +391,7 @@ impl Inner {
         Ok(())
     }
 
-    pub async fn advance_dkg(&mut self, batch: &mut DBBatch) -> SuiResult {
+    pub fn advance_dkg(&mut self, batch: &mut DBBatch) -> SuiResult {
         let epoch_store = self.epoch_store()?;
 
         // Once we have enough ProcessedMessages, send a Confirmation.
@@ -470,14 +460,12 @@ impl Inner {
                     self.dkg_output
                         .set(output.clone())
                         .expect("checked above that `dkg_output` is uninitialized");
-                    self.network_handle
-                        .update_epoch(
-                            epoch_store.committee().epoch(),
-                            self.authority_info.clone(),
-                            output.clone(),
-                            self.party.t(),
-                        )
-                        .await;
+                    self.network_handle.update_epoch(
+                        epoch_store.committee().epoch(),
+                        self.authority_info.clone(),
+                        output.clone(),
+                        self.party.t(),
+                    );
                     batch.insert_batch(
                         &self.tables()?.dkg_output,
                         std::iter::once((SINGLETON_KEY, output)),
@@ -529,10 +517,7 @@ impl Inner {
         Ok(())
     }
 
-    pub async fn reserve_next_randomness(
-        &mut self,
-        batch: &mut DBBatch,
-    ) -> SuiResult<RandomnessRound> {
+    pub fn reserve_next_randomness(&mut self, batch: &mut DBBatch) -> SuiResult<RandomnessRound> {
         let randomness_round = self.next_randomness_round;
         self.next_randomness_round = self
             .next_randomness_round
@@ -551,17 +536,15 @@ impl Inner {
         Ok(randomness_round)
     }
 
-    pub async fn generate_randomness(&self, epoch: EpochId, randomness_round: RandomnessRound) {
+    pub fn generate_randomness(&self, epoch: EpochId, randomness_round: RandomnessRound) {
         self.network_handle
-            .send_partial_signatures(epoch, randomness_round)
-            .await;
+            .send_partial_signatures(epoch, randomness_round);
     }
 
-    pub async fn notify_randomness_in_checkpoint(&self, round: RandomnessRound) -> SuiResult {
+    pub fn notify_randomness_in_checkpoint(&self, round: RandomnessRound) -> SuiResult {
         self.tables()?.randomness_rounds_pending.remove(&round)?;
         self.network_handle
-            .complete_round(self.epoch_store()?.committee().epoch(), round)
-            .await;
+            .complete_round(self.epoch_store()?.committee().epoch(), round);
         Ok(())
     }
 
@@ -646,9 +629,9 @@ mod tests {
         // Generate and distribute Messages.
         let mut dkg_messages = Vec::new();
         for randomness_manager in &randomness_managers {
-            randomness_manager.start_dkg().await.unwrap();
+            randomness_manager.start_dkg().unwrap();
 
-            let dkg_message = rx_consensus.recv().await.unwrap();
+            let dkg_message = rx_consensus.recv().unwrap();
             match dkg_message.kind {
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
                     let msg: fastcrypto_tbls::dkg::Message<PkG, EncG> = bcs::from_bytes(&bytes)
@@ -667,13 +650,9 @@ mod tests {
             for dkg_message in dkg_messages.iter().cloned() {
                 randomness_managers[i]
                     .add_message(&mut batch, dkg_message)
-                    .await
                     .unwrap();
             }
-            randomness_managers[i]
-                .advance_dkg(&mut batch)
-                .await
-                .unwrap();
+            randomness_managers[i].advance_dkg(&mut batch).unwrap();
             batch.write().unwrap();
         }
 
@@ -695,13 +674,9 @@ mod tests {
             for dkg_confirmation in dkg_confirmations.iter().cloned() {
                 randomness_managers[i]
                     .add_confirmation(&mut batch, dkg_confirmation)
-                    .await
                     .unwrap();
             }
-            randomness_managers[i]
-                .advance_dkg(&mut batch)
-                .await
-                .unwrap();
+            randomness_managers[i].advance_dkg(&mut batch).unwrap();
             batch.write().unwrap();
         }
 
@@ -710,7 +685,7 @@ mod tests {
             assert!(randomness_manager
                 .inner
                 .lock()
-                .await
+                .unwrap()
                 .dkg_output
                 .initialized());
         }

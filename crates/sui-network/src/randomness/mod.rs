@@ -61,7 +61,7 @@ pub struct Handle {
 impl Handle {
     /// Transitions the Randomness system to a new epoch. Cancels all partial signature sends for
     /// prior epochs.
-    pub async fn update_epoch(
+    pub fn update_epoch(
         &self,
         new_epoch: EpochId,
         authority_info: HashMap<AuthorityName, (PeerId, PartyId)>,
@@ -69,30 +69,27 @@ impl Handle {
         aggregation_threshold: u32,
     ) {
         self.sender
-            .send(RandomnessMessage::UpdateEpoch(
+            .try_send(RandomnessMessage::UpdateEpoch(
                 new_epoch,
                 authority_info,
                 dkg_output,
                 aggregation_threshold,
             ))
-            .await
-            .unwrap()
+            .expect("RandomnessEventLoop mailbox should not overflow or be closed")
     }
 
     /// Begins transmitting partial signatures for the given epoch and round until completed.
-    pub async fn send_partial_signatures(&self, epoch: EpochId, round: RandomnessRound) {
+    pub fn send_partial_signatures(&self, epoch: EpochId, round: RandomnessRound) {
         self.sender
-            .send(RandomnessMessage::SendPartialSignatures(epoch, round))
-            .await
-            .unwrap()
+            .try_send(RandomnessMessage::SendPartialSignatures(epoch, round))
+            .expect("RandomnessEventLoop mailbox should not overflow or be closed")
     }
 
     /// Records the given round as complete, stopping any partial signature sends.
-    pub async fn complete_round(&self, epoch: EpochId, round: RandomnessRound) {
+    pub fn complete_round(&self, epoch: EpochId, round: RandomnessRound) {
         self.sender
-            .send(RandomnessMessage::CompleteRound(epoch, round))
-            .await
-            .unwrap()
+            .try_send(RandomnessMessage::CompleteRound(epoch, round))
+            .expect("RandomnessEventLoop mailbox should not overflow or be closed")
     }
 
     // For testing.
@@ -159,7 +156,7 @@ impl RandomnessEventLoop {
                     // Once all handles to our mailbox have been dropped this
                     // will yield `None` and we can terminate the event loop.
                     if let Some(message) = maybe_message {
-                        self.handle_message(message).await;
+                        self.handle_message(message);
                     } else {
                         break;
                     }
@@ -170,7 +167,7 @@ impl RandomnessEventLoop {
         info!("Randomness network event loop ended");
     }
 
-    async fn handle_message(&mut self, message: RandomnessMessage) {
+    fn handle_message(&mut self, message: RandomnessMessage) {
         match message {
             RandomnessMessage::UpdateEpoch(
                 epoch,
@@ -178,28 +175,24 @@ impl RandomnessEventLoop {
                 dkg_output,
                 aggregation_threshold,
             ) => {
-                if let Err(e) = self
-                    .update_epoch(epoch, authority_info, dkg_output, aggregation_threshold)
-                    .await
+                if let Err(e) =
+                    self.update_epoch(epoch, authority_info, dkg_output, aggregation_threshold)
                 {
                     error!("BUG: failed to update epoch in RandomnessEventLoop: {e:?}");
                 }
             }
             RandomnessMessage::SendPartialSignatures(epoch, round) => {
-                self.send_partial_signatures(epoch, round).await
+                self.send_partial_signatures(epoch, round)
             }
-            RandomnessMessage::CompleteRound(epoch, round) => {
-                self.complete_round(epoch, round).await
-            }
+            RandomnessMessage::CompleteRound(epoch, round) => self.complete_round(epoch, round),
             RandomnessMessage::ReceivePartialSignatures(peer_id, epoch, round, sigs) => {
                 self.receive_partial_signatures(peer_id, epoch, round, sigs)
-                    .await
             }
         }
     }
 
     #[instrument(level = "debug", skip_all, fields(?new_epoch))]
-    async fn update_epoch(
+    fn update_epoch(
         &mut self,
         new_epoch: EpochId,
         authority_info: HashMap<AuthorityName, (PeerId, PartyId)>,
@@ -248,7 +241,7 @@ impl RandomnessEventLoop {
             .split_off(&(new_epoch, RandomnessRound(0)));
 
         // Start any pending tasks for the new epoch.
-        self.maybe_start_pending_tasks().await;
+        self.maybe_start_pending_tasks();
 
         // Aggregate any sigs received early from the new epoch.
         // (We can't call `maybe_aggregate_partial_signatures` directly while iterating,
@@ -266,15 +259,14 @@ impl RandomnessEventLoop {
             }
         }
         for round in aggregate_rounds {
-            self.maybe_aggregate_partial_signatures(new_epoch, round)
-                .await;
+            self.maybe_aggregate_partial_signatures(new_epoch, round);
         }
 
         Ok(())
     }
 
     #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
-    async fn send_partial_signatures(&mut self, epoch: EpochId, round: RandomnessRound) {
+    fn send_partial_signatures(&mut self, epoch: EpochId, round: RandomnessRound) {
         if epoch < self.epoch {
             info!(
                 "skipping sending partial sigs, we are already up to epoch {}",
@@ -290,11 +282,11 @@ impl RandomnessEventLoop {
         self.pending_tasks.insert((epoch, round));
         self.round_request_time
             .insert((epoch, round), time::Instant::now());
-        self.maybe_start_pending_tasks().await;
+        self.maybe_start_pending_tasks();
     }
 
     #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
-    async fn complete_round(&mut self, epoch: EpochId, round: RandomnessRound) {
+    fn complete_round(&mut self, epoch: EpochId, round: RandomnessRound) {
         debug!("completing randomness generation");
         self.pending_tasks.remove(&(epoch, round));
         self.round_request_time.remove(&(epoch, round));
@@ -302,14 +294,14 @@ impl RandomnessEventLoop {
         self.completed_rounds.insert((epoch, round));
         if let Some(task) = self.send_tasks.remove(&(epoch, round)) {
             task.abort();
-            self.maybe_start_pending_tasks().await;
+            self.maybe_start_pending_tasks();
         } else {
             self.update_rounds_pending_metric();
         }
     }
 
     #[instrument(level = "debug", skip_all, fields(?peer_id, ?epoch, ?round))]
-    async fn receive_partial_signatures(
+    fn receive_partial_signatures(
         &mut self,
         peer_id: PeerId,
         epoch: EpochId,
@@ -393,11 +385,11 @@ impl RandomnessEventLoop {
         self.received_partial_sigs
             .insert((epoch, round, peer_id), partial_sigs);
 
-        self.maybe_aggregate_partial_signatures(epoch, round).await;
+        self.maybe_aggregate_partial_signatures(epoch, round);
     }
 
     #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
-    async fn maybe_aggregate_partial_signatures(&mut self, epoch: EpochId, round: RandomnessRound) {
+    fn maybe_aggregate_partial_signatures(&mut self, epoch: EpochId, round: RandomnessRound) {
         if self.completed_sigs.contains(&(epoch, round)) {
             error!("BUG: called maybe_aggregate_partial_signatures for already-completed round");
             return;
@@ -512,12 +504,11 @@ impl RandomnessEventLoop {
 
         let bytes = bcs::to_bytes(&sig).expect("signature serialization should not fail");
         self.randomness_tx
-            .send((epoch, round, bytes))
-            .await
-            .expect("randomness_tx should never be closed");
+            .try_send((epoch, round, bytes))
+            .expect("RandomnessRoundReceiver mailbox should not overflow or be closed");
     }
 
-    async fn maybe_start_pending_tasks(&mut self) {
+    fn maybe_start_pending_tasks(&mut self) {
         let dkg_output = if let Some(dkg_output) = &self.dkg_output {
             dkg_output
         } else {
@@ -610,7 +601,7 @@ impl RandomnessEventLoop {
         // After starting a round, we have generated our own partial sigs. Check if that's
         // enough for us to aggregate already.
         for (epoch, round) in rounds_to_aggregate {
-            self.maybe_aggregate_partial_signatures(epoch, round).await;
+            self.maybe_aggregate_partial_signatures(epoch, round);
         }
     }
 

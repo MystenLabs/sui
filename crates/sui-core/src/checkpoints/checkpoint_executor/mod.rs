@@ -636,9 +636,7 @@ async fn execute_checkpoint(
                 ?round,
                 "notifying RandomnessManager that randomness update was executed in checkpoint"
             );
-            randomness_manager
-                .notify_randomness_in_checkpoint(round)
-                .await?;
+            randomness_manager.notify_randomness_in_checkpoint(round)?;
         }
     }
 

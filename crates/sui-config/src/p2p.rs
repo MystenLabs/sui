@@ -349,9 +349,10 @@ pub struct RandomnessConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub partial_signature_retry_interval_ms: Option<u64>,
 
-    /// Size of the Randomness actor's mailbox.
+    /// Size of the Randomness actor's mailbox. This should be set large enough to never
+    /// overflow unless a bug is encountered.
     ///
-    /// If unspecified, this will default to `128`.
+    /// If unspecified, this will default to `1,000,000`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mailbox_capacity: Option<usize>,
 
@@ -386,7 +387,7 @@ impl RandomnessConfig {
     }
 
     pub fn mailbox_capacity(&self) -> usize {
-        const MAILBOX_CAPACITY: usize = 128;
+        const MAILBOX_CAPACITY: usize = 1_000_000;
 
         self.mailbox_capacity.unwrap_or(MAILBOX_CAPACITY)
     }

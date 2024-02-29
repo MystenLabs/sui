@@ -855,7 +855,7 @@ impl AuthorityPerEpochStore {
         {
             error!("BUG: `set_randomness_manager` called more than once; this should never happen");
         }
-        randomness_manager.start_dkg().await
+        randomness_manager.start_dkg()
     }
 
     pub fn coin_deny_list_state_exists(&self) -> bool {
@@ -2416,9 +2416,7 @@ impl AuthorityPerEpochStore {
                 .clone();
             // Spawn a task for this, because we can't await while holding `lock`.
             spawn_monitored_task!(async move {
-                randomness_manager
-                    .generate_randomness(epoch, randomness_round)
-                    .await;
+                randomness_manager.generate_randomness(epoch, randomness_round);
             });
         }
 
@@ -2581,8 +2579,7 @@ impl AuthorityPerEpochStore {
                     .randomness_manager
                     .get()
                     .expect("randomness manager should exist if randomness is enabled")
-                    .reserve_next_randomness(batch)
-                    .await?;
+                    .reserve_next_randomness(batch)?;
                 reserved_randomness_round = Some(round);
 
                 let version = shared_input_next_versions
@@ -2653,9 +2650,9 @@ impl AuthorityPerEpochStore {
         let mut is_dkg_completed = None;
         if let Some(randomness_manager) = self.randomness_manager.get() {
             if randomness_state_updated {
-                randomness_manager.advance_dkg(batch).await?;
+                randomness_manager.advance_dkg(batch)?;
             }
-            is_dkg_completed = Some(randomness_manager.is_dkg_completed().await);
+            is_dkg_completed = Some(randomness_manager.is_dkg_completed());
         }
 
         batch.insert_batch(
@@ -2949,7 +2946,7 @@ impl AuthorityPerEpochStore {
                             authority.concise()
                         );
                         match bcs::from_bytes(bytes) {
-                            Ok(message) => randomness_manager.add_message(batch, message).await?,
+                            Ok(message) => randomness_manager.add_message(batch, message)?,
                             Err(e) => {
                                 warn!(
                                     "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
@@ -2983,9 +2980,7 @@ impl AuthorityPerEpochStore {
                         );
                         match bcs::from_bytes(bytes) {
                             Ok(confirmation) => {
-                                randomness_manager
-                                    .add_confirmation(batch, confirmation)
-                                    .await?
+                                randomness_manager.add_confirmation(batch, confirmation)?
                             }
                             Err(e) => {
                                 warn!(
