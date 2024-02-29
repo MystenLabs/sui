@@ -562,7 +562,6 @@ impl RandomnessEventLoop {
                 );
 
                 // Record own partial sigs.
-                // TODO-DNS test this behavior
                 if !self.completed_sigs.contains(&(epoch, round)) {
                     self.received_partial_sigs
                         .insert((epoch, round, self.network.peer_id()), sigs.clone());
