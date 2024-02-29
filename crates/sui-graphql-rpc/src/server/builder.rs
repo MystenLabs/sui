@@ -317,7 +317,7 @@ impl ServerBuilder {
             builder = builder.extension(QueryLimitsChecker::default());
         }
         if config.internal_features.query_timeout {
-            builder = builder.extension(Timeout);
+            builder = builder.extension(Timeout::default());
         }
         if config.internal_features.tracing {
             builder = builder.extension(Tracing);
@@ -554,10 +554,10 @@ pub mod tests {
                 .context_data(cfg)
                 .context_data(query_id())
                 .context_data(ip_address())
+                .extension(Timeout::default())
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
-                .extension(Timeout)
                 .build_schema();
 
             schema.execute("{ chainIdentifier }").await

@@ -489,7 +489,7 @@ impl ValidatorService {
             // even when we are not returning effects to user
             if !certificate.contains_shared_object() {
                 self.state
-                    .enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store)?;
+                    .enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store);
             }
             return Ok(None);
         }

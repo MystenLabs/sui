@@ -80,7 +80,7 @@ pub struct PendingCertificate {
     // When executing from checkpoint, the certified effects digest is provided, so that forks can
     // be detected prior to committing the transaction.
     pub expected_effects_digest: Option<TransactionEffectsDigest>,
-    // The input object this certifiate is waiting for to become available in order to be executed.
+    // The input object this certificate is waiting for to become available in order to be executed.
     pub waiting_input_objects: BTreeSet<InputKey>,
     // Stores stats about this transaction.
     pub stats: PendingCertificateStats,
@@ -354,9 +354,7 @@ impl TransactionManager {
             inner: RwLock::new(Inner::new(epoch_store.epoch(), metrics)),
             tx_ready_certificates,
         };
-        transaction_manager
-            .enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store)
-            .expect("Initialize TransactionManager with pending certificates failed.");
+        transaction_manager.enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store);
         transaction_manager
     }
 
@@ -370,7 +368,7 @@ impl TransactionManager {
         &self,
         certs: Vec<VerifiedCertificate>,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<()> {
+    ) {
         let executable_txns = certs
             .into_iter()
             .map(VerifiedExecutableTransaction::new_from_certificate)
@@ -383,7 +381,7 @@ impl TransactionManager {
         &self,
         certs: Vec<VerifiedExecutableTransaction>,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<()> {
+    ) {
         let certs = certs.into_iter().map(|cert| (cert, None)).collect();
         self.enqueue_impl(certs, epoch_store)
     }
@@ -393,7 +391,7 @@ impl TransactionManager {
         &self,
         certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<()> {
+    ) {
         let certs = certs
             .into_iter()
             .map(|(cert, fx)| (cert, Some(fx)))
@@ -408,7 +406,7 @@ impl TransactionManager {
             Option<TransactionEffectsDigest>,
         )>,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<()> {
+    ) {
         // filter out already executed certs
         let certs: Vec<_> = certs
             .into_iter()
@@ -418,10 +416,16 @@ impl TransactionManager {
                 if self
                     .cache_read
                     .is_tx_already_executed(&digest)
-                    .expect("Failed to check if tx is already executed")
+                    .unwrap_or_else(|err| {
+                        panic!("Failed to check if tx is already executed: {:?}", err)
+                    })
                 {
                     // also ensure the transaction will not be retried after restart.
-                    let _ = epoch_store.remove_pending_execution(&digest);
+                    epoch_store
+                        .remove_pending_execution(&digest)
+                        .unwrap_or_else(|err| {
+                            panic!("remove_pending_execution should not fail: {:?}", err)
+                        });
                     self.metrics
                         .transaction_manager_num_enqueued_certificates
                         .with_label_values(&["already_executed"])
@@ -497,7 +501,7 @@ impl TransactionManager {
                 receiving_objects,
                 epoch_store.epoch(),
             )
-            .expect("Checking object existence cannot fail!")
+            .unwrap_or_else(|err| panic!("Checking object existence cannot fail: {:?}", err))
             .into_iter()
             .zip(input_object_cache_misses);
 
@@ -565,7 +569,11 @@ impl TransactionManager {
                     inner.epoch, pending_cert.certificate
                 );
                 // also ensure the transaction will not be retried after restart.
-                let _ = epoch_store.remove_pending_execution(&digest);
+                epoch_store
+                    .remove_pending_execution(&digest)
+                    .unwrap_or_else(|err| {
+                        panic!("remove_pending_execution should not fail: {:?}", err)
+                    });
                 continue;
             }
 
@@ -586,9 +594,15 @@ impl TransactionManager {
                 continue;
             }
             // skip already executed txes
-            if self.cache_read.is_tx_already_executed(&digest)? {
+            let is_tx_already_executed = self
+                .cache_read
+                .is_tx_already_executed(&digest)
+                .expect("Check if tx is already executed should not fail");
+            if is_tx_already_executed {
                 // also ensure the transaction will not be retried after restart.
-                let _ = epoch_store.remove_pending_execution(&digest);
+                epoch_store
+                    .remove_pending_execution(&digest)
+                    .expect("remove_pending_execution should not fail");
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["already_executed"])
@@ -652,8 +666,6 @@ impl TransactionManager {
             .set(inner.pending_certificates.len() as i64);
 
         inner.maybe_reserve_capacity();
-
-        Ok(())
     }
 
     #[cfg(test)]

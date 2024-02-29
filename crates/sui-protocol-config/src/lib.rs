@@ -1897,6 +1897,11 @@ impl ProtocolConfig {
                 }
                 37 => {
                     cfg.feature_flags.reject_mutable_random_on_entry_functions = true;
+
+                    // Enable consensus digest in consensus commit prologue in testnet and devnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.include_consensus_digest_in_prologue = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
