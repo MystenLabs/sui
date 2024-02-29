@@ -575,11 +575,11 @@ fn default_epoch_db_pruning_period_secs() -> u64 {
 }
 
 fn default_max_transactions_in_batch() -> usize {
-    1000
+    300000
 }
 
 fn default_max_checkpoints_in_batch() -> usize {
-    10
+    60
 }
 
 impl Default for AuthorityStorePruningConfig {

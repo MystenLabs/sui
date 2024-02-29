@@ -412,6 +412,9 @@ impl AuthorityStorePruner {
         let mut checkpoint_content_to_prune = vec![];
         let mut effects_to_prune = vec![];
 
+        let max_transactions_in_batch = 300000;
+        let max_checkpoints_in_batch = 60;
+
         loop {
             let _scopepe = monitored_scope("pruner::prune_for_eligible_epochs_inner");
             let Some(ckpt) = checkpoint_store
@@ -449,8 +452,8 @@ impl AuthorityStorePruner {
             checkpoint_content_to_prune.push(content);
             effects_to_prune.extend(effects.into_iter().flatten());
 
-            if effects_to_prune.len() >= config.max_transactions_in_batch
-                || checkpoints_to_prune.len() >= config.max_checkpoints_in_batch
+            if effects_to_prune.len() >= max_transactions_in_batch
+                || checkpoints_to_prune.len() >= max_checkpoints_in_batch
             {
                 match mode {
                     PruningMode::Objects => {
