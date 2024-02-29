@@ -16,7 +16,7 @@ use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
@@ -1647,13 +1647,31 @@ impl AuthorityPerEpochStore {
             .contains_key(authority))
     }
 
+    // Converts transaction keys to digests, waiting for digests to become available for any
+    // non-digest keys.
     pub async fn notify_read_executed_digests(
         &self,
         keys: &[TransactionKey],
     ) -> SuiResult<Vec<TransactionDigest>> {
-        let registrations = self.executed_digests_notify_read.register_all(keys);
-        let executed_digests = self.tables()?.transaction_key_to_digest.multi_get(keys)?;
-        let results = executed_digests
+        let non_digest_keys: Vec<_> = keys
+            .iter()
+            .filter_map(|key| {
+                if matches!(key, TransactionKey::Digest(_)) {
+                    None
+                } else {
+                    Some(*key)
+                }
+            })
+            .collect();
+
+        let registrations = self
+            .executed_digests_notify_read
+            .register_all(&non_digest_keys);
+        let executed_digests = self
+            .tables()?
+            .transaction_key_to_digest
+            .multi_get(&non_digest_keys)?;
+        let futures = executed_digests
             .into_iter()
             .zip(registrations)
             .map(|(d, r)| match d {
@@ -1661,8 +1679,20 @@ impl AuthorityPerEpochStore {
                 Some(ready) => Either::Left(futures::future::ready(ready)),
                 None => Either::Right(r),
             });
+        let mut results = VecDeque::from(join_all(futures).await);
 
-        Ok(join_all(results).await)
+        Ok(keys
+            .iter()
+            .map(|key| {
+                if let TransactionKey::Digest(digest) = key {
+                    *digest
+                } else {
+                    results
+                        .pop_front()
+                        .expect("number of returned results should match number of non-digest keys")
+                }
+            })
+            .collect())
     }
 
     /// Note: caller usually need to call consensus_message_processed_notify before this call

@@ -33,8 +33,7 @@ use crate::consensus_handler::SequencedConsensusTransactionKey;
 use chrono::Utc;
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
-use std::collections::{BTreeMap, VecDeque};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -856,41 +855,19 @@ impl CheckpointBuilder {
             .checkpoint_roots_count
             .inc_by(pending.roots.len() as u64);
 
-        // First wait for digests to become available for any non-digest keys.
-        let non_digest_keys: Vec<_> = pending
-            .roots
-            .iter()
-            .filter_map(|root| {
-                if !matches!(root, TransactionKey::Digest(_)) {
-                    Some(*root)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let mut executed_digests = VecDeque::from(
-            self.epoch_store
-                .notify_read_executed_digests(&non_digest_keys)
-                .in_monitored_scope("CheckpointNotifyDigests")
-                .await?,
-        );
-
-        // Then wait for effects for all tx to be available.
-        let root_digests: Vec<_> = pending.roots.iter().map(|root| {
-            if let TransactionKey::Digest(digest) = root {
-                *digest
-            } else {
-                executed_digests.pop_front().expect("number of returned executed_digests should match number of non-digest roots")
-            }
-        }).collect();
-        let roots = self
+        let root_digests = self
+            .epoch_store
+            .notify_read_executed_digests(&pending.roots)
+            .in_monitored_scope("CheckpointNotifyDigests")
+            .await?;
+        let root_effects = self
             .effects_store
             .notify_read_executed_effects(root_digests)
             .in_monitored_scope("CheckpointNotifyRead")
             .await?;
 
         let _scope = monitored_scope("CheckpointBuilder");
-        let unsorted = self.complete_checkpoint_effects(roots)?;
+        let unsorted = self.complete_checkpoint_effects(root_effects)?;
         let sorted = {
             let _scope = monitored_scope("CheckpointBuilder::causal_sort");
             CausalOrder::causal_sort(unsorted)
