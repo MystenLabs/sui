@@ -171,7 +171,7 @@ The `setup_renting` function mints and shares a `ProtectedTP` and a `RentalPolic
 public fun setup_renting<T>(publisher: &Publisher, amount_bp: u64, ctx: &mut TxContext)
 ```
 
-The `list` function enables listing of an asset within the `Rentables` extension's bag, creating a bag entry with the asset's ID as the key and a `Rentable` wrapper object as the value. Requires the existance of a `ProtectedTP` transfer policy that only the creator of type `T` can create. The function assumes an item is already placed (and optionally locked) in a Kiosk.
+The `list` function enables listing of an asset within the `Rentables` extension's bag, creating a bag entry with the asset's ID as the key and a `Rentable` wrapper object as the value. Requires the existence of a `ProtectedTP` transfer policy that only the creator of type `T` can create. The function assumes an item is already placed (and optionally locked) in a Kiosk.
 
 ```move
 public fun list<T: key + store>(
