@@ -551,7 +551,7 @@ impl AuthorityStorePruner {
             config.num_epochs_to_retain
         );
 
-        let tick_duration = Duration::from_millis(min(epoch_duration_ms / 2, 60 * 1000));
+        let tick_duration = Duration::from_millis(min(epoch_duration_ms / 2, 5 * 1000));
         let pruning_initial_delay = if cfg!(msim) {
             Duration::from_millis(1)
         } else {
