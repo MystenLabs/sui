@@ -161,11 +161,14 @@ impl BuildConfig {
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
     /// failure.
     pub fn migrate_package<W: Write, R: BufRead>(
-        self,
+        mut self,
         path: &Path,
         writer: &mut W,
         reader: &mut R,
     ) -> Result<()> {
+        // we set test and dev mode to migrate all the code
+        self.test_mode = true;
+        self.dev_mode = true;
         let resolved_graph = self.resolution_graph_for_package(path, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
         let build_plan = BuildPlan::create(resolved_graph)?;

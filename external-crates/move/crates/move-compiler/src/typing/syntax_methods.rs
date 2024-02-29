@@ -6,16 +6,16 @@
 //! trait-like constraints around their definitions. We process them here, using typing machinery
 //! to ensure the are.
 
-use std::collections::{BTreeMap, BTreeSet};
-
 use crate::{
     diag,
     diagnostics::Diagnostic,
     expansion::ast::ModuleIdent,
+    ice,
     naming::ast::{self as N, IndexSyntaxMethods, SyntaxMethod},
     typing::core::{self, Context},
 };
 use move_ir_types::location::*;
+use std::collections::{BTreeMap, BTreeSet};
 
 //-------------------------------------------------------------------------------------------------
 // Validation
@@ -172,12 +172,9 @@ fn validate_index_syntax_methods(
         Some(mut_tparam_types),
     );
 
-    let mut param_tys = index_ty
-        .params
-        .iter()
-        .map(|(_, t1)| t1)
-        .zip(mut_finfo.signature.parameters.iter().map(|(_, _, ty)| ty))
-        .enumerate();
+    let index_params = index_ty.params.iter().map(|(_, t1)| t1);
+    let mut_params = mut_finfo.signature.parameters.iter().map(|(_, _, ty)| ty);
+    let mut param_tys = index_params.zip(mut_params).enumerate();
 
     let mut subst = std::mem::replace(&mut context.subst, core::Subst::empty());
 
@@ -197,14 +194,26 @@ fn validate_index_syntax_methods(
                 "This index function subject has type {}",
                 ty_str(index_type)
             );
+            let N::Type_::Ref(false, inner) =
+                core::ready_tvars(&subst, subject_ref_type.clone()).value
+            else {
+                context.env.add_diag(ice!((
+                    index_finfo.signature.return_type.loc,
+                    "This index function got to type verification with an invalid type"
+                )));
+                return false;
+            };
+            let expected_type = sp(mut_type.loc, N::Type_::Ref(true, inner.clone()));
             let mut_msg = format!(
-                "This mutable index function subject has type {}",
-                ty_str(mut_type)
+                "Expected this mutable index function subject to have type {}",
+                ty_str(&expected_type)
             );
+            let mut_msg_2 = format!("It has type {}", ty_str(mut_type));
             let mut diag = diag!(
                 TypeSafety::IncompatibleSyntaxMethods,
                 (index_type.loc, index_msg),
-                (mut_type.loc, mut_msg)
+                (mut_type.loc, mut_msg),
+                (mut_type.loc, mut_msg_2)
             );
             add_type_param_info(
                 &mut diag,
@@ -230,15 +239,17 @@ fn validate_index_syntax_methods(
         } else {
             let (_, _, index_type) = &index_finfo.signature.parameters[ndx];
             let (_, _, mut_type) = &mut_finfo.signature.parameters[ndx];
-            let index_msg = format!("This index function expects type {}", ty_str(index_type));
+            let index_msg = format!("This parameter has type {}", ty_str(index_type));
             let mut_msg = format!(
-                "This mutable index function expects type {}",
-                ty_str(mut_type)
+                "Expected this parameter to have type {}",
+                ty_str(&core::ready_tvars(&subst, ptype.clone()))
             );
+            let mut_msg_2 = format!("It has type {}", ty_str(mut_type));
             let mut diag = diag!(
                 TypeSafety::IncompatibleSyntaxMethods,
                 (index_type.loc, index_msg),
-                (mut_type.loc, mut_msg)
+                (mut_type.loc, mut_msg),
+                (mut_type.loc, mut_msg_2)
             );
             add_type_param_info(
                 &mut diag,
@@ -256,18 +267,35 @@ fn validate_index_syntax_methods(
     // Similar to the subject type, we ensure the return types are the same. We already checked
     // that they are appropriately-shaped references, and now we ensure they refer to the same type
     // under the reference.
-    if core::subtype(subst, &mut_finfo.signature.return_type, &index_ty.return_).is_err() {
+    if core::subtype(
+        subst.clone(),
+        &mut_finfo.signature.return_type,
+        &index_ty.return_,
+    )
+    .is_err()
+    {
         let index_type = &index_finfo.signature.return_type;
         let mut_type = &mut_finfo.signature.return_type;
         let index_msg = format!("This index function returns type {}", ty_str(index_type));
+        let N::Type_::Ref(false, inner) = core::ready_tvars(&subst, index_ty.return_.clone()).value
+        else {
+            context.env.add_diag(ice!((
+                index_finfo.signature.return_type.loc,
+                "This index function got to type verification with an invalid type"
+            )));
+            return false;
+        };
+        let expected_type = sp(mut_type.loc, N::Type_::Ref(true, inner.clone()));
         let mut_msg = format!(
-            "This mutable index function returns type {}",
-            ty_str(mut_type)
+            "Expected this mutable index function to return type {}",
+            ty_str(&expected_type)
         );
+        let mut_msg_2 = format!("It returns type {}", ty_str(mut_type));
         let mut diag = diag!(
             TypeSafety::IncompatibleSyntaxMethods,
             (index_type.loc, index_msg),
-            (mut_type.loc, mut_msg)
+            (mut_type.loc, mut_msg),
+            (mut_type.loc, mut_msg_2)
         );
         add_type_param_info(
             &mut diag,
@@ -339,8 +367,10 @@ fn type_param_positions(
         .into_iter()
         .filter_map(|tparam| {
             if let Some(posn) = tparams.iter().position(|t| t == &tparam) {
-                let declared_loc = tparams[posn].user_specified_name.loc;
-                Some((tparam.user_specified_name, (posn, declared_loc)))
+                Some((
+                    tparam.user_specified_name,
+                    (posn, tparam.user_specified_name.loc),
+                ))
             } else {
                 None
             }
