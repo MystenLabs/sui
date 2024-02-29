@@ -179,7 +179,7 @@ pub fn verify(
     final_state
 }
 
-/// Generates warnings for unused mut declerations
+/// Generates warnings for unused mut declarations
 fn unused_let_muts<T>(
     env: &mut CompilationEnv,
     locals: &UniqueMap<Var, T>,
