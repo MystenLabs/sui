@@ -458,12 +458,10 @@ impl CheckpointExecutor {
                 .expect("Acquiring shared locks for change_epoch tx cannot fail");
         }
 
-        self.tx_manager
-            .enqueue_with_expected_effects_digest(
-                vec![(change_epoch_tx.clone(), execution_digests.effects)],
-                &epoch_store,
-            )
-            .expect("Enqueueing change_epoch tx cannot fail");
+        self.tx_manager.enqueue_with_expected_effects_digest(
+            vec![(change_epoch_tx.clone(), execution_digests.effects)],
+            &epoch_store,
+        );
         handle_execution_effects(
             &self.state,
             vec![execution_digests],
@@ -1050,8 +1048,7 @@ async fn execute_transactions(
     }
 
     let exec_start = Instant::now();
-    transaction_manager
-        .enqueue_with_expected_effects_digest(executable_txns.clone(), &epoch_store)?;
+    transaction_manager.enqueue_with_expected_effects_digest(executable_txns.clone(), &epoch_store);
 
     handle_execution_effects(
         state,

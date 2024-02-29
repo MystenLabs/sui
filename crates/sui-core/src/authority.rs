@@ -1015,7 +1015,7 @@ impl AuthorityState {
         let expected_effects_digest = effects.digest();
 
         self.transaction_manager
-            .enqueue(vec![transaction.clone()], epoch_store)?;
+            .enqueue(vec![transaction.clone()], epoch_store);
 
         let observed_effects = self
             .execution_cache
@@ -1061,7 +1061,7 @@ impl AuthorityState {
             // Shared object transactions need to be sequenced by Narwhal before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
             // For owned object transactions, they can be enqueued for execution immediately.
-            self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
+            self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store);
         }
 
         let effects = self.notify_read_effects(certificate).await?;
@@ -1224,7 +1224,7 @@ impl AuthorityState {
         let digest = *certificate.digest();
 
         fail_point_if!("correlated-crash-process-certificate", || {
-            if sui_simulator::random::deterministic_probabilty_once(&digest, 0.01) {
+            if sui_simulator::random::deterministic_probability_once(&digest, 0.01) {
                 sui_simulator::task::kill_current_node(None);
             }
         });
@@ -2689,7 +2689,7 @@ impl AuthorityState {
         &self,
         certs: Vec<VerifiedCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<()> {
+    ) {
         self.transaction_manager
             .enqueue_certificates(certs, epoch_store)
     }

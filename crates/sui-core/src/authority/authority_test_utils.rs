@@ -335,12 +335,10 @@ pub async fn enqueue_all_and_execute_all(
     authority: &AuthorityState,
     certificates: Vec<VerifiedCertificate>,
 ) -> Result<Vec<TransactionEffects>, SuiError> {
-    authority
-        .enqueue_certificates_for_execution(
-            certificates.clone(),
-            &authority.epoch_store_for_testing(),
-        )
-        .unwrap();
+    authority.enqueue_certificates_for_execution(
+        certificates.clone(),
+        &authority.epoch_store_for_testing(),
+    );
     let mut output = Vec::new();
     for cert in certificates {
         let effects = authority.notify_read_effects(&cert).await?;
@@ -353,12 +351,10 @@ pub async fn execute_sequenced_certificate_to_effects(
     authority: &AuthorityState,
     certificate: VerifiedCertificate,
 ) -> Result<(TransactionEffects, Option<ExecutionError>), SuiError> {
-    authority
-        .enqueue_certificates_for_execution(
-            vec![certificate.clone()],
-            &authority.epoch_store_for_testing(),
-        )
-        .unwrap();
+    authority.enqueue_certificates_for_execution(
+        vec![certificate.clone()],
+        &authority.epoch_store_for_testing(),
+    );
 
     let (result, execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
     let effects = result.inner().data().clone();
@@ -383,8 +379,7 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
 
     authority
         .transaction_manager()
-        .enqueue(certs, &authority.epoch_store_for_testing())
-        .unwrap();
+        .enqueue(certs, &authority.epoch_store_for_testing());
 }
 
 pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &VerifiedCertificate) {

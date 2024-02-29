@@ -423,20 +423,16 @@ async fn test_execution_with_dependencies() {
 
     // Enqueue certs out of dependency order for executions.
     for cert in executed_shared_certs.iter().rev() {
-        authorities[3]
-            .enqueue_certificates_for_execution(
-                vec![cert.clone()],
-                &authorities[3].epoch_store_for_testing(),
-            )
-            .unwrap();
+        authorities[3].enqueue_certificates_for_execution(
+            vec![cert.clone()],
+            &authorities[3].epoch_store_for_testing(),
+        );
     }
     for cert in executed_owned_certs.iter().rev() {
-        authorities[3]
-            .enqueue_certificates_for_execution(
-                vec![cert.clone()],
-                &authorities[3].epoch_store_for_testing(),
-            )
-            .unwrap();
+        authorities[3].enqueue_certificates_for_execution(
+            vec![cert.clone()],
+            &authorities[3].epoch_store_for_testing(),
+        );
     }
 
     // All certs should get executed eventually.
@@ -761,7 +757,7 @@ async fn test_authority_txn_signing_pushback() {
     // Manually make the authority into overload state and reject 100% of traffic.
     authority_state.overload_info.set_overload(100);
 
-    // First, create a transaction to tranfer `gas_object1` to `recipient1`.
+    // First, create a transaction to transfer `gas_object1` to `recipient1`.
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
     let tx = make_transfer_object_transaction(
         gas_object1.compute_object_reference(),
@@ -888,7 +884,7 @@ async fn test_authority_txn_execution_pushback() {
     // Manually make the authority into overload state and reject 100% of traffic.
     authority_state.overload_info.set_overload(100);
 
-    // Create a transaction to tranfer `gas_object1` to `recipient`.
+    // Create a transaction to transfer `gas_object1` to `recipient`.
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
     let tx = make_transfer_object_transaction(
         gas_object1.compute_object_reference(),
