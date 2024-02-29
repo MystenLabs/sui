@@ -80,8 +80,8 @@
 @@ -15,1 +15,1 @@
 -        let i = 0;
 +        let mut i = 0;
---- ./tests/test0.move
-+++ ./tests/test0.move
+--- tests/test0.move
++++ tests/test0.move
 @@ -5,1 +5,1 @@
 -    struct R has store { }
 +    public struct R has store { }

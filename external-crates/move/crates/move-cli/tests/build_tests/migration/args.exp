@@ -8,7 +8,7 @@ Please select one of the following editions:
 
 Selection (default=1): Recorded edition in 'Move.toml'
 
-Would you like the Move compiler to migrate your code to Move 2024? (Y/n)
+Would you like the Move compiler to migrate your code to Move 2024? (Y/n) 
 Generated changes . . .
 BUILDING A
 
@@ -97,8 +97,8 @@ The following changes will be made.
 @@ -15,1 +15,1 @@
 -        let i = 0;
 +        let mut i = 0;
---- ./tests/test0.move
-+++ ./tests/test0.move
+--- tests/test0.move
++++ tests/test0.move
 @@ -5,1 +5,1 @@
 -    struct R has store { }
 +    public struct R has store { }
@@ -129,13 +129,13 @@ The following changes will be made.
 
 
 ============================================================
-Apply changes? (Y/n)
-Updating "./sources/mod0.move" . . .
-Updating "./sources/mod1.move" . . .
-Updating "./sources/mod2.move" . . .
-Updating "./sources/mod3_4.move" . . .
-Updating "./sources/mod5.move" . . .
-Updating "./tests/test0.move" . . .
+Apply changes? (Y/n) 
+Updating "sources/mod0.move" . . .
+Updating "sources/mod1.move" . . .
+Updating "sources/mod2.move" . . .
+Updating "sources/mod3_4.move" . . .
+Updating "sources/mod5.move" . . .
+Updating "tests/test0.move" . . .
 
 Changes complete
 Wrote patchfile out to: ./migration.patch
