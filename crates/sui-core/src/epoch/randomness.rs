@@ -631,7 +631,7 @@ mod tests {
         for randomness_manager in &randomness_managers {
             randomness_manager.start_dkg().unwrap();
 
-            let dkg_message = rx_consensus.recv().unwrap();
+            let dkg_message = rx_consensus.recv().await.unwrap();
             match dkg_message.kind {
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
                     let msg: fastcrypto_tbls::dkg::Message<PkG, EncG> = bcs::from_bytes(&bytes)
