@@ -47,7 +47,7 @@ use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::OnceCell;
 use tower::{Layer, Service};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
@@ -317,9 +317,7 @@ impl ServerBuilder {
             builder = builder.extension(QueryLimitsChecker::default());
         }
         if config.internal_features.query_timeout {
-            builder = builder.extension(Timeout {
-                query: Mutex::new(None),
-            });
+            builder = builder.extension(Timeout::default());
         }
         if config.internal_features.tracing {
             builder = builder.extension(Tracing);
@@ -468,7 +466,6 @@ pub mod tests {
     use simulacrum::Simulacrum;
     use std::sync::Arc;
     use std::time::Duration;
-    use tokio::sync::Mutex;
     use uuid::Uuid;
 
     async fn prep_cluster() -> ConnectionConfig {
@@ -560,9 +557,7 @@ pub mod tests {
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
-                .extension(Timeout {
-                    query: Mutex::new(None),
-                })
+                .extension(Timeout::default())
                 .build_schema();
 
             schema.execute("{ chainIdentifier }").await

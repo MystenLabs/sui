@@ -7,9 +7,10 @@ use async_graphql::{
     Response, ServerError, ServerResult,
 };
 use async_graphql_value::Variables;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::{net::SocketAddr, sync::Arc};
-use tokio::{sync::Mutex, time::timeout};
+use tokio::time::timeout;
 use tracing::error;
 use uuid::Uuid;
 
@@ -38,7 +39,7 @@ impl Extension for Timeout {
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
         let document = next.run(ctx, query, variables).await?;
-        *self.query.lock().await = Some(ctx.stringify_execute_doc(&document, variables));
+        *self.query.lock().unwrap() = Some(ctx.stringify_execute_doc(&document, variables));
         Ok(document)
     }
 
@@ -51,7 +52,6 @@ impl Extension for Timeout {
         let cfg = ctx
             .data::<ServiceConfig>()
             .expect("No service config provided in schema data");
-        let query = self.query.lock().await.take().unwrap_or("".to_string());
         let request_timeout = Duration::from_millis(cfg.limits.request_timeout_ms);
         timeout(request_timeout, next.run(ctx, operation_name))
             .await
@@ -59,6 +59,12 @@ impl Extension for Timeout {
                 let query_id: &Uuid = ctx.data_unchecked();
                 let session_id: &SocketAddr = ctx.data_unchecked();
                 let error_code = code::REQUEST_TIMEOUT.to_string();
+                let guard = self.query.lock().unwrap();
+                let query = match guard.as_ref() {
+                    Some(s) => s.as_str(),
+                    None => "",
+                };
+
                 error!(
                     %query_id,
                     %session_id,
