@@ -94,8 +94,8 @@ impl BlockManager {
                         'ancestor: for (included, found) in
                             b.ancestors().iter().zip(ancestors.into_iter())
                         {
-                            // When block is found, this should be guaranteed by the DagState.
                             if let Some(found_block) = found {
+                                // This invariant should be guaranteed by DagState.
                                 assert_eq!(included, &found_block.reference());
                                 ancestor_blocks.push(found_block);
                                 continue 'ancestor;
