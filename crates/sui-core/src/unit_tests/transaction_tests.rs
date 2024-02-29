@@ -1034,10 +1034,10 @@ async fn test_allowed_ptb_with_random_txn() {
         .await
         .unwrap();
 
-    let obj_basics_id = Identifier::new("object_basics").unwrap();
-    let use_clock_id = Identifier::new("use_clock").unwrap();
-    let use_random_id = Identifier::new("use_random").unwrap();
-    let use_value_id = Identifier::new("use_value").unwrap();
+    let obj_basics = Identifier::new("object_basics").unwrap();
+    let use_clock = Identifier::new("use_clock").unwrap();
+    let use_random = Identifier::new("use_random").unwrap();
+    let use_value = Identifier::new("use_value").unwrap();
     let clock_arg = CallArg::CLOCK_IMM;
     let random_arg = CallArg::Object(ObjectArg::SharedObject {
         id: SUI_RANDOMNESS_STATE_OBJECT_ID,
@@ -1050,8 +1050,8 @@ async fn test_allowed_ptb_with_random_txn() {
     builder
         .move_call(
             pkg,
-            obj_basics_id.clone(),
-            use_value_id.clone(),
+            obj_basics.clone(),
+            use_value.clone(),
             vec![],
             vec![CallArg::from(123u64)],
         )
@@ -1059,8 +1059,8 @@ async fn test_allowed_ptb_with_random_txn() {
     builder
         .move_call(
             pkg,
-            obj_basics_id.clone(),
-            use_random_id.clone(),
+            obj_basics.clone(),
+            use_random.clone(),
             vec![],
             vec![random_arg.clone()],
         )
@@ -1083,8 +1083,8 @@ async fn test_allowed_ptb_with_random_txn() {
     builder
         .move_call(
             pkg,
-            obj_basics_id.clone(),
-            use_clock_id.clone(),
+            obj_basics.clone(),
+            use_clock.clone(),
             vec![],
             vec![clock_arg.clone()],
         )
@@ -1092,8 +1092,8 @@ async fn test_allowed_ptb_with_random_txn() {
     builder
         .move_call(
             pkg,
-            obj_basics_id.clone(),
-            use_random_id.clone(),
+            obj_basics.clone(),
+            use_random.clone(),
             vec![],
             vec![random_arg.clone()],
         )
