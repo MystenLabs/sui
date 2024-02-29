@@ -29,13 +29,14 @@ use async_graphql::extensions::Tracing;
 use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::extract::FromRef;
-use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
-use axum::http::{HeaderMap, StatusCode};
-use axum::middleware::{self};
-use axum::response::IntoResponse;
-use axum::routing::{post, MethodRouter, Route};
-use axum::{headers::Header, Router};
+use axum::{
+    extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, FromRef, State},
+    http::StatusCode,
+    middleware::{self},
+    response::IntoResponse,
+    routing::{post, MethodRouter, Route},
+    Router, TypedHeader,
+};
 use http::{HeaderValue, Method, Request};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
@@ -347,15 +348,13 @@ pub fn export_schema() -> String {
 
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    TypedHeader(show_usage): TypedHeader<ShowUsage>,
     schema: axum::Extension<SuiGraphQLSchema>,
-    headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
     let mut req = req.into_inner();
     req.data.insert(Uuid::new_v4());
-    if headers.contains_key(ShowUsage::name()) {
-        req.data.insert(ShowUsage)
-    }
+    req.data.insert(show_usage);
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);

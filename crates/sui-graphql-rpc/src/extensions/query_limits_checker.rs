@@ -13,8 +13,7 @@ use async_graphql::parser::types::{
 use async_graphql::{value, Name, Pos, Positioned, Response, ServerResult, Value, Variables};
 use async_graphql_value::Value as GqlValue;
 use axum::headers;
-use axum::http::HeaderName;
-use axum::http::HeaderValue;
+use axum::http::{header::HeaderName, HeaderValue};
 use once_cell::sync::Lazy;
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::net::SocketAddr;
