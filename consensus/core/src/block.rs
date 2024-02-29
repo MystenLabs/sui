@@ -259,7 +259,7 @@ impl AsRef<[u8]> for BlockDigest {
 
 /// Slot is the position of blocks in the DAG. It can contain 0, 1 or multiple blocks
 /// from the same authority at the same round.
-#[derive(Clone, Copy, PartialEq, PartialOrd, Default, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Default, Hash)]
 pub struct Slot {
     pub round: Round,
     pub authority: AuthorityIndex,

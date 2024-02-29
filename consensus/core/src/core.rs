@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::num::NonZeroUsize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     sync::Arc,
@@ -10,7 +11,12 @@ use std::{
 use consensus_config::ProtocolKeyPair;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use tap::TapFallible;
 use tokio::sync::{broadcast, watch};
+#[cfg(test)]
+use tokio::task::JoinHandle;
+#[cfg(test)]
+use tracing::trace;
 use tracing::{debug, info, warn};
 
 use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
@@ -34,7 +40,7 @@ use crate::{
 };
 
 // TODO: Move to protocol config once initial value is finalized.
-const NUM_LEADERS_PER_ROUND: usize = 1;
+pub(crate) const DEFAULT_NUM_LEADERS_PER_ROUND: usize = 1;
 
 // Maximum number of commit votes to include in a block.
 // TODO: Move to protocol config, and verify in BlockVerifier.
@@ -71,6 +77,8 @@ pub(crate) struct Core {
     block_signer: ProtocolKeyPair,
     /// Keeping track of state of the DAG, including blocks, commits and last committed rounds.
     dag_state: Arc<RwLock<DagState>>,
+    /// The number of leaders per round for the commit rule
+    num_of_leaders: NonZeroUsize,
 }
 
 impl Core {
@@ -82,11 +90,12 @@ impl Core {
         signals: CoreSignals,
         block_signer: ProtocolKeyPair,
         dag_state: Arc<RwLock<DagState>>,
+        num_of_leaders: NonZeroUsize,
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
 
         let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone())
-            .with_number_of_leaders(NUM_LEADERS_PER_ROUND)
+            .with_number_of_leaders(num_of_leaders.get())
             .with_pipeline(true)
             .build();
 
@@ -121,6 +130,7 @@ impl Core {
             signals,
             block_signer,
             dag_state,
+            num_of_leaders,
         }
         .recover()
     }
@@ -128,7 +138,7 @@ impl Core {
     fn recover(mut self) -> Self {
         // Recover the last available quorum to correctly advance the threshold clock.
         let last_quorum = self.dag_state.read().last_quorum();
-        self.add_accepted_blocks(last_quorum);
+        self.add_accepted_blocks(&last_quorum).unwrap();
         // Try to commit and propose, since they may not have run after the last storage write.
         self.try_commit().unwrap();
         if self.try_propose(true).unwrap().is_none() {
@@ -153,23 +163,40 @@ impl Core {
 
         // Try to accept them via the block manager
         let (accepted_blocks, missing_blocks) = self.block_manager.try_accept_blocks(blocks);
-
-        if !accepted_blocks.is_empty() {
-            // Now add accepted blocks to the threshold clock and pending ancestors list.
-            self.add_accepted_blocks(accepted_blocks);
-
-            self.try_commit()?;
-
-            // Try to propose now since there are new blocks accepted.
-            self.try_propose(false)?;
+        if accepted_blocks.is_empty() {
+            return Ok(missing_blocks);
         }
+
+        // Now add accepted blocks to the threshold clock and emit any necessary signals
+        self.add_accepted_blocks(&accepted_blocks)?;
+
+        self.try_commit()?;
+
+        // Try to propose now since there are new blocks accepted.
+        self.try_propose(false)?;
 
         Ok(missing_blocks)
     }
 
+    /// Force creating a new block for the dictated round. This is used when a leader timeout occurs.
+    pub(crate) fn force_new_block(
+        &mut self,
+        round: Round,
+    ) -> ConsensusResult<Option<VerifiedBlock>> {
+        if self.last_proposed_round() < round {
+            self.context.metrics.node_metrics.leader_timeout_total.inc();
+            return self.try_propose(true);
+        }
+        Ok(None)
+    }
+
+    pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
+        self.block_manager.missing_blocks()
+    }
+
     /// Adds/processed all the newly `accepted_blocks`. We basically try to move the threshold clock and add them to the
     /// pending ancestors list.
-    fn add_accepted_blocks(&mut self, accepted_blocks: Vec<VerifiedBlock>) {
+    fn add_accepted_blocks(&mut self, accepted_blocks: &[VerifiedBlock]) -> ConsensusResult<()> {
         // Advance the threshold clock. If advanced to a new round then send a signal that a new quorum has been received.
         if let Some(new_round) = self
             .threshold_clock
@@ -185,41 +212,79 @@ impl Core {
             .node_metrics
             .threshold_clock_round
             .set(self.threshold_clock.get_round() as i64);
+        Ok(())
     }
 
-    /// Force creating a new block for the dictated round. This is used when a leader timeout occurs.
-    pub(crate) fn force_new_block(
-        &mut self,
-        round: Round,
-    ) -> ConsensusResult<Option<VerifiedBlock>> {
-        if self.last_proposed_round() < round {
-            self.context.metrics.node_metrics.leader_timeout_total.inc();
-            return self.try_propose(true);
+    /// The method will emit a signal update on the latest formed quorum. The signal will be emitted
+    /// until we propose for the round after the last quorum and only the quorum round is a leader round.
+    fn notify_quorum_updates(&mut self) -> ConsensusResult<()> {
+        let current_round = self.threshold_clock.get_round();
+        let quorum_round = current_round.saturating_sub(1);
+
+        // If we have already proposed for the latest round, then do not emit any event for the last quorum
+        if self.last_proposed_round() == current_round {
+            return Ok(());
         }
-        Ok(None)
+
+        // Do not attempt to give any update if is not a leader round
+        let leaders = self.leaders(quorum_round);
+        if leaders.is_empty() {
+            return Ok(());
+        }
+
+        // Just take a snapshot of the leaders (found & non-found) and forward them
+        let mut accepted_leaders = vec![None; self.num_of_leaders.get()];
+        let dag_state = self.dag_state.read();
+        for (i, leader) in leaders.into_iter().enumerate() {
+            if dag_state.contains_cached_block_at_slot(leader) {
+                accepted_leaders[i] = Some(leader);
+            }
+        }
+
+        // Emit the signal. As the `signals` is caching the latest value we are deduping from sending
+        // the exact same values multiple times.
+        self.signals
+            .quorum_update(QuorumUpdate::new(quorum_round, accepted_leaders))
+            .tap_err(|err| warn!("Could not notify subscribers for leader updates: {err}"))?;
+
+        Ok(())
     }
 
     // Attempts to create a new block, persist and propose it to all peers.
     // When force is true, ignore if leader from the last round exists among ancestors and if
     // the minimum round delay has passed.
     fn try_propose(&mut self, force: bool) -> ConsensusResult<Option<VerifiedBlock>> {
-        if let Some(block) = self.try_new_block(force) {
+        if let Some(block) = self.try_new_block(force)? {
             self.signals.new_block(block.clone())?;
+
+            // Since the block has been created, just accept it internally in Core
+            self.add_accepted_blocks(&[block.clone()])?;
+
             // The new block may help commit.
             self.try_commit()?;
+
+            // Notify about any updates on the last quorum. It is important to trigger this here as
+            // the newly created block might have formed a new quorum on the next round.
+            self.notify_quorum_updates()?;
+
             return Ok(Some(block));
         }
+
+        // Notify about any updates on the last quorum. Even if a block is not created, we might still
+        // have updates to emit.
+        self.notify_quorum_updates()?;
+
         Ok(None)
     }
 
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
     /// or earlier round, then no block is created and None is returned.
-    fn try_new_block(&mut self, force: bool) -> Option<VerifiedBlock> {
+    fn try_new_block(&mut self, force: bool) -> ConsensusResult<Option<VerifiedBlock>> {
         let _scope = monitored_scope("Core::try_new_block");
 
         let clock_round = self.threshold_clock.get_round();
         if clock_round <= self.last_proposed_round() {
-            return None;
+            return Ok(None);
         }
 
         let now = timestamp_utc_ms();
@@ -228,12 +293,12 @@ impl Core {
         // or because we are actually ready to produce the block (leader exists and min delay has passed).
         if !force {
             if !self.last_quorum_leaders_exist() {
-                return None;
+                return Ok(None);
             }
             if Duration::from_millis(now.saturating_sub(self.last_proposed_timestamp_ms()))
                 < self.context.parameters.min_round_delay
             {
-                return None;
+                return Ok(None);
             }
         }
 
@@ -285,13 +350,11 @@ impl Core {
         assert_eq!(accepted_blocks.len(), 1);
         assert!(missing.is_empty());
 
-        // Internally accept the block to move the threshold clock etc
-        self.add_accepted_blocks(vec![verified_block.clone()]);
-
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
         self.dag_state.write().flush();
 
         // Update internal state.
+        self.dag_state.write().flush();
         self.last_proposed_block = verified_block.clone();
 
         // Now acknowledge the transactions for their inclusion to block
@@ -301,7 +364,7 @@ impl Core {
 
         info!("Created block {}", verified_block);
 
-        Some(verified_block)
+        Ok(Some(verified_block))
     }
 
     /// Runs commit rule to attempt to commit additional blocks from the DAG.
@@ -324,10 +387,6 @@ impl Core {
             .collect::<Vec<_>>();
 
         self.commit_observer.handle_commit(committed_leaders)
-    }
-
-    pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
-        self.block_manager.missing_blocks()
     }
 
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round. Also, the `block_timestamp` is provided
@@ -430,7 +489,8 @@ impl Core {
         true
     }
 
-    /// Returns the leaders of the provided round.
+    /// Returns the leaders of the provided round. The leaders are returned in the order that they
+    /// are evaluated in the commit rule.
     fn leaders(&self, round: Round) -> Vec<Slot> {
         self.committer
             .get_leaders(round)
@@ -453,11 +513,29 @@ impl Core {
     }
 }
 
+#[derive(Clone, Default, Eq, PartialEq)]
+pub(crate) struct QuorumUpdate {
+    // The corresponding quorum round
+    pub round: Round,
+    // The array contains the leaders in the order of evaluation with the
+    // most left position being the leader with the highest priority. For each position a `Some` value
+    // represents that the leader of the position has been found.
+    pub leaders: Vec<Option<Slot>>,
+}
+
+impl QuorumUpdate {
+    pub(crate) fn new(round: Round, leaders: Vec<Option<Slot>>) -> Self {
+        Self { round, leaders }
+    }
+}
+
 /// Senders of signals from Core, for outputs and events (ex new block produced).
 pub(crate) struct CoreSignals {
     tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
     new_round_sender: watch::Sender<Round>,
     context: Arc<Context>,
+    quorum_update_sender: watch::Sender<QuorumUpdate>,
+    last_quorum_update: QuorumUpdate,
 }
 
 impl CoreSignals {
@@ -465,19 +543,25 @@ impl CoreSignals {
     const BROADCAST_BACKLOG_CAPACITY: usize = 1000;
 
     pub fn new(context: Arc<Context>) -> (Self, CoreSignalsReceivers) {
+        let last_quorum_update = QuorumUpdate::default();
         let (tx_block_broadcast, _rx_block_broadcast) =
             broadcast::channel::<VerifiedBlock>(Self::BROADCAST_BACKLOG_CAPACITY);
         let (new_round_sender, new_round_receiver) = watch::channel(0);
+        let (quorum_update_sender, quorum_update_receiver) =
+            watch::channel(last_quorum_update.clone());
 
         let me = Self {
             tx_block_broadcast: tx_block_broadcast.clone(),
             new_round_sender,
             context,
+            quorum_update_sender,
+            last_quorum_update,
         };
 
         let receivers = CoreSignalsReceivers {
             tx_block_broadcast,
             new_round_receiver,
+            quorum_update_receiver,
         };
 
         (me, receivers)
@@ -501,16 +585,32 @@ impl CoreSignals {
 
     /// Sends a signal that threshold clock has advanced to new round. The `round_number` is the round at which the
     /// threshold clock has advanced to.
-    pub fn new_round(&mut self, round_number: Round) {
-        let _ = self.new_round_sender.send_replace(round_number);
+    pub fn new_round(&mut self, round: Round) {
+        let _ = self.new_round_sender.send_replace(round);
+    }
+
+    /// Sends a signal with updates on the last quorum. Some small caching logic is included to avoid unnecessary
+    /// resend of same information. If the exact same quorum update is attempted to be sent, then the method
+    /// just returns.
+    pub fn quorum_update(&mut self, update: QuorumUpdate) -> ConsensusResult<()> {
+        if self.last_quorum_update.eq(&update) {
+            return Ok(());
+        }
+        self.last_quorum_update = update.clone();
+        self.quorum_update_sender
+            .send(update)
+            .map_err(|_err| ConsensusError::Shutdown)?;
+        Ok(())
     }
 }
 
 /// Receivers of signals from Core.
-/// Intentially un-clonable. Comonents should only subscribe to channels they need.
+/// Intentionally un-clonable. Components should only subscribe to channels they need.
 pub(crate) struct CoreSignalsReceivers {
     tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
+    #[allow(unused)]
     new_round_receiver: watch::Receiver<Round>,
+    quorum_update_receiver: watch::Receiver<QuorumUpdate>,
 }
 
 impl CoreSignalsReceivers {
@@ -518,8 +618,31 @@ impl CoreSignalsReceivers {
         self.tx_block_broadcast.subscribe()
     }
 
+    #[allow(unused)]
     pub(crate) fn new_round_receiver(&self) -> watch::Receiver<Round> {
         self.new_round_receiver.clone()
+    }
+
+    pub(crate) fn quorum_update_receiver(&self) -> watch::Receiver<QuorumUpdate> {
+        self.quorum_update_receiver.clone()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_task_listen_all_signals(&self) -> JoinHandle<()> {
+        let mut quorum_update_receiver = self.quorum_update_receiver();
+        let mut new_round_receiver = self.new_round_receiver();
+        tokio::spawn(async move {
+            tokio::select! {
+               Ok(_) = quorum_update_receiver.changed() => {
+                    let update = quorum_update_receiver.borrow_and_update().clone();
+                    trace!("New quorum update for round {}: {:?}", update.round, update.leaders);
+               },
+               Ok(_) = new_round_receiver.changed() => {
+                    let round = *new_round_receiver.borrow_and_update();
+                    trace!("New round received: {round}");
+                }
+            }
+        })
     }
 }
 
@@ -554,6 +677,7 @@ mod test {
         let store = Arc::new(MemStore::new());
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let num_of_leaders = NonZeroUsize::new(DEFAULT_NUM_LEADERS_PER_ROUND).unwrap();
 
         // Create test blocks for all the authorities for 4 rounds and populate them in store
         let mut last_round_blocks = genesis_blocks(context.clone());
@@ -610,6 +734,7 @@ mod test {
             signals,
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
+            num_of_leaders,
         );
 
         // New round should be 5
@@ -657,6 +782,7 @@ mod test {
         let store = Arc::new(MemStore::new());
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let num_of_leaders = NonZeroUsize::new(DEFAULT_NUM_LEADERS_PER_ROUND).unwrap();
 
         // Create test blocks for all authorities except our's (index = 0).
         let mut last_round_blocks = genesis_blocks(context.clone());
@@ -720,6 +846,7 @@ mod test {
             signals,
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
+            num_of_leaders,
         );
 
         // New round should be 4
@@ -768,6 +895,7 @@ mod test {
             config
         });
 
+        let num_of_leaders = NonZeroUsize::new(DEFAULT_NUM_LEADERS_PER_ROUND).unwrap();
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -800,6 +928,7 @@ mod test {
             signals,
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
+            num_of_leaders,
         );
 
         // Send some transactions
@@ -870,6 +999,7 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
+        let num_of_leaders = NonZeroUsize::new(DEFAULT_NUM_LEADERS_PER_ROUND).unwrap();
 
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -901,6 +1031,7 @@ mod test {
             signals,
             key_pairs.remove(context.own_index.value()).1,
             dag_state.clone(),
+            num_of_leaders,
         );
 
         let mut expected_ancestors = BTreeSet::new();
@@ -984,9 +1115,19 @@ mod test {
 
         // Try to create the blocks for round 4 by calling the try_propose() method. No block should be created as the
         // leader - authority 3 - hasn't proposed any block.
-        for (core, _, _, _, _) in cores.iter_mut() {
+        for (core, signal_receivers, _, _, _) in cores.iter_mut() {
             core.add_blocks(last_round_blocks.clone()).unwrap();
             assert!(core.try_propose(false).unwrap().is_none());
+
+            // The quorum update signal should be emitted for the last quorum round (3) with all
+            // the leaders missing.
+            let quorum_update = signal_receivers
+                .quorum_update_receiver()
+                .borrow_and_update()
+                .clone();
+            assert_eq!(quorum_update.round, 3);
+            assert_eq!(quorum_update.leaders.len(), 1);
+            assert!(quorum_update.leaders.iter().all(Option::is_none));
         }
 
         // Now try to create the blocks for round 4 via the leader timeout method which should
@@ -1021,7 +1162,7 @@ mod test {
         for round in 1..=10 {
             let mut this_round_blocks = Vec::new();
 
-            for (core, signal_receivers, block_receiver, _, _) in &mut cores {
+            for (core, signal_receivers, _block_receiver, _, _) in &mut cores {
                 // Wait for min round delay to allow blocks to be proposed.
                 sleep(default_params.min_round_delay).await;
                 // add the blocks from last round
@@ -1036,13 +1177,14 @@ mod test {
                 .await;
                 assert_eq!(new_round, round);
 
-                // Check that a new block has been proposed.
-                let block = tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
-                    .await
-                    .unwrap()
-                    .unwrap();
-                assert_eq!(block.round(), round);
-                assert_eq!(block.author(), core.context.own_index);
+                // We do not expect to receive a signal for a quorum update as we already proposed and
+                // there is no reason to pass an update.
+                let quorum_update = signal_receivers
+                    .quorum_update_receiver()
+                    .borrow_and_update()
+                    .clone();
+                assert_eq!(quorum_update.round, 0);
+                assert!(quorum_update.leaders.is_empty());
 
                 // append the new block to this round blocks
                 this_round_blocks.push(core.last_proposed_block().clone());
@@ -1167,6 +1309,7 @@ mod test {
         Arc<impl Store>,
     )> {
         let mut cores = Vec::new();
+        let num_of_leaders = NonZeroUsize::new(DEFAULT_NUM_LEADERS_PER_ROUND).unwrap();
 
         for index in 0..authorities.len() {
             let (committee, mut signers) = local_committee_and_keys(0, authorities.clone());
@@ -1200,6 +1343,9 @@ mod test {
 
             let block_signer = signers.remove(index).1;
 
+            // Spin up a task to have at least one subscriber for all the signals
+            signal_receivers.test_task_listen_all_signals();
+
             let core = Core::new(
                 context,
                 transaction_consumer,
@@ -1208,6 +1354,7 @@ mod test {
                 signals,
                 block_signer,
                 dag_state,
+                num_of_leaders,
             );
 
             cores.push((
