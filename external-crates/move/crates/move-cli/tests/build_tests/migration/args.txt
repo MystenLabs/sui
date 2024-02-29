@@ -2,4 +2,3 @@ migrate
 > diff -s migration.patch expected_migration.patch
 > diff -r -s sources migration_sources
 > diff -s Move.toml Move.toml.expected
-

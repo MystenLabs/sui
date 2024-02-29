@@ -339,7 +339,7 @@ codes!(
     Editions: [
         FeatureTooNew: {
             msg: "feature is not supported in specified edition",
-            severity: BlockingError,
+            severity: NonblockingError,
         },
     ],
     Migration: [

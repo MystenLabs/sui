@@ -10,6 +10,7 @@ Selection (default=1): Recorded edition in 'Move.toml'
 
 Would you like the Move compiler to migrate your code to Move 2024? (Y/n) 
 Generated changes . . .
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING A
 
 The following changes will be made.
@@ -117,6 +118,18 @@ Files sources/mod0.move and migration_sources/mod0.move are identical
 Files sources/mod1.move and migration_sources/mod1.move are identical
 Files sources/mod2.move and migration_sources/mod2.move are identical
 Files sources/mod3_4.move and migration_sources/mod3_4.move are identical
-Files sources/mod5.move and migration_sources/mod5.move are identical
+diff -r -s sources/mod5.move migration_sources/mod5.move
+27c27
+<         std::vector::destroy_empty(v);
+---
+>         vector::destroy_empty(v);
 External Command `diff -s Move.toml Move.toml.expected`:
+10,14c10
+< A = "0x42"
+< std = "0x1"
+< 
+< [dependencies]
+< MoveStdlib = { local = "../../../../move-stdlib" }
+---
+> A = "0x1"
 Files Move.toml and Move.toml.expected are identical
