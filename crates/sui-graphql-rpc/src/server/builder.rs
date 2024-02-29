@@ -47,7 +47,7 @@ use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
-use tokio::sync::OnceCell;
+use tokio::sync::{Mutex, OnceCell};
 use tower::{Layer, Service};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{info, warn};
@@ -317,7 +317,9 @@ impl ServerBuilder {
             builder = builder.extension(QueryLimitsChecker::default());
         }
         if config.internal_features.query_timeout {
-            builder = builder.extension(Timeout);
+            builder = builder.extension(Timeout {
+                query: Mutex::new(None),
+            });
         }
         if config.internal_features.tracing {
             builder = builder.extension(Tracing);
@@ -345,8 +347,6 @@ pub fn export_schema() -> String {
     schema_builder().finish().sdl()
 }
 
-pub(crate) struct QueryString(pub String);
-
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
@@ -354,7 +354,6 @@ async fn graphql_handler(
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
     let mut req = req.into_inner();
-    let query = QueryString(req.query.clone());
     req.data.insert(Uuid::new_v4());
     if headers.contains_key(ShowUsage::name()) {
         req.data.insert(ShowUsage)
@@ -362,7 +361,6 @@ async fn graphql_handler(
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
-    req.data.insert(query);
     let result = schema.execute(req).await;
 
     // If there are errors, insert them as an extention so that the Metrics callback handler can
@@ -470,6 +468,7 @@ pub mod tests {
     use simulacrum::Simulacrum;
     use std::sync::Arc;
     use std::time::Duration;
+    use tokio::sync::Mutex;
     use uuid::Uuid;
 
     async fn prep_cluster() -> ConnectionConfig {
@@ -561,7 +560,9 @@ pub mod tests {
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
-                .extension(Timeout)
+                .extension(Timeout {
+                    query: Mutex::new(None),
+                })
                 .build_schema();
 
             schema.execute("{ chainIdentifier }").await

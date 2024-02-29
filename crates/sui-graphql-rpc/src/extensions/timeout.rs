@@ -2,28 +2,46 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{
-    extensions::{Extension, ExtensionContext, ExtensionFactory, NextExecute},
-    Response, ServerError,
+    extensions::{Extension, ExtensionContext, ExtensionFactory, NextExecute, NextParseQuery},
+    parser::types::ExecutableDocument,
+    Response, ServerError, ServerResult,
 };
+use async_graphql_value::Variables;
 use std::time::Duration;
 use std::{net::SocketAddr, sync::Arc};
-use tokio::time::timeout;
+use tokio::{sync::Mutex, time::timeout};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::{config::ServiceConfig, error::code, server::builder::QueryString};
+use crate::{config::ServiceConfig, error::code};
 
-#[derive(Clone, Debug, Default)]
-pub(crate) struct Timeout;
+#[derive(Debug, Default)]
+pub(crate) struct Timeout {
+    pub query: Mutex<Option<String>>,
+}
 
 impl ExtensionFactory for Timeout {
     fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(Timeout)
+        Arc::new(Timeout {
+            query: Mutex::new(None),
+        })
     }
 }
 
 #[async_trait::async_trait]
 impl Extension for Timeout {
+    async fn parse_query(
+        &self,
+        ctx: &ExtensionContext<'_>,
+        query: &str,
+        variables: &Variables,
+        next: NextParseQuery<'_>,
+    ) -> ServerResult<ExecutableDocument> {
+        let document = next.run(ctx, query, variables).await?;
+        *self.query.lock().await = Some(ctx.stringify_execute_doc(&document, variables));
+        Ok(document)
+    }
+
     async fn execute(
         &self,
         ctx: &ExtensionContext<'_>,
@@ -33,12 +51,11 @@ impl Extension for Timeout {
         let cfg = ctx
             .data::<ServiceConfig>()
             .expect("No service config provided in schema data");
+        let query = self.query.lock().await.take().unwrap_or("".to_string());
         let request_timeout = Duration::from_millis(cfg.limits.request_timeout_ms);
         timeout(request_timeout, next.run(ctx, operation_name))
             .await
             .unwrap_or_else(|_| {
-                let query: &QueryString = ctx.data_unchecked();
-                let query = query.0.clone();
                 let query_id: &Uuid = ctx.data_unchecked();
                 let session_id: &SocketAddr = ctx.data_unchecked();
                 let error_code = code::REQUEST_TIMEOUT.to_string();
@@ -46,7 +63,7 @@ impl Extension for Timeout {
                     %query_id,
                     %session_id,
                     error_code,
-                    "Query: {}", query
+                    %query
                 );
                 Response::from_errors(vec![ServerError::new(
                     format!(
