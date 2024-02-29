@@ -258,7 +258,8 @@ module bridge::committee {
     const VALIDATOR1_PUBKEY: vector<u8> = b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964";
     #[test_only]
     const VALIDATOR2_PUBKEY: vector<u8> = b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a62";
-
+    #[test_only]
+    const VALIDATOR3_PUBKEY: vector<u8> = b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a63";
 
     #[test]
     fun test_verify_signatures_good_path() {
@@ -353,7 +354,7 @@ module bridge::committee {
         assert!(vec_map::is_empty(&committee.members), 0);
 
         let ctx = test_scenario::ctx(&mut scenario);
-        try_create_next_committee(&mut committee, &mut system_state, 60, ctx);
+        try_create_next_committee(&mut committee, &mut system_state, 6000, ctx);
 
         assert_eq(2, vec_map::size(&committee.members));
         let (_, member0) = vec_map::get_entry_by_idx(&committee.members, 0);
@@ -385,6 +386,51 @@ module bridge::committee {
 
         // validator registration
         register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xD, 0));
+
+        test_utils::destroy(committee);
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_init_committee_validator_become_inactive() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@0xA, 100, ctx),
+            create_validator_for_testing(@0xC, 100, ctx),
+            create_validator_for_testing(@0xD, 100, ctx),
+            create_validator_for_testing(@0xE, 100, ctx),
+            create_validator_for_testing(@0xF, 100, ctx)
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        test_scenario::next_tx(&mut scenario, @0x0);
+
+        let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // validator registration, 3 validators registered, should have 60% voting power in total
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@0xC, 0));
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR3_PUBKEY), b"", &tx(@0xD, 0));
+
+        // Verify validator registration
+        assert_eq(3, vec_map::size(&committee.member_registrations));
+
+        // Validator 0xA become inactive, total voting power become 50%
+        sui_system::request_remove_validator(&mut system_state, &mut tx(@0xA, 0));
+        test_scenario::return_shared(system_state);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+
+        let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // create committee should not create a committe because of not enough stake.
+        let ctx = test_scenario::ctx(&mut scenario);
+        try_create_next_committee(&mut committee, &mut system_state, 6000, ctx);
+
+        assert!(vec_map::is_empty(&committee.members), 0);
 
         test_utils::destroy(committee);
         test_scenario::return_shared(system_state);
