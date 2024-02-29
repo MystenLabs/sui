@@ -197,10 +197,18 @@ fn lvalues(context: &mut Context, ls: &[LValue], values: Values) {
 fn lvalue(context: &mut Context, sp!(loc, l_): &LValue, value: Value) {
     use LValue_ as L;
     match l_ {
-        L::Ignore => {
+        L::Ignore
+        | L::Var {
+            unused_assignment: true,
+            ..
+        } => {
             context.borrow_state.release_value(value);
         }
-        L::Var(v, _) => {
+        L::Var {
+            var: v,
+            unused_assignment: false,
+            ..
+        } => {
             let diags = context.borrow_state.assign_local(*loc, v, value);
             context.add_diags(diags)
         }

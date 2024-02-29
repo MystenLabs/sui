@@ -2195,14 +2195,10 @@ fn remove_unused_bindings_seq(
             N::SequenceItem_::Seq(e) => remove_unused_bindings_exp(context, used, e),
             N::SequenceItem_::Declare(lvalues, _) => {
                 // unused bindings will be reported as unused assignments
-                remove_unused_bindings_lvalues(
-                    context, used, lvalues, /* report unused */ true,
-                )
+                remove_unused_bindings_lvalues(context, used, lvalues)
             }
             N::SequenceItem_::Bind(lvalues, e) => {
-                remove_unused_bindings_lvalues(
-                    context, used, lvalues, /* report unused */ false,
-                );
+                remove_unused_bindings_lvalues(context, used, lvalues);
                 remove_unused_bindings_exp(context, used, e)
             }
         }
@@ -2213,10 +2209,9 @@ fn remove_unused_bindings_lvalues(
     context: &mut Context,
     used: &BTreeSet<N::Var_>,
     sp!(_, lvalues): &mut N::LValueList,
-    report: bool,
 ) {
     for lvalue in lvalues {
-        remove_unused_bindings_lvalue(context, used, lvalue, report)
+        remove_unused_bindings_lvalue(context, used, lvalue)
     }
 }
 
@@ -2224,7 +2219,6 @@ fn remove_unused_bindings_lvalue(
     context: &mut Context,
     used: &BTreeSet<N::Var_>,
     sp!(_, lvalue_): &mut N::LValue,
-    report: bool,
 ) {
     match lvalue_ {
         N::LValue_::Ignore => (),
@@ -2241,14 +2235,12 @@ fn remove_unused_bindings_lvalue(
             ..
         } => {
             debug_assert!(!*unused_binding);
-            if report {
-                report_unused_local(context, var);
-            }
+            report_unused_local(context, var);
             *unused_binding = true;
         }
         N::LValue_::Unpack(_, _, _, lvalues) => {
             for (_, _, (_, lvalue)) in lvalues {
-                remove_unused_bindings_lvalue(context, used, lvalue, report)
+                remove_unused_bindings_lvalue(context, used, lvalue)
             }
         }
     }
@@ -2297,7 +2289,7 @@ fn remove_unused_bindings_exp(
             body,
         }) => {
             for (lvs, _) in parameters {
-                remove_unused_bindings_lvalues(context, used, lvs, /* report unused */ false)
+                remove_unused_bindings_lvalues(context, used, lvs)
             }
             remove_unused_bindings_exp(context, used, body)
         }

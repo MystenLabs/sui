@@ -303,7 +303,7 @@ pub trait SimpleAbsInt: Sized {
         let sp!(loc, l_) = l;
         match l_ {
             L::Ignore => (),
-            L::Var(v, _) => {
+            L::Var { var: v, .. } => {
                 let locals = state.locals_mut();
                 locals.insert(*v, LocalState::Available(*loc, value));
             }

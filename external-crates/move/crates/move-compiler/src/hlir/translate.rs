@@ -1864,9 +1864,16 @@ fn assign(
     let mut after = Block::new();
     let l_ = match ta_ {
         A::Ignore => L::Ignore,
-        A::Var { var: v, ty: st, .. } => {
-            L::Var(translate_var(v), Box::new(single_type(context, *st)))
-        }
+        A::Var {
+            var: v,
+            ty: st,
+            unused_binding,
+            ..
+        } => L::Var {
+            var: translate_var(v),
+            ty: Box::new(single_type(context, *st)),
+            unused_assignment: unused_binding,
+        },
         A::Unpack(m, s, tbs, tfields) => {
             // all fields of an unpacked struct type are used
             context
@@ -1915,7 +1922,11 @@ fn assign(
                 let borrow = H::exp(borrow_ty, sp(floc, borrow_));
                 make_assignments(context, &mut after, floc, case, sp(floc, vec![tfa]), borrow);
             }
-            L::Var(tmp, Box::new(rvalue_ty.clone()))
+            L::Var {
+                var: tmp,
+                ty: Box::new(rvalue_ty.clone()),
+                unused_assignment: false,
+            }
         }
     };
     (sp(loc, l_), after)
@@ -2056,7 +2067,7 @@ fn bind_value_in_block(
     let mut binders_valid = true;
     for sp!(loc, lvalue) in &binders {
         match lvalue {
-            H::LValue_::Var(_, _) => (),
+            H::LValue_::Var { .. } => (),
             lv => {
                 context.env.add_diag(ice!((
                     *loc,
@@ -2118,7 +2129,12 @@ fn make_binders(context: &mut Context, loc: Loc, ty: H::Type) -> (Vec<H::LValue>
 
 fn make_temp(context: &mut Context, loc: Loc, sp!(_, ty): H::SingleType) -> (H::LValue, H::Exp) {
     let binder = context.new_temp(loc, sp(loc, ty.clone()));
-    let lvalue = sp(loc, H::LValue_::Var(binder, Box::new(sp(loc, ty.clone()))));
+    let lvalue_ = H::LValue_::Var {
+        var: binder,
+        ty: Box::new(sp(loc, ty.clone())),
+        unused_assignment: false,
+    };
+    let lvalue = sp(loc, lvalue_);
     let uexp = sp(
         loc,
         H::UnannotatedExp_::Move {

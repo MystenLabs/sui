@@ -279,7 +279,7 @@ fn lvalue(context: &mut Context, case: AssignCase, sp!(loc, l_): &LValue) {
     use LValue_ as L;
     match l_ {
         L::Ignore => (),
-        L::Var(v, _) => {
+        L::Var { var: v, .. } => {
             if case == AssignCase::Update {
                 let mut_ = context.local_mutability(v);
                 if let Some(assign_loc) = context.get_first_assignment(v) {
@@ -291,8 +291,8 @@ fn lvalue(context: &mut Context, case: AssignCase, sp!(loc, l_): &LValue) {
             context.maybe_set_first_assignment(*v, *loc);
             let ty = context.local_type(v);
             let abilities = ty.value.abilities(ty.loc);
-            let old_state = context.get_state(v);
             if !abilities.has_ability_(Ability_::Drop) {
+                let old_state = context.get_state(v);
                 match old_state {
                     LocalState::Unavailable(_, _) => (),
                     LocalState::Available(available)

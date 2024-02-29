@@ -2,7 +2,7 @@ warning[W09003]: unused assignment
   ┌─ tests/move_check/locals/assign_resource.move:5:13
   │
 5 │         let r = R{};
-  │             ^ Unused variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
+  │             ^ Unused assignment for variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
   │
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -62,7 +62,7 @@ warning[W09003]: unused assignment
    ┌─ tests/move_check/locals/assign_resource.move:29:13
    │
 29 │         let r = R{};
-   │             ^ Unused variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
+   │             ^ Unused assignment for variable 'r'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_r')
    │
    = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

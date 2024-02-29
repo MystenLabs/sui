@@ -212,7 +212,7 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
 }
 
 fn is_obj(sp!(_, l_): &LValue) -> bool {
-    if let LValue_::Var(_, st) = l_ {
+    if let LValue_::Var { ty: st, .. } = l_ {
         return is_obj_type(st);
     }
     false

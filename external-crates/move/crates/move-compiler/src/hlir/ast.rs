@@ -242,7 +242,11 @@ pub type Command = Spanned<Command_>;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LValue_ {
     Ignore,
-    Var(Var, Box<SingleType>),
+    Var {
+        var: Var,
+        ty: Box<SingleType>,
+        unused_assignment: bool,
+    },
     Unpack(StructName, Vec<BaseType>, Vec<(Field, LValue)>),
 }
 pub type LValue = Spanned<LValue_>;
@@ -1413,12 +1417,20 @@ impl AstDebug for LValue_ {
         use LValue_ as L;
         match self {
             L::Ignore => w.write("_"),
-            L::Var(v, st) => {
-                w.write("(");
-                v.ast_debug(w);
-                w.write(": ");
-                st.ast_debug(w);
-                w.write(")");
+            L::Var {
+                var,
+                ty,
+                unused_assignment,
+            } => {
+                w.annotate(
+                    |w| {
+                        var.ast_debug(w);
+                        if *unused_assignment {
+                            w.write("#unused")
+                        }
+                    },
+                    ty,
+                );
             }
             L::Unpack(s, tys, fields) => {
                 w.write(&format!("{}", s));

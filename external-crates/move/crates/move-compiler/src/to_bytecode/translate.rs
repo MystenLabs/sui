@@ -829,10 +829,19 @@ fn lvalue(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, l_): H::
     use H::LValue_ as L;
     use IR::Bytecode_ as B;
     match l_ {
-        L::Ignore => {
+        L::Ignore
+        | L::Var {
+            unused_assignment: true,
+            ..
+        } => {
             code.push(sp(loc, B::Pop));
         }
-        L::Var(v, _) => {
+
+        L::Var {
+            var: v,
+            unused_assignment: false,
+            ..
+        } => {
             code.push(sp(loc, B::StLoc(var(v))));
         }
         L::Unpack(s, tys, field_ls) if field_ls.is_empty() => {

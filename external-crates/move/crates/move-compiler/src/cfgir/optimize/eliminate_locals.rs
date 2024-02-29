@@ -142,7 +142,7 @@ mod count {
         use LValue_ as L;
         match l_ {
             L::Ignore | L::Unpack(_, _, _) => (),
-            L::Var(v, _) => context.assign(v, substitutable),
+            L::Var { var, .. } => context.assign(var, substitutable),
         }
     }
 
@@ -316,12 +316,23 @@ mod eliminate {
         use LValue_ as L;
         match l_ {
             l_ @ L::Ignore | l_ @ L::Unpack(_, _, _) => LRes::Same(sp(loc, l_)),
-            L::Var(v, t) => {
-                let contained = context.ssa_temps.remove(&v);
+            L::Var {
+                var,
+                ty,
+                unused_assignment,
+            } => {
+                let contained = context.ssa_temps.remove(&var);
                 if contained {
-                    LRes::Elim(v)
+                    LRes::Elim(var)
                 } else {
-                    LRes::Same(sp(loc, L::Var(v, t)))
+                    LRes::Same(sp(
+                        loc,
+                        L::Var {
+                            var,
+                            ty,
+                            unused_assignment,
+                        },
+                    ))
                 }
             }
         }
