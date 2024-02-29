@@ -16,7 +16,6 @@ use crate::metrics::Metrics;
 
 /// Context contains per-epoch configuration and metrics shared by all components
 /// of this authority.
-#[allow(dead_code)]
 #[derive(Clone)]
 pub(crate) struct Context {
     /// Index of this authority in the committee.
@@ -31,7 +30,6 @@ pub(crate) struct Context {
     pub metrics: Arc<Metrics>,
 }
 
-#[allow(dead_code)]
 impl Context {
     pub(crate) fn new(
         own_index: AuthorityIndex,
@@ -87,18 +85,6 @@ impl Context {
     #[cfg(test)]
     pub(crate) fn with_parameters(mut self, parameters: Parameters) -> Self {
         self.parameters = parameters;
-        self
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_protocol_config(mut self, protocol_config: ProtocolConfig) -> Self {
-        self.protocol_config = protocol_config;
-        self
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_metrics(mut self, metrics: Arc<Metrics>) -> Self {
-        self.metrics = metrics;
         self
     }
 }

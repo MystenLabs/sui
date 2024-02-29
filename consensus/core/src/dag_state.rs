@@ -20,7 +20,6 @@ use crate::{
 };
 
 /// Rounds of recently committed blocks cached in memory, per authority.
-#[allow(unused)]
 const CACHED_ROUNDS: Round = 100;
 
 /// DagState provides the API to write and read accepted blocks from the DAG.
@@ -30,7 +29,6 @@ const CACHED_ROUNDS: Round = 100;
 ///
 /// Note: DagState should be wrapped with Arc<parking_lot::RwLock<_>>, to allow
 /// concurrent access from multiple components.
-#[allow(unused)]
 pub(crate) struct DagState {
     context: Arc<Context>,
 
@@ -62,7 +60,6 @@ pub(crate) struct DagState {
     store: Arc<dyn Store>,
 }
 
-#[allow(unused)]
 impl DagState {
     /// Initializes DagState from storage.
     pub(crate) fn new(context: Arc<Context>, store: Arc<dyn Store>) -> Self {
@@ -218,7 +215,7 @@ impl DagState {
         // or support reading from storage while limiting storage reads to edge cases.
 
         let mut blocks = vec![];
-        for (block_ref, block) in self.recent_blocks.range((
+        for (_block_ref, block) in self.recent_blocks.range((
             Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
             Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
         )) {
@@ -235,7 +232,7 @@ impl DagState {
         }
 
         let mut blocks = vec![];
-        for (block_ref, block) in self.recent_blocks.range((
+        for (_block_ref, block) in self.recent_blocks.range((
             Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
             Excluded(BlockRef::new(
                 round + 1,

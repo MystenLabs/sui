@@ -18,7 +18,6 @@ pub(crate) struct LeaderSchedule {
     context: Arc<Context>,
 }
 
-#[allow(unused)]
 impl LeaderSchedule {
     pub fn new(context: Arc<Context>) -> Self {
         Self { context }

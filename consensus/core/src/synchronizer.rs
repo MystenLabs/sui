@@ -44,7 +44,6 @@ enum Command {
     },
 }
 
-#[allow(dead_code)]
 pub(crate) struct SynchronizerHandle {
     commands_sender: Sender<Command>,
     tasks: Mutex<JoinSet<()>>,
@@ -76,7 +75,6 @@ impl SynchronizerHandle {
     }
 }
 
-#[allow(dead_code)]
 pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> {
     context: Arc<Context>,
     commands_receiver: Receiver<Command>,
