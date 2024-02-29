@@ -37,7 +37,7 @@ export function ReplayInputArgument({ input }: { input: ReplayInput }) {
 						{Object.entries(formatObject(input)).map(([key, value]) => (
 							<div>
 								<span className="capitalize">{key}: </span>
-								{key === 'objectId' && <ReplayLink id={value} text={value} network="mainnet" />}
+								{key === 'objectId' && <ReplayLink id={value} text={value} />}
 								{key !== 'objectId' && <span>{JSON.stringify(value)}</span>}
 							</div>
 						))}

@@ -6,7 +6,6 @@ import { onChainAmountToFloat } from '../preview-effects/utils';
 import { type Effects, type ReplayGasStatus, type ReplayInput } from './replay-types';
 import { ReplayInputArgument } from './ReplayInputArgument';
 
-// SPDX-License-Identifier: Apache-2.0
 export function ReplayOverview({
 	effects,
 	gasStatus,
@@ -68,7 +67,7 @@ export function ReplayOverview({
 				</PreviewCard.Root>
 
 				<PreviewCard.Root className="m-2">
-					<PreviewCard.Header> Input Arguments </PreviewCard.Header>
+					<PreviewCard.Header>Input Arguments</PreviewCard.Header>
 					<PreviewCard.Body>
 						<div className="text-sm max-h-[450px] overflow-y-auto grid grid-cols-1 gap-3">
 							{inputs.map((input, index) => (

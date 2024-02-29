@@ -33,19 +33,13 @@ export function ReplayTransactionBlocks({
 						{'MoveCall' in command && (
 							<div className="flex flex-wrap gap-3">
 								Package:{' '}
-								<ReplayLink
-									id={command.MoveCall.package}
-									text={command.MoveCall.package}
-									network="mainnet"
-								/>
+								<ReplayLink id={command.MoveCall.package} text={command.MoveCall.package} />
 								Module:{' '}
 								<ReplayLink
 									id={command.MoveCall.package}
 									module={command.MoveCall.module}
 									text={command.MoveCall.module}
-									network="mainnet"
 								/>
-								<span v-scope="ExplorerLink({ data: { id: input.MoveCall.package, module: input.MoveCall.module }, text: input.MoveCall.module})"></span>
 								Function: {command.MoveCall.function}
 							</div>
 						)}
@@ -58,19 +52,16 @@ export function ReplayTransactionBlocks({
 
 							{'SplitCoins' in command && (
 								<>
-								<div>
-									From: {renderArgument(command.SplitCoins[0])}
-								</div>
-								<div>
-									Amounts: 
-									{
-										command.SplitCoins[1].map((argument) => renderArgument(argument))
-									}
+									<div>From: {renderArgument(command.SplitCoins[0])}</div>
+									<div>
+										Amounts:
+										{command.SplitCoins[1].map((argument) => renderArgument(argument))}
 									</div>
 								</>
-
 								// TODO(laura): Do this for all: `MergeCoins`, `MakeMoveVec` and all other commands. Also add these in types properly.
 							)}
+
+							{/* { 'MergeCoins' in command && ... } */}
 						</div>
 					</PreviewCard.Body>
 				</PreviewCard.Root>

@@ -152,7 +152,8 @@ export type ReplayProgrammableTransactions = {
 
 export type Command = {
 	MoveCall: MoveCall;
-	SplitCoins: [string | Argument, (string | Argument)[]]
+	SplitCoins: [string | Argument, (string | Argument)[]];
+	// MergeCoins, Publish, Upgrade, MakeMoveVec etc.
 };
 
 export type MoveCall = {
