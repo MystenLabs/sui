@@ -8,6 +8,27 @@ import { useEffect, useState } from 'react';
 import NetworkSelect from '../network/Network';
 import Search from '../search/Search';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
+import { Heading } from '../../../../ui';
+
+export function RedirectHeader() {
+	return (
+		<section
+			className="mb-20 flex flex-col items-center justify-center gap-5 px-5 py-12 text-center"
+			style={{
+				background: 'linear-gradient(159deg, #FAF8D2 50.65%, #F7DFD5 86.82%)',
+			}}
+		>
+			<div className="flex items-center gap-1">
+				<Sui className="h-11 w-9" />
+				<SuiLogoTxt className="h-7 w-11" />
+			</div>
+
+			<Heading variant="heading3/semibold">
+				Experience two amazing blockchain explorers on Sui!
+			</Heading>
+		</section>
+	);
+}
 
 function Header() {
 	const [isScrolled, setIsScrolled] = useState(window.scrollY > 0);

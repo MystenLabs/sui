@@ -3,16 +3,23 @@
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useAppsBackend, useElementDimensions } from '@mysten/core';
-import { LoadingIndicator } from '@mysten/ui';
+import { LoadingIndicator, Text } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { type ReactNode, useRef } from 'react';
 
 import Footer from '../footer/Footer';
-import Header from '../header/Header';
+import Header, { RedirectHeader } from '../header/Header';
 import { useNetworkContext } from '~/context';
 import { Banner } from '~/ui/Banner';
 import { Network } from '~/utils/api/DefaultRpcClient';
+import suiscanImg from '~/assets/explorer-suiscan.jpg';
+import suivisionImg from '~/assets/explorer-suivision.jpg';
+import suiscanImg2x from '~/assets/explorer-suiscan@2x.jpg';
+import suivisionImg2x from '~/assets/explorer-suivision@2x.jpg';
+import { ButtonOrLink } from '~/ui/utils/ButtonOrLink';
+import { Image } from '~/ui/image/Image';
+import { ArrowRight12 } from '@mysten/icons';
 
 export type PageLayoutProps = {
 	gradient?: {
@@ -27,7 +34,46 @@ export type PageLayoutProps = {
 
 const DEFAULT_HEADER_HEIGHT = 68;
 
+function ExternalExplorerLink({ type }: { type: 'suiscan' | 'suivision' }) {
+	const href = type === 'suiscan' ? 'https://suiscan.xyz' : 'https://suivision.xyz';
+	const src = type === 'suiscan' ? suiscanImg : suivisionImg;
+	const srcSet = type === 'suiscan' ? suiscanImg2x : suivisionImg2x;
+
+	return (
+		<div className="relative overflow-hidden rounded-3xl border border-gray-45 transition duration-300 ease-in-out hover:shadow-lg">
+			<ButtonOrLink href={href} target="_blank" rel="noopener noreferrer">
+				<Image src={src} srcSet={srcSet} />
+			</ButtonOrLink>
+			<div className="absolute bottom-10 left-1/2 right-0 flex -translate-x-1/2 sm:w-96">
+				<ButtonOrLink
+					className="flex w-full items-center justify-center gap-2 rounded-3xl bg-sui-dark px-3 py-2"
+					href={href}
+					target="_blank"
+					rel="noopener noreferrer"
+				>
+					<Text variant="body/semibold" color="white">
+						{type === 'suiscan' ? 'Visit Suiscan.xyz' : 'Visit Suivision.xyz'}
+					</Text>
+					<ArrowRight12 className="h-3 w-3 -rotate-45 text-white" />
+				</ButtonOrLink>
+			</div>
+		</div>
+	);
+}
+
+function RedirectContent() {
+	return (
+		<section className="flex flex-col justify-center gap-10 sm:flex-row">
+			<ExternalExplorerLink type="suivision" />
+			<ExternalExplorerLink type="suiscan" />
+		</section>
+	);
+}
+
 export function PageLayout({ gradient, content, header, loading, isError }: PageLayoutProps) {
+	// const enableExplorerRedirect = useFeatureIsOn('explorer-redirect');
+	// TODO: Change back to use feature flag before merging
+	const enableExplorerRedirect = true;
 	const [network] = useNetworkContext();
 	const { request } = useAppsBackend();
 	const outageOverride = useFeatureIsOn('network-outage-override');
@@ -62,9 +108,9 @@ export function PageLayout({ gradient, content, header, loading, isError }: Page
 						<div className="break-normal">{networkDegradeBannerCopy}</div>
 					</Banner>
 				)}
-				{!header && <Header />}
+				{!enableExplorerRedirect && <Header />}
 			</section>
-			{header}
+			{enableExplorerRedirect && <RedirectHeader />}
 			{loading && (
 				<div className="absolute left-1/2 right-0 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform justify-center">
 					<LoadingIndicator variant="lg" />
@@ -80,7 +126,7 @@ export function PageLayout({ gradient, content, header, loading, isError }: Page
 						: {}
 				}
 			>
-				{isGradientVisible ? (
+				{isGradientVisible && !enableExplorerRedirect ? (
 					<section
 						style={{
 							paddingTop: `${headerHeight}px`,
@@ -105,7 +151,7 @@ export function PageLayout({ gradient, content, header, loading, isError }: Page
 				) : null}
 				{!loading && (
 					<section className="mx-auto max-w-[1440px] p-5 pb-20 sm:py-8 md:p-10 md:pb-20">
-						{content}
+						{enableExplorerRedirect ? <RedirectContent /> : content}
 					</section>
 				)}
 			</main>
