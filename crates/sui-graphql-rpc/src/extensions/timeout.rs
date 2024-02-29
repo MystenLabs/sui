@@ -58,7 +58,7 @@ impl Extension for Timeout {
             .unwrap_or_else(|_| {
                 let query_id: &Uuid = ctx.data_unchecked();
                 let session_id: &SocketAddr = ctx.data_unchecked();
-                let error_code = code::REQUEST_TIMEOUT.to_string();
+                let error_code = code::REQUEST_TIMEOUT;
                 let guard = self.query.lock().unwrap();
                 let query = match guard.as_ref() {
                     Some(s) => s.as_str(),
@@ -68,7 +68,7 @@ impl Extension for Timeout {
                 error!(
                     %query_id,
                     %session_id,
-                    error_code,
+                    %error_code,
                     %query
                 );
                 Response::from_errors(vec![ServerError::new(

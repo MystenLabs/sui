@@ -554,10 +554,10 @@ pub mod tests {
                 .context_data(cfg)
                 .context_data(query_id())
                 .context_data(ip_address())
+                .extension(Timeout::default())
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
-                .extension(Timeout::default())
                 .build_schema();
 
             schema.execute("{ chainIdentifier }").await
