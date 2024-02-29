@@ -25,26 +25,6 @@ module test::random {
     public fun use_value(_value: u64) {}
 }
 
-//# view-object 8
-
-// bad tx - use_random, use_value,
-//# programmable --sender A --inputs 16 immshared(8)
-//> test::random::use_random(Input(1));
-//> test::random::use_value(Input(0))
-
-// bad tx - use_random, use_clock
-//# programmable --sender A --inputs immshared(8) immshared(6) @A
-//> test::random::use_random(Input(0));
-//> test::random::use_clock(Input(1))
-
-// bad tx - use_random, transfer, use_clock
-//# programmable --sender A --inputs 10 immshared(8) immshared(6) @B
-//> SplitCoins(Gas, [Input(0)]);
-//> test::random::use_random(Input(1));
-//> TransferObjects([Result(0)], Input(3));
-//> test::random::use_clock(Input(0))
-
-
 // TODO: Enable the following cases once execution with Random is working.
 
 // good tx - use_random
