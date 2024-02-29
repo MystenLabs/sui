@@ -58,7 +58,7 @@ export class ZkBag<IDs> {
 				typeof receiver === 'string' ? txb.pure.address(receiver) : receiver,
 				txb.object(item),
 			],
-			typeArguments,
+			typeArguments: typeArguments,
 		});
 	}
 
@@ -93,7 +93,7 @@ export class ZkBag<IDs> {
 			arguments: [
 				bag: TransactionObjectArgument | string,
 				claim: TransactionObjectArgument | string,
-				id: TransactionArgument | string,
+				id: TransactionArgument | number,
 			];
 			typeArguments: [string];
 		},
@@ -103,7 +103,7 @@ export class ZkBag<IDs> {
 			arguments: [
 				txb.object(bag),
 				txb.object(claim),
-				typeof id === 'string' ? txb.pure.u64(id) : id,
+				typeof id === 'number' ? txb.pure.u16(id) : id,
 			],
 			typeArguments,
 		});
