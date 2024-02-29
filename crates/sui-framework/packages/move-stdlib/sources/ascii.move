@@ -7,6 +7,9 @@ module std::ascii {
     use std::vector;
     use std::option::{Self, Option};
 
+    use fun is_valid_char as u8.is_valid_char;
+    use fun try_string as vector.try_string;
+
     /// An invalid ASCII character was encountered when creating an ASCII string.
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
 
@@ -26,30 +29,30 @@ module std::ascii {
 
     /// Convert a `byte` into a `Char` that is checked to make sure it is valid ASCII.
     public fun char(byte: u8): Char {
-        assert!(is_valid_char(byte), EINVALID_ASCII_CHARACTER);
+        assert!(byte.is_valid_char(), EINVALID_ASCII_CHARACTER);
         Char { byte }
     }
 
     /// Convert a vector of bytes `bytes` into an `String`. Aborts if
     /// `bytes` contains non-ASCII characters.
     public fun string(bytes: vector<u8>): String {
-       let x = try_string(bytes);
+       let x = bytes.try_string();
        assert!(
             option::is_some(&x),
             EINVALID_ASCII_CHARACTER
        );
-       option::destroy_some(x)
+       x.destroy_some()
     }
 
     /// Convert a vector of bytes `bytes` into an `String`. Returns
     /// `Some(<ascii_string>)` if the `bytes` contains all valid ASCII
     /// characters. Otherwise returns `None`.
     public fun try_string(bytes: vector<u8>): Option<String> {
-        let len = vector::length(&bytes);
+        let len = bytes.length();
         let mut i = 0;
         while (i < len) {
-            let possible_byte = *vector::borrow(&bytes, i);
-            if (!is_valid_char(possible_byte)) return option::none();
+            let possible_byte = *bytes.borrow(i);
+            if (!possible_byte.is_valid_char()) return option::none();
             i = i + 1;
         };
         option::some(String { bytes })
@@ -69,15 +72,15 @@ module std::ascii {
     }
 
     public fun push_char(string: &mut String, char: Char) {
-        vector::push_back(&mut string.bytes, char.byte);
+        string.bytes.push_back(char.byte);
     }
 
     public fun pop_char(string: &mut String): Char {
-        Char { byte: vector::pop_back(&mut string.bytes) }
+        Char { byte: string.bytes.pop_back() }
     }
 
     public fun length(string: &String): u64 {
-        vector::length(as_bytes(string))
+        string.as_bytes().length()
     }
 
     /// Get the inner bytes of the `string` as a reference
