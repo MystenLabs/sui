@@ -44,8 +44,8 @@ impl AuthorityOverloadInfo {
 }
 
 const STEADY_OVERLOAD_REDUCTION_PERCENTAGE: u32 = 10;
-const EXECUTION_RATE_RATIO_FOR_COMPARISON: f64 = 0.9;
-const ADDITIONAL_LOAD_SHEDDING: f64 = 0.1;
+const EXECUTION_RATE_RATIO_FOR_COMPARISON: f64 = 0.95;
+const ADDITIONAL_LOAD_SHEDDING: f64 = 0.02;
 
 // The update interval of the random seed used to determine whether a txn should be rejected.
 const SEED_UPDATE_DURATION_SECS: u64 = 30;
@@ -325,11 +325,11 @@ mod tests {
 
     #[test]
     pub fn test_calculate_load_shedding_ratio() {
-        assert_eq!(calculate_load_shedding_percentage(90.0, 100.1), 0);
-        assert_eq!(calculate_load_shedding_percentage(90.0, 100.0), 10);
-        assert_eq!(calculate_load_shedding_percentage(100.0, 100.0), 20);
-        assert_eq!(calculate_load_shedding_percentage(110.0, 100.0), 28);
-        assert_eq!(calculate_load_shedding_percentage(180.0, 100.0), 60);
+        assert_eq!(calculate_load_shedding_percentage(95.0, 100.1), 0);
+        assert_eq!(calculate_load_shedding_percentage(95.0, 100.0), 2);
+        assert_eq!(calculate_load_shedding_percentage(100.0, 100.0), 7);
+        assert_eq!(calculate_load_shedding_percentage(110.0, 100.0), 16);
+        assert_eq!(calculate_load_shedding_percentage(180.0, 100.0), 49);
         assert_eq!(calculate_load_shedding_percentage(100.0, 0.0), 100);
         assert_eq!(calculate_load_shedding_percentage(0.0, 1.0), 0);
     }
@@ -360,7 +360,7 @@ mod tests {
         // protection.
         assert_eq!(
             check_overload_signals(&config, 0, Duration::from_secs(2), 100.0, 100.0),
-            (true, 20)
+            (true, 7)
         );
 
         // When execution queueing latency hits hard limit, start more aggressive overload
@@ -374,7 +374,7 @@ mod tests {
         // is higher than min_load_shedding_percentage_above_hard_limit.
         assert_eq!(
             check_overload_signals(&config, 0, Duration::from_secs(11), 240.0, 100.0),
-            (true, 73)
+            (true, 62)
         );
 
         // When execution queueing latency hits hard limit, but transaction ready rate
@@ -393,7 +393,7 @@ mod tests {
         // When the system is already shedding 50% of load, and the current txn ready rate
         // and execution rate require another 20%, the final shedding rate is 60%.
         assert_eq!(
-            check_overload_signals(&config, 50, Duration::from_secs(2), 100.0, 100.0),
+            check_overload_signals(&config, 50, Duration::from_secs(2), 116.0, 100.0),
             (true, 60)
         );
 
@@ -704,7 +704,7 @@ mod tests {
         let executor = start_executor(1000.0, rx, stop_rx, state.clone());
 
         sleep_and_print_stats(state.clone(), 15).await;
-        for _ in 0..8 {
+        for _ in 0..16 {
             // Regularly send out a burst of request.
             burst_tx.send(10000).unwrap();
             sleep_and_print_stats(state.clone(), 5).await;
