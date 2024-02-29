@@ -35,7 +35,7 @@ export function Replay() {
 	useEffect(() => {
 		const urlNetwork = searchParams.get('network');
 		if (urlNetwork && urlNetwork !== network) setNetwork(urlNetwork);
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [searchParams]);
 
 	const tabs = [
