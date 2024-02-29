@@ -326,7 +326,7 @@ impl<'a> Compiler<'a> {
             .map(|p| Ok(p.to_vfs_path(&vfs_root)?))
             .collect::<Result<Vec<_>, anyhow::Error>>()?;
 
-        let interface_files = generate_interface_files_for_deps(
+        generate_interface_files_for_deps(
             &mut deps,
             interface_files_dir_opt,
             &compiled_module_named_address_mapping,
@@ -340,13 +340,8 @@ impl<'a> Compiler<'a> {
             compilation_env.add_custom_known_filters(prefix, filters)?;
         }
 
-        let (mut source_text, pprog, comments) = with_large_stack!(parse_program(
-            &mut compilation_env,
-            maps,
-            targets,
-            deps,
-            interface_files
-        ))?;
+        let (mut source_text, pprog, comments) =
+            with_large_stack!(parse_program(&mut compilation_env, maps, targets, deps,))?;
 
         source_text
             .iter_mut()
@@ -730,12 +725,13 @@ fn generate_interface_files_for_deps(
     deps: &mut Vec<IndexedVfsPackagePath>,
     interface_files_dir_opt: Option<String>,
     module_to_named_address: &BTreeMap<CompiledModuleId, String>,
-) -> anyhow::Result<Vec<IndexedVfsPackagePath>> {
-    let interface_files =
+) -> anyhow::Result<()> {
+    let interface_files_paths =
         generate_interface_files(deps, interface_files_dir_opt, module_to_named_address, true)?;
+    deps.extend(interface_files_paths);
     // Remove bytecode files
     deps.retain(|p| !p.path.as_str().ends_with(MOVE_COMPILED_EXTENSION));
-    Ok(interface_files)
+    Ok(())
 }
 
 pub fn generate_interface_files(

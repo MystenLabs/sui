@@ -29,7 +29,6 @@ pub(crate) fn parse_program(
     named_address_maps: NamedAddressMaps,
     targets: Vec<IndexedVfsPackagePath>,
     deps: Vec<IndexedVfsPackagePath>,
-    interface_files: Vec<IndexedVfsPackagePath>,
 ) -> anyhow::Result<(FilesSourceText, parser::ast::Program, CommentMap)> {
     fn find_move_filenames_with_address_mapping(
         paths_with_mapping: Vec<IndexedVfsPackagePath>,
@@ -83,20 +82,6 @@ pub(crate) fn parse_program(
         path,
         named_address_map,
     } in deps
-    {
-        let (defs, _, _) = parse_file(&path, compilation_env, &mut files, package)?;
-        lib_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
-            package,
-            named_address_map,
-            def,
-        }));
-    }
-
-    for IndexedVfsPackagePath {
-        package,
-        path,
-        named_address_map,
-    } in interface_files
     {
         let (defs, _, _) = parse_file(&path, compilation_env, &mut files, package)?;
         lib_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
