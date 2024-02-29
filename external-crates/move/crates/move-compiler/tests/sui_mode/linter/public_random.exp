@@ -1,5 +1,5 @@
 warning[Lint W06001]: Risky use of random::Random or random::RandomGenerator in a public function
-  ┌─ tests/sui_mode/linter/random_objects.move:9:16
+  ┌─ tests/sui_mode/linter/public_random.move:9:16
   │
 9 │     public fun not_allowed1(_x: u64, _r: &Random) {}
   │                ^^^^^^^^^^^^
@@ -7,10 +7,10 @@ warning[Lint W06001]: Risky use of random::Random or random::RandomGenerator in 
   │                Public function 'not_allowed1' accepts sui::random::Random or sui::random::RandomGenerator as a parameter.
   │                Functions that accept sui::random::Random or sui::random::RandomGenerator as a parameter might be abused by attackers. Private functions are preferred.
   │
-  = This warning can be suppressed with '#[allow(lint(random_objects))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W06001]: Risky use of random::Random or random::RandomGenerator in a public function
-   ┌─ tests/sui_mode/linter/random_objects.move:10:16
+   ┌─ tests/sui_mode/linter/public_random.move:10:16
    │
 10 │     public fun not_allowed2(_rg: &RandomGenerator, _x: u64) {}
    │                ^^^^^^^^^^^^
@@ -18,10 +18,10 @@ warning[Lint W06001]: Risky use of random::Random or random::RandomGenerator in 
    │                Public function 'not_allowed2' accepts sui::random::Random or sui::random::RandomGenerator as a parameter.
    │                Functions that accept sui::random::Random or sui::random::RandomGenerator as a parameter might be abused by attackers. Private functions are preferred.
    │
-   = This warning can be suppressed with '#[allow(lint(random_objects))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W06001]: Risky use of random::Random or random::RandomGenerator in a public function
-   ┌─ tests/sui_mode/linter/random_objects.move:11:16
+   ┌─ tests/sui_mode/linter/public_random.move:11:16
    │
 11 │     public fun not_allowed3(_r: &Random, _rg: &RandomGenerator, _x: u64) {}
    │                ^^^^^^^^^^^^
@@ -29,5 +29,5 @@ warning[Lint W06001]: Risky use of random::Random or random::RandomGenerator in 
    │                Public function 'not_allowed3' accepts sui::random::Random or sui::random::RandomGenerator as a parameter.
    │                Functions that accept sui::random::Random or sui::random::RandomGenerator as a parameter might be abused by attackers. Private functions are preferred.
    │
-   = This warning can be suppressed with '#[allow(lint(random_objects))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
