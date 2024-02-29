@@ -49,7 +49,7 @@ module std::option_tests {
 
     #[test]
     fun borrow_mut_some() {
-        let some = option::some(1);
+        let mut some = option::some(1);
         let ref = option::borrow_mut(&mut some);
         *ref = 10;
         assert!(*option::borrow(&some) == 10, 0);
@@ -79,7 +79,7 @@ module std::option_tests {
 
     #[test]
     fun extract_some() {
-        let opt = option::some(1);
+        let mut opt = option::some(1);
         assert!(option::extract(&mut opt) == 1, 0);
         assert!(option::is_none(&opt), 1);
     }
@@ -92,21 +92,21 @@ module std::option_tests {
 
     #[test]
     fun swap_some() {
-        let some = option::some(5);
+        let mut some = option::some(5);
         assert!(option::swap(&mut some, 1) == 5, 0);
         assert!(*option::borrow(&some) == 1, 1);
     }
 
     #[test]
     fun swap_or_fill_some() {
-        let some = option::some(5);
+        let mut some = option::some(5);
         assert!(option::swap_or_fill(&mut some, 1) == option::some(5), 0);
         assert!(*option::borrow(&some) == 1, 1);
     }
 
     #[test]
     fun swap_or_fill_none() {
-        let none = option::none();
+        let mut none = option::none();
         assert!(option::swap_or_fill(&mut none, 1) == option::none(), 0);
         assert!(*option::borrow(&none) == 1, 1);
     }
@@ -119,7 +119,7 @@ module std::option_tests {
 
     #[test]
     fun fill_none() {
-        let none = option::none<u64>();
+        let mut none = option::none<u64>();
         option::fill(&mut none, 3);
         assert!(option::is_some(&none), 0);
         assert!(*option::borrow(&none) == 3, 1);
@@ -161,7 +161,7 @@ module std::option_tests {
 
     #[test]
     fun into_vec_some() {
-        let v = option::to_vec(option::some<u64>(0));
+        let mut v = option::to_vec(option::some<u64>(0));
         assert!(vector::length(&v) == 1, 0);
         let x = vector::pop_back(&mut v);
         assert!(x == 0, 1);
