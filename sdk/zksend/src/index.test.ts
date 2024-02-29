@@ -3,6 +3,7 @@
 
 import { getFullnodeUrl, SuiClient, SuiObjectChange } from '@mysten/sui.js/client';
 import { decodeSuiPrivateKey } from '@mysten/sui.js/cryptography';
+// import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { describe } from 'node:test';
@@ -16,27 +17,42 @@ export const DEMO_BEAR_CONFIG = {
 };
 
 export const ZK_BAG_CONFIG = {
-	packageId: '0x48c37ed4d37fbbe76af8b6ca29d7bfd80c7c7145bfa4d0b9382cabb5657a70e8',
-	bagStoreId: '0xf0f2323539a2097fe8e6aec6be3289ea366375ba0709298957a6a70788d3b955',
-	bagStoreTableId: '0xede084021e34f32e80491f9b65c7d4e73cde23f7bc658b57ca1af00d628c9bef',
+	packageId: '0x0c4bfcee8a53c08e977048ae4f4e074ae72389264a88a3e8de37ef8e20ed43c6',
+	bagStoreId: '0xa1c32c266eb213f0366d9b10b0cf5895f02e12078b6d51bd94b873bbb85e2df2',
+	bagStoreTableId: '0x54aedcdfec063ffec31b8082019e9303284a8165d61388aec2c4d003e4ea4993',
 };
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
 });
 
+// 0x6e43d0e58341db532a87a16aaa079ae6eb1ed3ae8b77fdfa4870a268ea5d5db8
 const keypair = Ed25519Keypair.fromSecretKey(
 	decodeSuiPrivateKey('suiprivkey1qrlgsqryjmmt59nw7a76myeeadxrs3esp8ap2074qz8xaq5kens32f7e3u7')
 		.secretKey,
 );
 
+// Automatically get gas from testnet is not working reliably, manually request gas via discord,
+// or uncomment the beforeAll and gas function below
 // beforeAll(async () => {
-// 	// await getSuiFromFaucet(keypair);
+// 	await getSuiFromFaucet(keypair);
 // });
+
+// async function getSuiFromFaucet(keypair: Keypair) {
+// 	const faucetHost = getFaucetHost('testnet');
+// 	const result = await requestSuiFromFaucetV0({
+// 		host: faucetHost,
+// 		recipient: keypair.toSuiAddress(),
+// 	});
+
+// 	if (result.error) {
+// 		throw new Error(result.error);
+// 	}
+// }
 
 describe('Contract links', () => {
 	test(
-		'create a link',
+		'create and claim link',
 		async () => {
 			const link = new ZkSendLinkBuilder({
 				client,
@@ -50,6 +66,8 @@ describe('Contract links', () => {
 				link.addClaimableObject(bear.objectId);
 			}
 
+			link.addClaimableMist(100n);
+
 			const linkUrl = link.getLink();
 
 			await link.create({
@@ -61,9 +79,19 @@ describe('Contract links', () => {
 				client,
 			});
 
-			expect(
-				(await claimLink.listClaimableAssets(new Ed25519Keypair().toSuiAddress())).bag.length,
-			).toEqual(3);
+			const claimableAssets = await claimLink.listClaimableAssets(
+				new Ed25519Keypair().toSuiAddress(),
+			);
+
+			expect(claimableAssets.nfts.length).toEqual(3);
+			expect(claimableAssets.balances).toMatchInlineSnapshot(`
+				[
+				  {
+				    "amount": 100n,
+				    "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+				  },
+				]
+			`);
 
 			const claimTxb = claimLink.createClaimTransaction(keypair.toSuiAddress());
 
@@ -81,10 +109,16 @@ describe('Contract links', () => {
 				transactionBlock: claimBytes,
 				options: {
 					showObjectChanges: true,
+					showEffects: true,
 				},
 			});
 
-			console.log(res);
+			expect(res.objectChanges?.length).toEqual(
+				3 + // bears,
+					1 + // coin
+					1 + // gas
+					1, // bag
+			);
 		},
 		{
 			timeout: 30_000,
@@ -92,29 +126,121 @@ describe('Contract links', () => {
 	);
 });
 
-// async function getSuiFromFaucet(keypair: Keypair) {
-// 	const faucetHost = getFaucetHost('testnet');
-// 	const result = await requestSuiFromFaucetV0({
-// 		host: faucetHost,
-// 		recipient: keypair.toSuiAddress(),
-// 	});
+describe('Non contract links', () => {
+	test(
+		'Links with separate gas coin',
+		async () => {
+			const link = new ZkSendLinkBuilder({
+				client,
+				sender: keypair.toSuiAddress(),
+			});
 
-// 	if (result.error) {
-// 		throw new Error(result.error);
-// 	}
+			const bears = await createBears(3);
 
-// 	// let status;
-// 	// do {
-// 	// 	status = await getFaucetRequestStatus({
-// 	// 		host: faucetHost,
-// 	// 		taskId: result.task!,
-// 	// 	});
+			for (const bear of bears) {
+				link.addClaimableObject(bear.objectId);
+			}
 
-// 	// 	if (status.error) {
-// 	// 		throw new Error(status.error);
-// 	// 	}
-// 	// } while (status.status.status === 'INPROGRESS');
-// }
+			link.addClaimableMist(100n);
+
+			const linkUrl = link.getLink();
+
+			await link.create({
+				signer: keypair,
+			});
+
+			// Balances sometimes not updated even though we wait for the transaction to be indexed
+			await new Promise((resolve) => setTimeout(resolve, 3000));
+
+			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
+				contract: ZK_BAG_CONFIG,
+				client,
+			});
+
+			const claimableAssets = await claimLink.listClaimableAssets(
+				new Ed25519Keypair().toSuiAddress(),
+			);
+
+			expect(claimableAssets.nfts.length).toEqual(3);
+			expect(claimableAssets.balances).toMatchInlineSnapshot(`
+					[
+					  {
+					    "amount": 100n,
+					    "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+					  },
+					]
+				`);
+
+			const claimTx = await claimLink.claimAssets(keypair.toSuiAddress());
+
+			const res = await client.waitForTransactionBlock({
+				digest: claimTx.digest,
+				options: {
+					showObjectChanges: true,
+				},
+			});
+
+			expect(res.objectChanges?.length).toEqual(
+				3 + // bears,
+					1 + // coin
+					1, // gas
+			);
+		},
+		{
+			timeout: 30_000,
+		},
+	);
+
+	test(
+		'Links with single coin',
+		async () => {
+			const linkKp = new Ed25519Keypair();
+
+			const txb = new TransactionBlock();
+
+			const [coin] = txb.splitCoins(txb.gas, [5_000_000]);
+			txb.transferObjects([coin], linkKp.toSuiAddress());
+
+			const { digest } = await client.signAndExecuteTransactionBlock({
+				signer: keypair,
+				transactionBlock: txb,
+			});
+
+			await client.waitForTransactionBlock({ digest });
+
+			const claimLink = new ZkSendLink({
+				client,
+				keypair: linkKp,
+			});
+
+			await claimLink.loadOwnedData();
+
+			const claimableAssets = await claimLink.listClaimableAssets(
+				new Ed25519Keypair().toSuiAddress(),
+			);
+
+			expect(claimableAssets.nfts.length).toEqual(0);
+			expect(claimableAssets.balances.length).toEqual(1);
+			expect(claimableAssets.balances[0].coinType).toEqual(
+				'0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
+			);
+
+			const claimTx = await claimLink.claimAssets(keypair.toSuiAddress());
+
+			const res = await client.waitForTransactionBlock({
+				digest: claimTx.digest,
+				options: {
+					showBalanceChanges: true,
+				},
+			});
+
+			expect(res.balanceChanges?.length).toEqual(2);
+		},
+		{
+			timeout: 30_000,
+		},
+	);
+});
 
 async function createBears(totalBears: number) {
 	const txb = new TransactionBlock();

@@ -198,8 +198,6 @@ export class ZkSendLinkBuilder {
 			};
 		});
 
-		// [...this.#objects].map((id) => txb.object(id));
-
 		txb.setSenderIfNotSet(this.#sender);
 
 		for (const [coinType, amount] of this.#balances) {
@@ -207,8 +205,8 @@ export class ZkSendLinkBuilder {
 				const [sui] = txb.splitCoins(txb.gas, [amount]);
 				refsWithType.push({
 					ref: sui,
-					type: `0x::coin::Coin<${coinType}>`,
-				});
+					type: `0x2::coin::Coin<${coinType}>`,
+				} as never);
 			} else {
 				const coins = (await this.#getCoinsByType(coinType)).map((coin) => coin.coinObjectId);
 
@@ -322,7 +320,7 @@ export class ZkSendLink {
 		digest: string;
 		type: string;
 	}> = [];
-	#bagObjects: Array<DynamicFieldInfo> = [];
+	#bagObjects: Array<DynamicFieldInfo> | null = null;
 	#gasCoin?: CoinStruct;
 	#hasSui = false;
 	#creatorAddress?: string;
@@ -371,6 +369,77 @@ export class ZkSendLink {
 			objects?: string[];
 		},
 	) {
+		if (!this.#contract || !this.#bagObjects) {
+			return this.#listNonContractClaimableAssets(address, options);
+		}
+
+		const coins = [];
+
+		const nfts: {
+			objectId: string;
+			type: string;
+			version: string;
+			digest: string;
+		}[] = [];
+
+		for (const object of this.#bagObjects) {
+			const type = parseStructTag(object.objectType);
+
+			if (
+				type.address === normalizeSuiAddress('0x2') &&
+				type.module === 'coin' &&
+				type.name === 'Coin'
+			) {
+				coins.push(object);
+			} else {
+				nfts.push(object);
+			}
+		}
+
+		const coinsWithContent = await this.#client.multiGetObjects({
+			ids: coins.map((coin) => coin.objectId),
+			options: {
+				showContent: true,
+			},
+		});
+
+		const balances = new Map<
+			string,
+			{
+				coinType: string;
+				amount: bigint;
+			}
+		>();
+
+		coinsWithContent.forEach((coin) => {
+			if (coin.data?.content?.dataType !== 'moveObject') {
+				return;
+			}
+
+			const amount = BigInt((coin.data.content.fields as Record<string, string>).balance);
+			const coinType = normalizeStructTag(parseStructTag(coin.data.content.type).typeParams[0]);
+
+			if (!balances.has(coinType)) {
+				balances.set(coinType, { coinType, amount });
+			} else {
+				balances.get(coinType)!.amount += amount;
+			}
+		});
+
+		return {
+			balances: [...balances.values()],
+			nfts,
+		};
+	}
+
+	async #listNonContractClaimableAssets(
+		address: string,
+		options?: {
+			claimObjectsAddedAfterCreation?: boolean;
+			coinTypes?: string[];
+			objects?: string[];
+		},
+	) {
 		const normalizedAddress = normalizeSuiAddress(address);
 		const txb = this.createClaimTransaction(normalizedAddress, options);
 
@@ -396,7 +465,10 @@ export class ZkSendLink {
 
 		dryRun.balanceChanges.forEach((balanceChange) => {
 			if (BigInt(balanceChange.amount) > 0n && isOwner(balanceChange.owner, normalizedAddress)) {
-				balances.push({ coinType: balanceChange.coinType, amount: BigInt(balanceChange.amount) });
+				balances.push({
+					coinType: normalizeStructTag(balanceChange.coinType),
+					amount: BigInt(balanceChange.amount),
+				});
 			}
 		});
 
@@ -447,7 +519,7 @@ export class ZkSendLink {
 			objects?: string[];
 		},
 	) {
-		if (!this.#contract) {
+		if (!this.#contract || !this.#bagObjects) {
 			return this.#createNonContractClaimTransaction(address, options);
 		}
 
@@ -464,7 +536,7 @@ export class ZkSendLink {
 		for (const object of this.#bagObjects) {
 			objectsToTransfer.push(
 				this.#contract.claim(txb, {
-					arguments: [bag, proof, txb.pure.u64(object.name.value as string)],
+					arguments: [bag, proof, object.name.value as number],
 					typeArguments: [object.objectType],
 				}),
 			);
@@ -607,8 +679,8 @@ export class ZkSendLink {
 			return;
 		}
 
-		const bagId: string | undefined = (bagField as any).data?.content?.fields?.value?.fields?.items
-			?.fields?.id?.id;
+		const bagId: string | undefined = (bagField as any).data?.content?.fields?.value?.fields?.id
+			?.id;
 
 		if (!bagId) {
 			throw new Error('Invalid bag field');
