@@ -11897,6 +11897,7 @@ dependencies = [
  "bcs",
  "clap",
  "const-str",
+ "enum_dispatch",
  "ethers",
  "eyre",
  "fastcrypto",
