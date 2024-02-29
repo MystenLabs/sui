@@ -1,0 +1,416 @@
+---
+title: NFT Rental Using Kiosk Apps 
+description: An example using the Kiosk Apps standard that provides the ability for users to rent NFTs according to the rules of a provided policy instead of outright owning them. This approach closely aligns with the ERC-4907 renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
+---
+
+NFT renting is a mechanism that allows individuals without ownership or possession of a specific NFT to temporarily utilize or experience it. The implementation of this process leverages the [Kiosk Apps standard](../kiosk-apps.mdx) to establish an infrastructure conducive to facilitating rental transactions. This approach closely aligns with the [Etherium ERC-4907](https://eips.ethereum.org/EIPS/eip-4907) renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
+
+The NFT Rental example satisfies the following project requirements:
+
+- Enable a lender to offer their assets for renting for a specified period of time (list for renting).
+- Enable a lender to define the rental duration.
+    - Borrower has to comply with the renting period.
+- Borrower can gain mutable or immutable access to the NFT.
+    - Immutable access is read-only.
+    - Mutable, the lender should consider downgrade and upgrade operations and include them in the renting fee.
+- After the renting period has finished, the item can be sold normally.
+- Creator-defined royalties are respected by encompassing [transfer policy rules](../../concepts/transfers/custom-rules.mdx).
+
+## Use cases
+
+Some use cases for real-world NFT rental example include:
+
+- [Gaming](#gaming)
+- [Ticketing](#ticketing) 
+- [Virtual land](#virtual-land)
+- [Temporary assets and subscriptions](#temp-assets-subs)
+
+### Gaming
+
+There are multiple cases in gaming where renting NFTs can be beneficial to user experience:
+
+- **In-game assets:** NFTs can represent unique in-game items, characters, skins, or accessories. Players can rent these assets securely.
+- **Ownership and authenticity:** NFTs provide a transparent and immutable record of ownership, ensuring that players who truly own their in-game items can rent them and receive back the item under rent after the renting period expires. This can combat issues like fraud and counterfeiting.
+- **Cross-game integration:** Renting NFTs can work across multiple games, allowing players to carry and rent their unique items or characters from one game to another, fostering interoperability.
+- **Gaming collectibles:** NFTs can represent digital collectibles within games, creating a digital asset ecosystem where players can rent unique items.
+
+### Ticketing
+
+In the realm of ticketing, NFTs play a pivotal role in enhancing transferability. These digital assets facilitate a secure and traceable transfer, resale, or rental of tickets, mitigating the risk of counterfeit tickets within the secondary market. The blockchain-based nature of NFTs ensures transparency and authenticity in each transaction, providing users with a reliable and fraud-resistant means to engage in ticket-related activities. This innovation not only simplifies the process for ticket holders but also contributes to a more trustworthy and efficient secondary ticket market.
+
+### Virtual land {#virtual-land}
+
+Renting virtual lands and offices in the metaverse provides businesses with flexible solutions, enabling event companies to host gatherings without the commitment of permanent acquisitions and facilitating remote work through virtual offices. This approach not only offers cost-effective alternatives but also aligns with the evolving dynamics of digital business operations.
+
+### Temporary assets and subscriptions {#temp-assets-subs}
+
+Temporary assets and subscriptions are notable applications of rental NFTs, offering accessibility to virtual experiences like high-end virtual casinos or curated digital fashion. These NFTs cater to diverse budgets, broadening audience reach. Subscription rentals extend to pools of digital assets, allowing users to pay monthly for a set number of items, fostering accessibility, user retention, and acquisition. Holders can rent out unused subscriptions, ensuring no loss for them, potential customer gains for the protocol, and a commitment-free trial for temporary holders. This showcases the adaptability and user-centric appeal of rental NFTs in diverse scenarios.
+
+## Smart contract design
+
+:::warning
+
+Transferring kiosks might result in unexpected behaviors while an asset is being rented. If you want to disallow kiosk transferring all together, consider using personal kiosks.
+
+:::
+
+The smart contract design leverages the Kiosk Apps standard to create a framework enabling transactions between lenders and borrowers. Both parties are required to install this extension to facilitate lending or borrowing activities. Moreover, the creator of the rented asset must establish a rental policy and a `ProtectedTP` object, granting authorization to the renting extension for managing assets subject to royalty enforcement.
+
+:::info
+
+This implementation is charging a rental fee based on days. You can re-purpose and update the logic to support charging per hour, or even seconds.
+
+:::
+
+## Modules
+
+The NFT Rental example uses a single module, `nft_rental.move`. You can find the source for this file hosted in the [`sui-nft-rental` repository](https://github.com/MystenLabs/sui-nft-rental/blob/main/move/nft_rental/sources/nft_rental.move) on GitHub. The source code includes extensive comments to help you follow the example's logic and structure. 
+
+### nft_rental
+
+The `nft_rental` module provides an API that facilitates lending or borrowing through the following operations:
+
+- List for renting
+- Delist from renting
+- Rent
+- Borrow by reference and borrow by value
+- Reclaim for the lender
+
+### Structs
+
+The object model of the `nft_rental` module provides the structure of the app, beginning with the `Rentables` object. The struct only has the `drop` ability and acts as the extension key for the Kiosk `Rentables` extension.
+
+```move
+struct Rentables has drop {}
+```
+
+The `Rented` struct represents a rented item. The only field the struct includes is the ID of the object. 
+
+```move
+struct Rented has store, copy, drop { 
+    id: ID 
+}
+```
+
+The `Listed` struct represents a listed item. The only field the struct includes is the ID of the object.
+
+```move
+struct Listed has store, copy, drop { 
+    id: ID 
+}
+```
+
+The `Promise` struct is created for borrowing by value. The `Promise` operates as the [hot potato](../../concepts/sui-move-concepts/patterns/hot-potato.mdx) that can only be resolved by returning the item back to the extension's `Bag`.
+
+```move
+struct Promise has store {
+  item_id: Rented,
+  duration: u64,
+  start_date: u64,
+  price_per_day: u64,
+  renter: address,
+  borrower_kiosk: ID
+}
+```
+
+The `Rentable` struct is as a wrapper object that holds an asset that is being rented. Contains information relevant to the rental period, cost, and renter.
+
+```move
+struct Rentable<T: key + store> has store {
+      object: T,
+      duration: u64, // total amount of time offered for renting in days
+      start_date: Option<u64>, // initially undefined, is updated once someone rents it
+      price_per_day: u64,
+      kiosk_id: ID // the kiosk id that the object was taken from
+}
+```
+
+The `RentalPolicy` struct is a shared object that every creator mints. Defines the royalties the creator receives from each rent invocation.
+
+```move
+struct RentalPolicy<phantom T> has key, store {
+	id: UID,
+	balance: Balance<SUI>,
+	/// Note: Move does not support float numbers.
+	/// If you need to represent a float, you need to determine the desired precision and use a larger integer representation.
+	/// For example, percentages can be represented using basis points:
+	/// 10000 basis points represents 100% and 100 basis points represents 1%.
+	amount_bp: u64
+}
+```
+
+The `ProtectedTP` object is a shared object that every creator mints, regardless of their intent to enforce royalties. The object provides authorized access to an empty `TransferPolicy`.
+
+```move
+struct ProtectedTP<phantom T> has key, store {
+	id: UID,
+	transfer_policy: TransferPolicy<T>,
+	policy_cap: TransferPolicyCap<T>
+}
+```
+
+### Function signatures
+
+The NFT Rental example includes the following functions that define the project's logic. 
+
+The `install` function enables installation of the `Rentables` extension in a Kiosk.
+
+```move
+public fun install(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext)
+```
+
+The `remove` function enables the owner (and only the owner) of the kiosk to remove the extension. The extension storage must be empty for the transaction to succeed.
+
+```move
+public fun remove(kiosk: &mut Kiosk, cap: &KioskOwnerCap, _ctx: &mut TxContext)
+```
+
+The `setup_renting` function mints and shares a `ProtectedTP` and a `RentalPolicy` object for type `T`. The publisher of type `T` is the only entity that can perform the action.
+
+```move
+public fun setup_renting<T>(publisher: &Publisher, amount_bp: u64, ctx: &mut TxContext)
+```
+
+The `list` function enables listing of an asset within the `Rentables` extension's bag, creating a bag entry with the asset's ID as the key and a `Rentable` wrapper object as the value. Requires the existance of a `ProtectedTP` transfer policy that only the creator of type `T` can create. The function assumes an item is already placed (and optionally locked) in a Kiosk.
+
+```move
+public fun list<T: key + store>(
+    kiosk: &mut Kiosk, 
+    cap: &KioskOwnerCap,
+    protected_tp: &ProtectedTP<T>,
+    item_id: ID,
+    duration: u64,
+    price_per_day: u64,
+    ctx: &mut TxContext)
+```
+
+The `delist` function allows the renter to delist an item, as long as it's not currently being rented. The function also places (or locks, if a lock rule is present) the object back to owner's Kiosk. You should mint an empty `TransferPolicy` even if you don't want to apply any royalties.
+
+```move
+public fun delist<T: key + store>(
+		kiosk: &mut Kiosk, 
+		cap: &KioskOwnerCap, 
+		transfer_policy: &TransferPolicy<T>, 
+		item_id: ID, 
+		_ctx: &mut TxContext)
+```
+
+The `rent` function enables renting a listed `Rentable`. It permits anyone to borrow an item on behalf of another user, provided they have the `Rentables` extension installed. The `rental_policy` defines the portion of the coin that is retained as fees and added to the rental policy's balance.
+
+```move
+public fun rent<T: key + store>(
+    renter_kiosk: &mut Kiosk,
+    borrower_kiosk: &mut Kiosk,
+    rental_policy: &mut RentalPolicy<T>,
+    item_id: ID,
+    coin: Coin<SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext)
+```
+
+The `borrow` function enables the borrower to acquire the `Rentable` by reference from their bag.
+
+```move
+public fun borrow<T: key + store>(
+		kiosk: &mut Kiosk, 
+		cap: &KioskOwnerCap, 
+		item_id: ID, 
+		_ctx: &mut TxContext
+): &T
+```
+
+The `borrow_val` function enables the borrower to temporarily acquire the `Rentable` with an agreement or promise to return it. The `Promise` stores all the information about the `Rentable`, facilitating the reconstruction of the `Rentable` upon object return.
+
+```move
+public fun borrow_val<T: key + store>(
+		kiosk: &mut Kiosk, 
+		cap: &KioskOwnerCap, 
+		item_id: ID, 
+		_ctx: &mut TxContext
+): (T, Promise)
+```
+
+The `return_val` function enables the borrower to return the borrowed item.
+
+```move
+public fun return_val<T: key + store>(
+		kiosk: &mut Kiosk, 
+		object: T, 
+		promise: Promise, 
+		_ctx: &mut TxContext)
+```
+
+The `reclaim` function enables an owner to claim back their asset after the rental period is over and place it inside their Kiosk. If a lock rule is present, the example also locks the item inside the owner kiosk.
+
+```move
+public fun reclaim<T: key + store>(
+        renter_kiosk: &mut Kiosk, 
+        borrower_kiosk: &mut Kiosk, 
+        transfer_policy: &TransferPolicy<T>, 
+        clock: &Clock,
+        item_id: ID,
+        _ctx: &mut TxContext)
+```
+
+## Sequence diagrams
+
+:::note
+
+This implementation assumes that each creator, as an enabling action, creates a `TransferPolicy` even if empty, so that the `Rentables` extension can operate. This is a requirement in addition to invoking the `setup_renting` method.
+
+:::
+
+### Initialize
+
+The initialization process is part of the flow but only happens once for each entity:
+
+- For a new type that a creator would like to allow to be rented
+    - Involves invoking `setup_renting` & TransferPolicy creation with optional lock rule
+- For a Borrower that has never borrowed before using this framework
+    - If no Kiosk exists for the user, one should be created
+    - Involves installing the Extension in their Kiosk
+- For a Renter that has never rented before using this framework
+    - If no Kiosk exists for the user, one should be created
+    - Involves installing the Extension in their Kiosk
+
+```mermaid
+sequenceDiagram
+    participant Creator
+    participant Renter
+    participant Borrower
+    participant nft_rental module
+    participant Renter's Extension
+    participant Borrower's Extension
+	participant transfer_policy module
+    participant kiosk_lock_rule module
+    participant blockchain
+rect rgba(191, 223, 255, 0.2) 
+		note right of Creator: Setup Renting
+    Creator->>nft_rental module: Use Publisher and amountBP as inputs
+    nft_rental module-->>blockchain: Shares ProtectedTP and RentalPolicy
+    end
+rect rgba(191, 223, 255, 0.2) 
+		note right of Creator: Create TransferPolicy
+    Creator ->> transfer_policy module: Use Publisher as input to create TransferPolicy
+    transfer_policy module -->> blockchain: Shares TransferPolicy
+    transfer_policy module-->> Creator: Returns TransferPolicyCap
+    end
+opt Add lock rule
+    Creator ->> kiosk_lock_rule module: Use TransferPolicyCap as input in kiosk_lock_rule::add
+    blockchain ->> kiosk_lock_rule module: Use TransferPolicy as input in kiosk_lock_rule::add
+    kiosk_lock_rule module -->> blockchain: Shares TransferPolicy with lock rule
+    kiosk_lock_rule module -->> Creator: Returns TransferPolicyCap
+    end
+rect rgba(191, 223, 255, 0.2)
+		note right of Renter: Install Extension
+    Renter->>nft_rental module: Use kiosk, kioskOwnerCap as input to install extension
+    nft_rental module-->>Renter's Extension: Extension is installed to kiosk
+    end
+rect rgba(191, 223, 255, 0.2)
+		note right of Borrower: Install Extension
+    Borrower->>nft_rental module: Use kiosk, kioskOwnerCap as input to install extension
+    nft_rental module-->>Borrower's Extension: Extension is installed to kiosk
+    end
+```
+
+### List-Rent-Borrow-Reclaim
+
+```mermaid
+sequenceDiagram
+    participant Creator's Rental Policy
+    participant Renter
+    participant Borrower
+    participant nft_rental module
+    participant Renter's Extension Bag
+    participant Borrower's Extension Bag
+    participant kiosk module
+    participant Renter's Kiosk
+    participant coin module
+    participant blockchain
+rect rgba(191, 223, 255, 0.2) 
+    note right of Renter: List for rent
+    Renter->>nft_rental module: Use kiosk, kioskOwnerCap, ProtectedTP, ObjectID and Renting info as inputs in list
+    blockchain->>nft_rental module: Use protectedTP as input in list
+    nft_rental module->>kiosk module: List object for zero price
+    nft_rental module->>kiosk module: Purchase Object
+    Renter's Kiosk->>kiosk module: Take object from kiosk
+    kiosk module-->>nft_rental module: Returns Object
+    nft_rental module-->>Renter's Extension Bag: Place Object in renter's bag
+    end
+rect rgba(191, 223, 255, 0.2)
+		note right of Borrower: Rent
+    Borrower->>nft_rental module: Use renter_kiosk, borrower_kiosk, RentalPolicy, objectID, coin and clock as inputs in rent
+    blockchain->>nft_rental module: Use RentalPolicy as input in rent
+    nft_rental module->>coin module: Calculate payment and fees
+    coin module -->> Renter: Payment
+    coin module -->> Creator's Rental Policy: Fees
+    Renter's Extension Bag->>nft_rental module: Take object from renter's bag
+    nft_rental module-->>Borrower's Extension Bag: Place rented Object in borrower's bag
+    end
+rect rgba(191, 223, 255, 0.2)
+		note right of Borrower: Borrow
+    Borrower->>nft_rental module: Use kiosk, kioskOwnerCap, ObjectID as input in borrow
+    Borrower's Extension Bag->>nft_rental module: Take object from borrower's bag
+    nft_rental module-->>Borrower: Object, Promise
+        note right of Borrower: Perform operation & return Borrowed Item
+    Borrower->>Borrower: Operation on Object
+    Borrower->>nft_rental module: Resolve return promise by returning Object, Promise
+    nft_rental module-->>Borrower's Extension Bag: Place rented Object in borrower's bag
+    end
+rect rgba(191, 223, 255, 0.2)
+		note right of Renter: Reclaim
+    Renter->>nft_rental module: Use renter_kiosk, borrower_kiosk, clock as inputs in reclaim
+    blockchain ->>nft_rental module: Use TransferPolicy as input in reclaim
+    Borrower's Extension Bag->>nft_rental module: Take Object from borrower's bag if renting period is over
+    alt Empty Transfer Policy
+        nft_rental module-->>Renter's Kiosk: Place Object
+    else TransferPolicy with lock rule
+        nft_rental module-->>Renter's Kiosk: Lock Object
+    end 
+    end
+```
+
+### List-Delist
+
+```mermaid
+sequenceDiagram
+    participant Renter
+    participant nft_rental module
+    participant Renter's Extension Bag
+    participant kiosk module
+    participant Renter's Kiosk
+    participant blockchain
+rect rgba(191, 223, 255, 0.2) 
+	note right of Renter: List for rent
+    Renter->>nft_rental module: Use kiosk, kioskOwnerCap, ProtectedTP, ObjectID and Renting info as inputs in list
+    blockchain->>nft_rental module: Use protectedTP as input in list
+    nft_rental module->>kiosk module: List object for zero price
+    nft_rental module->>kiosk module: Purchase Object
+    Renter's Kiosk->>kiosk module: Take object from kiosk
+    kiosk module-->>nft_rental module: Returns Object
+    nft_rental module-->>Renter's Extension Bag: Place Object in renter's bag
+    end
+rect rgba(191, 223, 255, 0.2)
+		note right of Renter: Delist
+    Renter->>nft_rental module: Use renter_kiosk, borrower_kiosk, ObjectID as inputs in delist
+    blockchain->>nft_rental module: Use transferPolicy as input in delist
+    Renter's Extension Bag->>nft_rental module: Take Object from renter's bag
+    alt Empty Transfer Policy
+        nft_rental module-->>Renter's Kiosk: Place Object
+    else TransferPolicy with lock rule
+        nft_rental module-->>Renter's Kiosk: Lock Object
+    end 
+    end
+```
+
+## Deployment
+
+{@include: ../../snippets/initialize-sui-client-cli.mdx}
+
+{@include: ../../snippets/publish-to-devnet-with-coins.mdx}
+
+## Related links
+
+- [NFT Rental repository](https://github.com/MystenLabs/sui-nft-rental): GitHub repo that contains the source code this document references.
+- [Sui Kiosk](../kiosk.mdx): Kiosk is a decentralized system for commerce applications on Sui.
+- [Kiosk Apps](../kiosk-apps.mdx): The Kiosk Apps standard extends the functionality of Sui Kiosk. 
