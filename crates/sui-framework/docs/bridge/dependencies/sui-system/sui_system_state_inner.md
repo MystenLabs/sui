@@ -56,6 +56,7 @@
 -  [Function `epoch_start_timestamp_ms`](#0x3_sui_system_state_inner_epoch_start_timestamp_ms)
 -  [Function `validator_stake_amount`](#0x3_sui_system_state_inner_validator_stake_amount)
 -  [Function `total_stake_amount`](#0x3_sui_system_state_inner_total_stake_amount)
+-  [Function `validator_voting_power`](#0x3_sui_system_state_inner_validator_voting_power)
 -  [Function `validator_staking_pool_id`](#0x3_sui_system_state_inner_validator_staking_pool_id)
 -  [Function `validator_staking_pool_mappings`](#0x3_sui_system_state_inner_validator_staking_pool_mappings)
 -  [Function `get_reporters_of`](#0x3_sui_system_state_inner_get_reporters_of)
@@ -2276,6 +2277,30 @@
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_total_stake_amount">total_stake_amount</a>(self: &<a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): u64 {
     <a href="../../dependencies/sui-system/validator_set.md#0x3_validator_set_total_stake">validator_set::total_stake</a>(&self.validators)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_state_inner_validator_voting_power"></a>
+
+## Function `validator_voting_power`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_validator_voting_power">validator_voting_power</a>(self: &<a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>, validator_addr: <b>address</b>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_validator_voting_power">validator_voting_power</a>(self: &<a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, validator_addr: <b>address</b>): u64 {
+    <a href="../../dependencies/sui-system/validator_set.md#0x3_validator_set_validator_voting_power">validator_set::validator_voting_power</a>(&self.validators, validator_addr)
 }
 </code></pre>
 

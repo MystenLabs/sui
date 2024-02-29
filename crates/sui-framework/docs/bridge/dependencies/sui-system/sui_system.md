@@ -1422,10 +1422,8 @@
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_validator_voting_power">validator_voting_power</a>(wrapper: &<b>mut</b> <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>, validator_addr: <b>address</b>): u64 {
-    <b>let</b> validator_stake_amount = (<a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_validator_stake_amount">validator_stake_amount</a>(wrapper, validator_addr) <b>as</b> u128);
     <b>let</b> self = <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(wrapper);
-    <b>let</b> total_stake = (<a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_total_stake_amount">sui_system_state_inner::total_stake_amount</a>(self) <b>as</b> u128);
-    ((validator_stake_amount * 10000) / total_stake <b>as</b> u64)
+    <a href="../../dependencies/sui-system/sui_system_state_inner.md#0x3_sui_system_state_inner_validator_voting_power">sui_system_state_inner::validator_voting_power</a>(self, validator_addr)
 }
 </code></pre>
 

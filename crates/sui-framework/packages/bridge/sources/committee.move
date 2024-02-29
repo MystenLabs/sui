@@ -56,7 +56,8 @@ module bridge::committee {
         // Committee member registrations for the next committee creation.
         member_registrations: VecMap<address, CommitteeMemberRegistration>,
         // Epoch when the current committee was updated,
-        // the voting power for each of the committee members are snapshot from this epoch
+        // the voting power for each of the committee members are snapshot from this epoch.
+        // This is mainly for verification/auditing purposes, it might not be useful for bridge operations.
         last_committee_update_epoch: u64,
     }
 
@@ -80,7 +81,7 @@ module bridge::committee {
         blocklisted: bool,
     }
 
-    struct CommitteeMemberRegistration has drop, store {
+    struct CommitteeMemberRegistration has copy, drop, store {
         /// The Sui Address of the validator
         sui_address: address,
         /// The public key bytes of the bridge key
@@ -146,10 +147,11 @@ module bridge::committee {
         // Sender is active validator, record the registration
 
         // In case validator need to update the info
-        if (vec_map::contains(&self.member_registrations, &sender)) {
+        let registration = if (vec_map::contains(&self.member_registrations, &sender)) {
             let registration = vec_map::get_mut(&mut self.member_registrations, &sender);
             registration.http_rest_url = http_rest_url;
             registration.bridge_pubkey_bytes = bridge_pubkey_bytes;
+            *registration
         } else {
             let registration = CommitteeMemberRegistration {
                 sui_address: sender,
@@ -157,7 +159,9 @@ module bridge::committee {
                 http_rest_url,
             };
             vec_map::insert(&mut self.member_registrations, sender, registration);
-        }
+            registration
+        };
+        emit(registration)
     }
 
     // This method will try to create the next committee using the registration and system state,
@@ -352,6 +356,10 @@ module bridge::committee {
         try_create_next_committee(&mut committee, &mut system_state, 60, ctx);
 
         assert_eq(2, vec_map::size(&committee.members));
+        let (_, member0) = vec_map::get_entry_by_idx(&committee.members, 0);
+        let (_, member1) = vec_map::get_entry_by_idx(&committee.members, 1);
+        assert_eq(5000, member0.voting_power);
+        assert_eq(5000, member1.voting_power);
 
         test_utils::destroy(committee);
         test_scenario::return_shared(system_state);
@@ -378,6 +386,46 @@ module bridge::committee {
         // validator registration
         register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xD, 0));
 
+        test_utils::destroy(committee);
+        test_scenario::return_shared(system_state);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_update_committee_registration() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let committee = create(ctx);
+
+        let validators = vector[
+            create_validator_for_testing(@0xA, 100, ctx),
+            create_validator_for_testing(@0xC, 100, ctx)
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        advance_epoch_with_reward_amounts(0, 0, &mut scenario);
+        test_scenario::next_tx(&mut scenario, @0x0);
+
+        let system_state = test_scenario::take_shared<SuiSystemState>(&scenario);
+
+        // validator registration
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR1_PUBKEY), b"", &tx(@0xA, 0));
+
+        // Verify registration info
+        assert_eq(1, vec_map::size(&committee.member_registrations));
+        let (address, registration) = vec_map::get_entry_by_idx(&committee.member_registrations, 0);
+        assert_eq(@0xA, *address);
+        assert_eq(hex::decode(VALIDATOR1_PUBKEY), registration.bridge_pubkey_bytes);
+
+        // Register again with different pub key.
+        register(&mut committee, &mut system_state, hex::decode(VALIDATOR2_PUBKEY), b"", &tx(@0xA, 0));
+
+        // Verify registration info, registration count should still be 1
+        assert_eq(1, vec_map::size(&committee.member_registrations));
+        let (address, registration) = vec_map::get_entry_by_idx(&committee.member_registrations, 0);
+        assert_eq(@0xA, *address);
+        assert_eq(hex::decode(VALIDATOR2_PUBKEY), registration.bridge_pubkey_bytes);
+
+        // teardown
         test_utils::destroy(committee);
         test_scenario::return_shared(system_state);
         test_scenario::end(scenario);

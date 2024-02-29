@@ -195,7 +195,7 @@
 
 
 
-<pre><code><b>struct</b> <a href="committee.md#0xb_committee_CommitteeMemberRegistration">CommitteeMemberRegistration</a> <b>has</b> drop, store
+<pre><code><b>struct</b> <a href="committee.md#0xb_committee_CommitteeMemberRegistration">CommitteeMemberRegistration</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -426,10 +426,11 @@
     // Sender is active <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a>, record the registration
 
     // In case <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a> need <b>to</b> <b>update</b> the info
-    <b>if</b> (<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.member_registrations, &sender)) {
+    <b>let</b> registration = <b>if</b> (<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.member_registrations, &sender)) {
         <b>let</b> registration = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.member_registrations, &sender);
         registration.http_rest_url = http_rest_url;
         registration.bridge_pubkey_bytes = bridge_pubkey_bytes;
+        *registration
     } <b>else</b> {
         <b>let</b> registration = <a href="committee.md#0xb_committee_CommitteeMemberRegistration">CommitteeMemberRegistration</a> {
             sui_address: sender,
@@ -437,7 +438,9 @@
             http_rest_url,
         };
         <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.member_registrations, sender, registration);
-    }
+        registration
+    };
+    emit(registration)
 }
 </code></pre>
 
