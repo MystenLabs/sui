@@ -554,69 +554,6 @@ impl<'env> Context<'env> {
         }
     }
 
-    #[allow(dead_code)]
-    fn resolve_enum_name(
-        &mut self,
-        loc: Loc,
-        verb: &str,
-        ma: E::ModuleAccess,
-        etys_opt: Option<Vec<E::Type>>,
-    ) -> Option<(ModuleIdent, DatatypeName, Option<Vec<N::Type>>)> {
-        match self.resolve_type(ma) {
-            ResolvedType::Unbound => {
-                assert!(self.env.has_errors());
-                None
-            }
-            rt @ (ResolvedType::BuiltinType(_) | ResolvedType::TParam(_, _)) => {
-                let (rtloc, msg) = match rt {
-                    ResolvedType::TParam(loc, tp) => (
-                        loc,
-                        format!(
-                            "But '{}' was declared as a type parameter here",
-                            tp.user_specified_name
-                        ),
-                    ),
-                    ResolvedType::BuiltinType(n) => {
-                        (ma.loc, format!("But '{n}' is a builtin type"))
-                    }
-                    _ => unreachable!(),
-                };
-                self.env.add_diag(diag!(
-                    NameResolution::NamePositionMismatch,
-                    (ma.loc, format!("Invalid {}. Expected a struct name", verb)),
-                    (rtloc, msg)
-                ));
-                None
-            }
-            ResolvedType::ModuleType(mt) => {
-                let ResolvedModuleType {
-                    module_type,
-                    original_type_name: n,
-                    ..
-                } = *mt;
-                match module_type {
-                    ModuleType::Enum(enum_type) => {
-                        let m = enum_type.original_mident;
-                        let tys_opt = etys_opt.map(|etys| {
-                            let tys = types(self, etys);
-                            let name_f = || format!("{}::{}", &m, &n);
-                            check_type_argument_arity(self, loc, name_f, tys, enum_type.arity)
-                        });
-                        Some((m, DatatypeName(n), tys_opt))
-                    }
-                    ModuleType::Struct(..) => {
-                        self.env.add_diag(diag!(
-                            NameResolution::NamePositionMismatch,
-                            (ma.loc, format!("Invalid {}. Expected an enum", verb)),
-                            (n.loc, format!("But '{}' is an struct", n))
-                        ));
-                        None
-                    }
-                }
-            }
-        }
-    }
-
     fn resolve_enum_name_with_variants(
         &mut self,
         loc: Loc,
@@ -650,7 +587,7 @@ impl<'env> Context<'env> {
                 };
                 self.env.add_diag(diag!(
                     NameResolution::NamePositionMismatch,
-                    (ma.loc, format!("Invalid {}. Expected a struct name", verb)),
+                    (ma.loc, format!("Invalid {}. Expected an enum name", verb)),
                     (rtloc, msg)
                 ));
                 None
@@ -2254,7 +2191,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             }
         }
         EE::Call(ma @ sp!(_, E::ModuleAccess_::Variant(_, _)), is_macro, tys_opt, rhs) => {
-            report_invalid_macro(context, is_macro, "Enums");
+            report_invalid_macro(context, is_macro, "Enum variants");
             context
                 .env
                 .check_feature(context.current_package, FeatureGate::Enums, eloc);
@@ -2511,7 +2448,7 @@ fn match_arm(context: &mut Context, sp!(aloc, arm): E::MatchArm) -> N::MatchArm 
         rhs,
     } = arm;
 
-    let pat_binders = unqiue_pattern_binders(context, &pattern);
+    let pat_binders = unique_pattern_binders(context, &pattern);
 
     context.new_local_scope();
     // NB: we just checked the binders for duplicates and listed them all, so now we just need to
@@ -2594,7 +2531,7 @@ fn match_arm(context: &mut Context, sp!(aloc, arm): E::MatchArm) -> N::MatchArm 
     sp(aloc, arm)
 }
 
-fn unqiue_pattern_binders(
+fn unique_pattern_binders(
     context: &mut Context,
     pattern: &E::MatchPattern,
 ) -> Vec<(Mutability, P::Var)> {
@@ -3233,7 +3170,7 @@ fn resolve_function(
         (EA::Variant(_, _), _) => {
             context.env.add_diag(ice!((
                 mloc,
-                "Tried to resovle a variant as a function function '{}' in current scope"
+                "Tried to resovle variant '{}' as a function in current scope"
             ),));
             ResolvedFunction::Unbound
         }
