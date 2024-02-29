@@ -49,7 +49,6 @@ pub struct Transaction {
     data: Bytes,
 }
 
-#[allow(dead_code)]
 impl Transaction {
     pub fn new(data: Vec<u8>) -> Self {
         Self { data: data.into() }
@@ -403,7 +402,7 @@ impl Deref for SignedBlock {
 }
 
 /// VerifiedBlock allows full access to its content.
-/// It should be relatively cheap to copy.
+/// Note: clone() is relatively cheap with most underlying data refcounted.
 #[derive(Clone)]
 pub struct VerifiedBlock {
     block: Arc<SignedBlock>,

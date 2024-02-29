@@ -8,7 +8,7 @@ use tempfile::TempDir;
 use super::{mem_store::MemStore, rocksdb_store::RocksDBStore, Store};
 use crate::{
     block::{BlockDigest, BlockRef, TestBlock, VerifiedBlock},
-    commit::Commit,
+    commit::TrustedCommit,
 };
 
 /// Test fixture for store tests. Wraps around various store implementations.
@@ -197,22 +197,22 @@ async fn read_and_scan_commits(
     }
 
     let written_commits = vec![
-        Commit::new(
+        TrustedCommit::new_for_test(
             1,
             BlockRef::new(1, AuthorityIndex::new_for_test(0), BlockDigest::default()),
             vec![],
         ),
-        Commit::new(
+        TrustedCommit::new_for_test(
             2,
             BlockRef::new(2, AuthorityIndex::new_for_test(0), BlockDigest::default()),
             vec![],
         ),
-        Commit::new(
+        TrustedCommit::new_for_test(
             3,
             BlockRef::new(3, AuthorityIndex::new_for_test(0), BlockDigest::default()),
             vec![],
         ),
-        Commit::new(
+        TrustedCommit::new_for_test(
             4,
             BlockRef::new(4, AuthorityIndex::new_for_test(0), BlockDigest::default()),
             vec![],
