@@ -64,6 +64,27 @@ describe('Contract links', () => {
 			expect(
 				(await claimLink.listClaimableAssets(new Ed25519Keypair().toSuiAddress())).bag.length,
 			).toEqual(3);
+
+			const claimTxb = claimLink.createClaimTransaction(keypair.toSuiAddress());
+
+			claimTxb.setGasOwner(keypair.toSuiAddress());
+
+			const claimBytes = await claimTxb.build({
+				client,
+			});
+
+			const linkSig = await claimLink.keypair.signTransactionBlock(claimBytes);
+			const keypairSig = await keypair.signTransactionBlock(claimBytes);
+
+			const res = await client.executeTransactionBlock({
+				signature: [linkSig.signature, keypairSig.signature],
+				transactionBlock: claimBytes,
+				options: {
+					showObjectChanges: true,
+				},
+			});
+
+			console.log(res);
 		},
 		{
 			timeout: 30_000,
