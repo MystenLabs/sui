@@ -43,12 +43,6 @@ export interface ZkSendLinkBuilderOptions {
 	contract?: ZkBagContractOptions;
 }
 
-export interface ZkSendLinkOptions {
-	keypair?: Keypair;
-	client?: SuiClient;
-	contract?: ZkBagContractOptions;
-}
-
 export interface ZkBagContractOptions {
 	packageId: string;
 	bagStoreId: string;
@@ -314,12 +308,13 @@ export class ZkSendLinkBuilder {
 }
 
 export interface ZkSendLinkOptions {
-	keypair?: Keypair;
+	keypair: Keypair;
 	client?: SuiClient;
+	contract?: ZkBagContractOptions;
 }
 export class ZkSendLink {
 	#client: SuiClient;
-	#keypair: Keypair;
+	keypair: Keypair;
 	#initiallyOwnedObjects = new Set<string>();
 	#ownedObjects: Array<{
 		objectId: string;
@@ -335,11 +330,11 @@ export class ZkSendLink {
 
 	constructor({
 		client = DEFAULT_ZK_SEND_LINK_OPTIONS.client,
-		keypair = new Ed25519Keypair(),
+		keypair,
 		contract,
 	}: ZkSendLinkOptions & { linkAddress?: string }) {
 		this.#client = client;
-		this.#keypair = keypair;
+		this.keypair = keypair;
 
 		if (contract) {
 			this.#contract = new ZkBag(contract.packageId, contract);
@@ -440,7 +435,7 @@ export class ZkSendLink {
 	) {
 		return this.#client.signAndExecuteTransactionBlock({
 			transactionBlock: await this.createClaimTransaction(address, options),
-			signer: this.#keypair,
+			signer: this.keypair,
 		});
 	}
 
@@ -457,7 +452,7 @@ export class ZkSendLink {
 		}
 
 		const txb = new TransactionBlock();
-		const sender = this.#keypair.toSuiAddress();
+		const sender = this.keypair.toSuiAddress();
 		txb.setSender(sender);
 
 		const store = txb.object(this.#contract.ids.bagStoreId);
@@ -493,7 +488,7 @@ export class ZkSendLink {
 	) {
 		const claimAll = !options?.coinTypes && !options?.objects;
 		const txb = new TransactionBlock();
-		txb.setSender(this.#keypair.toSuiAddress());
+		txb.setSender(this.keypair.toSuiAddress());
 		const coinTypes = new Set(
 			options?.coinTypes?.map((type) => normalizeStructTag(`0x2::coin::Coin<${type}>`)) ?? [],
 		);
@@ -539,7 +534,7 @@ export class ZkSendLink {
 	async #loadOwnedObjects() {
 		this.#ownedObjects = [];
 		let nextCursor: string | null | undefined;
-		const owner = this.#keypair.toSuiAddress();
+		const owner = this.keypair.toSuiAddress();
 		do {
 			const ownedObjects = await this.#client.getOwnedObjects({
 				cursor: nextCursor,
@@ -573,7 +568,7 @@ export class ZkSendLink {
 	}
 
 	async #loadInitialTransactionData() {
-		const address = this.#keypair.toSuiAddress();
+		const address = this.keypair.toSuiAddress();
 		const result = await this.#client.queryTransactionBlocks({
 			limit: 1,
 			order: 'ascending',
@@ -604,7 +599,7 @@ export class ZkSendLink {
 			parentId: this.#contract.ids.bagStoreTableId,
 			name: {
 				type: 'address',
-				value: this.#keypair.toSuiAddress(),
+				value: this.keypair.toSuiAddress(),
 			},
 		});
 
