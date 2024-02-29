@@ -3,6 +3,7 @@
 
 module a::test1 {
     use sui::random::{Random, RandomGenerator};
+    friend a::test2;
 
     entry fun should_work(_r: &Random) {}
 
@@ -11,7 +12,9 @@ module a::test1 {
     public fun not_allowed3(_r: &Random, _rg: &RandomGenerator, _x: u64) {}
 
     #[allow(lint(public_random))]
-    public fun allow_random_objects_should_work(_r: &Random, _rg: &RandomGenerator) {}
+    public fun allow_public_random_should_work(_r: &Random, _rg: &RandomGenerator) {}
+
+    public(friend) fun public_friend_should_work(_r: &Random, _rg: &RandomGenerator) {}
 
     fun private_should_work(_r: &Random, _rg: &RandomGenerator) {}
 }
@@ -27,4 +30,10 @@ module sui::random {
 
     struct Random has key { id: UID }
     struct RandomGenerator has drop {}
+
+    public fun should_work(_r: &Random) {}
+}
+
+module a::test2 {
+
 }

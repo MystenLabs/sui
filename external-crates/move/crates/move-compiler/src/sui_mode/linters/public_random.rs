@@ -3,15 +3,18 @@
 
 //! This analysis flags uses of random::Random and random::RandomGenerator in public functions.
 
+use crate::diagnostics::WarningFilters;
+use crate::expansion::ast::{Address, ModuleIdent};
+use crate::parser::ast::FunctionName;
+use crate::typing::visitor::{TypingVisitorConstructor, TypingVisitorContext};
 use crate::{
     diag,
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
-    expansion::ast::Visibility,
+    expansion::ast::{ModuleIdent_, Visibility},
     naming::ast as N,
     shared::{program_info::TypingProgramInfo, CompilationEnv},
-    typing::{ast as T, visitor::TypingVisitor},
+    typing::ast as T,
 };
-use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
 use super::{
@@ -28,56 +31,86 @@ const PUBLIC_RANDOM_DIAG: DiagnosticInfo = custom(
 );
 
 pub struct PublicRandomVisitor;
+pub struct Context<'a> {
+    env: &'a mut CompilationEnv,
+}
 
-impl TypingVisitor for PublicRandomVisitor {
-    fn visit(
+impl TypingVisitorConstructor for PublicRandomVisitor {
+    type Context<'a> = Context<'a>;
+
+    fn context<'a>(
+        env: &'a mut CompilationEnv,
+        _program_info: &'a TypingProgramInfo,
+        _program: &T::Program_,
+    ) -> Self::Context<'a> {
+        Context { env }
+    }
+}
+
+impl TypingVisitorContext for Context<'_> {
+    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
+        self.env.add_warning_filter_scope(filter)
+    }
+
+    fn pop_warning_filter_scope(&mut self) {
+        self.env.pop_warning_filter_scope()
+    }
+
+    fn visit_function_custom(
         &mut self,
-        env: &mut CompilationEnv,
-        _program_info: &TypingProgramInfo,
-        program: &mut T::Program_,
-    ) {
-        for (_, _, mdef) in program.modules.iter() {
-            if mdef.attributes.is_test_or_test_only() {
-                continue;
+        module: ModuleIdent,
+        fname: FunctionName,
+        fdef: &mut T::Function,
+    ) -> bool {
+        if fdef.attributes.is_test_or_test_only()
+            || !matches!(fdef.visibility, Visibility::Public(_))
+            || is_sui_module(module)
+        {
+            return false;
+        }
+        for (_, _, t) in &fdef.signature.parameters {
+            if let Some(struct_name) = is_random_or_random_generator(t) {
+                let tloc = t.loc;
+                let msg =
+                    format!("Public function '{fname}' accepts '{struct_name}' as a parameter");
+                let mut d = diag!(PUBLIC_RANDOM_DIAG, (tloc, msg));
+                let note = format!("Functions that accept '{}::{}::{}' as a parameter might be abused by attackers by inspecting the results of randomness",
+                                   SUI_PKG_NAME, RANDOM_MOD_NAME, struct_name);
+                d.add_note(note);
+                d.add_note("Non-public functions are preferred");
+                self.env.add_diag(d);
+                return true;
             }
-            env.add_warning_filter_scope(mdef.warning_filter.clone());
-            mdef.functions
-                .iter()
-                .filter(|(_, _, fdef)| {
-                    !fdef.attributes.is_test_or_test_only()
-                        && matches!(fdef.visibility, Visibility::Public(_))
-                })
-                .for_each(|(sloc, fname, fdef)| func_def(env, *fname, fdef, sloc));
-            env.pop_warning_filter_scope();
         }
+        false
     }
 }
 
-fn func_def(env: &mut CompilationEnv, fname: Symbol, fdef: &T::Function, sloc: Loc) {
-    env.add_warning_filter_scope(fdef.warning_filter.clone());
-    for (_, _, t) in &fdef.signature.parameters {
-        if is_random_or_random_generator(t) {
-            let msg = format!("Public function '{fname}' accepts sui::random::Random or sui::random::RandomGenerator as a parameter.");
-            let uid_msg = "Functions that accept sui::random::Random or sui::random::RandomGenerator as a parameter might be abused by attackers. Private functions are preferred.";
-            let d = diag!(PUBLIC_RANDOM_DIAG, (sloc, msg), (sloc, uid_msg)); // same location
-            env.add_diag(d);
-        }
-    }
-    env.pop_warning_filter_scope();
-}
-
-fn is_random_or_random_generator(sp!(_, t): &N::Type) -> bool {
+fn is_random_or_random_generator(sp!(_, t): &N::Type) -> Option<&str> {
     use N::Type_ as T;
-
     match t {
         T::Ref(_, inner_t) => is_random_or_random_generator(inner_t),
-        T::Apply(_, tname, _) => {
-            let sp!(_, tname) = tname;
-            tname.is(SUI_PKG_NAME, RANDOM_MOD_NAME, RANDOM_STRUCT_NAME)
-                | tname.is(SUI_PKG_NAME, RANDOM_MOD_NAME, RANDOM_GENERATOR_STRUCT_NAME)
+        T::Apply(_, sp!(_, tname), _) => {
+            if tname.is(SUI_PKG_NAME, RANDOM_MOD_NAME, RANDOM_STRUCT_NAME) {
+                Some(RANDOM_STRUCT_NAME)
+            } else if tname.is(SUI_PKG_NAME, RANDOM_MOD_NAME, RANDOM_GENERATOR_STRUCT_NAME) {
+                Some(RANDOM_GENERATOR_STRUCT_NAME)
+            } else {
+                None
+            }
         }
-        T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError | T::Fun(_, _) => {
-            false
+        T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError | T::Fun(_, _) => None,
+    }
+}
+
+fn is_sui_module(module: ModuleIdent) -> bool {
+    let sp!(_, ModuleIdent_ { address, module: _ }) = module;
+    match address {
+        Address::Numerical {
+            name: Some(sp!(_, name)),
+            ..
         }
+        | Address::NamedUnassigned(sp!(_, name)) => Symbol::from(name) == symbol!("sui"),
+        _ => false,
     }
 }
