@@ -1433,7 +1433,7 @@ pub(crate) struct LoadedModule {
     // hence, a single type.
     single_signature_token_map: BTreeMap<SignatureIndex, Type>,
 
-    // a map from signatures in instantiations to the `Vec<Type>` that reperesent it.
+    // a map from signatures in instantiations to the `Vec<Type>` that represent it.
     instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>>,
 }
 

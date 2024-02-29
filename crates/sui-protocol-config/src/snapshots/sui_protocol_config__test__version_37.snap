@@ -53,7 +53,8 @@ max_size_written_objects_system_tx: 50000000
 max_serialized_tx_effects_size_bytes: 524288
 max_serialized_tx_effects_size_bytes_system_tx: 8388608
 max_gas_payment_objects: 256
-max_modules_in_publish: 128
+max_modules_in_publish: 64
+max_package_dependencies: 32
 max_arguments: 512
 max_type_arguments: 16
 max_type_argument_depth: 16

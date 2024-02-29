@@ -1329,6 +1329,7 @@ export const RPC_METHODS: {
 			max_arguments: 'u32',
 			max_gas_payment_objects: 'u32',
 			max_modules_in_publish: 'u32',
+			max_package_dependencies: 'u32',
 			max_programmable_tx_commands: 'u32',
 			max_pure_argument_size: 'u32',
 			max_type_argument_depth: 'u32',
