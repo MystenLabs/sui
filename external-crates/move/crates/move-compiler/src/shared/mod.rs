@@ -205,13 +205,6 @@ pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> 
     pub named_address_map: BTreeMap<NamedAddress, NumericalAddress>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct IndexedPackagePath {
-    pub package: Option<Symbol>,
-    pub path: Symbol,
-    pub named_address_map: NamedAddressMapIndex,
-}
-
 /// None for the default 'allow'.
 /// Some(prefix) for a custom set of warnings, e.g. 'allow(lint(_))'.
 pub type FilterPrefix = Option<Symbol>;
@@ -873,19 +866,22 @@ pub(crate) use process_binops;
 // Virtual file system support
 //**************************************************************************************************
 
-/// Same as `IndexedPackagePath` but the path is a virtual file system added/
-/// symbol.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct IndexedVfsPackagePath {
+pub struct IndexedPackagePath<P> {
     pub package: Option<Symbol>,
-    pub path: VfsPath,
+    pub path: P,
     pub named_address_map: NamedAddressMapIndex,
 }
+
+pub type IndexedPhysicalPackagePath = IndexedPackagePath<Symbol>;
+
+pub type IndexedVfsPackagePath = IndexedPackagePath<VfsPath>;
 
 pub fn vfs_path_from_str(path: String, vfs_path: &VfsPath) -> Result<VfsPath, VfsError> {
     // we need to canonicalized paths for virtual file systems as some of them (e.g., implementation
     // of the physical one) cannot handle relative paths
     fn canonicalize(p: String) -> String {
+        // dunce's version of canonicalize does a better job on Windows
         match dunce::canonicalize(&p) {
             Ok(s) => s.to_string_lossy().to_string(),
             Err(_) => p,
@@ -895,9 +891,9 @@ pub fn vfs_path_from_str(path: String, vfs_path: &VfsPath) -> Result<VfsPath, Vf
     vfs_path.join(canonicalize(path))
 }
 
-impl IndexedPackagePath {
+impl IndexedPhysicalPackagePath {
     pub fn to_vfs_path(self, vfs_root: &VfsPath) -> Result<IndexedVfsPackagePath, VfsError> {
-        let IndexedPackagePath {
+        let IndexedPhysicalPackagePath {
             package,
             path,
             named_address_map,

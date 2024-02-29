@@ -15,7 +15,7 @@ use crate::{
     expansion, hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
-        find_filenames, CompilationEnv, Flags, IndexedPackagePath, IndexedVfsPackagePath,
+        find_filenames, CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath,
         NamedAddressMap, NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths,
     },
     to_bytecode,
@@ -46,8 +46,8 @@ use vfs::{
 
 pub struct Compiler<'a> {
     maps: NamedAddressMaps,
-    targets: Vec<IndexedPackagePath>,
-    deps: Vec<IndexedPackagePath>,
+    targets: Vec<IndexedPhysicalPackagePath>,
+    deps: Vec<IndexedPhysicalPackagePath>,
     interface_files_dir_opt: Option<String>,
     pre_compiled_lib: Option<&'a FullyCompiledProgram>,
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
@@ -120,7 +120,7 @@ impl<'a> Compiler<'a> {
             maps: &mut NamedAddressMaps,
             package_configs: &mut BTreeMap<Symbol, PackageConfig>,
             all_pkgs: Vec<PackagePaths<impl Into<Symbol>, impl Into<Symbol>>>,
-        ) -> anyhow::Result<Vec<IndexedPackagePath>> {
+        ) -> anyhow::Result<Vec<IndexedPhysicalPackagePath>> {
             let mut idx_paths = vec![];
             for PackagePaths {
                 name,
@@ -141,7 +141,7 @@ impl<'a> Compiler<'a> {
                         .map(|(k, v)| (k.into(), v))
                         .collect::<NamedAddressMap>(),
                 );
-                idx_paths.extend(paths.into_iter().map(|path| IndexedPackagePath {
+                idx_paths.extend(paths.into_iter().map(|path| IndexedPhysicalPackagePath {
                     package: name,
                     path: path.into(),
                     named_address_map: idx,
