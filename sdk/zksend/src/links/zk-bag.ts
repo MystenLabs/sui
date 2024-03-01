@@ -7,6 +7,12 @@ import type {
 	TransactionObjectArgument,
 } from '@mysten/sui.js/transactions';
 
+export interface ZkBagContractOptions {
+	packageId: string;
+	bagStoreId: string;
+	bagStoreTableId: string;
+}
+
 export class ZkBag<IDs> {
 	#package: string;
 	#module = 'zk_bag' as const;

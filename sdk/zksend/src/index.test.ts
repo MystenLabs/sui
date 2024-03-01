@@ -9,7 +9,7 @@ import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { describe } from 'node:test';
 import { expect, test } from 'vitest';
 
-import { ZkSendLink, ZkSendLinkBuilder } from './links';
+import { ZkSendLink, ZkSendLinkBuilder } from './index.js';
 
 export const DEMO_BEAR_CONFIG = {
 	packageId: '0xab8ed19f16874f9b8b66b0b6e325ee064848b1a7fdcb1c2f0478b17ad8574e65',
@@ -76,7 +76,8 @@ describe('Contract links', () => {
 
 			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
 				contract: ZK_BAG_CONFIG,
-				client,
+				network: 'testnet',
+				claimApi: 'http://localhost:3000/api',
 			});
 
 			const claimableAssets = await claimLink.listClaimableAssets(
@@ -93,23 +94,12 @@ describe('Contract links', () => {
 				]
 			`);
 
-			const claimTxb = claimLink.createClaimTransaction(keypair.toSuiAddress());
+			const claim = await claimLink.claimAssets(keypair.toSuiAddress());
 
-			claimTxb.setGasOwner(keypair.toSuiAddress());
-
-			const claimBytes = await claimTxb.build({
-				client,
-			});
-
-			const linkSig = await claimLink.keypair.signTransactionBlock(claimBytes);
-			const keypairSig = await keypair.signTransactionBlock(claimBytes);
-
-			const res = await client.executeTransactionBlock({
-				signature: [linkSig.signature, keypairSig.signature],
-				transactionBlock: claimBytes,
+			const res = await client.waitForTransactionBlock({
+				digest: claim.digest,
 				options: {
 					showObjectChanges: true,
-					showEffects: true,
 				},
 			});
 
@@ -154,7 +144,7 @@ describe('Non contract links', () => {
 
 			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
 				contract: ZK_BAG_CONFIG,
-				client,
+				network: 'testnet',
 			});
 
 			const claimableAssets = await claimLink.listClaimableAssets(
@@ -209,8 +199,8 @@ describe('Non contract links', () => {
 			await client.waitForTransactionBlock({ digest });
 
 			const claimLink = new ZkSendLink({
-				client,
 				keypair: linkKp,
+				network: 'testnet',
 			});
 
 			await claimLink.loadOwnedData();
