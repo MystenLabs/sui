@@ -698,7 +698,7 @@
     // any jwk below this epoch is not retained
     min_epoch: u64,
     ctx: &TxContext) {
-    // This will only be called by sui_system::advance_epoch
+    // This will only be called by <a href="../../dependencies/sui-system/sui_system.md#0x3_sui_system_advance_epoch">sui_system::advance_epoch</a>
     <b>assert</b>!(<a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_ENotSystemAddress">ENotSystemAddress</a>);
 
     <b>let</b> inner = <a href="../../dependencies/sui-framework/authenticator_state.md#0x2_authenticator_state_load_inner_mut">load_inner_mut</a>(self);

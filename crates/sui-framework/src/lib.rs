@@ -127,7 +127,11 @@ impl BuiltInFramework {
             (
                 BRIDGE_PACKAGE_ID,
                 "bridge",
-                [MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID]
+                [
+                    MOVE_STDLIB_PACKAGE_ID,
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    SUI_SYSTEM_PACKAGE_ID
+                ]
             )
         ])
         .iter()

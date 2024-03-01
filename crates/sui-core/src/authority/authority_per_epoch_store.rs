@@ -887,6 +887,10 @@ impl AuthorityPerEpochStore {
             .is_some()
     }
 
+    pub fn bridge_committee_initiated(&self) -> bool {
+        self.epoch_start_configuration.bridge_committee_initiated()
+    }
+
     pub fn get_parent_path(&self) -> PathBuf {
         self.parent_path.clone()
     }

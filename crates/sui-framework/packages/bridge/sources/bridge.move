@@ -16,29 +16,31 @@ module bridge::bridge {
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::versioned::{Self, Versioned};
+    use sui_system::sui_system::SuiSystemState;
 
     use bridge::chain_ids;
     use bridge::committee::{Self, BridgeCommittee};
     use bridge::limiter::{Self, TransferLimiter};
-    use bridge::message::{Self, BridgeMessage, BridgeMessageKey, EmergencyOp, UpdateBridgeLimit,
-        UpdateAssetPrice
+    use bridge::message::{Self, BridgeMessage, BridgeMessageKey, EmergencyOp, UpdateAssetPrice,
+        UpdateBridgeLimit
     };
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury};
+
     #[test_only]
     use sui::object;
     #[test_only]
     use sui::test_scenario;
     #[test_only]
+    use sui::test_utils::{assert_eq, destroy};
+    #[test_only]
     use bridge::btc::BTC;
     #[test_only]
     use bridge::eth::ETH;
     #[test_only]
-    use sui::test_utils::{destroy, assert_eq};
-    #[test_only]
     use bridge::message::create_blocklist_message;
 
-    const ACCEPTED_MESSAGE_VERSION: u8 = 1;
+    const MESSAGE_VERSION: u8 = 1;
 
     struct Bridge has key {
         id: UID,
@@ -47,6 +49,7 @@ module bridge::bridge {
 
     struct BridgeInner has store {
         bridge_version: u64,
+        message_version: u8,
         chain_id: u8,
         // nonce for replay protection
         // key: message type, value: next sequence number
@@ -57,12 +60,8 @@ module bridge::bridge {
         treasury: BridgeTreasury,
         bridge_records: LinkedTable<BridgeMessageKey, BridgeRecord>,
         limiter: TransferLimiter,
-        frozen: bool,
+        paused: bool,
     }
-
-    // Emergency Op types
-    const FREEZE: u8 = 0;
-    const UNFREEZE: u8 = 1;
 
     struct TokenBridgeEvent has copy, drop {
         // TODO: do we need message_type here?
@@ -99,8 +98,8 @@ module bridge::bridge {
     const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 10;
     const EMessageNotFoundInRecords: u64 = 11;
     const EUnexpectedMessageVersion: u64 = 12;
-    const EBridgeAlreadyFrozen: u64 = 13;
-    const EBridgeNotFrozen: u64 = 14;
+    const EBridgeAlreadyPaused: u64 = 13;
+    const EBridgeNotPaused: u64 = 14;
     const ETokenAlreadyClaimed: u64 = 15;
 
     const CURRENT_VERSION: u64 = 1;
@@ -127,19 +126,48 @@ module bridge::bridge {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         let bridge_inner = BridgeInner {
             bridge_version: CURRENT_VERSION,
+            message_version: MESSAGE_VERSION,
             chain_id,
             sequence_nums: vec_map::empty(),
             committee: committee::create(ctx),
             treasury: treasury::create(ctx),
             bridge_records: linked_table::new(ctx),
             limiter: limiter::new(),
-            frozen: false,
+            paused: false,
         };
         let bridge = Bridge {
             id,
             inner: versioned::create(CURRENT_VERSION, bridge_inner, ctx)
         };
         transfer::share_object(bridge);
+    }
+
+    #[allow(unused_function)]
+    fun init_bridge_committee(
+        self: &mut Bridge,
+        system_state: &mut SuiSystemState,
+        min_stake_participation_percentage: u64,
+        ctx: &TxContext
+    ) {
+        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        let inner = load_inner_mut(self);
+        if (vec_map::is_empty(committee::committee_members(&inner.committee))) {
+            committee::try_create_next_committee(
+                &mut inner.committee,
+                system_state,
+                min_stake_participation_percentage,
+                ctx
+            )
+        }
+    }
+
+    public fun committee_registration(self: &mut Bridge,
+                                      system_state: &mut SuiSystemState,
+                                      bridge_pubkey_bytes: vector<u8>,
+                                      http_rest_url: vector<u8>,
+                                      ctx: &TxContext) {
+        let inner = load_inner_mut(self);
+        committee::register(&mut inner.committee, system_state, bridge_pubkey_bytes, http_rest_url, ctx)
     }
 
     // Create bridge request to send token to other chain, the request will be in pending state until approved
@@ -151,7 +179,7 @@ module bridge::bridge {
         ctx: &mut TxContext
     ) {
         let inner = load_inner_mut(self);
-        assert!(!inner.frozen, EBridgeUnavailable);
+        assert!(!inner.paused, EBridgeUnavailable);
         let amount = balance::value(coin::balance(&token));
 
         let bridge_seq_num = get_current_seq_num_and_increment(inner, message_types::token());
@@ -204,7 +232,7 @@ module bridge::bridge {
         let inner = load_inner_mut(self);
         let key = message::key(&message);
         // TODO: test this
-        assert!(message::message_version(&message) == ACCEPTED_MESSAGE_VERSION, EUnexpectedMessageVersion);
+        assert!(message::message_version(&message) == MESSAGE_VERSION, EUnexpectedMessageVersion);
 
         // retrieve pending message if source chain is Sui, the initial message must exist on chain.
         if (message::message_type(&message) == message_types::token() && message::source_chain(
@@ -272,11 +300,8 @@ module bridge::bridge {
         transfer::public_transfer(option::destroy_some(token), owner)
     }
 
-    fun load_inner_mut(
-        self: &mut Bridge,
-    ): &mut BridgeInner {
+    fun load_inner_mut(self: &mut Bridge): &mut BridgeInner {
         let version = versioned::version(&self.inner);
-
         // TODO: Replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CURRENT_VERSION, EWrongInnerVersion);
         let inner: &mut BridgeInner = versioned::load_value_mut(&mut self.inner);
@@ -307,7 +332,7 @@ module bridge::bridge {
         ctx: &mut TxContext
     ): (Option<Coin<T>>, address) {
         let inner = load_inner_mut(self);
-        assert!(!inner.frozen, EBridgeUnavailable);
+        assert!(!inner.paused, EBridgeUnavailable);
 
         let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
         assert!(linked_table::contains(&inner.bridge_records, key), EMessageNotFoundInRecords);
@@ -362,7 +387,7 @@ module bridge::bridge {
     ) {
         let message_type = message::message_type(&message);
         // TODO: test version mismatch
-        assert!(message::message_version(&message) == ACCEPTED_MESSAGE_VERSION, EUnexpectedMessageVersion);
+        assert!(message::message_version(&message) == MESSAGE_VERSION, EUnexpectedMessageVersion);
         let inner = load_inner_mut(self);
 
         assert!(message::source_chain(&message) == inner.chain_id, EUnexpectedChainID);
@@ -392,13 +417,13 @@ module bridge::bridge {
 
     fun execute_emergency_op(inner: &mut BridgeInner, payload: EmergencyOp) {
         let op = message::emergency_op_type(&payload);
-        if (op == FREEZE) {
-            assert!(!inner.frozen, EBridgeAlreadyFrozen);
-            inner.frozen = true;
+        if (op == message::emergency_op_pause()) {
+            assert!(!inner.paused, EBridgeAlreadyPaused);
+            inner.paused = true;
             emit(EmergencyOpEvent { frozen: true });
-        } else if (op == UNFREEZE) {
-            assert!(inner.frozen, EBridgeNotFrozen);
-            inner.frozen = false;
+        } else if (op == message::emergency_op_unpause()) {
+            assert!(inner.paused, EBridgeNotPaused);
+            inner.paused = false;
             emit(EmergencyOpEvent { frozen: false });
         } else {
             abort EUnexpectedOperation
@@ -431,13 +456,14 @@ module bridge::bridge {
     fun new_for_testing(ctx: &mut TxContext, chain_id: u8): Bridge {
         let bridge_inner = BridgeInner {
             bridge_version: CURRENT_VERSION,
+            message_version: MESSAGE_VERSION,
             chain_id,
             sequence_nums: vec_map::empty<u8, u64>(),
             committee: committee::create(ctx),
             treasury: treasury::create(ctx),
             bridge_records: linked_table::new<BridgeMessageKey, BridgeRecord>(ctx),
             limiter: limiter::new(),
-            frozen: false,
+            paused: false,
         };
         Bridge {
             id: object::new(ctx),
@@ -552,7 +578,7 @@ module bridge::bridge {
         let inner = load_inner_mut(&mut bridge);
 
         // initially it's unfrozen
-        assert!(!inner.frozen, 0);
+        assert!(!inner.paused, 0);
         // freeze it
         let msg = message::create_emergency_op_message(
             chain_ids::sui_devnet(),
@@ -563,7 +589,7 @@ module bridge::bridge {
         execute_emergency_op(inner, payload);
 
         // should be frozen now
-        assert!(inner.frozen, 0);
+        assert!(inner.paused, 0);
 
         // unfreeze it
         let msg = message::create_emergency_op_message(
@@ -575,14 +601,14 @@ module bridge::bridge {
         execute_emergency_op(inner, payload);
 
         // should be unfrozen now
-        assert!(!inner.frozen, 0);
+        assert!(!inner.paused, 0);
 
         destroy(bridge);
         test_scenario::end(scenario);
     }
 
     #[test]
-    #[expected_failure(abort_code = EBridgeNotFrozen)]
+    #[expected_failure(abort_code = EBridgeNotPaused)]
     fun test_execute_emergency_op_abort_when_not_frozen() {
         let scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
@@ -591,7 +617,7 @@ module bridge::bridge {
         let inner = load_inner_mut(&mut bridge);
 
         // initially it's unfrozen
-        assert!(!inner.frozen, 0);
+        assert!(!inner.paused, 0);
         // unfreeze it, should abort
         let msg = message::create_emergency_op_message(
             chain_ids::sui_devnet(),
@@ -606,7 +632,7 @@ module bridge::bridge {
     }
 
     #[test]
-    #[expected_failure(abort_code = EBridgeAlreadyFrozen)]
+    #[expected_failure(abort_code = EBridgeAlreadyPaused)]
     fun test_execute_emergency_op_abort_when_already_frozen() {
         let scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
@@ -615,7 +641,7 @@ module bridge::bridge {
         let inner = load_inner_mut(&mut bridge);
 
         // initially it's unfrozen
-        assert!(!inner.frozen, 0);
+        assert!(!inner.paused, 0);
         // freeze it
         let msg = message::create_emergency_op_message(
             chain_ids::sui_devnet(),
@@ -626,7 +652,7 @@ module bridge::bridge {
         execute_emergency_op(inner, payload);
 
         // should be frozen now
-        assert!(inner.frozen, 0);
+        assert!(inner.paused, 0);
 
         // freeze it again, should abort
         let msg = message::create_emergency_op_message(
