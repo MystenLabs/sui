@@ -196,6 +196,7 @@ impl StateSnapshotReaderV1 {
                 .unwrap(),
             ),
         );
+
         for (bucket, part_files) in self.ref_files.clone().iter() {
             for (part, _part_file) in part_files.iter() {
                 let mut sha3_digests = sha3_digests.lock().await;

@@ -221,7 +221,6 @@ impl CheckpointExecutor {
                     self.process_executed_checkpoint(&checkpoint);
                     highest_executed = Some(checkpoint.clone());
 
-
                     // Estimate TPS every 10k transactions or 30 sec
                     let elapsed = now_time.elapsed().as_millis();
                     let current_transaction_num =  highest_executed.as_ref().map(|c| c.network_total_transactions).unwrap_or(0);

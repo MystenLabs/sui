@@ -26,7 +26,6 @@ use serde_with::DisplayFromStr;
 use shared_crypto::intent::HashingIntentScope;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use tracing::debug;
 
 const DYNAMIC_FIELD_MODULE_NAME: &IdentStr = ident_str!("dynamic_field");
 const DYNAMIC_FIELD_FIELD_STRUCT_NAME: &IdentStr = ident_str!("Field");
@@ -254,9 +253,11 @@ where
 {
     let parent: SuiAddress = parent.into();
     let k_tag_bytes = bcs::to_bytes(key_type_tag)?;
-    debug!(
+    tracing::trace!(
         "Deriving dynamic field ID for parent={:?}, key={:?}, key_type_tag={:?}",
-        parent, key_bytes, key_type_tag,
+        parent,
+        key_bytes,
+        key_type_tag,
     );
 
     // hash(parent || len(key) || key || key_type_tag)
@@ -271,7 +272,7 @@ where
     // truncate into an ObjectID and return
     // OK to access slice because digest should never be shorter than ObjectID::LENGTH.
     let id = ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap();
-    debug!("derive_dynamic_field_id result: {:?}", id);
+    tracing::trace!("derive_dynamic_field_id result: {:?}", id);
     Ok(id)
 }
 
