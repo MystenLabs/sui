@@ -46,11 +46,19 @@ export interface CreateZkLoginZkpApiInput {
 }
 export interface CreateZkLoginZkpApiResponse extends ZkLoginSignatureInputs {}
 
-export interface CreateSponsoredTransactionBlockApiInput {
+export type CreateSponsoredTransactionBlockApiInput = {
 	network?: EnokiNetwork;
-	jwt: string;
 	transactionBlockKindBytes: string;
-}
+} & (
+	| {
+			jwt: string;
+			sender?: never;
+	  }
+	| {
+			sender: string;
+			jwt?: never;
+	  }
+);
 
 export interface CreateSponsoredTransactionBlockApiResponse {
 	bytes: string;
