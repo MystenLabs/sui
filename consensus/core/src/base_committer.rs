@@ -19,7 +19,6 @@ use crate::{
 #[path = "tests/base_committer_tests.rs"]
 mod base_committer_tests;
 
-#[allow(unused)]
 pub(crate) struct BaseCommitterOptions {
     /// TODO: Re-evaluate if we want this to be configurable after running experiments.
     /// The length of a wave (minimum 3)
@@ -48,7 +47,6 @@ impl Default for BaseCommitterOptions {
 /// the method `try_direct_decide` and `try_indirect_decide` can be called at any
 /// time and any number of times (it is idempotent) to determine whether a leader
 /// can be committed or skipped.
-#[allow(unused)]
 pub(crate) struct BaseCommitter {
     /// The per-epoch configuration of this authority.
     context: Arc<Context>,
@@ -397,7 +395,6 @@ impl Display for BaseCommitter {
 /// that has no leader or round offset. Which indicates single leader & pipelining
 /// disabled.
 #[cfg(test)]
-#[allow(unused)]
 mod base_committer_builder {
     use super::*;
 
@@ -410,7 +407,7 @@ mod base_committer_builder {
     }
 
     impl BaseCommitterBuilder {
-        pub fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
+        pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
             Self {
                 context,
                 dag_state,
@@ -420,22 +417,25 @@ mod base_committer_builder {
             }
         }
 
-        pub fn with_wave_length(mut self, wave_length: u32) -> Self {
+        #[allow(unused)]
+        pub(crate) fn with_wave_length(mut self, wave_length: u32) -> Self {
             self.wave_length = wave_length;
             self
         }
 
-        pub fn with_leader_offset(mut self, leader_offset: u32) -> Self {
+        #[allow(unused)]
+        pub(crate) fn with_leader_offset(mut self, leader_offset: u32) -> Self {
             self.leader_offset = leader_offset;
             self
         }
 
-        pub fn with_round_offset(mut self, round_offset: u32) -> Self {
+        #[allow(unused)]
+        pub(crate) fn with_round_offset(mut self, round_offset: u32) -> Self {
             self.round_offset = round_offset;
             self
         }
 
-        pub fn build(self) -> BaseCommitter {
+        pub(crate) fn build(self) -> BaseCommitter {
             let options = BaseCommitterOptions {
                 wave_length: DEFAULT_WAVE_LENGTH,
                 leader_offset: 0,

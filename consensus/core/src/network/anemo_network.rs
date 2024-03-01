@@ -38,7 +38,6 @@ impl AnemoClient {
     const SEND_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
     const FETCH_BLOCK_TIMEOUT: Duration = Duration::from_secs(15);
 
-    #[allow(unused)]
     pub(crate) fn new(context: Arc<Context>) -> Self {
         Self {
             context,

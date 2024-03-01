@@ -28,8 +28,6 @@ use crate::{
 /// is sent to the consumer.
 /// - When CommitObserver is initialized a last processed commit index can be used
 /// to ensure any missing commits are re-sent.
-
-#[allow(unused)]
 pub(crate) struct CommitObserver {
     context: Arc<Context>,
     /// Component to deterministically collect subdags for committed leaders.
@@ -40,7 +38,6 @@ pub(crate) struct CommitObserver {
     store: Arc<dyn Store>,
 }
 
-#[allow(unused)]
 impl CommitObserver {
     pub(crate) fn new(
         context: Arc<Context>,

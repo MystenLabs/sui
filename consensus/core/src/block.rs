@@ -160,7 +160,6 @@ pub struct BlockRef {
     pub digest: BlockDigest,
 }
 
-#[allow(unused)]
 impl BlockRef {
     pub fn new(round: Round, author: AuthorityIndex, digest: BlockDigest) -> Self {
         Self {
@@ -289,7 +288,6 @@ impl fmt::Debug for Slot {
 ///
 /// Note: `BlockDigest` is computed over this struct, so any added field (without `#[serde(skip)]`)
 /// will affect the values of `BlockDigest` and `BlockRef`.
-#[allow(unused)]
 #[derive(Deserialize, Serialize)]
 pub(crate) struct SignedBlock {
     inner: Block,
@@ -529,7 +527,6 @@ pub(crate) struct TestBlock {
     block: BlockV1,
 }
 
-#[allow(unused)]
 #[cfg(test)]
 impl TestBlock {
     pub(crate) fn new(round: Round, author: u32) -> Self {

@@ -46,14 +46,12 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError>;
 }
 
-#[allow(unused)]
 pub(crate) struct CoreThreadHandle {
     sender: metered_channel::Sender<CoreThreadCommand>,
     join_handle: thread::JoinHandle<()>,
 }
 
 impl CoreThreadHandle {
-    #[allow(unused)]
     pub fn stop(self) {
         // drop the sender, that will force all the other weak senders to not able to upgrade.
         drop(self.sender);
@@ -61,7 +59,6 @@ impl CoreThreadHandle {
     }
 }
 
-#[allow(unused)]
 struct CoreThread {
     core: Core,
     receiver: metered_channel::Receiver<CoreThreadCommand>,

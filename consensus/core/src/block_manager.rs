@@ -290,15 +290,14 @@ impl BlockManager {
         None
     }
 
-    #[allow(dead_code)]
     /// Returns all the blocks that are currently missing and needed in order to accept suspended
     /// blocks.
     pub(crate) fn missing_blocks(&self) -> BTreeSet<BlockRef> {
         self.missing_blocks.clone()
     }
 
-    #[allow(dead_code)]
     /// Returns all the suspended blocks whose causal history we miss hence we can't accept them yet.
+    #[cfg(test)]
     pub(crate) fn suspended_blocks(&self) -> Vec<BlockRef> {
         self.suspended_blocks.keys().cloned().collect()
     }

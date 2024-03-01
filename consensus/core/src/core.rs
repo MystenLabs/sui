@@ -34,7 +34,6 @@ use crate::{
 // TODO: Move to protocol config once initial value is finalized.
 const NUM_LEADERS_PER_ROUND: usize = 1;
 
-#[allow(dead_code)]
 pub(crate) struct Core {
     context: Arc<Context>,
     /// The threshold clock that is used to keep track of the current round
@@ -68,7 +67,6 @@ pub(crate) struct Core {
     store: Arc<dyn Store>,
 }
 
-#[allow(dead_code)]
 impl Core {
     pub(crate) fn new(
         context: Arc<Context>,
@@ -421,13 +419,13 @@ impl Core {
         self.last_proposed_block.round()
     }
 
+    #[cfg(test)]
     fn last_proposed_block(&self) -> &VerifiedBlock {
         &self.last_proposed_block
     }
 }
 
 /// Senders of signals from Core, for outputs and events (ex new block produced).
-#[allow(dead_code)]
 pub(crate) struct CoreSignals {
     tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
     new_round_sender: watch::Sender<Round>,
@@ -437,7 +435,6 @@ impl CoreSignals {
     // TODO: move to Parameters.
     const BROADCAST_BACKLOG_CAPACITY: usize = 1000;
 
-    #[allow(dead_code)]
     pub fn new() -> (Self, CoreSignalsReceivers) {
         let (tx_block_broadcast, _rx_block_broadcast) =
             broadcast::channel::<VerifiedBlock>(Self::BROADCAST_BACKLOG_CAPACITY);
@@ -477,12 +474,10 @@ impl CoreSignals {
 /// Intentially un-clonable. Comonents should only subscribe to channels they need.
 pub(crate) struct CoreSignalsReceivers {
     tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
-    #[allow(dead_code)]
     new_round_receiver: watch::Receiver<Round>,
 }
 
 impl CoreSignalsReceivers {
-    #[allow(dead_code)]
     pub(crate) fn block_broadcast_receiver(&self) -> broadcast::Receiver<VerifiedBlock> {
         self.tx_block_broadcast.subscribe()
     }

@@ -12,14 +12,12 @@ use crate::{
 };
 
 /// Expand a committed sequence of leader into a sequence of sub-dags.
-#[allow(unused)]
 #[derive(Clone)]
 pub(crate) struct Linearizer {
     /// In memory block store representing the dag state
     dag_state: Arc<RwLock<DagState>>,
 }
 
-#[allow(unused)]
 impl Linearizer {
     pub(crate) fn new(dag_state: Arc<RwLock<DagState>>) -> Self {
         Self { dag_state }
@@ -89,7 +87,7 @@ impl Linearizer {
         for leader_block in committed_leaders {
             // Grab latest commit state from dag state
             let dag_state = self.dag_state.read();
-            let mut last_commit_index = dag_state.last_commit_index();
+            let last_commit_index = dag_state.last_commit_index();
             let mut last_committed_rounds = dag_state.last_committed_rounds();
             drop(dag_state);
 

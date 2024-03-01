@@ -44,7 +44,6 @@ impl MemStore {
     }
 }
 
-#[allow(unused)]
 impl Store for MemStore {
     fn write(
         &self,

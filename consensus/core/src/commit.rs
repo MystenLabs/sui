@@ -30,7 +30,6 @@ pub(crate) const MINIMUM_WAVE_LENGTH: Round = 3;
 
 /// The consensus protocol operates in 'waves'. Each wave is composed of a leader
 /// round, at least one voting round, and one decision round.
-#[allow(unused)]
 pub(crate) type WaveNumber = u32;
 
 /// Versioned representation of a consensus commit.
@@ -156,7 +155,6 @@ pub struct CommittedSubDag {
     pub commit_index: CommitIndex,
 }
 
-#[allow(unused)]
 impl CommittedSubDag {
     /// Create new (empty) sub-dag.
     pub fn new(
@@ -238,7 +236,6 @@ pub fn load_committed_subdag_from_store(
     CommittedSubDag::new(leader_block_ref, blocks, timestamp_ms, commit.index())
 }
 
-#[allow(unused)]
 pub struct CommitConsumer {
     // A channel to send the committed sub dags through
     pub sender: UnboundedSender<CommittedSubDag>,
@@ -260,7 +257,6 @@ impl CommitConsumer {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-#[allow(unused)]
 pub(crate) enum Decision {
     Direct,
     Indirect,
@@ -269,7 +265,6 @@ pub(crate) enum Decision {
 /// The status of every leader output by the committers. While the core only cares
 /// about committed leaders, providing a richer status allows for easier debugging,
 /// testing, and composition with advanced commit strategies.
-#[allow(unused)]
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LeaderStatus {
     Commit(VerifiedBlock),
@@ -277,7 +272,6 @@ pub(crate) enum LeaderStatus {
     Undecided(Slot),
 }
 
-#[allow(unused)]
 impl LeaderStatus {
     pub(crate) fn round(&self) -> Round {
         match self {
@@ -316,7 +310,7 @@ impl LeaderStatus {
     pub fn into_committed_block(self) -> Option<VerifiedBlock> {
         match self {
             Self::Commit(block) => Some(block),
-            Self::Skip(leader) => None,
+            Self::Skip(_leader) => None,
             Self::Undecided(..) => panic!("Decided block is either Commit or Skip"),
         }
     }

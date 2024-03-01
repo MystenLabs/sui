@@ -11,7 +11,6 @@ use typed_store::TypedStoreError;
 use crate::block::{BlockRef, BlockTimestampMs, Round};
 
 /// Errors that can occur when processing blocks, reading from storage, or encountering shutdown.
-#[allow(unused)]
 #[derive(Clone, Debug, Error)]
 pub enum ConsensusError {
     #[error("Error deserializing block: {0}")]
@@ -109,7 +108,6 @@ pub enum ConsensusError {
     Shutdown,
 }
 
-#[allow(unused)]
 pub type ConsensusResult<T> = Result<T, ConsensusError>;
 
 #[macro_export]

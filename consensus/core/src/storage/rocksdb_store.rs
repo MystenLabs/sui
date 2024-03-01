@@ -36,7 +36,6 @@ pub(crate) struct RocksDBStore {
     last_committed_rounds: DBMap<(), Vec<Round>>,
 }
 
-#[allow(unused)]
 impl RocksDBStore {
     const BLOCKS_CF: &'static str = "blocks";
     const DIGESTS_BY_AUTHORITIES_CF: &'static str = "digests";
@@ -89,7 +88,6 @@ impl RocksDBStore {
     }
 }
 
-#[allow(unused)]
 impl Store for RocksDBStore {
     fn write(
         &self,
@@ -100,22 +98,30 @@ impl Store for RocksDBStore {
         let mut batch = self.blocks.batch();
         for block in blocks {
             let block_ref = block.reference();
-            batch.insert_batch(
-                &self.blocks,
-                [(
-                    (block_ref.round, block_ref.author, block_ref.digest),
-                    block.serialized(),
-                )],
-            );
-            batch.insert_batch(
-                &self.digests_by_authorities,
-                [((block_ref.author, block_ref.round, block_ref.digest), ())],
-            );
+            batch
+                .insert_batch(
+                    &self.blocks,
+                    [(
+                        (block_ref.round, block_ref.author, block_ref.digest),
+                        block.serialized(),
+                    )],
+                )
+                .map_err(ConsensusError::RocksDBFailure)?;
+            batch
+                .insert_batch(
+                    &self.digests_by_authorities,
+                    [((block_ref.author, block_ref.round, block_ref.digest), ())],
+                )
+                .map_err(ConsensusError::RocksDBFailure)?;
         }
         for commit in commits {
-            batch.insert_batch(&self.commits, [(commit.index(), commit.inner())]);
+            batch
+                .insert_batch(&self.commits, [(commit.index(), commit.inner())])
+                .map_err(ConsensusError::RocksDBFailure)?;
         }
-        batch.insert_batch(&self.last_committed_rounds, [((), last_committed_rounds)]);
+        batch
+            .insert_batch(&self.last_committed_rounds, [((), last_committed_rounds)])
+            .map_err(ConsensusError::RocksDBFailure)?;
         batch.write()?;
         Ok(())
     }
