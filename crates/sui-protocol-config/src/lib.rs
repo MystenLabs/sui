@@ -1957,6 +1957,8 @@ impl ProtocolConfig {
                     // reduce dependencies maximum
                     cfg.max_package_dependencies = Some(32);
                     cfg.max_modules_in_publish = Some(64);
+                    // bump execution version
+                    cfg.execution_version = Some(3);
                 }
                 // Use this template when making changes:
                 //
