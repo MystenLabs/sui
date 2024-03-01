@@ -216,12 +216,7 @@ module bridge::limiter {
         );
         vec_map::insert(
             &mut transfer_limits,
-            chain_ids::get_route(chain_ids::sui_devnet(), chain_ids::eth_sepolia()),
-            MAX_TRANSFER_LIMIT
-        );
-        vec_map::insert(
-            &mut transfer_limits,
-            chain_ids::get_route(chain_ids::sui_local_test(), chain_ids::eth_sepolia()),
+            chain_ids::get_route(chain_ids::sui_custom(), chain_ids::eth_sepolia()),
             MAX_TRANSFER_LIMIT
         );
         vec_map::insert(
@@ -231,12 +226,7 @@ module bridge::limiter {
         );
         vec_map::insert(
             &mut transfer_limits,
-            chain_ids::get_route(chain_ids::sui_devnet(), chain_ids::eth_local_test()),
-            MAX_TRANSFER_LIMIT
-        );
-        vec_map::insert(
-            &mut transfer_limits,
-            chain_ids::get_route(chain_ids::sui_local_test(), chain_ids::eth_local_test()),
+            chain_ids::get_route(chain_ids::sui_custom(), chain_ids::eth_local_test()),
             MAX_TRANSFER_LIMIT
         );
         transfer_limits
@@ -259,7 +249,7 @@ module bridge::limiter {
             transfer_records: vec_map::empty(),
         };
 
-        let route = chain_ids::get_route(chain_ids::sui_devnet(), chain_ids::eth_sepolia());
+        let route = chain_ids::get_route(chain_ids::sui_custom(), chain_ids::eth_sepolia());
 
         // Global transfer limit is 100M USD
         vec_map::insert(&mut limiter.transfer_limits, route, 100_000_000 * USD_VALUE_MULTIPLIER);
@@ -328,8 +318,8 @@ module bridge::limiter {
             transfer_records: vec_map::empty(),
         };
 
-        let route = chain_ids::get_route(chain_ids::sui_devnet(), chain_ids::eth_sepolia());
-        let route2 = chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_devnet());
+        let route = chain_ids::get_route(chain_ids::sui_custom(), chain_ids::eth_sepolia());
+        let route2 = chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_custom());
 
         // Global transfer limit is 1M USD
         vec_map::insert(&mut limiter.transfer_limits, route, 1_000_000 * USD_VALUE_MULTIPLIER);
@@ -367,7 +357,7 @@ module bridge::limiter {
             transfer_records: vec_map::empty(),
         };
 
-        let route = chain_ids::get_route(chain_ids::sui_devnet(), chain_ids::eth_sepolia());
+        let route = chain_ids::get_route(chain_ids::sui_custom(), chain_ids::eth_sepolia());
         // Global transfer limit is 1M USD
         vec_map::insert(&mut limiter.transfer_limits, route, 1_000_000 * USD_VALUE_MULTIPLIER);
         // Notional price for ETH is 10 USD

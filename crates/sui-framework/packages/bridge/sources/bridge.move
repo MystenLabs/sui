@@ -476,7 +476,7 @@ module bridge::bridge {
     fun test_system_msg_incorrect_chain_id() {
         let scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_custom();
         let bridge = new_for_testing(ctx, chain_id);
         let blocklist = create_blocklist_message(chain_ids::sui_mainnet(), 0, 0, vector[]);
         execute_system_message(&mut bridge, blocklist, vector[]);
@@ -488,7 +488,7 @@ module bridge::bridge {
     fun test_get_current_seq_num_and_increment() {
         let scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_custom();
         let bridge = new_for_testing(ctx, chain_id);
 
         let inner = load_inner_mut(&mut bridge);
@@ -515,7 +515,7 @@ module bridge::bridge {
     fun test_execute_update_bridge_limit() {
         let scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_custom();
         let bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
@@ -544,7 +544,7 @@ module bridge::bridge {
     fun test_execute_update_asset_price() {
         let scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_custom();
         let bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
@@ -573,7 +573,7 @@ module bridge::bridge {
     fun test_execute_emergency_op() {
         let scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_custom();
         let bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
@@ -581,7 +581,7 @@ module bridge::bridge {
         assert!(!inner.paused, 0);
         // freeze it
         let msg = message::create_emergency_op_message(
-            chain_ids::sui_devnet(),
+            chain_ids::sui_custom(),
             0, // seq num
             0, // freeze op
         );
@@ -593,7 +593,7 @@ module bridge::bridge {
 
         // unfreeze it
         let msg = message::create_emergency_op_message(
-            chain_ids::sui_devnet(),
+            chain_ids::sui_custom(),
             1, // seq num, this is supposed to be the next seq num but it's not what we test here
             1, // unfreeze op
         );
@@ -612,7 +612,7 @@ module bridge::bridge {
     fun test_execute_emergency_op_abort_when_not_frozen() {
         let scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_custom();
         let bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
@@ -620,7 +620,7 @@ module bridge::bridge {
         assert!(!inner.paused, 0);
         // unfreeze it, should abort
         let msg = message::create_emergency_op_message(
-            chain_ids::sui_devnet(),
+            chain_ids::sui_custom(),
             0, // seq num
             1, // freeze op
         );
@@ -636,7 +636,7 @@ module bridge::bridge {
     fun test_execute_emergency_op_abort_when_already_frozen() {
         let scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_custom();
         let bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
@@ -644,7 +644,7 @@ module bridge::bridge {
         assert!(!inner.paused, 0);
         // freeze it
         let msg = message::create_emergency_op_message(
-            chain_ids::sui_devnet(),
+            chain_ids::sui_custom(),
             0, // seq num
             0, // freeze op
         );
@@ -656,7 +656,7 @@ module bridge::bridge {
 
         // freeze it again, should abort
         let msg = message::create_emergency_op_message(
-            chain_ids::sui_devnet(),
+            chain_ids::sui_custom(),
             1, // seq num, this is supposed to be the next seq num but it's not what we test here
             0, // unfreeze op
         );
