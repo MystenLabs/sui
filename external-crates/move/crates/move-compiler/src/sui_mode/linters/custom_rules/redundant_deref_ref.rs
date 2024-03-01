@@ -1,6 +1,7 @@
-//! Detect potential overflow scenarios where the number of bits being shifted exceeds the bit width of
-//! the variable being shifted, which could lead to unintended behavior or loss of data. If such a
-//! potential overflow is detected, a warning is generated to alert the developer.
+//! Implements lint rule for Move IR code to detect redundant dereference of a reference.
+//! It identifies patterns where a dereference (`*`) is immediately followed by a borrow (`&` or `&mut`).
+//! The lint aims to simplify expressions by removing unnecessary dereference-borrow sequences.
+
 use crate::{
     diag,
     diagnostics::{
