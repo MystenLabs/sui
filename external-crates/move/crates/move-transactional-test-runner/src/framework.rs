@@ -650,7 +650,7 @@ pub fn compile_source_units(
         .map(|(_comments, move_compiler)| move_compiler.into_compiled_units());
 
     match units_or_diags {
-        Err(diags) => {
+        Err((_pass, diags)) => {
             if let Some(pcd) = state.pre_compiled_deps {
                 for (file_name, text) in &pcd.files {
                     // TODO This is bad. Rethink this when errors are redone
