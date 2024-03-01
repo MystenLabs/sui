@@ -236,6 +236,7 @@ pub fn update_managed_address(
 ) -> Result<()> {
     let mut toml_string = String::new();
     file.read_to_string(&mut toml_string)?;
+    println!("existing content: {}", toml_string);
     let mut toml = toml_string.parse::<toml_edit::Document>()?;
     let env_key = format!("move.env.{}.managed-addresses", chain_identifier);
 
