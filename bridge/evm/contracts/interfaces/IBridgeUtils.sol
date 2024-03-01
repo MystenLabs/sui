@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @title IBridgeTokens
-/// @dev Interface for the BridgeTokens contract.
-interface IBridgeTokens {
+/// @title IBridgeUtils
+/// @dev Interface for the BridgeUtils contract.
+interface IBridgeUtils {
     /* ========== STRUCTS ========== */
 
     /// @notice The data struct for the supported bridge tokens.
@@ -17,7 +17,7 @@ interface IBridgeTokens {
     /// @notice Returns the address of the token with the given ID.
     /// @param tokenID The ID of the token.
     /// @return address of the provided token.
-    function getAddress(uint8 tokenID) external view returns (address);
+    function getTokenAddress(uint8 tokenID) external view returns (address);
 
     /// @notice Returns the sui decimal places of the token with the given ID.
     /// @param tokenID The ID of the token.
@@ -46,4 +46,12 @@ interface IBridgeTokens {
     /// @param tokenID The ID of the token.
     /// @return true if the token is supported, false otherwise.
     function isTokenSupported(uint8 tokenID) external view returns (bool);
+
+    /// @notice Returns whether a chain is supported in SuiBridge with the given ID.
+    /// @param chainId The ID of the chain.
+    /// @return true if the chain is supported, false otherwise.
+    function isChainSupported(uint8 chainId) external view returns (bool);
+
+    /// @notice Returns the chain ID of the bridge.
+    function chainID() external view returns (uint8);
 }

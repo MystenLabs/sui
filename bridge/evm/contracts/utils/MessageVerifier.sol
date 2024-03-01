@@ -36,13 +36,15 @@ abstract contract MessageVerifier is Initializable {
         uint8 messageType
     ) {
         // verify message type
-        require(message.messageType == messageType, "BridgeCommittee: message does not match type");
+        require(message.messageType == messageType, "MessageVerifier: message does not match type");
         // verify signatures
         committee.verifySignatures(signatures, message);
         // increment message type nonce
         if (messageType != BridgeMessage.TOKEN_TRANSFER) {
             // verify chain ID
-            require(message.chainID == committee.chainID(), "BridgeCommittee: Invalid chain ID");
+            require(
+                message.chainID == committee.utils().chainID(), "MessageVerifier: Invalid chain ID"
+            );
             require(message.nonce == nonces[message.messageType], "MessageVerifier: Invalid nonce");
             nonces[message.messageType]++;
         }

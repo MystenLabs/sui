@@ -7,7 +7,7 @@ import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "../contracts/BridgeCommittee.sol";
 import "../contracts/BridgeVault.sol";
-import "../contracts/BridgeTokens.sol";
+import "../contracts/utils/BridgeUtils.sol";
 import "../contracts/BridgeLimiter.sol";
 import "../contracts/SuiBridge.sol";
 import "../test/mocks/MockTokens.sol";
@@ -49,6 +49,11 @@ contract DeployBridge is Script {
             supportedChainIDs[i] = uint8(config.supportedChainIDs[i]);
         }
 
+        // deploy bridge tokens
+
+        BridgeUtils bridgeUtils =
+            new BridgeUtils(uint8(config.sourceChainId), config.supportedTokens, supportedChainIDs);
+
         // deploy Bridge Committee
 
         // convert committeeMembers stake from uint256 to uint16[]
@@ -61,7 +66,7 @@ contract DeployBridge is Script {
             "BridgeCommittee.sol",
             abi.encodeCall(
                 BridgeCommittee.initialize,
-                (config.committeeMembers, committeeMemberStake, uint8(config.sourceChainId))
+                (address(bridgeUtils), config.committeeMembers, committeeMemberStake)
             )
         );
 
@@ -69,22 +74,13 @@ contract DeployBridge is Script {
 
         BridgeVault vault = new BridgeVault(config.WETH);
 
-        // deploy bridge tokens
-
-        BridgeTokens bridgeTokens = new BridgeTokens(config.supportedTokens);
-
         // deploy limiter
 
         address limiter = Upgrades.deployUUPSProxy(
             "BridgeLimiter.sol",
             abi.encodeCall(
                 BridgeLimiter.initialize,
-                (
-                    bridgeCommittee,
-                    address(bridgeTokens),
-                    config.tokenPrices,
-                    uint64(config.totalBridgeLimitInDollars)
-                )
+                (bridgeCommittee, config.tokenPrices, uint64(config.totalBridgeLimitInDollars))
             )
         );
 
@@ -96,15 +92,7 @@ contract DeployBridge is Script {
         address suiBridge = Upgrades.deployUUPSProxy(
             "SuiBridge.sol",
             abi.encodeCall(
-                SuiBridge.initialize,
-                (
-                    bridgeCommittee,
-                    address(bridgeTokens),
-                    address(vault),
-                    limiter,
-                    config.WETH,
-                    supportedChainIDs
-                )
+                SuiBridge.initialize, (bridgeCommittee, address(vault), limiter, config.WETH)
             )
         );
 
@@ -113,8 +101,6 @@ contract DeployBridge is Script {
         // transfer limiter ownership to bridge
         BridgeLimiter instance = BridgeLimiter(limiter);
         instance.transferOwnership(suiBridge);
-        // transfer bridge tokens ownership to bridge
-        bridgeTokens.transferOwnership(suiBridge);
         vm.stopBroadcast();
     }
 

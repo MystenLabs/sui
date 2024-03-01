@@ -6,7 +6,7 @@ import "../contracts/BridgeCommittee.sol";
 import "../contracts/BridgeVault.sol";
 import "../contracts/BridgeLimiter.sol";
 import "../contracts/SuiBridge.sol";
-import "../contracts/BridgeTokens.sol";
+import "../contracts/utils/BridgeUtils.sol";
 
 contract BridgeBaseTest is Test {
     address committeeMemberA;
@@ -46,7 +46,7 @@ contract BridgeBaseTest is Test {
     SuiBridge public bridge;
     BridgeVault public vault;
     BridgeLimiter public limiter;
-    BridgeTokens public tokens;
+    BridgeUtils public utils;
 
     function setUpBridgeTest() public {
         vm.createSelectFork(
@@ -69,6 +69,15 @@ contract BridgeBaseTest is Test {
         vm.deal(bridgerB, 1 ether);
         deployer = address(1);
         vm.startPrank(deployer);
+        address[] memory _supportedTokens = new address[](4);
+        _supportedTokens[0] = wBTC;
+        _supportedTokens[1] = wETH;
+        _supportedTokens[2] = USDC;
+        _supportedTokens[3] = USDT;
+        uint8[] memory _supportedDestinationChains = new uint8[](1);
+        _supportedDestinationChains[0] = 0;
+        utils = new BridgeUtils(chainID, _supportedTokens, _supportedDestinationChains);
+
         address[] memory _committee = new address[](5);
         uint16[] memory _stake = new uint16[](5);
         _committee[0] = committeeMemberA;
@@ -100,7 +109,7 @@ contract BridgeBaseTest is Test {
         vm.expectRevert(
             bytes("BridgeCommittee: Committee and stake arrays must be of the same length")
         );
-        committee.initialize(_committeeNotSameLength, _stakeNotSameLength, chainID);
+        committee.initialize(address(utils), _committeeNotSameLength, _stakeNotSameLength);
 
         // Test fail initialize: Committee Duplicate Committee Member
         address[] memory _committeeDuplicateCommitteeMember = new address[](5);
@@ -119,7 +128,7 @@ contract BridgeBaseTest is Test {
 
         vm.expectRevert(bytes("BridgeCommittee: Duplicate committee member"));
         committee.initialize(
-            _committeeDuplicateCommitteeMember, _stakeDuplicateCommitteeMember, chainID
+            address(utils), _committeeDuplicateCommitteeMember, _stakeDuplicateCommitteeMember
         );
 
         // Test fail initialize: Total Stake Must Be 10000
@@ -136,16 +145,12 @@ contract BridgeBaseTest is Test {
         _stakeTotalStakeMustBe10000[3] = 2000;
 
         vm.expectRevert(bytes("BridgeCommittee: Total stake must be 10000"));
-        committee.initialize(_committeeTotalStakeMustBe10000, _stakeTotalStakeMustBe10000, chainID);
+        committee.initialize(
+            address(utils), _committeeTotalStakeMustBe10000, _stakeTotalStakeMustBe10000
+        );
 
-        committee.initialize(_committee, _stake, chainID);
+        committee.initialize(address(utils), _committee, _stake);
         vault = new BridgeVault(wETH);
-        address[] memory _supportedTokens = new address[](4);
-        _supportedTokens[0] = wBTC;
-        _supportedTokens[1] = wETH;
-        _supportedTokens[2] = USDC;
-        _supportedTokens[3] = USDT;
-        tokens = new BridgeTokens(_supportedTokens);
         uint256[] memory assetPrices = new uint256[](4);
         assetPrices[0] = SUI_PRICE;
         assetPrices[1] = BTC_PRICE;
@@ -157,21 +162,11 @@ contract BridgeBaseTest is Test {
         tokenPrices[2] = ETH_PRICE;
         tokenPrices[3] = USDC_PRICE;
         limiter = new BridgeLimiter();
-        limiter.initialize(address(committee), address(tokens), tokenPrices, totalLimit);
+        limiter.initialize(address(committee), tokenPrices, totalLimit);
         bridge = new SuiBridge();
-        uint8[] memory _supportedDestinationChains = new uint8[](1);
-        _supportedDestinationChains[0] = 0;
-        bridge.initialize(
-            address(committee),
-            address(tokens),
-            address(vault),
-            address(limiter),
-            wETH,
-            _supportedDestinationChains
-        );
+        bridge.initialize(address(committee), address(vault), address(limiter), wETH);
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
-        tokens.transferOwnership(address(bridge));
     }
 
     function testMock() public {}

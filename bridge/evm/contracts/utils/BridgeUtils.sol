@@ -3,22 +3,29 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./interfaces/IBridgeTokens.sol";
+import "../interfaces/IBridgeUtils.sol";
 
-/// @title BridgeTokens
-/// @notice This contract manages the supported tokens of the SuiBridge. It enables the contract owner
-/// (intended to be the SuiBridge contract) to add and remove supported tokens. It also provides functions
-/// to convert token amounts to Sui decimal adjusted amounts and vice versa.
-contract BridgeTokens is Ownable, IBridgeTokens {
+/// @title BridgeUtils
+/// @notice This contract manages a registry of supported tokens and supported chain IDs for the SuiBridge.
+/// It also provides functions to convert token amounts to Sui decimal adjusted amounts and vice versa.
+contract BridgeUtils is IBridgeUtils {
     /* ========== STATE VARIABLES ========== */
 
+    uint8 public chainID;
     mapping(uint8 tokenID => Token) public supportedTokens;
+    mapping(uint8 chainId => bool isSupported) public supportedChains;
 
-    /// @notice Constructor function for the BridgeTokens contract.
+    /// @notice Constructor function for the BridgeUtils contract.
     /// @dev the provided arrays must have the same length.
+    /// @param _chainID The ID of the chain this contract is deployed on.
     /// @param _supportedTokens The addresses of the supported tokens.
-    constructor(address[] memory _supportedTokens) Ownable(msg.sender) {
-        require(_supportedTokens.length == 4, "BridgeTokens: Invalid supported token addresses");
+    /// @param _supportedChains array of supported chain IDs.
+    constructor(
+        uint8 _chainID,
+        address[] memory _supportedTokens,
+        uint8[] memory _supportedChains
+    ) {
+        require(_supportedTokens.length == 4, "BridgeUtils: Invalid supported token addresses");
 
         uint8[] memory _suiDecimals = new uint8[](5);
         _suiDecimals[0] = 9; // SUI
@@ -33,6 +40,13 @@ contract BridgeTokens is Ownable, IBridgeTokens {
         for (uint8 i; i < _supportedTokens.length; i++) {
             supportedTokens[i + 1] = Token(_supportedTokens[i], _suiDecimals[i + 1]);
         }
+
+        for (uint8 i; i < _supportedChains.length; i++) {
+            require(_supportedChains[i] != _chainID, "BridgeUtils: Cannot support self");
+            supportedChains[_supportedChains[i]] = true;
+        }
+
+        chainID = _chainID;
     }
 
     /* ========== VIEW FUNCTIONS ========== */
@@ -40,7 +54,7 @@ contract BridgeTokens is Ownable, IBridgeTokens {
     /// @notice Returns the address of the token with the given ID.
     /// @param tokenID The ID of the token.
     /// @return address of the provided token.
-    function getAddress(uint8 tokenID) public view override returns (address) {
+    function getTokenAddress(uint8 tokenID) public view override returns (address) {
         return supportedTokens[tokenID].tokenAddress;
     }
 
@@ -58,6 +72,13 @@ contract BridgeTokens is Ownable, IBridgeTokens {
         return supportedTokens[tokenID].tokenAddress != address(0);
     }
 
+    /// @notice Returns whether a chain is supported in SuiBridge with the given ID.
+    /// @param chainId The ID of the chain.
+    /// @return true if the chain is supported, false otherwise.
+    function isChainSupported(uint8 chainId) public view override returns (bool) {
+        return supportedChains[chainId];
+    }
+
     /// @notice Converts the provided token amount to the Sui decimal adjusted amount.
     /// @param tokenID The ID of the token to convert.
     /// @param amount The ERC20 amount of the tokens to convert to Sui.
@@ -69,23 +90,23 @@ contract BridgeTokens is Ownable, IBridgeTokens {
         tokenSupported(tokenID)
         returns (uint64)
     {
-        uint8 ethDecimal = IERC20Metadata(getAddress(tokenID)).decimals();
+        uint8 ethDecimal = IERC20Metadata(getTokenAddress(tokenID)).decimals();
         uint8 suiDecimal = getSuiDecimal(tokenID);
 
         if (ethDecimal == suiDecimal) {
             // Ensure converted amount fits within uint64
-            require(amount <= type(uint64).max, "BridgeTokens: Amount too large for uint64");
+            require(amount <= type(uint64).max, "BridgeUtils: Amount too large for uint64");
             return uint64(amount);
         }
 
-        require(ethDecimal > suiDecimal, "BridgeTokens: Invalid Sui decimal");
+        require(ethDecimal > suiDecimal, "BridgeUtils: Invalid Sui decimal");
 
         // Difference in decimal places
         uint256 factor = 10 ** (ethDecimal - suiDecimal);
         amount = amount / factor;
 
         // Ensure the converted amount fits within uint64
-        require(amount <= type(uint64).max, "BridgeTokens: Amount too large for uint64");
+        require(amount <= type(uint64).max, "BridgeUtils: Amount too large for uint64");
 
         return uint64(amount);
     }
@@ -101,14 +122,14 @@ contract BridgeTokens is Ownable, IBridgeTokens {
         tokenSupported(tokenID)
         returns (uint256)
     {
-        uint8 ethDecimal = IERC20Metadata(getAddress(tokenID)).decimals();
+        uint8 ethDecimal = IERC20Metadata(getTokenAddress(tokenID)).decimals();
         uint8 suiDecimal = getSuiDecimal(tokenID);
 
         if (suiDecimal == ethDecimal) {
             return uint256(amount);
         }
 
-        require(ethDecimal > suiDecimal, "BridgeTokens: Invalid Sui decimal");
+        require(ethDecimal > suiDecimal, "BridgeUtils: Invalid Sui decimal");
 
         // Difference in decimal places
         uint256 factor = 10 ** (ethDecimal - suiDecimal);
@@ -120,7 +141,7 @@ contract BridgeTokens is Ownable, IBridgeTokens {
     /// @notice Requires the given token to be supported.
     /// @param tokenID The ID of the token to check.
     modifier tokenSupported(uint8 tokenID) {
-        require(isTokenSupported(tokenID), "BridgeTokens: Unsupported token");
+        require(isTokenSupported(tokenID), "BridgeUtils: Unsupported token");
         _;
     }
 }

@@ -127,7 +127,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
 
     function testUpdateLimitWithSignatures() public {
         changePrank(address(bridge));
-        uint8 sourceChainID = 1;
+        uint8 sourceChainID = 0;
         uint64 newLimit = 1000000000;
         bytes memory payload = abi.encodePacked(sourceChainID, newLimit);
         // Create a sample BridgeMessage
@@ -169,7 +169,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         _stake[2] = 2500;
         _stake[3] = 2500;
         committee = new BridgeCommittee();
-        committee.initialize(_committee, _stake, 1);
+        committee.initialize(address(utils), _committee, _stake);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = 10000; // SUI PRICE
@@ -180,18 +180,11 @@ contract BridgeLimiterTest is BridgeBaseTest {
 
         skip(2 days);
         limiter = new BridgeLimiter();
-        limiter.initialize(address(committee), address(tokens), tokenPrices, totalLimit);
+        limiter.initialize(address(committee), tokenPrices, totalLimit);
         bridge = new SuiBridge();
         uint8[] memory _supportedDestinationChains = new uint8[](1);
         _supportedDestinationChains[0] = 0;
-        bridge.initialize(
-            address(committee),
-            address(tokens),
-            address(vault),
-            address(limiter),
-            wETH,
-            _supportedDestinationChains
-        );
+        bridge.initialize(address(committee), address(vault), address(limiter), wETH);
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
 
@@ -243,7 +236,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         _stake[2] = 2500;
         _stake[3] = 2500;
         committee = new BridgeCommittee();
-        committee.initialize(_committee, _stake, 1);
+        committee.initialize(address(utils), _committee, _stake);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = 10000; // SUI PRICE
@@ -254,18 +247,9 @@ contract BridgeLimiterTest is BridgeBaseTest {
 
         skip(2 days);
         limiter = new BridgeLimiter();
-        limiter.initialize(address(committee), address(tokens), tokenPrices, totalLimit);
+        limiter.initialize(address(committee), tokenPrices, totalLimit);
         bridge = new SuiBridge();
-        uint8[] memory _supportedDestinationChains = new uint8[](1);
-        _supportedDestinationChains[0] = 0;
-        bridge.initialize(
-            address(committee),
-            address(tokens),
-            address(vault),
-            address(limiter),
-            wETH,
-            _supportedDestinationChains
-        );
+        bridge.initialize(address(committee), address(vault), address(limiter), wETH);
         vault.transferOwnership(address(bridge));
         limiter.transferOwnership(address(bridge));
 

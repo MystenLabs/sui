@@ -29,24 +29,28 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         _stake[3] = 2002;
         _stake[4] = 4998;
 
+        address[] memory _supportedTokens = new address[](4);
+        _supportedTokens[0] = wBTC;
+        _supportedTokens[1] = wETH;
+        _supportedTokens[2] = USDC;
+        _supportedTokens[3] = USDT;
+        uint8[] memory _supportedDestinationChains = new uint8[](1);
+        _supportedDestinationChains[0] = 0;
+        BridgeUtils _utils =
+            new BridgeUtils(_chainID, _supportedTokens, _supportedDestinationChains);
+
         // deploy bridge committee
         address _committee = Upgrades.deployUUPSProxy(
             "BridgeCommittee.sol",
-            abi.encodeCall(BridgeCommittee.initialize, (_committeeMembers, _stake, _chainID))
+            abi.encodeCall(BridgeCommittee.initialize, (address(_utils), _committeeMembers, _stake))
         );
-
-        uint8[] memory _supportedDestinationChains = new uint8[](2);
-        _supportedDestinationChains[0] = 0;
-        _supportedDestinationChains[1] = 1;
 
         committee = BridgeCommittee(_committee);
 
         // deploy sui bridge
         address _bridge = Upgrades.deployUUPSProxy(
             "SuiBridge.sol",
-            abi.encodeCall(
-                SuiBridge.initialize, (_committee, address(0), address(0), address(0), address(0), _supportedDestinationChains)
-            )
+            abi.encodeCall(SuiBridge.initialize, (_committee, address(0), address(0), address(0)))
         );
 
         bridge = SuiBridge(_bridge);
@@ -115,7 +119,7 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         signatures[1] = getSignature(messageHash, committeeMemberPkB);
         signatures[2] = getSignature(messageHash, committeeMemberPkC);
         signatures[3] = getSignature(messageHash, committeeMemberPkD);
-        vm.expectRevert(bytes("BridgeCommittee: message does not match type"));
+        vm.expectRevert(bytes("MessageVerifier: message does not match type"));
         bridge.upgradeWithSignatures(signatures, message);
     }
 

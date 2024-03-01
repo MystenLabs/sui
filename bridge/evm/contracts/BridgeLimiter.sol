@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "./interfaces/IBridgeLimiter.sol";
-import "./interfaces/IBridgeTokens.sol";
+import "./interfaces/IBridgeUtils.sol";
 import "./utils/CommitteeUpgradeable.sol";
 
 /// @title BridgeLimiter
@@ -22,7 +22,6 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
     // total limit in USD (4 decimal precision) (e.g. 10000000 => 1000 USD)
     uint64 public totalLimit;
     uint32 public oldestHourTimestamp;
-    IBridgeTokens public tokens;
 
     /* ========== INITIALIZER ========== */
 
@@ -30,18 +29,14 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
     /// @dev this function should be called directly after deployment (see OpenZeppelin upgradeable
     /// standards).
     /// @param _committee The address of the BridggeCommittee contract.
-    /// @param _tokens The address of the BridgeTokens contract.
     /// @param _tokenPrices An array of token prices (with 4 decimal precision).
     /// @param _totalLimit The total limit for the bridge (4 decimal precision).
-    function initialize(
-        address _committee,
-        address _tokens,
-        uint256[] memory _tokenPrices,
-        uint64 _totalLimit
-    ) external initializer {
+    function initialize(address _committee, uint256[] memory _tokenPrices, uint64 _totalLimit)
+        external
+        initializer
+    {
         __CommitteeUpgradeable_init(_committee);
         __Ownable_init(msg.sender);
-        tokens = IBridgeTokens(_tokens);
         for (uint8 i; i < _tokenPrices.length; i++) {
             tokenPrices[i] = _tokenPrices[i];
         }
@@ -92,7 +87,7 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
     /// @return amount in USD (4 decimal precision).
     function calculateAmountInUSD(uint8 tokenID, uint256 amount) public view returns (uint256) {
         // get the token address
-        address tokenAddress = tokens.getAddress(tokenID);
+        address tokenAddress = committee.utils().getTokenAddress(tokenID);
         // get the decimals
         uint8 decimals = IERC20Metadata(tokenAddress).decimals();
 
@@ -168,7 +163,10 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
         (uint8 sourceChainID, uint64 newLimit) =
             BridgeMessage.decodeUpdateLimitPayload(message.payload);
 
-        // TODO: expose supportedChainIDs from SuiBridge contract and check that the sourceChainID is supported
+        require(
+            committee.utils().isChainSupported(sourceChainID),
+            "BridgeLimiter: Source chain not supported"
+        );
 
         // update the limit
         totalLimit = newLimit;

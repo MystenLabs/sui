@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "../utils/BridgeMessage.sol";
+import "./IBridgeUtils.sol";
 
 /// @title IBridgeCommittee
 /// @notice Interface for the BridgeCommittee contract.
@@ -15,8 +16,9 @@ interface IBridgeCommittee {
         external
         view;
 
-    /// @notice Returns the chain ID of the bridge.
-    function chainID() external view returns (uint8);
+    /// @notice Returns the interface of the BridgeUtils contract.
+    /// @return The interface of the BridgeUtils contract.
+    function utils() external view returns (IBridgeUtils);
 
     /* ========== EVENTS ========== */
 

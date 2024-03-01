@@ -7,7 +7,7 @@ import "./utils/CommitteeUpgradeable.sol";
 import "./interfaces/ISuiBridge.sol";
 import "./interfaces/IBridgeVault.sol";
 import "./interfaces/IBridgeLimiter.sol";
-import "./interfaces/IBridgeTokens.sol";
+import "./interfaces/IBridgeUtils.sol";
 import "./interfaces/IWETH9.sol";
 
 /// @title SuiBridge
@@ -20,42 +20,28 @@ import "./interfaces/IWETH9.sol";
 contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     /* ========== STATE VARIABLES ========== */
 
+    mapping(uint64 nonce => bool isProcessed) public isTransferProcessed;
     IBridgeVault public vault;
     IBridgeLimiter public limiter;
-    IBridgeTokens public tokens;
     IWETH9 public wETH;
-    mapping(uint64 nonce => bool isProcessed) public isMessageProcessed;
-    mapping(uint8 chainId => bool isSupported) public isChainSupported;
 
     /* ========== INITIALIZER ========== */
 
     /// @notice Initializes the SuiBridge contract with the provided parameters.
     /// @dev this function should be called directly after deployment (see OpenZeppelin upgradeable standards).
     /// @param _committee The address of the committee contract.
-    /// @param _tokens The address of the bridge tokens contract.
     /// @param _vault The address of the bridge vault contract.
     /// @param _limiter The address of the bridge limiter contract.
     /// @param _wETH The address of the WETH9 contract.
-    /// @param supportedChainIDs array of supported chain IDs.
-    function initialize(
-        address _committee,
-        address _tokens,
-        address _vault,
-        address _limiter,
-        address _wETH,
-        uint8[] memory supportedChainIDs
-    ) external initializer {
+    function initialize(address _committee, address _vault, address _limiter, address _wETH)
+        external
+        initializer
+    {
         __CommitteeUpgradeable_init(_committee);
         __Pausable_init();
-        tokens = IBridgeTokens(_tokens);
         vault = IBridgeVault(_vault);
         limiter = IBridgeLimiter(_limiter);
         wETH = IWETH9(_wETH);
-
-        for (uint8 i; i < supportedChainIDs.length; i++) {
-            require(supportedChainIDs[i] != committee.chainID(), "SuiBridge: Cannot support self");
-            isChainSupported[supportedChainIDs[i]] = true;
-        }
     }
 
     /* ========== EXTERNAL FUNCTIONS ========== */
@@ -76,19 +62,19 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         onlySupportedChain(message.chainID)
     {
         // verify that message has not been processed
-        require(!isMessageProcessed[message.nonce], "SuiBridge: Message already processed");
+        require(!isTransferProcessed[message.nonce], "SuiBridge: Message already processed");
 
         BridgeMessage.TokenTransferPayload memory tokenTransferPayload =
             BridgeMessage.decodeTokenTransferPayload(message.payload);
 
         // verify target chain ID is this chain ID
         require(
-            tokenTransferPayload.targetChain == committee.chainID(),
+            tokenTransferPayload.targetChain == committee.utils().chainID(),
             "SuiBridge: Invalid target chain"
         );
 
         // convert amount to ERC20 token decimals
-        uint256 erc20AdjustedAmount = tokens.convertSuiToERC20Decimal(
+        uint256 erc20AdjustedAmount = committee.utils().convertSuiToERC20Decimal(
             tokenTransferPayload.tokenID, tokenTransferPayload.amount
         );
 
@@ -97,7 +83,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         );
 
         // mark message as processed
-        isMessageProcessed[message.nonce] = true;
+        isTransferProcessed[message.nonce] = true;
 
         emit BridgedTokensTransferred(
             message.chainID,
@@ -144,9 +130,9 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         bytes memory targetAddress,
         uint8 destinationChainID
     ) external whenNotPaused nonReentrant onlySupportedChain(destinationChainID) {
-        require(tokens.isTokenSupported(tokenID), "SuiBridge: Unsupported token");
+        require(committee.utils().isTokenSupported(tokenID), "SuiBridge: Unsupported token");
 
-        address tokenAddress = tokens.getAddress(tokenID);
+        address tokenAddress = committee.utils().getTokenAddress(tokenID);
 
         // check that the bridge contract has allowance to transfer the tokens
         require(
@@ -158,10 +144,10 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         IERC20(tokenAddress).transferFrom(msg.sender, address(vault), amount);
 
         // Adjust the amount to emit.
-        uint64 suiAdjustedAmount = tokens.convertERC20ToSuiDecimal(tokenID, amount);
+        uint64 suiAdjustedAmount = committee.utils().convertERC20ToSuiDecimal(tokenID, amount);
 
         emit TokensDeposited(
-            committee.chainID(),
+            committee.utils().chainID(),
             nonces[BridgeMessage.TOKEN_TRANSFER],
             destinationChainID,
             tokenID,
@@ -194,10 +180,11 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         wETH.transfer(address(vault), amount);
 
         // Adjust the amount to emit.
-        uint64 suiAdjustedAmount = tokens.convertERC20ToSuiDecimal(BridgeMessage.ETH, amount);
+        uint64 suiAdjustedAmount =
+            committee.utils().convertERC20ToSuiDecimal(BridgeMessage.ETH, amount);
 
         emit TokensDeposited(
-            committee.chainID(),
+            committee.utils().chainID(),
             nonces[BridgeMessage.TOKEN_TRANSFER],
             destinationChainID,
             BridgeMessage.ETH,
@@ -221,7 +208,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         whenNotPaused
         limitNotExceeded(tokenID, amount)
     {
-        address tokenAddress = tokens.getAddress(tokenID);
+        address tokenAddress = committee.utils().getTokenAddress(tokenID);
 
         // Check that the token address is supported
         require(tokenAddress != address(0), "SuiBridge: Unsupported token");
@@ -255,7 +242,10 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     /// @dev Requires the target chain ID is supported.
     /// @param targetChainID The ID of the target chain.
     modifier onlySupportedChain(uint8 targetChainID) {
-        require(isChainSupported[targetChainID], "SuiBridge: Target chain not supported");
+        require(
+            committee.utils().isChainSupported(targetChainID),
+            "SuiBridge: Target chain not supported"
+        );
         _;
     }
 }
