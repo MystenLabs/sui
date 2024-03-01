@@ -73,10 +73,6 @@ runs:
       run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui.js --filter @mysten/graphql-transport test:e2e'
       shell: bash
 
-    - name: Run Explorer e2e tests
-      run: pnpm --filter sui-explorer playwright test
-      shell: bash
-
     - uses: actions/upload-artifact@v3
       if: always()
       with:

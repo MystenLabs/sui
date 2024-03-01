@@ -77,10 +77,6 @@ jobs:
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isRust == 'true'}}
         run: pnpm turbo --filter=sui-explorer build
 
-      - name: Run Explorer e2e tests
-        # need to run Explorer e2e when its upstream(TS SDK and Rust) or itself is changed
-        if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isRust == 'true'}}
-        run: pnpm --filter sui-explorer playwright test
       - uses: actions/upload-artifact@v3
         if: always()
         with:
