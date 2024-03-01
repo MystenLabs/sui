@@ -21,6 +21,7 @@ enum Routes {
 	epoch = '/epoch/:id',
 	address = '/address/:id',
 	validator = '/validator/:id',
+	validators = '/validators',
 }
 
 function useMatchPath() {
@@ -32,6 +33,7 @@ function useMatchPath() {
 		{ path: Routes.epoch },
 		{ path: Routes.address },
 		{ path: Routes.validator },
+		{ path: Routes.validators },
 	];
 	const matches = matchRoutes(someRoutes, location);
 	return matches?.[0]?.route.path;
@@ -95,6 +97,11 @@ export function useRedirectUrl(isPackage?: boolean) {
 				return {
 					suiscan: `/validator/${id}`,
 					suivision: `/validator/${id}`,
+				};
+			case Routes.validators:
+				return {
+					suiscan: `/validators`,
+					suivision: `/validators`,
 				};
 			default: {
 				return {
