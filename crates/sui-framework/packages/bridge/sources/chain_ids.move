@@ -8,8 +8,7 @@ module bridge::chain_ids {
     // Chain IDs
     const SuiMainnet: u8 = 0;
     const SuiTestnet: u8 = 1;
-    const SuiDevnet: u8 = 2;
-    const SuiLocalTest: u8 = 3;
+    const SuiCustom: u8 = 2;
 
     const EthMainnet: u8 = 10;
     const EthSepolia: u8 = 11;
@@ -30,12 +29,8 @@ module bridge::chain_ids {
         SuiTestnet
     }
 
-    public fun sui_local_test(): u8 {
-        SuiLocalTest
-    }
-
-    public fun sui_devnet(): u8 {
-        SuiDevnet
+    public fun sui_custom(): u8 {
+        SuiCustom
     }
 
     public fun eth_mainnet(): u8 {
@@ -62,8 +57,7 @@ module bridge::chain_ids {
         assert!(
             id == SuiMainnet ||
             id == SuiTestnet ||
-            id == SuiDevnet ||
-            id == SuiLocalTest ||
+            id == SuiCustom ||
             id == EthMainnet ||
             id == EthSepolia ||
             id == EthLocalTest,
@@ -76,18 +70,14 @@ module bridge::chain_ids {
             BridgeRoute { source: SuiMainnet, destination: EthMainnet },
             BridgeRoute { source: EthMainnet, destination: SuiMainnet },
 
-            BridgeRoute { source: SuiDevnet, destination: EthSepolia },
-            BridgeRoute { source: SuiDevnet, destination: EthLocalTest },
+            BridgeRoute { source: SuiCustom, destination: EthSepolia },
+            BridgeRoute { source: SuiCustom, destination: EthLocalTest },
             BridgeRoute { source: SuiTestnet, destination: EthSepolia },
             BridgeRoute { source: SuiTestnet, destination: EthLocalTest },
-            BridgeRoute { source: SuiLocalTest, destination: EthLocalTest },
-            BridgeRoute { source: SuiLocalTest, destination: EthSepolia },
-            BridgeRoute { source: EthSepolia, destination: SuiDevnet },
+            BridgeRoute { source: EthSepolia, destination: SuiCustom },
             BridgeRoute { source: EthSepolia, destination: SuiTestnet },
-            BridgeRoute { source: EthSepolia, destination: SuiLocalTest },
-            BridgeRoute { source: EthLocalTest, destination: SuiDevnet },
+            BridgeRoute { source: EthLocalTest, destination: SuiCustom },
             BridgeRoute { source: EthLocalTest, destination: SuiTestnet },
-            BridgeRoute { source: EthLocalTest, destination: SuiLocalTest }
         ]
     }
 

@@ -1022,11 +1022,11 @@ mod checked {
             .expect("Unable to create Bridge object UID!");
 
         let bridge_chain_id = if chain_id == get_mainnet_chain_identifier() {
-            0u8
+            0u8 // SuiMainnet
         } else if chain_id == get_testnet_chain_identifier() {
-            1u8
+            1u8 // SuiTestnet
         } else {
-            2u8
+            2u8 // SuiCustom
         };
 
         let bridge_chain_id = builder.pure(bridge_chain_id).unwrap();
