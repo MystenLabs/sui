@@ -2,7 +2,7 @@
 name = "test_functions"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+Sui = { local = "../../../../sui-framework/packages/sui-framework" }
 
 [addresses]
 test_functions = "0x0"
