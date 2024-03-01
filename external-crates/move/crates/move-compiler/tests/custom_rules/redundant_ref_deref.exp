@@ -1,0 +1,24 @@
+warning[W09003]: unused assignment
+   ┌─ tests/custom_rules/redundant_ref_deref.move:10:13
+   │
+10 │         let ref1 = &resource;
+   │             ^^^^ Unused assignment for variable 'ref1'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_ref1')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09003]: unused assignment
+   ┌─ tests/custom_rules/redundant_ref_deref.move:13:13
+   │
+13 │         let ref2 = &*(&resource);
+   │             ^^^^ Unused assignment for variable 'ref2'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_ref2')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W08001]: 
+   ┌─ tests/custom_rules/redundant_ref_deref.move:13:20
+   │
+13 │         let ref2 = &*(&resource);
+   │                    ^^^^^^^^^^^^^ Redundant borrow-dereference detected. Consider removing the borrow-dereference operation and using the expression directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
