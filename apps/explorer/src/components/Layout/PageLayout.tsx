@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
-import { useAppsBackend, useElementDimensions } from '@mysten/core';
+import {useAppsBackend, useElementDimensions, useLocalStorage} from '@mysten/core';
 import { Heading, LoadingIndicator, Text } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { type ReactNode, useRef } from 'react';
+import {type ReactNode, useEffect, useRef} from 'react';
 
 import Footer from '../footer/Footer';
 import Header from '../header/Header';
@@ -27,11 +27,6 @@ enum RedirectExplorer {
 	SUIVISION = 'suivision',
 }
 
-const isSuiVisionFirst = new Date().getMilliseconds() % 2 === 0;
-const redirectExplorers = isSuiVisionFirst
-	? [RedirectExplorer.SUIVISION, RedirectExplorer.SUISCAN]
-	: [RedirectExplorer.SUISCAN, RedirectExplorer.SUIVISION];
-
 export type PageLayoutProps = {
 	gradient?: {
 		content: ReactNode;
@@ -43,6 +38,23 @@ export type PageLayoutProps = {
 };
 
 const DEFAULT_HEADER_HEIGHT = 68;
+
+function useRedirectExplorerOrder() {
+	const [isSuiVisionFirst, setSuiVisionOrder] = useLocalStorage<boolean | undefined>(
+		'is-suivision-first',
+		undefined,
+	);
+
+	useEffect(() => {
+		if (typeof isSuiVisionFirst === 'undefined') {
+			setSuiVisionOrder(new Date().getMilliseconds() % 2 === 0)
+		}
+	}, [isSuiVisionFirst]);
+
+	return isSuiVisionFirst
+		? [RedirectExplorer.SUIVISION, RedirectExplorer.SUISCAN]
+		: [RedirectExplorer.SUISCAN, RedirectExplorer.SUIVISION];
+}
 
 function ImageLink({ type }: { type: RedirectExplorer }) {
 	const { suiscanUrl, suivisionUrl } = useRedirectExplorerUrl();
@@ -77,6 +89,8 @@ function ImageLink({ type }: { type: RedirectExplorer }) {
 }
 
 function RedirectContent() {
+	const redirectExplorers = useRedirectExplorerOrder();
+
 	return (
 		<section className="flex flex-col justify-center gap-10 sm:flex-row">
 			{redirectExplorers.map((type) => (
@@ -104,6 +118,7 @@ function HeaderLink({ type }: { type: RedirectExplorer }) {
 
 export function RedirectHeader() {
 	const { hasMatch } = useRedirectExplorerUrl();
+	const redirectExplorers = useRedirectExplorerOrder();
 
 	return (
 		<section
