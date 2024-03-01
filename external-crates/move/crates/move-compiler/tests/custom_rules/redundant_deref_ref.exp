@@ -1,0 +1,32 @@
+warning[W09003]: unused assignment
+   ┌─ tests/custom_rules/redundant_deref_ref.move:11:13
+   │
+11 │         let value1 = *ref1;
+   │             ^^^^^^ Unused assignment for variable 'value1'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_value1')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09003]: unused assignment
+   ┌─ tests/custom_rules/redundant_deref_ref.move:15:13
+   │
+15 │         let value2 = *ref2;
+   │             ^^^^^^ Unused assignment for variable 'value2'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_value2')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09003]: unused assignment
+   ┌─ tests/custom_rules/redundant_deref_ref.move:17:13
+   │
+17 │         let resource_ref = &resource;
+   │             ^^^^^^^^^^^^ Unused assignment for variable 'resource_ref'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_resource_ref')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09003]: unused assignment
+   ┌─ tests/custom_rules/redundant_deref_ref.move:18:13
+   │
+18 │         let resource_ref_mut = &mut resource;
+   │             ^^^^^^^^^^^^^^^^ Unused assignment for variable 'resource_ref_mut'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_resource_ref_mut')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
