@@ -6,6 +6,8 @@ published-at = "0xb"
 [dependencies]
 MoveStdlib = { local = "../move-stdlib" }
 Sui = { local = "../sui-framework" }
+SuiSystem = { local = "../sui-system" }
 
 [addresses]
 bridge = "0xb"
+

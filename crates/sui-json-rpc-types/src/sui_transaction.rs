@@ -25,7 +25,9 @@ use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use sui_types::crypto::SuiSignature;
-use sui_types::digests::{ConsensusCommitDigest, ObjectDigest, TransactionEventsDigest};
+use sui_types::digests::{
+    CheckpointDigest, ConsensusCommitDigest, ObjectDigest, TransactionEventsDigest,
+};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::execution_status::ExecutionStatus;
@@ -516,9 +518,16 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::DenyListStateCreate => {
                                 SuiEndOfEpochTransactionKind::CoinDenyListStateCreate
                             }
-                            EndOfEpochTransactionKind::BridgeStateCreate => {
-                                SuiEndOfEpochTransactionKind::BridgeStateCreate
+                            EndOfEpochTransactionKind::BridgeStateCreate(chain_id) => {
+                                SuiEndOfEpochTransactionKind::BridgeStateCreate(
+                                    (*chain_id.as_bytes()).into(),
+                                )
                             }
+                            EndOfEpochTransactionKind::BridgeCommitteeInit(
+                                bridge_shared_version,
+                            ) => SuiEndOfEpochTransactionKind::BridgeCommitteeUpdate(
+                                bridge_shared_version,
+                            ),
                         })
                         .collect(),
                 })
@@ -1457,7 +1466,8 @@ pub enum SuiEndOfEpochTransactionKind {
     AuthenticatorStateExpire(SuiAuthenticatorStateExpire),
     RandomnessStateCreate,
     CoinDenyListStateCreate,
-    BridgeStateCreate,
+    BridgeStateCreate(CheckpointDigest),
+    BridgeCommitteeUpdate(SequenceNumber),
 }
 
 #[serde_as]

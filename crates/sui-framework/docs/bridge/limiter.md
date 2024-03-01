@@ -241,7 +241,7 @@
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_new">new</a>(): <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a> {
-    // hardcoded limit for <a href="bridge.md#0xb_bridge">bridge</a> genesis
+    // hardcoded limit for <a href="bridge.md#0xb_bridge">bridge</a> <a href="dependencies/sui-system/genesis.md#0x3_genesis">genesis</a>
     <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a> {
         transfer_limits: <a href="limiter.md#0xb_limiter_initial_transfer_limits">initial_transfer_limits</a>(),
         notional_values: <a href="limiter.md#0xb_limiter_initial_notional_values">initial_notional_values</a>(),

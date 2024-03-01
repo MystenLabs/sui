@@ -5,15 +5,12 @@ module bridge::message {
     use std::vector;
 
     use sui::bcs;
-    use sui::bcs::{BCS};
-    use bridge::treasury;
+    use sui::bcs::BCS;
+
     use bridge::chain_ids;
     use bridge::message_types;
+    use bridge::treasury;
 
-    #[test_only]
-    use bridge::usdc::USDC;
-    #[test_only]
-    use bridge::btc::BTC;
     #[test_only]
     use sui::address;
     #[test_only]
@@ -25,11 +22,15 @@ module bridge::message {
     #[test_only]
     use sui::test_scenario;
     #[test_only]
+    use sui::test_utils::assert_eq;
+    #[test_only]
+    use bridge::btc::BTC;
+    #[test_only]
     use bridge::eth::ETH;
     #[test_only]
     use bridge::treasury::token_id;
     #[test_only]
-    use sui::test_utils::assert_eq;
+    use bridge::usdc::USDC;
 
     const CURRENT_MESSAGE_VERSION: u8 = 1;
     const ECDSA_ADDRESS_LENGTH: u64 = 20;
@@ -37,6 +38,12 @@ module bridge::message {
     const ETrailingBytes: u64 = 0;
     const EInvalidAddressLength: u64 = 1;
     const EEmptyList: u64 = 2;
+    const EInvalidMessageType: u64 = 3;
+    const EInvalidEmergencyOpType: u64 = 4;
+
+    // Emergency Op types
+    const PAUSE: u8 = 0;
+    const UNPAUSE: u8 = 1;
 
     struct BridgeMessage has copy, drop, store {
         message_type: u8,
@@ -68,7 +75,7 @@ module bridge::message {
         blocklist_type: u8,
         validator_eth_addresses: vector<vector<u8>>
     }
-    
+
     // Update the limit for route from sending_chain to receiving_chain
     // This message is supposed to be processed by `chain` or the receiving chain
     struct UpdateBridgeLimit has drop {
@@ -414,6 +421,40 @@ module bridge::message {
 
     public fun update_asset_price_payload_new_price(self: &UpdateAssetPrice): u64 {
         self.new_price
+    }
+
+    public fun emergency_op_pause(): u8 {
+        PAUSE
+    }
+
+    public fun emergency_op_unpause(): u8 {
+        UNPAUSE
+    }
+
+    /// Return the required signature threshold for the message, values are voting power in the scale of 10000
+    public fun required_voting_power(self: &BridgeMessage): u64 {
+        let message_type = message_type(self);
+
+        if (message_type == message_types::token()) {
+            3334
+        } else if (message_type == message_types::emergency_op()) {
+            let payload = extract_emergency_op_payload(self);
+            if (payload.op_type == PAUSE) {
+                450
+            } else if (payload.op_type == UNPAUSE) {
+                5001
+            } else {
+                abort EInvalidEmergencyOpType
+            }
+        } else if (message_type == message_types::committee_blocklist()) {
+            5001
+        } else if (message_type == message_types::update_asset_price()) {
+            5001
+        } else if (message_type == message_types::update_bridge_limit()) {
+            5001
+        } else {
+            abort EInvalidMessageType
+        }
     }
 
     fun reverse_bytes(bytes: vector<u8>): vector<u8> {
