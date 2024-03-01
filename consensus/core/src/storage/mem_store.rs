@@ -11,9 +11,10 @@ use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
 use super::Store;
+use crate::commit::{CommitAPI as _, TrustedCommit};
 use crate::{
     block::{BlockDigest, BlockRef, Round, VerifiedBlock},
-    commit::{Commit, CommitIndex},
+    commit::CommitIndex,
     error::ConsensusResult,
 };
 
@@ -25,7 +26,7 @@ pub(crate) struct MemStore {
 struct Inner {
     blocks: BTreeMap<(Round, AuthorityIndex, BlockDigest), VerifiedBlock>,
     digests_by_authorities: BTreeSet<(AuthorityIndex, Round, BlockDigest)>,
-    commits: BTreeMap<CommitIndex, Commit>,
+    commits: BTreeMap<CommitIndex, TrustedCommit>,
     last_committed_rounds: Vec<Round>,
 }
 
@@ -48,7 +49,7 @@ impl Store for MemStore {
     fn write(
         &self,
         blocks: Vec<VerifiedBlock>,
-        commits: Vec<Commit>,
+        commits: Vec<TrustedCommit>,
         last_committed_rounds: Vec<Round>,
     ) -> ConsensusResult<()> {
         let mut inner = self.inner.write();
@@ -65,7 +66,7 @@ impl Store for MemStore {
             ));
         }
         for commit in commits {
-            inner.commits.insert(commit.index, commit);
+            inner.commits.insert(commit.index(), commit);
         }
         inner.last_committed_rounds = last_committed_rounds;
 
@@ -144,7 +145,7 @@ impl Store for MemStore {
         Ok(blocks)
     }
 
-    fn read_last_commit(&self) -> ConsensusResult<Option<Commit>> {
+    fn read_last_commit(&self) -> ConsensusResult<Option<TrustedCommit>> {
         let inner = self.inner.read();
         Ok(inner
             .commits
@@ -152,7 +153,7 @@ impl Store for MemStore {
             .map(|(_, commit)| commit.clone()))
     }
 
-    fn scan_commits(&self, start_commit_index: CommitIndex) -> ConsensusResult<Vec<Commit>> {
+    fn scan_commits(&self, start_commit_index: CommitIndex) -> ConsensusResult<Vec<TrustedCommit>> {
         let inner = self.inner.read();
         let mut commits = vec![];
         for (_, commit) in inner

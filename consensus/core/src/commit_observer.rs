@@ -6,6 +6,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
+use crate::commit::CommitAPI;
 use crate::error::{ConsensusError, ConsensusResult};
 use crate::{
     block::{timestamp_utc_ms, BlockAPI, VerifiedBlock},
@@ -97,7 +98,7 @@ impl CommitObserver {
             .expect("Reading the last commit should not fail");
 
         if let Some(last_commit) = last_commit {
-            let last_commit_index = last_commit.index;
+            let last_commit_index = last_commit.index();
 
             assert!(last_commit_index >= last_processed_index);
             if last_commit_index == last_processed_index {
@@ -114,7 +115,7 @@ impl CommitObserver {
         for commit in unsent_commits {
             // Resend all the committed subdags to the consensus output channel
             // for all the commits above the last processed index.
-            assert!(commit.index > last_processed_index);
+            assert!(commit.index() > last_processed_index);
             let committed_subdag = load_committed_subdag_from_store(self.store.as_ref(), commit);
 
             // Failures in sender.send() are assumed to be permanent
@@ -242,7 +243,7 @@ mod tests {
                 expected_stored_refs.push(block.reference());
                 assert!(block.round() <= leaders[idx].round());
             }
-            assert_eq!(subdag.commit_index, idx as u64 + 1);
+            assert_eq!(subdag.commit_index, idx as CommitIndex + 1);
         }
 
         // Check commits sent over consensus output channel is accurate
@@ -260,7 +261,7 @@ mod tests {
 
         // Check commits have been persisted to storage
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
-        assert_eq!(last_commit.index, commits.last().unwrap().commit_index);
+        assert_eq!(last_commit.index(), commits.last().unwrap().commit_index);
         let all_stored_commits = mem_store.scan_commits(0).unwrap();
         assert_eq!(all_stored_commits.len(), leaders.len());
         let blocks_existence = mem_store.contains_blocks(&expected_stored_refs).unwrap();
@@ -331,7 +332,7 @@ mod tests {
         // Check last stored commit is correct
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
         assert_eq!(
-            last_commit.index,
+            last_commit.index(),
             expected_last_processed_index as CommitIndex
         );
 
@@ -367,7 +368,7 @@ mod tests {
         // that was sent over the channel regardless of how the consumer handled
         // the commit on their end.
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
-        assert_eq!(last_commit.index, expected_last_sent_index as CommitIndex);
+        assert_eq!(last_commit.index(), expected_last_sent_index as CommitIndex);
 
         // Re-create commit observer starting from index 2 which represents the
         // last processed index from the consumer over consensus output channel
@@ -451,7 +452,7 @@ mod tests {
         // Check last stored commit is correct
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
         assert_eq!(
-            last_commit.index,
+            last_commit.index(),
             expected_last_processed_index as CommitIndex
         );
 

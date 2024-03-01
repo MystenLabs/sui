@@ -502,8 +502,8 @@ mod test {
 
     use super::*;
     use crate::{
-        block::TestBlock, block_verifier::NoopBlockVerifier, storage::mem_store::MemStore,
-        transaction::TransactionClient,
+        block::TestBlock, block_verifier::NoopBlockVerifier, commit::CommitAPI as _,
+        storage::mem_store::MemStore, transaction::TransactionClient,
     };
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
@@ -603,7 +603,7 @@ mod test {
         // There were no commits prior to the core starting up but there was completed
         // rounds up to and including round 4. So we should commit leaders in round 1 & 2
         // as soon as the new block for round 5 is proposed.
-        assert_eq!(last_commit.index, 2);
+        assert_eq!(last_commit.index(), 2);
         assert_eq!(dag_state.read().last_commit_index(), 2);
         let all_stored_commits = store.scan_commits(0).unwrap();
         assert_eq!(all_stored_commits.len(), 2);
@@ -718,7 +718,7 @@ mod test {
         // There were no commits prior to the core starting up but there was completed
         // rounds up to round 4. So we should commit leaders in round 1 & 2 as soon
         // as the new block for round 4 is proposed.
-        assert_eq!(last_commit.index, 2);
+        assert_eq!(last_commit.index(), 2);
         assert_eq!(dag_state.read().last_commit_index(), 2);
         let all_stored_commits = store.scan_commits(0).unwrap();
         assert_eq!(all_stored_commits.len(), 2);
@@ -950,7 +950,7 @@ mod test {
                 .expect("last commit should be set");
             // There are 1 leader rounds with rounds completed up to and including
             // round 4
-            assert_eq!(last_commit.index, 1);
+            assert_eq!(last_commit.index(), 1);
             let all_stored_commits = core.store.scan_commits(0).unwrap();
             assert_eq!(all_stored_commits.len(), 1);
         }
@@ -1021,7 +1021,7 @@ mod test {
             // There are 8 leader rounds with rounds completed up to and including
             // round 9. Round 10 blocks will only include their own blocks, so the
             // 8th leader will not be committed.
-            assert_eq!(last_commit.index, 7);
+            assert_eq!(last_commit.index(), 7);
             let all_stored_commits = core.store.scan_commits(0).unwrap();
             assert_eq!(all_stored_commits.len(), 7);
         }
@@ -1090,7 +1090,7 @@ mod test {
         // There are 8 leader rounds with rounds completed up to and including
         // round 10. However because there were no blocks produced for authority 3
         // 2 leader rounds will be skipped.
-        assert_eq!(last_commit.index, 6);
+        assert_eq!(last_commit.index(), 6);
         let all_stored_commits = core.store.scan_commits(0).unwrap();
         assert_eq!(all_stored_commits.len(), 6);
     }

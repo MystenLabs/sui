@@ -1,9 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{self, Display, Formatter};
+use std::{
+    fmt::{self, Display, Formatter},
+    ops::Deref,
+    sync::Arc,
+};
 
 use consensus_config::AuthorityIndex;
+use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -11,6 +16,9 @@ use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
     storage::Store,
 };
+
+/// Index of a commit among all consensus commits.
+pub type CommitIndex = u32;
 
 /// Default wave length for all committers. A longer wave length increases the
 /// chance of committing the leader under asynchrony at the cost of latency in
@@ -25,23 +33,111 @@ pub(crate) const MINIMUM_WAVE_LENGTH: Round = 3;
 #[allow(unused)]
 pub(crate) type WaveNumber = u32;
 
-/// Index of the commit.
-pub(crate) type CommitIndex = u64;
+/// Versioned representation of a consensus commit.
+///
+/// Commit is used to persist commit metadata for recovery. It is also exchanged over the network.
+/// To balance being functional and succinct, a field must meet these requirements to be added
+/// to the struct:
+/// - helps with recoverying CommittedSubDag locally and for peers catching up.
+/// - cannot be derived from a sequence of Commits and other persisted values.
+///
+/// For example, transactions in blocks should not be included in Commit, because they can be
+/// retrieved from blocks specified in Commit. Last committed round per authority also should not
+/// be included, because it can be derived from the latest value in storage and the additional
+/// sequence of Commits.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[enum_dispatch(CommitAPI)]
+pub(crate) enum Commit {
+    V1(CommitV1),
+}
+
+impl Commit {
+    /// Create a new commit.
+    pub(crate) fn new(index: CommitIndex, leader: BlockRef, blocks: Vec<BlockRef>) -> Self {
+        Commit::V1(CommitV1 {
+            index,
+            leader,
+            blocks,
+        })
+    }
+}
+
+/// Accessors for Commit.
+#[enum_dispatch]
+pub(crate) trait CommitAPI {
+    fn index(&self) -> CommitIndex;
+    fn leader(&self) -> BlockRef;
+    fn blocks(&self) -> &[BlockRef];
+}
 
 /// Specifies one consensus commit.
 /// It is stored on disk, so it does not contain blocks which are stored individually.
-// TODO: store internal data in a refcounted and versioned struct. Remove last_committed_rounds.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-pub struct Commit {
+pub(crate) struct CommitV1 {
     /// Index of the commit.
     /// First commit after genesis has an index of 1, then every next commit has an index incremented by 1.
-    pub index: CommitIndex,
+    index: CommitIndex,
     /// A reference to the the commit leader.
-    pub leader: BlockRef,
+    leader: BlockRef,
     /// Refs to committed blocks, in the commit order.
-    pub blocks: Vec<BlockRef>,
-    /// Last committed round per authority.
-    pub last_committed_rounds: Vec<Round>,
+    blocks: Vec<BlockRef>,
+}
+
+impl CommitAPI for CommitV1 {
+    fn index(&self) -> CommitIndex {
+        self.index
+    }
+
+    fn leader(&self) -> BlockRef {
+        self.leader
+    }
+
+    fn blocks(&self) -> &[BlockRef] {
+        &self.blocks
+    }
+}
+
+/// A commit is trusted when it is produced locally or certified by a quorum of authorities.
+/// Blocks referenced by TrustedCommit are assumed to be valid.
+/// Only trusted Commit can be sent to execution.
+///
+/// Note: clone() is relatively cheap with the underlying data refcounted.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct TrustedCommit {
+    inner: Arc<Commit>,
+    // TODO: store digest and serialized bytes.
+}
+
+impl TrustedCommit {
+    pub(crate) fn new_trusted(commit: Commit) -> Self {
+        Self {
+            inner: Arc::new(commit),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test(
+        index: CommitIndex,
+        leader: BlockRef,
+        blocks: Vec<BlockRef>,
+    ) -> Self {
+        Self {
+            inner: Arc::new(Commit::new(index, leader, blocks)),
+        }
+    }
+
+    pub(crate) fn inner(&self) -> &Commit {
+        &self.inner
+    }
+}
+
+/// Allow easy access on the underlying Commit.
+impl Deref for TrustedCommit {
+    type Target = Commit;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 
 /// The output of consensus is an ordered list of [`CommittedSubDag`]. The application
@@ -118,11 +214,11 @@ impl fmt::Debug for CommittedSubDag {
 // Recovers the full CommittedSubDag from block store, based on Commit.
 pub fn load_committed_subdag_from_store(
     block_store: &dyn Store,
-    commit_data: Commit,
+    commit: TrustedCommit,
 ) -> CommittedSubDag {
     let mut leader_block_idx = None;
     let commit_blocks = block_store
-        .read_blocks(&commit_data.blocks)
+        .read_blocks(commit.blocks())
         .expect("We should have the block referenced in the commit data");
     let blocks = commit_blocks
         .into_iter()
@@ -130,7 +226,7 @@ pub fn load_committed_subdag_from_store(
         .map(|(idx, commit_block_opt)| {
             let commit_block =
                 commit_block_opt.expect("We should have the block referenced in the commit data");
-            if commit_block.reference() == commit_data.leader {
+            if commit_block.reference() == commit.leader() {
                 leader_block_idx = Some(idx);
             }
             commit_block
@@ -139,7 +235,7 @@ pub fn load_committed_subdag_from_store(
     let leader_block_idx = leader_block_idx.expect("Leader block must be in the sub-dag");
     let leader_block_ref = blocks[leader_block_idx].reference();
     let timestamp_ms = blocks[leader_block_idx].timestamp_ms();
-    CommittedSubDag::new(leader_block_ref, blocks, timestamp_ms, commit_data.index)
+    CommittedSubDag::new(leader_block_ref, blocks, timestamp_ms, commit.index())
 }
 
 #[allow(unused)]
@@ -148,12 +244,14 @@ pub struct CommitConsumer {
     pub sender: UnboundedSender<CommittedSubDag>,
     // The last commit index that the consumer has processed. This is useful for
     // crash/recovery so mysticeti can replay the commits from `last_processed_index + 1`.
-    pub last_processed_index: u64,
+    pub last_processed_index: CommitIndex,
 }
 
-#[allow(unused)]
 impl CommitConsumer {
-    pub fn new(sender: UnboundedSender<CommittedSubDag>, last_processed_index: u64) -> Self {
+    pub fn new(
+        sender: UnboundedSender<CommittedSubDag>,
+        last_processed_index: CommitIndex,
+    ) -> Self {
         Self {
             sender,
             last_processed_index,
@@ -294,14 +392,9 @@ mod tests {
         let leader_block = leader.unwrap();
         let leader_ref = leader_block.reference();
         let commit_index = 1;
-        let commit_data = Commit {
-            index: commit_index,
-            leader: leader_ref,
-            blocks: blocks.clone(),
-            last_committed_rounds: vec![],
-        };
+        let commit = TrustedCommit::new_for_test(commit_index, leader_ref, blocks.clone());
 
-        let subdag = load_committed_subdag_from_store(store.as_ref(), commit_data);
+        let subdag = load_committed_subdag_from_store(store.as_ref(), commit);
         assert_eq!(subdag.leader, leader_ref);
         assert_eq!(subdag.timestamp_ms, leader_block.timestamp_ms());
         assert_eq!(

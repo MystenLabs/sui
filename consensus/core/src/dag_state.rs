@@ -14,7 +14,7 @@ use tracing::error;
 
 use crate::{
     block::{genesis_blocks, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
-    commit::{Commit, CommitIndex},
+    commit::{CommitAPI as _, CommitIndex, TrustedCommit},
     context::Context,
     storage::Store,
 };
@@ -49,14 +49,14 @@ pub(crate) struct DagState {
     highest_accepted_round: Round,
 
     // Last consensus commit of the dag.
-    last_commit: Option<Commit>,
+    last_commit: Option<TrustedCommit>,
 
     // Last committed rounds per authority.
     last_committed_rounds: Vec<Round>,
 
     // Buffered data to be flushed to storage.
     buffered_blocks: Vec<VerifiedBlock>,
-    buffered_commits: Vec<Commit>,
+    buffered_commits: Vec<TrustedCommit>,
 
     // Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
@@ -343,21 +343,22 @@ impl DagState {
 
     // Buffers a new commit in memory and updates last committed rounds.
     // REQUIRED: must not skip over any commit index.
-    pub(crate) fn add_commit(&mut self, commit: Commit) {
+    pub(crate) fn add_commit(&mut self, commit: TrustedCommit) {
         if let Some(last_commit) = &self.last_commit {
-            if commit.index <= last_commit.index {
+            if commit.index() <= last_commit.index() {
                 error!(
                     "New commit index {} <= last commit index {}!",
-                    commit.index, last_commit.index
+                    commit.index(),
+                    last_commit.index()
                 );
                 return;
             }
-            assert_eq!(commit.index, last_commit.index + 1);
+            assert_eq!(commit.index(), last_commit.index() + 1);
         } else {
-            assert_eq!(commit.index, 1);
+            assert_eq!(commit.index(), 1);
         }
         self.last_commit = Some(commit.clone());
-        for block_ref in commit.blocks.iter() {
+        for block_ref in commit.blocks().iter() {
             self.last_committed_rounds[block_ref.author] = max(
                 self.last_committed_rounds[block_ref.author],
                 block_ref.round,
@@ -369,7 +370,7 @@ impl DagState {
     /// Index of the last commit.
     pub(crate) fn last_commit_index(&self) -> CommitIndex {
         match &self.last_commit {
-            Some(commit) => commit.index,
+            Some(commit) => commit.index(),
             None => 0,
         }
     }
@@ -377,7 +378,7 @@ impl DagState {
     /// Leader slot of the last commit.
     pub(crate) fn last_commit_leader(&self) -> Slot {
         match &self.last_commit {
-            Some(commit) => commit.leader.into(),
+            Some(commit) => commit.leader().into(),
             None => self
                 .genesis
                 .iter()
@@ -390,10 +391,7 @@ impl DagState {
 
     /// Last committed round per authority.
     pub(crate) fn last_committed_rounds(&self) -> Vec<Round> {
-        match &self.last_commit {
-            Some(commit) => commit.last_committed_rounds.clone(),
-            None => vec![0; self.context.committee.size()],
-        }
+        self.last_committed_rounds.clone()
     }
 
     /// After each flush, DagState becomes persisted in storage and it expected to recover
@@ -434,7 +432,7 @@ impl DagState {
     /// Highest round where a block is committed, which is last commit's leader round.
     fn last_commit_round(&self) -> Round {
         match &self.last_commit {
-            Some(commit) => commit.leader.round,
+            Some(commit) => commit.leader().round,
             None => 0,
         }
     }
@@ -838,11 +836,11 @@ mod test {
                 let block = VerifiedBlock::new_for_test(TestBlock::new(round, author).build());
                 blocks.push(block);
             }
-            commits.push(Commit {
-                index: round as CommitIndex,
-                leader: blocks.last().unwrap().reference(),
-                ..Default::default()
-            });
+            commits.push(TrustedCommit::new_for_test(
+                round as CommitIndex,
+                blocks.last().unwrap().reference(),
+                vec![],
+            ));
         }
 
         // Add the blocks from first 5 rounds and first 5 commits to the dag state

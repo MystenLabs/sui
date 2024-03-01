@@ -16,6 +16,7 @@ use typed_store::{
 };
 
 use super::Store;
+use crate::commit::{CommitAPI as _, TrustedCommit};
 use crate::{
     block::{BlockDigest, BlockRef, Round, SignedBlock, VerifiedBlock},
     commit::{Commit, CommitIndex},
@@ -29,6 +30,7 @@ pub(crate) struct RocksDBStore {
     /// A secondary index that orders refs first by authors.
     digests_by_authorities: DBMap<(AuthorityIndex, Round, BlockDigest), ()>,
     /// Maps commit index to content.
+    // TODO: Use Bytes for value. Add CommitDigest to key.
     commits: DBMap<CommitIndex, Commit>,
     /// Stores the last committed rounds per authority.
     last_committed_rounds: DBMap<(), Vec<Round>>,
@@ -74,7 +76,7 @@ impl RocksDBStore {
         let (blocks, digests_by_authorities, commits, last_committed_rounds) = reopen!(&rocksdb,
             Self::BLOCKS_CF;<(Round, AuthorityIndex, BlockDigest), bytes::Bytes>,
             Self::DIGESTS_BY_AUTHORITIES_CF;<(AuthorityIndex, Round, BlockDigest), ()>,
-            Self::COMMITS_CF;<u64, Commit>,
+            Self::COMMITS_CF;<CommitIndex, Commit>,
             Self::LAST_COMMITTED_ROUNDS_CF;<(), Vec<Round>>
         );
 
@@ -92,7 +94,7 @@ impl Store for RocksDBStore {
     fn write(
         &self,
         blocks: Vec<VerifiedBlock>,
-        commits: Vec<Commit>,
+        commits: Vec<TrustedCommit>,
         last_committed_rounds: Vec<Round>,
     ) -> ConsensusResult<()> {
         let mut batch = self.blocks.batch();
@@ -111,7 +113,7 @@ impl Store for RocksDBStore {
             );
         }
         for commit in commits {
-            batch.insert_batch(&self.commits, [(commit.index, commit)]);
+            batch.insert_batch(&self.commits, [(commit.index(), commit.inner())]);
         }
         batch.insert_batch(&self.last_committed_rounds, [((), last_committed_rounds)]);
         batch.write()?;
@@ -203,22 +205,22 @@ impl Store for RocksDBStore {
         Ok(blocks)
     }
 
-    fn read_last_commit(&self) -> ConsensusResult<Option<Commit>> {
+    fn read_last_commit(&self) -> ConsensusResult<Option<TrustedCommit>> {
         let Some(commit) = self.commits.safe_iter().skip_to_last().next() else {
             return Ok(None);
         };
         let (_, commit) = commit?;
-        Ok(Some(commit))
+        Ok(Some(TrustedCommit::new_trusted(commit)))
     }
 
-    fn scan_commits(&self, start_commit_index: CommitIndex) -> ConsensusResult<Vec<Commit>> {
+    fn scan_commits(&self, start_commit_index: CommitIndex) -> ConsensusResult<Vec<TrustedCommit>> {
         let mut commits = vec![];
         for commit in self
             .commits
             .safe_range_iter((Included(start_commit_index), Unbounded))
         {
             let (_, commit) = commit?;
-            commits.push(commit);
+            commits.push(TrustedCommit::new_trusted(commit));
         }
         Ok(commits)
     }

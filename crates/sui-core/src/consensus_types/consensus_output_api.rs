@@ -136,7 +136,7 @@ impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
     }
 
     fn commit_sub_dag_index(&self) -> u64 {
-        self.commit_index
+        self.commit_index.into()
     }
 
     fn transactions(&self) -> ConsensusOutputTransactions {
