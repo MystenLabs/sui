@@ -4919,6 +4919,26 @@ pub mod framework_injection {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ObjDumpFormat {
+    pub id: ObjectID,
+    pub version: VersionNumber,
+    pub digest: ObjectDigest,
+    pub object: Object,
+}
+
+impl ObjDumpFormat {
+    fn new(object: Object) -> Self {
+        let oref = object.compute_object_reference();
+        Self {
+            id: oref.0,
+            version: oref.1,
+            digest: oref.2,
+            object,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NodeStateDump {
     pub tx_digest: TransactionDigest,
     pub sender_signed_data: SenderSignedData,
@@ -4928,12 +4948,12 @@ pub struct NodeStateDump {
     pub epoch_start_timestamp_ms: u64,
     pub computed_effects: TransactionEffects,
     pub expected_effects_digest: TransactionEffectsDigest,
-    pub relevant_system_packages: Vec<Object>,
-    pub shared_objects: Vec<Object>,
-    pub loaded_child_objects: Vec<Object>,
-    pub modified_at_versions: Vec<Object>,
-    pub runtime_reads: Vec<Object>,
-    pub input_objects: Vec<Object>,
+    pub relevant_system_packages: Vec<ObjDumpFormat>,
+    pub shared_objects: Vec<ObjDumpFormat>,
+    pub loaded_child_objects: Vec<ObjDumpFormat>,
+    pub modified_at_versions: Vec<ObjDumpFormat>,
+    pub runtime_reads: Vec<ObjDumpFormat>,
+    pub input_objects: Vec<ObjDumpFormat>,
 }
 
 impl NodeStateDump {
@@ -4957,7 +4977,7 @@ impl NodeStateDump {
         let mut relevant_system_packages = Vec::new();
         for sys_package_id in BuiltInFramework::all_package_ids() {
             if let Some(w) = object_store.get_object(&sys_package_id)? {
-                relevant_system_packages.push(w)
+                relevant_system_packages.push(ObjDumpFormat::new(w))
             }
         }
 
@@ -4967,7 +4987,7 @@ impl NodeStateDump {
             match kind {
                 InputSharedObject::Mutate(obj_ref) | InputSharedObject::ReadOnly(obj_ref) => {
                     if let Some(w) = object_store.get_object_by_key(&obj_ref.0, obj_ref.1)? {
-                        shared_objects.push(w)
+                        shared_objects.push(ObjDumpFormat::new(w))
                     }
                 }
                 InputSharedObject::ReadDeleted(..) | InputSharedObject::MutateDeleted(..) => (),
@@ -4979,7 +4999,7 @@ impl NodeStateDump {
         let mut loaded_child_objects = Vec::new();
         for (id, meta) in &inner_temporary_store.loaded_runtime_objects {
             if let Some(w) = object_store.get_object_by_key(id, meta.version)? {
-                loaded_child_objects.push(w)
+                loaded_child_objects.push(ObjDumpFormat::new(w))
             }
         }
 
@@ -4987,7 +5007,7 @@ impl NodeStateDump {
         let mut modified_at_versions = Vec::new();
         for (id, ver) in effects.modified_at_versions() {
             if let Some(w) = object_store.get_object_by_key(&id, ver)? {
-                modified_at_versions.push(w)
+                modified_at_versions.push(ObjDumpFormat::new(w))
             }
         }
 
@@ -4998,7 +5018,7 @@ impl NodeStateDump {
             .runtime_packages_loaded_from_db
             .values()
         {
-            runtime_reads.push(obj.object().clone());
+            runtime_reads.push(ObjDumpFormat::new(obj.object().clone()));
         }
 
         // All other input objects should already be in `inner_temporary_store.objects`
@@ -5018,14 +5038,14 @@ impl NodeStateDump {
             input_objects: inner_temporary_store
                 .input_objects
                 .values()
-                .map(|o| (*o).clone())
+                .map(|o| ObjDumpFormat::new(o.clone()))
                 .collect(),
             computed_effects: effects.clone(),
             expected_effects_digest,
         })
     }
 
-    pub fn all_objects(&self) -> Vec<Object> {
+    pub fn all_objects(&self) -> Vec<ObjDumpFormat> {
         let mut objects = Vec::new();
         objects.extend(self.relevant_system_packages.clone());
         objects.extend(self.shared_objects.clone());
