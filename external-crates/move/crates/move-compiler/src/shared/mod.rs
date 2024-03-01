@@ -27,6 +27,7 @@ use std::{
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering as AtomicOrdering},
 };
+use vfs::{VfsError, VfsPath};
 
 pub mod ast_debug;
 pub mod known_attributes;
@@ -201,13 +202,6 @@ pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> 
     pub name: Option<(Symbol, PackageConfig)>,
     pub paths: Vec<Path>,
     pub named_address_map: BTreeMap<NamedAddress, NumericalAddress>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct IndexedPackagePath {
-    pub package: Option<Symbol>,
-    pub path: Symbol,
-    pub named_address_map: NamedAddressMapIndex,
 }
 
 /// None for the default 'allow'.
@@ -866,3 +860,48 @@ macro_rules! process_binops {
 }
 
 pub(crate) use process_binops;
+
+//**************************************************************************************************
+// Virtual file system support
+//**************************************************************************************************
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IndexedPackagePath<P> {
+    pub package: Option<Symbol>,
+    pub path: P,
+    pub named_address_map: NamedAddressMapIndex,
+}
+
+pub type IndexedPhysicalPackagePath = IndexedPackagePath<Symbol>;
+
+pub type IndexedVfsPackagePath = IndexedPackagePath<VfsPath>;
+
+pub fn vfs_path_from_str(path: String, vfs_path: &VfsPath) -> Result<VfsPath, VfsError> {
+    // we need to canonicalized paths for virtual file systems as some of them (e.g., implementation
+    // of the physical one) cannot handle relative paths
+    fn canonicalize(p: String) -> String {
+        // dunce's version of canonicalize does a better job on Windows
+        match dunce::canonicalize(&p) {
+            Ok(s) => s.to_string_lossy().to_string(),
+            Err(_) => p,
+        }
+    }
+
+    vfs_path.join(canonicalize(path))
+}
+
+impl IndexedPhysicalPackagePath {
+    pub fn to_vfs_path(self, vfs_root: &VfsPath) -> Result<IndexedVfsPackagePath, VfsError> {
+        let IndexedPhysicalPackagePath {
+            package,
+            path,
+            named_address_map,
+        } = self;
+
+        Ok(IndexedVfsPackagePath {
+            package,
+            path: vfs_path_from_str(path.to_string(), vfs_root)?,
+            named_address_map,
+        })
+    }
+}

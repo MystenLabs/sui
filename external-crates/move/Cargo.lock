@@ -1560,6 +1560,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "url",
+ "vfs",
 ]
 
 [[package]]
@@ -1688,6 +1689,7 @@ dependencies = [
  "once_cell",
  "serde",
  "sha2",
+ "vfs",
  "walkdir",
 ]
 
@@ -1700,6 +1702,7 @@ dependencies = [
  "clap 4.4.1",
  "codespan-reporting",
  "datatest-stable",
+ "dunce",
  "hex",
  "move-binary-format",
  "move-borrow-graph",
@@ -1712,11 +1715,13 @@ dependencies = [
  "move-stdlib",
  "move-symbol-pool",
  "once_cell",
+ "pathdiff",
  "petgraph",
  "regex",
  "serde",
  "stacker",
  "tempfile",
+ "vfs",
 ]
 
 [[package]]
@@ -2504,6 +2509,12 @@ name = "paste"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f746c4065a8fa3fe23974dd82f15431cc8d40779821001404d10d2e79ca7d79"
+
+[[package]]
+name = "pathdiff"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8835116a5c179084a830efb3adc117ab007512b535bc1a21c991d3b32a6b44dd"
 
 [[package]]
 name = "percent-encoding"
@@ -3758,6 +3769,12 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+
+[[package]]
+name = "vfs"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e4fe92cfc1bad19c19925d5eee4b30584dbbdee4ff10183b261acccbef74e2d"
 
 [[package]]
 name = "wait-timeout"
