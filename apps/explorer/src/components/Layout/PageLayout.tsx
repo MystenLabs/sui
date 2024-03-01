@@ -3,13 +3,13 @@
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useAppsBackend, useElementDimensions } from '@mysten/core';
-import { LoadingIndicator, Text } from '@mysten/ui';
+import { Heading, LoadingIndicator, Text } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { type ReactNode, useRef } from 'react';
 
 import Footer from '../footer/Footer';
-import Header, { RedirectHeader } from '../header/Header';
+import Header from '../header/Header';
 import { useNetworkContext } from '~/context';
 import { Banner } from '~/ui/Banner';
 import { Network } from '~/utils/api/DefaultRpcClient';
@@ -19,7 +19,18 @@ import suiscanImg2x from '~/assets/explorer-suiscan@2x.jpg';
 import suivisionImg2x from '~/assets/explorer-suivision@2x.jpg';
 import { ButtonOrLink } from '~/ui/utils/ButtonOrLink';
 import { Image } from '~/ui/image/Image';
-import { ArrowRight12 } from '@mysten/icons';
+import { ArrowRight12, Sui, SuiLogoTxt } from '@mysten/icons';
+import { useRedirectExplorerUrl } from '~/hooks/useRedirectExplorerUrl';
+
+enum RedirectExplorer {
+	SUISCAN = 'suiscan',
+	SUIVISION = 'suivision',
+}
+
+const isSuiVisionFirst = new Date().getMilliseconds() % 2 === 0;
+const redirectExplorers = isSuiVisionFirst
+	? [RedirectExplorer.SUIVISION, RedirectExplorer.SUISCAN]
+	: [RedirectExplorer.SUISCAN, RedirectExplorer.SUIVISION];
 
 export type PageLayoutProps = {
 	gradient?: {
@@ -29,22 +40,26 @@ export type PageLayoutProps = {
 	isError?: boolean;
 	content: ReactNode;
 	loading?: boolean;
-	header?: ReactNode;
 };
 
 const DEFAULT_HEADER_HEIGHT = 68;
 
-function ExternalExplorerLink({ type }: { type: 'suiscan' | 'suivision' }) {
-	const href = type === 'suiscan' ? 'https://suiscan.xyz' : 'https://suivision.xyz';
-	const src = type === 'suiscan' ? suiscanImg : suivisionImg;
-	const srcSet = type === 'suiscan' ? suiscanImg2x : suivisionImg2x;
+function ImageLink({ type }: { type: RedirectExplorer }) {
+	const { suiscanUrl, suivisionUrl } = useRedirectExplorerUrl();
+
+	const href = type === RedirectExplorer.SUISCAN ? suiscanUrl : suivisionUrl;
+	const src = type === RedirectExplorer.SUISCAN ? suiscanImg : suivisionImg;
+	const srcSet =
+		type === RedirectExplorer.SUISCAN
+			? `${suiscanImg} 1x, ${suiscanImg2x} 2x`
+			: `${suivisionImg} 1x, ${suivisionImg2x} 2x`;
 
 	return (
 		<div className="relative overflow-hidden rounded-3xl border border-gray-45 transition duration-300 ease-in-out hover:shadow-lg">
 			<ButtonOrLink href={href} target="_blank" rel="noopener noreferrer">
 				<Image src={src} srcSet={srcSet} />
 			</ButtonOrLink>
-			<div className="absolute bottom-10 left-1/2 right-0 flex -translate-x-1/2 sm:w-96">
+			<div className="absolute bottom-10 left-1/2 right-0 flex -translate-x-1/2 sm:w-80">
 				<ButtonOrLink
 					className="flex w-full items-center justify-center gap-2 rounded-3xl bg-sui-dark px-3 py-2"
 					href={href}
@@ -52,7 +67,7 @@ function ExternalExplorerLink({ type }: { type: 'suiscan' | 'suivision' }) {
 					rel="noopener noreferrer"
 				>
 					<Text variant="body/semibold" color="white">
-						{type === 'suiscan' ? 'Visit Suiscan.xyz' : 'Visit Suivision.xyz'}
+						{type === RedirectExplorer.SUISCAN ? 'Visit Suiscan.xyz' : 'Visit Suivision.xyz'}
 					</Text>
 					<ArrowRight12 className="h-3 w-3 -rotate-45 text-white" />
 				</ButtonOrLink>
@@ -64,16 +79,66 @@ function ExternalExplorerLink({ type }: { type: 'suiscan' | 'suivision' }) {
 function RedirectContent() {
 	return (
 		<section className="flex flex-col justify-center gap-10 sm:flex-row">
-			<ExternalExplorerLink type="suivision" />
-			<ExternalExplorerLink type="suiscan" />
+			{redirectExplorers.map((type) => (
+				<ImageLink key={type} type={type} />
+			))}
 		</section>
 	);
 }
 
-export function PageLayout({ gradient, content, header, loading, isError }: PageLayoutProps) {
-	// const enableExplorerRedirect = useFeatureIsOn('explorer-redirect');
-	// TODO: Change back to use feature flag before merging
-	const enableExplorerRedirect = true;
+function HeaderLink({ type }: { type: RedirectExplorer }) {
+	const { suiscanUrl, suivisionUrl } = useRedirectExplorerUrl();
+	const openWithLabel =
+		type === RedirectExplorer.SUISCAN ? 'Open in Suiscan.xyz' : 'Open in Suivision.xyz';
+
+	return (
+		<ButtonOrLink
+			href={type === 'suiscan' ? suiscanUrl : suivisionUrl}
+			target="_blank"
+			className="flex items-center gap-2 border-b border-gray-100 py-1 text-heading5 font-semibold"
+		>
+			{openWithLabel} <ArrowRight12 className="h-4 w-4 -rotate-45" />
+		</ButtonOrLink>
+	);
+}
+
+export function RedirectHeader() {
+	const { hasMatch } = useRedirectExplorerUrl();
+
+	return (
+		<section
+			className="mb-20 flex flex-col items-center justify-center gap-5 px-5 py-12 text-center"
+			style={{
+				background: 'linear-gradient(159deg, #FAF8D2 50.65%, #F7DFD5 86.82%)',
+			}}
+		>
+			<div className="flex items-center gap-1">
+				<Sui className={clsx(hasMatch ? 'h-7.5 w-5' : 'h-11 w-9')} />
+				<SuiLogoTxt className={clsx(hasMatch ? 'h-5 w-7.5' : 'h-7 w-11')} />
+			</div>
+
+			{hasMatch ? (
+				<div className="flex flex-col gap-2">
+					<Text variant="body/medium">
+						The link that brought you here is no longer available on suiexplorer.com
+					</Text>
+					<div className="flex flex-col items-center justify-center gap-5 sm:flex-row">
+						{redirectExplorers.map((type) => (
+							<HeaderLink key={type} type={type} />
+						))}
+					</div>
+				</div>
+			) : (
+				<Heading variant="heading3/semibold">
+					Experience two amazing blockchain explorers on Sui!
+				</Heading>
+			)}
+		</section>
+	);
+}
+
+export function PageLayout({ gradient, content, loading, isError }: PageLayoutProps) {
+	const enableExplorerRedirect = useFeatureIsOn('explorer-redirect');
 	const [network] = useNetworkContext();
 	const { request } = useAppsBackend();
 	const outageOverride = useFeatureIsOn('network-outage-override');
