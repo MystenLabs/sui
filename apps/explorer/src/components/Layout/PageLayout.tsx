@@ -121,7 +121,7 @@ function HeaderLink({ type }: { type: RedirectExplorer }) {
 	const { suiscanUrl, suivisionUrl } = useRedirectExplorerUrl();
 	const href = type === RedirectExplorer.SUISCAN ? suiscanUrl : suivisionUrl;
 	const openWithLabel =
-		type === RedirectExplorer.SUISCAN ? 'Open in Suiscan.xyz' : 'Open in Suivision.xyz';
+		type === RedirectExplorer.SUISCAN ? 'Open on Suiscan.xyz' : 'Open on Suivision.xyz';
 
 	return (
 		<ButtonOrLink
