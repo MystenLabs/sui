@@ -5038,6 +5038,47 @@ impl NodeStateDump {
         Ok(path)
     }
 
+    pub fn print_readable(&self) {
+        println!("tx_digest: {:?}", self.tx_digest);
+        println!("sender_signed_data: <omitted>");
+        println!("executed_epoch: {:?}", self.executed_epoch);
+        println!("reference_gas_price: {:?}", self.reference_gas_price);
+        println!("protocol_version: {:?}", self.protocol_version);
+        println!(
+            "epoch_start_timestamp_ms: {:?}",
+            self.epoch_start_timestamp_ms
+        );
+        println!("computed_effects: {:?}", self.computed_effects);
+        println!(
+            "expected_effects_digest: {:?}",
+            self.expected_effects_digest
+        );
+        println!("relevant_system_packages:");
+        for package in &self.relevant_system_packages {
+            println!("-- {:?}", package.compute_object_reference());
+        }
+        println!("shared_objects:");
+        for obj in &self.shared_objects {
+            println!("-- {:?}", obj.compute_object_reference());
+        }
+        println!("loaded_child_objects:");
+        for obj in &self.loaded_child_objects {
+            println!("-- {:?}", obj.compute_object_reference());
+        }
+        println!("modified_at_versions:");
+        for obj in &self.modified_at_versions {
+            println!("-- {:?}", obj.compute_object_reference());
+        }
+        println!("runtime_reads:");
+        for obj in &self.runtime_reads {
+            println!("-- {:?}", obj.compute_object_reference());
+        }
+        println!("input_objects:");
+        for obj in &self.input_objects {
+            println!("-- {:?}", obj.compute_object_reference());
+        }
+    }
+
     #[cfg(not(release))]
     pub fn read_from_file(path: &PathBuf) -> Result<Self, anyhow::Error> {
         let file = File::open(path)?;

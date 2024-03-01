@@ -32,6 +32,7 @@ use sui_storage::object_store::util::{copy_file, copy_files, path_to_filesystem}
 use sui_storage::object_store::{ObjectStoreGetExt, ObjectStorePutExt};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
+use sui_types::committee::EpochId;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
@@ -232,6 +233,59 @@ impl StateSnapshotReaderV1 {
 
         if let Some(handle) = accum_handle {
             handle.await?;
+        }
+        Ok(())
+    }
+
+    pub fn print_obj_refs(
+        manifest_path: PathBuf,
+        local_staging_dir_root: PathBuf,
+        epoch: EpochId,
+    ) -> Result<()> {
+        let epoch_dir = format!("epoch_{}", epoch);
+        let manifest = Self::read_manifest(manifest_path)?;
+
+        let mut object_files = BTreeMap::new();
+        let mut ref_files = BTreeMap::new();
+        for file_metadata in manifest.file_metadata() {
+            match file_metadata.file_type {
+                FileType::Object => {
+                    let entry = object_files
+                        .entry(file_metadata.bucket_num)
+                        .or_insert_with(BTreeMap::new);
+                    entry.insert(file_metadata.part_num, file_metadata.clone());
+                }
+                FileType::Reference => {
+                    let entry = ref_files
+                        .entry(file_metadata.bucket_num)
+                        .or_insert_with(BTreeMap::new);
+                    entry.insert(file_metadata.part_num, file_metadata.clone());
+                }
+            }
+        }
+        let epoch_dir_path = Path::from(epoch_dir);
+
+        let local_staging_dir_root_clone = local_staging_dir_root.clone();
+        for (bucket, part_files) in ref_files.clone().iter() {
+            for (part, _part_files) in part_files.iter() {
+                let obj_ref_iter = {
+                    let file_metadata = ref_files
+                        .get(bucket)
+                        .expect("No ref files found for bucket: {bucket_num}")
+                        .get(part)
+                        .expect("No ref files found for bucket: {bucket_num}, part: {part_num}");
+                    ObjectRefIter::new(
+                        file_metadata,
+                        local_staging_dir_root_clone.clone(),
+                        epoch_dir_path.clone(),
+                    )
+                    .expect("Failed to create object ref iter")
+                };
+
+                for objref in obj_ref_iter {
+                    println!("{:?}", objref);
+                }
+            }
         }
         Ok(())
     }
@@ -511,9 +565,12 @@ pub struct ObjectRefIter {
 
 impl ObjectRefIter {
     pub fn new(file_metadata: &FileMetadata, root_path: PathBuf, dir_path: Path) -> Result<Self> {
-        let file_path = file_metadata.local_file_path(&root_path, &dir_path)?;
-        let mut reader = file_metadata.file_compression.decompress(&file_path)?;
-        let magic = reader.read_u32::<BigEndian>()?;
+        let file_path = dbg!(file_metadata.local_file_path(&root_path, &dir_path)).unwrap();
+        let mut reader = file_metadata
+            .file_compression
+            .decompress(dbg!(&file_path))
+            .unwrap();
+        let magic = reader.read_u32::<BigEndian>().unwrap();
         if magic != REFERENCE_FILE_MAGIC {
             Err(anyhow!(
                 "Unexpected magic string in REFERENCE file: {:?}",

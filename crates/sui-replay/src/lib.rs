@@ -7,6 +7,7 @@ use config::ReplayableNetworkConfigSet;
 use fuzz::ReplayFuzzer;
 use fuzz::ReplayFuzzerConfig;
 use fuzz_mutations::base_fuzzers;
+use sui_core::authority::NodeStateDump;
 use sui_types::digests::get_mainnet_chain_identifier;
 use sui_types::digests::get_testnet_chain_identifier;
 use sui_types::message_envelope::Message;
@@ -54,6 +55,12 @@ pub enum ReplayToolCommand {
         tx_digest: String,
         #[arg(long, short, default_value = DEFAULT_SANDBOX_BASE_PATH)]
         base_path: PathBuf,
+    },
+
+    #[command(name = "print-state-dump")]
+    PrintStateDump {
+        #[arg(long, short)]
+        path: String,
     },
 
     /// Replay from sandbox state file
@@ -170,6 +177,15 @@ pub async fn execute_replay_command(
         ExpensiveSafetyCheckConfig::default()
     };
     Ok(match cmd {
+        ReplayToolCommand::PrintStateDump { path } => {
+            // load the contents of path into a buffer
+            let contents_json = std::fs::read_to_string(&path)?;
+            // parse as NodeStateDump
+            let state_dump: NodeStateDump = serde_json::from_str(&contents_json)?;
+
+            state_dump.print_readable();
+            None
+        }
         ReplayToolCommand::ReplaySandbox { path } => {
             let contents = std::fs::read_to_string(path)?;
             let sandbox_state: ExecutionSandboxState = serde_json::from_str(&contents)?;

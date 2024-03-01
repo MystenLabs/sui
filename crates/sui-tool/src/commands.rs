@@ -308,6 +308,16 @@ pub enum ToolCommand {
         verbose: bool,
     },
 
+    #[clap(
+        name = "print-formal-snapshot-objrefs",
+        about = "Prints objrefs in formal snapshot"
+    )]
+    PrintFormalSnapshotObjRefs {
+        manifest_path: PathBuf,
+        local_staging_dir_root: PathBuf,
+        epoch: u64,
+    },
+
     // Restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
     /// for protocol versions supporting `commit_root_state_digest`. For mainnet, this is
     /// epoch 20+, and for testnet this is epoch 12+
@@ -569,6 +579,17 @@ impl ToolCommand {
             } => {
                 let config = sui_config::NodeConfig::load(config_path)?;
                 restore_from_db_checkpoint(&config, &db_checkpoint_path).await?;
+            }
+            ToolCommand::PrintFormalSnapshotObjRefs {
+                manifest_path,
+                local_staging_dir_root,
+                epoch,
+            } => {
+                sui_snapshot::reader::StateSnapshotReaderV1::print_obj_refs(
+                    manifest_path,
+                    local_staging_dir_root,
+                    epoch,
+                )?;
             }
             ToolCommand::DownloadFormalSnapshot {
                 epoch,

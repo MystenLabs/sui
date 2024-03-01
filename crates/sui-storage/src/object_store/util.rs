@@ -220,16 +220,19 @@ pub async fn delete_recursively<S: ObjectStoreDeleteExt + ObjectStoreListExt>(
 
 pub fn path_to_filesystem(local_dir_path: PathBuf, location: &Path) -> anyhow::Result<PathBuf> {
     // Convert an `object_store::path::Path` to `std::path::PathBuf`
-    let path = std::fs::canonicalize(local_dir_path)?;
+    let path = std::fs::canonicalize(local_dir_path).unwrap();
     let mut url = Url::from_file_path(&path)
-        .map_err(|_| anyhow!("Failed to parse input path: {}", path.display()))?;
+        .map_err(|_| anyhow!("Failed to parse input path: {}", path.display()))
+        .unwrap();
     url.path_segments_mut()
-        .map_err(|_| anyhow!("Failed to get path segments: {}", path.display()))?
+        .map_err(|_| anyhow!("Failed to get path segments: {}", path.display()))
+        .unwrap()
         .pop_if_empty()
         .extend(location.parts());
     let new_path = url
         .to_file_path()
-        .map_err(|_| anyhow!("Failed to convert url to path: {}", url.as_str()))?;
+        .map_err(|_| anyhow!("Failed to convert url to path: {}", url.as_str()))
+        .unwrap();
     Ok(new_path)
 }
 

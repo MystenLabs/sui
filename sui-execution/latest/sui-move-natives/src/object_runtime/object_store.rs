@@ -167,6 +167,7 @@ impl<'a> Inner<'a> {
                     PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))
                 })?;
             let obj_opt = if let Some(object) = child_opt {
+                tracing::trace!(parent = ?parent, ?child, objref = ?object.compute_object_reference(), "get_or_fetch_child_object");
                 // if there was no root version, guard against reading a child object. A newly
                 // created parent should not have a child in storage
                 if !had_parent_root_version {
@@ -426,6 +427,7 @@ impl<'a> ChildObjectStore<'a> {
         child: ObjectID,
         child_move_type: &MoveObjectType,
     ) -> PartialVMResult<bool> {
+        tracing::trace!(?parent, ?child, "object_exists_and_has_type");
         if let Some(child_object) = self.store.get(&child) {
             // exists and has same type
             return Ok(child_object.value.exists()? && &child_object.move_type == child_move_type);
