@@ -16,6 +16,8 @@
 -  [Struct `TokenTransferAlreadyClaimed`](#0xb_bridge_TokenTransferAlreadyClaimed)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#0xb_bridge_create)
+-  [Function `init_bridge_committee`](#0xb_bridge_init_bridge_committee)
+-  [Function `committee_registration`](#0xb_bridge_committee_registration)
 -  [Function `send_token`](#0xb_bridge_send_token)
 -  [Function `approve_bridge_message`](#0xb_bridge_approve_bridge_message)
 -  [Function `claim_token`](#0xb_bridge_claim_token)
@@ -42,6 +44,7 @@
 <b>use</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map">0x2::vec_map</a>;
 <b>use</b> <a href="dependencies/sui-framework/versioned.md#0x2_versioned">0x2::versioned</a>;
+<b>use</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system">0x3::sui_system</a>;
 <b>use</b> <a href="chain_ids.md#0xb_chain_ids">0xb::chain_ids</a>;
 <b>use</b> <a href="committee.md#0xb_committee">0xb::committee</a>;
 <b>use</b> <a href="limiter.md#0xb_limiter">0xb::limiter</a>;
@@ -108,6 +111,12 @@
 
 </dd>
 <dt>
+<code>message_version: u8</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
 <code>chain_id: u8</code>
 </dt>
 <dd>
@@ -144,7 +153,7 @@
 
 </dd>
 <dt>
-<code>frozen: bool</code>
+<code>paused: bool</code>
 </dt>
 <dd>
 
@@ -429,29 +438,20 @@
 
 
 
-<a name="0xb_bridge_ACCEPTED_MESSAGE_VERSION"></a>
+<a name="0xb_bridge_EBridgeAlreadyPaused"></a>
 
 
 
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_ACCEPTED_MESSAGE_VERSION">ACCEPTED_MESSAGE_VERSION</a>: u8 = 1;
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EBridgeAlreadyPaused">EBridgeAlreadyPaused</a>: u64 = 13;
 </code></pre>
 
 
 
-<a name="0xb_bridge_EBridgeAlreadyFrozen"></a>
+<a name="0xb_bridge_EBridgeNotPaused"></a>
 
 
 
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EBridgeAlreadyFrozen">EBridgeAlreadyFrozen</a>: u64 = 13;
-</code></pre>
-
-
-
-<a name="0xb_bridge_EBridgeNotFrozen"></a>
-
-
-
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EBridgeNotFrozen">EBridgeNotFrozen</a>: u64 = 14;
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_EBridgeNotPaused">EBridgeNotPaused</a>: u64 = 14;
 </code></pre>
 
 
@@ -564,20 +564,11 @@
 
 
 
-<a name="0xb_bridge_FREEZE"></a>
+<a name="0xb_bridge_MESSAGE_VERSION"></a>
 
 
 
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_FREEZE">FREEZE</a>: u8 = 0;
-</code></pre>
-
-
-
-<a name="0xb_bridge_UNFREEZE"></a>
-
-
-
-<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_UNFREEZE">UNFREEZE</a>: u8 = 1;
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>: u8 = 1;
 </code></pre>
 
 
@@ -601,19 +592,87 @@
     <b>assert</b>!(<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="bridge.md#0xb_bridge_ENotSystemAddress">ENotSystemAddress</a>);
     <b>let</b> bridge_inner = <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
         bridge_version: <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>,
+        message_version: <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>,
         chain_id,
         sequence_nums: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
         <a href="committee.md#0xb_committee">committee</a>: <a href="committee.md#0xb_committee_create">committee::create</a>(ctx),
         <a href="treasury.md#0xb_treasury">treasury</a>: <a href="treasury.md#0xb_treasury_create">treasury::create</a>(ctx),
         bridge_records: <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_new">linked_table::new</a>(ctx),
         <a href="limiter.md#0xb_limiter">limiter</a>: <a href="limiter.md#0xb_limiter_new">limiter::new</a>(),
-        frozen: <b>false</b>,
+        paused: <b>false</b>,
     };
     <b>let</b> <a href="bridge.md#0xb_bridge">bridge</a> = <a href="bridge.md#0xb_bridge_Bridge">Bridge</a> {
         id,
         inner: <a href="dependencies/sui-framework/versioned.md#0x2_versioned_create">versioned::create</a>(<a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, bridge_inner, ctx)
     };
     <a href="dependencies/sui-framework/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="bridge.md#0xb_bridge">bridge</a>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_init_bridge_committee"></a>
+
+## Function `init_bridge_committee`
+
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_init_bridge_committee">init_bridge_committee</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, system_state: &<b>mut</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, min_stake_participation_percentage: u64, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_init_bridge_committee">init_bridge_committee</a>(
+    self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
+    system_state: &<b>mut</b> SuiSystemState,
+    min_stake_participation_percentage: u64,
+    ctx: &TxContext
+) {
+    <b>assert</b>!(<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="bridge.md#0xb_bridge_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
+    <b>if</b> (<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_is_empty">vec_map::is_empty</a>(<a href="committee.md#0xb_committee_committee_members">committee::committee_members</a>(&inner.<a href="committee.md#0xb_committee">committee</a>))) {
+        <a href="committee.md#0xb_committee_try_create_next_committee">committee::try_create_next_committee</a>(
+            &<b>mut</b> inner.<a href="committee.md#0xb_committee">committee</a>,
+            system_state,
+            min_stake_participation_percentage,
+            ctx
+        )
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_committee_registration"></a>
+
+## Function `committee_registration`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_committee_registration">committee_registration</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, system_state: &<b>mut</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, bridge_pubkey_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, http_rest_url: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_committee_registration">committee_registration</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
+                                  system_state: &<b>mut</b> SuiSystemState,
+                                  bridge_pubkey_bytes: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+                                  http_rest_url: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+                                  ctx: &TxContext) {
+    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
+    <a href="committee.md#0xb_committee_register">committee::register</a>(&<b>mut</b> inner.<a href="committee.md#0xb_committee">committee</a>, system_state, bridge_pubkey_bytes, http_rest_url, ctx)
 }
 </code></pre>
 
@@ -644,7 +703,7 @@
     ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
-    <b>assert</b>!(!inner.frozen, <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
+    <b>assert</b>!(!inner.paused, <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
     <b>let</b> amount = <a href="dependencies/sui-framework/balance.md#0x2_balance_value">balance::value</a>(<a href="dependencies/sui-framework/coin.md#0x2_coin_balance">coin::balance</a>(&token));
 
     <b>let</b> bridge_seq_num = <a href="bridge.md#0xb_bridge_get_current_seq_num_and_increment">get_current_seq_num_and_increment</a>(inner, <a href="message_types.md#0xb_message_types_token">message_types::token</a>());
@@ -714,7 +773,7 @@
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
     <b>let</b> key = <a href="message.md#0xb_message_key">message::key</a>(&<a href="message.md#0xb_message">message</a>);
     // TODO: test this
-    <b>assert</b>!(<a href="message.md#0xb_message_message_version">message::message_version</a>(&<a href="message.md#0xb_message">message</a>) == <a href="bridge.md#0xb_bridge_ACCEPTED_MESSAGE_VERSION">ACCEPTED_MESSAGE_VERSION</a>, <a href="bridge.md#0xb_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>);
+    <b>assert</b>!(<a href="message.md#0xb_message_message_version">message::message_version</a>(&<a href="message.md#0xb_message">message</a>) == <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>, <a href="bridge.md#0xb_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>);
 
     // retrieve pending <a href="message.md#0xb_message">message</a> <b>if</b> source chain is Sui, the initial <a href="message.md#0xb_message">message</a> must exist on chain.
     <b>if</b> (<a href="message.md#0xb_message_message_type">message::message_type</a>(&<a href="message.md#0xb_message">message</a>) == <a href="message_types.md#0xb_message_types_token">message_types::token</a>() && <a href="message.md#0xb_message_source_chain">message::source_chain</a>(
@@ -838,11 +897,8 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(
-    self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
-): &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>): &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
     <b>let</b> version = <a href="dependencies/sui-framework/versioned.md#0x2_versioned_version">versioned::version</a>(&self.inner);
-
     // TODO: Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="dependencies/sui-framework/object.md#0x2_object">object</a>.
     <b>assert</b>!(version == <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
     <b>let</b> inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> = <a href="dependencies/sui-framework/versioned.md#0x2_versioned_load_value_mut">versioned::load_value_mut</a>(&<b>mut</b> self.inner);
@@ -910,7 +966,7 @@
     ctx: &<b>mut</b> TxContext
 ): (Option&lt;Coin&lt;T&gt;&gt;, <b>address</b>) {
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
-    <b>assert</b>!(!inner.frozen, <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
+    <b>assert</b>!(!inner.paused, <a href="bridge.md#0xb_bridge_EBridgeUnavailable">EBridgeUnavailable</a>);
 
     <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(source_chain, <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), bridge_seq_num);
     <b>assert</b>!(<a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(&inner.bridge_records, key), <a href="bridge.md#0xb_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>);
@@ -985,7 +1041,7 @@
 ) {
     <b>let</b> message_type = <a href="message.md#0xb_message_message_type">message::message_type</a>(&<a href="message.md#0xb_message">message</a>);
     // TODO: test version mismatch
-    <b>assert</b>!(<a href="message.md#0xb_message_message_version">message::message_version</a>(&<a href="message.md#0xb_message">message</a>) == <a href="bridge.md#0xb_bridge_ACCEPTED_MESSAGE_VERSION">ACCEPTED_MESSAGE_VERSION</a>, <a href="bridge.md#0xb_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>);
+    <b>assert</b>!(<a href="message.md#0xb_message_message_version">message::message_version</a>(&<a href="message.md#0xb_message">message</a>) == <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>, <a href="bridge.md#0xb_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>);
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
 
     <b>assert</b>!(<a href="message.md#0xb_message_source_chain">message::source_chain</a>(&<a href="message.md#0xb_message">message</a>) == inner.chain_id, <a href="bridge.md#0xb_bridge_EUnexpectedChainID">EUnexpectedChainID</a>);
@@ -1035,13 +1091,13 @@
 
 <pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_emergency_op">execute_emergency_op</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a>, payload: EmergencyOp) {
     <b>let</b> op = <a href="message.md#0xb_message_emergency_op_type">message::emergency_op_type</a>(&payload);
-    <b>if</b> (op == <a href="bridge.md#0xb_bridge_FREEZE">FREEZE</a>) {
-        <b>assert</b>!(!inner.frozen, <a href="bridge.md#0xb_bridge_EBridgeAlreadyFrozen">EBridgeAlreadyFrozen</a>);
-        inner.frozen = <b>true</b>;
+    <b>if</b> (op == <a href="message.md#0xb_message_emergency_op_pause">message::emergency_op_pause</a>()) {
+        <b>assert</b>!(!inner.paused, <a href="bridge.md#0xb_bridge_EBridgeAlreadyPaused">EBridgeAlreadyPaused</a>);
+        inner.paused = <b>true</b>;
         emit(<a href="bridge.md#0xb_bridge_EmergencyOpEvent">EmergencyOpEvent</a> { frozen: <b>true</b> });
-    } <b>else</b> <b>if</b> (op == <a href="bridge.md#0xb_bridge_UNFREEZE">UNFREEZE</a>) {
-        <b>assert</b>!(inner.frozen, <a href="bridge.md#0xb_bridge_EBridgeNotFrozen">EBridgeNotFrozen</a>);
-        inner.frozen = <b>false</b>;
+    } <b>else</b> <b>if</b> (op == <a href="message.md#0xb_message_emergency_op_unpause">message::emergency_op_unpause</a>()) {
+        <b>assert</b>!(inner.paused, <a href="bridge.md#0xb_bridge_EBridgeNotPaused">EBridgeNotPaused</a>);
+        inner.paused = <b>false</b>;
         emit(<a href="bridge.md#0xb_bridge_EmergencyOpEvent">EmergencyOpEvent</a> { frozen: <b>false</b> });
     } <b>else</b> {
         <b>abort</b> <a href="bridge.md#0xb_bridge_EUnexpectedOperation">EUnexpectedOperation</a>
