@@ -9,8 +9,7 @@
 -  [Constants](#@Constants_0)
 -  [Function `sui_mainnet`](#0xb_chain_ids_sui_mainnet)
 -  [Function `sui_testnet`](#0xb_chain_ids_sui_testnet)
--  [Function `sui_local_test`](#0xb_chain_ids_sui_local_test)
--  [Function `sui_devnet`](#0xb_chain_ids_sui_devnet)
+-  [Function `sui_custom`](#0xb_chain_ids_sui_custom)
 -  [Function `eth_mainnet`](#0xb_chain_ids_eth_mainnet)
 -  [Function `eth_sepolia`](#0xb_chain_ids_eth_sepolia)
 -  [Function `eth_local_test`](#0xb_chain_ids_eth_local_test)
@@ -101,20 +100,11 @@
 
 
 
-<a name="0xb_chain_ids_SuiDevnet"></a>
+<a name="0xb_chain_ids_SuiCustom"></a>
 
 
 
-<pre><code><b>const</b> <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a>: u8 = 2;
-</code></pre>
-
-
-
-<a name="0xb_chain_ids_SuiLocalTest"></a>
-
-
-
-<pre><code><b>const</b> <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a>: u8 = 3;
+<pre><code><b>const</b> <a href="chain_ids.md#0xb_chain_ids_SuiCustom">SuiCustom</a>: u8 = 2;
 </code></pre>
 
 
@@ -185,13 +175,13 @@
 
 </details>
 
-<a name="0xb_chain_ids_sui_local_test"></a>
+<a name="0xb_chain_ids_sui_custom"></a>
 
-## Function `sui_local_test`
+## Function `sui_custom`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_local_test">sui_local_test</a>(): u8
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_custom">sui_custom</a>(): u8
 </code></pre>
 
 
@@ -200,32 +190,8 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_local_test">sui_local_test</a>(): u8 {
-    <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a>
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xb_chain_ids_sui_devnet"></a>
-
-## Function `sui_devnet`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_devnet">sui_devnet</a>(): u8
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_devnet">sui_devnet</a>(): u8 {
-    <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a>
+<pre><code><b>public</b> <b>fun</b> <a href="chain_ids.md#0xb_chain_ids_sui_custom">sui_custom</a>(): u8 {
+    <a href="chain_ids.md#0xb_chain_ids_SuiCustom">SuiCustom</a>
 }
 </code></pre>
 
@@ -372,8 +338,7 @@
     <b>assert</b>!(
         id == <a href="chain_ids.md#0xb_chain_ids_SuiMainnet">SuiMainnet</a> ||
         id == <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a> ||
-        id == <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a> ||
-        id == <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a> ||
+        id == <a href="chain_ids.md#0xb_chain_ids_SuiCustom">SuiCustom</a> ||
         id == <a href="chain_ids.md#0xb_chain_ids_EthMainnet">EthMainnet</a> ||
         id == <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a> ||
         id == <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>,
@@ -406,18 +371,14 @@
         <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiMainnet">SuiMainnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthMainnet">EthMainnet</a> },
         <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthMainnet">EthMainnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiMainnet">SuiMainnet</a> },
 
-        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a> },
-        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a> },
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiCustom">SuiCustom</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a> },
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiCustom">SuiCustom</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a> },
         <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a> },
         <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a> },
-        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a> },
-        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a>, destination: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a> },
-        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a> },
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiCustom">SuiCustom</a> },
         <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a> },
-        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthSepolia">EthSepolia</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a> },
-        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiDevnet">SuiDevnet</a> },
+        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiCustom">SuiCustom</a> },
         <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiTestnet">SuiTestnet</a> },
-        <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="chain_ids.md#0xb_chain_ids_EthLocalTest">EthLocalTest</a>, destination: <a href="chain_ids.md#0xb_chain_ids_SuiLocalTest">SuiLocalTest</a> }
     ]
 }
 </code></pre>

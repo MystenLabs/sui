@@ -595,7 +595,7 @@ module bridge::message {
     #[test]
     fun test_emergency_op_message_serialization_regression() {
         let emergency_op_message = create_emergency_op_message(
-            chain_ids::sui_local_test(),
+            chain_ids::sui_custom(),
             55, // seq_num
             0, // pause
         );
@@ -603,7 +603,7 @@ module bridge::message {
         // Test message serialization
         let message = serialize_message(emergency_op_message);
         let expected_msg = hex::decode(
-            b"020100000000000000370300",
+            b"020100000000000000370200",
         );
 
         assert!(message == expected_msg, 0);
@@ -644,7 +644,7 @@ module bridge::message {
         // Test 1
         let validator_eth_addresses = vector[validator_eth_addr_1];
         let blocklist_message = create_blocklist_message(
-            chain_ids::sui_local_test(), // source chain
+            chain_ids::sui_custom(), // source chain
             129, // seq_num
             0, // blocklist
             validator_eth_addresses
@@ -653,7 +653,7 @@ module bridge::message {
         let message = serialize_message(blocklist_message);
 
         let expected_msg = hex::decode(
-            b"0101000000000000008103000168b43fd906c0b8f024a18c56e06744f7c6157c65",
+            b"0101000000000000008102000168b43fd906c0b8f024a18c56e06744f7c6157c65",
         );
 
         assert!(message == expected_msg, 0);
@@ -665,7 +665,7 @@ module bridge::message {
         // Test 2
         let validator_eth_addresses = vector[validator_eth_addr_1, validator_eth_addr_2];
         let blocklist_message = create_blocklist_message(
-            chain_ids::sui_devnet(), // source chain
+            chain_ids::sui_custom(), // source chain
             68, // seq_num
             1, // unblocklist
             validator_eth_addresses
@@ -712,7 +712,7 @@ module bridge::message {
     #[test]
     fun test_update_bridge_limit_message_serialization_regression() {
         let update_bridge_limit = create_update_bridge_limit_message(
-            chain_ids::sui_local_test(), // source chain
+            chain_ids::sui_custom(), // source chain
             15, // seq_num
             chain_ids::eth_local_test(),
             10_000_000_000 // 1M USD
@@ -721,14 +721,14 @@ module bridge::message {
         // Test message serialization
         let message = serialize_message(update_bridge_limit);
         let expected_msg = hex::decode(
-            b"0301000000000000000f030c00000002540be400",
+            b"0301000000000000000f020c00000002540be400",
         );
 
         assert_eq(message, expected_msg);
         assert!(update_bridge_limit == deserialize_message_test_only(message), 0);
 
         let bridge_limit = extract_update_bridge_limit(&update_bridge_limit);
-        assert!(bridge_limit.receiving_chain == chain_ids::sui_local_test(), 0);
+        assert!(bridge_limit.receiving_chain == chain_ids::sui_custom(), 0);
         assert!(bridge_limit.sending_chain == chain_ids::eth_local_test(), 0);
         assert!(bridge_limit.limit == 10_000_000_000, 0);
     }
@@ -758,7 +758,7 @@ module bridge::message {
     #[test]
     fun test_update_asset_price_message_serialization_regression() {
         let asset_price_message = create_update_asset_price_message<BTC>(
-            chain_ids::sui_local_test(), // source chain
+            chain_ids::sui_custom(), // source chain
             266, // seq_num
             1_000_000_000 // $100k USD
         );
@@ -766,7 +766,7 @@ module bridge::message {
         // Test message serialization
         let message = serialize_message(asset_price_message);
         let expected_msg = hex::decode(
-            b"0401000000000000010a0301000000003b9aca00",
+            b"0401000000000000010a0201000000003b9aca00",
         );
         assert!(message == expected_msg, 0);
         assert!(asset_price_message == deserialize_message_test_only(message), 0);
