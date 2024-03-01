@@ -12,6 +12,8 @@ use crate::types::LimitUpdateAction;
 use crate::types::SuiToEthBridgeAction;
 use enum_dispatch::enum_dispatch;
 use ethers::types::Address as EthAddress;
+use fastcrypto::encoding::Encoding;
+use fastcrypto::encoding::Hex;
 use sui_types::base_types::SUI_ADDRESS_LENGTH;
 
 pub const TOKEN_TRANSFER_MESSAGE_VERSION: u8 = 1;
