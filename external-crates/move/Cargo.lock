@@ -1689,6 +1689,7 @@ dependencies = [
  "once_cell",
  "serde",
  "sha2",
+ "vfs",
  "walkdir",
 ]
 

@@ -15,15 +15,15 @@ use crate::{
     expansion, hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
-        find_filenames, CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath,
-        NamedAddressMap, NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths,
+        CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath, NamedAddressMap,
+        NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths,
     },
     to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
     unit_test,
 };
 use move_command_line_common::files::{
-    MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
+    find_filenames_vfs, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_symbol_pool::Symbol;
@@ -759,7 +759,7 @@ pub fn generate_interface_files(
         } in other_file_locations
         {
             v.extend(
-                find_filenames(&[path], |path| {
+                find_filenames_vfs(&[path], |path| {
                     path.extension()
                         .map(|e| e.as_str() == MOVE_COMPILED_EXTENSION)
                         .unwrap_or(false)

@@ -16,7 +16,6 @@ use crate::{
     typing::visitor::{TypingVisitor, TypingVisitorObj},
 };
 use clap::*;
-use move_command_line_common::files::MOVE_EXTENSION;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
@@ -28,7 +27,7 @@ use std::{
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering as AtomicOrdering},
 };
-use vfs::{error::VfsErrorKind, VfsError, VfsPath, VfsResult};
+use vfs::{VfsError, VfsPath};
 
 pub mod ast_debug;
 pub mod known_attributes;
@@ -903,85 +902,6 @@ impl IndexedPhysicalPackagePath {
             package,
             path: vfs_path_from_str(path.to_string(), vfs_root)?,
             named_address_map,
-        })
-    }
-}
-
-/// Determine if the virtual path at `vfs_path` exists distinguishing between whether the path did
-/// not exist, or if there were other errors in determining if the path existed.
-pub fn try_exists(vfs_path: &VfsPath) -> VfsResult<bool> {
-    use VfsResult as R;
-    match vfs_path.metadata() {
-        R::Ok(_) => R::Ok(true),
-        R::Err(e) if matches!(e.kind(), &VfsErrorKind::FileNotFound) => R::Ok(false),
-        R::Err(e) => R::Err(e),
-    }
-}
-
-/// - For each directory in `paths`, it will return all files that satisfy the predicate
-/// - Any file explicitly passed in `paths`, it will include that file in the result, regardless
-///   of the file extension
-/// It implements the same functionality as move-command-line-common::files::find_filenames but for
-/// the virtual file system
-pub fn find_filenames<Predicate: FnMut(&VfsPath) -> bool>(
-    paths: &[VfsPath],
-    mut is_file_desired: Predicate,
-) -> anyhow::Result<Vec<VfsPath>> {
-    let mut result = vec![];
-
-    for p in paths {
-        if !try_exists(p)? {
-            anyhow::bail!("No such file or directory '{}'", p.as_str())
-        }
-        if p.is_file()? && is_file_desired(p) {
-            result.push(p.clone());
-            continue;
-        }
-        if !p.is_dir()? {
-            continue;
-        }
-        for entry in p.walk_dir()?.filter_map(|e| e.ok()) {
-            if !entry.is_file()? || !is_file_desired(&entry) {
-                continue;
-            }
-
-            result.push(entry);
-        }
-    }
-    Ok(result)
-}
-
-/// - For each directory in `paths`, it will return all files with the `MOVE_EXTENSION` found
-///   recursively in that directory
-/// - If `keep_specified_files` any file explicitly passed in `paths`, will be added to the result
-///   Otherwise, they will be discarded
-/// It implements the same functionality as move-command-line-common::files::find_move_filenames but
-/// for the virtual file system
-pub fn find_move_filenames(
-    paths: &[VfsPath],
-    keep_specified_files: bool,
-) -> anyhow::Result<Vec<VfsPath>> {
-    if keep_specified_files {
-        let mut file_paths = vec![];
-        let mut other_paths = vec![];
-        for p in paths {
-            if p.is_file()? {
-                file_paths.push(p.clone());
-            } else {
-                other_paths.push(p.clone());
-            }
-        }
-        file_paths.extend(find_filenames(&other_paths, |path| {
-            path.extension()
-                .map(|e| e.as_str() == MOVE_EXTENSION)
-                .unwrap_or(false)
-        })?);
-        Ok(file_paths)
-    } else {
-        find_filenames(paths, |path| {
-            path.extension()
-                .map(|e| e.as_str() == MOVE_EXTENSION)
-                .unwrap_or(false)
         })
     }
 }
