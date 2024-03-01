@@ -79,13 +79,27 @@ impl BuildPlan {
             transitive_dependencies,
         } = self.compute_dependencies();
 
-        let (_, migration) = CompiledPackage::build_for_result(
+        let (files, res) = CompiledPackage::build_for_result(
             writer,
             root_package,
             transitive_dependencies,
             &self.resolution_graph,
             |compiler| compiler.generate_migration_patch(&self.root),
         )?;
+        let migration = match res {
+            Ok(migration) => migration,
+            Err(diags) => {
+                let diags_buf = report_diagnostics_to_color_buffer(&files, diags);
+                writeln!(
+                    writer,
+                    "Unable to generate migration patch due to compilation errors:"
+                )?;
+                if let Err(err) = writer.write_all(&diags_buf) {
+                    anyhow::bail!("Cannot output compiler diagnostics: {}", err);
+                }
+                anyhow::bail!("Compilation error");
+            }
+        };
 
         Self::clean(
             &project_root.join(CompiledPackageLayout::Root.path()),

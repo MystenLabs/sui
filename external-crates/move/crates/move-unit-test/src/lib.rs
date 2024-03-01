@@ -150,14 +150,19 @@ impl UnitTestingConfig {
                 .set_flags(flags)
                 .run::<PASS_CFGIR>()
                 .unwrap();
-        let (_, compiler) =
-            diagnostics::unwrap_or_report_diagnostics(&files, comments_and_compiler_res);
+        let (_, compiler) = diagnostics::unwrap_or_report_diagnostics(
+            &files,
+            comments_and_compiler_res.map_err(|(_pass, diags)| diags),
+        );
 
         let (mut compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
         let test_plan = unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
 
-        let compilation_result = compiler.at_cfgir(cfgir).build();
+        let compilation_result = compiler
+            .at_cfgir(cfgir)
+            .build()
+            .map_err(|(_pass, diags)| diags);
         let (units, warnings) =
             diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
         diagnostics::report_warnings(&files, warnings);

@@ -184,13 +184,18 @@ pub fn run_move_unit_tests<W: Write + Send>(
     let mut warning_diags = None;
     build_plan.compile_with_driver(writer, |compiler| {
         let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
-        let (_, compiler) =
-            diagnostics::unwrap_or_report_diagnostics(&files, comments_and_compiler_res);
+        let (_, compiler) = diagnostics::unwrap_or_report_diagnostics(
+            &files,
+            comments_and_compiler_res.map_err(|(_pass, diags)| diags),
+        );
         let (mut compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
         let built_test_plan = construct_test_plan(compilation_env, Some(root_package), &cfgir);
 
-        let compilation_result = compiler.at_cfgir(cfgir).build();
+        let compilation_result = compiler
+            .at_cfgir(cfgir)
+            .build()
+            .map_err(|(_pass, diags)| diags);
         let (units, warnings) =
             diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
         diagnostics::report_warnings(&files, warnings.clone());
