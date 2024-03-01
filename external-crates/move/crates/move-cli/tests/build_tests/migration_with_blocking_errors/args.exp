@@ -1,0 +1,26 @@
+Command `migrate`:
+Package toml does not specify an edition. As of 2024, Move requires all packages to define a language edition.
+
+Please select one of the following editions:
+
+1) 2024.alpha
+2) legacy
+
+Selection (default=1): Recorded edition in 'Move.toml'
+
+Would you like the Move compiler to migrate your code to Move 2024? (Y/n) 
+Generated changes . . .
+BUILDING A
+Unable to generate migration patch due to compilation errors:
+[0m[1m[38;5;9merror[E04007][0m[1m: incompatible types[0m
+   [0m[34m┌─[0m ./sources/mod.move:12:13
+   [0m[34m│[0m
+[0m[34m11[0m [0m[34m│[0m     entry fun t0(x: u64, s: Positional): u64 {
+   [0m[34m│[0m                             [0m[34m----------[0m [0m[34mExpected: 'A::mod0::Positional'[0m
+[0m[34m12[0m [0m[34m│[0m         let [0m[31mS { f: fin }[0m = s;
+   [0m[34m│[0m             [0m[31m^^^^^^^^^^^^[0m
+   [0m[34m│[0m             [0m[31m│[0m
+   [0m[34m│[0m             [0m[31mInvalid deconstruction binding[0m
+   [0m[34m│[0m             [0m[34mGiven: 'A::mod0::S'[0m
+
+Error: Compilation error

@@ -339,12 +339,12 @@ codes!(
     Editions: [
         FeatureTooNew: {
             msg: "feature is not supported in specified edition",
-            severity: BlockingError,
+            severity: NonblockingError,
         },
     ],
     Migration: [
-        NeedsPublic: { msg: "move 2024 migration: public struct", severity: BlockingError },
-        NeedsLetMut: { msg: "move 2024 migration: let mut", severity: BlockingError },
+        NeedsPublic: { msg: "move 2024 migration: public struct", severity: NonblockingError },
+        NeedsLetMut: { msg: "move 2024 migration: let mut", severity: NonblockingError },
     ]
 );
 

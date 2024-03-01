@@ -1,0 +1,9 @@
+
+# TOML FILE
+
+[package]
+name = "A"
+
+# this is a comment
+[addresses]
+A = "0x1"
