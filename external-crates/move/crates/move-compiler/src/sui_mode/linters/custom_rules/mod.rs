@@ -3,4 +3,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod constant_naming;
+pub mod redundant_boolean_expressions;
 pub mod shift_overflow;
