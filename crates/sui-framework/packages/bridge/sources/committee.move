@@ -40,6 +40,7 @@ module bridge::committee {
     const EValidatorBlocklistContainsUnknownKey: u64 = 4;
     const ESenderNotActiveValidator: u64 = 5;
     const EInvalidPubkeyLength: u64 = 6;
+    const ECommitteeAlreadyInitiated: u64 = 7;
 
     const SUI_MESSAGE_PREFIX: vector<u8> = b"SUI_BRIDGE_MESSAGE";
 
@@ -138,8 +139,11 @@ module bridge::committee {
         http_rest_url: vector<u8>,
         ctx: &TxContext
     ) {
+        // We disallow registration after committee initiated in v1
+        assert!(vec_map::is_empty(&self.members), ECommitteeAlreadyInitiated);
+        // Ensure pubkey is valid
         assert!(vector::length(&bridge_pubkey_bytes) == ECDSA_COMPRESSED_PUBKEY_LENGTH, EInvalidPubkeyLength);
-        // sender must be the same sender that created the validator object
+        // sender must be the same sender that created the validator object, this is to prevent DDoS from non-validator actor.
         let sender = tx_context::sender(ctx);
         let validators = sui_system::active_validator_addresses(system_state);
 
