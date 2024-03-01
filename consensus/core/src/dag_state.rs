@@ -13,7 +13,7 @@ use consensus_config::AuthorityIndex;
 use tracing::error;
 
 use crate::{
-    block::{Block, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
+    block::{genesis_blocks, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
     commit::{Commit, CommitIndex},
     context::Context,
     storage::Store,
@@ -68,8 +68,7 @@ impl DagState {
     pub(crate) fn new(context: Arc<Context>, store: Arc<dyn Store>) -> Self {
         let num_authorities = context.committee.size();
 
-        let (_, genesis) = Block::genesis(context.clone());
-        let genesis = genesis
+        let genesis = genesis_blocks(context.clone())
             .into_iter()
             .map(|block| (block.reference(), block))
             .collect();
@@ -165,18 +164,25 @@ impl DagState {
             .expect("Exactly one element should be returned")
     }
 
-    /// Gets blocks by checking cached recent blocks in memory then storage.
+    /// Gets blocks by checking genesis, cached recent blocks in memory, then storage.
     /// An element is None when the corresponding block is not found.
     pub(crate) fn get_blocks(&self, block_refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
         let mut blocks = vec![None; block_refs.len()];
         let mut missing = Vec::new();
 
         for (index, block_ref) in block_refs.iter().enumerate() {
+            if block_ref.round == 0 {
+                // Allow the caller to handle the invalid genesis ancestor error.
+                if let Some(block) = self.genesis.get(block_ref) {
+                    blocks[index] = Some(block.clone());
+                }
+                continue;
+            }
             if let Some(block) = self.recent_blocks.get(block_ref) {
                 blocks[index] = Some(block.clone());
-            } else {
-                missing.push((index, block_ref));
+                continue;
             }
+            missing.push((index, block_ref));
         }
 
         if missing.is_empty() {

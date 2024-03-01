@@ -1,10 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use parking_lot::RwLock;
+
 use std::collections::{BTreeMap, BTreeSet};
+use std::iter;
 use std::sync::Arc;
 
+use parking_lot::RwLock;
+use tracing::warn;
+
 use crate::block::{BlockAPI, BlockRef, VerifiedBlock};
+use crate::block_verifier::BlockVerifier;
 use crate::context::Context;
 use crate::dag_state::DagState;
 
@@ -28,6 +33,10 @@ impl SuspendedBlock {
 /// history we need to make sure that BlockManager takes care of that and avoid OOM (Out Of Memory)
 /// situations.
 pub(crate) struct BlockManager {
+    context: Arc<Context>,
+    dag_state: Arc<RwLock<DagState>>,
+    block_verifier: Arc<dyn BlockVerifier>,
+
     /// Keeps all the suspended blocks. A suspended block is a block that is missing part of its causal history and thus
     /// can't be immediately processed. A block will remain in this map until all its causal history has been successfully
     /// processed.
@@ -39,18 +48,21 @@ pub(crate) struct BlockManager {
     /// Keeps all the blocks that we actually miss and haven't fetched them yet. That set will basically contain all the
     /// keys from the `missing_ancestors` minus any keys that exist in `suspended_blocks`.
     missing_blocks: BTreeSet<BlockRef>,
-    dag_state: Arc<RwLock<DagState>>,
-    context: Arc<Context>,
 }
 
 impl BlockManager {
-    pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
+    pub(crate) fn new(
+        context: Arc<Context>,
+        dag_state: Arc<RwLock<DagState>>,
+        block_verifier: Arc<dyn BlockVerifier>,
+    ) -> Self {
         Self {
+            context,
+            dag_state,
+            block_verifier,
             suspended_blocks: BTreeMap::new(),
             missing_ancestors: BTreeMap::new(),
             missing_blocks: BTreeSet::new(),
-            context,
-            dag_state,
         }
     }
 
@@ -61,26 +73,76 @@ impl BlockManager {
         &mut self,
         mut blocks: Vec<VerifiedBlock>,
     ) -> (Vec<VerifiedBlock>, BTreeSet<BlockRef>) {
+        blocks.sort_by_key(|b| b.round());
+
         let mut accepted_blocks = vec![];
         let missing_blocks_before = self.missing_blocks.clone();
 
-        blocks.sort_by_key(|b| b.round());
         for block in blocks {
-            if let Some(block) = self.try_accept_block(block) {
-                // Try to unsuspend and accept any children blocks
-                let mut unsuspended_blocks = self.try_unsuspend_children_blocks(&block);
-                unsuspended_blocks.push(block);
+            if let Some(block) = self.try_accept_one_block(block) {
+                // Try to unsuspend any children blocks.
+                let unsuspended_blocks = self.try_unsuspend_children_blocks(&block);
 
-                // Accept the state in DAG here so the next block to be processed can find in DAG/store any accepted blocks.
+                // Try to verify the block with ancestor blocks.
+                let mut blocks_to_accept: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
+                let mut blocks_to_reject: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
+                {
+                    'block: for b in iter::once(block).chain(unsuspended_blocks) {
+                        let ancestors = self.dag_state.read().get_blocks(b.ancestors());
+                        assert_eq!(b.ancestors().len(), ancestors.len());
+                        let mut ancestor_blocks = vec![];
+                        'ancestor: for (included, found) in
+                            b.ancestors().iter().zip(ancestors.into_iter())
+                        {
+                            if let Some(found_block) = found {
+                                // This invariant should be guaranteed by DagState.
+                                assert_eq!(included, &found_block.reference());
+                                ancestor_blocks.push(found_block);
+                                continue 'ancestor;
+                            }
+                            // blocks_to_accept have not been added to DagState yet, but they
+                            // can appear in ancestors.
+                            if blocks_to_accept.contains_key(included) {
+                                ancestor_blocks.push(blocks_to_accept[included].clone());
+                                continue 'ancestor;
+                            }
+                            // If an ancestor is already rejected, reject this block as well.
+                            if blocks_to_reject.contains_key(included) {
+                                blocks_to_reject.insert(b.reference(), b);
+                                continue 'block;
+                            }
+                            panic!("Unsuspended block {:?} has a missing ancestor! Ancestor not found in DagState: {:?}", b, included);
+                        }
+                        if let Err(e) = self.block_verifier.check_ancestors(&b, &ancestor_blocks) {
+                            warn!("Block {:?} failed to verify ancestors: {}", b, e);
+                            blocks_to_reject.insert(b.reference(), b);
+                        } else {
+                            blocks_to_accept.insert(b.reference(), b);
+                        }
+                    }
+                }
+                for (block_ref, block) in blocks_to_reject {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .invalid_blocks
+                        .with_label_values(&[&block_ref.author.to_string(), "accept_block"])
+                        .inc();
+                    warn!("Invalid block {:?} is rejected", block);
+                }
+
+                // TODO: report blocks_to_reject to peers.
+
+                // Insert the accepted blocks into DAG state so future blocks including them as
+                // ancestors do not get suspended.
+                let blocks_to_accept: Vec<_> = blocks_to_accept.into_values().collect();
                 self.dag_state
                     .write()
-                    .accept_blocks(unsuspended_blocks.clone());
+                    .accept_blocks(blocks_to_accept.clone());
 
-                accepted_blocks.extend(unsuspended_blocks);
+                accepted_blocks.extend(blocks_to_accept);
             }
         }
-
-        accepted_blocks.sort_by_key(|b| b.reference());
 
         // Newly missed blocks
         // TODO: make sure that the computation here is bounded either in the byzantine or node fall
@@ -98,7 +160,7 @@ impl BlockManager {
     /// Tries to accept the provided block. To accept a block its ancestors must have been already successfully accepted. If
     /// block is accepted then Some result is returned. None is returned when either the block is suspended or the block
     /// has been already accepted before.
-    fn try_accept_block(&mut self, block: VerifiedBlock) -> Option<VerifiedBlock> {
+    fn try_accept_one_block(&mut self, block: VerifiedBlock) -> Option<VerifiedBlock> {
         let block_ref = block.reference();
         let mut missing_ancestors = BTreeSet::new();
         let dag_state = self.dag_state.read();
@@ -159,7 +221,7 @@ impl BlockManager {
     }
 
     /// Given an accepted block `accepted_block` it attempts to accept all the suspended children blocks assuming such exist.
-    /// All the unsuspended/accepted blocks are returned as a vector.
+    /// All the unsuspended / accepted blocks are returned as a vector in causal order.
     fn try_unsuspend_children_blocks(
         &mut self,
         accepted_block: &VerifiedBlock,
@@ -244,17 +306,23 @@ impl BlockManager {
 
 #[cfg(test)]
 mod tests {
-    use crate::block::{Block, BlockAPI, Round, TestBlock, VerifiedBlock};
-    use crate::block_manager::BlockManager;
-    use crate::context::Context;
-    use crate::dag_state::DagState;
-    use crate::storage::mem_store::MemStore;
+    use std::collections::BTreeSet;
+    use std::sync::Arc;
+
     use parking_lot::RwLock;
     use rand::prelude::StdRng;
     use rand::seq::SliceRandom;
     use rand::SeedableRng;
-    use std::collections::BTreeSet;
-    use std::sync::Arc;
+
+    use crate::block::{
+        genesis_blocks, BlockAPI, BlockRef, Round, SignedBlock, TestBlock, VerifiedBlock,
+    };
+    use crate::block_manager::BlockManager;
+    use crate::block_verifier::{BlockVerifier, NoopBlockVerifier};
+    use crate::context::Context;
+    use crate::dag_state::DagState;
+    use crate::error::{ConsensusError, ConsensusResult};
+    use crate::storage::mem_store::MemStore;
 
     #[test]
     fn suspend_blocks_with_missing_ancestors() {
@@ -264,7 +332,8 @@ mod tests {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let mut block_manager = BlockManager::new(context.clone(), dag_state);
+        let mut block_manager =
+            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
 
         // create a DAG of 2 rounds
         let all_blocks = dag(context, 2);
@@ -307,7 +376,8 @@ mod tests {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let mut block_manager = BlockManager::new(context.clone(), dag_state);
+        let mut block_manager =
+            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
 
         // create a DAG of 4 rounds
         let all_blocks = dag(context, 4);
@@ -344,7 +414,8 @@ mod tests {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let mut block_manager = BlockManager::new(context.clone(), dag_state);
+        let mut block_manager =
+            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
 
         // create a DAG of 2 rounds
         let all_blocks = dag(context, 2);
@@ -375,13 +446,8 @@ mod tests {
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
 
-        // create a DAG of 3 rounds
-        let all_blocks = dag(context.clone(), 3);
-        // keep only the non-genesis blocks
-        let mut all_blocks = all_blocks
-            .into_iter()
-            .filter(|block| block.round() > 0)
-            .collect::<Vec<_>>();
+        // create a DAG of rounds 1 ~ 3
+        let mut all_blocks = dag(context.clone(), 3);
 
         // Now randomize the sequence of sending the blocks to block manager. In the end all the blocks should be uniquely
         // suspended and no missing blocks should exist.
@@ -391,7 +457,8 @@ mod tests {
             let store = Arc::new(MemStore::new());
             let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-            let mut block_manager = BlockManager::new(context.clone(), dag_state);
+            let mut block_manager =
+                BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
 
             // WHEN
             let mut all_accepted_blocks = vec![];
@@ -418,12 +485,13 @@ mod tests {
     /// Creates all the blocks to produce a fully connected DAG from round 0 up to `end_round`.
     /// Note: this method also returns the genesis blocks.
     fn dag(context: Arc<Context>, end_round: u64) -> Vec<VerifiedBlock> {
-        let (_, mut last_round_blocks) = Block::genesis(context.clone());
-        let mut all_blocks = last_round_blocks.clone();
+        let mut last_round_blocks = genesis_blocks(context.clone());
+        let mut all_blocks = vec![];
         for round in 1..=end_round {
             let mut this_round_blocks = Vec::new();
             for (index, _authority) in context.committee.authorities() {
                 let block = TestBlock::new(round as Round, index.value() as u32)
+                    .set_timestamp_ms(round * 1000)
                     .set_ancestors(last_round_blocks.iter().map(|b| b.reference()).collect())
                     .build();
 
@@ -433,5 +501,95 @@ mod tests {
             last_round_blocks = this_round_blocks;
         }
         all_blocks
+    }
+
+    struct TestBlockVerifier {
+        fail: BTreeSet<BlockRef>,
+    }
+
+    impl TestBlockVerifier {
+        fn new(fail: BTreeSet<BlockRef>) -> Self {
+            Self { fail }
+        }
+    }
+
+    impl BlockVerifier for TestBlockVerifier {
+        fn verify(&self, _block: &SignedBlock) -> ConsensusResult<()> {
+            Ok(())
+        }
+
+        fn check_ancestors(
+            &self,
+            block: &VerifiedBlock,
+            _ancestors: &[VerifiedBlock],
+        ) -> ConsensusResult<()> {
+            if self.fail.contains(&block.reference()) {
+                Err(ConsensusError::InvalidBlockTimestamp {
+                    max_timestamp_ms: 0,
+                    block_timestamp_ms: block.timestamp_ms(),
+                })
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    #[test]
+    fn reject_blocks_failing_verifications() {
+        let (context, _key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
+
+        // create a DAG of rounds 1 ~ 5.
+        let all_blocks = dag(context.clone(), 5);
+
+        // Create a test verifier that fails the blocks of round 3
+        let test_verifier = TestBlockVerifier::new(
+            all_blocks
+                .iter()
+                .filter(|block| block.round() == 3)
+                .map(|block| block.reference())
+                .collect(),
+        );
+
+        // Create BlockManager.
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let mut block_manager =
+            BlockManager::new(context.clone(), dag_state, Arc::new(test_verifier));
+
+        // Try to accept blocks from round 2 ~ 5 into block manager. All of them should be suspended.
+        let (accepted_blocks, missing_refs) = block_manager.try_accept_blocks(
+            all_blocks
+                .iter()
+                .filter(|block| block.round() > 1)
+                .cloned()
+                .collect(),
+        );
+
+        // Missing refs should all come from round 1.
+        assert!(accepted_blocks.is_empty());
+        assert_eq!(missing_refs.len(), 4);
+        missing_refs.iter().for_each(|missing_ref| {
+            assert_eq!(missing_ref.round, 1);
+        });
+
+        // Now add round 1 blocks into block manager.
+        let (accepted_blocks, missing_refs) = block_manager.try_accept_blocks(
+            all_blocks
+                .iter()
+                .filter(|block| block.round() == 1)
+                .cloned()
+                .collect(),
+        );
+
+        // Only round 1 and round 2 blocks should be accepted.
+        assert_eq!(accepted_blocks.len(), 8);
+        accepted_blocks.iter().for_each(|block| {
+            assert!(block.round() <= 2);
+        });
+        assert!(missing_refs.is_empty());
+
+        // Other blocks should be rejected and there should be no remaining suspended block.
+        assert!(block_manager.suspended_blocks().is_empty());
     }
 }

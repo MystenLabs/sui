@@ -14,8 +14,8 @@ use tracing::warn;
 
 use crate::{
     block::{
-        timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
-        Slot, VerifiedBlock,
+        genesis_blocks, timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1,
+        Round, SignedBlock, Slot, VerifiedBlock,
     },
     block_manager::BlockManager,
     commit_observer::CommitObserver,
@@ -80,7 +80,12 @@ impl Core {
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
-        let (my_genesis_block, all_genesis_blocks) = Block::genesis(context.clone());
+        let all_genesis_blocks = genesis_blocks(context.clone());
+        let my_genesis_block = all_genesis_blocks
+            .iter()
+            .find(|block| block.author() == context.own_index)
+            .expect("Own block at genesis must be present")
+            .clone();
         let last_decided_leader = dag_state.read().last_commit_leader();
 
         let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone())
@@ -496,7 +501,10 @@ mod test {
     use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
     use super::*;
-    use crate::{block::TestBlock, storage::mem_store::MemStore, transaction::TransactionClient};
+    use crate::{
+        block::TestBlock, block_verifier::NoopBlockVerifier, storage::mem_store::MemStore,
+        transaction::TransactionClient,
+    };
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
     #[tokio::test]
@@ -509,7 +517,7 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
         // Create test blocks for all the authorities for 4 rounds and populate them in store
-        let (_, mut last_round_blocks) = Block::genesis(context.clone());
+        let mut last_round_blocks = genesis_blocks(context.clone());
         let mut all_blocks: Vec<VerifiedBlock> = last_round_blocks.clone();
         for round in 1..=4 {
             let mut this_round_blocks = Vec::new();
@@ -532,7 +540,11 @@ mod test {
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
 
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
@@ -610,7 +622,7 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
         // Create test blocks for all authorities except our's (index = 0).
-        let (_, mut last_round_blocks) = Block::genesis(context.clone());
+        let mut last_round_blocks = genesis_blocks(context.clone());
         let mut all_blocks = last_round_blocks.clone();
         for round in 1..=4 {
             let mut this_round_blocks = Vec::new();
@@ -640,7 +652,11 @@ mod test {
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
 
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
@@ -722,7 +738,11 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
         let (transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, signal_receivers) = CoreSignals::new();
@@ -790,7 +810,7 @@ mod test {
         );
 
         // genesis blocks should be referenced
-        let (_genesis_my, all_genesis) = Block::genesis(context);
+        let all_genesis = genesis_blocks(context);
 
         for ancestor in block.ancestors() {
             all_genesis
@@ -818,7 +838,11 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, signal_receivers) = CoreSignals::new();
@@ -1095,7 +1119,11 @@ mod test {
             let store = Arc::new(MemStore::new());
             let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-            let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+            let block_manager = BlockManager::new(
+                context.clone(),
+                dag_state.clone(),
+                Arc::new(NoopBlockVerifier),
+            );
             let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
             let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
             let (signals, signal_receivers) = CoreSignals::new();

@@ -24,6 +24,7 @@ use crate::context::Context;
 use crate::core_thread::CoreThreadDispatcher;
 use crate::error::{ConsensusError, ConsensusResult};
 use crate::network::NetworkClient;
+use crate::BlockAPI;
 use consensus_config::AuthorityIndex;
 
 /// The number of concurrent fetch blocks requests per authority
@@ -271,7 +272,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     .metrics
                     .node_metrics
                     .invalid_blocks
-                    .with_label_values(&[&peer_index.to_string(), "synchronizer"])
+                    .with_label_values(&[&signed_block.author().to_string(), "synchronizer"])
                     .inc();
                 warn!("Invalid block received from {}: {}", peer_index, e);
                 return Err(e);
