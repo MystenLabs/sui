@@ -2,7 +2,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{base_types::*, error::*};
+use std::fmt::Write;
+use std::fmt::{Debug, Display, Formatter};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    hash::Hash,
+    iter,
+};
+
+use enum_dispatch::enum_dispatch;
+use fastcrypto::{encoding::Base64, hash::HashFunction};
+use itertools::Either;
+use move_core_types::ident_str;
+use move_core_types::identifier::IdentStr;
+use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+use nonempty::{nonempty, NonEmpty};
+use serde::{Deserialize, Serialize};
+use strum::IntoStaticStr;
+use tap::Pipe;
+use tracing::trace;
+
+use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+
 use crate::authenticator_state::ActiveJwk;
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
@@ -10,8 +32,8 @@ use crate::crypto::{
     AuthorityStrongQuorumSignInfo, DefaultHash, Ed25519SuiSignature, EmptySignInfo,
     RandomnessRound, Signature, Signer, SuiSignatureInner, ToFromBytes,
 };
-use crate::digests::ConsensusCommitDigest;
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
+use crate::digests::{ChainIdentifier, ConsensusCommitDigest};
 use crate::execution::SharedInput;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
@@ -294,7 +316,8 @@ pub enum EndOfEpochTransactionKind {
     AuthenticatorStateExpire(AuthenticatorStateExpire),
     RandomnessStateCreate,
     DenyListStateCreate,
-    BridgeStateCreate,
+    BridgeStateCreate(ChainIdentifier),
+    BridgeCommitteeInit(SequenceNumber),
 }
 
 impl EndOfEpochTransactionKind {
@@ -342,8 +365,12 @@ impl EndOfEpochTransactionKind {
         Self::DenyListStateCreate
     }
 
-    pub fn new_bridge_create() -> Self {
-        Self::BridgeStateCreate
+    pub fn new_bridge_create(chain_identifier: ChainIdentifier) -> Self {
+        Self::BridgeStateCreate(chain_identifier)
+    }
+
+    pub fn init_bridge_committee(bridge_shared_version: SequenceNumber) -> Self {
+        Self::BridgeCommitteeInit(bridge_shared_version)
     }
 
     fn input_objects(&self) -> Vec<InputObjectKind> {
@@ -365,22 +392,50 @@ impl EndOfEpochTransactionKind {
             }
             Self::RandomnessStateCreate => vec![],
             Self::DenyListStateCreate => vec![],
-            Self::BridgeStateCreate => vec![],
+            Self::BridgeStateCreate(_) => vec![],
+            Self::BridgeCommitteeInit(bridge_version) => vec![
+                InputObjectKind::SharedMoveObject {
+                    id: SUI_BRIDGE_OBJECT_ID,
+                    initial_shared_version: *bridge_version,
+                    mutable: true,
+                },
+                InputObjectKind::SharedMoveObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
+                },
+            ],
         }
     }
 
     fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         match self {
-            Self::ChangeEpoch(_) => Either::Left(iter::once(SharedInputObject::SUI_SYSTEM_OBJ)),
-            Self::AuthenticatorStateExpire(expire) => Either::Left(iter::once(SharedInputObject {
-                id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                initial_shared_version: expire.authenticator_obj_initial_shared_version(),
-                mutable: true,
-            })),
+            Self::ChangeEpoch(_) => {
+                Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
+            }
+            Self::AuthenticatorStateExpire(expire) => Either::Left(
+                vec![SharedInputObject {
+                    id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                    initial_shared_version: expire.authenticator_obj_initial_shared_version(),
+                    mutable: true,
+                }]
+                .into_iter(),
+            ),
             Self::AuthenticatorStateCreate => Either::Right(iter::empty()),
             Self::RandomnessStateCreate => Either::Right(iter::empty()),
             Self::DenyListStateCreate => Either::Right(iter::empty()),
-            Self::BridgeStateCreate => Either::Right(iter::empty()),
+            Self::BridgeStateCreate(_) => Either::Right(iter::empty()),
+            Self::BridgeCommitteeInit(bridge_version) => Either::Left(
+                vec![
+                    SharedInputObject {
+                        id: SUI_BRIDGE_OBJECT_ID,
+                        initial_shared_version: *bridge_version,
+                        mutable: true,
+                    },
+                    SharedInputObject::SUI_SYSTEM_OBJ,
+                ]
+                .into_iter(),
+            ),
         }
     }
 
@@ -399,7 +454,7 @@ impl EndOfEpochTransactionKind {
                 // Transaction should have been rejected earlier (or never formed).
                 assert!(config.enable_coin_deny_list());
             }
-            Self::BridgeStateCreate => {
+            Self::BridgeStateCreate(_) | Self::BridgeCommitteeInit(_) => {
                 // Transaction should have been rejected earlier (or never formed).
                 assert!(config.enable_bridge());
             }
@@ -485,7 +540,14 @@ impl VersionedProtocolMessage for TransactionKind {
                                     });
                                 }
                             }
-                            EndOfEpochTransactionKind::BridgeStateCreate => {
+                            EndOfEpochTransactionKind::BridgeStateCreate(_) => {
+                                if !protocol_config.enable_bridge() {
+                                    return Err(SuiError::UnsupportedFeatureError {
+                                        error: "bridge not enabled".to_string(),
+                                    });
+                                }
+                            }
+                            EndOfEpochTransactionKind::BridgeCommitteeInit(_) => {
                                 if !protocol_config.enable_bridge() {
                                     return Err(SuiError::UnsupportedFeatureError {
                                         error: "bridge not enabled".to_string(),

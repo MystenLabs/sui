@@ -4434,8 +4434,35 @@ impl AuthorityState {
         if epoch_store.bridge_exists() {
             return None;
         }
-        let tx = EndOfEpochTransactionKind::new_bridge_create();
+        let tx = EndOfEpochTransactionKind::new_bridge_create(epoch_store.get_chain_identifier());
         info!("Creating Bridge Create tx");
+        Some(tx)
+    }
+
+    #[instrument(level = "debug", skip_all)]
+    fn init_bridge_committee_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().enable_bridge() {
+            info!("bridge not enabled");
+            return None;
+        }
+        // Only create this transaction if bridge exists
+        if !epoch_store.bridge_exists() {
+            return None;
+        }
+
+        if epoch_store.bridge_committee_initiated() {
+            return None;
+        }
+
+        let bridge_initial_shared_version = epoch_store
+            .epoch_start_config()
+            .bridge_obj_initial_shared_version()
+            .expect("initial version must exist");
+        let tx = EndOfEpochTransactionKind::init_bridge_committee(bridge_initial_shared_version);
+        info!("Init Bridge committee tx");
         Some(tx)
     }
 
@@ -4484,6 +4511,9 @@ impl AuthorityState {
             txns.push(tx);
         }
         if let Some(tx) = self.create_bridge_tx(epoch_store) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.init_bridge_committee_tx(epoch_store) {
             txns.push(tx);
         }
         if let Some(tx) = self.create_deny_list_state_tx(epoch_store) {

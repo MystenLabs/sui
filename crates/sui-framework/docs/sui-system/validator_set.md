@@ -26,6 +26,7 @@ title: Module `0x3::validator_set`
 -  [Function `total_stake`](#0x3_validator_set_total_stake)
 -  [Function `validator_total_stake_amount`](#0x3_validator_set_validator_total_stake_amount)
 -  [Function `validator_stake_amount`](#0x3_validator_set_validator_stake_amount)
+-  [Function `validator_voting_power`](#0x3_validator_set_validator_voting_power)
 -  [Function `validator_staking_pool_id`](#0x3_validator_set_validator_staking_pool_id)
 -  [Function `staking_pool_mappings`](#0x3_validator_set_staking_pool_mappings)
 -  [Function `pool_exchange_rates`](#0x3_validator_set_pool_exchange_rates)
@@ -1319,6 +1320,31 @@ gas price, weighted by stake.
 <pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_stake_amount">validator_stake_amount</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_ref">get_validator_ref</a>(&self.active_validators, validator_address);
     <a href="validator.md#0x3_validator">validator</a>.stake_amount()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_set_validator_voting_power"></a>
+
+## Function `validator_voting_power`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_voting_power">validator_voting_power</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_voting_power">validator_voting_power</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_ref">get_validator_ref</a>(&self.active_validators, validator_address);
+    <a href="validator.md#0x3_validator_voting_power">validator::voting_power</a>(<a href="validator.md#0x3_validator">validator</a>)
 }
 </code></pre>
 

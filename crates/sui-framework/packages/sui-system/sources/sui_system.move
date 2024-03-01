@@ -599,12 +599,18 @@ module sui_system::sui_system {
         self.epoch_start_timestamp_ms()
     }
 
-    #[test_only]
     /// Returns the total amount staked with `validator_addr`.
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_stake_amount(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
         let self = load_system_state(wrapper);
         self.validator_stake_amount(validator_addr)
+    }
+
+    /// Returns the voting power of the active validator, values are voting power in the scale of 10000.
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_voting_power(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::validator_voting_power(self, validator_addr)
     }
 
     #[test_only]

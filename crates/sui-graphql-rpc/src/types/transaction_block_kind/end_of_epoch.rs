@@ -5,6 +5,8 @@ use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use move_binary_format::errors::PartialVMResult;
 use move_binary_format::CompiledModule;
+use sui_types::base_types::SequenceNumber;
+use sui_types::digests::ChainIdentifier as SuiChainIdentifier;
 use sui_types::{
     digests::TransactionDigest,
     object::Object as NativeObject,
@@ -41,6 +43,7 @@ pub(crate) enum EndOfEpochTransactionKind {
     RandomnessStateCreate(RandomnessStateCreateTransaction),
     CoinDenyListStateCreate(CoinDenyListStateCreateTransaction),
     BridgeStateCreate(BridgeStateCreateTransaction),
+    BridgeCommitteeInit(BridgeCommitteeInitTransaction),
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -79,11 +82,18 @@ pub(crate) struct CoinDenyListStateCreateTransaction {
     dummy: Option<bool>,
 }
 
-#[derive(SimpleObject, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct BridgeStateCreateTransaction {
-    /// A workaround to define an empty variant of a GraphQL union.
-    #[graphql(name = "_")]
-    dummy: Option<bool>,
+    pub native: SuiChainIdentifier,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct BridgeCommitteeInitTransaction {
+    pub native: SequenceNumber,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 pub(crate) type CTxn = JsonCursor<ConsistentIndexCursor>;
@@ -238,6 +248,20 @@ impl AuthenticatorStateExpireTransaction {
     }
 }
 
+#[Object]
+impl BridgeStateCreateTransaction {
+    async fn chain_id(&self) -> String {
+        self.native.to_string()
+    }
+}
+
+#[Object]
+impl BridgeCommitteeInitTransaction {
+    async fn bridge_obj_initial_shared_version(&self) -> u64 {
+        self.native.value()
+    }
+}
+
 impl EndOfEpochTransactionKind {
     fn from(kind: NativeEndOfEpochTransactionKind, checkpoint_viewed_at: u64) -> Self {
         use EndOfEpochTransactionKind as K;
@@ -263,8 +287,15 @@ impl EndOfEpochTransactionKind {
             N::DenyListStateCreate => {
                 K::CoinDenyListStateCreate(CoinDenyListStateCreateTransaction { dummy: None })
             }
-            N::BridgeStateCreate => {
-                K::BridgeStateCreate(BridgeStateCreateTransaction { dummy: None })
+            N::BridgeStateCreate(chain_id) => K::BridgeStateCreate(BridgeStateCreateTransaction {
+                native: chain_id,
+                checkpoint_viewed_at,
+            }),
+            N::BridgeCommitteeInit(bridge_shared_version) => {
+                K::BridgeCommitteeInit(BridgeCommitteeInitTransaction {
+                    native: bridge_shared_version,
+                    checkpoint_viewed_at,
+                })
             }
         }
     }
