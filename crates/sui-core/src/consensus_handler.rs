@@ -746,7 +746,12 @@ impl SequencedConsensusTransaction {
         )
     }
 
-    pub fn is_user_tx_with_randomness(&self) -> bool {
+    pub fn is_user_tx_with_randomness(&self, randomness_state_enabled: bool) -> bool {
+        if !randomness_state_enabled {
+            // If randomness is disabled, these should be processed same as a tx without randomness,
+            // which will eventually fail when the randomness state object is not found.
+            return false;
+        }
         let SequencedConsensusTransactionKind::External(ConsensusTransaction {
             kind: ConsensusTransactionKind::UserTransaction(certificate),
             ..
