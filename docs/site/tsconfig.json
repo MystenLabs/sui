@@ -1,6 +1,9 @@
 {
   // This file is not used in compilation. It is here just for a nice editor experience.
   "extends": "@tsconfig/docusaurus/tsconfig.json",
+  "target": "es2017",
+    "module": "commonjs",
+    "lib": ["es2017","es2019.array","dom"],
   "compilerOptions": {
     "baseUrl": ".",
     "jsx": "react"
