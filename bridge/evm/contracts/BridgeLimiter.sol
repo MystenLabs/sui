@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "./interfaces/IBridgeLimiter.sol";
-import "./interfaces/IBridgeUtils.sol";
+import "./interfaces/IBridgeCommon.sol";
 import "./utils/CommitteeUpgradeable.sol";
 
 /// @title BridgeLimiter
@@ -87,7 +87,7 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
     /// @return amount in USD (4 decimal precision).
     function calculateAmountInUSD(uint8 tokenID, uint256 amount) public view returns (uint256) {
         // get the token address
-        address tokenAddress = committee.utils().getTokenAddress(tokenID);
+        address tokenAddress = committee.common().getTokenAddress(tokenID);
         // get the decimals
         uint8 decimals = IERC20Metadata(tokenAddress).decimals();
 
@@ -164,7 +164,7 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
             BridgeMessage.decodeUpdateLimitPayload(message.payload);
 
         require(
-            committee.utils().isChainSupported(sourceChainID),
+            committee.common().isChainSupported(sourceChainID),
             "BridgeLimiter: Source chain not supported"
         );
 

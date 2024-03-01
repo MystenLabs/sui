@@ -16,7 +16,7 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
     mapping(address committeeMember => uint16 stakeAmount) public committeeStake;
     mapping(address committeeMember => uint8 index) public committeeIndex;
     mapping(address committeeMember => bool isBlocklisted) public blocklist;
-    IBridgeUtils public utils;
+    IBridgeCommon public common;
 
     /* ========== INITIALIZER ========== */
 
@@ -25,7 +25,7 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
     /// the provided arrays must have the same length and the total stake provided must equal 10000.
     /// @param committee addresses of the committee members.
     /// @param stake amounts of the committee members.
-    function initialize(address _utils, address[] memory committee, uint16[] memory stake)
+    function initialize(address _common, address[] memory committee, uint16[] memory stake)
         external
         initializer
     {
@@ -37,7 +37,7 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
             "BridgeCommittee: Committee and stake arrays must be of the same length"
         );
 
-        utils = IBridgeUtils(_utils);
+        common = IBridgeCommon(_common);
 
         uint16 totalStake;
         for (uint16 i; i < committee.length; i++) {

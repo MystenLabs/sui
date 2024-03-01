@@ -7,7 +7,7 @@ import "./utils/CommitteeUpgradeable.sol";
 import "./interfaces/ISuiBridge.sol";
 import "./interfaces/IBridgeVault.sol";
 import "./interfaces/IBridgeLimiter.sol";
-import "./interfaces/IBridgeUtils.sol";
+import "./interfaces/IBridgeCommon.sol";
 import "./interfaces/IWETH9.sol";
 
 /// @title SuiBridge
@@ -69,12 +69,12 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
 
         // verify target chain ID is this chain ID
         require(
-            tokenTransferPayload.targetChain == committee.utils().chainID(),
+            tokenTransferPayload.targetChain == committee.common().chainID(),
             "SuiBridge: Invalid target chain"
         );
 
         // convert amount to ERC20 token decimals
-        uint256 erc20AdjustedAmount = committee.utils().convertSuiToERC20Decimal(
+        uint256 erc20AdjustedAmount = committee.common().convertSuiToERC20Decimal(
             tokenTransferPayload.tokenID, tokenTransferPayload.amount
         );
 
@@ -130,9 +130,9 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         bytes memory targetAddress,
         uint8 destinationChainID
     ) external whenNotPaused nonReentrant onlySupportedChain(destinationChainID) {
-        require(committee.utils().isTokenSupported(tokenID), "SuiBridge: Unsupported token");
+        require(committee.common().isTokenSupported(tokenID), "SuiBridge: Unsupported token");
 
-        address tokenAddress = committee.utils().getTokenAddress(tokenID);
+        address tokenAddress = committee.common().getTokenAddress(tokenID);
 
         // check that the bridge contract has allowance to transfer the tokens
         require(
@@ -144,10 +144,10 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         IERC20(tokenAddress).transferFrom(msg.sender, address(vault), amount);
 
         // Adjust the amount to emit.
-        uint64 suiAdjustedAmount = committee.utils().convertERC20ToSuiDecimal(tokenID, amount);
+        uint64 suiAdjustedAmount = committee.common().convertERC20ToSuiDecimal(tokenID, amount);
 
         emit TokensDeposited(
-            committee.utils().chainID(),
+            committee.common().chainID(),
             nonces[BridgeMessage.TOKEN_TRANSFER],
             destinationChainID,
             tokenID,
@@ -181,10 +181,10 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
 
         // Adjust the amount to emit.
         uint64 suiAdjustedAmount =
-            committee.utils().convertERC20ToSuiDecimal(BridgeMessage.ETH, amount);
+            committee.common().convertERC20ToSuiDecimal(BridgeMessage.ETH, amount);
 
         emit TokensDeposited(
-            committee.utils().chainID(),
+            committee.common().chainID(),
             nonces[BridgeMessage.TOKEN_TRANSFER],
             destinationChainID,
             BridgeMessage.ETH,
@@ -208,7 +208,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         whenNotPaused
         limitNotExceeded(tokenID, amount)
     {
-        address tokenAddress = committee.utils().getTokenAddress(tokenID);
+        address tokenAddress = committee.common().getTokenAddress(tokenID);
 
         // Check that the token address is supported
         require(tokenAddress != address(0), "SuiBridge: Unsupported token");
@@ -243,7 +243,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     /// @param targetChainID The ID of the target chain.
     modifier onlySupportedChain(uint8 targetChainID) {
         require(
-            committee.utils().isChainSupported(targetChainID),
+            committee.common().isChainSupported(targetChainID),
             "SuiBridge: Target chain not supported"
         );
         _;

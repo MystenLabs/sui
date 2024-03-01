@@ -477,7 +477,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         _stake[3] = 2500;
         committee = new BridgeCommittee();
 
-        // deploy bridge utils with 11 chainID
+        // deploy bridge common with 11 chainID
         address[] memory _supportedTokens = new address[](4);
         _supportedTokens[0] = wBTC;
         _supportedTokens[1] = wETH;
@@ -485,9 +485,9 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         _supportedTokens[3] = USDT;
         uint8[] memory _supportedDestinationChains = new uint8[](1);
         _supportedDestinationChains[0] = 1;
-        BridgeUtils _utils = new BridgeUtils(11, _supportedTokens, _supportedDestinationChains);
+        BridgeCommon _common = new BridgeCommon(11, _supportedTokens, _supportedDestinationChains);
 
-        committee.initialize(address(_utils), _committee, _stake);
+        committee.initialize(address(_common), _committee, _stake);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = 10000; // SUI PRICE
@@ -554,7 +554,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         _stake[3] = 2500;
         committee = new BridgeCommittee();
         // TODO: need to change chainID for utils to 3
-        committee.initialize(address(utils), _committee, _stake);
+        committee.initialize(address(common), _committee, _stake);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = 10000; // SUI PRICE
@@ -610,7 +610,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         _stake[3] = 2500;
         committee = new BridgeCommittee();
 
-        committee.initialize(address(utils), _committee, _stake);
+        committee.initialize(address(common), _committee, _stake);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = 10000; // SUI PRICE

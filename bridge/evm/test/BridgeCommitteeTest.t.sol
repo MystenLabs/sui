@@ -314,7 +314,7 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         _stake[2] = 2500;
         _stake[3] = 2500;
         committee = new BridgeCommittee();
-        committee.initialize(address(utils), _committee, _stake);
+        committee.initialize(address(common), _committee, _stake);
 
         bytes memory payload =
             hex"010268b43fd906c0b8f024a18c56e06744f7c6157c65acaef39832cb995c4e049437a3e2ec6a7bad1ab5";
