@@ -24,7 +24,7 @@ Response: {
     "queryCoinsAtLatest": {
       "edges": [
         {
-          "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AgAAAAAAAAA=",
+          "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AgAAAAAAAAA=",
           "node": {
             "consistentStateForEachCoin": {
               "owner": {
@@ -32,24 +32,24 @@ Response: {
                 "coins": {
                   "edges": [
                     {
-                      "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AgAAAAAAAAA=",
+                      "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AgAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                            "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                             "balance": {
-                              "value": "100100"
+                              "value": "100300"
                             }
                           }
                         }
                       }
                     },
                     {
-                      "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAgAAAAAAAAA=",
+                      "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAgAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                            "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                             "balance": {
                               "value": "200"
                             }
@@ -58,13 +58,13 @@ Response: {
                       }
                     },
                     {
-                      "cursor": "IIJNdwwg/zGVPCiJL033bBpxAyQQV80tC4wnv8juhXJqAgAAAAAAAAA=",
+                      "cursor": "IO5sf6NaDuxiQfwzysrdkypmyqtENRalMOnv/ZFuikGYAgAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x824d770c20ff31953c28892f4df76c1a7103241057cd2d0b8c27bfc8ee85726a",
+                            "id": "0xee6c7fa35a0eec6241fc33cacadd932a66caab443516a530e9effd916e8a4198",
                             "balance": {
-                              "value": "300"
+                              "value": "100"
                             }
                           }
                         }
@@ -76,16 +76,16 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                 "balance": {
-                  "value": "100100"
+                  "value": "100300"
                 }
               }
             }
           }
         },
         {
-          "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAgAAAAAAAAA=",
+          "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAgAAAAAAAAA=",
           "node": {
             "consistentStateForEachCoin": {
               "owner": {
@@ -93,24 +93,24 @@ Response: {
                 "coins": {
                   "edges": [
                     {
-                      "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AgAAAAAAAAA=",
+                      "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AgAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                            "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                             "balance": {
-                              "value": "100100"
+                              "value": "100300"
                             }
                           }
                         }
                       }
                     },
                     {
-                      "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAgAAAAAAAAA=",
+                      "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAgAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                            "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                             "balance": {
                               "value": "200"
                             }
@@ -119,13 +119,13 @@ Response: {
                       }
                     },
                     {
-                      "cursor": "IIJNdwwg/zGVPCiJL033bBpxAyQQV80tC4wnv8juhXJqAgAAAAAAAAA=",
+                      "cursor": "IO5sf6NaDuxiQfwzysrdkypmyqtENRalMOnv/ZFuikGYAgAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x824d770c20ff31953c28892f4df76c1a7103241057cd2d0b8c27bfc8ee85726a",
+                            "id": "0xee6c7fa35a0eec6241fc33cacadd932a66caab443516a530e9effd916e8a4198",
                             "balance": {
-                              "value": "300"
+                              "value": "100"
                             }
                           }
                         }
@@ -137,7 +137,7 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                 "balance": {
                   "value": "200"
                 }
@@ -146,7 +146,7 @@ Response: {
           }
         },
         {
-          "cursor": "IIJNdwwg/zGVPCiJL033bBpxAyQQV80tC4wnv8juhXJqAgAAAAAAAAA=",
+          "cursor": "IO5sf6NaDuxiQfwzysrdkypmyqtENRalMOnv/ZFuikGYAgAAAAAAAAA=",
           "node": {
             "consistentStateForEachCoin": {
               "owner": {
@@ -154,24 +154,24 @@ Response: {
                 "coins": {
                   "edges": [
                     {
-                      "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AgAAAAAAAAA=",
+                      "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AgAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                            "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                             "balance": {
-                              "value": "100100"
+                              "value": "100300"
                             }
                           }
                         }
                       }
                     },
                     {
-                      "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAgAAAAAAAAA=",
+                      "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAgAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                            "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                             "balance": {
                               "value": "200"
                             }
@@ -180,13 +180,13 @@ Response: {
                       }
                     },
                     {
-                      "cursor": "IIJNdwwg/zGVPCiJL033bBpxAyQQV80tC4wnv8juhXJqAgAAAAAAAAA=",
+                      "cursor": "IO5sf6NaDuxiQfwzysrdkypmyqtENRalMOnv/ZFuikGYAgAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x824d770c20ff31953c28892f4df76c1a7103241057cd2d0b8c27bfc8ee85726a",
+                            "id": "0xee6c7fa35a0eec6241fc33cacadd932a66caab443516a530e9effd916e8a4198",
                             "balance": {
-                              "value": "300"
+                              "value": "100"
                             }
                           }
                         }
@@ -198,9 +198,9 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0x824d770c20ff31953c28892f4df76c1a7103241057cd2d0b8c27bfc8ee85726a",
+                "id": "0xee6c7fa35a0eec6241fc33cacadd932a66caab443516a530e9effd916e8a4198",
                 "balance": {
-                  "value": "300"
+                  "value": "100"
                 }
               }
             }
@@ -212,24 +212,24 @@ Response: {
       "coins": {
         "edges": [
           {
-            "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AgAAAAAAAAA=",
+            "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AgAAAAAAAAA=",
             "node": {
               "contents": {
                 "json": {
-                  "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                  "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                   "balance": {
-                    "value": "100100"
+                    "value": "100300"
                   }
                 }
               }
             }
           },
           {
-            "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAgAAAAAAAAA=",
+            "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAgAAAAAAAAA=",
             "node": {
               "contents": {
                 "json": {
-                  "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                  "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                   "balance": {
                     "value": "200"
                   }
@@ -238,13 +238,13 @@ Response: {
             }
           },
           {
-            "cursor": "IIJNdwwg/zGVPCiJL033bBpxAyQQV80tC4wnv8juhXJqAgAAAAAAAAA=",
+            "cursor": "IO5sf6NaDuxiQfwzysrdkypmyqtENRalMOnv/ZFuikGYAgAAAAAAAAA=",
             "node": {
               "contents": {
                 "json": {
-                  "id": "0x824d770c20ff31953c28892f4df76c1a7103241057cd2d0b8c27bfc8ee85726a",
+                  "id": "0xee6c7fa35a0eec6241fc33cacadd932a66caab443516a530e9effd916e8a4198",
                   "balance": {
-                    "value": "300"
+                    "value": "100"
                   }
                 }
               }
@@ -262,7 +262,7 @@ Response: {
     "queryCoinsAtChkpt1": {
       "edges": [
         {
-          "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AQAAAAAAAAA=",
+          "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AQAAAAAAAAA=",
           "node": {
             "consistentStateForEachCoin": {
               "owner": {
@@ -270,24 +270,24 @@ Response: {
                 "coins": {
                   "edges": [
                     {
-                      "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AQAAAAAAAAA=",
+                      "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AQAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                            "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                             "balance": {
-                              "value": "100"
+                              "value": "300"
                             }
                           }
                         }
                       }
                     },
                     {
-                      "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAQAAAAAAAAA=",
+                      "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAQAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                            "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                             "balance": {
                               "value": "200"
                             }
@@ -296,13 +296,13 @@ Response: {
                       }
                     },
                     {
-                      "cursor": "IIJNdwwg/zGVPCiJL033bBpxAyQQV80tC4wnv8juhXJqAQAAAAAAAAA=",
+                      "cursor": "IO5sf6NaDuxiQfwzysrdkypmyqtENRalMOnv/ZFuikGYAQAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x824d770c20ff31953c28892f4df76c1a7103241057cd2d0b8c27bfc8ee85726a",
+                            "id": "0xee6c7fa35a0eec6241fc33cacadd932a66caab443516a530e9effd916e8a4198",
                             "balance": {
-                              "value": "300"
+                              "value": "100"
                             }
                           }
                         }
@@ -314,16 +314,16 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                 "balance": {
-                  "value": "100"
+                  "value": "300"
                 }
               }
             }
           }
         },
         {
-          "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAQAAAAAAAAA=",
+          "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAQAAAAAAAAA=",
           "node": {
             "consistentStateForEachCoin": {
               "owner": {
@@ -331,24 +331,24 @@ Response: {
                 "coins": {
                   "edges": [
                     {
-                      "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AQAAAAAAAAA=",
+                      "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AQAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                            "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                             "balance": {
-                              "value": "100"
+                              "value": "300"
                             }
                           }
                         }
                       }
                     },
                     {
-                      "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAQAAAAAAAAA=",
+                      "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAQAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                            "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                             "balance": {
                               "value": "200"
                             }
@@ -357,13 +357,13 @@ Response: {
                       }
                     },
                     {
-                      "cursor": "IIJNdwwg/zGVPCiJL033bBpxAyQQV80tC4wnv8juhXJqAQAAAAAAAAA=",
+                      "cursor": "IO5sf6NaDuxiQfwzysrdkypmyqtENRalMOnv/ZFuikGYAQAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x824d770c20ff31953c28892f4df76c1a7103241057cd2d0b8c27bfc8ee85726a",
+                            "id": "0xee6c7fa35a0eec6241fc33cacadd932a66caab443516a530e9effd916e8a4198",
                             "balance": {
-                              "value": "300"
+                              "value": "100"
                             }
                           }
                         }
@@ -375,7 +375,7 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                 "balance": {
                   "value": "200"
                 }
@@ -389,24 +389,24 @@ Response: {
       "coins": {
         "edges": [
           {
-            "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AQAAAAAAAAA=",
+            "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AQAAAAAAAAA=",
             "node": {
               "contents": {
                 "json": {
-                  "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                  "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                   "balance": {
-                    "value": "100"
+                    "value": "300"
                   }
                 }
               }
             }
           },
           {
-            "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAQAAAAAAAAA=",
+            "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAQAAAAAAAAA=",
             "node": {
               "contents": {
                 "json": {
-                  "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                  "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                   "balance": {
                     "value": "200"
                   }
@@ -437,7 +437,7 @@ Response: {
     "queryCoins": {
       "edges": [
         {
-          "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AwAAAAAAAAA=",
+          "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AwAAAAAAAAA=",
           "node": {
             "owner": {
               "owner": {
@@ -445,13 +445,13 @@ Response: {
                 "coins": {
                   "edges": [
                     {
-                      "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AwAAAAAAAAA=",
+                      "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AwAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                            "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                             "balance": {
-                              "value": "100100"
+                              "value": "100300"
                             }
                           }
                         }
@@ -463,16 +463,16 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                 "balance": {
-                  "value": "100100"
+                  "value": "100300"
                 }
               }
             }
           }
         },
         {
-          "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAwAAAAAAAAA=",
+          "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAwAAAAAAAAA=",
           "node": {
             "owner": {
               "owner": {
@@ -480,11 +480,11 @@ Response: {
                 "coins": {
                   "edges": [
                     {
-                      "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAwAAAAAAAAA=",
+                      "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAwAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                            "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                             "balance": {
                               "value": "200"
                             }
@@ -493,13 +493,13 @@ Response: {
                       }
                     },
                     {
-                      "cursor": "IIJNdwwg/zGVPCiJL033bBpxAyQQV80tC4wnv8juhXJqAwAAAAAAAAA=",
+                      "cursor": "IO5sf6NaDuxiQfwzysrdkypmyqtENRalMOnv/ZFuikGYAwAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x824d770c20ff31953c28892f4df76c1a7103241057cd2d0b8c27bfc8ee85726a",
+                            "id": "0xee6c7fa35a0eec6241fc33cacadd932a66caab443516a530e9effd916e8a4198",
                             "balance": {
-                              "value": "300"
+                              "value": "100"
                             }
                           }
                         }
@@ -511,7 +511,7 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                 "balance": {
                   "value": "200"
                 }
@@ -520,7 +520,7 @@ Response: {
           }
         },
         {
-          "cursor": "IIJNdwwg/zGVPCiJL033bBpxAyQQV80tC4wnv8juhXJqAwAAAAAAAAA=",
+          "cursor": "IO5sf6NaDuxiQfwzysrdkypmyqtENRalMOnv/ZFuikGYAwAAAAAAAAA=",
           "node": {
             "owner": {
               "owner": {
@@ -528,11 +528,11 @@ Response: {
                 "coins": {
                   "edges": [
                     {
-                      "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAwAAAAAAAAA=",
+                      "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAwAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                            "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                             "balance": {
                               "value": "200"
                             }
@@ -541,13 +541,13 @@ Response: {
                       }
                     },
                     {
-                      "cursor": "IIJNdwwg/zGVPCiJL033bBpxAyQQV80tC4wnv8juhXJqAwAAAAAAAAA=",
+                      "cursor": "IO5sf6NaDuxiQfwzysrdkypmyqtENRalMOnv/ZFuikGYAwAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x824d770c20ff31953c28892f4df76c1a7103241057cd2d0b8c27bfc8ee85726a",
+                            "id": "0xee6c7fa35a0eec6241fc33cacadd932a66caab443516a530e9effd916e8a4198",
                             "balance": {
-                              "value": "300"
+                              "value": "100"
                             }
                           }
                         }
@@ -559,9 +559,9 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0x824d770c20ff31953c28892f4df76c1a7103241057cd2d0b8c27bfc8ee85726a",
+                "id": "0xee6c7fa35a0eec6241fc33cacadd932a66caab443516a530e9effd916e8a4198",
                 "balance": {
-                  "value": "300"
+                  "value": "100"
                 }
               }
             }
@@ -573,13 +573,13 @@ Response: {
       "coins": {
         "edges": [
           {
-            "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AwAAAAAAAAA=",
+            "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AwAAAAAAAAA=",
             "node": {
               "contents": {
                 "json": {
-                  "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                  "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                   "balance": {
-                    "value": "100100"
+                    "value": "100300"
                   }
                 }
               }
@@ -592,11 +592,11 @@ Response: {
       "coins": {
         "edges": [
           {
-            "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAwAAAAAAAAA=",
+            "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAwAAAAAAAAA=",
             "node": {
               "contents": {
                 "json": {
-                  "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                  "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                   "balance": {
                     "value": "200"
                   }
@@ -605,13 +605,13 @@ Response: {
             }
           },
           {
-            "cursor": "IIJNdwwg/zGVPCiJL033bBpxAyQQV80tC4wnv8juhXJqAwAAAAAAAAA=",
+            "cursor": "IO5sf6NaDuxiQfwzysrdkypmyqtENRalMOnv/ZFuikGYAwAAAAAAAAA=",
             "node": {
               "contents": {
                 "json": {
-                  "id": "0x824d770c20ff31953c28892f4df76c1a7103241057cd2d0b8c27bfc8ee85726a",
+                  "id": "0xee6c7fa35a0eec6241fc33cacadd932a66caab443516a530e9effd916e8a4198",
                   "balance": {
-                    "value": "300"
+                    "value": "100"
                   }
                 }
               }
@@ -638,7 +638,7 @@ Response: {
     "queryCoinsAtChkpt1BeforeSnapshotCatchup": {
       "edges": [
         {
-          "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AQAAAAAAAAA=",
+          "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AQAAAAAAAAA=",
           "node": {
             "consistentStateForEachCoin": {
               "owner": {
@@ -646,24 +646,24 @@ Response: {
                 "coins": {
                   "edges": [
                     {
-                      "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AQAAAAAAAAA=",
+                      "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AQAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                            "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                             "balance": {
-                              "value": "100"
+                              "value": "300"
                             }
                           }
                         }
                       }
                     },
                     {
-                      "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAQAAAAAAAAA=",
+                      "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAQAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                            "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                             "balance": {
                               "value": "200"
                             }
@@ -672,13 +672,13 @@ Response: {
                       }
                     },
                     {
-                      "cursor": "IIJNdwwg/zGVPCiJL033bBpxAyQQV80tC4wnv8juhXJqAQAAAAAAAAA=",
+                      "cursor": "IO5sf6NaDuxiQfwzysrdkypmyqtENRalMOnv/ZFuikGYAQAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x824d770c20ff31953c28892f4df76c1a7103241057cd2d0b8c27bfc8ee85726a",
+                            "id": "0xee6c7fa35a0eec6241fc33cacadd932a66caab443516a530e9effd916e8a4198",
                             "balance": {
-                              "value": "300"
+                              "value": "100"
                             }
                           }
                         }
@@ -690,16 +690,16 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                 "balance": {
-                  "value": "100"
+                  "value": "300"
                 }
               }
             }
           }
         },
         {
-          "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAQAAAAAAAAA=",
+          "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAQAAAAAAAAA=",
           "node": {
             "consistentStateForEachCoin": {
               "owner": {
@@ -707,24 +707,24 @@ Response: {
                 "coins": {
                   "edges": [
                     {
-                      "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AQAAAAAAAAA=",
+                      "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AQAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                            "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                             "balance": {
-                              "value": "100"
+                              "value": "300"
                             }
                           }
                         }
                       }
                     },
                     {
-                      "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAQAAAAAAAAA=",
+                      "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAQAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                            "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                             "balance": {
                               "value": "200"
                             }
@@ -733,13 +733,13 @@ Response: {
                       }
                     },
                     {
-                      "cursor": "IIJNdwwg/zGVPCiJL033bBpxAyQQV80tC4wnv8juhXJqAQAAAAAAAAA=",
+                      "cursor": "IO5sf6NaDuxiQfwzysrdkypmyqtENRalMOnv/ZFuikGYAQAAAAAAAAA=",
                       "node": {
                         "contents": {
                           "json": {
-                            "id": "0x824d770c20ff31953c28892f4df76c1a7103241057cd2d0b8c27bfc8ee85726a",
+                            "id": "0xee6c7fa35a0eec6241fc33cacadd932a66caab443516a530e9effd916e8a4198",
                             "balance": {
-                              "value": "300"
+                              "value": "100"
                             }
                           }
                         }
@@ -751,7 +751,7 @@ Response: {
             },
             "contents": {
               "json": {
-                "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                 "balance": {
                   "value": "200"
                 }
@@ -765,24 +765,24 @@ Response: {
       "coins": {
         "edges": [
           {
-            "cursor": "IBqbmzJPBECQZLC4/RUf/ElBDw/elJICKKRDsw+nQq61AQAAAAAAAAA=",
+            "cursor": "IHI8j4B+zKrruYncTDJeo5FMOEaUDFo64rPDnEcs6rX7AQAAAAAAAAA=",
             "node": {
               "contents": {
                 "json": {
-                  "id": "0x1a9b9b324f04409064b0b8fd151ffc49410f0fde94920228a443b30fa742aeb5",
+                  "id": "0x723c8f807eccaaebb989dc4c325ea3914c3846940c5a3ae2b3c39c472ceab5fb",
                   "balance": {
-                    "value": "100"
+                    "value": "300"
                   }
                 }
               }
             }
           },
           {
-            "cursor": "IHegxHmWUwb+1PEwrS/dnTdAz9Y4BRL/FPUxkzTlWCBUAQAAAAAAAAA=",
+            "cursor": "II7UUQ7os93n3nd3593S9G1lT9GOVqh48/3ntD/uLNqaAQAAAAAAAAA=",
             "node": {
               "contents": {
                 "json": {
-                  "id": "0x77a0c479965306fed4f130ad2fdd9d3740cfd6380512ff14f5319334e5582054",
+                  "id": "0x8ed4510ee8b3dde7de7777e7ddd2f46d654fd18e56a878f3fde7b43fee2cda9a",
                   "balance": {
                     "value": "200"
                   }
