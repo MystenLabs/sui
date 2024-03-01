@@ -3161,6 +3161,7 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
         Tok::Invariant => {
             context.tokens.match_doc_comments();
             let spec_string = consume_spec_string(context)?;
+            consume_token(context.tokens, Tok::Semicolon)?;
             Ok(ModuleMember::Spec(spec_string))
         }
         Tok::Spec => {
@@ -3262,12 +3263,6 @@ fn consume_spec_string(context: &mut Context) -> Result<Spanned<String>, Box<Dia
         } else if tok == Tok::RBrace {
             count -= 1;
         }
-        context.tokens.advance()?;
-    }
-
-    // consume semi-colon if present
-    if context.tokens.peek() == Tok::Semicolon {
-        s.push_str(context.tokens.content());
         context.tokens.advance()?;
     }
 

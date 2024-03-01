@@ -217,7 +217,10 @@ impl<'env, 'map> Context<'env, 'map> {
             } else {
                 Uncategorized::DeprecatedWillBeRemoved
             },
-            (loc, "Specification blocks are deprecated and are no longer used")
+            (
+                loc,
+                "Specification blocks are deprecated and are no longer used"
+            )
         )
     }
 }
@@ -2103,7 +2106,6 @@ fn aliases_from_member(
             Some(P::ModuleMember::Struct(s))
         }
         P::ModuleMember::Spec(s) => Some(P::ModuleMember::Spec(s)),
-
     }
 }
 

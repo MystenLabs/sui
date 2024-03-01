@@ -128,8 +128,9 @@ impl AliasMapBuilder {
                 module_members,
             } => match kind {
                 // constants and functions are not in the leading access namespace
-                ModuleMemberKind::Constant
-                | ModuleMemberKind::Function => remove_dup(module_members, alias),
+                ModuleMemberKind::Constant | ModuleMemberKind::Function => {
+                    remove_dup(module_members, alias)
+                }
                 // structs are in the leading access namespace in addition to the module members
                 // namespace
                 ModuleMemberKind::Struct => {
@@ -186,8 +187,7 @@ impl AliasMapBuilder {
                 module_members,
             } => match kind {
                 // constants and functions are not in the leading access namespace
-                ModuleMemberKind::Constant
-                | ModuleMemberKind::Function => {
+                ModuleMemberKind::Constant | ModuleMemberKind::Function => {
                     let entry = (MemberEntry::Member(ident, member), is_implicit);
                     module_members.add(alias, entry).unwrap();
                 }
