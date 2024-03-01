@@ -8,6 +8,7 @@ pub(crate) mod filter;
 pub mod keywords;
 pub mod lexer;
 pub(crate) mod syntax;
+mod token_set;
 pub(crate) mod verification_attribute_filter;
 
 use crate::{
