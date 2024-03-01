@@ -392,6 +392,14 @@ impl Diagnostics {
         v
     }
 
+    pub fn retain(&mut self, f: impl FnMut(&Diagnostic) -> bool) {
+        if self.0.is_none() {
+            return;
+        }
+        let inner = self.0.as_mut().unwrap();
+        inner.diagnostics.retain(f);
+    }
+
     pub fn any_with_prefix(&self, prefix: &str) -> bool {
         let Self(Some(inner)) = self else {
             return false;
