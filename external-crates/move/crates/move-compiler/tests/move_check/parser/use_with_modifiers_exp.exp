@@ -8,7 +8,7 @@ error[E01002]: unexpected token
   │         Expected an expression term
 
 error[E13001]: feature is not supported in specified edition
-  ┌─ tests/move_check/parser/use_with_modifiers_exp.move:3:9
+  ┌─ tests/move_check/parser/use_with_modifiers_exp.move:3:16
   │
 3 │         public use fun bar as X.baz;
   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Method syntax is not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
@@ -32,4 +32,3 @@ error[E01002]: unexpected token
   │
 5 │ }
   │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'
-

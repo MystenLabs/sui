@@ -17,11 +17,11 @@ error[E01002]: unexpected token
   │         Expected an expression term
 
 error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/invalid_pack_mname_non_addr.move:8:18
+  ┌─ tests/move_check/parser/invalid_pack_mname_non_addr.move:8:13
   │
 8 │         fun baz()::baz()::M::S { }
-  │                  ^^
-  │                  │
-  │                  Unexpected '::'
-  │                  Expected '{'
+  │             ^^^
+  │             │
+  │             Unexpected 'baz'
+  │             Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 

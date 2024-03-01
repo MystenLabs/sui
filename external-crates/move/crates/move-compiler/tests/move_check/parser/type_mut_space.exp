@@ -1,7 +1,7 @@
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/type_mut_space.move:5:29
   │
-5 │     public fun foo(x: & mut S): & mut S {
+5 │     public fun foo(x: & mut S) {
   │                   -         ^ Expected ')'
   │                   │          
   │                   To match this '('

@@ -16,33 +16,13 @@ error[E01002]: unexpected token
   │     Unexpected 'fun'
   │     Expected '('
 
-error[E01002]: unexpected token
-   ┌─ tests/move_check/parser/function_incomplete.move:10:5
-   │
-10 │     fun just_ret<T>(_u: u64): u64
-   │     ^^^
-   │     │
-   │     Unexpected 'fun'
-   │     Expected '{'
-
-error[E01002]: unexpected token
-   ┌─ tests/move_check/parser/function_incomplete.move:12:5
-   │
-12 │     fun everything<T>(u: u64): u64 {
-   │     ^^^
-   │     │
-   │     Unexpected 'fun'
-   │     Expected '{'
-
 error[E04007]: incompatible types
    ┌─ tests/move_check/parser/function_incomplete.move:12:5
-   │
-10 │     fun just_ret<T>(_u: u64): u64
-   │                               --- Expected: 'u64'
-11 │ 
-12 │     fun everything<T>(u: u64): u64 {
-   │     ^^^
-   │     │
-   │     Invalid return expression
-   │     Given: '()'
+   │    
+10 │ │ │     fun just_ret<T>(_u: u64): u64
+   │ │ │                               --- Expected: 'u64'
+   │ ╰─│─────────────────────────────────^ Invalid return expression
+   │   ╰─────────────────────────────────' Given: '()'
+11 │     
+12 │ ╭ ╭     fun everything<T>(u: u64): u64 {
 

@@ -13,3 +13,72 @@ error[E01002]: unexpected token
    │                        Unexpected '::'
    │                        Expected an expression term
 
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/global_access.move:16:18
+   │
+16 │         let () = ::move_to<Self::R>(account, Self::R{});
+   │                  ^^
+   │                  │
+   │                  Unexpected '::'
+   │                  Expected an expression term
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/global_access.move:19:28
+   │
+19 │         let _ : &Self::R = ::borrow_global<Self::R>(0x0);
+   │                            ^^
+   │                            │
+   │                            Unexpected '::'
+   │                            Expected an expression term
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/global_access.move:22:26
+   │
+22 │         let Self::R {} = ::move_from<Self::R>(0x0);
+   │                          ^^
+   │                          │
+   │                          Unexpected '::'
+   │                          Expected an expression term
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/global_access.move:25:32
+   │
+25 │         let r : &mut Self::R = ::borrow_global_mut<Self::R>(0x0);
+   │                                ^^
+   │                                │
+   │                                Unexpected '::'
+   │                                Expected an expression term
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/parser/global_access.move:27:17
+   │
+27 │         let _ : u64 = freeze();
+   │                 ^^^   -------- Given: '&_'
+   │                 │      
+   │                 Invalid type annotation
+   │                 Expected: 'u64'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_check/parser/global_access.move:27:23
+   │
+27 │         let _ : u64 = freeze();
+   │                       ^^^^^^^^
+   │                       │     │
+   │                       │     Found 0 argument(s) here
+   │                       Invalid call of 'freeze'. The call expected 1 argument(s) but got 0
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_check/parser/global_access.move:27:23
+   │
+27 │         let _ : u64 = freeze();
+   │                       ^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/parser/global_access.move:28:28
+   │
+28 │         let _ : &Self::R = ::freeze<Self::R>(r);
+   │                            ^^
+   │                            │
+   │                            Unexpected '::'
+   │                            Expected an expression term
+

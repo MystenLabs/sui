@@ -1,3 +1,23 @@
+warning[W09003]: unused assignment
+  ┌─ tests/move_check/expansion/type_arguments_on_field_access.move:5:13
+  │
+5 │         let x = S { f: X{} };
+  │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E06001]: unused value without 'drop'
+  ┌─ tests/move_check/expansion/type_arguments_on_field_access.move:5:29
+  │
+3 │     struct S { f: X<u64> }
+  │            - To satisfy the constraint, the 'drop' ability would need to be added here
+4 │     fun foo() {
+5 │         let x = S { f: X{} };
+  │             -   ------------^ Invalid return
+  │             │   │            
+  │             │   The type '0x42::M::S' does not have the ability 'drop'
+  │             The local variable 'x' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/type_arguments_on_field_access.move:6:17
   │

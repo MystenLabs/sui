@@ -1,3 +1,11 @@
+warning[W09003]: unused assignment
+  ┌─ tests/move_check/expansion/invalid_unpack_assign_lhs_not_name.move:3:13
+  │
+3 │         let f = 0;
+  │             ^ Unused assignment for variable 'f'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_f')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/invalid_unpack_assign_lhs_not_name.move:4:11
   │

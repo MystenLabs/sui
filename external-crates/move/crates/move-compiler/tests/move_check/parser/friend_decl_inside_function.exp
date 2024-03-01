@@ -8,8 +8,11 @@ error[E01002]: unexpected token
   │         Expected an expression term
 
 error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/friend_decl_inside_function.move:9:1
+  ┌─ tests/move_check/parser/friend_decl_inside_function.move:6:16
   │
-9 │ }
-  │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'
+6 │         friend 0x42::A;
+  │                ^^^^
+  │                │
+  │                Unexpected '0x42'
+  │                Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 

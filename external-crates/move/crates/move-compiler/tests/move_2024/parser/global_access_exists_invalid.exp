@@ -21,3 +21,72 @@ error[E01002]: unexpected token
    = Access chains that start with '::' must be one of the following forms: 
        '::<address>::<module>', '::<address>::<module>::<member>'
 
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/global_access_exists_invalid.move:16:20
+   │
+16 │         let () = ::move_to<Self::R>(account, Self::R{});
+   │                    ^^^^^^^ Expected '::' after the address in this module access chain
+   │
+   = Access chains that start with '::' must be one of the following forms: 
+       '::<address>::<module>', '::<address>::<module>::<member>'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/global_access_exists_invalid.move:19:30
+   │
+19 │         let _ : &Self::R = ::borrow_global<Self::R>(0x0);
+   │                              ^^^^^^^^^^^^^ Expected '::' after the address in this module access chain
+   │
+   = Access chains that start with '::' must be one of the following forms: 
+       '::<address>::<module>', '::<address>::<module>::<member>'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/global_access_exists_invalid.move:22:28
+   │
+22 │         let Self::R {} = ::move_from<Self::R>(0x0);
+   │                            ^^^^^^^^^ Expected '::' after the address in this module access chain
+   │
+   = Access chains that start with '::' must be one of the following forms: 
+       '::<address>::<module>', '::<address>::<module>::<member>'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/global_access_exists_invalid.move:25:34
+   │
+25 │         let r : &mut Self::R = ::borrow_global_mut<Self::R>(0x0);
+   │                                  ^^^^^^^^^^^^^^^^^ Expected '::' after the address in this module access chain
+   │
+   = Access chains that start with '::' must be one of the following forms: 
+       '::<address>::<module>', '::<address>::<module>::<member>'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/global_access_exists_invalid.move:27:17
+   │
+27 │         let _ : u64 = freeze();
+   │                 ^^^   -------- Given: '&_'
+   │                 │      
+   │                 Invalid type annotation
+   │                 Expected: 'u64'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/parser/global_access_exists_invalid.move:27:23
+   │
+27 │         let _ : u64 = freeze();
+   │                       ^^^^^^^^
+   │                       │     │
+   │                       │     Found 0 argument(s) here
+   │                       Invalid call of 'freeze'. The call expected 1 argument(s) but got 0
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/parser/global_access_exists_invalid.move:27:23
+   │
+27 │         let _ : u64 = freeze();
+   │                       ^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/global_access_exists_invalid.move:28:30
+   │
+28 │         let _ : &Self::R = ::freeze<Self::R>(r);
+   │                              ^^^^^^ Expected '::' after the address in this module access chain
+   │
+   = Access chains that start with '::' must be one of the following forms: 
+       '::<address>::<module>', '::<address>::<module>::<member>'
+

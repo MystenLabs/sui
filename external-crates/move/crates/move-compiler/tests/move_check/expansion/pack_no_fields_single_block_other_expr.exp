@@ -1,3 +1,9 @@
+error[E03003]: unbound module member
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:6:17
+  │
+6 │         let s = S 0;
+  │                 ^ Invalid module access. Unbound constant 'S' in module '0x42::M'
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:6:19
   │
@@ -6,4 +12,51 @@ error[E01002]: unexpected token
   │                   │
   │                   Unexpected '0'
   │                   Expected ';'
+
+error[E03003]: unbound module member
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:7:17
+  │
+7 │         let s = S f;
+  │                 ^ Invalid module access. Unbound constant 'S' in module '0x42::M'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:7:19
+  │
+7 │         let s = S f;
+  │                   ^
+  │                   │
+  │                   Unexpected 'f'
+  │                   Expected ';'
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:8:17
+  │
+8 │         let g = G ();
+  │                 ^^^^ Positional fields are not supported by current edition 'legacy', only '2024.alpha' support this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E03013]: positional call mismatch
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:8:17
+  │
+8 │         let g = G ();
+  │                 ^^^^ Invalid struct instantiation. Named struct declarations require named instantiations.
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:9:21
+  │
+9 │         let g = G { {} };
+  │                     ^
+  │                     │
+  │                     Unexpected '{'
+  │                     Expected an identifier
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_other_expr.move:9:25
+  │
+9 │         let g = G { {} };
+  │                         ^
+  │                         │
+  │                         Unexpected ';'
+  │                         Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 

@@ -1,3 +1,11 @@
+warning[W09003]: unused assignment
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_pack.move:5:13
+  │
+5 │         let f = 0;
+  │             ^ Unused assignment for variable 'f'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_f')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E01002]: unexpected token
   ┌─ tests/move_2024/parser/mut_field_pun_invalid_pack.move:6:13
   │
@@ -6,4 +14,10 @@ error[E01002]: unexpected token
   │             │
   │             Unexpected 'mut'
   │             Expected an identifier
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_pack.move:8:1
+  │
+8 │ }
+  │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'
 

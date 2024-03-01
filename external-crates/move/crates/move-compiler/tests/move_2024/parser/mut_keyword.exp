@@ -7,3 +7,24 @@ error[E01002]: unexpected token
   │                       Unexpected ':'
   │                       Expected an identifier
 
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/parser/mut_keyword.move:5:45
+  │    
+5 │         public fun foo(mut: &mut u64): &mut u64 {
+  │                                        -------- Expected: '&mut u64'
+  │ ╭───────────────────────────────────────────────^
+  │ │ ╭─────────────────────────────────────────────'
+6 │ │ │         mut
+7 │ │ │     }
+  │ ╰─│─────^ Invalid return expression
+  │   ╰─────' Given: '()'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/mut_keyword.move:6:9
+  │
+6 │         mut
+  │         ^^^
+  │         │
+  │         Unexpected 'mut'
+  │         Expected an expression term
+
