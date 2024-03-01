@@ -1,15 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::ObjectID;
-use crate::base_types::SequenceNumber;
-use crate::error::SuiResult;
-use crate::object::Owner;
-use crate::storage::ObjectStore;
-use crate::sui_serde::BigInt;
-use crate::sui_serde::Readable;
-use crate::versioned::Versioned;
-use crate::SUI_BRIDGE_OBJECT_ID;
 use enum_dispatch::enum_dispatch;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -17,8 +8,17 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
+use crate::base_types::ObjectID;
+use crate::base_types::SequenceNumber;
 use crate::collection_types::LinkedTableNode;
 use crate::dynamic_field::{get_dynamic_field_from_store, Field};
+use crate::error::SuiResult;
+use crate::object::Owner;
+use crate::storage::ObjectStore;
+use crate::sui_serde::BigInt;
+use crate::sui_serde::Readable;
+use crate::versioned::Versioned;
+use crate::SUI_BRIDGE_OBJECT_ID;
 use crate::{
     base_types::SuiAddress,
     collection_types::{Bag, LinkedTable, VecMap},
@@ -34,6 +34,7 @@ pub type BridgeRecordDyanmicField = Field<
 
 pub const BRIDGE_MODULE_NAME: &IdentStr = ident_str!("bridge");
 pub const BRIDGE_CREATE_FUNCTION_NAME: &IdentStr = ident_str!("create");
+pub const BRIDGE_INIT_COMMITTEE_FUNCTION_NAME: &IdentStr = ident_str!("init_bridge_committee");
 
 pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];
 
@@ -75,7 +76,8 @@ pub struct BridgeWrapper {
 /// This is the standard API that all bridge inner object type should implement.
 #[enum_dispatch]
 pub trait BridgeTrait {
-    fn message_version(&self) -> u64;
+    fn bridge_version(&self) -> u64;
+    fn message_version(&self) -> u8;
     fn chain_id(&self) -> u8;
     fn sequence_nums(&self) -> &VecMap<u8, u64>;
     fn committee(&self) -> &MoveTypeBridgeCommittee;
@@ -89,10 +91,11 @@ pub trait BridgeTrait {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeSummary {
-    // Message version
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "Readable<BigInt<u64>, _>")]
-    pub message_version: u64,
+    pub bridge_version: u64,
+    // Message version
+    pub message_version: u8,
     /// Self Chain ID
     pub chain_id: u8,
     /// Sequence numbers of all message types
@@ -146,7 +149,8 @@ pub fn get_bridge(object_store: &dyn ObjectStore) -> Result<Bridge, SuiError> {
 /// Rust version of the Move bridge::BridgeInner type.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BridgeInnerV1 {
-    pub message_version: u64,
+    pub bridge_version: u64,
+    pub message_version: u8,
     pub chain_id: u8,
     pub sequence_nums: VecMap<u8, u64>,
     pub committee: MoveTypeBridgeCommittee,
@@ -157,7 +161,11 @@ pub struct BridgeInnerV1 {
 }
 
 impl BridgeTrait for BridgeInnerV1 {
-    fn message_version(&self) -> u64 {
+    fn bridge_version(&self) -> u64 {
+        self.bridge_version
+    }
+
+    fn message_version(&self) -> u8 {
         self.message_version
     }
 
@@ -187,6 +195,7 @@ impl BridgeTrait for BridgeInnerV1 {
 
     fn into_bridge_summary(self) -> BridgeSummary {
         BridgeSummary {
+            bridge_version: self.bridge_version,
             message_version: self.message_version,
             chain_id: self.chain_id,
             sequence_nums: self
@@ -205,7 +214,7 @@ impl BridgeTrait for BridgeInnerV1 {
                     .collect(),
                 thresholds: self
                     .committee
-                    .thresholds
+                    .stake_thresholds_percentage
                     .contents
                     .into_iter()
                     .map(|e| (e.key, e.value))
@@ -227,7 +236,16 @@ pub struct MoveTypeBridgeTreasury {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MoveTypeBridgeCommittee {
     pub members: VecMap<Vec<u8>, MoveTypeCommitteeMember>,
-    pub thresholds: VecMap<u8, u64>,
+    pub stake_thresholds_percentage: VecMap<u8, u64>,
+    pub member_registrations: VecMap<SuiAddress, MoveTypeCommitteeMemberRegistration>,
+    pub last_committee_update_epoch: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MoveTypeCommitteeMemberRegistration {
+    pub sui_address: SuiAddress,
+    pub bridge_pubkey_bytes: Vec<u8>,
+    pub http_rest_url: Vec<u8>,
 }
 
 #[serde_as]
@@ -298,4 +316,9 @@ pub struct MoveTypeBridgeRecord {
     pub message: MoveTypeBridgeMessage,
     pub verified_signatures: Option<Vec<Vec<u8>>>,
     pub claimed: bool,
+}
+
+pub fn is_bridge_committee_initiated(object_store: &dyn ObjectStore) -> SuiResult<bool> {
+    let bridge = get_bridge(object_store)?;
+    Ok(!bridge.committee().members.contents.is_empty())
 }
