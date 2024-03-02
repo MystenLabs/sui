@@ -4,7 +4,7 @@
 
 use crate::{
     context::Context,
-    symbols::{DefInfo, Symbols},
+    symbols::{self, DefInfo, SymbolicatorRunner, Symbols},
 };
 use lsp_server::Request;
 use lsp_types::{
@@ -21,7 +21,7 @@ use move_compiler::{
     shared::Identifier,
 };
 use move_symbol_pool::Symbol;
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, path::Path};
 use vfs::VfsPath;
 
 /// Constructs an `lsp_types::CompletionItem` with the given `label` and `kind`.
@@ -80,7 +80,7 @@ fn builtins() -> Vec<CompletionItem> {
 /// server did not initialize with a response indicating it's capable of providing completions. In
 /// the future, the server should be modified to return semantically valid completion items, not
 /// simple textual suggestions.
-fn identifiers(buffer: &str, symbols: &Symbols, path: &PathBuf) -> Vec<CompletionItem> {
+fn identifiers(buffer: &str, symbols: &Symbols, path: &Path) -> Vec<CompletionItem> {
     // TODO thread through package configs
     let mut lexer = Lexer::new(buffer, FileHash::new(buffer), Edition::LEGACY);
     if lexer.advance().is_err() {
@@ -157,7 +157,7 @@ fn get_cursor_token(buffer: &str, position: &Position) -> Option<Tok> {
 /// Handle context-specific auto-completion requests.
 fn context_specific(
     symbols: &Symbols,
-    use_fpath: &PathBuf,
+    use_fpath: &Path,
     buffer: &str,
     position: &Position,
 ) -> Vec<CompletionItem> {
@@ -264,12 +264,7 @@ fn context_specific(
 /// Sends the given connection a response to a completion request.
 ///
 /// The completions returned depend upon where the user's cursor is positioned.
-pub fn on_completion_request(
-    context: &Context,
-    request: &Request,
-    ide_files: VfsPath,
-    symbols: &Symbols,
-) {
+pub fn on_completion_request(context: &Context, request: &Request, ide_files_root: VfsPath) {
     eprintln!("handling completion request");
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
         .expect("could not deserialize completion request");
@@ -280,50 +275,26 @@ pub fn on_completion_request(
         .uri
         .to_file_path()
         .unwrap();
-    let mut buffer = String::new();
-    if let Ok(mut f) = ide_files.join(path.to_string_lossy()).unwrap().open_file() {
-        if f.read_to_string(&mut buffer).is_err() {
-            eprintln!(
-                "Could not read '{:?}' when handling completion request",
-                path
-            );
-        }
-    }
 
-    let mut items = vec![];
-    if !buffer.is_empty() {
-        let cursor = get_cursor_token(buffer.as_str(), &parameters.text_document_position.position);
-        match cursor {
-            Some(Tok::Colon) => {
-                items.extend_from_slice(&primitive_types());
+    let items = match SymbolicatorRunner::root_dir(&path) {
+        Some(pkg_path) => match symbols::get_symbols(ide_files_root.clone(), &pkg_path, false) {
+            Ok((Some(symbols), _)) => {
+                completion_items(parameters, &path, &symbols, &ide_files_root)
             }
-            Some(Tok::Period) | Some(Tok::ColonColon) => {
-                // `.` or `::` must be followed by identifiers, which are added to the completion items
-                // below.
-            }
-            _ => {
-                // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
-                // offer them context-specific autocompletion items as well as
-                // Move's keywords, operators, and builtins.
-                items.extend_from_slice(&context_specific(
-                    symbols,
-                    &path,
-                    buffer.as_str(),
-                    &parameters.text_document_position.position,
-                ));
-                // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
-                // offer them Move's keywords, operators, and builtins as completion items.
-                items.extend_from_slice(&keywords());
-                items.extend_from_slice(&builtins());
-            }
-        }
-        let identifiers = identifiers(buffer.as_str(), symbols, &path);
-        items.extend_from_slice(&identifiers);
-    } else {
-        // no file content
-        items.extend_from_slice(&keywords());
-        items.extend_from_slice(&builtins());
-    }
+            _ => completion_items(
+                parameters,
+                &path,
+                &context.symbols.lock().unwrap(),
+                &ide_files_root,
+            ),
+        },
+        None => completion_items(
+            parameters,
+            &path,
+            &context.symbols.lock().unwrap(),
+            &ide_files_root,
+        ),
+    };
 
     let result = serde_json::to_value(items).expect("could not serialize completion response");
     eprintln!("about to send completion response");
@@ -334,5 +305,62 @@ pub fn on_completion_request(
         .send(lsp_server::Message::Response(response))
     {
         eprintln!("could not send completion response: {:?}", err);
+    }
+
+    fn completion_items(
+        parameters: CompletionParams,
+        path: &Path,
+        symbols: &Symbols,
+        ide_files_root: &VfsPath,
+    ) -> Vec<CompletionItem> {
+        let mut items = vec![];
+        let mut buffer = String::new();
+        if let Ok(mut f) = ide_files_root
+            .join(path.to_string_lossy())
+            .unwrap()
+            .open_file()
+        {
+            if f.read_to_string(&mut buffer).is_err() {
+                eprintln!(
+                    "Could not read '{:?}' when handling completion request",
+                    path
+                );
+            }
+        }
+        if !buffer.is_empty() {
+            let cursor =
+                get_cursor_token(buffer.as_str(), &parameters.text_document_position.position);
+            match cursor {
+                Some(Tok::Colon) => {
+                    items.extend_from_slice(&primitive_types());
+                }
+                Some(Tok::Period) | Some(Tok::ColonColon) => {
+                    // `.` or `::` must be followed by identifiers, which are added to the completion items
+                    // below.
+                }
+                _ => {
+                    // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
+                    // offer them context-specific autocompletion items as well as
+                    // Move's keywords, operators, and builtins.
+                    items.extend_from_slice(&context_specific(
+                        &symbols,
+                        path,
+                        buffer.as_str(),
+                        &parameters.text_document_position.position,
+                    ));
+                    // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
+                    // offer them Move's keywords, operators, and builtins as completion items.
+                    items.extend_from_slice(&keywords());
+                    items.extend_from_slice(&builtins());
+                }
+            }
+            let identifiers = identifiers(buffer.as_str(), &symbols, path);
+            items.extend_from_slice(&identifiers);
+        } else {
+            // no file content
+            items.extend_from_slice(&keywords());
+            items.extend_from_slice(&builtins());
+        }
+        items
     }
 }

@@ -267,12 +267,9 @@ fn on_request(
         return true;
     }
     match request.method.as_str() {
-        lsp_types::request::Completion::METHOD => on_completion_request(
-            context,
-            request,
-            ide_files_root.clone(),
-            &context.symbols.lock().unwrap(),
-        ),
+        lsp_types::request::Completion::METHOD => {
+            on_completion_request(context, request, ide_files_root.clone())
+        }
         lsp_types::request::GotoDefinition::METHOD => {
             symbols::on_go_to_def_request(context, request, &context.symbols.lock().unwrap());
         }

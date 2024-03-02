@@ -340,6 +340,7 @@ pub struct TypingSymbolicator<'a> {
 struct UseDefMap(BTreeMap<u32, BTreeSet<UseDef>>);
 
 /// Result of the symbolication process
+#[derive(Clone)]
 pub struct Symbols {
     /// A map from def locations to all the references (uses)
     references: BTreeMap<DefLoc, BTreeSet<UseLoc>>,
@@ -969,7 +970,7 @@ impl Symbols {
         &self.file_mods
     }
 
-    pub fn line_uses(&self, use_fpath: &PathBuf, use_line: u32) -> BTreeSet<UseDef> {
+    pub fn line_uses(&self, use_fpath: &Path, use_line: u32) -> BTreeSet<UseDef> {
         let Some(file_symbols) = self.file_use_defs.get(use_fpath) else {
             return BTreeSet::new();
         };
