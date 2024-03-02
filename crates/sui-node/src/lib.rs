@@ -446,6 +446,7 @@ impl SuiNode {
                 .expensive_safety_check_config
                 .enable_epoch_sui_conservation_check(),
             &prometheus_registry,
+            true,
         )
         .await?;
         let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(&prometheus_registry));

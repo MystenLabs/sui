@@ -137,6 +137,7 @@ impl AuthorityStore {
         indirect_objects_threshold: usize,
         enable_epoch_sui_conservation_check: bool,
         registry: &Registry,
+        load_genesis: bool,
     ) -> SuiResult<Arc<Self>> {
         let epoch_start_configuration = if perpetual_tables.database_is_empty()? {
             info!("Creating new epoch start config from genesis");
@@ -164,6 +165,7 @@ impl AuthorityStore {
             indirect_objects_threshold,
             enable_epoch_sui_conservation_check,
             registry,
+            load_genesis,
         )
         .await?;
         this.update_epoch_flags_metrics(&[], epoch_start_configuration.flags());
@@ -215,6 +217,7 @@ impl AuthorityStore {
             indirect_objects_threshold,
             true,
             &Registry::new(),
+            true,
         )
         .await
     }
@@ -225,6 +228,7 @@ impl AuthorityStore {
         indirect_objects_threshold: usize,
         enable_epoch_sui_conservation_check: bool,
         registry: &Registry,
+        load_genesis: bool,
     ) -> SuiResult<Arc<Self>> {
         let store = Arc::new(Self {
             mutex_table: MutexTable::new(NUM_SHARDS),
@@ -241,9 +245,11 @@ impl AuthorityStore {
             .database_is_empty()
             .expect("Database read should not fail at init.")
         {
-            store
-                .bulk_insert_genesis_objects(genesis.objects())
-                .expect("Cannot bulk insert genesis objects");
+            if load_genesis {
+                store
+                    .bulk_insert_genesis_objects(genesis.objects())
+                    .expect("Cannot bulk insert genesis objects");
+            }
 
             // insert txn and effects of genesis
             let transaction = VerifiedTransaction::new_unchecked(genesis.transaction().clone());

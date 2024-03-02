@@ -659,6 +659,7 @@ fn start_summary_sync(
             usize::MAX,
             false,
             &Registry::default(),
+            false,
         )
         .await?;
         let state_sync_store = RocksDbStore::new(
@@ -1231,6 +1232,7 @@ pub async fn state_sync_from_archive(
         usize::MAX,
         false,
         &Registry::default(),
+        true,
     )
     .await?;
 
