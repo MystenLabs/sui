@@ -533,7 +533,9 @@ impl ToolCommand {
             }
             ToolCommand::DumpGenesis { genesis } => {
                 let genesis = Genesis::load(genesis)?;
-                println!("{:#?}", genesis);
+                for o in genesis.objects().iter() {
+                    println!("{:?}", o.compute_object_reference());
+                }
             }
             ToolCommand::FetchCheckpoint {
                 genesis,
