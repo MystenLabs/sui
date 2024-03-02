@@ -1479,7 +1479,7 @@ struct Move2024PathExpander {
     aliases: AliasMap,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum AccessChainResult {
     ModuleAccess(Loc, E::ModuleAccess_),
     Address(Loc, E::Address),
@@ -1488,7 +1488,7 @@ enum AccessChainResult {
     ResolutionFailure(Box<AccessChainResult>, AccessChainFailure),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum AccessChainFailure {
     UnresolvedAlias(Name),
     InvalidKind(String),
@@ -1710,17 +1710,28 @@ impl PathExpander for Move2024PathExpander {
                 // A bit strange, but we first try to resolve it as a term, if that fails, we try
                 // to resolve it as a module access.
                 PV::ModuleAccess(access_chain) => {
-                    let result =
+                    let term_result =
                         self.resolve_name_access_chain(context, Access::Term, access_chain.clone());
-                    let result = match &result {
-                        AccessChainResult::ModuleAccess(_, _)
-                        | AccessChainResult::Address(_, _)
-                        | AccessChainResult::ModuleIdent(_, _)
-                        | AccessChainResult::UnresolvedName(_, _) => result,
-                        AccessChainResult::ResolutionFailure(_, _) => {
-                            self.resolve_name_access_chain(context, Access::Module, access_chain)
+                    let module_result =
+                        self.resolve_name_access_chain(context, Access::Module, access_chain);
+                    let result = match (term_result, module_result) {
+                        (t_res, m_res) if t_res == m_res => t_res,
+                        (AccessChainResult::ResolutionFailure(_, _), other)
+                        | (other, AccessChainResult::ResolutionFailure(_, _)) => other,
+                        (t_res, m_res) => {
+                            let msg = format!(
+                                "Ambiguous attribute value, this name could resolve \
+                                to both {} and {}",
+                                t_res.err_name(),
+                                m_res.err_name()
+                            );
+                            context
+                                .env
+                                .add_diag(diag!(Attributes::AmbiguousAttributeValue, (loc, msg)));
+                            return None;
                         }
                     };
+
                     match result {
                         AccessChainResult::ModuleIdent(_, mident) => {
                             if context.module_members.get(&mident).is_none() {
