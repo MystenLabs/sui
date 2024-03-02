@@ -202,7 +202,18 @@ pub struct EthToSuiBridgeAction {
     pub eth_bridge_event: EthToSuiTokenBridgeV1,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, Hash)]
+#[derive(
+    Debug,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    TryFromPrimitive,
+    Hash,
+    clap::ValueEnum,
+)]
 #[repr(u8)]
 pub enum BlocklistType {
     Blocklist = 0,
@@ -214,10 +225,22 @@ pub struct BlocklistCommitteeAction {
     pub nonce: u64,
     pub chain_id: BridgeChainId,
     pub blocklist_type: BlocklistType,
+    // TODO: rename this to `members_to_update`
     pub blocklisted_members: Vec<BridgeAuthorityPublicKeyBytes>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive, Hash)]
+#[derive(
+    Debug,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    TryFromPrimitive,
+    Hash,
+    clap::ValueEnum,
+)]
 #[repr(u8)]
 pub enum EmergencyActionType {
     Pause = 0,
