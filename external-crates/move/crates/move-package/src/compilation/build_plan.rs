@@ -15,7 +15,7 @@ use anyhow::Result;
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
     diagnostics::{
-        report_diagnostics_to_color_buffer, report_warnings, FilesSourceText, Migration,
+        report_diagnostics_to_buffer_with_env_color, report_warnings, FilesSourceText, Migration,
     },
     editions::Edition,
     Compiler,
@@ -89,10 +89,11 @@ impl BuildPlan {
         let migration = match res {
             Ok(migration) => migration,
             Err(diags) => {
-                let diags_buf = report_diagnostics_to_color_buffer(&files, diags);
+                let diags_buf = report_diagnostics_to_buffer_with_env_color(&files, diags);
                 writeln!(
                     writer,
-                    "Unable to generate migration patch due to compilation errors:"
+                    "Unable to generate migration patch due to compilation errors.\n\
+                    Please fix the errors in your current edition before attempting to migrate."
                 )?;
                 if let Err(err) = writer.write_all(&diags_buf) {
                     anyhow::bail!("Cannot output compiler diagnostics: {}", err);
@@ -119,7 +120,8 @@ impl BuildPlan {
                 }
                 Err(error_diags) => {
                     assert!(!error_diags.is_empty());
-                    let diags_buf = report_diagnostics_to_color_buffer(&files, error_diags);
+                    let diags_buf =
+                        report_diagnostics_to_buffer_with_env_color(&files, error_diags);
                     if let Err(err) = std::io::stdout().write_all(&diags_buf) {
                         anyhow::bail!("Cannot output compiler diagnostics: {}", err);
                     }

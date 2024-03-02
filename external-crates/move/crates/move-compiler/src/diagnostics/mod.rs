@@ -123,12 +123,7 @@ pub fn report_warnings(files: &FilesSourceText, warnings: Diagnostics) {
 }
 
 fn report_diagnostics_impl(files: &FilesSourceText, diags: Diagnostics, should_exit: bool) {
-    let color_choice = match read_env_var(COLOR_MODE_ENV_VAR).as_str() {
-        "NONE" => ColorChoice::Never,
-        "ANSI" => ColorChoice::AlwaysAnsi,
-        "ALWAYS" => ColorChoice::Always,
-        _ => ColorChoice::Auto,
-    };
+    let color_choice = env_color();
     let mut writer = StandardStream::stderr(color_choice);
     output_diagnostics(&mut writer, files, diags);
     if should_exit {
@@ -146,16 +141,38 @@ pub fn unwrap_or_report_diagnostics<T>(files: &FilesSourceText, res: Result<T, D
     }
 }
 
-pub fn report_diagnostics_to_buffer(files: &FilesSourceText, diags: Diagnostics) -> Vec<u8> {
-    let mut writer = Buffer::no_color();
+pub fn report_diagnostics_to_buffer_with_env_color(
+    files: &FilesSourceText,
+    diags: Diagnostics,
+) -> Vec<u8> {
+    let ansi_color = match env_color() {
+        ColorChoice::Always | ColorChoice::AlwaysAnsi | ColorChoice::Auto => true,
+        ColorChoice::Never => false,
+    };
+    report_diagnostics_to_buffer(files, diags, ansi_color)
+}
+
+pub fn report_diagnostics_to_buffer(
+    files: &FilesSourceText,
+    diags: Diagnostics,
+    ansi_color: bool,
+) -> Vec<u8> {
+    let mut writer = if ansi_color {
+        Buffer::ansi()
+    } else {
+        Buffer::no_color()
+    };
     output_diagnostics(&mut writer, files, diags);
     writer.into_inner()
 }
 
-pub fn report_diagnostics_to_color_buffer(files: &FilesSourceText, diags: Diagnostics) -> Vec<u8> {
-    let mut writer = Buffer::ansi();
-    output_diagnostics(&mut writer, files, diags);
-    writer.into_inner()
+fn env_color() -> ColorChoice {
+    match read_env_var(COLOR_MODE_ENV_VAR).as_str() {
+        "NONE" => ColorChoice::Never,
+        "ANSI" => ColorChoice::AlwaysAnsi,
+        "ALWAYS" => ColorChoice::Always,
+        _ => ColorChoice::Auto,
+    }
 }
 
 fn output_diagnostics<W: WriteColor>(
