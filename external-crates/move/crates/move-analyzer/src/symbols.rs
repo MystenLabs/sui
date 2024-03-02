@@ -81,10 +81,8 @@ use std::{
 };
 use tempfile::tempdir;
 use url::Url;
-#[cfg(test)]
-use vfs::impls::memory::MemoryFS;
 use vfs::{
-    impls::{overlay::OverlayFS, physical::PhysicalFS},
+    impls::{memory::MemoryFS, overlay::OverlayFS, physical::PhysicalFS},
     VfsPath,
 };
 
@@ -978,10 +976,10 @@ pub fn get_symbols(
     // vector as the writer
     let resolution_graph = build_config.resolution_graph_for_package(pkg_path, &mut Vec::new())?;
 
-    let physical_root = VfsPath::new(PhysicalFS::new("/"));
     let overlay_fs_root = VfsPath::new(OverlayFS::new(&[
+        VfsPath::new(MemoryFS::new()),
         ide_files_root.clone(),
-        physical_root.clone(),
+        VfsPath::new(PhysicalFS::new("/")),
     ]));
 
     // get source files to be able to correlate positions (in terms of byte offsets) with actual
@@ -1198,20 +1196,14 @@ fn file_sources(
                     // there is a fair number of unwraps here but if we can't read the files
                     // that by all accounts should be in the file system, then there is not much
                     // we can do so it's better to fail so that we can investigate
-                    let mut vfs_file = overlay_fs
-                        .join(fname.as_str())
-                        .unwrap()
-                        .open_file()
-                        .unwrap();
+                    let vfs_file_path = overlay_fs.join(fname.as_str()).unwrap();
+                    let mut vfs_file = vfs_file_path.open_file().unwrap();
                     let _ = vfs_file.read_to_string(&mut contents);
                     let fhash = FileHash::new(&contents);
                     // write to top layer of the overlay file system so that the content
-                    // is immutable for the duration of compliation and symbolication
-                    let mut vfs_file = overlay_fs
-                        .join(fname.as_str())
-                        .unwrap()
-                        .create_file()
-                        .unwrap();
+                    // is immutable for the duration of compilation and symbolication
+                    let _ = vfs_file_path.parent().create_dir_all();
+                    let mut vfs_file = vfs_file_path.create_file().unwrap();
                     let _ = vfs_file.write_all(contents.as_bytes());
                     (fhash, (Symbol::from(fname), contents))
                 })
