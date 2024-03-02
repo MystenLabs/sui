@@ -74,9 +74,9 @@ contract BridgeBaseTest is Test {
         _supportedTokens[1] = wETH;
         _supportedTokens[2] = USDC;
         _supportedTokens[3] = USDT;
-        uint8[] memory _supportedDestinationChains = new uint8[](1);
-        _supportedDestinationChains[0] = 0;
-        common = new BridgeCommon(chainID, _supportedTokens, _supportedDestinationChains);
+        uint8[] memory supportedChains = new uint8[](1);
+        supportedChains[0] = 0;
+        common = new BridgeCommon(chainID, _supportedTokens, supportedChains);
 
         address[] memory _committee = new address[](5);
         uint16[] memory _stake = new uint16[](5);
@@ -151,18 +151,15 @@ contract BridgeBaseTest is Test {
 
         committee.initialize(address(common), _committee, _stake);
         vault = new BridgeVault(wETH);
-        uint256[] memory assetPrices = new uint256[](4);
-        assetPrices[0] = SUI_PRICE;
-        assetPrices[1] = BTC_PRICE;
-        assetPrices[2] = ETH_PRICE;
-        assetPrices[3] = USDC_PRICE;
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = SUI_PRICE;
         tokenPrices[1] = BTC_PRICE;
         tokenPrices[2] = ETH_PRICE;
         tokenPrices[3] = USDC_PRICE;
         limiter = new BridgeLimiter();
-        limiter.initialize(address(committee), tokenPrices, totalLimit);
+        uint64[] memory chainLimits = new uint64[](1);
+        chainLimits[0] = totalLimit;
+        limiter.initialize(address(committee), tokenPrices, supportedChains, chainLimits);
         bridge = new SuiBridge();
         bridge.initialize(address(committee), address(vault), address(limiter), wETH);
         vault.transferOwnership(address(bridge));

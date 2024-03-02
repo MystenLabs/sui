@@ -79,7 +79,10 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         );
 
         _transferTokensFromVault(
-            tokenTransferPayload.tokenID, tokenTransferPayload.targetAddress, erc20AdjustedAmount
+            message.chainID,
+            tokenTransferPayload.tokenID,
+            tokenTransferPayload.targetAddress,
+            erc20AdjustedAmount
         );
 
         // mark message as processed
@@ -200,14 +203,16 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     /* ========== INTERNAL FUNCTIONS ========== */
 
     /// @dev Transfers tokens from the vault to a target address.
+    /// @param sendingChainID The ID of the chain from which the tokens are being transferred.
     /// @param tokenID The ID of the token being transferred.
     /// @param targetAddress The address to which the tokens are being transferred.
     /// @param amount The amount of tokens being transferred.
-    function _transferTokensFromVault(uint8 tokenID, address targetAddress, uint256 amount)
-        private
-        whenNotPaused
-        limitNotExceeded(tokenID, amount)
-    {
+    function _transferTokensFromVault(
+        uint8 sendingChainID,
+        uint8 tokenID,
+        address targetAddress,
+        uint256 amount
+    ) private whenNotPaused limitNotExceeded(sendingChainID, tokenID, amount) {
         address tokenAddress = committee.common().getTokenAddress(tokenID);
 
         // Check that the token address is supported
@@ -222,7 +227,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         }
 
         // update amount bridged
-        limiter.recordBridgeTransfers(tokenID, amount);
+        limiter.recordBridgeTransfers(sendingChainID, tokenID, amount);
     }
 
     /* ========== MODIFIERS ========== */
@@ -231,9 +236,9 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     /// the last 24 hours.
     /// @param tokenID The ID of the token being transferred.
     /// @param amount The amount of tokens being transferred.
-    modifier limitNotExceeded(uint8 tokenID, uint256 amount) {
+    modifier limitNotExceeded(uint8 chainID, uint8 tokenID, uint256 amount) {
         require(
-            !limiter.willAmountExceedLimit(tokenID, amount),
+            !limiter.willAmountExceedLimit(chainID, tokenID, amount),
             "SuiBridge: Amount exceeds bridge limit"
         );
         _;

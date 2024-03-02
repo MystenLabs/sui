@@ -76,11 +76,17 @@ contract DeployBridge is Script {
 
         // deploy limiter
 
+        // convert chain limits from uint256 to uint64[]
+        uint64[] memory chainLimits = new uint64[](config.supportedChainLimitsInDollars.length);
+        for (uint256 i; i < config.supportedChainLimitsInDollars.length; i++) {
+            chainLimits[i] = uint64(config.supportedChainLimitsInDollars[i]);
+        }
+
         address limiter = Upgrades.deployUUPSProxy(
             "BridgeLimiter.sol",
             abi.encodeCall(
                 BridgeLimiter.initialize,
-                (bridgeCommittee, config.tokenPrices, uint64(config.totalBridgeLimitInDollars))
+                (bridgeCommittee, config.tokenPrices, supportedChainIDs, chainLimits)
             )
         );
 
@@ -115,8 +121,8 @@ struct DeployConfig {
     address[] committeeMembers;
     uint256 sourceChainId;
     uint256[] supportedChainIDs;
+    uint256[] supportedChainLimitsInDollars;
     address[] supportedTokens;
     uint256[] tokenPrices;
-    uint256 totalBridgeLimitInDollars;
     address WETH;
 }
