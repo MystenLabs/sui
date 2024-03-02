@@ -210,7 +210,8 @@ mod test {
         let commit_observer = CommitObserver::new(
             context.clone(),
             sender.clone(),
-            0, // last_processed_index
+            0, // last_processed_commit_round
+            0, // last_processed_commit_index
             dag_state.clone(),
             store.clone(),
         );

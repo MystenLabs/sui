@@ -4,17 +4,17 @@
 use std::collections::VecDeque;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    ops::Bound::{Included, Unbounded},
+    ops::Bound::{Excluded, Included},
 };
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
-use super::Store;
+use super::{CommitInfo, Store, WriteBatch};
 use crate::commit::{CommitAPI as _, TrustedCommit};
 use crate::{
-    block::{BlockDigest, BlockRef, Round, VerifiedBlock},
-    commit::CommitIndex,
+    block::{BlockAPI as _, BlockDigest, BlockRef, Round, VerifiedBlock},
+    commit::{CommitDigest, CommitIndex},
     error::ConsensusResult,
 };
 
@@ -26,8 +26,9 @@ pub(crate) struct MemStore {
 struct Inner {
     blocks: BTreeMap<(Round, AuthorityIndex, BlockDigest), VerifiedBlock>,
     digests_by_authorities: BTreeSet<(AuthorityIndex, Round, BlockDigest)>,
-    commits: BTreeMap<CommitIndex, TrustedCommit>,
-    last_committed_rounds: Vec<Round>,
+    commits: BTreeMap<(Round, CommitIndex, CommitDigest), TrustedCommit>,
+    commit_votes: BTreeSet<(Round, CommitIndex, CommitDigest, BlockRef)>,
+    commit_info: BTreeMap<(Round, CommitIndex, CommitDigest), CommitInfo>,
 }
 
 impl MemStore {
@@ -38,37 +39,52 @@ impl MemStore {
                 blocks: BTreeMap::new(),
                 digests_by_authorities: BTreeSet::new(),
                 commits: BTreeMap::new(),
-                last_committed_rounds: vec![],
+                commit_votes: BTreeSet::new(),
+                commit_info: BTreeMap::new(),
             }),
         }
     }
 }
 
 impl Store for MemStore {
-    fn write(
-        &self,
-        blocks: Vec<VerifiedBlock>,
-        commits: Vec<TrustedCommit>,
-        last_committed_rounds: Vec<Round>,
-    ) -> ConsensusResult<()> {
+    fn write(&self, write_batch: WriteBatch) -> ConsensusResult<()> {
         let mut inner = self.inner.write();
 
-        for block in blocks {
+        for block in write_batch.blocks {
             let block_ref = block.reference();
-            inner
-                .blocks
-                .insert((block_ref.round, block_ref.author, block_ref.digest), block);
+            inner.blocks.insert(
+                (block_ref.round, block_ref.author, block_ref.digest),
+                block.clone(),
+            );
             inner.digests_by_authorities.insert((
                 block_ref.author,
                 block_ref.round,
                 block_ref.digest,
             ));
+            for commit in block.commit_votes() {
+                inner
+                    .commit_votes
+                    .insert((commit.round, commit.index, commit.digest, block_ref));
+            }
         }
-        for commit in commits {
-            inner.commits.insert(commit.index(), commit);
+        if let Some(last_commit) = write_batch.commits.last().cloned() {
+            for commit in write_batch.commits {
+                inner
+                    .commits
+                    .insert((commit.round(), commit.index(), commit.digest()), commit);
+            }
+            let commit_info = CommitInfo {
+                last_committed_rounds: write_batch.last_committed_rounds,
+            };
+            inner.commit_info.insert(
+                (
+                    last_commit.round(),
+                    last_commit.index(),
+                    last_commit.digest(),
+                ),
+                commit_info,
+            );
         }
-        inner.last_committed_rounds = last_committed_rounds;
-
         Ok(())
     }
 
@@ -152,20 +168,24 @@ impl Store for MemStore {
             .map(|(_, commit)| commit.clone()))
     }
 
-    fn scan_commits(&self, start_commit_index: CommitIndex) -> ConsensusResult<Vec<TrustedCommit>> {
+    fn scan_commits(
+        &self,
+        start: (Round, CommitIndex),
+        end: (Round, CommitIndex),
+    ) -> ConsensusResult<Vec<TrustedCommit>> {
         let inner = self.inner.read();
         let mut commits = vec![];
-        for (_, commit) in inner
-            .commits
-            .range((Included(start_commit_index), Unbounded))
-        {
+        for (_, commit) in inner.commits.range((
+            Included((start.0, start.1, CommitDigest::MIN)),
+            Excluded((end.0, end.1, CommitDigest::MIN)),
+        )) {
             commits.push(commit.clone());
         }
         Ok(commits)
     }
 
-    fn read_last_committed_rounds(&self) -> ConsensusResult<Vec<Round>> {
+    fn read_last_commit_info(&self) -> ConsensusResult<Option<CommitInfo>> {
         let inner = self.inner.read();
-        Ok(inner.last_committed_rounds.clone())
+        Ok(inner.commit_info.last_key_value().map(|(_k, v)| v.clone()))
     }
 }

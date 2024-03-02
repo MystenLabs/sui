@@ -102,7 +102,7 @@ impl Linearizer {
             sub_dag.sort();
 
             // Buffer commit in dag state for persistence later.
-            let commit = TrustedCommit::new_trusted(Commit::new(
+            let commit = Commit::new(
                 sub_dag.commit_index,
                 sub_dag.leader,
                 sub_dag
@@ -114,7 +114,11 @@ impl Linearizer {
                         block_ref
                     })
                     .collect(),
-            ));
+            );
+            let serialized = commit
+                .serialize()
+                .unwrap_or_else(|e| panic!("Failed to serialize commit: {}", e));
+            let commit = TrustedCommit::new_trusted(commit, serialized);
             self.dag_state.write().add_commit(commit.clone());
             committed_sub_dags.push(sub_dag);
         }

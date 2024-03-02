@@ -23,8 +23,8 @@ use fastcrypto::{
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 
-use crate::context::Context;
 use crate::error::ConsensusResult;
+use crate::{commit::CommitRef, context::Context};
 use crate::{ensure, error::ConsensusError};
 
 /// Round number of a block.
@@ -81,6 +81,7 @@ pub trait BlockAPI {
     fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
     fn transactions(&self) -> &[Transaction];
+    fn commit_votes(&self) -> &[CommitRef];
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -92,6 +93,7 @@ pub struct BlockV1 {
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
     transactions: Vec<Transaction>,
+    commit_votes: Vec<CommitRef>,
 }
 
 impl BlockV1 {
@@ -102,25 +104,28 @@ impl BlockV1 {
         timestamp_ms: BlockTimestampMs,
         ancestors: Vec<BlockRef>,
         transactions: Vec<Transaction>,
+        commit_votes: Vec<CommitRef>,
     ) -> BlockV1 {
         Self {
+            epoch,
             round,
             author,
             timestamp_ms,
             ancestors,
             transactions,
-            epoch,
+            commit_votes,
         }
     }
 
     fn genesis_block(epoch: Epoch, author: AuthorityIndex) -> Self {
         Self {
+            epoch,
             round: GENESIS_ROUND,
             author,
             timestamp_ms: 0,
             ancestors: vec![],
             transactions: vec![],
-            epoch,
+            commit_votes: vec![],
         }
     }
 }
@@ -148,6 +153,10 @@ impl BlockAPI for BlockV1 {
 
     fn transactions(&self) -> &[Transaction] {
         &self.transactions
+    }
+
+    fn commit_votes(&self) -> &[CommitRef] {
+        &self.commit_votes
     }
 }
 
@@ -539,6 +548,11 @@ impl TestBlock {
         }
     }
 
+    pub(crate) fn set_epoch(mut self, epoch: Epoch) -> Self {
+        self.block.epoch = epoch;
+        self
+    }
+
     pub(crate) fn set_round(mut self, round: Round) -> Self {
         self.block.round = round;
         self
@@ -561,11 +575,6 @@ impl TestBlock {
 
     pub(crate) fn set_transactions(mut self, transactions: Vec<Transaction>) -> Self {
         self.block.transactions = transactions;
-        self
-    }
-
-    pub(crate) fn set_epoch(mut self, epoch: Epoch) -> Self {
-        self.block.epoch = epoch;
         self
     }
 

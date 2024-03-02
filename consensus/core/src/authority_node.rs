@@ -143,7 +143,8 @@ where
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer.sender,
-            commit_consumer.last_processed_index,
+            commit_consumer.last_processed_commit_round,
+            commit_consumer.last_processed_commit_index,
             dag_state.clone(),
             store.clone(),
         );
@@ -445,9 +446,7 @@ mod tests {
         let network_keypair = keypairs[own_index].0.copy();
 
         let (sender, _receiver) = unbounded_channel();
-        let commit_consumer = CommitConsumer::new(
-            sender, 0, // last_processed_index
-        );
+        let commit_consumer = CommitConsumer::new(sender, 0, 0);
 
         let authority = ConsensusAuthority::start(
             own_index,
@@ -539,9 +538,7 @@ mod tests {
             let network_keypair = keypairs[index].0.copy();
 
             let (sender, receiver) = unbounded_channel();
-            let commit_consumer = CommitConsumer::new(
-                sender, 0, // last_processed_index
-            );
+            let commit_consumer = CommitConsumer::new(sender, 0, 0);
             output_receivers.push(receiver);
 
             let authority = ConsensusAuthority::start(

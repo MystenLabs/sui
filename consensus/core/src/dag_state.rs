@@ -3,7 +3,7 @@
 
 use std::{
     cmp::max,
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     ops::Bound::{Excluded, Included, Unbounded},
     panic,
     sync::Arc,
@@ -14,9 +14,9 @@ use tracing::error;
 
 use crate::{
     block::{genesis_blocks, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
-    commit::{CommitAPI as _, CommitIndex, TrustedCommit},
+    commit::{CommitAPI as _, CommitIndex, CommitRef, TrustedCommit},
     context::Context,
-    storage::Store,
+    storage::{Store, WriteBatch},
 };
 
 /// Rounds of recently committed blocks cached in memory, per authority.
@@ -52,9 +52,13 @@ pub(crate) struct DagState {
     // Last committed rounds per authority.
     last_committed_rounds: Vec<Round>,
 
-    // Buffered data to be flushed to storage.
-    buffered_blocks: Vec<VerifiedBlock>,
-    buffered_commits: Vec<TrustedCommit>,
+    // Commits to be voted on in new blocks.
+    // TODO: limit to 1st commit per round with multi-leader.
+    commits_to_vote: VecDeque<CommitRef>,
+
+    // Data to be flushed to storage.
+    blocks_to_write: Vec<VerifiedBlock>,
+    commits_to_write: Vec<TrustedCommit>,
 
     // Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
@@ -74,13 +78,13 @@ impl DagState {
             .read_last_commit()
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
         let last_committed_rounds = {
-            let rounds = store
-                .read_last_committed_rounds()
+            let commit_info = store
+                .read_last_commit_info()
                 .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
-            if rounds.is_empty() {
-                vec![0; num_authorities]
+            if let Some(commit_info) = commit_info {
+                commit_info.last_committed_rounds
             } else {
-                rounds
+                vec![0; num_authorities]
             }
         };
 
@@ -92,8 +96,9 @@ impl DagState {
             highest_accepted_round: 0,
             last_commit,
             last_committed_rounds: last_committed_rounds.clone(),
-            buffered_blocks: vec![],
-            buffered_commits: vec![],
+            commits_to_vote: VecDeque::new(),
+            blocks_to_write: vec![],
+            commits_to_write: vec![],
             store,
         };
 
@@ -135,7 +140,7 @@ impl DagState {
             );
         }
         self.update_block_metadata(&block);
-        self.buffered_blocks.push(block);
+        self.blocks_to_write.push(block);
     }
 
     /// Updates internal metadata for a block.
@@ -361,7 +366,16 @@ impl DagState {
                 block_ref.round,
             );
         }
-        self.buffered_commits.push(commit);
+        self.commits_to_vote.push_back(commit.reference());
+        self.commits_to_write.push(commit);
+    }
+
+    pub(crate) fn commit_votes(&mut self, limit: usize) -> Vec<CommitRef> {
+        let mut votes = Vec::new();
+        while !self.commits_to_vote.is_empty() && votes.len() < limit {
+            votes.push(self.commits_to_vote.pop_front().unwrap());
+        }
+        votes
     }
 
     /// Index of the last commit.
@@ -391,17 +405,30 @@ impl DagState {
         self.last_committed_rounds.clone()
     }
 
+    /// Highest round where a block is committed, which is last commit's leader round.
+    fn last_commit_round(&self) -> Round {
+        match &self.last_commit {
+            Some(commit) => commit.leader().round,
+            None => 0,
+        }
+    }
+
     /// After each flush, DagState becomes persisted in storage and it expected to recover
     /// all internal states from stroage after restarts.
     pub(crate) fn flush(&mut self) {
         // Flush buffered data to storage.
-        let blocks = std::mem::take(&mut self.buffered_blocks);
-        let commits = std::mem::take(&mut self.buffered_commits);
+        let blocks = std::mem::take(&mut self.blocks_to_write);
+        let commits = std::mem::take(&mut self.commits_to_write);
         if blocks.is_empty() && commits.is_empty() {
             return;
         }
         self.store
-            .write(blocks, commits, self.last_committed_rounds.clone())
+            .write(WriteBatch::new(
+                blocks,
+                commits,
+                // TODO: limit to write at most once per commit round with multi-leader.
+                self.last_committed_rounds.clone(),
+            ))
             .unwrap_or_else(|e| panic!("Failed to write to storage: {:?}", e));
         self.context
             .metrics
@@ -425,14 +452,6 @@ impl DagState {
             }
         }
     }
-
-    /// Highest round where a block is committed, which is last commit's leader round.
-    fn last_commit_round(&self) -> Round {
-        match &self.last_commit {
-            Some(commit) => commit.leader().round,
-            None => 0,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -442,7 +461,7 @@ mod test {
     use super::*;
     use crate::{
         block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
-        storage::mem_store::MemStore,
+        storage::{mem_store::MemStore, WriteBatch},
     };
 
     #[test]
@@ -730,7 +749,9 @@ mod test {
         // Now write in store the blocks from first 4 rounds and the rest to the dag state
         blocks.clone().into_iter().for_each(|block| {
             if block.round() <= 4 {
-                store.write(vec![block], vec![], vec![]).unwrap();
+                store
+                    .write(WriteBatch::default().blocks(vec![block]))
+                    .unwrap();
             } else {
                 dag_state.accept_blocks(vec![block]);
             }
@@ -782,7 +803,9 @@ mod test {
         // Now write in store the blocks from first 4 rounds and the rest to the dag state
         blocks.clone().into_iter().for_each(|block| {
             if block.round() <= 4 {
-                store.write(vec![block], vec![], vec![]).unwrap();
+                store
+                    .write(WriteBatch::default().blocks(vec![block]))
+                    .unwrap();
             } else {
                 dag_state.accept_blocks(vec![block]);
             }
