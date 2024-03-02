@@ -220,8 +220,10 @@ With the new entry functions included, add another test function to make sure th
             let sword = test_scenario::take_from_sender<Sword>(scenario);
             // verify that the sword has expected properties
             assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
-            // return the sword to the object pool (it cannot be simply "dropped")
+            // return the sword to the object pool
             test_scenario::return_to_sender(scenario, sword)
+            // or uncomment the line below to destroy the sword instead
+            // test_utils::destroy(sword)
         };
         test_scenario::end(scenario_val);
     }
@@ -240,7 +242,7 @@ Transaction effects, such as object creation and transfer become visible only af
 
 The final owner executes the fourth and final transaction that retrieves the `sword` object from storage and checks if it has the expected properties. Remember, as described in [Testing a package](#testing-a-package), in the pure Move testing scenario, after an object is available in Move code (after creation or retrieval from emulated storage), it cannot simply disappear.
 
-In the pure Move testing function, the function transfers the `sword` object to the fake address to handle the disappearing problem. The `test_scenario` package provides a more elegant solution, however, which is closer to what happens when Move code actually executes in the context of Sui - the package simply returns the `sword` to the object pool using the `test_scenario::return_to_sender` function.
+In the pure Move testing function, the function transfers the `sword` object to the fake address to handle the disappearing problem. The `test_scenario` package provides a more elegant solution, however, which is closer to what happens when Move code actually executes in the context of Sui - the package simply returns the `sword` to the object pool using the `test_scenario::return_to_sender` function. For scenarios where returning to the sender is not desirable or if you would like to simply destroy the object, the `test_utils` module also provides the generic `destroy<T>` function, that can be used on any type `T` regardless of its ability. It is advisable to check out other useful functions in the [`test_scenario`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/test/test_scenario.move) and [`test_utils`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/test/test_utils.move) modules as well.
 
 Run the test command again to see two successful tests for our module:
 
