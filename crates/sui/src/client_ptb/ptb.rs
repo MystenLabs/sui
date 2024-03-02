@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    client_commands::{dry_run, max_gas_budget},
     client_ptb::{
         ast::{ParsedProgram, Program},
         builder::PTBBuilder,
@@ -98,9 +99,7 @@ impl PTB {
             );
             return Ok(());
         }
-
         let client = context.get_client().await?;
-
         let (res, warnings) = Self::build_ptb(program, context, client).await;
 
         // Render warnings
@@ -131,17 +130,6 @@ impl PTB {
             anyhow::bail!("No active address, cannot execute PTB");
         };
 
-        // find the gas coins if we have no gas coin given
-        let coins = if let Some(gas) = program_metadata.gas_object_id {
-            context.get_object_ref(gas.value).await?
-        } else {
-            context
-                .gas_for_owner_budget(sender, program_metadata.gas_budget.value, BTreeSet::new())
-                .await?
-                .1
-                .object_ref()
-        };
-
         // get the gas price
         let gas_price = context
             .get_client()
@@ -149,14 +137,34 @@ impl PTB {
             .read_api()
             .get_reference_gas_price()
             .await?;
+        let gas_budget = if let Some(gas_budget) = program_metadata.gas_budget {
+            gas_budget.value
+        } else {
+            let tx = TransactionData::new_programmable(
+                sender,
+                vec![],
+                ptb.clone(),
+                max_gas_budget(context).await?,
+                gas_price,
+            );
+            dry_run(context, tx).await?
+        };
+
+        // find the gas coins if we have no gas coin given
+        let coins = if let Some(gas) = program_metadata.gas_object_id {
+            context.get_object_ref(gas.value).await?
+        } else {
+            context
+                .gas_for_owner_budget(sender, gas_budget, BTreeSet::new())
+                .await?
+                .1
+                .object_ref()
+        };
+
         // create the transaction data that will be sent to the network
-        let tx_data = TransactionData::new_programmable(
-            sender,
-            vec![coins],
-            ptb,
-            program_metadata.gas_budget.value,
-            gas_price,
-        );
+        let tx_data =
+            TransactionData::new_programmable(sender, vec![coins], ptb, gas_budget, gas_price);
+
         // sign the tx
         let signature =
             context

@@ -122,7 +122,6 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                         self.fast_forward_to_next_command();
                     }
                 }
-
                 L(T::Command, A::TRANSFER_OBJECTS) => command!(self.parse_transfer_objects()),
                 L(T::Command, A::SPLIT_COINS) => command!(self.parse_split_coins()),
                 L(T::Command, A::MERGE_COINS) => command!(self.parse_merge_coins()),
@@ -184,14 +183,6 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 .push(err!(sp, "Trailing {tok} found after the last command",));
         }
 
-        let Some(gas_budget) = self.state.gas_budget else {
-            self.state.errors.push(err!(
-                sp => help: { "Use --gas-budget <u64> to set a gas budget" },
-                "Gas budget not set."
-            ));
-            return Err(self.state.errors);
-        };
-
         if self.state.errors.is_empty() {
             Ok((
                 A::Program {
@@ -203,7 +194,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     summary_set: self.state.summary_set,
                     gas_object_id: self.state.gas_object_id,
                     json_set: self.state.json_set,
-                    gas_budget,
+                    gas_budget: self.state.gas_budget,
                 },
             ))
         } else {
