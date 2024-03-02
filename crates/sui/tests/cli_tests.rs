@@ -295,6 +295,22 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
         .execute(context)
         .await?;
 
+    let delete_object_ptb_string = format!(
+        r#"
+         --assign p @{package_id_str}
+         --assign s @{shared_id_str}
+         # Use the shared object by immutable reference first
+         --move-call "p::test_module::use_immut" s 
+         --move-call "p::test_module::delete_shared_object" s
+         --gas-budget 100000000
+        "#
+    );
+
+    let args = shlex::split(&delete_object_ptb_string).unwrap();
+    sui::client_ptb::ptb::PTB { args: args.clone() }
+        .execute(context)
+        .await?;
+
     Ok(())
 }
 

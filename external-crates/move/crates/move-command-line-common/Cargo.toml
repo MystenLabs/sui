@@ -19,5 +19,6 @@ num-bigint.workspace = true
 once_cell.workspace = true
 serde.workspace = true
 dirs-next.workspace = true
+vfs.workspace = true
 
 move-core-types.workspace = true

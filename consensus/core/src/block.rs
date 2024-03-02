@@ -27,10 +27,10 @@ use crate::context::Context;
 use crate::error::ConsensusResult;
 use crate::{ensure, error::ConsensusError};
 
-const GENESIS_ROUND: Round = 0;
-
 /// Round number of a block.
 pub type Round = u32;
+
+pub const GENESIS_ROUND: Round = 0;
 
 /// Block proposal timestamp in milliseconds.
 pub type BlockTimestampMs = u64;
@@ -49,7 +49,6 @@ pub struct Transaction {
     data: Bytes,
 }
 
-#[allow(dead_code)]
 impl Transaction {
     pub fn new(data: Vec<u8>) -> Self {
         Self { data: data.into() }
@@ -74,36 +73,6 @@ pub enum Block {
     V1(BlockV1),
 }
 
-impl Block {
-    /// Generate the genesis blocks for the latest Block version. The tuple contains (my_genesis_block, all_genesis_blocks).
-    /// The blocks are returned in authority index order.
-    pub(crate) fn genesis(context: Arc<Context>) -> (VerifiedBlock, Vec<VerifiedBlock>) {
-        let blocks = context
-            .committee
-            .authorities()
-            .map(|(authority_index, _)| {
-                let signed_block = SignedBlock::new_genesis(Block::V1(BlockV1::genesis(
-                    authority_index,
-                    context.committee.epoch(),
-                )));
-                let serialized = signed_block
-                    .serialize()
-                    .expect("Genesis block serialization failed.");
-                // Unnecessary to verify genesis blocks.
-                VerifiedBlock::new_verified(signed_block, serialized)
-            })
-            .collect::<Vec<VerifiedBlock>>();
-        (
-            blocks
-                .iter()
-                .find(|b| b.author() == context.own_index)
-                .cloned()
-                .expect("We should have found our own genesis block"),
-            blocks,
-        )
-    }
-}
-
 #[enum_dispatch]
 pub trait BlockAPI {
     fn epoch(&self) -> Epoch;
@@ -126,7 +95,6 @@ pub struct BlockV1 {
 }
 
 impl BlockV1 {
-    #[allow(dead_code)]
     pub(crate) fn new(
         epoch: Epoch,
         round: Round,
@@ -145,8 +113,7 @@ impl BlockV1 {
         }
     }
 
-    /// Generate the block that is meant to be used for genesis
-    pub(crate) fn genesis(author: AuthorityIndex, epoch: Epoch) -> BlockV1 {
+    fn genesis_block(epoch: Epoch, author: AuthorityIndex) -> Self {
         Self {
             round: GENESIS_ROUND,
             author,
@@ -159,6 +126,10 @@ impl BlockV1 {
 }
 
 impl BlockAPI for BlockV1 {
+    fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+
     fn round(&self) -> Round {
         self.round
     }
@@ -178,10 +149,6 @@ impl BlockAPI for BlockV1 {
     fn transactions(&self) -> &[Transaction] {
         &self.transactions
     }
-
-    fn epoch(&self) -> Epoch {
-        self.epoch
-    }
 }
 
 /// `BlockRef` uniquely identifies a `VerifiedBlock` via `digest`. It also contains the slot
@@ -193,7 +160,6 @@ pub struct BlockRef {
     pub digest: BlockDigest,
 }
 
-#[allow(unused)]
 impl BlockRef {
     pub fn new(round: Round, author: AuthorityIndex, digest: BlockDigest) -> Self {
         Self {
@@ -322,7 +288,6 @@ impl fmt::Debug for Slot {
 ///
 /// Note: `BlockDigest` is computed over this struct, so any added field (without `#[serde(skip)]`)
 /// will affect the values of `BlockDigest` and `BlockRef`.
-#[allow(unused)]
 #[derive(Deserialize, Serialize)]
 pub(crate) struct SignedBlock {
     inner: Block,
@@ -435,7 +400,7 @@ impl Deref for SignedBlock {
 }
 
 /// VerifiedBlock allows full access to its content.
-/// It should be relatively cheap to copy.
+/// Note: clone() is relatively cheap with most underlying data refcounted.
 #[derive(Clone)]
 pub struct VerifiedBlock {
     block: Arc<SignedBlock>,
@@ -535,6 +500,26 @@ impl fmt::Debug for VerifiedBlock {
     }
 }
 
+/// Generates the genesis blocks for the current Committee.
+/// The blocks are returned in authority index order.
+pub(crate) fn genesis_blocks(context: Arc<Context>) -> Vec<VerifiedBlock> {
+    context
+        .committee
+        .authorities()
+        .map(|(authority_index, _)| {
+            let signed_block = SignedBlock::new_genesis(Block::V1(BlockV1::genesis_block(
+                context.committee.epoch(),
+                authority_index,
+            )));
+            let serialized = signed_block
+                .serialize()
+                .expect("Genesis block serialization failed.");
+            // Unnecessary to verify genesis blocks.
+            VerifiedBlock::new_verified(signed_block, serialized)
+        })
+        .collect::<Vec<VerifiedBlock>>()
+}
+
 /// Creates fake blocks for testing.
 #[cfg(test)]
 #[derive(Clone)]
@@ -542,7 +527,6 @@ pub(crate) struct TestBlock {
     block: BlockV1,
 }
 
-#[allow(unused)]
 #[cfg(test)]
 impl TestBlock {
     pub(crate) fn new(round: Round, author: u32) -> Self {

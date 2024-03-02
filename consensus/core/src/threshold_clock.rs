@@ -9,16 +9,12 @@ use crate::{
     stake_aggregator::{QuorumThreshold, StakeAggregator},
 };
 
-#[allow(unused)]
-
 pub(crate) struct ThresholdClock {
     aggregator: StakeAggregator<QuorumThreshold>,
     round: Round,
     last_quorum_ts: Instant,
     context: Arc<Context>,
 }
-
-#[allow(unused)]
 
 impl ThresholdClock {
     pub(crate) fn new(round: Round, context: Arc<Context>) -> Self {
@@ -30,13 +26,9 @@ impl ThresholdClock {
         }
     }
 
-    pub(crate) fn last_quorum_ts(&self) -> Instant {
-        self.last_quorum_ts
-    }
-
     /// Add the block references that have been successfully processed and advance the round accordingly. If the round
     /// has indeed advanced then the new round is returned, otherwise None is returned.
-    pub(crate) fn add_blocks(&mut self, mut blocks: Vec<BlockRef>) -> Option<Round> {
+    pub(crate) fn add_blocks(&mut self, blocks: Vec<BlockRef>) -> Option<Round> {
         let previous_round = self.round;
         for block_ref in blocks {
             self.add_block(block_ref);
