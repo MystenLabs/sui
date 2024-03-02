@@ -116,6 +116,8 @@ export class EnokiClient {
 				sender: input.sender,
 				network: input.network,
 				transactionBlockKindBytes: input.transactionBlockKindBytes,
+				allowedAddresses: input.allowedAddresses,
+				allowedMoveCallTargets: input.allowedMoveCallTargets,
 			}),
 		});
 	}

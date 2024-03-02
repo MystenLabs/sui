@@ -53,9 +53,13 @@ export type CreateSponsoredTransactionBlockApiInput = {
 	| {
 			jwt: string;
 			sender?: never;
+			allowedAddresses?: never;
+			allowedMoveCallTargets?: never;
 	  }
 	| {
 			sender: string;
+			allowedAddresses?: string[];
+			allowedMoveCallTargets?: string[];
 			jwt?: never;
 	  }
 );

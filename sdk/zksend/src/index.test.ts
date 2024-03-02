@@ -17,9 +17,9 @@ export const DEMO_BEAR_CONFIG = {
 };
 
 export const ZK_BAG_CONFIG = {
-	packageId: '0x0c4bfcee8a53c08e977048ae4f4e074ae72389264a88a3e8de37ef8e20ed43c6',
-	bagStoreId: '0xa1c32c266eb213f0366d9b10b0cf5895f02e12078b6d51bd94b873bbb85e2df2',
-	bagStoreTableId: '0x54aedcdfec063ffec31b8082019e9303284a8165d61388aec2c4d003e4ea4993',
+	packageId: '0x47822def052ee6074dc5d3e9962cbfcadc1424dcc65df535b6c2b5d86a28fe96',
+	bagStoreId: '0x19b03a96969ff4166ba532b3ac9bdf295f5bb6d6dea7377cd8170d3db0145b02',
+	bagStoreTableId: '0x2fc366651852311e49f97d0208ff1ebf989793006dc959c79ffc35cb44149ef3',
 };
 
 const client = new SuiClient({
@@ -75,6 +75,92 @@ describe('Contract links', () => {
 			});
 
 			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
+				contract: ZK_BAG_CONFIG,
+				network: 'testnet',
+				claimApi: 'http://localhost:3000/api',
+			});
+
+			const claimableAssets = await claimLink.listClaimableAssets(
+				new Ed25519Keypair().toSuiAddress(),
+			);
+
+			expect(claimableAssets.nfts.length).toEqual(3);
+			expect(claimableAssets.balances).toMatchInlineSnapshot(`
+				[
+				  {
+				    "amount": 100n,
+				    "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+				  },
+				]
+			`);
+
+			const claim = await claimLink.claimAssets(keypair.toSuiAddress());
+
+			const res = await client.waitForTransactionBlock({
+				digest: claim.digest,
+				options: {
+					showObjectChanges: true,
+				},
+			});
+
+			expect(res.objectChanges?.length).toEqual(
+				3 + // bears,
+					1 + // coin
+					1 + // gas
+					1, // bag
+			);
+		},
+		{
+			timeout: 30_000,
+		},
+	);
+
+	test(
+		'regenerate links',
+		async () => {
+			const linkKp = new Ed25519Keypair();
+			const link = new ZkSendLinkBuilder({
+				keypair: linkKp,
+				client,
+				contract: ZK_BAG_CONFIG,
+				sender: keypair.toSuiAddress(),
+			});
+
+			const bears = await createBears(3);
+
+			for (const bear of bears) {
+				link.addClaimableObject(bear.objectId);
+			}
+
+			link.addClaimableMist(100n);
+
+			await link.create({
+				signer: keypair,
+			});
+
+			const lostLink = await ZkSendLink.fromUrl(link.getLink(), {
+				contract: ZK_BAG_CONFIG,
+				network: 'testnet',
+			});
+
+			const { url, transactionBlock } = await lostLink.createRegenerateTransaction(
+				keypair.toSuiAddress(),
+			);
+
+			const result = await client.signAndExecuteTransactionBlock({
+				transactionBlock,
+				signer: keypair,
+				options: {
+					showEffects: true,
+					showObjectChanges: true,
+				},
+			});
+
+			await client.waitForTransactionBlock({ digest: result.digest });
+
+			await new Promise((resolve) => setTimeout(resolve, 8000));
+
+			const claimLink = await ZkSendLink.fromUrl(url, {
 				contract: ZK_BAG_CONFIG,
 				network: 'testnet',
 				claimApi: 'http://localhost:3000/api',

@@ -4,10 +4,8 @@
 import '@mysten/sui.js/graphql/schemas/2024-01';
 
 import { SuiGraphQLClient } from '@mysten/sui.js/graphql';
-import { graphql, readFragment, ResultOf } from '@mysten/sui.js/graphql/schemas/2024-01';
-
-const DYNAMIC_FIELD_TYPE =
-	'0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_object_field::Wrapper<u16>,0x0000000000000000000000000000000000000000000000000000000000000002::object::ID>';
+// import type { ResultOf } from '@mysten/sui.js/graphql/schemas/2024-01';
+import { graphql } from '@mysten/sui.js/graphql/schemas/2024-01';
 
 const CreatedLinkFragment = graphql(`
 	fragment CreatedLinkFragment on TransactionBlock {
@@ -102,17 +100,17 @@ export async function getCreatedLinks(options: {
 	// };
 }
 
-function listLinkAssets(txb: ResultOf<typeof CreatedLinkFragment>) {
-	const nfts = [];
-	const balances = new Map<string, bigint>();
+// function listLinkAssets(txb: ResultOf<typeof CreatedLinkFragment>) {
+// 	const nfts = [];
+// 	const balances = new Map<string, bigint>();
 
-	const dynamicField = txb.effects?.objectChanges.nodes.find((node) => {
-		node.outputState?.asMoveObject?.contents?.type.repr === DYNAMIC_FIELD_TYPE;
-	});
+// 	const dynamicField = txb.effects?.objectChanges.nodes.find((node) => {
+// 		node.outputState?.asMoveObject?.contents?.type.repr === DYNAMIC_FIELD_TYPE;
+// 	});
 
-	if (!objectField) {
-		throw new Error('Failed to find dynamic field');
-	}
+// 	if (!dynamicField) {
+// 		throw new Error('Failed to find dynamic field');
+// 	}
 
-	const dynamicFieldId = objectField.
-}
+// 	const dynamicFieldId = dynamicField.outputState?.address;
+// }

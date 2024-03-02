@@ -71,6 +71,22 @@ export class ZkBag<IDs> {
 	init_claim(
 		txb: TransactionBlock,
 		{
+			arguments: [store],
+		}: {
+			arguments: [store: TransactionObjectArgument | string];
+		},
+	) {
+		const [bag, claimProof] = txb.moveCall({
+			target: `${this.#package}::${this.#module}::init_claim`,
+			arguments: [txb.object(store)],
+		});
+
+		return [bag, claimProof] as const;
+	}
+
+	reclaim(
+		txb: TransactionBlock,
+		{
 			arguments: [store, receiver],
 		}: {
 			arguments: [
@@ -80,7 +96,7 @@ export class ZkBag<IDs> {
 		},
 	) {
 		const [bag, claimProof] = txb.moveCall({
-			target: `${this.#package}::${this.#module}::init_claim`,
+			target: `${this.#package}::${this.#module}::reclaim`,
 			arguments: [
 				txb.object(store),
 				typeof receiver === 'string' ? txb.pure.address(receiver) : receiver,
@@ -99,18 +115,14 @@ export class ZkBag<IDs> {
 			arguments: [
 				bag: TransactionObjectArgument | string,
 				claim: TransactionObjectArgument | string,
-				id: TransactionArgument | number,
+				id: TransactionObjectArgument | string,
 			];
 			typeArguments: [string];
 		},
 	): Extract<TransactionArgument, { kind: 'Result' }> {
 		return txb.moveCall({
 			target: `${this.#package}::${this.#module}::claim`,
-			arguments: [
-				txb.object(bag),
-				txb.object(claim),
-				typeof id === 'number' ? txb.pure.u16(id) : id,
-			],
+			arguments: [txb.object(bag), txb.object(claim), typeof id === 'string' ? txb.object(id) : id],
 			typeArguments,
 		});
 	}
