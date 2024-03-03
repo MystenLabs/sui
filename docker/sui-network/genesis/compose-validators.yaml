@@ -1,0 +1,60 @@
+accounts:
+- address: '0x7d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b58e'
+  gas_amounts:
+  - 750000000000000000
+  - 750000000000000000
+- address: '0x160ef6ce4f395208a12119c5011bf8d8ceb760e3159307c819bd0197d154d384'
+  gas_amounts:
+  - 20000000000000000
+  - 20000000000000000
+  - 20000000000000000
+  - 20000000000000000
+  - 20000000000000000
+parameters:
+  allow_insertion_of_extra_objects: false
+validator_config_info:
+- commission_rate: 0
+  consensus_address: /ip4/127.0.0.1/tcp/8083/http
+  gas_price: 1000
+  name: validator1
+  narwhal_primary_address: /dns/validator1/udp/8081
+  narwhal_worker_address: /dns/validator1/udp/8082
+  network_address: /dns/validator1/tcp/8080/http
+  p2p_address: /dns/validator1/udp/8084
+  stake: 20000000000000000
+  genesis:
+    genesis-file-location: /opt/sui/genesis.blob
+- commission_rate: 0
+  consensus_address: /ip4/127.0.0.1/tcp/8083/http
+  gas_price: 1000
+  name: validator2
+  narwhal_primary_address: /dns/validator2/udp/8081
+  narwhal_worker_address: /dns/validator2/udp/8082
+  network_address: /dns/validator2/tcp/8080/http
+  p2p_address: /dns/validator2/udp/8084
+  stake: 20000000000000000
+- commission_rate: 0
+  consensus_address: /ip4/127.0.0.1/tcp/8083/http
+  gas_price: 1000
+  name: validator3
+  narwhal_primary_address: /dns/validator3/udp/8081
+  narwhal_worker_address: /dns/validator3/udp/8082
+  network_address: /dns/validator3/tcp/8080/http
+  p2p_address: /dns/validator3/udp/8084
+  stake: 20000000000000000
+# - commission_rate: 0
+#   consensus_address: /ip4/127.0.0.1/tcp/8083/http
+#   gas_price: 1000
+#   name: lax-suival-71040.ci.sui.io
+#   narwhal_primary_address: /dns/lax-suival-71040.ci.sui.io/udp/8081
+#   narwhal_worker_address: /dns/lax-suival-71040.ci.sui.io/udp/8082
+#   network_address: /dns/lax-suival-71040.ci.sui.io/tcp/8080/http
+#   p2p_address: /dns/lax-suival-71040.ci.sui.io/udp/8084
+#   stake: 20000000000000000
+            # "sui",
+            # "genesis",
+            # "--from-config",
+            # f"{args.target_directory}/genesis.yaml",
+            # "--working-dir",
+            # "z",
+            # "-f",

@@ -1,0 +1,152 @@
+version: "3"
+
+services:
+services:
+  validator1:
+    networks:
+      - sui-network
+    image: mysten/sui-node:mainnet-v1.19.1
+    container_name: validator1
+    environment:
+      - RUST_BACKTRACE=1
+      - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+    volumes:
+      - ./genesis/files/validator1-8080.yaml:/opt/sui/config/validator.yaml:ro
+      - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
+      - /tmp/sui/db1:/opt/sui/db:rw
+    command:
+      [
+        "/usr/local/bin/sui-node",
+        "--config-path",
+        "/opt/sui/config/validator.yaml",
+      ]
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "1g"
+  validator2:
+    networks:
+      - sui-network
+    image: mysten/sui-node:mainnet-v1.19.1
+    container_name: validator2
+    environment:
+      - RUST_BACKTRACE=1
+      - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+    volumes:
+      - ./genesis/files/validator2-8080.yaml:/opt/sui/config/validator.yaml:ro
+      - /Users/johnmartin/src/github.com/johnjmartin/sui/docker/sui-network/genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
+      - /tmp/sui/db2:/opt/sui/db:rw
+    command:
+      [
+        "/usr/local/bin/sui-node",
+        "--config-path",
+        "/opt/sui/config/validator.yaml",
+      ]
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "1g"
+  validator3:
+    networks:
+      - sui-network
+    image: mysten/sui-node:mainnet-v1.19.1
+    container_name: validator3
+    environment:
+      - RUST_BACKTRACE=1
+      - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+    volumes:
+      - ./genesis/files/validator3-8080.yaml:/opt/sui/config/validator.yaml:ro
+      - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
+      - /tmp/sui/db3:/opt/sui/db:rw
+    command:
+      [
+        "/usr/local/bin/sui-node",
+        "--config-path",
+        "/opt/sui/config/validator.yaml",
+      ]
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "1g"
+  fullnode1:
+    networks:
+      - sui-network
+    image: mysten/sui-node:mainnet-v1.19.1
+    container_name: fullnode1
+    environment:
+      - RUST_BACKTRACE=1
+      - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+    volumes:
+      - ./genesis/static/fullnode.yaml:/opt/sui/config/fullnode.yaml:ro
+      - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
+      - /tmp/sui/db4:/opt/sui/db:rw
+    command:
+      [
+        "/usr/local/bin/sui-node",
+        "--config-path",
+        "/opt/sui/config/fullnode.yaml",
+      ]
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "1g"
+
+  stress:
+    networks:
+      - sui-network
+    image: mysten/sui-tools:mainnet-v1.19.1
+    container_name: stress
+    environment:
+      - RUST_LOG=info
+    volumes:
+      - ./genesis/static/fullnode.yaml:/opt/sui/config/fullnode.yaml:ro
+      - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
+      - ./genesis/static/sui.keystore:/opt/sui/config/sui.keystore:ro
+      - /tmp/sui/db5:/opt/sui/db:rw
+    command:
+      [
+        "/usr/local/bin/stress",
+        "--staggered-start-max-multiplier", "0",
+        "--fullnode-rpc-addresses", "fullnode1:9000",
+        "--use-fullnode-for-reconfig", "false",
+        "--num-client-threads", "5",
+        "--num-server-threads", "1",
+        "--num-transfer-accounts", "2",
+        "--local", "false",
+        "--primary-gas-owner-id", "0x7d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b58e",
+        "--genesis-blob-path", "/opt/sui/config/genesis.blob",
+        "--keystore-path", "/opt/sui/config/",
+        "bench",
+        "--target-qps", "10",
+        "--in-flight-ratio", "30",
+        "--shared-counter", "1",
+        "--transfer-object", "1",
+        "--delegation", "0",
+        "--batch-payment", "1",
+        "--batch-payment-size", "100",
+        "--adversarial", "0",
+        "--client-metric-host", "0.0.0.0",
+        "--num-workers", "2",
+      ]
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "1g"
+  # fullnode1:
+  #   image: mysten/sui-node:mainnet-v1.19.1
+  #   ...
+  # fullnode2:
+  #   image: mysten/sui-node:mainnet-v1.19.1
+networks:
+  sui-network:
+    driver: bridge
