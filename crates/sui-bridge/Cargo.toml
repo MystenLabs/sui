@@ -47,6 +47,7 @@ shared-crypto.workspace = true
 backoff = { version = "0.4.0", features = [
   "futures",
 ] }
+sui-json-rpc-api.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }
