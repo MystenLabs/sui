@@ -701,11 +701,11 @@ impl<'a> ModuleLoader<'a> {
     // Remove the entry at the top of the stack, verification was good,
     // remove from `visiting` and add to `verified_modules`
     fn pop(&mut self) {
-        self.stack.pop().map(|entry| {
+        if let Some(entry) = self.stack.pop() {
             let module_id = entry.module.module.self_id();
             self.visiting.remove(&module_id);
             self.verified_modules.insert(module_id, entry.module.module.clone());
-        });
+        }
     }
 }
 
