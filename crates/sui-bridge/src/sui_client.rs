@@ -4,10 +4,6 @@
 // TODO remove when integrated
 #![allow(unused)]
 
-use std::str::from_utf8;
-use std::str::FromStr;
-use std::time::Duration;
-
 use anyhow::anyhow;
 use async_trait::async_trait;
 use axum::response::sse::Event;
@@ -16,6 +12,10 @@ use fastcrypto::traits::KeyPair;
 use fastcrypto::traits::ToFromBytes;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
+use std::str::from_utf8;
+use std::str::FromStr;
+use std::time::Duration;
+use sui_json_rpc_api::BridgeReadApiClient;
 use sui_json_rpc_types::{EventFilter, Page, SuiData, SuiEvent};
 use sui_json_rpc_types::{
     EventPage, SuiObjectDataOptions, SuiTransactionBlockResponse,
@@ -23,6 +23,7 @@ use sui_json_rpc_types::{
 };
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SequenceNumber;
 use sui_types::bridge::BridgeInnerDynamicField;
 use sui_types::bridge::BridgeRecordDyanmicField;
 use sui_types::bridge::MoveTypeBridgeCommittee;
@@ -36,8 +37,11 @@ use sui_types::error::UserInputError;
 use sui_types::event;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{Object, Owner};
+use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
 use sui_types::TypeTag;
+use sui_types::BRIDGE_PACKAGE_ID;
+use sui_types::SUI_BRIDGE_OBJECT_ID;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
@@ -112,6 +116,13 @@ where
         Ok(())
     }
 
+    pub async fn get_mutable_bridge_object_arg(&self) -> BridgeResult<ObjectArg> {
+        self.inner
+            .get_mutable_bridge_object_arg()
+            .await
+            .map_err(|e| BridgeError::Generic(format!("Can't get mutable bridge object arg: {e}")))
+    }
+
     /// Query emitted Events that are defined in the given Move Module.
     pub async fn query_events_by_module(
         &self,
@@ -147,7 +158,7 @@ where
         let event = events
             .get(event_idx as usize)
             .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
-        if event.type_.address.as_ref() != get_bridge_package_id().as_ref() {
+        if event.type_.address.as_ref() != BRIDGE_PACKAGE_ID.as_ref() {
             return Err(BridgeError::BridgeEventInUnrecognizedSuiPackage);
         }
         let bridge_event = SuiBridgeEvent::try_from_sui_event(event)?
@@ -245,6 +256,8 @@ pub trait SuiClientInner: Send + Sync {
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, Self::Error>;
 
+    async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, Self::Error>;
+
     async fn get_bridge_committee(&self) -> Result<MoveTypeBridgeCommittee, Self::Error>;
 
     async fn execute_transaction_block_with_effects(
@@ -294,6 +307,18 @@ impl SuiClientInner for SuiSdkClient {
             .await
     }
 
+    async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, Self::Error> {
+        let initial_shared_version = self
+            .http()
+            .get_bridge_object_initial_shared_version()
+            .await?;
+        Ok(ObjectArg::SharedObject {
+            id: SUI_BRIDGE_OBJECT_ID,
+            initial_shared_version: SequenceNumber::from_u64(initial_shared_version),
+            mutable: true,
+        })
+    }
+
     // TODO: Add a test for this
     async fn get_bridge_committee(&self) -> Result<MoveTypeBridgeCommittee, Self::Error> {
         let object_id = *get_bridge_object_id();
@@ -310,7 +335,7 @@ impl SuiClientInner for SuiSdkClient {
             BridgeAction::SuiToEthBridgeAction(_) | BridgeAction::EthToSuiBridgeAction(_) => (),
             _ => return Err(BridgeError::ActionIsNotTokenTransferAction),
         };
-        let package_id = *get_bridge_package_id();
+        let package_id = BRIDGE_PACKAGE_ID;
         let key = serde_json::json!(
             {
                 // u64 is represented as string
@@ -415,7 +440,6 @@ mod tests {
         sui_mock_client::SuiMockClient,
         test_utils::{
             bridge_token, get_test_sui_to_eth_bridge_action, mint_tokens, publish_bridge_package,
-            transfer_treasury_cap,
         },
         types::{BridgeActionType, BridgeChainId, SuiToEthBridgeAction, TokenId},
     };
@@ -466,9 +490,6 @@ mod tests {
             token_type: sanitized_event_1.token_id as u8,
             amount: sanitized_event_1.amount,
         };
-
-        // TODO: remove once we don't rely on env var to get package id
-        std::env::set_var("BRIDGE_PACKAGE_ID", "0x0b");
 
         let mut sui_event_1 = SuiEvent::random_for_testing();
         sui_event_1.type_ = SuiToEthTokenBridgeV1.get().unwrap().clone();
@@ -552,7 +573,6 @@ mod tests {
             .unwrap_err();
     }
 
-    // TODO: resume this test once we fully migrate move code to sui-framework
     #[ignore]
     #[tokio::test]
     async fn test_get_action_onchain_status_for_sui_to_eth_transfer() {
@@ -564,6 +584,7 @@ mod tests {
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await
             .unwrap();
+        let arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
 
         let action = get_test_sui_to_eth_bridge_action(None, None, None, None);
 
@@ -584,11 +605,9 @@ mod tests {
         )
         .await;
 
-        transfer_treasury_cap(context, treasury_cap_obj_ref, TokenId::USDC).await;
-
         let recv_address = EthAddress::random();
         let bridge_event =
-            bridge_token(context, recv_address, usdc_coin_obj_ref, TokenId::USDC).await;
+            bridge_token(context, recv_address, usdc_coin_obj_ref, TokenId::USDC, arg).await;
         assert_eq!(bridge_event.nonce, 0);
         assert_eq!(bridge_event.sui_chain_id, BridgeChainId::SuiLocalTest);
         assert_eq!(bridge_event.eth_chain_id, BridgeChainId::EthLocalTest);

@@ -10,7 +10,6 @@ use std::str::FromStr;
 
 use crate::error::BridgeError;
 use crate::error::BridgeResult;
-use crate::sui_transaction_builder::get_bridge_package_id;
 use crate::types::BridgeAction;
 use crate::types::BridgeActionType;
 use crate::types::BridgeChainId;
@@ -25,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
+use sui_types::BRIDGE_PACKAGE_ID;
 
 // This is the event structure defined and emitted in Move
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -125,7 +125,7 @@ impl TryFrom<MoveTokenBridgeEvent> for EmittedSuiToEthTokenBridgeV1 {
 pub fn get_bridge_event_struct_tag() -> &'static str {
     static BRIDGE_EVENT_STRUCT_TAG: OnceCell<String> = OnceCell::new();
     BRIDGE_EVENT_STRUCT_TAG.get_or_init(|| {
-        let bridge_package_id = *get_bridge_package_id();
+        let bridge_package_id = BRIDGE_PACKAGE_ID;
         format!("0x{}::bridge::TokenBridgeEvent", bridge_package_id.to_hex())
     })
 }

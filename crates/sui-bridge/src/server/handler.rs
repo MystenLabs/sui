@@ -418,8 +418,6 @@ mod tests {
             amount: 12345,
         };
 
-        // TODO: remove once we don't rely on env var to get package id
-        std::env::set_var("BRIDGE_PACKAGE_ID", "0x0b");
         init_all_struct_tags();
 
         let mut sui_event_1 = SuiEvent::random_for_testing();

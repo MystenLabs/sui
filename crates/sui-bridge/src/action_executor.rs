@@ -9,6 +9,7 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
+use sui_types::transaction::ObjectArg;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     committee::VALIDITY_THRESHOLD,
@@ -19,6 +20,7 @@ use sui_types::{
     transaction::Transaction,
 };
 
+use crate::error::BridgeResult;
 use crate::{
     client::bridge_authority_aggregator::BridgeAuthorityAggregator,
     error::BridgeError,
@@ -64,6 +66,7 @@ pub struct BridgeActionExecutor<C> {
     sui_address: SuiAddress,
     gas_object_id: ObjectID,
     store: Arc<BridgeOrchestratorTables>,
+    bridge_object_arg: ObjectArg,
 }
 
 impl<C> BridgeActionExecutorTrait for BridgeActionExecutor<C>
@@ -85,22 +88,24 @@ impl<C> BridgeActionExecutor<C>
 where
     C: SuiClientInner + 'static,
 {
-    pub fn new(
+    pub async fn new(
         sui_client: Arc<SuiClient<C>>,
         bridge_auth_agg: Arc<BridgeAuthorityAggregator>,
         store: Arc<BridgeOrchestratorTables>,
         key: SuiKeyPair,
         sui_address: SuiAddress,
         gas_object_id: ObjectID,
-    ) -> Self {
-        Self {
+    ) -> BridgeResult<Self> {
+        let bridge_object_arg = sui_client.get_mutable_bridge_object_arg().await?;
+        Ok(Self {
             sui_client,
             bridge_auth_agg,
             store,
             key,
             gas_object_id,
             sui_address,
-        }
+            bridge_object_arg,
+        })
     }
 
     fn run_inner(
@@ -153,6 +158,7 @@ where
                 self.store.clone(),
                 execution_tx_clone,
                 execution_rx,
+                self.bridge_object_arg,
             )
         ));
         (tasks, sender, execution_tx)
@@ -285,6 +291,7 @@ where
         mut execution_queue_receiver: mysten_metrics::metered_channel::Receiver<
             CertifiedBridgeActionExecutionWrapper,
         >,
+        bridge_object_arg: ObjectArg,
     ) {
         info!("Starting run_onchain_execution_loop");
         while let Some(certificate_wrapper) = execution_queue_receiver.recv().await {
@@ -311,7 +318,12 @@ where
             let (_gas_coin, gas_object_ref) =
                 Self::get_gas_data_assert_ownership(sui_address, gas_object_id, &sui_client).await;
             let ceriticate_clone = certificate.clone();
-            let tx_data = match build_transaction(sui_address, &gas_object_ref, ceriticate_clone) {
+            let tx_data = match build_transaction(
+                sui_address,
+                &gas_object_ref,
+                ceriticate_clone,
+                bridge_object_arg,
+            ) {
                 Ok(tx_data) => tx_data,
                 Err(err) => {
                     // TODO: add mertrics
@@ -434,10 +446,10 @@ pub async fn submit_to_executor(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
+    use crate::test_utils::DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
+    use std::collections::BTreeMap;
     use sui_json_rpc_types::SuiTransactionBlockResponse;
     use sui_types::crypto::get_key_pair;
     use sui_types::gas_coin::GasCoin;
@@ -476,11 +488,7 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
-        ) = setup();
-
-        // TODO: remove once we don't rely on env var to get object id
-        std::env::set_var("ROOT_BRIDGE_OBJECT_ID", "0x09");
-        std::env::set_var("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION", "1");
+        ) = setup().await;
 
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
@@ -488,7 +496,13 @@ mod tests {
         );
         let action = action_certificate.data().clone();
 
-        let tx_data = build_transaction(sui_address, &gas_object_ref, action_certificate).unwrap();
+        let tx_data = build_transaction(
+            sui_address,
+            &gas_object_ref,
+            action_certificate,
+            DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
+        )
+        .unwrap();
 
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
@@ -533,7 +547,13 @@ mod tests {
 
         let action = action_certificate.data().clone();
 
-        let tx_data = build_transaction(sui_address, &gas_object_ref, action_certificate).unwrap();
+        let tx_data = build_transaction(
+            sui_address,
+            &gas_object_ref,
+            action_certificate,
+            DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
+        )
+        .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
         // Mock the transaction to fail
@@ -576,7 +596,13 @@ mod tests {
 
         let action = action_certificate.data().clone();
 
-        let tx_data = build_transaction(sui_address, &gas_object_ref, action_certificate).unwrap();
+        let tx_data = build_transaction(
+            sui_address,
+            &gas_object_ref,
+            action_certificate,
+            DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
+        )
+        .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
         mock_transaction_error(
             &sui_client_mock,
@@ -640,11 +666,7 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
-        ) = setup();
-
-        // TODO: remove once we don't rely on env var to get object id
-        std::env::set_var("ROOT_BRIDGE_OBJECT_ID", "0x09");
-        std::env::set_var("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION", "1");
+        ) = setup().await;
 
         let (action_certificate, sui_tx_digest, sui_tx_event_index) =
             get_bridge_authority_approved_action(
@@ -717,8 +739,13 @@ mod tests {
             BridgeCommitteeValiditySignInfo { signatures: sigs },
         );
         let action_certificate = VerifiedCertifiedBridgeAction::new_from_verified(certified_action);
-
-        let tx_data = build_transaction(sui_address, &gas_object_ref, action_certificate).unwrap();
+        let tx_data = build_transaction(
+            sui_address,
+            &gas_object_ref,
+            action_certificate,
+            DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
+        )
+        .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
         mock_transaction_response(
@@ -754,11 +781,7 @@ mod tests {
             _handles,
             _gas_object_ref,
             _sui_address,
-        ) = setup();
-
-        // TODO: remove once we don't rely on env var to get object id
-        std::env::set_var("ROOT_BRIDGE_OBJECT_ID", "0x09");
-        std::env::set_var("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION", "1");
+        ) = setup().await;
 
         let sui_tx_digest = TransactionDigest::random();
         let sui_tx_event_index = 0;
@@ -828,11 +851,7 @@ mod tests {
             _handles,
             gas_object_ref,
             sui_address,
-        ) = setup();
-
-        // TODO: remove once we don't rely on env var to get object id
-        std::env::set_var("ROOT_BRIDGE_OBJECT_ID", "0x09");
-        std::env::set_var("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION", "1");
+        ) = setup().await;
 
         let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
@@ -840,9 +859,14 @@ mod tests {
         );
 
         let action = action_certificate.data().clone();
-
-        let tx_data =
-            build_transaction(sui_address, &gas_object_ref, action_certificate.clone()).unwrap();
+        let arg = DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
+        let tx_data = build_transaction(
+            sui_address,
+            &gas_object_ref,
+            action_certificate.clone(),
+            arg,
+        )
+        .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
         mock_transaction_error(
             &sui_client_mock,
@@ -997,7 +1021,7 @@ mod tests {
     }
 
     #[allow(clippy::type_complexity)]
-    fn setup() -> (
+    async fn setup() -> (
         mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
         mysten_metrics::metered_channel::Sender<CertifiedBridgeActionExecutionWrapper>,
         SuiMockClient,
@@ -1052,7 +1076,9 @@ mod tests {
             sui_key,
             sui_address,
             gas_object_ref.0,
-        );
+        )
+        .await
+        .unwrap();
 
         let (executor_handle, signing_tx, execution_tx) = executor.run_inner();
         handles.extend(executor_handle);

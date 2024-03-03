@@ -329,9 +329,6 @@ mod tests {
         let registry = Registry::new();
         mysten_metrics::init_metrics(&registry);
 
-        // TODO: remove once we don't rely on env var to get package id
-        std::env::set_var("BRIDGE_PACKAGE_ID", "0x0b");
-
         let temp_dir = tempfile::tempdir().unwrap();
         let store = BridgeOrchestratorTables::new(temp_dir.path());
 
