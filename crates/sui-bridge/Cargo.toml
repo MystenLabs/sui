@@ -47,6 +47,7 @@ rand.workspace = true
 workspace-hack.workspace = true
 lru.workspace = true
 shared-crypto.workspace = true
+sui-json-rpc-api.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }
