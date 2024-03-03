@@ -151,7 +151,6 @@ where
                 continue;
             }
 
-            // TODO: skip events that are not already processed (in DB and on chain)
             let bridge_events = logs
                 .iter()
                 .map(EthBridgeEvent::try_from_eth_log)
@@ -166,6 +165,7 @@ where
                 }
                 // Unwrap safe: checked above
                 let bridge_event = opt_bridge_event.unwrap();
+                info!("Observed Eth bridge event: {:?}", bridge_event);
 
                 if let Some(action) =
                     bridge_event.try_into_bridge_action(log.tx_hash, log.log_index_in_tx)
