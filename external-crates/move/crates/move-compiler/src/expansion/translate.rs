@@ -1716,12 +1716,19 @@ impl PathExpander for Move2024PathExpander {
                         self.resolve_name_access_chain(context, Access::Module, access_chain);
                     let result = match (term_result, module_result) {
                         (t_res, m_res) if t_res == m_res => t_res,
-                        (AccessChainResult::ResolutionFailure(_, _), other)
-                        | (other, AccessChainResult::ResolutionFailure(_, _)) => other,
+                        (
+                            AccessChainResult::ResolutionFailure(_, _)
+                            | AccessChainResult::UnresolvedName(_, _),
+                            other,
+                        )
+                        | (
+                            other,
+                            AccessChainResult::ResolutionFailure(_, _)
+                            | AccessChainResult::UnresolvedName(_, _),
+                        ) => other,
                         (t_res, m_res) => {
                             let msg = format!(
-                                "Ambiguous attribute value, this name could resolve \
-                                to both {} and {}",
+                                "Ambiguous attribute value. It can resolve to both {} and {}",
                                 t_res.err_name(),
                                 m_res.err_name()
                             );
@@ -1748,18 +1755,7 @@ impl PathExpander for Move2024PathExpander {
                         AccessChainResult::UnresolvedName(loc, name) => {
                             EV::ModuleAccess(sp(loc, E::ModuleAccess_::Name(name)))
                         }
-                        AccessChainResult::Address(loc, _) => {
-                            let diag = diag!(
-                                NameResolution::NamePositionMismatch,
-                                (
-                                    loc,
-                                    "Found an address, but expected a module or module member"
-                                        .to_string(),
-                                )
-                            );
-                            context.env.add_diag(diag);
-                            return None;
-                        }
+                        AccessChainResult::Address(_, a) => EV::Address(a),
                         result @ AccessChainResult::ResolutionFailure(_, _) => {
                             context.env.add_diag(access_chain_resolution_error(result));
                             return None;
