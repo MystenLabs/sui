@@ -62,7 +62,7 @@ Response: {
                 },
                 {
                   "coinType": {
-                    "repr": "0x4b27bd46287a77621aab8a771d4937f8b58e2f8356a8273c1e6b7089e71ba198::fake::FAKE"
+                    "repr": "0x97c6b422cbbc43a9e64678d756096e6ea852faf60b80e568da149fbef9c42f1d::fake::FAKE"
                   },
                   "coinObjectCount": 3,
                   "totalBalance": "700"
@@ -97,7 +97,7 @@ Response: {
                 },
                 {
                   "coinType": {
-                    "repr": "0x4b27bd46287a77621aab8a771d4937f8b58e2f8356a8273c1e6b7089e71ba198::fake::FAKE"
+                    "repr": "0x97c6b422cbbc43a9e64678d756096e6ea852faf60b80e568da149fbef9c42f1d::fake::FAKE"
                   },
                   "coinObjectCount": 2,
                   "totalBalance": "500"
@@ -119,7 +119,7 @@ Response: {
         {
           "sender": {
             "fakeCoinBalance": {
-              "totalBalance": "400"
+              "totalBalance": "200"
             },
             "allBalances": {
               "nodes": [
@@ -132,10 +132,10 @@ Response: {
                 },
                 {
                   "coinType": {
-                    "repr": "0x4b27bd46287a77621aab8a771d4937f8b58e2f8356a8273c1e6b7089e71ba198::fake::FAKE"
+                    "repr": "0x97c6b422cbbc43a9e64678d756096e6ea852faf60b80e568da149fbef9c42f1d::fake::FAKE"
                   },
                   "coinObjectCount": 1,
-                  "totalBalance": "400"
+                  "totalBalance": "200"
                 }
               ]
             }
@@ -173,7 +173,7 @@ Response: {
                 },
                 {
                   "coinType": {
-                    "repr": "0x4b27bd46287a77621aab8a771d4937f8b58e2f8356a8273c1e6b7089e71ba198::fake::FAKE"
+                    "repr": "0x97c6b422cbbc43a9e64678d756096e6ea852faf60b80e568da149fbef9c42f1d::fake::FAKE"
                   },
                   "coinObjectCount": 3,
                   "totalBalance": "700"
@@ -208,7 +208,7 @@ Response: {
                 },
                 {
                   "coinType": {
-                    "repr": "0x4b27bd46287a77621aab8a771d4937f8b58e2f8356a8273c1e6b7089e71ba198::fake::FAKE"
+                    "repr": "0x97c6b422cbbc43a9e64678d756096e6ea852faf60b80e568da149fbef9c42f1d::fake::FAKE"
                   },
                   "coinObjectCount": 2,
                   "totalBalance": "500"
@@ -230,7 +230,7 @@ Response: {
         {
           "sender": {
             "fakeCoinBalance": {
-              "totalBalance": "400"
+              "totalBalance": "200"
             },
             "allBalances": {
               "nodes": [
@@ -243,10 +243,10 @@ Response: {
                 },
                 {
                   "coinType": {
-                    "repr": "0x4b27bd46287a77621aab8a771d4937f8b58e2f8356a8273c1e6b7089e71ba198::fake::FAKE"
+                    "repr": "0x97c6b422cbbc43a9e64678d756096e6ea852faf60b80e568da149fbef9c42f1d::fake::FAKE"
                   },
                   "coinObjectCount": 1,
-                  "totalBalance": "400"
+                  "totalBalance": "200"
                 }
               ]
             }
@@ -318,7 +318,7 @@ Response: {
                 },
                 {
                   "coinType": {
-                    "repr": "0x4b27bd46287a77621aab8a771d4937f8b58e2f8356a8273c1e6b7089e71ba198::fake::FAKE"
+                    "repr": "0x97c6b422cbbc43a9e64678d756096e6ea852faf60b80e568da149fbef9c42f1d::fake::FAKE"
                   },
                   "coinObjectCount": 2,
                   "totalBalance": "500"
@@ -340,7 +340,7 @@ Response: {
         {
           "sender": {
             "fakeCoinBalance": {
-              "totalBalance": "400"
+              "totalBalance": "200"
             },
             "allBalances": {
               "nodes": [
@@ -353,10 +353,10 @@ Response: {
                 },
                 {
                   "coinType": {
-                    "repr": "0x4b27bd46287a77621aab8a771d4937f8b58e2f8356a8273c1e6b7089e71ba198::fake::FAKE"
+                    "repr": "0x97c6b422cbbc43a9e64678d756096e6ea852faf60b80e568da149fbef9c42f1d::fake::FAKE"
                   },
                   "coinObjectCount": 1,
-                  "totalBalance": "400"
+                  "totalBalance": "200"
                 }
               ]
             }

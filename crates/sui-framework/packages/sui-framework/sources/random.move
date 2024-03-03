@@ -107,11 +107,9 @@ module sui::random {
             // First update should be for round zero.
             assert!(new_round == 0, EInvalidRandomnessUpdate);
         } else {
-            // Subsequent updates should either increase epoch or increment randomness_round.
-            // Note that epoch may increase by more than 1 if an epoch is completed without
-            // randomness ever being generated in that epoch.
+            // Subsequent updates should increment either epoch or randomness_round.
             assert!(
-                (epoch > inner.epoch && new_round == 0) ||
+                (epoch == inner.epoch + 1 && new_round == 0) ||
                     (new_round == inner.randomness_round + 1),
                 EInvalidRandomnessUpdate
             );

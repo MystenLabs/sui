@@ -277,11 +277,9 @@
         // First <b>update</b> should be for round zero.
         <b>assert</b>!(new_round == 0, <a href="../../dependencies/sui-framework/random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>);
     } <b>else</b> {
-        // Subsequent updates should either increase epoch or increment randomness_round.
-        // Note that epoch may increase by more than 1 <b>if</b> an epoch is completed without
-        // randomness ever being generated in that epoch.
+        // Subsequent updates should increment either epoch or randomness_round.
         <b>assert</b>!(
-            (epoch &gt; inner.epoch && new_round == 0) ||
+            (epoch == inner.epoch + 1 && new_round == 0) ||
                 (new_round == inner.randomness_round + 1),
             <a href="../../dependencies/sui-framework/random.md#0x2_random_EInvalidRandomnessUpdate">EInvalidRandomnessUpdate</a>
         );
