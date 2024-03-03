@@ -126,6 +126,10 @@ impl DefLoc {
     pub fn fhash(&self) -> FileHash {
         self.fhash
     }
+
+    pub fn start(&self) -> Position {
+        self.start
+    }
 }
 
 /// Location of a use's identifier
@@ -373,6 +377,10 @@ impl ModuleDefs {
 
     pub fn structs(&self) -> &BTreeMap<Symbol, StructDef> {
         &self.structs
+    }
+
+    pub fn fhash(&self) -> FileHash {
+        self.fhash
     }
 }
 

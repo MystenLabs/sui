@@ -160,15 +160,16 @@ fn context_specific(
     use_fpath: &Path,
     buffer: &str,
     position: &Position,
-) -> Vec<CompletionItem> {
+) -> (Vec<CompletionItem>, bool) {
+    let mut only_custom_items = false;
     let mut completions = vec![];
     // If the cursor is at the start of a new line, it cannot be preceded by a trigger character.
     if position.character == 0 {
-        return completions;
+        return (completions, only_custom_items);
     }
     let line = match buffer.lines().nth(position.line as usize) {
         Some(line) => line,
-        None => return completions, // Our buffer does not contain the line, and so must be out of date.
+        None => return (completions, only_custom_items), // Our buffer does not contain the line, and so must be out of date.
     };
 
     // find white-space separated strings on the line containing auto-completion request
@@ -180,7 +181,7 @@ fn context_specific(
     let mut cur_str = "".to_string();
     while cur_col < position.character {
         let Some(c) = chars.next() else {
-            return completions;
+            return (completions, only_custom_items);
         };
         if c == ' ' || c == '\t' {
             if !cur_str.is_empty() {
@@ -204,22 +205,38 @@ fn context_specific(
     }
 
     if strings.is_empty() {
-        return completions;
+        return (completions, only_custom_items);
     }
 
     // at this point only try to auto-complete init function declararation - get the last string
     // and see if it represents the beginning of init function declaration
+    const INIT_FN_NAME: &str = "init";
     let (n, use_col) = strings.last().unwrap();
     for u in symbols.line_uses(use_fpath, position.line) {
         if *use_col >= u.col_start() && *use_col <= u.col_end() {
-            let Some(def_info) = symbols.def_info(&u.def_loc()) else {
+            let def_loc = u.def_loc();
+            let Some(use_file_mod_definiion) = symbols.file_mods().get(use_fpath) else {
+                break;
+            };
+            let Some(use_file_mod_def) = use_file_mod_definiion.first() else {
+                break;
+            };
+            if use_file_mod_def.fhash() == def_loc.fhash()
+                && position.line == def_loc.start().line
+                && u.col_start() == def_loc.start().character
+            {
+                // it's the define - no point in trying to suggest a name if one is about to
+                // create a fresh identifier
+                only_custom_items = true;
+            }
+            let Some(def_info) = symbols.def_info(&def_loc) else {
                 break;
             };
             let DefInfo::Function(mod_ident, v, _, _, _, _, _) = def_info else {
                 // not a function
                 break;
             };
-            if !"init".starts_with(n) {
+            if !INIT_FN_NAME.starts_with(n) {
                 // starting to type "init"
                 break;
             }
@@ -229,23 +246,29 @@ fn context_specific(
             }
 
             // get module info containing the init function
-            let Some(mdef) = symbols.mod_defs(&u.def_loc().fhash(), *mod_ident) else {
+            let Some(def_mdef) = symbols.mod_defs(&u.def_loc().fhash(), *mod_ident) else {
                 break;
             };
+
+            if def_mdef.functions().contains_key(&(INIT_FN_NAME.into())) {
+                // already has init function
+                break;
+            }
+
             // TODO: remove sui::tx_context once auto-imports are enabled
             let sui_ctx_arg = "ctx: &mut sui::tx_context::TxContext";
 
             // decide on the list of parameters depending on whether a module containing
             // the init function has a struct thats an one-time-witness candidate struct
             let otw_candidate = Symbol::from(mod_ident.module.value().to_uppercase());
-            let init_snippet = if mdef.structs().contains_key(&otw_candidate) {
-                format!("init(${{1:witness}}: {otw_candidate}, {sui_ctx_arg}) {{\n\t${{2:}}\n}}\n")
+            let init_snippet = if def_mdef.structs().contains_key(&otw_candidate) {
+                format!("{INIT_FN_NAME}(${{1:witness}}: {otw_candidate}, {sui_ctx_arg}) {{\n\t${{2:}}\n}}\n")
             } else {
-                format!("init({sui_ctx_arg}) {{\n\t${{1:}}\n}}\n")
+                format!("{INIT_FN_NAME}({sui_ctx_arg}) {{\n\t${{1:}}\n}}\n")
             };
 
             let init_completion = CompletionItem {
-                label: "init".to_string(),
+                label: INIT_FN_NAME.to_string(),
                 kind: Some(CompletionItemKind::Snippet),
                 documentation: Some(Documentation::String(
                     "Snippet for module initializer".to_string(),
@@ -258,7 +281,7 @@ fn context_specific(
             break;
         }
     }
-    completions
+    (completions, only_custom_items)
 }
 
 /// Sends the given connection a response to a completion request.
@@ -328,6 +351,7 @@ pub fn on_completion_request(context: &Context, request: &Request, ide_files_roo
             }
         }
         if !buffer.is_empty() {
+            let mut only_custom_items = false;
             let cursor =
                 get_cursor_token(buffer.as_str(), &parameters.text_document_position.position);
             match cursor {
@@ -342,20 +366,26 @@ pub fn on_completion_request(context: &Context, request: &Request, ide_files_roo
                     // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
                     // offer them context-specific autocompletion items as well as
                     // Move's keywords, operators, and builtins.
-                    items.extend_from_slice(&context_specific(
+                    let (custom_items, custom) = context_specific(
                         &symbols,
                         path,
                         buffer.as_str(),
                         &parameters.text_document_position.position,
-                    ));
-                    // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
-                    // offer them Move's keywords, operators, and builtins as completion items.
-                    items.extend_from_slice(&keywords());
-                    items.extend_from_slice(&builtins());
+                    );
+                    only_custom_items = custom;
+                    items.extend_from_slice(&custom_items);
+                    if !only_custom_items {
+                        // If the user's cursor is positioned anywhere other than following a `.`, `:`, or `::`,
+                        // offer them Move's keywords, operators, and builtins as completion items.
+                        items.extend_from_slice(&keywords());
+                        items.extend_from_slice(&builtins());
+                    }
                 }
             }
-            let identifiers = identifiers(buffer.as_str(), &symbols, path);
-            items.extend_from_slice(&identifiers);
+            if !only_custom_items {
+                let identifiers = identifiers(buffer.as_str(), &symbols, path);
+                items.extend_from_slice(&identifiers);
+            }
         } else {
             // no file content
             items.extend_from_slice(&keywords());
