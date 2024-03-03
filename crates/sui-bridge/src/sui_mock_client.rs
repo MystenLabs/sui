@@ -4,6 +4,7 @@
 //! A mock implementation of Sui JSON-RPC client.
 
 use crate::error::{BridgeError, BridgeResult};
+use crate::test_utils::DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
 use async_trait::async_trait;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -16,6 +17,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
+use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
 use sui_types::Identifier;
 
@@ -179,6 +181,10 @@ impl SuiClientInner for SuiMockClient {
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, Self::Error> {
         Ok(self.latest_checkpoint_sequence_number)
+    }
+
+    async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, Self::Error> {
+        Ok(DUMMY_MUTALBE_BRIDGE_OBJECT_ARG)
     }
 
     async fn get_bridge_committee(&self) -> Result<MoveTypeBridgeCommittee, Self::Error> {
