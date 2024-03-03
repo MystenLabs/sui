@@ -165,7 +165,7 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         signatures[1] = getSignature(messageHash, committeeMemberPkB);
         signatures[2] = getSignature(messageHash, committeeMemberPkC);
         signatures[3] = getSignature(messageHash, committeeMemberPkD);
-        vm.expectRevert(bytes("BridgeCommittee: message does not match type"));
+        vm.expectRevert(bytes("MessageVerifier: message does not match type"));
         committee.updateBlocklistWithSignatures(signatures, messageWrongMessageType);
     }
 
@@ -314,7 +314,7 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         _stake[2] = 2500;
         _stake[3] = 2500;
         committee = new BridgeCommittee();
-        committee.initialize(_committee, _stake, 1);
+        committee.initialize(address(config), _committee, _stake);
 
         bytes memory payload =
             hex"010268b43fd906c0b8f024a18c56e06744f7c6157c65acaef39832cb995c4e049437a3e2ec6a7bad1ab5";

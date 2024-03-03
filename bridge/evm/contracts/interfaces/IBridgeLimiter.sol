@@ -7,16 +7,21 @@ interface IBridgeLimiter {
     /// @notice Updates the bridge transfers for a specific token ID and amount. Only the contract
     /// owner can call this function (intended to be the SuiBridge contract).
     /// @dev The amount must be greater than 0 and must not exceed the rolling window limit.
+    /// @param chainID The ID of the chain to record the transfer for.
     /// @param tokenID The ID of the token.
     /// @param amount The amount of tokens to be transferred.
-    function recordBridgeTransfers(uint8 tokenID, uint256 amount) external;
+    function recordBridgeTransfers(uint8 chainID, uint8 tokenID, uint256 amount) external;
 
     /// @notice Returns whether the total amount, including the given token amount, will exceed the totalLimit.
     /// @dev The function will calculate the given token amount in USD.
+    /// @param chainID The ID of the chain to check limit for.
     /// @param tokenID The ID of the token.
     /// @param amount The amount of the token.
     /// @return boolean indicating whether the total amount will exceed the limit.
-    function willAmountExceedLimit(uint8 tokenID, uint256 amount) external view returns (bool);
+    function willAmountExceedLimit(uint8 chainID, uint8 tokenID, uint256 amount)
+        external
+        view
+        returns (bool);
 
     /// @dev Emitted when the hourly transfer amount is updated.
     /// @param hourUpdated The hour that was updated.
