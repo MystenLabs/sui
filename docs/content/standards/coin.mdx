@@ -82,6 +82,8 @@ The `coin` module provides the logic for creating and destroying coins on the Su
 
 Use the `coin::mint` function to create new tokens. The signature for the function is:
 
+{@inject: examples/move/bridge/sources/bridge.move}
+
 ```move
 public fun mint<T>(
   cap: &mut coin::TreasuryCap<T>, 

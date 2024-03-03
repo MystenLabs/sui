@@ -6,6 +6,7 @@ const darkCodeTheme = require("prism-react-renderer/themes/nightOwl");
 const math = require("remark-math");
 const katex = require("rehype-katex");
 require("dotenv").config();
+const path = require("path");
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -39,13 +40,15 @@ const config = {
   },
   plugins: [
     // ....
-    //"./src/plugins/inject-code",
+    [path.resolve(__dirname, "src/plugins/inject-code"), {}],
     [
       "@graphql-markdown/docusaurus",
       {
-        schema:
+        schema: path.resolve(
+          __dirname,
           "../../crates/sui-graphql-rpc/schema/current_progress_schema.graphql",
-        rootPath: "../content", // docs will be generated under rootPath/baseURL
+        ),
+        rootPath: path.resolve(__dirname, "../content"), // docs will be generated under rootPath/baseURL
         baseURL: "references/sui-api/sui-graphql/reference",
         loaders: {
           GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
@@ -55,7 +58,7 @@ const config = {
     [
       "docusaurus-plugin-includes",
       {
-        postBuildDeletedFolders: ["../snippets"],
+        postBuildDeletedFolders: [path.resolve(__dirname, "../snippets")],
       },
     ],
     async function myPlugin(context, options) {
@@ -76,9 +79,9 @@ const config = {
       /** @type {import('@docusaurus/preset-classic').Options} */
       ({
         docs: {
-          path: "../content",
+          path: path.resolve(__dirname, "../content"),
           routeBasePath: "/",
-          sidebarPath: require.resolve("./sidebars.js"),
+          sidebarPath: require.resolve(path.resolve(__dirname, "sidebars.js")),
           // the double docs below is a fix for having the path set to ../content
           editUrl: "https://github.com/MystenLabs/sui/tree/main/docs/docs",
           /*disableVersioning: true,
@@ -102,8 +105,8 @@ const config = {
         },
         theme: {
           customCss: [
-            require.resolve("./src/css/fonts.css"),
-            require.resolve("./src/css/custom.css"),
+            require.resolve(path.resolve(__dirname, "src/css/fonts.css")),
+            require.resolve(path.resolve(__dirname, "src/css/custom.css")),
           ],
         },
         googleTagManager: {
