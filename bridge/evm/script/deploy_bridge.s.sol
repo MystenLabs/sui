@@ -49,7 +49,7 @@ contract DeployBridge is Script {
             supportedChainIDs[i] = uint8(config.supportedChainIDs[i]);
         }
 
-        // deploy bridge tokens
+        // deploy bridge config
 
         BridgeConfig bridgeConfig =
             new BridgeConfig(uint8(config.sourceChainId), config.supportedTokens, supportedChainIDs);
