@@ -50,7 +50,7 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
         }
         for (uint8 i; i < chainIDs.length; i++) {
             require(
-                committee.common().isChainSupported(chainIDs[i]),
+                committee.config().isChainSupported(chainIDs[i]),
                 "BridgeLimiter: Chain not supported"
             );
             chainLimits[chainIDs[i]] = _totalLimits[i];
@@ -114,6 +114,17 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
     /// @return current hour timestamp.
     function currentHour() public view returns (uint32) {
         return uint32(block.timestamp / 1 hours);
+    }
+
+    /// @notice Returns the key for the chain and hour timestamp.
+    /// @param chainID The ID of the chain.
+    /// @param hourTimestamp The hour timestamp.
+    function getChainHourTimestampKey(uint8 chainID, uint32 hourTimestamp)
+        public
+        pure
+        returns (uint256)
+    {
+        return (uint256(chainID) << 32) | uint256(hourTimestamp);
     }
 
     /* ========== EXTERNAL FUNCTIONS ========== */
@@ -196,15 +207,5 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
         chainLimits[sourceChainID] = newLimit;
 
         emit LimitUpdated(sourceChainID, newLimit);
-    }
-
-    /* ========== PRIVATE FUNCTIONS ========== */
-
-    function getChainHourTimestampKey(uint8 chainID, uint32 hourTimestamp)
-        public
-        pure
-        returns (uint256)
-    {
-        return (uint256(chainID) << 32) | uint256(hourTimestamp);
     }
 }

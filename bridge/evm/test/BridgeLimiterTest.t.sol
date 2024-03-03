@@ -160,7 +160,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
     }
 
     function testMultipleChainLimits() public {
-        // deploy new common contract with 2 supported chains
+        // deploy new config contract with 2 supported chains
         address[] memory _supportedTokens = new address[](4);
         _supportedTokens[0] = wBTC;
         _supportedTokens[1] = wETH;
@@ -169,8 +169,8 @@ contract BridgeLimiterTest is BridgeBaseTest {
         uint8[] memory supportedChains = new uint8[](2);
         supportedChains[0] = 11;
         supportedChains[1] = 12;
-        common = new BridgeCommon(chainID, _supportedTokens, supportedChains);
-        // deploy new committee with new common contract
+        config = new BridgeConfig(chainID, _supportedTokens, supportedChains);
+        // deploy new committee with new config contract
         address[] memory _committee = new address[](5);
         uint16[] memory _stake = new uint16[](5);
         _committee[0] = committeeMemberA;
@@ -184,7 +184,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         _stake[3] = 2002;
         _stake[4] = 4998;
         committee = new BridgeCommittee();
-        committee.initialize(address(common), _committee, _stake);
+        committee.initialize(address(config), _committee, _stake);
         // deploy new limiter with 2 supported chains
         uint64[] memory totalLimits = new uint64[](2);
         totalLimits[0] = 10000000000;
@@ -210,7 +210,9 @@ contract BridgeLimiterTest is BridgeBaseTest {
         limiter.recordBridgeTransfers(11, tokenID, amount);
         assertTrue(limiter.willAmountExceedLimit(11, tokenID, 2000000));
         assertFalse(limiter.willAmountExceedLimit(11, tokenID, 1000000));
-
+        assertEq(limiter.calculateWindowAmount(11), 9999990000);
+        assertEq(limiter.calculateWindowAmount(12), 0);
+        uint256 chain11Amount = limiter.calculateWindowAmount(11);
         // check that transfers are recorded correctly
         amount = 1100000 * 1000000; // USDC has 6 decimals
         limiter.recordBridgeTransfers(12, tokenID, amount);
@@ -220,6 +222,8 @@ contract BridgeLimiterTest is BridgeBaseTest {
             ),
             11000000000
         );
+        assertEq(limiter.calculateWindowAmount(11), 9999990000);
+        assertEq(limiter.calculateWindowAmount(12), 11000000000);
     }
 
     // An e2e update limit regression test covering message ser/de and signature verification
