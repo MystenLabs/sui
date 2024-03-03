@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Randomness, RandomnessMessage, SendPartialSignaturesRequest};
+use super::{Randomness, RandomnessMessage, SendSignaturesRequest};
 use anemo::{Request, Response};
 use tokio::sync::mpsc;
 
@@ -11,9 +11,9 @@ pub(super) struct Server {
 
 #[anemo::async_trait]
 impl Randomness for Server {
-    async fn send_partial_signatures(
+    async fn send_signatures(
         &self,
-        request: Request<SendPartialSignaturesRequest>,
+        request: Request<SendSignaturesRequest>,
     ) -> Result<Response<()>, anemo::rpc::Status> {
         let sender = self
             .sender
@@ -22,10 +22,18 @@ impl Randomness for Server {
         let peer_id = *request
             .peer_id()
             .ok_or_else(|| anemo::rpc::Status::internal("missing peer ID"))?;
-        let SendPartialSignaturesRequest { epoch, round, sigs } = request.into_inner();
+        let SendSignaturesRequest {
+            epoch,
+            round,
+            partial_sigs,
+            sig: _,
+        } = request.into_inner();
         let _ = sender // throw away error, caller will retry
             .send(RandomnessMessage::ReceivePartialSignatures(
-                peer_id, epoch, round, sigs,
+                peer_id,
+                epoch,
+                round,
+                partial_sigs,
             ))
             .await;
         Ok(anemo::Response::new(()))

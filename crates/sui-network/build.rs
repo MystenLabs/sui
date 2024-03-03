@@ -171,9 +171,9 @@ fn build_anemo_services(out_dir: &Path) {
         .package("sui")
         .method(
             anemo_build::manual::Method::builder()
-                .name("send_partial_signatures")
-                .route_name("SendPartialSignatures")
-                .request_type("crate::randomness::SendPartialSignaturesRequest")
+                .name("send_signatures")
+                .route_name("SendSignatures")
+                .request_type("crate::randomness::SendSignaturesRequest")
                 .response_type("()")
                 .codec_path(codec_path)
                 .build(),

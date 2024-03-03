@@ -19,7 +19,7 @@ use std::{
 use sui_types::{
     base_types::AuthorityName,
     committee::EpochId,
-    crypto::{RandomnessPartialSignature, RandomnessRound},
+    crypto::{RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
 };
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, instrument, warn};
@@ -41,12 +41,15 @@ pub use generated::{
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SendPartialSignaturesRequest {
+pub struct SendSignaturesRequest {
     epoch: EpochId,
     round: RandomnessRound,
     // BCS-serialized `RandomnessPartialSignature` values. We store raw bytes here to enable
     // defenses against too-large messages.
-    sigs: Vec<Vec<u8>>,
+    partial_sigs: Vec<Vec<u8>>,
+    // TODO: add support for receiving full signature from validators who have already
+    // reconstructed it.
+    sig: Option<RandomnessSignature>,
 }
 
 /// A handle to the Randomness network subsystem.
@@ -556,7 +559,7 @@ impl RandomnessEventLoop {
                 let authority_info = self.authority_info.clone();
                 let epoch = *epoch;
                 let round = *round;
-                let sigs = ThresholdBls12381MinSig::partial_sign_batch(
+                let partial_sigs = ThresholdBls12381MinSig::partial_sign_batch(
                     shares.iter(),
                     &round.signature_message(),
                 );
@@ -564,7 +567,7 @@ impl RandomnessEventLoop {
                 // Record own partial sigs.
                 if !self.completed_sigs.contains(&(epoch, round)) {
                     self.received_partial_sigs
-                        .insert((epoch, round, self.network.peer_id()), sigs.clone());
+                        .insert((epoch, round, self.network.peer_id()), partial_sigs.clone());
                     rounds_to_aggregate.push((epoch, round));
                 }
 
@@ -576,7 +579,7 @@ impl RandomnessEventLoop {
                     authority_info,
                     epoch,
                     round,
-                    sigs
+                    partial_sigs
                 ))
             });
         }
@@ -611,7 +614,7 @@ impl RandomnessEventLoop {
         authority_info: Arc<HashMap<AuthorityName, (PeerId, PartyId)>>,
         epoch: EpochId,
         round: RandomnessRound,
-        sigs: Vec<RandomnessPartialSignature>,
+        partial_sigs: Vec<RandomnessPartialSignature>,
     ) {
         let _metrics_guard = metrics
             .round_observation_latency_metric()
@@ -621,7 +624,7 @@ impl RandomnessEventLoop {
             .iter()
             .map(|(name, (peer_id, _party_id))| (name, network.waiting_peer(*peer_id)))
             .collect();
-        let sigs: Vec<_> = sigs
+        let partial_sigs: Vec<_> = partial_sigs
             .iter()
             .map(|sig| bcs::to_bytes(sig).expect("message serialization should not fail"))
             .collect();
@@ -634,14 +637,15 @@ impl RandomnessEventLoop {
                 }
                 let mut client = RandomnessClient::new(peer.clone());
                 const SEND_PARTIAL_SIGNATURES_TIMEOUT: Duration = Duration::from_secs(10);
-                let request = anemo::Request::new(SendPartialSignaturesRequest {
+                let request = anemo::Request::new(SendSignaturesRequest {
                     epoch,
                     round,
-                    sigs: sigs.clone(),
+                    partial_sigs: partial_sigs.clone(),
+                    sig: None,
                 })
                 .with_timeout(SEND_PARTIAL_SIGNATURES_TIMEOUT);
                 requests.push(async move {
-                    let result = client.send_partial_signatures(request).await;
+                    let result = client.send_signatures(request).await;
                     if let Err(e) = result {
                         debug!("failed to send partial signatures to {peer_name}: {e:?}");
                     }

@@ -63,13 +63,12 @@ impl Builder {
         let server = Server {
             sender: sender.downgrade(),
         };
-        let randomness_server = RandomnessServer::new(server)
-            .add_layer_for_send_partial_signatures(InboundRequestLayer::new(
-                inflight_limit::InflightLimitLayer::new(
-                    config.send_partial_signatures_inflight_limit(),
-                    inflight_limit::WaitMode::ReturnError,
-                ),
-            ));
+        let randomness_server = RandomnessServer::new(server).add_layer_for_send_signatures(
+            InboundRequestLayer::new(inflight_limit::InflightLimitLayer::new(
+                config.send_partial_signatures_inflight_limit(),
+                inflight_limit::WaitMode::ReturnError,
+            )),
+        );
 
         let allowed_peers = AllowedPeersUpdatable::new(Arc::new(HashSet::new()));
         let router = anemo::Router::new()
