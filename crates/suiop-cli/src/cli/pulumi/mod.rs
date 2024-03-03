@@ -3,12 +3,14 @@
 
 mod init;
 mod setup;
+mod shell;
 
 use anyhow::Result;
 use clap::Parser;
 use init::ProjectType;
 use setup::ensure_gcloud;
 use setup::ensure_setup;
+use shell::start_shell;
 
 #[derive(Parser, Debug, Clone)]
 pub struct PulumiArgs {
@@ -41,6 +43,11 @@ pub enum PulumiAction {
         #[arg(long, aliases = ["name"])]
         project_name: Option<String>,
     },
+    /// create and attach to a new devcontainer shell
+    ///
+    /// the new environment will include everything necessary to use pulumi
+    #[command(name = "shell", aliases=["sh"])]
+    Shell,
 }
 
 pub async fn pulumi_cmd(args: &PulumiArgs) -> Result<()> {
@@ -62,6 +69,10 @@ pub async fn pulumi_cmd(args: &PulumiArgs) -> Result<()> {
                 (_, _, _) => ProjectType::Basic,
             };
             project_type.create_project(kms, project_name.clone())
+        }
+        PulumiAction::Shell => {
+            let _ = start_shell().await?;
+            Ok(())
         }
     }
 }

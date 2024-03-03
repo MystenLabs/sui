@@ -11,6 +11,8 @@ use std::process::Output;
 use std::process::Stdio;
 use tracing::debug;
 const SPINNER: Spinners = Spinners::Dots12;
+use std::env;
+use std::fs;
 
 #[derive(Debug, Clone)]
 pub struct CommandOptions {
@@ -79,5 +81,16 @@ pub fn run_cmd(cmd_in: Vec<&str>, options: Option<CommandOptions>) -> Result<Out
         ))
     } else {
         Ok(res)
+    }
+}
+
+pub fn is_binary_in_path(binary: &str) -> bool {
+    if let Ok(path) = env::var("PATH") {
+        path.split(':').any(|p| {
+            let p_str = format!("{}/{}", p, binary);
+            fs::metadata(p_str).is_ok()
+        })
+    } else {
+        false
     }
 }

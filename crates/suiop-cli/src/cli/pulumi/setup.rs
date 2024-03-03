@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::command::is_binary_in_path;
 use crate::{command::CommandOptions, run_cmd};
 use anyhow::anyhow;
 use anyhow::{Context, Result};
@@ -39,17 +40,6 @@ fn ensure_pulumi_authed() -> Result<()> {
         debug!("authed");
     }
     Ok(())
-}
-
-fn is_binary_in_path(binary: &str) -> bool {
-    if let Ok(path) = env::var("PATH") {
-        path.split(':').any(|p| {
-            let p_str = format!("{}/{}", p, binary);
-            fs::metadata(p_str).is_ok()
-        })
-    } else {
-        false
-    }
 }
 
 fn ensure_prereqs() -> Result<()> {
