@@ -13,29 +13,32 @@ import "./utils/CommitteeUpgradeable.sol";
 contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
     /* ========== STATE VARIABLES ========== */
 
-    uint8 public chainID;
     mapping(address committeeMember => uint16 stakeAmount) public committeeStake;
     mapping(address committeeMember => uint8 index) public committeeIndex;
     mapping(address committeeMember => bool isBlocklisted) public blocklist;
+    IBridgeConfig public config;
 
     /* ========== INITIALIZER ========== */
 
     /// @notice Initializes the contract with the provided parameters.
     /// @dev should be called directly after deployment (see OpenZeppelin upgradeable standards).
     /// the provided arrays must have the same length and the total stake provided must equal 10000.
+    /// @param _config The address of the BridgeConfig contract.
     /// @param committee addresses of the committee members.
     /// @param stake amounts of the committee members.
-    /// @param _chainID used to identify the chain when validating messages.
-    function initialize(address[] memory committee, uint16[] memory stake, uint8 _chainID)
+    function initialize(address _config, address[] memory committee, uint16[] memory stake)
         external
         initializer
     {
         __CommitteeUpgradeable_init(address(this));
         __UUPSUpgradeable_init();
+
         require(
             committee.length == stake.length,
             "BridgeCommittee: Committee and stake arrays must be of the same length"
         );
+
+        config = IBridgeConfig(_config);
 
         uint16 totalStake;
         for (uint16 i; i < committee.length; i++) {
@@ -48,7 +51,6 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
         }
 
         require(totalStake == 10000, "BridgeCommittee: Total stake must be 10000"); // 10000 == 100%
-        chainID = _chainID;
     }
 
     /* ========== EXTERNAL FUNCTIONS ========== */
