@@ -91,7 +91,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         emit TokensClaimed(
             message.chainID,
             message.nonce,
-            committee.chainID(),
+            committee.config().chainID(),
             tokenTransferPayload.tokenID,
             erc20AdjustedAmount,
             tokenTransferPayload.senderAddress,
