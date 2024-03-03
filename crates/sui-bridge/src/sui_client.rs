@@ -24,8 +24,11 @@ use sui_json_rpc_types::{
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
+use sui_types::bridge;
+use sui_types::bridge::BridgeCommitteeSummary;
 use sui_types::bridge::BridgeInnerDynamicField;
 use sui_types::bridge::BridgeRecordDyanmicField;
+use sui_types::bridge::BridgeSummary;
 use sui_types::bridge::MoveTypeBridgeCommittee;
 use sui_types::bridge::MoveTypeCommitteeMember;
 use sui_types::collection_types::LinkedTableNode;
@@ -58,32 +61,6 @@ use crate::retry_with_max_elapsed_time;
 use crate::sui_transaction_builder::get_bridge_package_id;
 use crate::types::BridgeActionStatus;
 use crate::types::{BridgeAction, BridgeAuthority, BridgeCommittee};
-
-// TODO: once we have bridge package on sui framework, we can hardcode the actual
-// bridge dynamic field object id (not 0x9 or dynamic field wrapper) and update
-// along with software upgrades.
-// Or do we always retrieve from 0x9? We can figure this out before the first uggrade.
-fn get_bridge_object_id() -> &'static ObjectID {
-    static BRIDGE_OBJ_ID: OnceCell<ObjectID> = OnceCell::new();
-    BRIDGE_OBJ_ID.get_or_init(|| {
-        let bridge_object_id =
-            std::env::var("BRIDGE_OBJECT_ID").expect("Expect BRIDGE_OBJECT_ID env var set");
-        ObjectID::from_hex_literal(&bridge_object_id)
-            .expect("BRIDGE_OBJECT_ID must be a valid hex string")
-    })
-}
-
-// object id of BridgeRecord, this is wrapped in the bridge inner object.
-// TODO: once we have bridge package on sui framework, we can hardcode the actual id.
-fn get_bridge_record_id() -> &'static ObjectID {
-    static BRIDGE_RECORD_ID: OnceCell<ObjectID> = OnceCell::new();
-    BRIDGE_RECORD_ID.get_or_init(|| {
-        let bridge_record_id =
-            std::env::var("BRIDGE_RECORD_ID").expect("Expect BRIDGE_RECORD_ID env var set");
-        ObjectID::from_hex_literal(&bridge_record_id)
-            .expect("BRIDGE_RECORD_ID must be a valid hex string")
-    })
-}
 
 pub struct SuiClient<P> {
     inner: P,
@@ -169,22 +146,32 @@ where
             .ok_or(BridgeError::BridgeEventNotActionable)
     }
 
-    // TODO: expose this API to jsonrpc like system state query
+    // TODO: cache this
+    pub async fn get_bridge_record_id(&self) -> BridgeResult<ObjectID> {
+        self.inner
+            .get_bridge_summary()
+            .await
+            .map_err(|e| BridgeError::InternalError(format!("Can't get bridge committee: {e}")))
+            .map(|bridge_summary| bridge_summary.bridge_records_id)
+    }
+
     pub async fn get_bridge_committee(&self) -> BridgeResult<BridgeCommittee> {
-        let move_type_bridge_committee =
-            self.inner.get_bridge_committee().await.map_err(|e| {
+        let bridge_summary =
+            self.inner.get_bridge_summary().await.map_err(|e| {
                 BridgeError::InternalError(format!("Can't get bridge committee: {e}"))
             })?;
+        let move_type_bridge_committee = bridge_summary.committee;
+
         let mut authorities = vec![];
         // TODO: move this to MoveTypeBridgeCommittee
-        for member in move_type_bridge_committee.members.contents {
+        for (_, member) in move_type_bridge_committee.members {
             let MoveTypeCommitteeMember {
                 sui_address,
                 bridge_pubkey_bytes,
                 voting_power,
                 http_rest_url,
                 blocklisted,
-            } = member.value;
+            } = member;
             let pubkey = BridgeAuthorityPublicKey::from_bytes(&bridge_pubkey_bytes)?;
             let base_url = from_utf8(&http_rest_url).unwrap_or_else(|e| {
                 warn!(
@@ -215,8 +202,16 @@ where
         action: &BridgeAction,
     ) -> BridgeActionStatus {
         loop {
+            let Ok(bridge_records_id) =
+                retry_with_max_delay!(self.get_bridge_record_id(), Duration::from_secs(600))
+            else {
+                // TODO: add metrics and fire alert
+                error!("Failed to get bridge records id");
+                continue;
+            };
             let Ok(Ok(status)) = retry_with_max_elapsed_time!(
-                self.inner.get_token_transfer_action_onchain_status(action),
+                self.inner
+                    .get_token_transfer_action_onchain_status(bridge_records_id, action),
                 Duration::from_secs(30)
             ) else {
                 // TODO: add metrics and fire alert
@@ -258,7 +253,7 @@ pub trait SuiClientInner: Send + Sync {
 
     async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, Self::Error>;
 
-    async fn get_bridge_committee(&self) -> Result<MoveTypeBridgeCommittee, Self::Error>;
+    async fn get_bridge_summary(&self) -> Result<BridgeSummary, Self::Error>;
 
     async fn execute_transaction_block_with_effects(
         &self,
@@ -267,6 +262,7 @@ pub trait SuiClientInner: Send + Sync {
 
     async fn get_token_transfer_action_onchain_status(
         &self,
+        bridge_records_id: ObjectID,
         action: &BridgeAction,
     ) -> Result<BridgeActionStatus, BridgeError>;
 
@@ -319,16 +315,13 @@ impl SuiClientInner for SuiSdkClient {
         })
     }
 
-    // TODO: Add a test for this
-    async fn get_bridge_committee(&self) -> Result<MoveTypeBridgeCommittee, Self::Error> {
-        let object_id = *get_bridge_object_id();
-        let bcs_bytes = self.read_api().get_move_object_bcs(object_id).await?;
-        let bridge_dynamic_field: BridgeInnerDynamicField = bcs::from_bytes(&bcs_bytes)?;
-        Ok(bridge_dynamic_field.value.committee)
+    async fn get_bridge_summary(&self) -> Result<BridgeSummary, Self::Error> {
+        self.http().get_latest_bridge().await.map_err(|e| e.into())
     }
 
     async fn get_token_transfer_action_onchain_status(
         &self,
+        bridge_records_id: ObjectID,
         action: &BridgeAction,
     ) -> Result<BridgeActionStatus, BridgeError> {
         match &action {
@@ -347,7 +340,7 @@ impl SuiClientInner for SuiSdkClient {
         let status_object_id = match self
             .read_api()
             .get_dynamic_field_object(
-                *get_bridge_record_id(),
+                bridge_records_id,
                 DynamicFieldName {
                     type_: TypeTag::from_str(&format!(
                         "{:?}::message::BridgeMessageKey",
@@ -585,12 +578,13 @@ mod tests {
             .await
             .unwrap();
         let arg = sui_client.get_mutable_bridge_object_arg().await.unwrap();
+        let bridge_records_id = sui_client.get_bridge_record_id().await.unwrap();
 
         let action = get_test_sui_to_eth_bridge_action(None, None, None, None);
 
         let status = sui_client
             .inner
-            .get_token_transfer_action_onchain_status(&action)
+            .get_token_transfer_action_onchain_status(bridge_records_id, &action)
             .await
             .unwrap();
         assert_eq!(status, BridgeActionStatus::RecordNotFound);
@@ -618,7 +612,7 @@ mod tests {
 
         let status = sui_client
             .inner
-            .get_token_transfer_action_onchain_status(&action)
+            .get_token_transfer_action_onchain_status(bridge_records_id, &action)
             .await
             .unwrap();
         assert_eq!(status, BridgeActionStatus::Pending);

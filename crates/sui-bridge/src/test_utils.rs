@@ -320,11 +320,7 @@ pub async fn publish_bridge_package(context: &WalletContext) -> BTreeMap<TokenId
         .await
         .unwrap();
     let bridge_inner_object: BridgeInnerDynamicField = bcs::from_bytes(&bcs_bytes).unwrap();
-    let bridge_record_id = bridge_inner_object.value.bridge_records.id;
-
-    // TODO: remove once we don't rely on env var to get package id
-    std::env::set_var("BRIDGE_RECORD_ID", bridge_record_id.to_string());
-    std::env::set_var("BRIDGE_OBJECT_ID", bridge_inner_object_ref.0.to_string());
+    let _bridge_record_id = bridge_inner_object.value.bridge_records.id;
 
     treasury_caps
 }
