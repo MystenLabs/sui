@@ -3,12 +3,13 @@
 
 use std::{collections::HashMap, str::FromStr};
 
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::traits::{KeyPair, ToFromBytes};
 use move_core_types::ident_str;
 use once_cell::sync::OnceCell;
+use sui_types::bridge::BRIDGE_MODULE_NAME;
 use sui_types::gas_coin::GAS;
 use sui_types::transaction::CallArg;
-use sui_types::BRIDGE_PACKAGE_ID;
+use sui_types::{Identifier, BRIDGE_PACKAGE_ID};
 
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
@@ -18,6 +19,7 @@ use sui_types::{
     TypeTag,
 };
 
+use crate::crypto::BridgeAuthorityKeyPair;
 use crate::{
     error::{BridgeError, BridgeResult},
     types::{BridgeAction, VerifiedCertifiedBridgeAction},
@@ -477,6 +479,41 @@ fn build_asset_price_update_approve_transaction(
         // TODO: use reference gas price
         1500,
     ))
+}
+
+pub fn build_committee_register_transaction(
+    validator_address: SuiAddress,
+    gas_object_ref: &ObjectRef,
+    bridge_object_arg: ObjectArg,
+    bridge_key: BridgeAuthorityKeyPair,
+    bridge_url: &str,
+    ref_gas_price: u64,
+) -> BridgeResult<TransactionData> {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+    let bridge = builder.obj(bridge_object_arg).unwrap();
+    let pub_key = bridge_key.public().as_bytes().to_vec();
+    let bridge_pubkey = builder
+        .input(CallArg::Pure(bcs::to_bytes(&pub_key).unwrap()))
+        .unwrap();
+    let url = builder
+        .input(CallArg::Pure(bcs::to_bytes(bridge_url.as_bytes()).unwrap()))
+        .unwrap();
+    builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        BRIDGE_MODULE_NAME.into(),
+        Identifier::from_str("committee_registration").unwrap(),
+        vec![],
+        vec![bridge, system_state, bridge_pubkey, url],
+    );
+    let data = TransactionData::new_programmable(
+        validator_address,
+        vec![*gas_object_ref],
+        builder.finish(),
+        1000000000,
+        ref_gas_price,
+    );
+    Ok(data)
 }
 
 #[cfg(test)]

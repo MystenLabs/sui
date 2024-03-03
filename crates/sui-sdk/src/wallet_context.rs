@@ -16,6 +16,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::crypto::SuiKeyPair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 use tokio::sync::RwLock;
@@ -276,6 +277,11 @@ impl WalletContext {
         let client = self.get_client().await?;
         let gas_price = client.governance_api().get_reference_gas_price().await?;
         Ok(gas_price)
+    }
+
+    /// Add an account
+    pub fn add_account(&mut self, alias: Option<String>, keypair: SuiKeyPair) {
+        self.config.keystore.add_key(alias, keypair).unwrap();
     }
 
     /// Sign a transaction with a key currently managed by the WalletContext

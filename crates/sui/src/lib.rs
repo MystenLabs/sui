@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod bridge;
 pub mod client_commands;
 pub mod console;
 pub mod fire_drill;
