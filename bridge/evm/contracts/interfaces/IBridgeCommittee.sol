@@ -23,7 +23,7 @@ interface IBridgeCommittee {
     /* ========== EVENTS ========== */
 
     /// @notice Emitted when the blocklist is updated.
-    /// @param newMembers The addresses of the new committee members.
+    /// @param updatedMembers The addresses of the updated committee members.
     /// @param isBlocklisted A boolean indicating whether the committee members are blocklisted or not.
-    event BlocklistUpdated(address[] newMembers, bool isBlocklisted);
+    event BlocklistUpdated(address[] updatedMembers, bool isBlocklisted);
 }

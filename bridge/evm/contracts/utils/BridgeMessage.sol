@@ -27,16 +27,16 @@ library BridgeMessage {
     /// @param senderAddressLength The length of the sender address in bytes
     /// @param senderAddress The address of the sender on the source chain
     /// @param targetChain The chain ID of the target chain
-    /// @param targetAddressLength The length of the target address in bytes
-    /// @param targetAddress The address of the recipient on the target chain
+    /// @param recipientAddressLength The length of the target address in bytes
+    /// @param recipientAddress The address of the recipient on the target chain
     /// @param tokenID The ID of the token to be transferred
     /// @param amount The amount of the token to be transferred
     struct TokenTransferPayload {
         uint8 senderAddressLength;
         bytes senderAddress;
         uint8 targetChain;
-        uint8 targetAddressLength;
-        address targetAddress;
+        uint8 recipientAddressLength;
+        address recipientAddress;
         uint8 tokenID;
         uint64 amount;
     }
@@ -155,27 +155,27 @@ library BridgeMessage {
         uint8 targetChain = uint8(_payload[offset++]);
 
         // target address length is a single byte
-        uint8 targetAddressLength = uint8(_payload[offset++]);
+        uint8 recipientAddressLength = uint8(_payload[offset++]);
         require(
-            targetAddressLength == 20,
+            recipientAddressLength == 20,
             "BridgeMessage: Invalid target address length, EVM address must be 20 bytes"
         );
 
         // extract target address from payload (35-54)
-        address targetAddress;
+        address recipientAddress;
 
-        // why `add(targetAddressLength, offset)`?
-        // At this point, offset = 35, targetAddressLength = 20. `mload(add(payload, 55))`
+        // why `add(recipientAddressLength, offset)`?
+        // At this point, offset = 35, recipientAddressLength = 20. `mload(add(payload, 55))`
         // reads the next 32 bytes from bytes 23 in paylod, because the first 32 bytes
         // of payload stores its length. So in reality, bytes 23 - 54 is loaded. During
         // casting to address (20 bytes), the least sigificiant bytes are retained, namely
-        // `targetAddress` is bytes 35-54
+        // `recipientAddress` is bytes 35-54
         assembly {
-            targetAddress := mload(add(_payload, add(targetAddressLength, offset)))
+            recipientAddress := mload(add(_payload, add(recipientAddressLength, offset)))
         }
 
         // move offset past the target address length
-        offset += targetAddressLength;
+        offset += recipientAddressLength;
 
         // token id is a single byte
         uint8 tokenID = uint8(_payload[offset++]);
@@ -189,7 +189,7 @@ library BridgeMessage {
         // reads the next 32 bytes from bytes 32 in paylod, because the first 32 bytes
         // of payload stores its length. So in reality, bytes 32 - 63 is loaded. During
         // casting to uint64 (8 bytes), the least sigificiant bytes are retained, namely
-        // `targetAddress` is bytes 56-63
+        // `recipientAddress` is bytes 56-63
         assembly {
             amount := mload(add(_payload, add(amountLength, offset)))
         }
@@ -198,8 +198,8 @@ library BridgeMessage {
             senderAddressLength,
             senderAddress,
             targetChain,
-            targetAddressLength,
-            targetAddress,
+            recipientAddressLength,
+            recipientAddress,
             tokenID,
             amount
         );

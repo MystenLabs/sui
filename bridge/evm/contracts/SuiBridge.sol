@@ -81,20 +81,21 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
         _transferTokensFromVault(
             message.chainID,
             tokenTransferPayload.tokenID,
-            tokenTransferPayload.targetAddress,
+            tokenTransferPayload.recipientAddress,
             erc20AdjustedAmount
         );
 
         // mark message as processed
         isTransferProcessed[message.nonce] = true;
 
-        emit BridgedTokensTransferred(
+        emit TokensClaimed(
             message.chainID,
             message.nonce,
+            committee.config().chainID(),
             tokenTransferPayload.tokenID,
             erc20AdjustedAmount,
             tokenTransferPayload.senderAddress,
-            tokenTransferPayload.targetAddress
+            tokenTransferPayload.recipientAddress
         );
     }
 
@@ -125,12 +126,12 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     /// have approved this contract to transfer the given token.
     /// @param tokenID The ID of the token to be bridged.
     /// @param amount The amount of tokens to be bridged.
-    /// @param targetAddress The address on the Sui chain where the tokens will be sent.
+    /// @param recipientAddress The address on the Sui chain where the tokens will be sent.
     /// @param destinationChainID The ID of the destination chain.
     function bridgeERC20(
         uint8 tokenID,
         uint256 amount,
-        bytes memory targetAddress,
+        bytes memory recipientAddress,
         uint8 destinationChainID
     ) external whenNotPaused nonReentrant onlySupportedChain(destinationChainID) {
         require(committee.config().isTokenSupported(tokenID), "SuiBridge: Unsupported token");
@@ -156,7 +157,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
             tokenID,
             suiAdjustedAmount,
             msg.sender,
-            targetAddress
+            recipientAddress
         );
 
         // increment token transfer nonce
@@ -165,9 +166,9 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
 
     /// @notice Enables the caller to deposit Eth to be bridged to a given destination chain.
     /// @dev The provided destinationChainID must be supported.
-    /// @param targetAddress The address on the destination chain where Eth will be sent.
+    /// @param recipientAddress The address on the destination chain where Eth will be sent.
     /// @param destinationChainID The ID of the destination chain.
-    function bridgeETH(bytes memory targetAddress, uint8 destinationChainID)
+    function bridgeETH(bytes memory recipientAddress, uint8 destinationChainID)
         external
         payable
         whenNotPaused
@@ -193,7 +194,7 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
             BridgeMessage.ETH,
             suiAdjustedAmount,
             msg.sender,
-            targetAddress
+            recipientAddress
         );
 
         // increment token transfer nonce
@@ -205,12 +206,12 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
     /// @dev Transfers tokens from the vault to a target address.
     /// @param sendingChainID The ID of the chain from which the tokens are being transferred.
     /// @param tokenID The ID of the token being transferred.
-    /// @param targetAddress The address to which the tokens are being transferred.
+    /// @param recipientAddress The address to which the tokens are being transferred.
     /// @param amount The amount of tokens being transferred.
     function _transferTokensFromVault(
         uint8 sendingChainID,
         uint8 tokenID,
-        address targetAddress,
+        address recipientAddress,
         uint256 amount
     ) private whenNotPaused limitNotExceeded(sendingChainID, tokenID, amount) {
         address tokenAddress = committee.config().getTokenAddress(tokenID);
@@ -220,10 +221,10 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
 
         // transfer eth if token type is eth
         if (tokenID == BridgeMessage.ETH) {
-            vault.transferETH(payable(targetAddress), amount);
+            vault.transferETH(payable(recipientAddress), amount);
         } else {
             // transfer tokens from vault to target address
-            vault.transferERC20(tokenAddress, targetAddress, amount);
+            vault.transferERC20(tokenAddress, recipientAddress, amount);
         }
 
         // update amount bridged

@@ -54,8 +54,8 @@ contract BridgeMessageTest is BridgeBaseTest {
             hex"80ab1ee086210a3a37355300ca24672e81062fcdb5ced6618dab203f6a3b291c"
         );
         assertEq(_payload.targetChain, uint8(11));
-        assertEq(_payload.targetAddressLength, uint8(20));
-        assertEq(_payload.targetAddress, 0xb18f79Fe671db47393315fFDB377Da4Ea1B7AF96);
+        assertEq(_payload.recipientAddressLength, uint8(20));
+        assertEq(_payload.recipientAddress, 0xb18f79Fe671db47393315fFDB377Da4Ea1B7AF96);
         assertEq(_payload.tokenID, BridgeMessage.ETH);
         assertEq(_payload.amount, uint64(854768923101));
     }
