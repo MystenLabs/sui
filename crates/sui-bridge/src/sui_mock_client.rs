@@ -12,7 +12,7 @@ use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::{EventFilter, EventPage, SuiEvent};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
-use sui_types::bridge::MoveTypeBridgeCommittee;
+use sui_types::bridge::BridgeSummary;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
@@ -187,12 +187,21 @@ impl SuiClientInner for SuiMockClient {
         Ok(DUMMY_MUTALBE_BRIDGE_OBJECT_ARG)
     }
 
-    async fn get_bridge_committee(&self) -> Result<MoveTypeBridgeCommittee, Self::Error> {
-        unimplemented!()
+    async fn get_bridge_summary(&self) -> Result<BridgeSummary, Self::Error> {
+        Ok(BridgeSummary {
+            bridge_version: 0,
+            message_version: 0,
+            chain_id: 0,
+            sequence_nums: vec![],
+            bridge_records_id: ObjectID::random(),
+            is_frozen: false,
+            committee: Default::default(),
+        })
     }
 
     async fn get_token_transfer_action_onchain_status(
         &self,
+        _bridge_records_id: ObjectID,
         action: &BridgeAction,
     ) -> Result<BridgeActionStatus, BridgeError> {
         Ok(self
