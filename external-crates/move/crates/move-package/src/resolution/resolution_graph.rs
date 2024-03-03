@@ -557,6 +557,16 @@ impl Package {
         .collect())
     }
 
+    pub fn get_bytecodes_bytes(&self) -> Result<Vec<Vec<u8>>> {
+        let mut ret = vec![];
+        for path in self.get_bytecodes()? {
+            let bytes = std::fs::read(path.to_string())?;
+            ret.push(bytes);
+        }
+
+        Ok(ret)
+    }
+
     pub(crate) fn compiler_config(
         &self,
         is_dependency: bool,

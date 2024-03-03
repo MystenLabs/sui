@@ -5,6 +5,7 @@ use super::reroot_path;
 use crate::NativeFunctionRecord;
 use anyhow::Result;
 use clap::*;
+use move_binary_format::CompiledModule;
 use move_command_line_common::files::MOVE_COVERAGE_MAP_EXTENSION;
 use move_compiler::{
     diagnostics::{self, Diagnostics},
@@ -159,8 +160,27 @@ pub fn run_move_unit_tests<W: Write + Send>(
         })
         .collect();
 
+    // Collect all the bytecode modules that are dependencies of the package. We need to do this
+    // because they're not returned by the compilation result, but we need to add them in the
+    // VM storage.
+    let mut bytecode_deps_modules = vec![];
+    for pkg in resolution_graph.package_table.values() {
+        let source_available = !pkg
+            .get_sources(&resolution_graph.build_options)
+            .unwrap()
+            .is_empty();
+        if source_available {
+            continue;
+        }
+        for bytes in pkg.get_bytecodes_bytes()? {
+            let module = CompiledModule::deserialize_with_defaults(&bytes)?;
+            bytecode_deps_modules.push(module);
+        }
+    }
+
     let root_package = resolution_graph.root_package();
     let build_plan = BuildPlan::create(resolution_graph)?;
+
     // Compile the package. We need to intercede in the compilation, process being performed by the
     // Move package system, to first grab the compilation env, construct the test plan from it, and
     // then save it, before resuming the rest of the compilation and returning the results and
@@ -215,7 +235,13 @@ pub fn run_move_unit_tests<W: Write + Send>(
     // Run the tests. If any of the tests fail, then we don't produce a coverage report, so cleanup
     // the trace files.
     if !unit_test_config
-        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, writer)?
+        .run_and_report_unit_tests(
+            test_plan,
+            Some(natives),
+            cost_table,
+            bytecode_deps_modules,
+            writer,
+        )?
         .1
     {
         cleanup_trace();

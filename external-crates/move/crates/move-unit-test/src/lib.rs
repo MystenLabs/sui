@@ -10,6 +10,7 @@ pub mod test_runner;
 use crate::test_runner::TestRunner;
 use anyhow::{bail, Result};
 use clap::*;
+use move_binary_format::CompiledModule;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
     self,
@@ -200,6 +201,7 @@ impl UnitTestingConfig {
         test_plan: TestPlan,
         native_function_table: Option<NativeFunctionTable>,
         cost_table: Option<CostTable>,
+        bytecode_deps_modules: Vec<CompiledModule>,
         writer: W,
     ) -> Result<(W, bool)> {
         let shared_writer = Mutex::new(writer);
@@ -247,6 +249,7 @@ impl UnitTestingConfig {
             test_plan,
             native_function_table,
             cost_table,
+            bytecode_deps_modules,
         )
         .unwrap();
 

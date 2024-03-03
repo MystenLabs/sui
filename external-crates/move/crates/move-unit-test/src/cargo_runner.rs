@@ -39,6 +39,7 @@ pub fn run_tests_with_config_and_filter(
             test_plan,
             native_function_table,
             cost_table,
+            vec![],
             std::io::stdout(),
         )
         .expect("Failed to execute tests");
