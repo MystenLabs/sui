@@ -212,7 +212,6 @@ contract BridgeLimiterTest is BridgeBaseTest {
         assertFalse(limiter.willAmountExceedLimit(11, tokenID, 1000000));
         assertEq(limiter.calculateWindowAmount(11), 9999990000);
         assertEq(limiter.calculateWindowAmount(12), 0);
-        uint256 chain11Amount = limiter.calculateWindowAmount(11);
         // check that transfers are recorded correctly
         amount = 1100000 * 1000000; // USDC has 6 decimals
         limiter.recordBridgeTransfers(12, tokenID, amount);
