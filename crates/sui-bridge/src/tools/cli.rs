@@ -6,45 +6,34 @@ use clap::*;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::secp256k1::Secp256k1KeyPair;
 use fastcrypto::traits::EncodeDecodeBase64;
+use shared_crypto::intent::Intent;
+use shared_crypto::intent::IntentMessage;
 use std::path::PathBuf;
+use std::sync::Arc;
+use sui_bridge::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use sui_bridge::config::BridgeNodeConfig;
 use sui_bridge::crypto::BridgeAuthorityKeyPair;
 use sui_bridge::crypto::BridgeAuthorityPublicKeyBytes;
+use sui_bridge::eth_transaction_builder::build_eth_transaction;
+use sui_bridge::sui_client::SuiClient;
+use sui_bridge::sui_transaction_builder::build_sui_transaction;
+use sui_bridge::tools::{
+    make_action, select_contract_address, Args, BridgeCliConfig, BridgeValidatorCommand,
+};
 use sui_config::Config;
+use sui_sdk::SuiClient as SuiSdkClient;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
+use sui_types::bridge::BridgeChainId;
 use sui_types::crypto::get_key_pair;
+use sui_types::crypto::Signature;
 use sui_types::crypto::SuiKeyPair;
-
-#[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
-struct Args {
-    #[clap(subcommand)]
-    command: BridgeValidatorCommand,
-}
-
-#[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
-pub enum BridgeValidatorCommand {
-    #[clap(name = "create-bridge-validator-key")]
-    CreateBridgeValidatorKey { path: PathBuf },
-    #[clap(name = "create-bridge-client-key")]
-    CreateBridgeClientKey {
-        path: PathBuf,
-        #[clap(name = "use-ecdsa", long)]
-        use_ecdsa: bool,
-    },
-    #[clap(name = "create-bridge-node-config-template")]
-    CreateBridgeNodeConfigTemplate {
-        path: PathBuf,
-        #[clap(name = "run-client", long)]
-        run_client: bool,
-    },
-}
+use sui_types::transaction::Transaction;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+
     match args.command {
         BridgeValidatorCommand::CreateBridgeValidatorKey { path } => {
             generate_bridge_authority_key_and_write_to_file(&path)?;
@@ -60,6 +49,92 @@ async fn main() -> anyhow::Result<()> {
                 "Bridge node config template generated at {}",
                 path.display()
             );
+        }
+
+        BridgeValidatorCommand::GovernanceClient { config_path, cmd } => {
+            let config = BridgeCliConfig::load(config_path).expect("Couldn't load BridgeCliConfig");
+            let sui_client = SuiClient::<SuiSdkClient>::new(&config.sui_rpc_url).await?;
+            let eth_signer_client = config
+                .get_eth_signer_client()
+                .await
+                .expect("Failed to get eth signer client");
+            let (sui_key, sui_address, gas_object_ref) = config
+                .get_sui_account_info()
+                .await
+                .expect("Failed to get sui account info");
+            let bridge_summary = sui_client
+                .get_bridge_summary()
+                .await
+                .expect("Failed to get bridge summary");
+            let sui_chain_id = BridgeChainId::try_from(bridge_summary.chain_id).unwrap();
+            println!("Sui Chain ID: {:?}", sui_chain_id);
+            // TODO: get eth chain id from eth client
+            let eth_chain_id = BridgeChainId::EthSepolia;
+            println!("Eth Chain ID: {:?}", eth_chain_id);
+
+            // Handle Sui Side
+            // Create BridgeAction
+            let bridge_committee = Arc::new(
+                sui_client
+                    .get_bridge_committee()
+                    .await
+                    .expect("Failed to get bridge committee"),
+            );
+            let agg = BridgeAuthorityAggregator::new(bridge_committee);
+            let sui_action = make_action(sui_chain_id, &cmd);
+            let threshold = sui_action.approval_threshold();
+            let certified_action = agg
+                .request_committee_signatures(sui_action, threshold)
+                .await
+                .expect("Failed to request committee signatures");
+            let bridge_arg = sui_client
+                .get_mutable_bridge_object_arg()
+                .await
+                .expect("Failed to get mutable bridge object arg");
+            let tx =
+                build_sui_transaction(sui_address, &gas_object_ref, certified_action, bridge_arg)
+                    .expect("Failed to build sui transaction");
+            let sui_sig = Signature::new_secure(
+                &IntentMessage::new(Intent::sui_transaction(), tx.clone()),
+                &sui_key,
+            );
+            let tx = Transaction::from_data(tx, vec![sui_sig]);
+            let resp = sui_client
+                .execute_transaction_block_with_effects(tx)
+                .await
+                .expect("Failed to execute transaction block with effects");
+            if resp.status_ok().unwrap() {
+                println!("Sui Transaction succeeded: {:?}", resp.digest);
+            } else {
+                println!(
+                    "Sui Transaction failed: {:?}. Effects: {:?}",
+                    resp.digest, resp.effects
+                );
+            }
+
+            // Handle Eth Side
+            // Create BridgeAction
+            let eth_action = make_action(eth_chain_id, &cmd);
+            // Create Eth Signer Client
+            let threshold = eth_action.approval_threshold();
+            let certified_action = agg
+                .request_committee_signatures(eth_action, threshold)
+                .await
+                .expect("Failed to request committee signatures");
+            let contract_address = select_contract_address(&config, &cmd);
+            let tx = build_eth_transaction(contract_address, eth_signer_client, certified_action)
+                .await
+                .expect("Failed to build eth transaction");
+            println!("sending Eth tx: {:?}", tx);
+            match tx.send().await {
+                Ok(tx_hash) => {
+                    println!("Transaction sent with hash: {:?}", tx_hash);
+                }
+                Err(err) => {
+                    let revert = err.as_revert();
+                    println!("Transaction reverted: {:?}", revert);
+                }
+            };
         }
     }
 
