@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "../utils/BridgeMessage.sol";
-import "./IBridgeCommon.sol";
+import "./IBridgeConfig.sol";
 
 /// @title IBridgeCommittee
 /// @notice Interface for the BridgeCommittee contract.
@@ -16,9 +16,9 @@ interface IBridgeCommittee {
         external
         view;
 
-    /// @notice Returns the interface of the BridgeCommon contract.
-    /// @return The interface of the BridgeCommon contract.
-    function common() external view returns (IBridgeCommon);
+    /// @notice Returns the interface of the BridgeConfig contract.
+    /// @return The interface of the BridgeConfig contract.
+    function config() external view returns (IBridgeConfig);
 
     /* ========== EVENTS ========== */
 

@@ -3,19 +3,19 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "../interfaces/IBridgeCommon.sol";
+import "../interfaces/IBridgeConfig.sol";
 
-/// @title BridgeCommon
+/// @title BridgeConfig
 /// @notice This contract manages a registry of supported tokens and supported chain IDs for the SuiBridge.
 /// It also provides functions to convert token amounts to Sui decimal adjusted amounts and vice versa.
-contract BridgeCommon is IBridgeCommon {
+contract BridgeConfig is IBridgeConfig {
     /* ========== STATE VARIABLES ========== */
 
     uint8 public chainID;
     mapping(uint8 tokenID => Token) public supportedTokens;
     mapping(uint8 chainId => bool isSupported) public supportedChains;
 
-    /// @notice Constructor function for the BridgeCommon contract.
+    /// @notice Constructor function for the BridgeConfig contract.
     /// @dev the provided arrays must have the same length.
     /// @param _chainID The ID of the chain this contract is deployed on.
     /// @param _supportedTokens The addresses of the supported tokens.
@@ -25,7 +25,7 @@ contract BridgeCommon is IBridgeCommon {
         address[] memory _supportedTokens,
         uint8[] memory _supportedChains
     ) {
-        require(_supportedTokens.length == 4, "BridgeCommon: Invalid supported token addresses");
+        require(_supportedTokens.length == 4, "BridgeConfig: Invalid supported token addresses");
 
         uint8[] memory _suiDecimals = new uint8[](5);
         _suiDecimals[0] = 9; // SUI
@@ -42,7 +42,7 @@ contract BridgeCommon is IBridgeCommon {
         }
 
         for (uint8 i; i < _supportedChains.length; i++) {
-            require(_supportedChains[i] != _chainID, "BridgeCommon: Cannot support self");
+            require(_supportedChains[i] != _chainID, "BridgeConfig: Cannot support self");
             supportedChains[_supportedChains[i]] = true;
         }
 
@@ -95,18 +95,18 @@ contract BridgeCommon is IBridgeCommon {
 
         if (ethDecimal == suiDecimal) {
             // Ensure converted amount fits within uint64
-            require(amount <= type(uint64).max, "BridgeCommon: Amount too large for uint64");
+            require(amount <= type(uint64).max, "BridgeConfig: Amount too large for uint64");
             return uint64(amount);
         }
 
-        require(ethDecimal > suiDecimal, "BridgeCommon: Invalid Sui decimal");
+        require(ethDecimal > suiDecimal, "BridgeConfig: Invalid Sui decimal");
 
         // Difference in decimal places
         uint256 factor = 10 ** (ethDecimal - suiDecimal);
         amount = amount / factor;
 
         // Ensure the converted amount fits within uint64
-        require(amount <= type(uint64).max, "BridgeCommon: Amount too large for uint64");
+        require(amount <= type(uint64).max, "BridgeConfig: Amount too large for uint64");
 
         return uint64(amount);
     }
@@ -129,7 +129,7 @@ contract BridgeCommon is IBridgeCommon {
             return uint256(amount);
         }
 
-        require(ethDecimal > suiDecimal, "BridgeCommon: Invalid Sui decimal");
+        require(ethDecimal > suiDecimal, "BridgeConfig: Invalid Sui decimal");
 
         // Difference in decimal places
         uint256 factor = 10 ** (ethDecimal - suiDecimal);
@@ -141,7 +141,7 @@ contract BridgeCommon is IBridgeCommon {
     /// @notice Requires the given token to be supported.
     /// @param tokenID The ID of the token to check.
     modifier tokenSupported(uint8 tokenID) {
-        require(isTokenSupported(tokenID), "BridgeCommon: Unsupported token");
+        require(isTokenSupported(tokenID), "BridgeConfig: Unsupported token");
         _;
     }
 }

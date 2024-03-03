@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @title IBridgeCommon
-/// @dev Interface for the BridgeCommon contract.
-interface IBridgeCommon {
+/// @title IBridgeConfig
+/// @dev Interface for the BridgeConfig contract.
+interface IBridgeConfig {
     /* ========== STRUCTS ========== */
 
     /// @notice The data struct for the supported bridge tokens.

@@ -43,7 +43,7 @@ abstract contract MessageVerifier is Initializable {
         if (messageType != BridgeMessage.TOKEN_TRANSFER) {
             // verify chain ID
             require(
-                message.chainID == committee.common().chainID(), "MessageVerifier: Invalid chain ID"
+                message.chainID == committee.config().chainID(), "MessageVerifier: Invalid chain ID"
             );
             require(message.nonce == nonces[message.messageType], "MessageVerifier: Invalid nonce");
             nonces[message.messageType]++;

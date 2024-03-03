@@ -16,16 +16,17 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
     mapping(address committeeMember => uint16 stakeAmount) public committeeStake;
     mapping(address committeeMember => uint8 index) public committeeIndex;
     mapping(address committeeMember => bool isBlocklisted) public blocklist;
-    IBridgeCommon public common;
+    IBridgeConfig public config;
 
     /* ========== INITIALIZER ========== */
 
     /// @notice Initializes the contract with the provided parameters.
     /// @dev should be called directly after deployment (see OpenZeppelin upgradeable standards).
     /// the provided arrays must have the same length and the total stake provided must equal 10000.
+    /// @param _config The address of the BridgeConfig contract.
     /// @param committee addresses of the committee members.
     /// @param stake amounts of the committee members.
-    function initialize(address _common, address[] memory committee, uint16[] memory stake)
+    function initialize(address _config, address[] memory committee, uint16[] memory stake)
         external
         initializer
     {
@@ -37,7 +38,7 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
             "BridgeCommittee: Committee and stake arrays must be of the same length"
         );
 
-        common = IBridgeCommon(_common);
+        config = IBridgeConfig(_config);
 
         uint16 totalStake;
         for (uint16 i; i < committee.length; i++) {
