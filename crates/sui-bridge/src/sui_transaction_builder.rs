@@ -126,7 +126,7 @@ fn build_token_bridge_approve_transaction(
                     bridge_event.eth_chain_id,
                     bridge_event.eth_address.to_fixed_bytes().to_vec(),
                     bridge_event.token_id,
-                    bridge_event.amount,
+                    bridge_event.amount_sui_adjusted,
                 )
             }
             BridgeAction::EthToSuiBridgeAction(a) => {
@@ -138,7 +138,7 @@ fn build_token_bridge_approve_transaction(
                     bridge_event.sui_chain_id,
                     bridge_event.sui_address.to_vec(),
                     bridge_event.token_id,
-                    bridge_event.amount,
+                    bridge_event.sui_adjusted_amount,
                 )
             }
             _ => unreachable!(),
@@ -552,7 +552,7 @@ mod tests {
             None,
             None,
             Some(bridge_event.nonce),
-            Some(bridge_event.amount),
+            Some(bridge_event.amount_sui_adjusted),
             Some(bridge_event.sui_address),
             Some(bridge_event.eth_address),
             Some(TokenId::USDC),
