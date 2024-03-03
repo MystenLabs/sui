@@ -6,7 +6,7 @@ import "../contracts/BridgeCommittee.sol";
 import "../contracts/BridgeVault.sol";
 import "../contracts/BridgeLimiter.sol";
 import "../contracts/SuiBridge.sol";
-import "../contracts/utils/BridgeCommon.sol";
+import "../contracts/utils/BridgeConfig.sol";
 
 contract BridgeBaseTest is Test {
     address committeeMemberA;
@@ -46,7 +46,7 @@ contract BridgeBaseTest is Test {
     SuiBridge public bridge;
     BridgeVault public vault;
     BridgeLimiter public limiter;
-    BridgeCommon public common;
+    BridgeConfig public config;
 
     function setUpBridgeTest() public {
         vm.createSelectFork(
@@ -76,7 +76,7 @@ contract BridgeBaseTest is Test {
         _supportedTokens[3] = USDT;
         uint8[] memory supportedChains = new uint8[](1);
         supportedChains[0] = 0;
-        common = new BridgeCommon(chainID, _supportedTokens, supportedChains);
+        config = new BridgeConfig(chainID, _supportedTokens, supportedChains);
 
         address[] memory _committee = new address[](5);
         uint16[] memory _stake = new uint16[](5);
@@ -109,7 +109,7 @@ contract BridgeBaseTest is Test {
         vm.expectRevert(
             bytes("BridgeCommittee: Committee and stake arrays must be of the same length")
         );
-        committee.initialize(address(common), _committeeNotSameLength, _stakeNotSameLength);
+        committee.initialize(address(config), _committeeNotSameLength, _stakeNotSameLength);
 
         // Test fail initialize: Committee Duplicate Committee Member
         address[] memory _committeeDuplicateCommitteeMember = new address[](5);
@@ -128,7 +128,7 @@ contract BridgeBaseTest is Test {
 
         vm.expectRevert(bytes("BridgeCommittee: Duplicate committee member"));
         committee.initialize(
-            address(common), _committeeDuplicateCommitteeMember, _stakeDuplicateCommitteeMember
+            address(config), _committeeDuplicateCommitteeMember, _stakeDuplicateCommitteeMember
         );
 
         // Test fail initialize: Total Stake Must Be 10000
@@ -146,10 +146,10 @@ contract BridgeBaseTest is Test {
 
         vm.expectRevert(bytes("BridgeCommittee: Total stake must be 10000"));
         committee.initialize(
-            address(common), _committeeTotalStakeMustBe10000, _stakeTotalStakeMustBe10000
+            address(config), _committeeTotalStakeMustBe10000, _stakeTotalStakeMustBe10000
         );
 
-        committee.initialize(address(common), _committee, _stake);
+        committee.initialize(address(config), _committee, _stake);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = SUI_PRICE;

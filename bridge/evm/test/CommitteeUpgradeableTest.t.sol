@@ -36,14 +36,14 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         _supportedTokens[3] = USDT;
         uint8[] memory _supportedDestinationChains = new uint8[](1);
         _supportedDestinationChains[0] = 0;
-        BridgeCommon _common =
-            new BridgeCommon(_chainID, _supportedTokens, _supportedDestinationChains);
+        BridgeConfig _config =
+            new BridgeConfig(_chainID, _supportedTokens, _supportedDestinationChains);
 
         // deploy bridge committee
         address _committee = Upgrades.deployUUPSProxy(
             "BridgeCommittee.sol",
             abi.encodeCall(
-                BridgeCommittee.initialize, (address(_common), _committeeMembers, _stake)
+                BridgeCommittee.initialize, (address(_config), _committeeMembers, _stake)
             )
         );
 

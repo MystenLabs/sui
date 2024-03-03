@@ -7,7 +7,7 @@ import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "../contracts/BridgeCommittee.sol";
 import "../contracts/BridgeVault.sol";
-import "../contracts/utils/BridgeCommon.sol";
+import "../contracts/utils/BridgeConfig.sol";
 import "../contracts/BridgeLimiter.sol";
 import "../contracts/SuiBridge.sol";
 import "../test/mocks/MockTokens.sol";
@@ -49,10 +49,10 @@ contract DeployBridge is Script {
             supportedChainIDs[i] = uint8(config.supportedChainIDs[i]);
         }
 
-        // deploy bridge tokens
+        // deploy bridge config
 
-        BridgeCommon BridgeCommon =
-            new BridgeCommon(uint8(config.sourceChainId), config.supportedTokens, supportedChainIDs);
+        BridgeConfig bridgeConfig =
+            new BridgeConfig(uint8(config.sourceChainId), config.supportedTokens, supportedChainIDs);
 
         // deploy Bridge Committee
 
@@ -66,7 +66,7 @@ contract DeployBridge is Script {
             "BridgeCommittee.sol",
             abi.encodeCall(
                 BridgeCommittee.initialize,
-                (address(BridgeCommon), config.committeeMembers, committeeMemberStake)
+                (address(bridgeConfig), config.committeeMembers, committeeMemberStake)
             )
         );
 

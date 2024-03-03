@@ -477,7 +477,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         _stake[3] = 2500;
         committee = new BridgeCommittee();
 
-        // deploy bridge common with 11 chainID
+        // deploy bridge config with 11 chainID
         address[] memory _supportedTokens = new address[](4);
         _supportedTokens[0] = wBTC;
         _supportedTokens[1] = wETH;
@@ -485,10 +485,10 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         _supportedTokens[3] = USDT;
         uint8 supportedChainID = 1;
         uint8[] memory _supportedDestinationChains = new uint8[](1);
-        _supportedDestinationChains[0] = supportedChainID;
-        BridgeCommon _common = new BridgeCommon(11, _supportedTokens, _supportedDestinationChains);
+        _supportedDestinationChains[0] = 1;
+        BridgeConfig _config = new BridgeConfig(11, _supportedTokens, _supportedDestinationChains);
 
-        committee.initialize(address(_common), _committee, _stake);
+        committee.initialize(address(_config), _committee, _stake);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = 10000; // SUI PRICE
@@ -564,9 +564,9 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         _supportedTokens[1] = wETH;
         _supportedTokens[2] = USDC;
         _supportedTokens[3] = USDT;
-        common = new BridgeCommon(_chainID, _supportedTokens, _supportedDestinationChains);
+        config = new BridgeConfig(_chainID, _supportedTokens, _supportedDestinationChains);
         committee = new BridgeCommittee();
-        committee.initialize(address(common), _committee, _stake);
+        committee.initialize(address(config), _committee, _stake);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = 10000; // SUI PRICE
@@ -632,9 +632,9 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         _supportedTokens[1] = wETH;
         _supportedTokens[2] = USDC;
         _supportedTokens[3] = USDT;
-        common = new BridgeCommon(_chainID, _supportedTokens, _supportedDestinationChains);
+        config = new BridgeConfig(_chainID, _supportedTokens, _supportedDestinationChains);
 
-        committee.initialize(address(common), _committee, _stake);
+        committee.initialize(address(config), _committee, _stake);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = 10000; // SUI PRICE

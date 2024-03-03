@@ -235,7 +235,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         _stake[2] = 2500;
         _stake[3] = 2500;
         committee = new BridgeCommittee();
-        committee.initialize(address(common), _committee, _stake);
+        committee.initialize(address(config), _committee, _stake);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = 10000; // SUI PRICE
@@ -304,7 +304,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         _stake[2] = 2500;
         _stake[3] = 2500;
         committee = new BridgeCommittee();
-        committee.initialize(address(common), _committee, _stake);
+        committee.initialize(address(config), _committee, _stake);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = 10000; // SUI PRICE
