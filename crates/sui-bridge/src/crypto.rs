@@ -331,7 +331,7 @@ mod tests {
                 eth_address: EthAddress::from_str("0xb18f79Fe671db47393315fFDB377Da4Ea1B7AF96")
                     .unwrap(),
                 token_id: TokenId::ETH,
-                amount: 100000u64,
+                amount_sui_adjusted: 100000u64,
             },
         });
         let sig = BridgeAuthoritySignInfo {
