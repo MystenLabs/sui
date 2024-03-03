@@ -30,34 +30,34 @@ Response: {
                     "asMoveObject": {
                       "contents": {
                         "type": {
+                          "repr": "0x4d6dd933cd6dfbe1ba0f21947f687588eb19c11adac42fbfb94b7b214f1264a0::m::Foo"
+                        }
+                      },
+                      "hasPublicTransfer": true
+                    }
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x4d6dd933cd6dfbe1ba0f21947f687588eb19c11adac42fbfb94b7b214f1264a0::m::Bar"
+                        }
+                      },
+                      "hasPublicTransfer": false
+                    }
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
                           "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
                         }
                       },
                       "hasPublicTransfer": true
-                    }
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMoveObject": {
-                      "contents": {
-                        "type": {
-                          "repr": "0x914f07c86a2ad7a34578448e648cd2181b1b85883ed3680ee62a11545dd89b36::m::Foo"
-                        }
-                      },
-                      "hasPublicTransfer": true
-                    }
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMoveObject": {
-                      "contents": {
-                        "type": {
-                          "repr": "0x914f07c86a2ad7a34578448e648cd2181b1b85883ed3680ee62a11545dd89b36::m::Bar"
-                        }
-                      },
-                      "hasPublicTransfer": false
                     }
                   }
                 }
