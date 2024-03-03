@@ -65,10 +65,7 @@ fn setup_test_storage<'a>(
 ) -> Result<InMemoryStorage> {
     let mut storage = InMemoryStorage::new();
     let modules = Modules::new(modules);
-    for module in modules
-        .compute_dependency_graph()
-        .compute_topological_order()?
-    {
+    for module in modules.compute_topological_order()? {
         let module_id = module.self_id();
         let mut module_bytes = Vec::new();
         module.serialize_with_version(module.version, &mut module_bytes)?;

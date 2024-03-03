@@ -2,18 +2,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod dependency_graph;
 pub mod layout;
 pub mod module_cache;
 
-use crate::dependency_graph::DependencyGraph;
 use move_binary_format::file_format::{CompiledModule, DatatypeHandleIndex, SignatureToken};
 use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
 };
 
 use anyhow::{anyhow, Result};
-use std::collections::BTreeMap;
+use petgraph::graphmap::DiGraphMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Set of Move modules indexed by module Id
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -43,9 +42,38 @@ impl<'a> Modules<'a> {
         self.iter_modules().into_iter().cloned().collect()
     }
 
-    /// Compute a dependency graph for `self`
-    pub fn compute_dependency_graph(&self) -> DependencyGraph {
-        DependencyGraph::new(self.0.values().copied())
+    /// Return an iterator over the modules in `self` in topological order--modules with least deps first.
+    /// Fails with an error if `self` contains circular dependencies.
+    /// Tolerates missing dependencies.
+    pub fn compute_topological_order(&self) -> Result<impl Iterator<Item = &CompiledModule>> {
+        let mut module_id_idx_map = HashMap::new();
+        let mut idx_module_map = HashMap::new();
+        for (i, m) in self.iter_modules().into_iter().enumerate() {
+            if module_id_idx_map.insert(m.self_id(), i).is_some() {
+                panic!("Duplicate module found")
+            };
+            idx_module_map.insert(i, m);
+        }
+
+        let mut graph: DiGraphMap<usize, usize> = DiGraphMap::new();
+        for i in 0..idx_module_map.len() {
+            graph.add_node(i);
+        }
+
+        for (i, m) in idx_module_map.iter() {
+            for dep in m.immediate_dependencies() {
+                if let Some(j) = module_id_idx_map.get(&dep) {
+                    graph.add_edge(*i, *j, 0);
+                }
+            }
+        }
+
+        match petgraph::algo::toposort(&graph, None) {
+            Err(_) => panic!("Circular dependency detected"),
+            Ok(ordered_idxs) => Ok(ordered_idxs
+                .into_iter()
+                .map(move |idx| idx_module_map.remove(&idx).unwrap())),
+        }
     }
 
     /// Return the backing map of `self`

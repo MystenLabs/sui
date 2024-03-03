@@ -314,10 +314,9 @@ impl CompiledPackage {
         with_unpublished_deps: bool,
     ) -> Vec<CompiledModule> {
         let all_modules = self.package.all_modules_map();
-        let graph = all_modules.compute_dependency_graph();
 
         // SAFETY: package built successfully
-        let modules = graph.compute_topological_order().unwrap();
+        let modules = all_modules.compute_topological_order().unwrap();
 
         if with_unpublished_deps {
             // For each transitive dependent module, if they are not to be published, they must have
