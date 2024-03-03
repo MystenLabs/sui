@@ -43,20 +43,6 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveObject"
-            }
-          },
-          {
-            "name": {
-              "type": {
-                "repr": "vector<u8>"
-              },
-              "data": {
-                "Vector": []
-              },
-              "bcs": "AA=="
-            },
-            "value": {
               "__typename": "MoveValue"
             }
           },
@@ -83,6 +69,20 @@ Response: {
                 "Number": "0"
               },
               "bcs": "AAAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "vector<u8>"
+              },
+              "data": {
+                "Vector": []
+              },
+              "bcs": "AA=="
             },
             "value": {
               "__typename": "MoveValue"
@@ -120,20 +120,6 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveObject"
-            }
-          },
-          {
-            "name": {
-              "type": {
-                "repr": "vector<u8>"
-              },
-              "data": {
-                "Vector": []
-              },
-              "bcs": "AA=="
-            },
-            "value": {
               "__typename": "MoveValue"
             }
           },
@@ -162,6 +148,20 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
+              "__typename": "MoveObject"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "vector<u8>"
+              },
+              "data": {
+                "Vector": []
+              },
+              "bcs": "AA=="
+            },
+            "value": {
               "__typename": "MoveValue"
             }
           }
@@ -188,23 +188,9 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveObject"
-            }
-          },
-          {
-            "name": {
-              "type": {
-                "repr": "vector<u8>"
-              },
+              "bcs": "AAAAAAAAAAA=",
               "data": {
-                "Vector": []
-              },
-              "bcs": "AA=="
-            },
-            "value": {
-              "bcs": "AQAAAAAAAAA=",
-              "data": {
-                "Number": "1"
+                "Number": "0"
               },
               "__typename": "MoveValue"
             }
@@ -238,9 +224,23 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "bcs": "AAAAAAAAAAA=",
+              "__typename": "MoveObject"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "vector<u8>"
+              },
               "data": {
-                "Number": "0"
+                "Vector": []
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "bcs": "AQAAAAAAAAA=",
+              "data": {
+                "Number": "1"
               },
               "__typename": "MoveValue"
             }
