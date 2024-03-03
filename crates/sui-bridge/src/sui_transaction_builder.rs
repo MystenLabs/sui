@@ -7,8 +7,9 @@ use fastcrypto::traits::ToFromBytes;
 use move_core_types::ident_str;
 use once_cell::sync::OnceCell;
 use sui_types::gas_coin::GAS;
+use sui_types::BRIDGE_PACKAGE_ID;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
+    base_types::{ObjectRef, SuiAddress},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{ObjectArg, TransactionData},
     TypeTag,
@@ -19,42 +20,11 @@ use crate::{
     types::{BridgeAction, TokenId, VerifiedCertifiedBridgeAction},
 };
 
-// TODO: once we have bridge package on sui framework, we can hardcode the actual package id.
-pub fn get_bridge_package_id() -> &'static ObjectID {
-    static BRIDGE_PACKAGE_ID: OnceCell<ObjectID> = OnceCell::new();
-    BRIDGE_PACKAGE_ID.get_or_init(|| match std::env::var("BRIDGE_PACKAGE_ID") {
-        Ok(id) => {
-            ObjectID::from_hex_literal(&id).expect("BRIDGE_PACKAGE_ID must be a valid hex string")
-        }
-        Err(_) => ObjectID::from_hex_literal("0x9").unwrap(),
-    })
-}
-
-// TODO: this should be hardcoded once we have bridge package on sui framework.
-pub fn get_root_bridge_object_arg() -> &'static ObjectArg {
-    static ROOT_BRIDGE_OBJ_ID: OnceCell<ObjectArg> = OnceCell::new();
-    ROOT_BRIDGE_OBJ_ID.get_or_init(|| {
-        let bridge_object_id = std::env::var("ROOT_BRIDGE_OBJECT_ID")
-            .expect("Expect ROOT_BRIDGE_OBJECT_ID env var set");
-        let object_id = ObjectID::from_hex_literal(&bridge_object_id)
-            .expect("ROOT_BRIDGE_OBJECT_ID must be a valid hex string");
-        let initial_shared_version = std::env::var("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION")
-            .expect("Expect ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION env var set")
-            .parse::<u64>()
-            .expect("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION must be a valid u64");
-        ObjectArg::SharedObject {
-            id: object_id,
-            initial_shared_version: SequenceNumber::from_u64(initial_shared_version),
-            mutable: true,
-        }
-    })
-}
-
 // TODO: how do we generalize this thing more?
 pub fn get_sui_token_type_tag(token_id: TokenId) -> TypeTag {
     static TYPE_TAGS: OnceCell<HashMap<TokenId, TypeTag>> = OnceCell::new();
     let type_tags = TYPE_TAGS.get_or_init(|| {
-        let package_id = get_bridge_package_id();
+        let package_id = BRIDGE_PACKAGE_ID;
         let mut type_tags = HashMap::new();
         type_tags.insert(TokenId::Sui, GAS::type_tag());
         type_tags.insert(
@@ -83,14 +53,23 @@ pub fn build_transaction(
     client_address: SuiAddress,
     gas_object_ref: &ObjectRef,
     action: VerifiedCertifiedBridgeAction,
+    bridge_object_arg: ObjectArg,
 ) -> BridgeResult<TransactionData> {
     match action.data() {
-        BridgeAction::EthToSuiBridgeAction(_) => {
-            build_token_bridge_approve_transaction(client_address, gas_object_ref, action, true)
-        }
-        BridgeAction::SuiToEthBridgeAction(_) => {
-            build_token_bridge_approve_transaction(client_address, gas_object_ref, action, false)
-        }
+        BridgeAction::EthToSuiBridgeAction(_) => build_token_bridge_approve_transaction(
+            client_address,
+            gas_object_ref,
+            action,
+            true,
+            bridge_object_arg,
+        ),
+        BridgeAction::SuiToEthBridgeAction(_) => build_token_bridge_approve_transaction(
+            client_address,
+            gas_object_ref,
+            action,
+            false,
+            bridge_object_arg,
+        ),
         BridgeAction::BlocklistCommitteeAction(_) => {
             // TODO: handle this case
             unimplemented!()
@@ -120,6 +99,7 @@ fn build_token_bridge_approve_transaction(
     gas_object_ref: &ObjectRef,
     action: VerifiedCertifiedBridgeAction,
     claim: bool,
+    bridge_object_arg: ObjectArg,
 ) -> BridgeResult<TransactionData> {
     let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -172,7 +152,7 @@ fn build_token_bridge_approve_transaction(
     let amount = builder.pure(amount).unwrap();
 
     let arg_msg = builder.programmable_move_call(
-        *get_bridge_package_id(),
+        BRIDGE_PACKAGE_ID,
         ident_str!("message").to_owned(),
         ident_str!("create_token_bridge_message").to_owned(),
         vec![],
@@ -188,7 +168,7 @@ fn build_token_bridge_approve_transaction(
     );
 
     // Unwrap: this should not fail
-    let arg_bridge = builder.obj(*get_root_bridge_object_arg()).unwrap();
+    let arg_bridge = builder.obj(bridge_object_arg).unwrap();
 
     let mut sig_bytes = vec![];
     for (_, sig) in sigs.signatures {
@@ -202,8 +182,8 @@ fn build_token_bridge_approve_transaction(
     })?;
 
     builder.programmable_move_call(
-        *get_bridge_package_id(),
-        ident_str!("bridge").to_owned(),
+        BRIDGE_PACKAGE_ID,
+        sui_types::bridge::BRIDGE_MODULE_NAME.to_owned(),
         ident_str!("approve_bridge_message").to_owned(),
         vec![],
         vec![arg_bridge, arg_msg, arg_signatures],
@@ -211,8 +191,8 @@ fn build_token_bridge_approve_transaction(
 
     if claim {
         builder.programmable_move_call(
-            *get_bridge_package_id(),
-            ident_str!("bridge").to_owned(),
+            BRIDGE_PACKAGE_ID,
+            sui_types::bridge::BRIDGE_MODULE_NAME.to_owned(),
             ident_str!("claim_and_transfer_token").to_owned(),
             vec![get_sui_token_type_tag(token_type)],
             vec![arg_bridge, source_chain, seq_num],

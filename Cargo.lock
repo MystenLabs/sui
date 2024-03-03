@@ -12107,6 +12107,7 @@ dependencies = [
  "shared-crypto",
  "sui-common",
  "sui-config",
+ "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-sdk",
  "sui-test-transaction-builder",

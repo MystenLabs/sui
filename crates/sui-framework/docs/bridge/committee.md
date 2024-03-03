@@ -261,6 +261,15 @@
 
 
 
+<a name="0xb_committee_ECommitteeAlreadyInitiated"></a>
+
+
+
+<pre><code><b>const</b> <a href="committee.md#0xb_committee_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>: u64 = 7;
+</code></pre>
+
+
+
 <a name="0xb_committee_EDuplicatedSignature"></a>
 
 
@@ -417,8 +426,11 @@
     http_rest_url: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     ctx: &TxContext
 ) {
+    // We disallow registration after <a href="committee.md#0xb_committee">committee</a> initiated in v1
+    <b>assert</b>!(<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_is_empty">vec_map::is_empty</a>(&self.members), <a href="committee.md#0xb_committee_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>);
+    // Ensure pubkey is valid
     <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&bridge_pubkey_bytes) == <a href="committee.md#0xb_committee_ECDSA_COMPRESSED_PUBKEY_LENGTH">ECDSA_COMPRESSED_PUBKEY_LENGTH</a>, <a href="committee.md#0xb_committee_EInvalidPubkeyLength">EInvalidPubkeyLength</a>);
-    // sender must be the same sender that created the <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a> <a href="dependencies/sui-framework/object.md#0x2_object">object</a>
+    // sender must be the same sender that created the <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a> <a href="dependencies/sui-framework/object.md#0x2_object">object</a>, this is <b>to</b> prevent DDoS from non-<a href="dependencies/sui-system/validator.md#0x3_validator">validator</a> actor.
     <b>let</b> sender = <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     <b>let</b> validators = <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_active_validator_addresses">sui_system::active_validator_addresses</a>(system_state);
 
