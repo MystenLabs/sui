@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 37;
+const MAX_PROTOCOL_VERSION: u64 = 38;
 
 // Record history of protocol version allocations here:
 //
@@ -109,6 +109,7 @@ const MAX_PROTOCOL_VERSION: u64 = 37;
 //             Enable shared object deletion in mainnet.
 //             Set the consensus accepted transaction size and the included transactions size in the proposed block.
 // Version 37: Reject entry functions with mutable Random.
+// Version 38: Allow skipped epochs for randomness updates.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -1903,6 +1904,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.include_consensus_digest_in_prologue = true;
                     }
                 }
+                38 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
