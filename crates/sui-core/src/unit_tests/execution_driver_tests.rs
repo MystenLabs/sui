@@ -848,8 +848,10 @@ async fn test_authority_txn_execution_pushback() {
     let gas_object2 = Object::with_owner_for_testing(sender);
 
     // Initialize an AuthorityState. Disable overload monitor by setting max_load_shedding_percentage to 0;
+    // Set check_system_overload_at_signing to false to disable load shedding at signing, this we are testing load shedding at execution.
     // Set check_system_overload_at_execution to true.
     let overload_config = AuthorityOverloadConfig {
+        check_system_overload_at_signing: false,
         check_system_overload_at_execution: true,
         max_load_shedding_percentage: 0,
         ..Default::default()

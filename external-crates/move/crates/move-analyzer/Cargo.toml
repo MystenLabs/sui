@@ -19,6 +19,7 @@ lsp-types.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 url.workspace = true
+vfs.workspace = true
 clap.workspace = true
 crossbeam.workspace = true
 move-command-line-common.workspace = true

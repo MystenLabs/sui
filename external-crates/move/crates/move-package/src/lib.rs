@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
 use std::{
     collections::BTreeMap,
-    io::{BufRead, Seek, SeekFrom, Write},
+    io::{BufRead, Write},
     path::{Path, PathBuf},
 };
 
@@ -277,7 +277,6 @@ impl BuildConfig {
         };
         let install_dir = self.install_dir.as_ref().unwrap_or(path).to_owned();
         let mut lock = LockFile::from(install_dir, lock_file)?;
-        lock.seek(SeekFrom::Start(0))?;
         update_compiler_toolchain(
             &mut lock,
             compiler_version,

@@ -81,6 +81,10 @@ use std::{
 };
 use tempfile::tempdir;
 use url::Url;
+use vfs::{
+    impls::{memory::MemoryFS, overlay::OverlayFS, physical::PhysicalFS},
+    VfsPath,
+};
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
@@ -96,7 +100,10 @@ use move_compiler::{
     PASS_PARSER, PASS_TYPING,
 };
 use move_ir_types::location::*;
-use move_package::compilation::build_plan::BuildPlan;
+use move_package::{
+    compilation::build_plan::BuildPlan, resolution::resolution_graph::ResolvedGraph,
+    source_package::parsed_manifest::FileName,
+};
 use move_symbol_pool::Symbol;
 
 /// Enabling/disabling the language server reporting readiness to support go-to-def and
@@ -652,6 +659,7 @@ impl SymbolicatorRunner {
 
     /// Create a new runner
     pub fn new(
+        ide_files_root: VfsPath,
         symbols: Arc<Mutex<Symbols>>,
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
         lint: bool,
@@ -711,7 +719,8 @@ impl SymbolicatorRunner {
                             continue;
                         }
                         eprintln!("symbolication started");
-                        match get_symbols(root_dir.unwrap().as_path(), lint) {
+                        match get_symbols(ide_files_root.clone(), root_dir.unwrap().as_path(), lint)
+                        {
                             Ok((symbols_opt, lsp_diagnostics)) => {
                                 eprintln!("symbolication finished");
                                 if let Some(new_symbols) = symbols_opt {
@@ -949,6 +958,7 @@ impl Symbols {
 /// actually (re)computed and the diagnostics are returned, the old symbolic information should
 /// be retained even if it's getting out-of-date.
 pub fn get_symbols(
+    ide_files_root: VfsPath,
     pkg_path: &Path,
     lint: bool,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
@@ -966,20 +976,23 @@ pub fn get_symbols(
     // vector as the writer
     let resolution_graph = build_config.resolution_graph_for_package(pkg_path, &mut Vec::new())?;
 
+    let overlay_fs_root = VfsPath::new(OverlayFS::new(&[
+        VfsPath::new(MemoryFS::new()),
+        ide_files_root.clone(),
+        VfsPath::new(PhysicalFS::new("/")),
+    ]));
+
     // get source files to be able to correlate positions (in terms of byte offsets) with actual
     // file locations (in terms of line/column numbers)
-    let source_files = &resolution_graph.file_sources();
+    let source_files = file_sources(&resolution_graph, overlay_fs_root.clone());
     let mut files = SimpleFiles::new();
     let mut file_id_mapping = HashMap::new();
     let mut file_id_to_lines = HashMap::new();
     let mut file_name_mapping = BTreeMap::new();
-    for (fhash, (fname, source)) in source_files {
+    for (fhash, (fname, source)) in &source_files {
         let id = files.add(*fname, source.clone());
         file_id_mapping.insert(*fhash, id);
-        file_name_mapping.insert(
-            *fhash,
-            dunce::canonicalize(fname.as_str()).unwrap_or_else(|_| PathBuf::from(fname.as_str())),
-        );
+        file_name_mapping.insert(*fhash, PathBuf::from(fname.as_str()));
         let lines: Vec<String> = source.lines().map(String::from).collect();
         file_id_to_lines.insert(id, lines);
     }
@@ -988,7 +1001,8 @@ pub fn get_symbols(
     let mut parsed_ast = None;
     let mut typed_ast = None;
     let mut diagnostics = None;
-    build_plan.compile_with_driver(&mut std::io::sink(), |compiler| {
+    build_plan.compile_with_driver(&mut std::io::sink(), |mut compiler| {
+        compiler = compiler.set_vfs_root(overlay_fs_root.clone());
         // extract expansion AST
         let (files, compilation_result) = compiler.run::<PASS_PARSER>()?;
         let (_, compiler) = match compilation_result {
@@ -1087,7 +1101,7 @@ pub fn get_symbols(
         let cloned_defs = defs.clone();
         let path = file_name_mapping.get(&cloned_defs.fhash.clone()).unwrap();
         file_mods
-            .entry(dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()))
+            .entry(path.to_path_buf())
             .or_insert_with(BTreeSet::new)
             .insert(cloned_defs);
 
@@ -1160,6 +1174,42 @@ pub fn get_symbols(
     eprintln!("get_symbols load complete");
 
     Ok((Some(symbols), ide_diagnostics))
+}
+
+fn file_sources(
+    resolved_graph: &ResolvedGraph,
+    overlay_fs: VfsPath,
+) -> BTreeMap<FileHash, (FileName, String)> {
+    resolved_graph
+        .package_table
+        .iter()
+        .flat_map(|(_, rpkg)| {
+            rpkg.get_sources(&resolved_graph.build_options)
+                .unwrap()
+                .iter()
+                .map(|f| {
+                    // dunce does a better job of canonicalization on Windows
+                    let fname = dunce::canonicalize(f.as_str())
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|_| f.to_string());
+                    let mut contents = String::new();
+                    // there is a fair number of unwraps here but if we can't read the files
+                    // that by all accounts should be in the file system, then there is not much
+                    // we can do so it's better to fail so that we can investigate
+                    let vfs_file_path = overlay_fs.join(fname.as_str()).unwrap();
+                    let mut vfs_file = vfs_file_path.open_file().unwrap();
+                    let _ = vfs_file.read_to_string(&mut contents);
+                    let fhash = FileHash::new(&contents);
+                    // write to top layer of the overlay file system so that the content
+                    // is immutable for the duration of compilation and symbolication
+                    let _ = vfs_file_path.parent().create_dir_all();
+                    let mut vfs_file = vfs_file_path.create_file().unwrap();
+                    let _ = vfs_file.write_all(contents.as_bytes());
+                    (fhash, (Symbol::from(fname), contents))
+                })
+                .collect::<BTreeMap<_, _>>()
+        })
+        .collect()
 }
 
 /// Produces module ident string of the form pkg_name::module_name to be used as a map key.
@@ -3468,7 +3518,8 @@ fn docstring_test() {
 
     path.push("tests/symbols");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -3738,7 +3789,8 @@ fn symbols_test() {
 
     path.push("tests/symbols");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -4778,7 +4830,8 @@ fn const_test() {
 
     path.push("tests/symbols");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5017,7 +5070,8 @@ fn imports_test() {
 
     path.push("tests/symbols");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5218,7 +5272,8 @@ fn module_access_test() {
 
     path.push("tests/symbols");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5372,7 +5427,8 @@ fn parse_error_test() {
 
     path.push("tests/parse-error");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5456,7 +5512,8 @@ fn parse_error_with_deps_test() {
 
     path.push("tests/parse-error-dep");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5504,7 +5561,8 @@ fn pretype_error_test() {
 
     path.push("tests/pre-type-error");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5538,7 +5596,8 @@ fn pretype_error_with_deps_test() {
 
     path.push("tests/pre-type-error-dep");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5635,7 +5694,8 @@ fn dot_call_test() {
 
     path.push("tests/move-2024");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5964,7 +6024,8 @@ fn mod_ident_uniform_test() {
 
     path.push("tests/mod-ident-uniform");
 
-    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();

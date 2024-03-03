@@ -15,8 +15,8 @@ BUILDING A
 The following changes will be made.
 ============================================================
 
---- ./sources/mod0.move
-+++ ./sources/mod0.move
+--- sources/mod0.move
++++ sources/mod0.move
 @@ -2,1 +2,1 @@
 -    struct S { f: u64 }
 +    public struct S { f: u64 }
@@ -32,8 +32,8 @@ The following changes will be made.
 @@ -12,1 +12,1 @@
 -        let S { f: fin } = s;
 +        let S { f: mut fin } = s;
---- ./sources/mod1.move
-+++ ./sources/mod1.move
+--- sources/mod1.move
++++ sources/mod1.move
 @@ -3,1 +3,1 @@
 -    public fun t(x: u64, yip: u64, s: S): u64  {
 +    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
@@ -43,8 +43,8 @@ The following changes will be made.
 @@ -5,1 +5,1 @@
 -        let S { f: fin } = s;
 +        let S { f: mut fin } = s;
---- ./sources/mod2.move
-+++ ./sources/mod2.move
+--- sources/mod2.move
++++ sources/mod2.move
 @@ -3,1 +3,1 @@
 -    public fun t(x: u64, yip: u64, s: S): u64  {
 +    public fun t(mut x: u64, mut yip: u64, s: S): u64  {
@@ -57,8 +57,8 @@ The following changes will be made.
 @@ -15,1 +15,1 @@
 -        let x = 5; let y = 10;
 +        let mut x = 5; let mut y = 10;
---- ./sources/mod3_4.move
-+++ ./sources/mod3_4.move
+--- sources/mod3_4.move
++++ sources/mod3_4.move
 @@ -2,1 +2,1 @@
 -    struct S { f: u64 }
 +    public struct S { f: u64 }
@@ -83,8 +83,8 @@ The following changes will be made.
 @@ -24,1 +24,1 @@
 -        let S { f: fin } = s;
 +        let S { f: mut fin } = s;
---- ./sources/mod5.move
-+++ ./sources/mod5.move
+--- sources/mod5.move
++++ sources/mod5.move
 @@ -3,1 +3,1 @@
 -    struct UID { }
 +    public struct UID { }
@@ -97,8 +97,8 @@ The following changes will be made.
 @@ -15,1 +15,1 @@
 -        let i = 0;
 +        let mut i = 0;
---- ./tests/test0.move
-+++ ./tests/test0.move
+--- tests/test0.move
++++ tests/test0.move
 @@ -5,1 +5,1 @@
 -    struct R has store { }
 +    public struct R has store { }
@@ -130,12 +130,12 @@ The following changes will be made.
 
 ============================================================
 Apply changes? (Y/n) 
-Updating "./sources/mod0.move" . . .
-Updating "./sources/mod1.move" . . .
-Updating "./sources/mod2.move" . . .
-Updating "./sources/mod3_4.move" . . .
-Updating "./sources/mod5.move" . . .
-Updating "./tests/test0.move" . . .
+Updating "sources/mod0.move" . . .
+Updating "sources/mod1.move" . . .
+Updating "sources/mod2.move" . . .
+Updating "sources/mod3_4.move" . . .
+Updating "sources/mod5.move" . . .
+Updating "tests/test0.move" . . .
 
 Changes complete
 Wrote patchfile out to: ./migration.patch

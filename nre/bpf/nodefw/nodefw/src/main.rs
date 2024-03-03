@@ -6,20 +6,39 @@ use aya::include_bytes_aligned;
 use aya::programs::{Xdp, XdpFlags};
 use aya::BpfLoader;
 use aya_log::BpfLogger;
-use clap::Parser;
-use log::{debug, info, warn};
+use clap::{Parser, ValueEnum};
 use nodefw::fwmap::{ttl_watcher, Firewall};
-use nodefw::time::{get_ktime_get_ns, ttl};
-use nodefw_common::{Meta, Rule};
-use std::cell::RefCell;
-use std::time::Duration;
-use tokio::signal;
+use nodefw::server;
+use nodefw::time::get_ktime_get_ns;
+use nodefw_common::Meta;
+use std::sync::{Arc, RwLock};
 use tokio_util::sync::CancellationToken;
+use tracing::{debug, info, warn};
 
 #[derive(Debug, Parser)]
 struct Opt {
     #[clap(short, long, default_value = "lo")]
     iface: String,
+    #[clap(short, long, value_enum, default_value_t=Mode::Default)]
+    mode: Mode,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+enum Mode {
+    Default,
+    Drv,
+    Skb,
+}
+
+// we wrap XdpFlags in our own struct to decouple it from clap's derive requirements.
+impl From<Mode> for XdpFlags {
+    fn from(m: Mode) -> Self {
+        match m {
+            Mode::Default => XdpFlags::default(),
+            Mode::Drv => XdpFlags::DRV_MODE,
+            Mode::Skb => XdpFlags::SKB_MODE,
+        }
+    }
 }
 
 #[tokio::main]
@@ -61,40 +80,30 @@ async fn main() -> Result<(), anyhow::Error> {
         warn!("failed to initialize eBPF logger: {}", e);
     }
 
-    // TODO replace with rpc, this is just for testing locally
-    // preload static firewall rules
-    let mut fw = Firewall::new("BLOCKLIST", &mut bpf);
-    fw.add(
-        "192.168.1.1",
-        Rule {
-            ttl: ttl(Duration::from_secs(5)),
-            port: 2046,
-        },
-    )?;
-    fw.add(
-        "192.168.2.1",
-        Rule {
-            ttl: ttl(Duration::from_secs(5)),
-            port: 2046,
-        },
-    )?;
-    fw.add("::1", Rule { ttl: 0, port: 2046 })?;
-
-    let fw_ref = RefCell::new(fw);
     let ctx = CancellationToken::new();
-    let ttl_watcher_token = ctx.clone();
+    let fw = Firewall::new("BLOCKLIST", &mut bpf);
+    let fw_guard = Arc::new(RwLock::new(fw));
+    tokio::spawn(ttl_watcher(ctx.clone(), fw_guard.clone()));
 
-    let ttl_watcher_task = tokio::spawn(ttl_watcher(ttl_watcher_token.clone(), fw_ref));
+    let router = server::app(fw_guard.clone());
     let program: &mut Xdp = bpf.program_mut("nodefw").unwrap().try_into()?;
     program.load()?;
-    program.attach(&opt.iface, XdpFlags::default())
+    program.attach(&opt.iface, XdpFlags::from(opt.mode))
         .context("failed to attach the XDP program with default flags - try changing XdpFlags::default() to XdpFlags::SKB_MODE")?;
 
-    info!("Waiting for Ctrl-C...");
-    signal::ctrl_c().await?;
-    ttl_watcher_token.cancel();
-    info!("Gracefully exiting...");
-    ttl_watcher_task.await?;
-    info!("Watcher task has stopped, exiting.");
+    let listener = std::net::TcpListener::bind(nodefw::var!(
+        "NODEFW_LISTEN_ON",
+        "127.0.0.1:8080".into(),
+        String
+    ))
+    .unwrap();
+    info!("Listening for signal to terminate...");
+    let sc = server::ServerConfig {
+        ctx,
+        listener,
+        router,
+    };
+    let _ = server::serve(sc).await;
+    info!("firewall has stopped, exiting.");
     Ok(())
 }

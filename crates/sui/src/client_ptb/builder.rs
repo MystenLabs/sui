@@ -447,7 +447,8 @@ impl<'a> PTBBuilder<'a> {
         // Otherwise it's ambiguous what the value should be, and we need to turn to the signature
         // to determine it.
         let mut is_receiving = false;
-        let mut is_mutable = false;
+        // A value is mutable by default.
+        let mut is_mutable = true;
 
         // traverse the types in the signature to see if the argument is an object argument or not,
         // and also determine if it's a receiving argument or not.
@@ -461,7 +462,11 @@ impl<'a> PTBBuilder<'a> {
                         error!(loc, "Not enough type parameters supplied for Move call");
                     }
                 }
+                SignatureToken::Reference(_) => {
+                    is_mutable = false;
+                }
                 SignatureToken::MutableReference(_) => {
+                    // Not strictly needed, but for clarity
                     is_mutable = true;
                 }
                 SignatureToken::Bool
@@ -473,8 +478,9 @@ impl<'a> PTBBuilder<'a> {
                 | SignatureToken::Vector(_)
                 | SignatureToken::U16
                 | SignatureToken::U32
-                | SignatureToken::U256
-                | SignatureToken::Reference(_) => {}
+                | SignatureToken::U256 => {
+                    is_mutable = false;
+                }
             }
         }
 

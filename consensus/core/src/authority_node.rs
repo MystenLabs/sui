@@ -131,7 +131,15 @@ where
 
         let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+
+        let block_verifier = Arc::new(SignedBlockVerifier::new(
+            context.clone(),
+            transaction_verifier,
+        ));
+
+        let block_manager =
+            BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
+
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer.sender,
@@ -157,10 +165,6 @@ where
         let leader_timeout_handle =
             LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
 
-        let block_verifier = Arc::new(SignedBlockVerifier::new(
-            context.clone(),
-            transaction_verifier,
-        ));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),

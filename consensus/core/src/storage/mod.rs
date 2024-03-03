@@ -11,7 +11,7 @@ use consensus_config::AuthorityIndex;
 
 use crate::{
     block::{BlockRef, Round, VerifiedBlock},
-    commit::{Commit, CommitIndex},
+    commit::{CommitIndex, TrustedCommit},
     error::ConsensusResult,
 };
 
@@ -21,7 +21,7 @@ pub(crate) trait Store: Send + Sync {
     fn write(
         &self,
         blocks: Vec<VerifiedBlock>,
-        commits: Vec<Commit>,
+        commits: Vec<TrustedCommit>,
         last_committed_rounds: Vec<Round>,
     ) -> ConsensusResult<()>;
 
@@ -47,10 +47,10 @@ pub(crate) trait Store: Send + Sync {
     ) -> ConsensusResult<Vec<VerifiedBlock>>;
 
     /// Reads the last commit.
-    fn read_last_commit(&self) -> ConsensusResult<Option<Commit>>;
+    fn read_last_commit(&self) -> ConsensusResult<Option<TrustedCommit>>;
 
     /// Reads all commits from start_commit_index.
-    fn scan_commits(&self, start_commit_index: CommitIndex) -> ConsensusResult<Vec<Commit>>;
+    fn scan_commits(&self, start_commit_index: CommitIndex) -> ConsensusResult<Vec<TrustedCommit>>;
 
     /// Reads the last committed rounds per authority.
     fn read_last_committed_rounds(&self) -> ConsensusResult<Vec<Round>>;
