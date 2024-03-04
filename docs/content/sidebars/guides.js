@@ -164,6 +164,7 @@ const guides = [
 					},
 					'guides/developer/app-examples/coin-flip',
 					'guides/developer/app-examples/blackjack',
+					'guides/developer/app-examples/reviews-rating',
 				],
 			},
 			'guides/developer/starter-templates',
