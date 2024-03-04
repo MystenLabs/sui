@@ -1315,7 +1315,7 @@ impl AuthorityPerEpochStore {
     // successfully for each affected object id.
     async fn get_or_init_next_object_versions(
         &self,
-        objects_to_init: impl Iterator<Item = (ObjectID, SequenceNumber)> + Clone,
+        objects_to_init: &[(ObjectID, SequenceNumber)],
         cache_reader: &dyn ExecutionCacheRead,
     ) -> SuiResult<HashMap<ObjectID, SequenceNumber>> {
         let mut ret: HashMap<_, _>;
@@ -1328,16 +1328,16 @@ impl AuthorityPerEpochStore {
             let tables = self.tables()?;
             let mut db_transaction = tables.next_shared_object_versions.transaction()?;
 
-            let ids = objects_to_init.clone().map(|(id, _)| id);
+            let ids: Vec<_> = objects_to_init.iter().map(|(id, _)| *id).collect();
 
             let next_versions = db_transaction
                 .multi_get(&self.tables()?.next_shared_object_versions, ids.clone())?;
 
             let uninitialized_objects: Vec<(ObjectID, SequenceNumber)> = next_versions
                 .iter()
-                .zip(objects_to_init.clone())
+                .zip(objects_to_init)
                 .filter_map(|(next_version, id_and_version)| match next_version {
-                    None => Some(id_and_version),
+                    None => Some(*id_and_version),
                     Some(_) => None,
                 })
                 .collect();
@@ -1385,28 +1385,18 @@ impl AuthorityPerEpochStore {
 
     async fn set_assigned_shared_object_versions(
         &self,
-        certificate: &VerifiedExecutableTransaction,
+        tx_digest: &TransactionDigest,
+        init_shared_versions: &[(ObjectID, SequenceNumber)],
         assigned_versions: &Vec<(ObjectID, SequenceNumber)>,
         cache_reader: &dyn ExecutionCacheRead,
     ) -> SuiResult {
-        let tx_digest = certificate.digest();
-
         debug!(
             ?tx_digest,
             ?assigned_versions,
             "set_assigned_shared_object_versions"
         );
 
-        #[allow(clippy::needless_collect)]
-        let shared_input_objects: Vec<_> = certificate
-            .data()
-            .transaction_data()
-            .kind()
-            .shared_input_objects()
-            .map(SharedInputObject::into_id_and_version)
-            .collect();
-
-        self.get_or_init_next_object_versions(shared_input_objects.into_iter(), cache_reader)
+        self.get_or_init_next_object_versions(init_shared_versions, cache_reader)
             .await?;
         self.tables()?
             .assigned_shared_object_versions
@@ -1525,13 +1515,19 @@ impl AuthorityPerEpochStore {
         effects: &TransactionEffects,
         cache_reader: &dyn ExecutionCacheRead,
     ) -> SuiResult {
+        let init_shared_versions: Vec<_> = certificate
+            .shared_input_objects()
+            .map(SharedInputObject::into_id_and_version)
+            .collect();
+        let assigned_versions: Vec<_> = effects
+            .input_shared_objects()
+            .into_iter()
+            .map(|iso| iso.id_and_version())
+            .collect();
         self.set_assigned_shared_object_versions(
-            certificate,
-            &effects
-                .input_shared_objects()
-                .into_iter()
-                .map(|iso| iso.id_and_version())
-                .collect(),
+            certificate.digest(),
+            &init_shared_versions,
+            &assigned_versions,
             cache_reader,
         )
         .await
@@ -2473,11 +2469,8 @@ impl AuthorityPerEpochStore {
                 shared_input_objects
             };
 
-            self.get_or_init_next_object_versions(
-                unique_shared_input_objects.into_iter(),
-                cache_reader,
-            )
-            .await?
+            self.get_or_init_next_object_versions(&unique_shared_input_objects, cache_reader)
+                .await?
         };
 
         let mut deferred_txns: BTreeMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>> =
