@@ -310,6 +310,9 @@ pub struct MoveTypeBridgeRecord {
 }
 
 pub fn is_bridge_committee_initiated(object_store: &dyn ObjectStore) -> SuiResult<bool> {
-    let bridge = get_bridge(object_store)?;
-    Ok(!bridge.committee().members.contents.is_empty())
+    match get_bridge(object_store) {
+        Ok(bridge) => Ok(!bridge.committee().members.contents.is_empty()),
+        Err(SuiError::SuiBridgeReadError(..)) => Ok(false),
+        Err(other) => Err(other),
+    }
 }
