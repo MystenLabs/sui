@@ -635,6 +635,14 @@ macro_rules! delegate_batch_call {
 }
 
 impl RocksDBBatch {
+    fn len(&self) -> usize {
+        delegate_batch_call!(self.len())
+    }
+
+    fn is_empty(&self) -> bool {
+        delegate_batch_call!(self.is_empty())
+    }
+
     fn size_in_bytes(&self) -> usize {
         delegate_batch_call!(self.size_in_bytes())
     }
@@ -1333,6 +1341,14 @@ impl DBBatch {
             db_metrics: db_metrics.clone(),
             write_sample_interval: write_sample_interval.clone(),
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.batch.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.batch.is_empty()
     }
 
     /// Consume the batch and write its operations to the database
