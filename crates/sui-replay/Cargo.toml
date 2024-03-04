@@ -35,6 +35,8 @@ move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 tokio.workspace = true
 tabled.workspace = true
+lz4_flex = "0.11.2"
+open.workspace = true
 
 shared-crypto.workspace = true
 sui-config.workspace = true

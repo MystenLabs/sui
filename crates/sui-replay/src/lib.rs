@@ -435,12 +435,18 @@ pub async fn execute_replay_command(
 
             if html {
                 // TODO(Laura) open up the URL with params `?network=rpc_url#<URL Encoded JSON object>`
-                //let network = network_from_url(rpc_url);
-                // generate_html_from_json(
-                //     &sandbox_state.output,
-                //     get_filepath(tx_digest, "html"),
-                //     &rpc_url.unwrap(),
-                // );
+                use lz4_flex::block::compress_prepend_size;
+
+                let input = sandbox_state.output.clone();
+
+                let compressed = compress_prepend_size(input.as_bytes());
+
+                let url = format!(
+                    "https://multisig-toolkit-amz9iwckn-mysten-labs.vercel.app/replay?network={}#{:?}",&rpc_url.unwrap_or("local".parse()?),
+                    compressed
+                ).replace(" ", "");
+                info!("{:?}", url);
+                open::that(url).ok();
             }
 
             sandbox_state.check_effects()?;
