@@ -41,7 +41,7 @@ pub enum FeatureGate {
     MacroFuns,
     Move2024Migration,
     SyntaxMethods,
-    Autoborrow,
+    AutoborrowEq,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -123,7 +123,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::MacroFuns,
     FeatureGate::Move2024Optimizations,
     FeatureGate::SyntaxMethods,
-    FeatureGate::Autoborrow,
+    FeatureGate::AutoborrowEq,
 ];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
@@ -219,7 +219,7 @@ impl FeatureGate {
             FeatureGate::MacroFuns => "'macro' functions are",
             FeatureGate::Move2024Migration => "Move 2024 migration is",
             FeatureGate::SyntaxMethods => "'syntax' methods are",
-            FeatureGate::Autoborrow => "Automatic borrowing is",
+            FeatureGate::AutoborrowEq => "Automatic borrowing is",
         }
     }
 }

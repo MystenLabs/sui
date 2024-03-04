@@ -1642,9 +1642,9 @@ fn binop(
             (Type_::bool(loc), operand_ty)
         }
 
-        Eq | Neq => {
-            let lhs_type = ready_tvars(&context.subst, el.ty.clone());
-            let rhs_type = ready_tvars(&context.subst, er.ty.clone());
+        Eq | Neq if context.env.supports_feature(context.current_package(), FeatureGate::AutoborrowEq) => {
+            let lhs_type = core::ready_tvars(&context.subst, el.ty.clone());
+            let rhs_type = core::ready_tvars(&context.subst, er.ty.clone());
             let (lhs_ref, lhs_inner, rhs_ref, rhs_inner) = match (lhs_type, rhs_type) {
                 (sp!(_, Type_::Ref(lhs_mut, lhs)), sp!(_, Type_::Ref(rhs_mut, rhs))) => {
                     (Some(lhs_mut), *lhs, Some(rhs_mut), *rhs)
@@ -1681,18 +1681,18 @@ fn binop(
                     // If the RHS is mutable, we reborrow it as immutable so avoid requiring the
                     // LHS to be mutable.
                     if rhs_mut {
-                        er = exp_to_ref(context, loc, false, er);
+                        er = exp_to_ref(context, er.exp.loc, false, er);
                     }
-                    el = exp_to_ref(context, loc, false, el);
+                    el = exp_to_ref(context, el.exp.loc, false, el);
                     sp(bop.loc, Type_::Ref(false, Box::new(ty)))
                 }
                 (Some(lhs_mut), None) => {
                     // If the LHS is mutable, we reborrow it as immutable so avoid requiring the
                     // RHS to be mutable.
                     if lhs_mut {
-                        el = exp_to_ref(context, loc, false, el);
+                        el = exp_to_ref(context, el.exp.loc, false, el);
                     }
-                    er = exp_to_ref(context, loc, false, er);
+                    er = exp_to_ref(context, er.exp.loc, false, er);
                     sp(bop.loc, Type_::Ref(false, Box::new(ty)))
                 }
                 (Some(lhs_mut), Some(rhs_mut)) => {
@@ -1700,16 +1700,34 @@ fn binop(
                         sp(bop.loc, Type_::Ref(lhs_mut, Box::new(ty)))
                     } else {
                         if lhs_mut {
-                            el = exp_to_ref(context, loc, false, el)
+                            el = exp_to_ref(context, el.exp.loc, false, el)
                         };
                         if rhs_mut {
-                            er = exp_to_ref(context, loc, false, er)
+                            er = exp_to_ref(context, er.exp.loc, false, er)
                         };
                         sp(bop.loc, Type_::Ref(false, Box::new(ty)))
                     }
                 }
             };
             (Type_::bool(loc), eq_ty)
+        }
+        Eq | Neq => {
+            let ability_msg = Some(format!(
+                "'{}' requires the '{}' ability as the value is consumed. Try \
+                         borrowing the values with '&' first.'",
+                &bop,
+                Ability_::Drop,
+            ));
+            context.add_ability_constraint(
+                el.exp.loc,
+                ability_msg.clone(),
+                el.ty.clone(),
+                Ability_::Drop,
+            );
+            context.add_ability_constraint(er.exp.loc, ability_msg, er.ty.clone(), Ability_::Drop);
+            let ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+            context.add_single_type_constraint(loc, msg(), ty.clone());
+            (Type_::bool(loc), ty)
         }
 
         And | Or => {
