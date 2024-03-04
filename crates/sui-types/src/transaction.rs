@@ -1318,7 +1318,12 @@ impl TransactionKind {
                 }]
             }
             Self::EndOfEpochTransaction(txns) => {
-                txns.iter().flat_map(|txn| txn.input_objects()).collect()
+                let mut inputs = txns
+                    .iter()
+                    .flat_map(|txn| txn.input_objects())
+                    .collect::<Vec<_>>();
+                inputs.dedup();
+                inputs
             }
             Self::ProgrammableTransaction(p) => return p.input_objects(),
         };

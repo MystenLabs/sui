@@ -212,13 +212,6 @@ impl BridgeTrait for BridgeInnerV1 {
                     .into_iter()
                     .map(|e| (e.key, e.value))
                     .collect(),
-                thresholds: self
-                    .committee
-                    .stake_thresholds_percentage
-                    .contents
-                    .into_iter()
-                    .map(|e| (e.key, e.value))
-                    .collect(),
             },
             bridge_records_id: self.bridge_records.id,
             is_frozen: self.frozen,
@@ -236,7 +229,6 @@ pub struct MoveTypeBridgeTreasury {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MoveTypeBridgeCommittee {
     pub members: VecMap<Vec<u8>, MoveTypeCommitteeMember>,
-    pub stake_thresholds_percentage: VecMap<u8, u64>,
     pub member_registrations: VecMap<SuiAddress, MoveTypeCommitteeMemberRegistration>,
     pub last_committee_update_epoch: u64,
 }
@@ -253,7 +245,6 @@ pub struct MoveTypeCommitteeMemberRegistration {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeCommitteeSummary {
     pub members: Vec<(Vec<u8>, MoveTypeCommitteeMember)>,
-    pub thresholds: Vec<(u8, u64)>,
 }
 
 /// Rust version of the Move committee::CommitteeMember type.
@@ -319,6 +310,9 @@ pub struct MoveTypeBridgeRecord {
 }
 
 pub fn is_bridge_committee_initiated(object_store: &dyn ObjectStore) -> SuiResult<bool> {
-    let bridge = get_bridge(object_store)?;
-    Ok(!bridge.committee().members.contents.is_empty())
+    match get_bridge(object_store) {
+        Ok(bridge) => Ok(!bridge.committee().members.contents.is_empty()),
+        Err(SuiError::SuiBridgeReadError(..)) => Ok(false),
+        Err(e) => Err(e),
+    }
 }
