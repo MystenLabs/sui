@@ -7,7 +7,10 @@ use crate::{
     data_fetcher::{
         extract_epoch_and_version, DataFetcher, Fetchers, NodeStateDumpFetcher, RemoteFetcher,
     },
-    displays::Pretty,
+    displays::{
+        transaction_displays::{transform_command_results_to_annotated, FullPTB},
+        Pretty,
+    },
     types::*,
 };
 use futures::executor::block_on;
@@ -141,6 +144,7 @@ pub struct ProtocolVersionSummary {
     pub epoch_change_tx: TransactionDigest,
 }
 
+#[derive(Clone)]
 pub struct Storage {
     /// These are objects at the frontier of the execution's view
     /// They might not be the latest object currently but they are the latest objects
@@ -211,6 +215,7 @@ impl Storage {
     }
 }
 
+#[derive(Clone)]
 pub struct LocalExec {
     pub client: Option<SuiClient>,
     // For a given protocol version, what TX created it, and what is the valid range of epochs
@@ -761,12 +766,12 @@ impl LocalExec {
             executor.execute_transaction_to_effects(
                 &self,
                 protocol_config,
-                metrics,
+                metrics.clone(),
                 expensive_checks,
                 &certificate_deny_set,
                 &tx_info.executed_epoch,
                 epoch_start_timestamp,
-                CheckedInputObjects::new_for_replay(input_objects),
+                CheckedInputObjects::new_for_replay(input_objects.clone()),
                 tx_info.gas.clone(),
                 gas_status,
                 transaction_kind.clone(),
@@ -779,8 +784,30 @@ impl LocalExec {
 
         trace!(target: "replay_gas_info", "{}", Pretty(&gas_status));
 
-        if let ProgrammableTransaction(pt) = transaction_kind {
-            trace!(target: "replay_ptb_info", "{}", Pretty(&pt));
+        let skip_checks = true;
+        if let ProgrammableTransaction(ref pt) = transaction_kind {
+            trace!(target: "replay_ptb_info", "{}",
+                Pretty(
+                    &FullPTB {
+                        ptb: pt.clone(),
+                        results: transform_command_results_to_annotated(
+                            &executor,
+                            &self.clone(),
+                            executor.dev_inspect_transaction(&self, protocol_config,
+                            metrics,
+                            expensive_checks,
+                            &certificate_deny_set,
+                           &tx_info.executed_epoch,
+                            epoch_start_timestamp,
+                            CheckedInputObjects::new_for_replay(input_objects),
+                            tx_info.gas.clone(),
+                            SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)?,
+                            transaction_kind.clone(),
+                            tx_info.sender,
+                            *tx_digest,
+                            skip_checks
+                            ).3.unwrap_or_else(|e| panic!("Error executing this transaction in dev-inspect mode, {e}")),)?
+            }))
         };
 
         let all_required_objects = self.storage.all_objects();
