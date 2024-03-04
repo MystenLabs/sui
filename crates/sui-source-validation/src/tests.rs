@@ -667,6 +667,72 @@ async fn successful_versioned_dependency_verification() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = &mut cluster.wallet;
+
+    let b_ref_fixtures = tempfile::tempdir()?;
+    let b_ref = {
+        let b_src = copy_published_package(&b_ref_fixtures, "b", SuiAddress::ZERO).await?;
+        publish_package(context, b_src).await.0
+    };
+
+    let b_pkg_fixtures = tempfile::tempdir()?;
+    {
+        let pkg_path = copy_published_package(&b_pkg_fixtures, "b", b_ref.0.into()).await?;
+        let pkg = compile_package(&pkg_path);
+
+        // convert to a bytecode package
+        fs::remove_dir_all(pkg_path.join("sources"))?;
+        fs::create_dir(pkg_path.join("sources"))?;
+        let modules_out = pkg_path.join("build").join("b").join("bytecode_modules");
+        fs::create_dir_all(&modules_out)?;
+        for module in pkg.package.root_modules() {
+            let out = modules_out.join(format!("{}.mv", module.unit.name));
+            let mut buf = vec![];
+            module.unit.module.serialize(&mut buf)?;
+            fs::write(out, buf)?;
+        }
+    };
+
+    let a_fixtures = tempfile::tempdir()?;
+    let (a_pkg, a_ref) = {
+        fs::rename(b_pkg_fixtures.path().join("b"), a_fixtures.path().join("b"))?;
+        let a_src = copy_published_package(&a_fixtures, "a", SuiAddress::ZERO).await?;
+        (
+            compile_package(a_src.clone()),
+            publish_package(context, a_src).await.0,
+        )
+    };
+
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
+
+    // Skip deps and root
+    verifier
+        .verify_package(&a_pkg, /* verify_deps */ false, SourceMode::Skip)
+        .await
+        .unwrap();
+
+    // Verify deps but skip root
+    verifier.verify_package_deps(&a_pkg).await.unwrap();
+
+    // Skip deps but verify root
+    verifier
+        .verify_package_root(&a_pkg, a_ref.0.into())
+        .await
+        .unwrap();
+
+    // Verify both deps and root
+    verifier
+        .verify_package_root_and_deps(&a_pkg, a_ref.0.into())
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
 /// Compile the package at absolute path `package`.
 fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
