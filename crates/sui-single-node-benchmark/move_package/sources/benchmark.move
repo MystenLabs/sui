@@ -71,4 +71,21 @@ module move_benchmark::benchmark {
             i = i + 1;
         }
     }
+
+    struct SharedCounter has key {
+        id: UID,
+        count: u64,
+    }
+
+    public fun create_shared_counter(ctx: &mut TxContext) {
+        let counter = SharedCounter {
+            id: object::new(ctx),
+            count: 0,
+        };
+        transfer::share_object(counter);
+    }
+
+    public fun increment_shared_counter(counter: &mut SharedCounter) {
+        counter.count = counter.count + 1;
+    }
 }

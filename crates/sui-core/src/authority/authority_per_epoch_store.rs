@@ -1481,7 +1481,7 @@ impl AuthorityPerEpochStore {
         Ok(ret)
     }
 
-    async fn set_assigned_shared_object_versions(
+    pub async fn set_assigned_shared_object_versions(
         &self,
         tx_key: &TransactionKey,
         init_shared_versions: &[(ObjectID, SequenceNumber)],
