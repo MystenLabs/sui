@@ -451,7 +451,7 @@ dependencies = [
  "pin-project",
  "serde_json",
  "tokio",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
 ]
 
@@ -528,7 +528,7 @@ dependencies = [
  "tap",
  "thiserror",
  "tokio",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower",
  "tracing",
  "x509-parser",
@@ -1340,7 +1340,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower-service",
 ]
 
@@ -1903,7 +1903,7 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
  "tokio",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
 ]
 
@@ -6808,7 +6808,7 @@ dependencies = [
  "indexmap 2.1.0",
  "slab",
  "tokio",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
 ]
 
@@ -7683,7 +7683,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-rustls 0.23.4",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "webpki-roots 0.22.6",
 ]
@@ -7761,7 +7761,7 @@ dependencies = [
  "soketto",
  "tokio",
  "tokio-stream",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower",
  "tracing",
 ]
@@ -9224,7 +9224,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=1a52783d6600ecc22e15253a982f77881bd47c77#1a52783d6600ecc22e15253a982f77881bd47c77"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=4d9040e5c6bb264bfe14900d09a5da4000154da8#4d9040e5c6bb264bfe14900d09a5da4000154da8"
 dependencies = [
  "ahash 0.7.6",
  "async-task 4.3.0",
@@ -9244,7 +9244,7 @@ dependencies = [
  "serde",
  "socket2 0.4.9",
  "tap",
- "tokio-util 0.7.7",
+ "tokio-util 0.7.10 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e47aafebf98e9c1734a8848a1876d5946c44bdd1)",
  "toml 0.5.10",
  "tracing",
  "tracing-subscriber",
@@ -9253,7 +9253,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=1a52783d6600ecc22e15253a982f77881bd47c77#1a52783d6600ecc22e15253a982f77881bd47c77"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=4d9040e5c6bb264bfe14900d09a5da4000154da8#4d9040e5c6bb264bfe14900d09a5da4000154da8"
 dependencies = [
  "darling 0.14.2",
  "proc-macro2 1.0.78",
@@ -12016,10 +12016,10 @@ dependencies = [
 
 [[package]]
 name = "real_tokio"
-version = "1.28.1"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e4693500118d5e79ce098ee6dfc2c48f3ef19e45#e4693500118d5e79ce098ee6dfc2c48f3ef19e45"
+version = "1.36.0"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e47aafebf98e9c1734a8848a1876d5946c44bdd1#e47aafebf98e9c1734a8848a1876d5946c44bdd1"
 dependencies = [
- "autocfg",
+ "backtrace",
  "bytes",
  "libc",
  "mio 0.8.10",
@@ -12027,8 +12027,8 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2 0.4.9",
- "tokio-macros 2.1.0",
+ "socket2 0.5.6",
+ "tokio-macros 2.2.0 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e47aafebf98e9c1734a8848a1876d5946c44bdd1)",
  "windows-sys 0.48.0",
 ]
 
@@ -12173,7 +12173,7 @@ dependencies = [
  "serde_urlencoded",
  "tokio",
  "tokio-rustls 0.24.1",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -12644,7 +12644,7 @@ dependencies = [
  "subtle",
  "thiserror",
  "tokio",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -14356,7 +14356,7 @@ dependencies = [
  "telemetry-subscribers",
  "test-cluster",
  "tokio",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "typed-store",
 ]
@@ -17080,7 +17080,7 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2 0.5.6",
- "tokio-macros 2.2.0",
+ "tokio-macros 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "windows-sys 0.48.0",
 ]
@@ -17097,8 +17097,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "2.1.0"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e4693500118d5e79ce098ee6dfc2c48f3ef19e45#e4693500118d5e79ce098ee6dfc2c48f3ef19e45"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
 dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
@@ -17108,8 +17109,7 @@ dependencies = [
 [[package]]
 name = "tokio-macros"
 version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e47aafebf98e9c1734a8848a1876d5946c44bdd1#e47aafebf98e9c1734a8848a1876d5946c44bdd1"
 dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
@@ -17157,7 +17157,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -17177,9 +17177,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.4"
+version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bb2e075f03b3d66d8d8785356224ba688d2906a371015e225beeb65ca92c740"
+checksum = "5419f34732d9eb6ee4c3578b7989078579b7f039cbbb9ca2c4da015749371e15"
 dependencies = [
  "bytes",
  "futures-core",
@@ -17192,15 +17192,15 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.7"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e4693500118d5e79ce098ee6dfc2c48f3ef19e45#e4693500118d5e79ce098ee6dfc2c48f3ef19e45"
+version = "0.7.10"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e47aafebf98e9c1734a8848a1876d5946c44bdd1#e47aafebf98e9c1734a8848a1876d5946c44bdd1"
 dependencies = [
  "bytes",
  "futures-core",
  "futures-io",
  "futures-sink",
  "futures-util",
- "hashbrown 0.12.3",
+ "hashbrown 0.14.1",
  "pin-project-lite",
  "real_tokio",
  "slab",
@@ -17436,7 +17436,7 @@ dependencies = [
  "rand 0.8.5",
  "slab",
  "tokio",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -17464,7 +17464,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "tokio",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower",
  "tower-layer",
  "tower-service",
@@ -17491,7 +17491,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "tokio",
- "tokio-util 0.7.4",
+ "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower-layer",
  "tower-service",
  "tracing",
