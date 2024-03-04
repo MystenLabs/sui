@@ -23,6 +23,7 @@ pub async fn run_benchmark(
     component: Component,
     checkpoint_size: usize,
     print_sample_tx: bool,
+    skip_signing: bool,
 ) {
     let mut ctx = BenchmarkContext::new(
         workload.clone(),
@@ -47,7 +48,7 @@ pub async fn run_benchmark(
                 .await;
         }
         _ => {
-            ctx.benchmark_transaction_execution(transactions, print_sample_tx)
+            ctx.benchmark_transaction_execution(transactions, print_sample_tx, skip_signing)
                 .await;
         }
     }

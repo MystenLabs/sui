@@ -18,7 +18,9 @@ use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::mock_checkpoint_builder::ValidatorKeypairProvider;
-use sui_types::transaction::{CertifiedTransaction, SignedTransaction, Transaction};
+use sui_types::transaction::{
+    CertifiedTransaction, SignedTransaction, Transaction, VerifiedTransaction,
+};
 use tracing::info;
 
 pub struct BenchmarkContext {
@@ -155,6 +157,7 @@ impl BenchmarkContext {
     pub(crate) async fn certify_transactions(
         &self,
         transactions: Vec<Transaction>,
+        skip_signing: bool,
     ) -> Vec<CertifiedTransaction> {
         info!("Creating transaction certificates");
         let tasks: FuturesUnordered<_> = transactions
@@ -163,8 +166,23 @@ impl BenchmarkContext {
                 let validator = self.validator();
                 tokio::spawn(async move {
                     let committee = validator.get_committee();
-                    let validator = validator.get_validator();
-                    let sig = SignedTransaction::sign(0, &tx, &*validator.secret, validator.name);
+                    let validator_state = validator.get_validator();
+                    let sig = if skip_signing {
+                        SignedTransaction::sign(
+                            0,
+                            &tx,
+                            &*validator_state.secret,
+                            validator_state.name,
+                        )
+                    } else {
+                        let verified_tx = VerifiedTransaction::new_unchecked(tx.clone());
+                        validator_state
+                            .handle_transaction(validator.get_epoch_store(), verified_tx)
+                            .await
+                            .unwrap()
+                            .status
+                            .into_signed_for_testing()
+                    };
                     CertifiedTransaction::new(tx.into_data(), vec![sig], committee).unwrap()
                 })
             })
@@ -177,8 +195,9 @@ impl BenchmarkContext {
         &self,
         transactions: Vec<Transaction>,
         print_sample_tx: bool,
+        skip_signing: bool,
     ) {
-        let mut transactions = self.certify_transactions(transactions).await;
+        let mut transactions = self.certify_transactions(transactions, skip_signing).await;
         if print_sample_tx {
             self.execute_sample_transaction(transactions.pop().unwrap().into_unsigned())
                 .await;
