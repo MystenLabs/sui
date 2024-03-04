@@ -5,7 +5,7 @@ module a::m {
     fun any<T>(): T { abort 0 }
 
     fun globals00(): bool {
-        let mut x: T<u64> = any();
+        let x: T<u64> = any();
         let y: &T<u64> = abort 0;
         let z: &mut T<u64> = abort 0;
         x == y && x == z
@@ -19,7 +19,7 @@ module a::m {
     }
 
     fun globals02(): u64 {
-        let mut x = any();
+        let x = any();
         let y = &any();
         let z = &mut any();
         x == y && x == z;
@@ -49,7 +49,7 @@ module a::m {
     }
 
     fun locals02(): bool {
-        let mut x = abort 0;
+        let x = abort 0;
         let y = &(abort 0);
         let z = &mut (abort 0);
         x == y && x == z;
@@ -60,7 +60,7 @@ module a::m {
     fun options00(): bool {
         let mut c = option_none();
         c == c;
-        let mut x: T<u64> = option_take(&mut c);
+        let x: T<u64> = option_take(&mut c);
         x == &mut T { q: 5 };
         option_fill(&mut c, T { q: 10 });
         x == x
@@ -78,7 +78,7 @@ module a::m {
     fun options02(): T<u64> {
         let mut c = option_none();
         c == c;
-        let mut x = option_take(&mut c);
+        let x = option_take(&mut c);
         x == &mut T { q: 5 };
         option_fill(&mut c, T { q: 10 });
         x == x;

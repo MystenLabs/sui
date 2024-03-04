@@ -8,7 +8,7 @@ module 0x8675309::M {
     public struct G2<phantom T> has drop {}
 
 
-    fun t0(mut s: S, s_ref: &S, s_mut: &mut S) {
+    fun t0(s: S, s_ref: &S, s_mut: &mut S) {
         (0: u8) == (1: u128);
         0 == false;
         &0 == 1;
