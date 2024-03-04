@@ -22,6 +22,10 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
 
+const LATENCY_NANOSEC_BUCKETS: &[f64] = &[
+    1., 5., 10., 100., 500., 1000., 10000., 100000., 1000000., 2000000., 5000000., 10000000., 20000000., 30000000., 60000000., 90000000.,
+];
+
 #[derive(Debug, Clone)]
 // A struct for sampling based on number of operations or duration.
 // Sampling happens if the duration expires and after number of operations
@@ -762,72 +766,80 @@ impl ReadPerfContextMetrics {
 
 #[derive(Debug)]
 pub struct WritePerfContextMetrics {
-    pub write_wal_nanos: IntCounterVec,
-    pub write_memtable_nanos: IntCounterVec,
-    pub write_delay_nanos: IntCounterVec,
-    pub write_pre_and_post_process_nanos: IntCounterVec,
-    pub write_db_mutex_lock_nanos: IntCounterVec,
-    pub write_db_condition_wait_nanos: IntCounterVec,
-    pub write_key_lock_wait_nanos: IntCounterVec,
-    pub write_key_lock_wait_count: IntCounterVec,
+    pub write_wal_nanos: HistogramVec,
+    pub write_memtable_nanos: HistogramVec,
+    pub write_delay_nanos: HistogramVec,
+    pub write_pre_and_post_process_nanos: HistogramVec,
+    pub write_db_mutex_lock_nanos: HistogramVec,
+    pub write_db_condition_wait_nanos: HistogramVec,
+    pub write_key_lock_wait_nanos: HistogramVec,
+    pub write_key_lock_wait_count: HistogramVec,
 }
 
 impl WritePerfContextMetrics {
     pub(crate) fn new(registry: &Registry) -> Self {
         WritePerfContextMetrics {
-            write_wal_nanos: register_int_counter_vec_with_registry!(
+            write_wal_nanos: register_histogram_vec_with_registry!(
                 "write_wal_nanos",
                 "Total nanos spent on writing to WAL",
                 &["cf_name"],
+                LATENCY_NANOSEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
-            write_memtable_nanos: register_int_counter_vec_with_registry!(
+            write_memtable_nanos: register_histogram_vec_with_registry!(
                 "write_memtable_nanos",
                 "Total nanos spent on writing to memtable",
                 &["cf_name"],
+                LATENCY_NANOSEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
-            write_delay_nanos: register_int_counter_vec_with_registry!(
+            write_delay_nanos: register_histogram_vec_with_registry!(
                 "write_delay_nanos",
                 "Total nanos spent on delaying or throttling write",
                 &["cf_name"],
+                LATENCY_NANOSEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
-            write_pre_and_post_process_nanos: register_int_counter_vec_with_registry!(
+            write_pre_and_post_process_nanos: register_histogram_vec_with_registry!(
                 "write_pre_and_post_process_nanos",
                 "Total nanos spent on writing a record, excluding the above four things",
                 &["cf_name"],
+                LATENCY_NANOSEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
-            write_db_mutex_lock_nanos: register_int_counter_vec_with_registry!(
+            write_db_mutex_lock_nanos: register_histogram_vec_with_registry!(
                 "write_db_mutex_lock_nanos",
                 "Time spent on acquiring db mutex",
                 &["cf_name"],
+                LATENCY_NANOSEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
-            write_db_condition_wait_nanos: register_int_counter_vec_with_registry!(
+            write_db_condition_wait_nanos: register_histogram_vec_with_registry!(
                 "write_db_condition_wait_nanos",
                 "Time spent waiting with a condition variable created with DB Mutex.",
                 &["cf_name"],
+                LATENCY_NANOSEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
-            write_key_lock_wait_nanos: register_int_counter_vec_with_registry!(
+            write_key_lock_wait_nanos: register_histogram_vec_with_registry!(
                 "write_key_lock_wait_time",
                 "Time spent waiting on key locks in transaction lock manager",
                 &["cf_name"],
+                LATENCY_NANOSEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
-            write_key_lock_wait_count: register_int_counter_vec_with_registry!(
+            write_key_lock_wait_count: register_histogram_vec_with_registry!(
                 "write_key_lock_wait_count",
                 "Number of times acquiring a lock was blocked by another transaction",
                 &["cf_name"],
+                LATENCY_NANOSEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -839,28 +851,28 @@ impl WritePerfContextMetrics {
             let perf_context = perf_context_cell.borrow();
             self.write_wal_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::WriteWalTime));
+                .observe(perf_context.metric(PerfMetric::WriteWalTime) as f64);
             self.write_memtable_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::WriteMemtableTime));
+                .observe(perf_context.metric(PerfMetric::WriteMemtableTime) as f64);
             self.write_delay_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::WriteDelayTime));
+                .observe(perf_context.metric(PerfMetric::WriteDelayTime) as f64);
             self.write_pre_and_post_process_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::WritePreAndPostProcessTime));
+                .observe(perf_context.metric(PerfMetric::WritePreAndPostProcessTime) as f64);
             self.write_db_mutex_lock_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::DbMutexLockNanos));
+                .observe(perf_context.metric(PerfMetric::DbMutexLockNanos) as f64);
             self.write_db_condition_wait_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::DbConditionWaitNanos));
+                .observe(perf_context.metric(PerfMetric::DbConditionWaitNanos) as f64);
             self.write_key_lock_wait_nanos
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::KeyLockWaitTime));
+                .observe(perf_context.metric(PerfMetric::KeyLockWaitTime) as f64);
             self.write_key_lock_wait_count
                 .with_label_values(&[db_name])
-                .inc_by(perf_context.metric(PerfMetric::KeyLockWaitCount));
+                .observe(perf_context.metric(PerfMetric::KeyLockWaitCount) as f64);
         });
     }
 }
