@@ -10,8 +10,8 @@ use sui_json_rpc_api::BridgeReadApiClient;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockResponseOptions};
 use sui_macros::sim_test;
-use sui_types::bridge::BridgeTrait;
 use sui_types::bridge::{get_bridge, get_bridge_obj_initial_shared_version, BRIDGE_MODULE_NAME};
+use sui_types::bridge::{BridgeTrait, BRIDGE_ENABLE_PROTOCOL_VERSION};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
 use sui_types::{BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
@@ -20,7 +20,7 @@ use test_cluster::TestClusterBuilder;
 #[sim_test]
 async fn test_create_bridge_state_object() {
     let test_cluster = TestClusterBuilder::new()
-        .with_protocol_version(37.into())
+        .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION - 1).into())
         .with_epoch_duration_ms(20000)
         .build()
         .await;
@@ -40,7 +40,9 @@ async fn test_create_bridge_state_object() {
     }
 
     // wait until feature is enabled
-    test_cluster.wait_for_protocol_version(36.into()).await;
+    test_cluster
+        .wait_for_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
+        .await;
     // wait until next epoch - authenticator state object is created at the end of the first epoch
     // in which it is supported.
     test_cluster.wait_for_epoch_all_nodes(2).await; // protocol upgrade completes in epoch 1
@@ -60,7 +62,7 @@ async fn test_create_bridge_state_object() {
 async fn test_committee_registration() {
     telemetry_subscribers::init_for_testing();
     let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-        .with_protocol_version(37.into())
+        .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
         .with_epoch_duration_ms(10000)
         .build()
         .await;
@@ -192,7 +194,7 @@ async fn test_committee_registration() {
 #[tokio::test]
 async fn test_bridge_api_compatibility() {
     let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-        .with_protocol_version(37.into())
+        .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
         .with_epoch_duration_ms(10000)
         .build()
         .await;
