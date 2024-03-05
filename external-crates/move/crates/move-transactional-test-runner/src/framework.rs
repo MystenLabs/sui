@@ -619,11 +619,9 @@ pub fn compile_source_units(
             return None;
         }
 
-        let error_buffer = if read_bool_env_var(move_command_line_common::testing::PRETTY) {
-            move_compiler::diagnostics::report_diagnostics_to_color_buffer(files, diags)
-        } else {
-            move_compiler::diagnostics::report_diagnostics_to_buffer(files, diags)
-        };
+        let ansi_color = read_bool_env_var(move_command_line_common::testing::PRETTY);
+        let error_buffer =
+            move_compiler::diagnostics::report_diagnostics_to_buffer(files, diags, ansi_color);
         Some(String::from_utf8(error_buffer).unwrap())
     }
 
@@ -650,7 +648,7 @@ pub fn compile_source_units(
         .map(|(_comments, move_compiler)| move_compiler.into_compiled_units());
 
     match units_or_diags {
-        Err(diags) => {
+        Err((_pass, diags)) => {
             if let Some(pcd) = state.pre_compiled_deps {
                 for (file_name, text) in &pcd.files {
                     // TODO This is bad. Rethink this when errors are redone

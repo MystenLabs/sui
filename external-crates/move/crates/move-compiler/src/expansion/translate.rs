@@ -1479,7 +1479,7 @@ struct Move2024PathExpander {
     aliases: AliasMap,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum AccessChainResult {
     ModuleAccess(Loc, E::ModuleAccess_),
     Address(Loc, E::Address),
@@ -1488,7 +1488,7 @@ enum AccessChainResult {
     ResolutionFailure(Box<AccessChainResult>, AccessChainFailure),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum AccessChainFailure {
     UnresolvedAlias(Name),
     InvalidKind(String),
@@ -1702,28 +1702,44 @@ impl PathExpander for Move2024PathExpander {
         sp!(loc, avalue_): P::AttributeValue,
     ) -> Option<E::AttributeValue> {
         use E::AttributeValue_ as EV;
-        use P::{AttributeValue_ as PV, LeadingNameAccess_ as LN, NameAccessChain_ as PN};
+        use P::AttributeValue_ as PV;
         Some(sp(
             loc,
             match avalue_ {
                 PV::Value(v) => EV::Value(value(context, v)?),
-                PV::ModuleAccess(
-                    sp!(ident_loc, PN::Two(sp!(aloc, LN::AnonymousAddress(a)), n)),
-                ) => {
-                    let addr = Address::anonymous(aloc, a);
-                    let mident = sp(ident_loc, ModuleIdent_::new(addr, ModuleName(n)));
-                    if context.module_members.get(&mident).is_none() {
-                        context.env.add_diag(diag!(
-                            NameResolution::UnboundModule,
-                            (ident_loc, format!("Unbound module '{}'", mident))
-                        ));
-                    }
-                    EV::Module(mident)
-                }
-                // TODO consider if we want to just force all of these checks into the well-known
-                // attribute setup
+                // A bit strange, but we try to resolve it as a term and a module, and report
+                // an error if they both resolve (to different things)
                 PV::ModuleAccess(access_chain) => {
-                    match self.resolve_name_access_chain(context, Access::Term, access_chain) {
+                    let term_result =
+                        self.resolve_name_access_chain(context, Access::Term, access_chain.clone());
+                    let module_result =
+                        self.resolve_name_access_chain(context, Access::Module, access_chain);
+                    let result = match (term_result, module_result) {
+                        (t_res, m_res) if t_res == m_res => t_res,
+                        (
+                            AccessChainResult::ResolutionFailure(_, _)
+                            | AccessChainResult::UnresolvedName(_, _),
+                            other,
+                        )
+                        | (
+                            other,
+                            AccessChainResult::ResolutionFailure(_, _)
+                            | AccessChainResult::UnresolvedName(_, _),
+                        ) => other,
+                        (t_res, m_res) => {
+                            let msg = format!(
+                                "Ambiguous attribute value. It can resolve to both {} and {}",
+                                t_res.err_name(),
+                                m_res.err_name()
+                            );
+                            context
+                                .env
+                                .add_diag(diag!(Attributes::AmbiguousAttributeValue, (loc, msg)));
+                            return None;
+                        }
+                    };
+
+                    match result {
                         AccessChainResult::ModuleIdent(_, mident) => {
                             if context.module_members.get(&mident).is_none() {
                                 context.env.add_diag(diag!(
@@ -1739,18 +1755,7 @@ impl PathExpander for Move2024PathExpander {
                         AccessChainResult::UnresolvedName(loc, name) => {
                             EV::ModuleAccess(sp(loc, E::ModuleAccess_::Name(name)))
                         }
-                        AccessChainResult::Address(loc, _) => {
-                            let diag = diag!(
-                                NameResolution::NamePositionMismatch,
-                                (
-                                    loc,
-                                    "Found an address, but expected a module or module member"
-                                        .to_string(),
-                                )
-                            );
-                            context.env.add_diag(diag);
-                            return None;
-                        }
+                        AccessChainResult::Address(_, a) => EV::Address(a),
                         result @ AccessChainResult::ResolutionFailure(_, _) => {
                             context.env.add_diag(access_chain_resolution_error(result));
                             return None;
