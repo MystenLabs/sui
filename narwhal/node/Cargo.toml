@@ -11,8 +11,7 @@ arc-swap.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
-# clap.workspace = true
-clap = { version = "4", features = ["derive"] }
+clap.workspace = true
 futures.workspace = true
 rand.workspace = true
 thiserror.workspace = true

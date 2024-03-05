@@ -22,7 +22,7 @@ axum-server = { version = "0.5.1", default-features = false, features = [
 ] }
 aya = { git = "https://github.com/aya-rs/aya", features = ["async_tokio"] }
 aya-log = { git = "https://github.com/aya-rs/aya" }
-clap = { version = "4.1", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
 env_logger = "0.10"
 http-body = "0.4.5"
 libc = "0.2"
