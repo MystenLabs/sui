@@ -172,21 +172,22 @@ impl AuthorityStorePruner {
 
         let mut updates: HashMap<ObjectID, (VersionNumber, VersionNumber)> = HashMap::new();
         for ObjectKey(object_id, seq_number) in live_object_keys_to_prune {
-            updates
-                .entry(object_id)
-                .and_modify(|range| *range = (min(range.0, seq_number), max(range.1, seq_number)))
-                .or_insert((seq_number, seq_number));
+            wb.delete_batch(&perpetual_db.objects, std::iter::once(ObjectKey(object_id, seq_number)))?;
+            // updates
+            //     .entry(object_id)
+            //     .and_modify(|range| *range = (min(range.0, seq_number), max(range.1, seq_number)))
+            //     .or_insert((seq_number, seq_number));
         }
 
-        for (object_id, (min_version, max_version)) in updates {
-            debug!(
-                "Pruning object {:?} versions {:?} - {:?}",
-                object_id, min_version, max_version
-            );
-            let start_range = ObjectKey(object_id, min_version);
-            let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
-            wb.schedule_delete_range(&perpetual_db.objects, &start_range, &end_range)?;
-        }
+        // for (object_id, (min_version, max_version)) in updates {
+        //     debug!(
+        //         "Pruning object {:?} versions {:?} - {:?}",
+        //         object_id, min_version, max_version
+        //     );
+        //     let start_range = ObjectKey(object_id, min_version);
+        //     let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
+        //     wb.schedule_delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+        // }
 
         // When enable_pruning_tombstones is enabled, instead of using range deletes, we need to do a scan of all the keys
         // for the deleted objects and then do point deletes to delete all the existing keys. This is because to improve read
