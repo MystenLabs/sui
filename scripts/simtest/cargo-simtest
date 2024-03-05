@@ -75,6 +75,16 @@ if [ -n "$USE_MOCK_CRYPTO" ]; then
   )
 fi
 
+TARGET=$(rustc -vV | grep host | sed 's/^host: //')
+if [ -z "$TARGET" ]; then
+  echo "Failed to determine target from rustc -vV"
+  exit 1
+fi
+
+# set target so that cargo runs in cross compilation mode. needed so that build
+# scripts are not built with the simulator
+export CARGO_BUILD_TARGET="$TARGET"
+
 RUST_FLAGS=$(IFS=, ; echo "${RUST_FLAGS[*]}")
 
 if ! cargo nextest --help > /dev/null 2>&1; then
