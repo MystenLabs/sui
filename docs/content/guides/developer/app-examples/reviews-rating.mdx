@@ -62,9 +62,9 @@ This module defines Services struct which is managed by a service owner.
     }
 ```
 
-All the submitted reviews are stored in ***reviews*** field which has ***MultiMap<ID\>*** type. MultiMap is our implementation of Multimap data structure (https://en.wikipedia.org/wiki/Multimap) which keeps all the reviews sorted by their. Using MultiMap, all the reviews are ordered such that the high rated reviews come first.
+All the submitted reviews are stored in ***reviews*** field which has ***MultiMap<ID\>*** type. MultiMap is our implementation of Multimap data structure (https://en.wikipedia.org/wiki/Multimap) which keeps all the reviews sorted. Using MultiMap, all the reviews are ordered such that the high rated reviews come first.
 
-***reward_pool*** and ***reward*** are available to attract reviewers to submit their reviews
+***reward_pool*** and ***reward*** are available to attract reviewers to submit their reviews.
 
 ### review.move
 This module defines Review struct.
@@ -89,7 +89,7 @@ This module defines Review struct.
 In addition to the content of a review, all the elements that are required to compute total score are stored in a Review object.
 
 ## Backend
-No backend service is required to run this platform. All data is stored onchain and reviews are rated onchain!
+No backend service is required to run this platform. All data is stored onchain and reviews are rated and sorted onchain!
 
 ## Frontend
 A React frontend is implemented and is available at https://github.com/MystenLabs/reviews-ratings-poc
