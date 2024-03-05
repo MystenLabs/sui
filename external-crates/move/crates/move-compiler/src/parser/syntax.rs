@@ -3201,16 +3201,13 @@ fn parse_use_module(
         (None, Tok::ColonColon) => {
             consume_token(context.tokens, Tok::ColonColon)?;
             let sub_uses = match context.tokens.peek() {
-                Tok::LBrace => {
-                    let use_members = parse_comma_list(
-                        context,
-                        Tok::LBrace,
-                        Tok::RBrace,
-                        parse_use_member,
-                        "a module member alias",
-                    )?;
-                    use_members
-                }
+                Tok::LBrace => parse_comma_list(
+                    context,
+                    Tok::LBrace,
+                    Tok::RBrace,
+                    parse_use_member,
+                    "a module member alias",
+                )?,
                 _ => vec![parse_use_member(context)?],
             };
             ModuleUse::Members(sub_uses)
