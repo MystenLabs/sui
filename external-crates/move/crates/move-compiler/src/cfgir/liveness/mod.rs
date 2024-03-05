@@ -162,7 +162,6 @@ pub fn last_usage(
     cfg: &mut MutForwardCFG,
 ) {
     let super::CFGContext {
-        locals,
         infinite_loop_starts,
         ..
     } = context;
@@ -172,13 +171,7 @@ pub fn last_usage(
             .get(lbl)
             .unwrap_or_else(|| panic!("ICE no liveness states for {}", lbl));
         let command_states = per_command_states.get(lbl).unwrap();
-        last_usage::block(
-            compilation_env,
-            locals,
-            final_invariant,
-            command_states,
-            block,
-        )
+        last_usage::block(compilation_env, final_invariant, command_states, block)
     }
 }
 
@@ -186,12 +179,11 @@ mod last_usage {
     use crate::{
         cfgir::liveness::state::LivenessState,
         diag,
-        expansion::ast::Mutability,
         hlir::{
             ast::*,
             translate::{display_var, DisplayVar},
         },
-        shared::{unique_map::*, *},
+        shared::*,
     };
     use std::collections::{BTreeSet, VecDeque};
 
@@ -204,7 +196,6 @@ mod last_usage {
     impl<'a, 'b> Context<'a, 'b> {
         fn new(
             env: &'a mut CompilationEnv,
-            _locals: &'a UniqueMap<Var, (Mutability, SingleType)>,
             next_live: &'b BTreeSet<Var>,
             dropped_live: BTreeSet<Var>,
         ) -> Self {
@@ -218,7 +209,6 @@ mod last_usage {
 
     pub fn block(
         compilation_env: &mut CompilationEnv,
-        locals: &UniqueMap<Var, (Mutability, SingleType)>,
         final_invariant: &LivenessState,
         command_states: &VecDeque<LivenessState>,
         block: &mut BasicBlock,
@@ -242,7 +232,7 @@ mod last_usage {
                 .cloned()
                 .collect::<BTreeSet<_>>();
             command(
-                &mut Context::new(compilation_env, locals, next_data, dropped_live),
+                &mut Context::new(compilation_env, next_data, dropped_live),
                 cmd,
             )
         }

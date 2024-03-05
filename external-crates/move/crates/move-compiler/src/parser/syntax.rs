@@ -2686,7 +2686,6 @@ fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context
                     .env
                     .add_diag(diag!(Migration::NeedsPublic, (loc, msg.clone())))
             }
-
             let mut err = diag!(Syntax::InvalidModifier, (loc, msg));
             err.add_note(note);
             context.env.add_diag(err);
