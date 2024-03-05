@@ -27,8 +27,7 @@ module ml::linear_regression_tests {
         test_scenario::next_tx(scenario, user2);
         linear_regression::submit_point(model, 3, 5);
         
-        std::debug::print(&linear_regression::get_alpha(model));
-        std::debug::print(&linear_regression::get_beta(model));
+        std::debug::print(&linear_regression::get_coefficients(model));
 
         test_scenario::return_shared(model_val);
         test_scenario::end(scenario_val);

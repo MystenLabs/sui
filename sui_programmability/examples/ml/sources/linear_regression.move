@@ -46,11 +46,14 @@ module ml::linear_regression {
         model.cov_xy = divide_by_constant(add(model.cov_xy, subtract(multiply(multiply(from_rational(model.n-1, model.n, false), dx), dy), model.cov_xy)), model.n);
     }
 
-    public entry fun get_alpha(model: &mut Model): IFixedPoint32 {
-        divide(model.cov_xy, model.var_x)   
+    public fun get_coefficients(model: &mut Model): vector<IFixedPoint32> {
+        let alpha = divide(model.cov_xy, model.var_x);
+        let beta = subtract(model.mean_y, multiply(alpha, model.mean_x));
+        vector[beta, alpha]
     }
 
-    public entry fun get_beta(model: &mut Model): IFixedPoint32 {
-        subtract(model.mean_y, multiply(get_alpha(model), model.mean_x))
+    public fun predict(model: &mut Model, x: IFixedPoint32): IFixedPoint32 {
+        let coefficients = get_coefficients(model);
+        add(*std::vector::borrow(&coefficients, 0), multiply(*std::vector::borrow(&coefficients, 1), x))
     }
 }
