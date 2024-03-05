@@ -1029,7 +1029,7 @@ pub fn to_ordinal_contraction(num: usize) -> String {
     format!("{}{}", num, suffix)
 }
 
-fn find_did_you_means<'a>(
+pub(crate) fn find_did_you_means<'a>(
     needle: &str,
     haystack: impl IntoIterator<Item = &'a str>,
 ) -> Vec<&'a str> {
@@ -1055,7 +1055,9 @@ fn find_did_you_means<'a>(
     results
 }
 
-fn display_did_you_mean(possibles: Vec<&str>) -> Option<String> {
+pub(crate) fn display_did_you_mean<S: AsRef<str> + std::fmt::Display>(
+    possibles: Vec<S>,
+) -> Option<String> {
     if possibles.is_empty() {
         return None;
     }
