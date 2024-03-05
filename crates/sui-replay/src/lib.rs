@@ -445,7 +445,7 @@ pub async fn execute_replay_command(
                     "https://multisig-toolkit-amz9iwckn-mysten-labs.vercel.app/replay?network={}#{:?}",&rpc_url.unwrap_or("local".parse()?),
                     compressed
                 ).replace(" ", "");
-                info!("{:?}", url);
+                //info!("{:?}", url);
                 open::that(url).ok();
             }
 

@@ -8,6 +8,7 @@ import { useLocation, useSearchParams } from 'react-router-dom';
 import 'react-json-view-lite/dist/index.css';
 
 import * as Tabs from '@radix-ui/react-tabs';
+import * as wasm from "lz4-wasm";
 
 import { ReplayType } from '@/components/replay/replay-types';
 import { ReplayContext } from '@/components/replay/ReplayContext';
@@ -28,12 +29,14 @@ export function Replay() {
 
 	useEffect(() => {
 		if (hash) {
-			setData(objectToCamelCase(JSON.parse(decodeURIComponent(hash.slice(1)))) as ReplayType);
+			setData(objectToCamelCase(JSON.parse(wasm.decompress(hash.slice(1)))) as ReplayType);
+			console.log(data);
 		}
 	}, [hash]);
 
 	useEffect(() => {
 		const urlNetwork = searchParams.get('network');
+		console.log(urlNetwork);
 		if (urlNetwork && urlNetwork !== network) setNetwork(urlNetwork);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [searchParams]);

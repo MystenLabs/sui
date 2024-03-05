@@ -52,7 +52,7 @@ export function ReplayTransactionBlocks({
 
 							{'SplitCoins' in command && (
 								<>
-									<div>From: {renderArgument(command.SplitCoins[0])}</div>
+									<div>Coin: {renderArgument(command.SplitCoins[0])}</div>
 									<div>
 										Amounts:
 										{command.SplitCoins[1].map((argument) => renderArgument(argument))}
@@ -62,6 +62,44 @@ export function ReplayTransactionBlocks({
 							)}
 
 							{/* { 'MergeCoins' in command && ... } */}
+							{'TransferObjects' in command && (
+								<>
+									<div>Address: {renderArgument(command.TransferObjects[1])}</div>
+									<div>
+										Objects:
+										{command.SplitCoins[0].map((argument) => renderArgument(argument))}
+									</div>
+								</>
+							)}
+
+							{'MergeCoins' in command && (
+								<>
+									<div>Coin: {renderArgument(command.MergeCoins[0])}</div>
+									<div>
+										Coins:
+										{command.SplitCoins[1].map((argument) => renderArgument(argument))}
+									</div>
+								</>
+							)}
+							{'MakeMoveVec' in command && (
+								<>
+									<div>Type: {renderArgument(command.MakeMoveVec[0])}</div>
+									<div>
+										Arguments:
+										{command.MakeMoveVec[1].map((argument) => renderArgument(argument))}
+									</div>
+								</>
+							)}
+							{'Publish' in command && (
+								<>
+									<div>ObjectIds: {command.Publish[1].map((argument) => renderArgument(argument))}</div>
+								</>
+							)}
+							{'Upgrade' in command && (
+								<>
+									<div>ObjectId: {renderArgument(command.Upgrade[2])}</div>
+								</>
+							)}
 						</div>
 					</PreviewCard.Body>
 				</PreviewCard.Root>
