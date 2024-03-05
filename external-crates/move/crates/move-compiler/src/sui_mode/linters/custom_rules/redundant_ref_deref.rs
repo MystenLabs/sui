@@ -1,3 +1,6 @@
+// Implements lint rule for Move code to detect redundant reference dereference patterns.
+// It identifies and reports unnecessary temporary borrow followed by a dereference and a local borrow.
+// Aims to improve code efficiency by suggesting direct usage of expressions without redundant operations.
 use crate::{
     diag,
     diagnostics::{

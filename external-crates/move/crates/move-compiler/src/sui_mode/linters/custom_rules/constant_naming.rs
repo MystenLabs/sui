@@ -53,7 +53,7 @@ impl TypingVisitor for ConstantNamingVisitor {
 fn check_constant_naming(env: &mut CompilationEnv, name: Symbol, loc: Loc) {
     if !is_all_caps_snake_case(name.as_str()) {
         let uid_msg = format!(
-            "{} should be named using UPPER_CASE_WITH_UNDERSCORES.",
+            "{} should be snaked cased and all caps, e.g. UPPER_CASE_WITH_UNDERSCORES",
             name.as_str()
         );
 

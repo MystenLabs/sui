@@ -9,5 +9,4 @@ module 0x42::M {
     const MinValue: u64 = 1; // Should trigger a warning
     const Another_badName: u64 = 42; // Should trigger a warning
     const YetAnotherName: u64 = 777; // Should trigger a warning
-
 }
