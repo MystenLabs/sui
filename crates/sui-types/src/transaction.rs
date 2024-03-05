@@ -1392,7 +1392,9 @@ impl TransactionKind {
                 }]
             }
             Self::EndOfEpochTransaction(txns) => {
-                txns.iter().flat_map(|txn| txn.input_objects()).collect()
+                // Dedup since transactions may have a overlap in input objects.
+                let deduped: HashSet<_> = txns.iter().flat_map(|txn| txn.input_objects()).collect();
+                deduped.into_iter().collect()
             }
             Self::ProgrammableTransaction(p) => return p.input_objects(),
         };
@@ -2805,7 +2807,7 @@ pub trait VersionedProtocolMessage {
     fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult;
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord, Hash)]
 pub enum InputObjectKind {
     // A Move package, must be immutable.
     MovePackage(ObjectID),

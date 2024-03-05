@@ -52,6 +52,9 @@ CallArg:
       Object:
         NEWTYPE:
           TYPENAME: ObjectArg
+ChainIdentifier:
+  NEWTYPESTRUCT:
+    TYPENAME: CheckpointDigest
 ChangeEpoch:
   STRUCT:
     - epoch: U64
@@ -303,7 +306,13 @@ EndOfEpochTransactionKind:
     4:
       DenyListStateCreate: UNIT
     5:
-      BridgeStateCreate: UNIT
+      BridgeStateCreate:
+        NEWTYPE:
+          TYPENAME: ChainIdentifier
+    6:
+      BridgeCommitteeInit:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
 Envelope:
   STRUCT:
     - data:

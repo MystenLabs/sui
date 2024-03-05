@@ -39,8 +39,16 @@ module bridge::bridge {
     use bridge::eth::ETH;
     #[test_only]
     use bridge::message::create_blocklist_message;
+    #[test_only]
+    use sui::hex;
 
     const MESSAGE_VERSION: u8 = 1;
+
+    // Transfer Status
+    const TRANSFER_STATUS_PENDING: u8 = 0;
+    const TRANSFER_STATUS_APPROVED: u8 = 1;
+    const TRANSFER_STATUS_CLAIMED: u8 = 2;
+    const TRANSFER_STATUS_NOT_FOUND: u8 = 3;
 
     struct Bridge has key {
         id: UID,
@@ -229,6 +237,7 @@ module bridge::bridge {
         message: BridgeMessage,
         signatures: vector<vector<u8>>,
     ) {
+        // FIXME: need to check pause
         let inner = load_inner_mut(self);
         let key = message::key(&message);
         // TODO: test this
@@ -386,6 +395,7 @@ module bridge::bridge {
         signatures: vector<vector<u8>>,
     ) {
         let message_type = message::message_type(&message);
+
         // TODO: test version mismatch
         assert!(message::message_version(&message) == MESSAGE_VERSION, EUnexpectedMessageVersion);
         let inner = load_inner_mut(self);
@@ -431,7 +441,9 @@ module bridge::bridge {
     }
 
     fun execute_update_bridge_limit(inner: &mut BridgeInner, payload: UpdateBridgeLimit) {
-        let route = chain_ids::get_route(message::update_bridge_limit_payload_sending_chain(&payload), message::update_bridge_limit_payload_receiving_chain(&payload));
+        let receiving_chain = message::update_bridge_limit_payload_receiving_chain(&payload);
+        assert!(receiving_chain == inner.chain_id, EUnexpectedChainID);
+        let route = chain_ids::get_route(message::update_bridge_limit_payload_sending_chain(&payload), receiving_chain);
         limiter::update_route_limit(&mut inner.limiter, &route, message::update_bridge_limit_payload_limit(&payload))
     }
 
@@ -450,6 +462,26 @@ module bridge::bridge {
         let seq_num = *entry;
         *entry = seq_num + 1;
         seq_num
+    }
+
+    public fun get_token_transfer_action_status(
+        self: &mut Bridge,
+        source_chain: u8,
+        bridge_seq_num: u64,
+    ): u8 {
+        let inner = load_inner_mut(self);
+        let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
+        if (!linked_table::contains(&inner.bridge_records, key)) {
+            return TRANSFER_STATUS_NOT_FOUND
+        };
+        let record = linked_table::borrow(&inner.bridge_records, key);
+        if (record.claimed) {
+            return TRANSFER_STATUS_CLAIMED
+        };
+        if (option::is_some(&record.verified_signatures)) {
+            return TRANSFER_STATUS_APPROVED
+        };
+        TRANSFER_STATUS_PENDING
     }
 
     #[test_only]
@@ -515,30 +547,55 @@ module bridge::bridge {
     fun test_execute_update_bridge_limit() {
         let scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
-        let chain_id = chain_ids::sui_devnet();
+        let chain_id = chain_ids::sui_mainnet();
         let bridge = new_for_testing(ctx, chain_id);
         let inner = load_inner_mut(&mut bridge);
 
         // Assert the starting limit is a different value
-        assert!(limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())) != 1, 0);
+        assert!(limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet())) != 1, 0);
         // now shrink to 1 for SUI mainnet -> ETH mainnet
         let msg = message::create_update_bridge_limit_message(
-            chain_ids::eth_mainnet(),
+            chain_ids::sui_mainnet(), // receiving_chain
             0,
-            chain_ids::sui_mainnet(),
+            chain_ids::eth_mainnet(), // sending_chain
             1,
         );
         let payload = message::extract_update_bridge_limit(&msg);
         execute_update_bridge_limit(inner, payload);
 
         // should be 1 now
-        assert_eq(limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::sui_mainnet(), chain_ids::eth_mainnet())), 1);
+        assert_eq(limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::eth_mainnet(), chain_ids::sui_mainnet())), 1);
         // other routes are not impacted
-        assert!(limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::sui_testnet(), chain_ids::eth_sepolia())) != 1, 0);
+        assert!(limiter::get_route_limit(&inner.limiter, &chain_ids::get_route(chain_ids::eth_sepolia(), chain_ids::sui_testnet())) != 1, 0);
 
         destroy(bridge);
         test_scenario::end(scenario);
     }
+
+    #[test]
+    #[expected_failure(abort_code = EUnexpectedChainID)]
+    fun test_execute_update_bridge_limit_abort_with_unexpected_chain_id() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let chain_id = chain_ids::sui_devnet();
+        let bridge = new_for_testing(ctx, chain_id);
+        let inner = load_inner_mut(&mut bridge);
+
+        // shrink to 1 for SUI mainnet -> ETH mainnet
+        let msg = message::create_update_bridge_limit_message(
+            chain_ids::sui_mainnet(), // receiving_chain
+            0,
+            chain_ids::eth_mainnet(), // sending_chain
+            1,
+        );
+        let payload = message::extract_update_bridge_limit(&msg);
+        // This abort because the receiving_chain (sui_mainnet) is not the same as the bridge's chain_id (sui_devnet)
+        execute_update_bridge_limit(inner, payload);
+
+        destroy(bridge);
+        test_scenario::end(scenario);
+    }
+
 
     #[test]
     fun test_execute_update_asset_price() {
@@ -669,4 +726,75 @@ module bridge::bridge {
 
 
     // TODO: Add tests for execute_system_message, including message validation and effects check
+
+    #[test]
+    fun test_get_token_transfer_action_status() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let chain_id = chain_ids::sui_devnet();
+        let bridge = new_for_testing(ctx, chain_id);
+        let coin = coin::mint_for_testing<ETH>(12345, ctx);
+
+        // Test when pending
+        let message = message::create_token_bridge_message(
+            chain_ids::sui_devnet(), // source chain
+            10, // seq_num
+            address::to_bytes(tx_context::sender(ctx)), // sender address
+            chain_ids::eth_sepolia(), // target_chain
+            hex::decode(b"00000000000000000000000000000000000000c8"), // target_address
+            1u8, // token_type
+            balance::value(coin::balance(&coin))
+        );        
+
+        let key = message::key(&message);
+        linked_table::push_back(&mut load_inner_mut(&mut bridge).bridge_records, key, BridgeRecord {
+            message,
+            verified_signatures: none(),
+            claimed: false,
+        });
+        assert_eq(get_token_transfer_action_status(&mut bridge, chain_id, 10), TRANSFER_STATUS_PENDING);
+
+        // Test when ready for claim
+        let message = message::create_token_bridge_message(
+            chain_ids::sui_devnet(), // source chain
+            11, // seq_num
+            address::to_bytes(tx_context::sender(ctx)), // sender address
+            chain_ids::eth_sepolia(), // target_chain
+            hex::decode(b"00000000000000000000000000000000000000c8"), // target_address
+            1u8, // token_type
+            balance::value(coin::balance(&coin))
+        );        
+        let key = message::key(&message);
+        linked_table::push_back(&mut load_inner_mut(&mut bridge).bridge_records, key, BridgeRecord {
+            message,
+            verified_signatures: option::some(vector[]),
+            claimed: false,
+        });
+        assert_eq(get_token_transfer_action_status(&mut bridge, chain_id, 11), TRANSFER_STATUS_APPROVED);
+
+        // Test when already claimed
+        let message = message::create_token_bridge_message(
+            chain_ids::sui_devnet(), // source chain
+            12, // seq_num
+            address::to_bytes(tx_context::sender(ctx)), // sender address
+            chain_ids::eth_sepolia(), // target_chain
+            hex::decode(b"00000000000000000000000000000000000000c8"), // target_address
+            1u8, // token_type
+            balance::value(coin::balance(&coin))
+        );        
+        let key = message::key(&message);
+        linked_table::push_back(&mut load_inner_mut(&mut bridge).bridge_records, key, BridgeRecord {
+            message,
+            verified_signatures: option::some(vector[]),
+            claimed: true,
+        });
+        assert_eq(get_token_transfer_action_status(&mut bridge, chain_id, 12), TRANSFER_STATUS_CLAIMED);
+
+        // Test when message not found
+        assert_eq(get_token_transfer_action_status(&mut bridge, chain_id, 13), TRANSFER_STATUS_NOT_FOUND);
+
+        destroy(bridge);
+        coin::burn_for_testing(coin);
+        test_scenario::end(scenario);
+    }
 }
