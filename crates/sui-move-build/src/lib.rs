@@ -19,9 +19,7 @@ use move_binary_format::{
 use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
-    diagnostics::{
-        report_diagnostics_to_color_buffer, report_warnings, Diagnostics, FilesSourceText,
-    },
+    diagnostics::{report_diagnostics_to_buffer, report_warnings, Diagnostics, FilesSourceText},
     sui_mode::linters::LINT_WARNING_PREFIX,
 };
 use move_core_types::{
@@ -138,7 +136,8 @@ impl BuildConfig {
                     // with errors present don't even try decorating warnings output to avoid
                     // clutter
                     assert!(!error_diags.is_empty());
-                    let diags_buf = report_diagnostics_to_color_buffer(&files, error_diags);
+                    let diags_buf =
+                        report_diagnostics_to_buffer(&files, error_diags, /* color */ true);
                     if let Err(err) = std::io::stderr().write_all(&diags_buf) {
                         anyhow::bail!("Cannot output compiler diagnostics: {}", err);
                     }

@@ -25,15 +25,11 @@ impl CommitteeThreshold for ValidityThreshold {
     }
 }
 
-#[allow(unused)]
-
 pub(crate) struct StakeAggregator<T> {
     votes: HashSet<AuthorityIndex>,
     stake: Stake,
     _phantom: PhantomData<T>,
 }
-
-#[allow(unused)]
 
 impl<T: CommitteeThreshold> StakeAggregator<T> {
     pub(crate) fn new() -> Self {

@@ -31,4 +31,9 @@ module test_functions::test_module {
     public fun use_utf8_string(_: US) {
         // do nothing
     }
+
+    public fun delete_shared_object(shared: Shared) {
+        let Shared { id } = shared;
+        object::delete(id);
+    }
 }

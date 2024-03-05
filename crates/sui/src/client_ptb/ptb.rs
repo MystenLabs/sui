@@ -54,6 +54,10 @@ pub struct Summary {
 impl PTB {
     /// Parses and executes the PTB with the sender as the current active address
     pub async fn execute(self, context: &mut WalletContext) -> Result<(), Error> {
+        if self.args.is_empty() {
+            ptb_description().print_help().unwrap();
+            return Ok(());
+        }
         let source_string = to_source_string(self.args.clone());
 
         // Tokenize once to detect help flags

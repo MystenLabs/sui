@@ -25,8 +25,6 @@ The documentation refers to fungible tokens created on Sui using the Coin standa
 
 ::: 
 
-{@include: ../snippets/coin-token-apis.mdx}
-
 ## Treasury capability
 
 When you create a coin using the `coin::create_currency` function, the publisher of the smart contract that creates the coin receives a `TreasuryCap` object. The `TreasuryCap` object is required to mint new coins or to burn current ones. Consequently, only addresses that have access to this object are able to maintain the coin supply on the Sui network. 

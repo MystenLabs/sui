@@ -217,7 +217,10 @@ impl<'env, 'map> Context<'env, 'map> {
             } else {
                 Uncategorized::DeprecatedWillBeRemoved
             },
-            (loc, "Specification blocks are deprecated")
+            (
+                loc,
+                "Specification blocks are deprecated and are no longer used"
+            )
         )
     }
 }
@@ -1476,7 +1479,7 @@ struct Move2024PathExpander {
     aliases: AliasMap,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum AccessChainResult {
     ModuleAccess(Loc, E::ModuleAccess_),
     Address(Loc, E::Address),
@@ -1485,7 +1488,7 @@ enum AccessChainResult {
     ResolutionFailure(Box<AccessChainResult>, AccessChainFailure),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum AccessChainFailure {
     UnresolvedAlias(Name),
     InvalidKind(String),
@@ -1699,28 +1702,44 @@ impl PathExpander for Move2024PathExpander {
         sp!(loc, avalue_): P::AttributeValue,
     ) -> Option<E::AttributeValue> {
         use E::AttributeValue_ as EV;
-        use P::{AttributeValue_ as PV, LeadingNameAccess_ as LN, NameAccessChain_ as PN};
+        use P::AttributeValue_ as PV;
         Some(sp(
             loc,
             match avalue_ {
                 PV::Value(v) => EV::Value(value(context, v)?),
-                PV::ModuleAccess(
-                    sp!(ident_loc, PN::Two(sp!(aloc, LN::AnonymousAddress(a)), n)),
-                ) => {
-                    let addr = Address::anonymous(aloc, a);
-                    let mident = sp(ident_loc, ModuleIdent_::new(addr, ModuleName(n)));
-                    if context.module_members.get(&mident).is_none() {
-                        context.env.add_diag(diag!(
-                            NameResolution::UnboundModule,
-                            (ident_loc, format!("Unbound module '{}'", mident))
-                        ));
-                    }
-                    EV::Module(mident)
-                }
-                // TODO consider if we want to just force all of these checks into the well-known
-                // attribute setup
+                // A bit strange, but we try to resolve it as a term and a module, and report
+                // an error if they both resolve (to different things)
                 PV::ModuleAccess(access_chain) => {
-                    match self.resolve_name_access_chain(context, Access::Term, access_chain) {
+                    let term_result =
+                        self.resolve_name_access_chain(context, Access::Term, access_chain.clone());
+                    let module_result =
+                        self.resolve_name_access_chain(context, Access::Module, access_chain);
+                    let result = match (term_result, module_result) {
+                        (t_res, m_res) if t_res == m_res => t_res,
+                        (
+                            AccessChainResult::ResolutionFailure(_, _)
+                            | AccessChainResult::UnresolvedName(_, _),
+                            other,
+                        )
+                        | (
+                            other,
+                            AccessChainResult::ResolutionFailure(_, _)
+                            | AccessChainResult::UnresolvedName(_, _),
+                        ) => other,
+                        (t_res, m_res) => {
+                            let msg = format!(
+                                "Ambiguous attribute value. It can resolve to both {} and {}",
+                                t_res.err_name(),
+                                m_res.err_name()
+                            );
+                            context
+                                .env
+                                .add_diag(diag!(Attributes::AmbiguousAttributeValue, (loc, msg)));
+                            return None;
+                        }
+                    };
+
+                    match result {
                         AccessChainResult::ModuleIdent(_, mident) => {
                             if context.module_members.get(&mident).is_none() {
                                 context.env.add_diag(diag!(
@@ -1736,18 +1755,7 @@ impl PathExpander for Move2024PathExpander {
                         AccessChainResult::UnresolvedName(loc, name) => {
                             EV::ModuleAccess(sp(loc, E::ModuleAccess_::Name(name)))
                         }
-                        AccessChainResult::Address(loc, _) => {
-                            let diag = diag!(
-                                NameResolution::NamePositionMismatch,
-                                (
-                                    loc,
-                                    "Found an address, but expected a module or module member"
-                                        .to_string(),
-                                )
-                            );
-                            context.env.add_diag(diag);
-                            return None;
-                        }
+                        AccessChainResult::Address(_, a) => EV::Address(a),
                         result @ AccessChainResult::ResolutionFailure(_, _) => {
                             context.env.add_diag(access_chain_resolution_error(result));
                             return None;
@@ -2018,7 +2026,6 @@ fn module_members(
     }
     let mut cur_members = members.remove(&mident).unwrap_or_default();
     for mem in &m.members {
-        use P::{SpecBlockMember_ as SBM, SpecBlockTarget_ as SBT, SpecBlock_ as SB};
         match mem {
             P::ModuleMember::Function(f) => {
                 cur_members.insert(f.name.0, ModuleMemberKind::Function);
@@ -2029,28 +2036,7 @@ fn module_members(
             P::ModuleMember::Struct(s) => {
                 cur_members.insert(s.name.0, ModuleMemberKind::Struct);
             }
-            P::ModuleMember::Spec(
-                sp!(
-                    _,
-                    SB {
-                        target,
-                        members,
-                        ..
-                    }
-                ),
-            ) => match &target.value {
-                SBT::Schema(n, _) => {
-                    cur_members.insert(*n, ModuleMemberKind::Schema);
-                }
-                SBT::Module => {
-                    for sp!(_, smember_) in members {
-                        if let SBM::Function { name, .. } = smember_ {
-                            cur_members.insert(name.0, ModuleMemberKind::Function);
-                        }
-                    }
-                }
-                _ => (),
-            },
+            P::ModuleMember::Spec(_) => (),
             P::ModuleMember::Use(_) | P::ModuleMember::Friend(_) => (),
         };
     }
@@ -2085,7 +2071,6 @@ fn aliases_from_member(
     current_module: &ModuleIdent,
     member: P::ModuleMember,
 ) -> Option<P::ModuleMember> {
-    use P::{SpecBlockMember_ as SBM, SpecBlockTarget_ as SBT, SpecBlock_ as SB};
     macro_rules! check_name_and_add_implicit_alias {
         ($kind:expr, $name:expr) => {{
             if let Some(n) = check_valid_module_member_name(context, $kind, $name) {
@@ -2125,31 +2110,7 @@ fn aliases_from_member(
             check_name_and_add_implicit_alias!(ModuleMemberKind::Struct, n);
             Some(P::ModuleMember::Struct(s))
         }
-        P::ModuleMember::Spec(s) => {
-            let sp!(
-                _,
-                SB {
-                    target,
-                    members,
-                    ..
-                }
-            ) = &s;
-            match &target.value {
-                SBT::Schema(n, _) => {
-                    check_name_and_add_implicit_alias!(ModuleMemberKind::Schema, *n);
-                }
-                SBT::Module => {
-                    for sp!(_, smember_) in members {
-                        if let SBM::Function { name, .. } = smember_ {
-                            let n = name.0;
-                            check_name_and_add_implicit_alias!(ModuleMemberKind::Function, n);
-                        }
-                    }
-                }
-                _ => (),
-            };
-            Some(P::ModuleMember::Spec(s))
-        }
+        P::ModuleMember::Spec(s) => Some(P::ModuleMember::Spec(s)),
     }
 }
 
@@ -3676,7 +3637,6 @@ pub enum ModuleMemberKind {
     Constant,
     Function,
     Struct,
-    Schema,
 }
 
 impl ModuleMemberKind {
@@ -3685,7 +3645,6 @@ impl ModuleMemberKind {
             ModuleMemberKind::Constant => NameCase::Constant,
             ModuleMemberKind::Function => NameCase::Function,
             ModuleMemberKind::Struct => NameCase::Struct,
-            ModuleMemberKind::Schema => NameCase::Schema,
         }
     }
 }
@@ -3695,7 +3654,6 @@ pub enum NameCase {
     Constant,
     Function,
     Struct,
-    Schema,
     Module,
     ModuleMemberAlias(ModuleMemberKind),
     ModuleAlias,
@@ -3710,12 +3668,10 @@ impl NameCase {
             NameCase::Constant => "constant",
             NameCase::Function => "function",
             NameCase::Struct => "struct",
-            NameCase::Schema => "schema",
             NameCase::Module => "module",
             NameCase::ModuleMemberAlias(ModuleMemberKind::Function) => "function alias",
             NameCase::ModuleMemberAlias(ModuleMemberKind::Constant) => "constant alias",
             NameCase::ModuleMemberAlias(ModuleMemberKind::Struct) => "struct alias",
-            NameCase::ModuleMemberAlias(ModuleMemberKind::Schema) => "schema alias",
             NameCase::ModuleAlias => "module alias",
             NameCase::Variable => "variable",
             NameCase::Address => "address",
@@ -3780,7 +3736,7 @@ fn check_valid_module_member_name_impl(
                 return Err(());
             }
         }
-        M::Constant | M::Struct | M::Schema => {
+        M::Constant | M::Struct => {
             if !is_valid_struct_or_constant_name(&n.value) {
                 let msg = format!(
                     "Invalid {} name '{}'. {} names must start with 'A'..'Z'",
@@ -3891,7 +3847,6 @@ fn check_restricted_name_all_cases(
         NameCase::Constant
         | NameCase::Function
         | NameCase::Struct
-        | NameCase::Schema
         | NameCase::Module
         | NameCase::ModuleMemberAlias(_)
         | NameCase::ModuleAlias

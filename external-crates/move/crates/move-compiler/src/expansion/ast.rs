@@ -70,6 +70,7 @@ pub struct UseFuns {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AttributeValue_ {
     Value(Value),
+    Address(Address),
     Module(ModuleIdent),
     ModuleAccess(ModuleAccess),
 }
@@ -197,9 +198,6 @@ pub enum FunctionBody_ {
     Native,
 }
 pub type FunctionBody = Spanned<FunctionBody_>;
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct SpecId(usize);
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Function {
@@ -945,8 +943,9 @@ impl AstDebug for AttributeValue_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
             AttributeValue_::Value(v) => v.ast_debug(w),
-            AttributeValue_::Module(m) => w.write(&format!("{}", m)),
+            AttributeValue_::Module(m) => w.write(&format!("{m}")),
             AttributeValue_::ModuleAccess(n) => n.ast_debug(w),
+            AttributeValue_::Address(a) => w.write(&format!("{a}")),
         }
     }
 }

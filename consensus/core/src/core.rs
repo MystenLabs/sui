@@ -14,8 +14,8 @@ use tracing::warn;
 
 use crate::{
     block::{
-        timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
-        Slot, VerifiedBlock,
+        genesis_blocks, timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1,
+        Round, SignedBlock, Slot, VerifiedBlock,
     },
     block_manager::BlockManager,
     commit_observer::CommitObserver,
@@ -34,7 +34,6 @@ use crate::{
 // TODO: Move to protocol config once initial value is finalized.
 const NUM_LEADERS_PER_ROUND: usize = 1;
 
-#[allow(dead_code)]
 pub(crate) struct Core {
     context: Arc<Context>,
     /// The threshold clock that is used to keep track of the current round
@@ -68,7 +67,6 @@ pub(crate) struct Core {
     store: Arc<dyn Store>,
 }
 
-#[allow(dead_code)]
 impl Core {
     pub(crate) fn new(
         context: Arc<Context>,
@@ -80,7 +78,12 @@ impl Core {
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
-        let (my_genesis_block, all_genesis_blocks) = Block::genesis(context.clone());
+        let all_genesis_blocks = genesis_blocks(context.clone());
+        let my_genesis_block = all_genesis_blocks
+            .iter()
+            .find(|block| block.author() == context.own_index)
+            .expect("Own block at genesis must be present")
+            .clone();
         let last_decided_leader = dag_state.read().last_commit_leader();
 
         let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone())
@@ -416,13 +419,13 @@ impl Core {
         self.last_proposed_block.round()
     }
 
+    #[cfg(test)]
     fn last_proposed_block(&self) -> &VerifiedBlock {
         &self.last_proposed_block
     }
 }
 
 /// Senders of signals from Core, for outputs and events (ex new block produced).
-#[allow(dead_code)]
 pub(crate) struct CoreSignals {
     tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
     new_round_sender: watch::Sender<Round>,
@@ -432,7 +435,6 @@ impl CoreSignals {
     // TODO: move to Parameters.
     const BROADCAST_BACKLOG_CAPACITY: usize = 1000;
 
-    #[allow(dead_code)]
     pub fn new() -> (Self, CoreSignalsReceivers) {
         let (tx_block_broadcast, _rx_block_broadcast) =
             broadcast::channel::<VerifiedBlock>(Self::BROADCAST_BACKLOG_CAPACITY);
@@ -472,12 +474,10 @@ impl CoreSignals {
 /// Intentially un-clonable. Comonents should only subscribe to channels they need.
 pub(crate) struct CoreSignalsReceivers {
     tx_block_broadcast: broadcast::Sender<VerifiedBlock>,
-    #[allow(dead_code)]
     new_round_receiver: watch::Receiver<Round>,
 }
 
 impl CoreSignalsReceivers {
-    #[allow(dead_code)]
     pub(crate) fn block_broadcast_receiver(&self) -> broadcast::Receiver<VerifiedBlock> {
         self.tx_block_broadcast.subscribe()
     }
@@ -496,7 +496,10 @@ mod test {
     use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
     use super::*;
-    use crate::{block::TestBlock, storage::mem_store::MemStore, transaction::TransactionClient};
+    use crate::{
+        block::TestBlock, block_verifier::NoopBlockVerifier, commit::CommitAPI as _,
+        storage::mem_store::MemStore, transaction::TransactionClient,
+    };
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
     #[tokio::test]
@@ -509,7 +512,7 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
         // Create test blocks for all the authorities for 4 rounds and populate them in store
-        let (_, mut last_round_blocks) = Block::genesis(context.clone());
+        let mut last_round_blocks = genesis_blocks(context.clone());
         let mut all_blocks: Vec<VerifiedBlock> = last_round_blocks.clone();
         for round in 1..=4 {
             let mut this_round_blocks = Vec::new();
@@ -532,7 +535,11 @@ mod test {
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
 
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
@@ -591,7 +598,7 @@ mod test {
         // There were no commits prior to the core starting up but there was completed
         // rounds up to and including round 4. So we should commit leaders in round 1 & 2
         // as soon as the new block for round 5 is proposed.
-        assert_eq!(last_commit.index, 2);
+        assert_eq!(last_commit.index(), 2);
         assert_eq!(dag_state.read().last_commit_index(), 2);
         let all_stored_commits = store.scan_commits(0).unwrap();
         assert_eq!(all_stored_commits.len(), 2);
@@ -610,7 +617,7 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
         // Create test blocks for all authorities except our's (index = 0).
-        let (_, mut last_round_blocks) = Block::genesis(context.clone());
+        let mut last_round_blocks = genesis_blocks(context.clone());
         let mut all_blocks = last_round_blocks.clone();
         for round in 1..=4 {
             let mut this_round_blocks = Vec::new();
@@ -640,7 +647,11 @@ mod test {
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
 
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
@@ -702,7 +713,7 @@ mod test {
         // There were no commits prior to the core starting up but there was completed
         // rounds up to round 4. So we should commit leaders in round 1 & 2 as soon
         // as the new block for round 4 is proposed.
-        assert_eq!(last_commit.index, 2);
+        assert_eq!(last_commit.index(), 2);
         assert_eq!(dag_state.read().last_commit_index(), 2);
         let all_stored_commits = store.scan_commits(0).unwrap();
         assert_eq!(all_stored_commits.len(), 2);
@@ -722,7 +733,11 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
         let (transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, signal_receivers) = CoreSignals::new();
@@ -790,7 +805,7 @@ mod test {
         );
 
         // genesis blocks should be referenced
-        let (_genesis_my, all_genesis) = Block::genesis(context);
+        let all_genesis = genesis_blocks(context);
 
         for ancestor in block.ancestors() {
             all_genesis
@@ -818,7 +833,11 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
         let (signals, signal_receivers) = CoreSignals::new();
@@ -926,7 +945,7 @@ mod test {
                 .expect("last commit should be set");
             // There are 1 leader rounds with rounds completed up to and including
             // round 4
-            assert_eq!(last_commit.index, 1);
+            assert_eq!(last_commit.index(), 1);
             let all_stored_commits = core.store.scan_commits(0).unwrap();
             assert_eq!(all_stored_commits.len(), 1);
         }
@@ -997,7 +1016,7 @@ mod test {
             // There are 8 leader rounds with rounds completed up to and including
             // round 9. Round 10 blocks will only include their own blocks, so the
             // 8th leader will not be committed.
-            assert_eq!(last_commit.index, 7);
+            assert_eq!(last_commit.index(), 7);
             let all_stored_commits = core.store.scan_commits(0).unwrap();
             assert_eq!(all_stored_commits.len(), 7);
         }
@@ -1066,7 +1085,7 @@ mod test {
         // There are 8 leader rounds with rounds completed up to and including
         // round 10. However because there were no blocks produced for authority 3
         // 2 leader rounds will be skipped.
-        assert_eq!(last_commit.index, 6);
+        assert_eq!(last_commit.index(), 6);
         let all_stored_commits = core.store.scan_commits(0).unwrap();
         assert_eq!(all_stored_commits.len(), 6);
     }
@@ -1095,7 +1114,11 @@ mod test {
             let store = Arc::new(MemStore::new());
             let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-            let block_manager = BlockManager::new(context.clone(), dag_state.clone());
+            let block_manager = BlockManager::new(
+                context.clone(),
+                dag_state.clone(),
+                Arc::new(NoopBlockVerifier),
+            );
             let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
             let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
             let (signals, signal_receivers) = CoreSignals::new();

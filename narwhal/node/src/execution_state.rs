@@ -36,7 +36,7 @@ impl ExecutionState for SimpleExecutionState {
         }
     }
 
-    async fn last_executed_sub_dag_index(&self) -> u64 {
+    fn last_executed_sub_dag_index(&self) -> u64 {
         0
     }
 }

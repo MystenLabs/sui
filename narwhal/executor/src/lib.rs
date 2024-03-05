@@ -38,7 +38,7 @@ pub trait ExecutionState {
     async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput);
 
     /// Load the last executed sub-dag index from storage
-    async fn last_executed_sub_dag_index(&self) -> u64;
+    fn last_executed_sub_dag_index(&self) -> u64;
 }
 
 /// A client subscribing to the consensus output and executing every transaction.
@@ -96,7 +96,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
     // whether the execution has been interrupted and there are still batches/transactions
     // that need to be sent for execution.
 
-    let last_executed_sub_dag_index = execution_state.last_executed_sub_dag_index().await;
+    let last_executed_sub_dag_index = execution_state.last_executed_sub_dag_index();
 
     let compressed_sub_dags =
         consensus_store.read_committed_sub_dags_from(&last_executed_sub_dag_index)?;
