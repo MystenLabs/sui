@@ -44,6 +44,7 @@ fn run_deepbook_tests() {
 fn run_examples_move_unit_tests() {
     for example in [
         "basics",
+        "ml",
         "capy",
         "crypto",
         "defi",
