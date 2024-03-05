@@ -1128,7 +1128,7 @@ impl LocalExec {
                 .node_state_dump
                 .relevant_system_packages
                 .iter()
-                .map(|w| w.compute_object_reference())
+                .map(|w| (w.id, w.version, w.digest))
                 .map(|q| (q.0, q.1))
                 .collect()),
         }
