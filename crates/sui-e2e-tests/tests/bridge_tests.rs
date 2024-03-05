@@ -58,6 +58,7 @@ async fn test_create_bridge_state_object() {
 
 #[tokio::test]
 async fn test_committee_registration() {
+    telemetry_subscribers::init_for_testing();
     let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
         .with_protocol_version(37.into())
         .with_epoch_duration_ms(10000)
