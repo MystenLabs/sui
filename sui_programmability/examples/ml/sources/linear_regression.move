@@ -6,7 +6,7 @@ module ml::linear_regression {
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{TxContext};
-    use ml::ifixed_point32::{IFixedPoint32, zero, from_rational, add, subtract, multiply, divide, divide_by_constant};
+    use ml::ifixed_point32::{IFixedPoint32, zero, from_integer, from_rational, add, subtract, multiply, divide, divide_by_constant};
 
     struct Model has key, store {
         id: UID,
@@ -33,8 +33,8 @@ module ml::linear_regression {
     /// Anyone can close the game by providing the randomness of round-2.
     public entry fun submit_point(model: &mut Model, x: u64, y: u64) {
 
-        let x_fixed = from_rational(x, 1, false);
-        let y_fixed = from_rational(y, 1, false);
+        let x_fixed = from_integer(x, false);
+        let y_fixed = from_integer(y, false);
 
         model.n = model.n + 1;
 

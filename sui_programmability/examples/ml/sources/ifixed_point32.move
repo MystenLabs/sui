@@ -6,6 +6,10 @@ module ml::ifixed_point32 {
         sign: bool, // true when negative
     }
 
+    public fun one(): IFixedPoint32 {
+        from_integer(1, false)
+    }
+
     public fun zero(): IFixedPoint32 {
         from_parts(create_from_raw_value(0), false)
     }
@@ -29,6 +33,10 @@ module ml::ifixed_point32 {
 
     public fun from_rational(n: u64, d: u64, negative: bool): IFixedPoint32 {
         from_parts(create_from_rational(n, d), negative)
+    }
+
+    public fun from_integer(n: u64, negative: bool): IFixedPoint32 {
+        from_parts(create_from_raw_value(n << 32), negative)
     }
 
     public fun multiply(a: IFixedPoint32, b: IFixedPoint32): IFixedPoint32 {
@@ -115,5 +123,54 @@ module ml::ifixed_point32 {
 
     public fun raw_abs(a: IFixedPoint32): u64 {
         get_raw_value(a.value)
+    }
+
+    public fun integer_part(a: FixedPoint32): u64 {
+        get_raw_value(a) >> 32
+    }
+
+    public fun fractional_part(a: FixedPoint32): FixedPoint32 {
+        create_from_raw_value(get_raw_value(a) & 0xFFFFFFFF)
+    }
+
+    public fun polynomial_evaluation(x: IFixedPoint32, p: vector<u64>): IFixedPoint32 {
+        let result: IFixedPoint32 = from_raw(*std::vector::borrow(&p, 0), false);
+        let i = 1;
+        let xi = x;
+        let length = std::vector::length(&p);
+        while (i < length) {
+            let ci = from_raw(*std::vector::borrow(&p, i), false);
+            result = add(result, multiply(xi, ci));
+            i = i + 1;
+            if (i < length) {
+                xi = multiply(xi, x);
+            };
+        };
+        result
+    }
+
+    // The raw part of an approximation of log_2(e)
+    const LOG2_E: u64 = 6196328018;
+
+    // A polynomial approximation of the exponential function on [0,1]
+    const P: vector<u64> = vector[4294967628,2977044471,1031765007,238388159,41310461,5724033,666181,60979];
+
+    public fun exp(x: IFixedPoint32): IFixedPoint32 {
+
+        // Compute exp(|x|) = 2^{1.44 * |x|} and take reciprocal if x is negative
+
+        let y = multiply(x, from_raw(LOG2_E, false));
+        let integer_part = integer_part(y.value);
+        let fractional_part = from_parts(fractional_part(y.value), false);
+
+        let f = 1 << (integer_part as u8);
+        let g = polynomial_evaluation(fractional_part, P);
+        let h = multiply_with_constant(g, f);
+
+        if (x.sign) {
+            divide(one(), h)
+        } else {
+            h
+        }
     }
 }

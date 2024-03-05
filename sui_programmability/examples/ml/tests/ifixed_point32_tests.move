@@ -3,13 +3,13 @@
 
 #[test_only]
 module ml::ifixed_point32_tests {
-    use ml::ifixed_point32::{from_rational, add, divide, multiply, subtract};
+    use ml::ifixed_point32::{from_rational, add, divide, multiply, subtract, exp, from_raw};
 
     #[test]
-    fun test_ifixed_point() {
+    fun test_ifixed_point_arithmetic() {
         let a = from_rational(3, 1, false); // 3
         let b = from_rational(7, 2, true); // -3.5
-        
+
         let expected_sum = from_rational(1, 2, true);
         let sum = add(a, b);
         assert!(sum == expected_sum, 0);
@@ -44,5 +44,13 @@ module ml::ifixed_point32_tests {
         let expected_quotient = from_rational(6, 7, false);
         let quotient = divide(a, b);
         assert!(quotient == expected_quotient, 7);
+    }
+
+    #[test]
+    fun test_exp() {
+        let a = from_rational(5, 2, false); // 2.5
+        let expected_exp = from_raw(52323414568, false);
+        let exp = exp(a);
+        assert!(exp == expected_exp, 0);
     }
 }
