@@ -1707,8 +1707,8 @@ impl PathExpander for Move2024PathExpander {
             loc,
             match avalue_ {
                 PV::Value(v) => EV::Value(value(context, v)?),
-                // A bit strange, but we first try to resolve it as a term, if that fails, we try
-                // to resolve it as a module access.
+                // A bit strange, but we try to resolve it as a term and a module, and report
+                // an error if they both resolve (to different things)
                 PV::ModuleAccess(access_chain) => {
                     let term_result =
                         self.resolve_name_access_chain(context, Access::Term, access_chain.clone());
