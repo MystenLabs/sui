@@ -1,3 +1,4 @@
+//! This rules detects and warns about unnecessary boolean operation such as x || true.
 use crate::{
     diag,
     diagnostics::{
