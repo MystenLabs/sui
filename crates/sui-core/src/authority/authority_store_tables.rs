@@ -3,8 +3,12 @@
 
 use super::*;
 use crate::authority::authority_store::LockDetailsWrapper;
+use once_cell::sync::Lazy;
+use rocksdb::compaction_filter::{CompactionFilter, Decision};
+use rocksdb::compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory};
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
+use std::ffi::{CStr, CString};
 use std::path::Path;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
@@ -31,6 +35,7 @@ const ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE: &str = "TRANSACTIONS_BLOCK_CACHE_MB
 const ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE: &str = "EFFECTS_BLOCK_CACHE_MB";
 const ENV_VAR_EVENTS_BLOCK_CACHE_SIZE: &str = "EVENTS_BLOCK_CACHE_MB";
 const ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE: &str = "INDIRECT_OBJECTS_BLOCK_CACHE_MB";
+const ENV_VAR_OBJECT_CACHE_PATH: &str = "/tmp";
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
@@ -128,6 +133,83 @@ pub struct AuthorityPerpetualTables {
     pub(crate) object_per_epoch_marker_table: DBMap<(EpochId, ObjectKey), MarkerValue>,
 }
 
+#[derive(DBMapUtils)]
+pub struct AuthorityObjectCache {
+    pub(crate) object_tombstones: DBMap<ObjectID, SequenceNumber>,
+}
+
+impl AuthorityObjectCache {
+    pub fn path(parent_path: &Path) -> PathBuf {
+        parent_path.join("object_cache")
+    }
+
+    pub fn open(parent_path: &Path, db_options: Option<Options>) -> Self {
+        Self::open_tables_read_write(
+            Self::path(parent_path),
+            MetricConf::new("object_cache")
+                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+            db_options,
+            None,
+        )
+    }
+}
+
+#[derive(Clone)]
+pub struct ObjectCompactionFilter {
+    pub db: Arc<AuthorityObjectCache>,
+}
+
+struct ObjectCompactionFilterFactory;
+pub static OBJECT_COMPACTION_DB: Lazy<ObjectCompactionFilter> =
+    Lazy::new(|| ObjectCompactionFilter {
+        db: Arc::new(AuthorityObjectCache::open(
+            Path::new(ENV_VAR_OBJECT_CACHE_PATH),
+            None,
+        )),
+    });
+
+impl CompactionFilterFactory for ObjectCompactionFilterFactory {
+    type Filter = ObjectCompactionFilter;
+
+    fn create(&mut self, _context: CompactionFilterContext) -> Self::Filter {
+        OBJECT_COMPACTION_DB.clone()
+    }
+
+    fn name(&self) -> &CStr {
+        let c_str: &CStr = CStr::from_bytes_with_nul(b"xxxx\0").unwrap();
+        c_str
+    }
+}
+
+impl CompactionFilter for ObjectCompactionFilter {
+    fn filter(&mut self, _level: u32, key: &[u8], value: &[u8]) -> Decision {
+        let object_key: ObjectKey = bcs::from_bytes(&key).unwrap();
+        if let Some(max_version) = self.db.object_tombstones.get(&object_key.0).unwrap() {
+            let version = object_key.1;
+            let object: StoreObjectWrapper = bcs::from_bytes(&value).unwrap();
+            if let StoreObject::Value(obj) = object.into_inner() {
+                if let StoreData::IndirectObject(indirect_object) = obj.data {
+                    Decision::Keep
+                } else {
+                    if version <= max_version {
+                        Decision::Remove
+                    } else {
+                        Decision::Keep
+                    }
+                }
+            } else {
+                Decision::Keep
+            }
+        } else {
+            Decision::Keep
+        }
+    }
+
+    fn name(&self) -> &CStr {
+        let c_str: &CStr = CStr::from_bytes_with_nul(b"yyyy\0").unwrap();
+        c_str
+    }
+}
 impl AuthorityPerpetualTables {
     pub fn path(parent_path: &Path) -> PathBuf {
         parent_path.join("perpetual")
@@ -138,7 +220,10 @@ impl AuthorityPerpetualTables {
             Self::path(parent_path),
             MetricConf::new("perpetual")
                 .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
-            db_options,
+            db_options.map(|mut o| {
+                o.set_compaction_filter_factory(ObjectCompactionFilterFactory);
+                o
+            }),
             None,
         )
     }

@@ -35,7 +35,7 @@ use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
 use typed_store::{Map, TypedStoreError};
 
-use super::authority_store_tables::AuthorityPerpetualTables;
+use super::authority_store_tables::{AuthorityPerpetualTables, OBJECT_COMPACTION_DB};
 
 static PERIODIC_PRUNING_TABLES: Lazy<BTreeSet<String>> = Lazy::new(|| {
     [
@@ -130,7 +130,7 @@ impl AuthorityStorePruner {
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
         let mut wb = perpetual_db.objects.batch();
-
+        let mut tombstone_wb = OBJECT_COMPACTION_DB.db.object_tombstones.batch();
         // Collect objects keys that need to be deleted from `transaction_effects`.
         let mut live_object_keys_to_prune = vec![];
         let mut object_tombstones_to_prune = vec![];
@@ -183,9 +183,13 @@ impl AuthorityStorePruner {
                 "Pruning object {:?} versions {:?} - {:?}",
                 object_id, min_version, max_version
             );
-            let start_range = ObjectKey(object_id, min_version);
-            let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
-            wb.schedule_delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+            //let start_range = ObjectKey(object_id, min_version);
+            //let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
+            tombstone_wb.insert_batch(
+                &OBJECT_COMPACTION_DB.db.object_tombstones,
+                std::iter::once((object_id, SequenceNumber::from_u64(max_version.value()))),
+            )?;
+            //wb.schedule_delete_range(&perpetual_db.objects, &start_range, &end_range)?;
         }
 
         // When enable_pruning_tombstones is enabled, instead of using range deletes, we need to do a scan of all the keys
@@ -221,6 +225,7 @@ impl AuthorityStorePruner {
         let _locks = objects_lock_table
             .acquire_locks(indirect_objects.into_keys())
             .await;
+        tombstone_wb.write()?;
         wb.write()?;
         Ok(())
     }
@@ -551,7 +556,7 @@ impl AuthorityStorePruner {
             config.num_epochs_to_retain
         );
 
-        let tick_duration = Duration::from_millis(min(epoch_duration_ms / 2, 60 * 1000));
+        let tick_duration = Duration::from_millis(min(epoch_duration_ms / 2, 1 * 1000));
         let pruning_initial_delay = if cfg!(msim) {
             Duration::from_millis(1)
         } else {
