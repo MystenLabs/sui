@@ -369,7 +369,6 @@ module bridge::message {
         self.seq_num
     }
 
-    // TokenBridgePayload getters
     public fun source_chain(self: &BridgeMessage): u8 {
         self.source_chain
     }

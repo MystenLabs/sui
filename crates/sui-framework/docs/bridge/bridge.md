@@ -30,6 +30,7 @@
 -  [Function `execute_update_bridge_limit`](#0xb_bridge_execute_update_bridge_limit)
 -  [Function `execute_update_asset_price`](#0xb_bridge_execute_update_asset_price)
 -  [Function `get_current_seq_num_and_increment`](#0xb_bridge_get_current_seq_num_and_increment)
+-  [Function `get_token_transfer_action_status`](#0xb_bridge_get_token_transfer_action_status)
 
 
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
@@ -573,6 +574,42 @@
 
 
 
+<a name="0xb_bridge_TRANSFER_STATUS_APPROVED"></a>
+
+
+
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_APPROVED">TRANSFER_STATUS_APPROVED</a>: u8 = 1;
+</code></pre>
+
+
+
+<a name="0xb_bridge_TRANSFER_STATUS_CLAIMED"></a>
+
+
+
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_CLAIMED">TRANSFER_STATUS_CLAIMED</a>: u8 = 2;
+</code></pre>
+
+
+
+<a name="0xb_bridge_TRANSFER_STATUS_NOT_FOUND"></a>
+
+
+
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_NOT_FOUND">TRANSFER_STATUS_NOT_FOUND</a>: u8 = 3;
+</code></pre>
+
+
+
+<a name="0xb_bridge_TRANSFER_STATUS_PENDING"></a>
+
+
+
+<pre><code><b>const</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_PENDING">TRANSFER_STATUS_PENDING</a>: u8 = 0;
+</code></pre>
+
+
+
 <a name="0xb_bridge_create"></a>
 
 ## Function `create`
@@ -770,6 +807,7 @@
     <a href="message.md#0xb_message">message</a>: BridgeMessage,
     signatures: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;,
 ) {
+    // FIXME: need <b>to</b> check pause
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
     <b>let</b> key = <a href="message.md#0xb_message_key">message::key</a>(&<a href="message.md#0xb_message">message</a>);
     // TODO: test this
@@ -1040,6 +1078,7 @@
     signatures: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;,
 ) {
     <b>let</b> message_type = <a href="message.md#0xb_message_message_type">message::message_type</a>(&<a href="message.md#0xb_message">message</a>);
+
     // TODO: test version mismatch
     <b>assert</b>!(<a href="message.md#0xb_message_message_version">message::message_version</a>(&<a href="message.md#0xb_message">message</a>) == <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>, <a href="bridge.md#0xb_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>);
     <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
@@ -1125,7 +1164,9 @@
 
 
 <pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_execute_update_bridge_limit">execute_update_bridge_limit</a>(inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a>, payload: UpdateBridgeLimit) {
-    <b>let</b> route = <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="message.md#0xb_message_update_bridge_limit_payload_sending_chain">message::update_bridge_limit_payload_sending_chain</a>(&payload), <a href="message.md#0xb_message_update_bridge_limit_payload_receiving_chain">message::update_bridge_limit_payload_receiving_chain</a>(&payload));
+    <b>let</b> receiving_chain = <a href="message.md#0xb_message_update_bridge_limit_payload_receiving_chain">message::update_bridge_limit_payload_receiving_chain</a>(&payload);
+    <b>assert</b>!(receiving_chain == inner.chain_id, <a href="bridge.md#0xb_bridge_EUnexpectedChainID">EUnexpectedChainID</a>);
+    <b>let</b> route = <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="message.md#0xb_message_update_bridge_limit_payload_sending_chain">message::update_bridge_limit_payload_sending_chain</a>(&payload), receiving_chain);
     <a href="limiter.md#0xb_limiter_update_route_limit">limiter::update_route_limit</a>(&<b>mut</b> inner.<a href="limiter.md#0xb_limiter">limiter</a>, &route, <a href="message.md#0xb_message_update_bridge_limit_payload_limit">message::update_bridge_limit_payload_limit</a>(&payload))
 }
 </code></pre>
@@ -1182,6 +1223,46 @@
     <b>let</b> seq_num = *entry;
     *entry = seq_num + 1;
     seq_num
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_get_token_transfer_action_status"></a>
+
+## Function `get_token_transfer_action_status`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(
+    self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
+    source_chain: u8,
+    bridge_seq_num: u64,
+): u8 {
+    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
+    <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(source_chain, <a href="message_types.md#0xb_message_types_token">message_types::token</a>(), bridge_seq_num);
+    <b>if</b> (!<a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(&inner.bridge_records, key)) {
+        <b>return</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_NOT_FOUND">TRANSFER_STATUS_NOT_FOUND</a>
+    };
+    <b>let</b> record = <a href="dependencies/sui-framework/linked_table.md#0x2_linked_table_borrow">linked_table::borrow</a>(&inner.bridge_records, key);
+    <b>if</b> (record.claimed) {
+        <b>return</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_CLAIMED">TRANSFER_STATUS_CLAIMED</a>
+    };
+    <b>if</b> (<a href="dependencies/move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&record.verified_signatures)) {
+        <b>return</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_APPROVED">TRANSFER_STATUS_APPROVED</a>
+    };
+    <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_PENDING">TRANSFER_STATUS_PENDING</a>
 }
 </code></pre>
 
