@@ -72,7 +72,8 @@ impl<'a> Modules<'a> {
             Err(_) => panic!("Circular dependency detected"),
             Ok(ordered_idxs) => Ok(ordered_idxs
                 .into_iter()
-                .map(move |idx| idx_module_map.remove(&idx).unwrap())),
+                .map(move |idx| idx_module_map.remove(&idx).unwrap())
+                .rev()),
         }
     }
 
