@@ -6300,7 +6300,7 @@ fn partial_function_test() {
         2,
         8,
         "M1.move",
-        "fun PartialFunction::M1::just_name(): unknown type (unresolved)",
+        "fun PartialFunction::M1::just_name()",
         None,
     );
 }
