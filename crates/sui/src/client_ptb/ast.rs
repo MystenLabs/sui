@@ -52,6 +52,23 @@ pub const KEYWORDS: &[&str] = &[
     ADDRESS, BOOL, VECTOR, SOME, NONE, GAS, U8, U16, U32, U64, U128, U256,
 ];
 
+pub const COMMANDS: &[&str] = &[
+    TRANSFER_OBJECTS,
+    SPLIT_COINS,
+    MERGE_COINS,
+    MAKE_MOVE_VEC,
+    MOVE_CALL,
+    PUBLISH,
+    UPGRADE,
+    ASSIGN,
+    PREVIEW,
+    WARN_SHADOWS,
+    GAS_BUDGET,
+    SUMMARY,
+    GAS_COIN,
+    JSON,
+];
+
 pub fn is_keyword(s: &str) -> bool {
     KEYWORDS.contains(&s)
 }

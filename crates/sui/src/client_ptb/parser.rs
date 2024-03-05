@@ -10,7 +10,13 @@ use move_command_line_common::{
 };
 use sui_types::{base_types::ObjectID, Identifier};
 
-use crate::{client_ptb::ast::all_keywords, err, error, sp};
+use crate::{
+    client_ptb::{
+        ast::{all_keywords, COMMANDS},
+        builder::{display_did_you_mean, find_did_you_means},
+    },
+    err, error, sp,
+};
 
 use super::{
     ast::{self as A, is_keyword, Argument, ModuleAccess, ParsedPTBCommand, ParsedProgram},
@@ -135,8 +141,19 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     Ok(cap.span.wrap(ParsedPTBCommand::Upgrade(src, cap)))
                 }),
 
-                L(T::Command, _) => {
-                    let err = err!(sp, "Unknown {lexeme}");
+                L(T::Command, s) => {
+                    let possibles = find_did_you_means(s, COMMANDS.iter().copied())
+                        .into_iter()
+                        .map(|s| format!("--{s}"))
+                        .collect();
+                    let err = if let Some(suggestion) = display_did_you_mean(possibles) {
+                        err!(
+                            sp => help: { "{suggestion}" },
+                            "Unknown {lexeme}",
+                        )
+                    } else {
+                        err!(sp, "Unknown {lexeme}")
+                    };
                     self.state.errors.push(err);
                     self.fast_forward_to_next_command();
                 }
