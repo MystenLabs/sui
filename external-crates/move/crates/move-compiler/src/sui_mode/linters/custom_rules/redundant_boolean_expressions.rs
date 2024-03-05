@@ -83,7 +83,7 @@ fn add_redundant_bool_expr_diag(
         REDUNDANT_BOOLEAN_EXP_DIAG,
         (
             loc,
-            format!("{}.Consider refactor it to {}", message, simplified)
+            format!("{}.Consider refactoring it to {}", message, simplified)
         )
     );
     env.add_diag(d);
