@@ -131,6 +131,19 @@ fn report_diagnostics_impl(files: &FilesSourceText, diags: Diagnostics, should_e
     }
 }
 
+pub fn unwrap_or_report_pass_diagnostics<T, Pass>(
+    files: &FilesSourceText,
+    res: Result<T, (Pass, Diagnostics)>,
+) -> T {
+    match res {
+        Ok(t) => t,
+        Err((_pass, diags)) => {
+            assert!(!diags.is_empty());
+            report_diagnostics(files, diags)
+        }
+    }
+}
+
 pub fn unwrap_or_report_diagnostics<T>(files: &FilesSourceText, res: Result<T, Diagnostics>) -> T {
     match res {
         Ok(t) => t,

@@ -930,9 +930,10 @@ fn run(
         until: Pass,
         mut result_check: impl FnMut(&PassResult, &CompilationEnv),
     ) -> Result<PassResult, (Pass, Diagnostics)> {
+        let cur_pass = cur.equivalent_pass();
         compilation_env
             .check_diags_at_or_above_severity(Severity::Bug)
-            .map_err(|diags| (cur.equivalent_pass(), diags))?;
+            .map_err(|diags| (cur_pass, diags))?;
         assert!(
             until <= PASS_COMPILATION,
             "Invalid pass for run_to. Target is greater than maximum pass"
@@ -980,7 +981,7 @@ fn run(
             PassResult::Typing(tprog) => {
                 compilation_env
                     .check_diags_at_or_above_severity(Severity::BlockingError)
-                    .map_err(|diags| (PASS_TYPING, diags))?;
+                    .map_err(|diags| (cur_pass, diags))?;
                 let hprog = hlir::translate::program(compilation_env, pre_compiled_lib, tprog);
                 rec(
                     compilation_env,
@@ -1004,7 +1005,7 @@ fn run(
                 // Don't generate bytecode if there are any errors
                 compilation_env
                     .check_diags_at_or_above_severity(Severity::NonblockingError)
-                    .map_err(|diags| (PASS_CFGIR, diags))?;
+                    .map_err(|diags| (cur_pass, diags))?;
                 let compiled_units =
                     to_bytecode::translate::program(compilation_env, pre_compiled_lib, cprog);
                 // Report any errors from bytecode generation
