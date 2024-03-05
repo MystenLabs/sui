@@ -318,6 +318,7 @@
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="limiter.md#0xb_limiter_update_route_limit">update_route_limit</a>(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>, route: &BridgeRoute, new_usd_limit: u64) {
+    <b>let</b> receiving_chain = *<a href="chain_ids.md#0xb_chain_ids_route_destination">chain_ids::route_destination</a>(route);
     <b>if</b> (!<a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.transfer_limits, route)) {
         <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.transfer_limits, *route, new_usd_limit);
     } <b>else</b> {
@@ -326,7 +327,7 @@
     };
     emit(<a href="limiter.md#0xb_limiter_UpdateRouteLimitEvent">UpdateRouteLimitEvent</a> {
         sending_chain: *<a href="chain_ids.md#0xb_chain_ids_route_source">chain_ids::route_source</a>(route),
-        receiving_chain: *<a href="chain_ids.md#0xb_chain_ids_route_destination">chain_ids::route_destination</a>(route),
+        receiving_chain,
         new_limit: new_usd_limit,
     })
 }
@@ -533,39 +534,39 @@
     // 5M limit on Sui -&gt; Ethereum mainnet
     <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
         &<b>mut</b> transfer_limits,
-        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_mainnet">chain_ids::sui_mainnet</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_mainnet">chain_ids::eth_mainnet</a>()),
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_mainnet">chain_ids::eth_mainnet</a>(), <a href="chain_ids.md#0xb_chain_ids_sui_mainnet">chain_ids::sui_mainnet</a>()),
         5_000_000 * <a href="limiter.md#0xb_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>
     );
 
     // MAX limit for testnet and devnet
     <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
         &<b>mut</b> transfer_limits,
-        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_testnet">chain_ids::sui_testnet</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>()),
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>(), <a href="chain_ids.md#0xb_chain_ids_sui_testnet">chain_ids::sui_testnet</a>()),
         <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
     );
     <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
         &<b>mut</b> transfer_limits,
-        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_devnet">chain_ids::sui_devnet</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>()),
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>(), <a href="chain_ids.md#0xb_chain_ids_sui_devnet">chain_ids::sui_devnet</a>()),
         <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
     );
     <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
         &<b>mut</b> transfer_limits,
-        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_local_test">chain_ids::sui_local_test</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>()),
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>(), <a href="chain_ids.md#0xb_chain_ids_sui_local_test">chain_ids::sui_local_test</a>()),
         <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
     );
     <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
         &<b>mut</b> transfer_limits,
-        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_testnet">chain_ids::sui_testnet</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_local_test">chain_ids::eth_local_test</a>()),
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_local_test">chain_ids::eth_local_test</a>(), <a href="chain_ids.md#0xb_chain_ids_sui_testnet">chain_ids::sui_testnet</a>()),
         <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
     );
     <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
         &<b>mut</b> transfer_limits,
-        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_devnet">chain_ids::sui_devnet</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_local_test">chain_ids::eth_local_test</a>()),
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_local_test">chain_ids::eth_local_test</a>(), <a href="chain_ids.md#0xb_chain_ids_sui_devnet">chain_ids::sui_devnet</a>()),
         <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
     );
     <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(
         &<b>mut</b> transfer_limits,
-        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_sui_local_test">chain_ids::sui_local_test</a>(), <a href="chain_ids.md#0xb_chain_ids_eth_local_test">chain_ids::eth_local_test</a>()),
+        <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(<a href="chain_ids.md#0xb_chain_ids_eth_local_test">chain_ids::eth_local_test</a>(), <a href="chain_ids.md#0xb_chain_ids_sui_local_test">chain_ids::sui_local_test</a>()),
         <a href="limiter.md#0xb_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
     );
     transfer_limits
