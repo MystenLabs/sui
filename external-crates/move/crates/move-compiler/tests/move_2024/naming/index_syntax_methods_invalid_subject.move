@@ -15,6 +15,6 @@ module 0x42::a {
     public fun index_unit(_unit: (), i: &u64): &u64 { i }
 
     #[syntax(index)]
-    public fun index_unit(): &u64 { abort 0 }
-}
+    public fun index_no_arg(): &u64 { abort 0 }
+
 }

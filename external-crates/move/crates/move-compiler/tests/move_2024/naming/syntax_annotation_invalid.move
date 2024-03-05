@@ -17,4 +17,9 @@ module 0x42::m {
     #[syntax(index = foo)]
     public fun index_mut_b(b: &mut B): &mut B { b }
 
+    public struct C {}
+
+    #[syntax(index, index)]
+    public fun index_c(c: &C): &C { c }
+
 }
