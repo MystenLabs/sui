@@ -8,9 +8,6 @@ use crate::{
         codes::{custom, DiagnosticInfo, Severity},
         WarningFilters,
     },
-    expansion::ast::Value_,
-    naming::ast::{BuiltinTypeName_, TypeName_, Type_},
-    parser::ast::BinOp_,
     shared::{program_info::TypingProgramInfo, CompilationEnv},
     sui_mode::linters::{LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX},
     typing::{
@@ -19,7 +16,6 @@ use crate::{
     },
 };
 use move_ir_types::location::Loc;
-use std::str::FromStr;
 
 const REDUNDANT_DEREF_REF_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
