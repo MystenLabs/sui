@@ -25,4 +25,5 @@ CREATE TABLE checkpoints
 );
 
 CREATE INDEX checkpoints_epoch ON checkpoints (epoch);
+CREATE INDEX checkpoints_epoch_sequence_number ON checkpoints (epoch, sequence_number);
 CREATE INDEX checkpoints_digest ON checkpoints USING HASH (checkpoint_digest);
