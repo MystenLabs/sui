@@ -146,7 +146,7 @@ export function RedirectHeader() {
 
 	return (
 		<section
-			className="sm:mb-20 flex flex-col items-center justify-center gap-5 px-5 py-12 text-center"
+			className="flex flex-col items-center justify-center gap-5 px-5 py-12 text-center sm:mb-20"
 			style={{
 				background: 'linear-gradient(159deg, #FAF8D2 50.65%, #F7DFD5 86.82%)',
 			}}
