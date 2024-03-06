@@ -3,7 +3,7 @@
 
 #[test_only]
 module ml::linear_regression_tests {
-    use sui::test_scenario::{Self};
+    use sui::test_scenario;
     use ml::linear_regression::{Self, Model};
 
     #[test]

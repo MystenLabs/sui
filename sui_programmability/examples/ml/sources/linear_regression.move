@@ -18,7 +18,7 @@ module ml::linear_regression {
     }
 
     /// Create a shared-object Game.
-    public entry fun create(ctx: &mut TxContext) {
+    public fun create(ctx: &mut TxContext) {
         let model = Model {
             id: object::new(ctx),
             mean_x: zero(),
@@ -31,9 +31,10 @@ module ml::linear_regression {
     }
 
     /// Submit a data point to the model. The number format for a positive real number `x` is x_raw = floor(2^32 x).
-    /// To submit a negative number set the negative boolean to true.
-    public entry fun submit_point(model: &mut Model, x_raw: u64, x_negative: bool, y_raw: u64, y_negative: bool) {
-
+    /// If x < 0, set x_negative to true. The same goes for y.
+    /// 
+    /// A real x is mapped to (x_raw = round(x * 2.0^32), x_negative = x < 0)
+    public fun submit_point(model: &mut Model, x_raw: u64, x_negative: bool, y_raw: u64, y_negative: bool) {
         model.n = model.n + 1;
 
         let x = from_raw(x_raw, x_negative);
