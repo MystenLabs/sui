@@ -122,5 +122,29 @@ struct Review has key, store {
 In addition to the content of a review, all the elements that are required to compute total score are stored in a `Review` object.
 
 ## Frontend
+The frontend module is written in React, and is structured to provide a responsive user experience for interacting with a review rating platform.
+On the [`page` component](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/page.tsx), a user can be logged in as a `SERVICE OWNER` or a `USER`.
 
-A React frontend is implemented and is available at https://github.com/MystenLabs/reviews-ratings-poc
+### Directories structure
+
+The frontend is a NextJS project, that follows the NextJS App Router [project structure](https://nextjs.org/docs/app/building-your-application/routing).
+The main code of the frontend lies under the [app/src/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/) directory.
+The main sub-directories are:
+  - [app/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/): The main code of the pages and the global styles.
+  - [components/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/components): The reusable components of the app, organized in sub-directories.
+  - [hooks/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/hooks): The custom hooks used in the app.
+  - [serviceOwner/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/serviceOwner): The pages for `SERVICE OWNER`.
+  - [types/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/types): The types/interfaces used in the app.
+  - [user/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/user): The pages for `USER`.
+
+### Components and custom hooks for state management
+
+- **Custom Hooks:** To keep the code as structured as possible, multiple custom hooks are utilized to manage the list of reviews associated with a service. The [useGetReviews](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/hooks/useGetReviews.ts)
+custom hook encapsulates the service, exposing all the required information (with fields such as `nameOfService`, `listOfReviews`, `listOfStars`) to display the reviews in a table.
+Multiple additional custom hooks, such as [useDashboardCreation](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/hooks/useDashboardCreation.ts), and [useServiceReview](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/hooks/useServiceReview.ts) are encapsulating their own piece of state and logic to make the code readable and maintainable.
+
+- **Component for Adding a New Review:** The [AddReview](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/components/review/AddReview.tsx) component is implemented to facilitate the creation of a new review. It is rendered by the [servicePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/service/[id]/page.tsx) to collect a review entry from a `USER` and uses the `signAndExecuteTransactionBlock` function of the [useWalletKit] hook to execute the transaction.
+
+- **Proof of Experience Generation:** Proof of Experience(PoE) is an NFT that is minted by `SERVICE OWNER` for customers after they dine at the restaurant; customers can, then, burn the PoE to write a high-rated review later. Minting an NFT is facilitated by the [ownedServicePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/serviceOwner/ownedServices/page.tsx) component. This component is using the [useServicePoEGeneration](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/hooks/useServicePoeGeneration.ts) custom hook.
+
+- **Delete a Review:** The moderator can delete a review that contain inappropriate content. [moderatorRemovePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/user/moderator/remove/page.tsx) component is used to delete a review.
