@@ -9,7 +9,7 @@ Response: {
     "objects": {
       "edges": [
         {
-          "cursor": "IJ5POJboEfY6MK/wOmhE6AsynY05TZ2vITb7t4l+zik8AAAAAAAAAAA=",
+          "cursor": "IGVmrg8YomaqWH+JojOLPCeDSxQFBPFd/lupYkOIxhcHAAAAAAAAAAA=",
           "node": {
             "asMoveObject": {
               "asStakedSui": {
@@ -34,7 +34,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3 'run'. lines 37-37:
-events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [197, 165, 243, 239, 90, 201, 191, 150, 15, 242, 249, 157, 2, 26, 251, 110, 37, 2, 53, 247, 81, 13, 33, 160, 215, 27, 6, 224, 204, 223, 251, 246, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [142, 102, 117, 218, 219, 167, 180, 163, 169, 59, 100, 73, 37, 129, 254, 231, 15, 124, 21, 140, 77, 208, 72, 223, 205, 226, 4, 95, 17, 50, 208, 179, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
 created: object(3,0), object(3,1)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0)
 deleted: object(_), object(2,0)
@@ -52,34 +52,34 @@ Response: {
     "objects": {
       "edges": [
         {
-          "cursor": "ICeS/kqH3+TLoSJmY+AhHEcdvLxcuu4GwHQtii07L3heAgAAAAAAAAA=",
+          "cursor": "IB10GJcZbip8ktjufOvx+nvSdTRv29B7SVj2e0HgpVHxAgAAAAAAAAA=",
           "node": {
             "asMoveObject": {
               "asStakedSui": {
                 "principal": "10000000000",
-                "poolId": "0xc5a5f3ef5ac9bf960ff2f99d021afb6e250235f7510d21a0d71b06e0ccdffbf6"
+                "poolId": "0x8e6675dadba7b4a3a93b64492581fee70f7c158c4dd048dfcde2045f1132d0b3"
               }
             }
           }
         },
         {
-          "cursor": "IJ5POJboEfY6MK/wOmhE6AsynY05TZ2vITb7t4l+zik8AgAAAAAAAAA=",
+          "cursor": "IGVmrg8YomaqWH+JojOLPCeDSxQFBPFd/lupYkOIxhcHAgAAAAAAAAA=",
           "node": {
             "asMoveObject": {
               "asStakedSui": {
                 "principal": "20000000000000000",
-                "poolId": "0xc5a5f3ef5ac9bf960ff2f99d021afb6e250235f7510d21a0d71b06e0ccdffbf6"
+                "poolId": "0x8e6675dadba7b4a3a93b64492581fee70f7c158c4dd048dfcde2045f1132d0b3"
               }
             }
           }
         },
         {
-          "cursor": "IKA3H7YbwU+esMoInJJ7Wa3G/Iwf7tS0/HNcof0dZ2p0AgAAAAAAAAA=",
+          "cursor": "IM4xOAHc44iKtPoj6VC+X2JPItu/LKLvVeSyLZAGWA+/AgAAAAAAAAA=",
           "node": {
             "asMoveObject": {
               "asStakedSui": {
                 "principal": "40000",
-                "poolId": "0xc5a5f3ef5ac9bf960ff2f99d021afb6e250235f7510d21a0d71b06e0ccdffbf6"
+                "poolId": "0x8e6675dadba7b4a3a93b64492581fee70f7c158c4dd048dfcde2045f1132d0b3"
               }
             }
           }
@@ -90,7 +90,7 @@ Response: {
       "stakedSuis": {
         "edges": [
           {
-            "cursor": "ICeS/kqH3+TLoSJmY+AhHEcdvLxcuu4GwHQtii07L3heAgAAAAAAAAA=",
+            "cursor": "IB10GJcZbip8ktjufOvx+nvSdTRv29B7SVj2e0HgpVHxAgAAAAAAAAA=",
             "node": {
               "principal": "10000000000"
             }
