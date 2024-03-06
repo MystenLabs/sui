@@ -164,7 +164,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
         .package_table
         .iter()
         .flat_map(|(_, rpkg)| {
-            rpkg.get_sources(&resolution_graph.build_options)
+            rpkg.get_sources(&resolution_graph.build_options, /* deps_only */ false)
                 .unwrap()
                 .iter()
                 .map(|fname| {

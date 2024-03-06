@@ -151,7 +151,10 @@ impl BuildPlan {
                     .get(&package_name)
                     .unwrap();
                 let mut dep_source_paths = dep_package
-                    .get_sources(&self.resolution_graph.build_options)
+                    .get_sources(
+                        &self.resolution_graph.build_options,
+                        /* for_deps */ true,
+                    )
                     .unwrap();
                 let mut source_available = true;
                 // If source is empty, search bytecode(mv) files

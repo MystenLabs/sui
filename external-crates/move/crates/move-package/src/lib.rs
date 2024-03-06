@@ -103,6 +103,11 @@ pub struct BuildConfig {
     /// If `true`, disable linters
     #[clap(long, global = true)]
     pub no_lint: bool,
+
+    /// Compile in 'IDE' mode to omit/alter some operations when building for IDE-related purposes
+    /// to improve IDE performance
+    #[clap(skip)]
+    pub ide_mode: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]

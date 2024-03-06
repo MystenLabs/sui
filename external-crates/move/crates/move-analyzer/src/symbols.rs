@@ -963,6 +963,7 @@ pub fn get_symbols(
     lint: bool,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     let build_config = move_package::BuildConfig {
+        ide_mode: true,
         test_mode: true,
         install_dir: Some(tempdir().unwrap().path().to_path_buf()),
         default_flavor: Some(Flavor::Sui),
@@ -1183,31 +1184,34 @@ fn file_sources(
     resolved_graph
         .package_table
         .iter()
-        .flat_map(|(_, rpkg)| {
-            rpkg.get_sources(&resolved_graph.build_options)
-                .unwrap()
-                .iter()
-                .map(|f| {
-                    // dunce does a better job of canonicalization on Windows
-                    let fname = dunce::canonicalize(f.as_str())
-                        .map(|p| p.to_string_lossy().to_string())
-                        .unwrap_or_else(|_| f.to_string());
-                    let mut contents = String::new();
-                    // there is a fair number of unwraps here but if we can't read the files
-                    // that by all accounts should be in the file system, then there is not much
-                    // we can do so it's better to fail so that we can investigate
-                    let vfs_file_path = overlay_fs.join(fname.as_str()).unwrap();
-                    let mut vfs_file = vfs_file_path.open_file().unwrap();
-                    let _ = vfs_file.read_to_string(&mut contents);
-                    let fhash = FileHash::new(&contents);
-                    // write to top layer of the overlay file system so that the content
-                    // is immutable for the duration of compilation and symbolication
-                    let _ = vfs_file_path.parent().create_dir_all();
-                    let mut vfs_file = vfs_file_path.create_file().unwrap();
-                    let _ = vfs_file.write_all(contents.as_bytes());
-                    (fhash, (Symbol::from(fname), contents))
-                })
-                .collect::<BTreeMap<_, _>>()
+        .flat_map(|(rpkg_name, rpkg)| {
+            rpkg.get_sources(
+                &resolved_graph.build_options,
+                *rpkg_name != resolved_graph.root_package(),
+            )
+            .unwrap()
+            .iter()
+            .map(|f| {
+                // dunce does a better job of canonicalization on Windows
+                let fname = dunce::canonicalize(f.as_str())
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| f.to_string());
+                let mut contents = String::new();
+                // there is a fair number of unwraps here but if we can't read the files
+                // that by all accounts should be in the file system, then there is not much
+                // we can do so it's better to fail so that we can investigate
+                let vfs_file_path = overlay_fs.join(fname.as_str()).unwrap();
+                let mut vfs_file = vfs_file_path.open_file().unwrap();
+                let _ = vfs_file.read_to_string(&mut contents);
+                let fhash = FileHash::new(&contents);
+                // write to top layer of the overlay file system so that the content
+                // is immutable for the duration of compilation and symbolication
+                let _ = vfs_file_path.parent().create_dir_all();
+                let mut vfs_file = vfs_file_path.create_file().unwrap();
+                let _ = vfs_file.write_all(contents.as_bytes());
+                (fhash, (Symbol::from(fname), contents))
+            })
+            .collect::<BTreeMap<_, _>>()
         })
         .collect()
 }
