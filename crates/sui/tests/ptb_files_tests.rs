@@ -14,11 +14,7 @@ const TEST_DIR: &str = "tests";
 async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
     use sui::client_ptb::ptb::{to_source_string, PTB};
     use sui::client_ptb::{error::build_error_reports, ptb::PTBPreview};
-    use test_cluster::TestCluster;
     use test_cluster::TestClusterBuilder;
-    use tokio::sync::OnceCell;
-
-    static CLUSTER: OnceCell<TestCluster> = OnceCell::const_new();
 
     let _ = miette::set_hook(Box::new(|_| {
         Box::new(
@@ -62,9 +58,7 @@ async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
     ));
 
     // === BUILD PTB ===
-    let test_cluster = CLUSTER
-        .get_or_init(|| TestClusterBuilder::new().build())
-        .await;
+    let test_cluster = TestClusterBuilder::new().build().await;
 
     let context = &test_cluster.wallet;
     let client = context.get_client().await?;
