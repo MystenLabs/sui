@@ -35,7 +35,7 @@ use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
 use typed_store::{Map, TypedStoreError};
 
-use super::authority_store_tables::{AuthorityPerpetualTables, OBJECT_COMPACTION_DB};
+use super::authority_store_tables::{AuthorityObjectCache, AuthorityPerpetualTables};
 
 static PERIODIC_PRUNING_TABLES: Lazy<BTreeSet<String>> = Lazy::new(|| {
     [
@@ -127,10 +127,11 @@ impl AuthorityStorePruner {
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
         enable_pruning_tombstones: bool,
+        object_tombstone_db: &Arc<AuthorityObjectCache>,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
         let mut wb = perpetual_db.objects.batch();
-        let mut tombstone_wb = OBJECT_COMPACTION_DB.db.object_tombstones.batch();
+        let mut tombstone_wb = object_tombstone_db.object_tombstones.batch();
         // Collect objects keys that need to be deleted from `transaction_effects`.
         let mut live_object_keys_to_prune = vec![];
         let mut object_tombstones_to_prune = vec![];
@@ -185,9 +186,10 @@ impl AuthorityStorePruner {
             );
             //let start_range = ObjectKey(object_id, min_version);
             //let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
+            let object_key = ObjectKey(object_id, max_version.value().into());
             tombstone_wb.insert_batch(
-                &OBJECT_COMPACTION_DB.db.object_tombstones,
-                std::iter::once((object_id, SequenceNumber::from_u64(max_version.value()))),
+                &object_tombstone_db.object_tombstones,
+                std::iter::once((object_key.0, object_key.1)),
             )?;
             //wb.schedule_delete_range(&perpetual_db.objects, &start_range, &end_range)?;
         }
@@ -312,6 +314,7 @@ impl AuthorityStorePruner {
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
+        object_tombstone_db: &Arc<AuthorityObjectCache>,
     ) -> anyhow::Result<()> {
         let max_eligible_checkpoint_number = checkpoint_store
             .get_highest_executed_checkpoint()?
@@ -329,6 +332,7 @@ impl AuthorityStorePruner {
             config,
             metrics.clone(),
             indirect_objects_threshold,
+            object_tombstone_db,
         )
         .await
     }
@@ -341,6 +345,7 @@ impl AuthorityStorePruner {
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
         archive_readers: ArchiveReaderBalancer,
+        object_tombstone_db: &Arc<AuthorityObjectCache>,
     ) -> anyhow::Result<()> {
         let pruned_checkpoint_number =
             checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
@@ -370,6 +375,7 @@ impl AuthorityStorePruner {
             config,
             metrics.clone(),
             indirect_objects_threshold,
+            object_tombstone_db,
         )
         .await
     }
@@ -386,6 +392,7 @@ impl AuthorityStorePruner {
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
+        object_tombstone_db: &Arc<AuthorityObjectCache>,
     ) -> anyhow::Result<()> {
         let mut checkpoint_number = starting_checkpoint_number;
         let current_epoch = checkpoint_store
@@ -446,6 +453,7 @@ impl AuthorityStorePruner {
                             metrics.clone(),
                             indirect_objects_threshold,
                             !config.killswitch_tombstone_pruning,
+                            object_tombstone_db,
                         )
                         .await?
                     }
@@ -476,6 +484,7 @@ impl AuthorityStorePruner {
                         metrics.clone(),
                         indirect_objects_threshold,
                         !config.killswitch_tombstone_pruning,
+                        object_tombstone_db,
                     )
                     .await?
                 }
@@ -549,6 +558,7 @@ impl AuthorityStorePruner {
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
         archive_readers: ArchiveReaderBalancer,
+        object_tombstone_db: Arc<AuthorityObjectCache>,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         debug!(
@@ -556,7 +566,7 @@ impl AuthorityStorePruner {
             config.num_epochs_to_retain
         );
 
-        let tick_duration = Duration::from_millis(min(epoch_duration_ms / 2, 1 * 1000));
+        let tick_duration = Duration::from_millis(min(epoch_duration_ms / 2, 60 * 1000));
         let pruning_initial_delay = if cfg!(msim) {
             Duration::from_millis(1)
         } else {
@@ -605,12 +615,12 @@ impl AuthorityStorePruner {
             loop {
                 tokio::select! {
                     _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
-                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold).await {
+                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold, &object_tombstone_db).await {
                             error!("Failed to prune objects: {:?}", err);
                         }
                     },
                     _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
-                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold, archive_readers.clone()).await {
+                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config, metrics.clone(), indirect_objects_threshold, archive_readers.clone(), &object_tombstone_db).await {
                             error!("Failed to prune checkpoints: {:?}", err);
                         }
                     },
@@ -631,6 +641,7 @@ impl AuthorityStorePruner {
         registry: &Registry,
         indirect_objects_threshold: usize,
         archive_readers: ArchiveReaderBalancer,
+        object_tombstone_db: Arc<AuthorityObjectCache>,
     ) -> Self {
         if pruning_config.num_epochs_to_retain > 0 && pruning_config.num_epochs_to_retain < u64::MAX
         {
@@ -652,6 +663,7 @@ impl AuthorityStorePruner {
                 AuthorityStorePruningMetrics::new(registry),
                 indirect_objects_threshold,
                 archive_readers,
+                object_tombstone_db,
             ),
         }
     }
@@ -673,7 +685,9 @@ mod tests {
     use tracing::log::info;
 
     use crate::authority::authority_store_pruner::AuthorityStorePruningMetrics;
-    use crate::authority::authority_store_tables::AuthorityPerpetualTables;
+    use crate::authority::authority_store_tables::{
+        AuthorityObjectCache, AuthorityPerpetualTables,
+    };
     use crate::authority::authority_store_types::{
         get_store_object_pair, ObjectContentDigest, StoreData, StoreObject, StoreObjectPair,
         StoreObjectWrapper,
@@ -809,8 +823,9 @@ mod tests {
     ) -> Vec<ObjectKey> {
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
+        let object_tombstone_cache = Arc::new(AuthorityObjectCache::open(Path::new("/tmp"), None));
         let to_keep = {
-            let db = Arc::new(AuthorityPerpetualTables::open(path, None));
+            let db = Arc::new(AuthorityPerpetualTables::open(path, None, None));
             let (to_keep, to_delete, tombstones) = generate_test_data(
                 db.clone(),
                 num_versions_per_object,
@@ -842,6 +857,7 @@ mod tests {
                 metrics,
                 indirect_object_threshold,
                 true,
+                &object_tombstone_cache,
             )
             .await
             .unwrap();
@@ -882,7 +898,7 @@ mod tests {
         let path = tempfile::tempdir().unwrap().into_path();
         run_pruner(&path, 3, 2, 1000, 1).await;
         {
-            let perpetual_db = AuthorityPerpetualTables::open(&path, None);
+            let perpetual_db = AuthorityPerpetualTables::open(&path, None, None);
             let count = perpetual_db.indirect_move_objects.keys().count();
             // references are not reset, expected to have 1000 unique objects
             assert_eq!(count, 1000);
@@ -891,7 +907,7 @@ mod tests {
         let path = tempfile::tempdir().unwrap().into_path();
         run_pruner(&path, 3, 0, 1000, 1).await;
         {
-            let perpetual_db = AuthorityPerpetualTables::open(&path, None);
+            let perpetual_db = AuthorityPerpetualTables::open(&path, None, None);
             perpetual_db.indirect_move_objects.flush().unwrap();
             perpetual_db
                 .indirect_move_objects
@@ -910,7 +926,7 @@ mod tests {
     #[tokio::test]
     async fn test_db_size_after_compaction() -> Result<(), anyhow::Error> {
         let primary_path = tempfile::tempdir()?.into_path();
-        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
+        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None, None));
         let total_unique_object_ids = 10_000;
         let num_versions_per_object = 10;
         let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids)?;
@@ -958,6 +974,7 @@ mod tests {
                 ObjectDigest::MIN,
             ));
         }
+        let object_tombstone_cache = Arc::new(AuthorityObjectCache::open(Path::new("/tmp"), None));
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
         let total_pruned = AuthorityStorePruner::prune_objects(
@@ -968,6 +985,7 @@ mod tests {
             metrics,
             0,
             true,
+            &object_tombstone_cache,
         )
         .await;
         info!("Total pruned keys = {:?}", total_pruned);
@@ -1078,7 +1096,7 @@ mod pprof_tests {
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
         let primary_path = tempfile::tempdir()?.into_path();
-        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
+        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None, None));
         let effects = insert_keys(&perpetual_db.objects)?;
         AuthorityStorePruner::prune_objects(
             vec![effects],
@@ -1112,7 +1130,7 @@ mod pprof_tests {
         // We then record a cpu profile of the `get()` calls and do not find any range fragmentation stack frame
         // in it.
         let primary_path = tempfile::tempdir()?.into_path();
-        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
+        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None, None));
         let effects = insert_keys(&perpetual_db.objects)?;
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);

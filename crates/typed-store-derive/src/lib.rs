@@ -432,7 +432,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                         ],
                         Some(o) => [
                             #(
-                                (stringify!(#cf_names).to_owned(), o.to_map().get(stringify!(#cf_names)).unwrap().clone()),
+                                (stringify!(#cf_names).to_owned(), o.to_map().get(stringify!(#cf_names)).cloned().unwrap_or(#default_options_override_fn_names())),
                             )*
                         ]
                     };

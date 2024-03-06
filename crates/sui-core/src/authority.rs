@@ -152,6 +152,7 @@ use crate::subscription_handler::SubscriptionHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 use crate::transaction_manager::TransactionManager;
 
+use crate::authority::authority_store_tables::AuthorityObjectCache;
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
 
@@ -2536,6 +2537,7 @@ impl AuthorityState {
         debug_dump_config: StateDebugDumpConfig,
         authority_overload_config: AuthorityOverloadConfig,
         archive_readers: ArchiveReaderBalancer,
+        object_tombstone_db: Arc<AuthorityObjectCache>,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -2561,6 +2563,7 @@ impl AuthorityState {
             prometheus_registry,
             indirect_objects_threshold,
             archive_readers,
+            object_tombstone_db,
         );
         let input_loader = TransactionInputLoader::new(execution_cache.clone());
         let cache_pointers = ExecutionCacheTraitPointers::new(&execution_cache);
@@ -2664,18 +2667,20 @@ impl AuthorityState {
         config: NodeConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
     ) -> anyhow::Result<()> {
-        let archive_readers =
-            ArchiveReaderBalancer::new(config.archive_reader_config(), &Registry::default())?;
-        AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
-            &self.execution_cache.store_for_testing().perpetual_tables,
-            &self.checkpoint_store,
-            &self.execution_cache.store_for_testing().objects_lock_table,
-            config.authority_store_pruning_config,
-            metrics,
-            config.indirect_objects_threshold,
-            archive_readers,
-        )
-        .await
+        // let archive_readers =
+        //     ArchiveReaderBalancer::new(config.archive_reader_config(), &Registry::default())?;
+        // AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
+        //     &self.execution_cache.store_for_testing().perpetual_tables,
+        //     &self.checkpoint_store,
+        //     &self.execution_cache.store_for_testing().objects_lock_table,
+        //     config.authority_store_pruning_config,
+        //     metrics,
+        //     config.indirect_objects_threshold,
+        //     archive_readers,
+        //
+        // )
+        // .await
+        Ok(())
     }
 
     pub fn transaction_manager(&self) -> &Arc<TransactionManager> {

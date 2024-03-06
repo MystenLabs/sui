@@ -114,6 +114,7 @@ impl StateSnapshotUploader {
                 let db = Arc::new(AuthorityPerpetualTables::open(
                     &path_to_filesystem(self.db_checkpoint_path.clone(), &db_path.child("store"))?,
                     None,
+                    None,
                 ));
                 state_snapshot_writer.write(*epoch, db).await?;
                 info!("State snapshot creation successful for epoch: {}", *epoch);

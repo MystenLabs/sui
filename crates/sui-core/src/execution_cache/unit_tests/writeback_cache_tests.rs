@@ -37,7 +37,7 @@ async fn init_authority_store() -> Arc<AuthorityStore> {
     let dir = tempdir().unwrap();
     let db_path = dir.path();
 
-    let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(db_path, None));
+    let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(db_path, None, None));
     AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
         .await
         .unwrap()

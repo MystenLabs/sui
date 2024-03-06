@@ -54,7 +54,9 @@ use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
+use sui_core::authority::authority_store_tables::{
+    AuthorityObjectCache, AuthorityPerpetualTables, ObjectCompactionFilter, ObjectCompactionMetrics,
+};
 use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
@@ -430,11 +432,19 @@ impl SuiNode {
             None,
         ));
 
+        let parent_path = config.db_path().join("store");
+        let object_tombstone_db = Arc::new(AuthorityObjectCache::open(parent_path.as_ref(), None));
+        let object_filter = ObjectCompactionFilter {
+            db: object_tombstone_db.clone(),
+            metrics: ObjectCompactionMetrics::new(&prometheus_registry),
+        };
         let perpetual_options = default_db_options().optimize_db_for_write_throughput(4);
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
-            &config.db_path().join("store"),
+            parent_path.as_ref(),
             Some(perpetual_options.options),
+            Some(object_filter),
         ));
+        info!("33333333");
         let is_genesis = perpetual_tables
             .database_is_empty()
             .expect("Database read should not fail at init.");
@@ -602,6 +612,7 @@ impl SuiNode {
             config.state_debug_dump_config.clone(),
             config.authority_overload_config.clone(),
             archive_readers,
+            object_tombstone_db,
         )
         .await;
         // ensure genesis txn was executed

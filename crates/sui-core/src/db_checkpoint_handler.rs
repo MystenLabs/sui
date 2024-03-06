@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
-use sui_storage::mutex_table::RwLockTable;
+use sui_storage::mutex_table::{LockTable, RwLockTable};
 use sui_storage::object_store::util::{
     copy_recursively, find_all_dirs_with_epoch_prefix, find_missing_epochs_dirs,
     path_to_filesystem, put, run_manifest_update_loop, write_snapshot_manifest,
@@ -239,28 +239,32 @@ impl DBCheckpointHandler {
     }
 
     async fn prune_and_compact(&self, db_path: PathBuf, epoch: u64) -> Result<()> {
-        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
+        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+            &db_path.join("store"),
+            None,
+            None,
+        ));
         let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
             db_path.join("checkpoints"),
             MetricConf::new("db_checkpoint"),
             None,
             None,
         ));
-        let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
-        let lock_table = Arc::new(RwLockTable::new(1));
+        //let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
+        //let lock_table: Arc<LockTable<K, tokio::sync::RwLock<()>>>  = Arc::new(RwLockTable::new(1));
         info!(
             "Pruning db checkpoint in {:?} for epoch: {epoch}",
             db_path.display()
         );
-        AuthorityStorePruner::prune_objects_for_eligible_epochs(
-            &perpetual_db,
-            &checkpoint_store,
-            &lock_table,
-            self.pruning_config,
-            metrics,
-            self.indirect_objects_threshold,
-        )
-        .await?;
+        // AuthorityStorePruner::prune_objects_for_eligible_epochs(
+        //     &perpetual_db,
+        //     &checkpoint_store,
+        //     &lock_table,
+        //     self.pruning_config,
+        //     metrics,
+        //     self.indirect_objects_threshold,
+        // )
+        // .await?;
         info!(
             "Compacting db checkpoint in {:?} for epoch: {epoch}",
             db_path.display()
