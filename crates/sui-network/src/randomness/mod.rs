@@ -364,7 +364,7 @@ impl RandomnessEventLoop {
             // If we just changed epochs and haven't completed any sigs yet, this will be used.
             None => (self.epoch, RandomnessRound(0)),
         };
-        const MAX_PARTIAL_SIGS_ROUNDS_AHEAD: u64 = 5;
+        const MAX_PARTIAL_SIGS_ROUNDS_AHEAD: u64 = 10;
         if epoch == last_completed_epoch
             && round.0
                 >= last_completed_round
@@ -548,7 +548,7 @@ impl RandomnessEventLoop {
                 break; // wait for DKG in new epoch
             }
 
-            const MAX_CONCURRENT_SEND_PARTIAL_SIGNATURES: usize = 5;
+            const MAX_CONCURRENT_SEND_PARTIAL_SIGNATURES: usize = 10;
             if self.send_tasks.len() >= MAX_CONCURRENT_SEND_PARTIAL_SIGNATURES {
                 break; // limit concurrent tasks
             }
