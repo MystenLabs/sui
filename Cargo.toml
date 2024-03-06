@@ -61,7 +61,7 @@ exclude = [
   "external-crates/move/move-execution/v1/crates/move-bytecode-verifier",
   "external-crates/move/move-execution/v1/crates/move-stdlib",
   "external-crates/move/move-execution/v1/crates/move-vm-runtime",
-  "sdk/move-binary-format-wasm",
+  "sdk/move-bytecode-template",
 ]
 
 members = [

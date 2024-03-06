@@ -1644,7 +1644,7 @@ importers:
         specifier: ^0.33.0
         version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
 
-  sdk/move-binary-format-wasm:
+  sdk/move-bytecode-template:
     devDependencies:
       '@mysten/build-scripts':
         specifier: workspace:*
