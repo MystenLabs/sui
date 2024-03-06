@@ -6,7 +6,7 @@ module ml::linear_regression {
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{TxContext};
-    use ml::ifixed_point32::{IFixedPoint32, zero, from_integer, from_rational, add, subtract, multiply, divide, divide_by_constant};
+    use ml::ifixed_point32::{IFixedPoint32, zero, from_rational, add, subtract, multiply, divide, divide_by_constant, from_raw};
 
     struct Model has key, store {
         id: UID,
@@ -30,18 +30,19 @@ module ml::linear_regression {
         transfer::public_share_object(model);
     }
 
-    /// Anyone can close the game by providing the randomness of round-2.
-    public entry fun submit_point(model: &mut Model, x: u64, y: u64) {
-
-        let x_fixed = from_integer(x, false);
-        let y_fixed = from_integer(y, false);
+    /// Submit a data point to the model. The number format for a positive real number `x` is x_raw = floor(2^32 x).
+    /// To submit a negative number set the negative boolean to true.
+    public entry fun submit_point(model: &mut Model, x_raw: u64, x_negative: bool, y_raw: u64, y_negative: bool) {
 
         model.n = model.n + 1;
 
-        let dx = subtract(x_fixed, model.mean_x);
-        let dy = subtract(y_fixed, model.mean_y);
-        model.mean_x = divide_by_constant(add(model.mean_x, x_fixed), model.n);
-        model.mean_y = divide_by_constant(add(model.mean_y, y_fixed), model.n);
+        let x = from_raw(x_raw, x_negative);
+        let y = from_raw(y_raw, y_negative);
+
+        let dx = subtract(x, model.mean_x);
+        let dy = subtract(y, model.mean_y);
+        model.mean_x = divide_by_constant(add(model.mean_x, x), model.n);
+        model.mean_y = divide_by_constant(add(model.mean_y, y), model.n);
         model.var_x = divide_by_constant(add(model.var_x, subtract(multiply(multiply(from_rational(model.n-1, model.n, false), dx), dx), model.var_x)), model.n);
         model.cov_xy = divide_by_constant(add(model.cov_xy, subtract(multiply(multiply(from_rational(model.n-1, model.n, false), dx), dy), model.cov_xy)), model.n);
     }

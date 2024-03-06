@@ -67,6 +67,7 @@ module ml::logistic_regression {
         delta
     }
 
+    /// Fit model using SGD on the given data points
     public fun fit(model: &mut Model, x: &vector<vector<IFixedPoint32>>, expected: &vector<IFixedPoint32>, rate: IFixedPoint32, rounds: u64) {
         assert!(vector::length(x) == vector::length(expected), 0);
 
@@ -81,6 +82,7 @@ module ml::logistic_regression {
         }
     }
 
+    /// Fit a single row
     fun fit_row(model: &mut Model, rate: IFixedPoint32, x: &vector<IFixedPoint32>, expected: IFixedPoint32) {
         let delta = row_gradient(model, rate, x, expected);
 

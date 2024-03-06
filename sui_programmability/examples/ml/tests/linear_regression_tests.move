@@ -21,11 +21,11 @@ module ml::linear_regression_tests {
 
         // User1 submits a point
         test_scenario::next_tx(scenario, user1);
-        linear_regression::submit_point(model, 2, 4);
+        linear_regression::submit_point(model, 2 << 32, false, 4 << 32, false);
 
         // User2 submits a point
         test_scenario::next_tx(scenario, user2);
-        linear_regression::submit_point(model, 3, 5);
+        linear_regression::submit_point(model, 3 << 32, false, 5 << 32, false);
 
         test_scenario::return_shared(model_val);
         test_scenario::end(scenario_val);
