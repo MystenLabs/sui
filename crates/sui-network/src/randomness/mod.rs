@@ -249,16 +249,18 @@ impl RandomnessEventLoop {
         // Aggregate any sigs received early from the new epoch.
         // (We can't call `maybe_aggregate_partial_signatures` directly while iterating,
         // because it takes `&mut self`, so we store in a Vec first.)
-        let mut aggregate_rounds = Vec::new();
-        let mut next_eligible_round = 0;
+        let mut aggregate_rounds = BTreeSet::new();
         for (epoch, round, _) in self.received_partial_sigs.keys() {
-            if *epoch != new_epoch {
+            if *epoch < new_epoch {
+                error!("BUG: received partial sigs for old epoch still present after attempting to remove them");
+                debug_assert!(false, "received partial sigs for old epoch still present after attempting to remove them");
+                continue;
+            }
+            if *epoch > new_epoch {
                 break;
             }
-            if round.0 >= next_eligible_round && !self.completed_sigs.contains(&(*epoch, *round)) {
-                // de-dupe same round from multiple PeerIds
-                aggregate_rounds.push(*round);
-                next_eligible_round = round.0 + 1;
+            if !self.completed_sigs.contains(&(*epoch, *round)) {
+                aggregate_rounds.insert(*round);
             }
         }
         for round in aggregate_rounds {
@@ -271,9 +273,13 @@ impl RandomnessEventLoop {
     #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
     fn send_partial_signatures(&mut self, epoch: EpochId, round: RandomnessRound) {
         if epoch < self.epoch {
-            info!(
-                "skipping sending partial sigs, we are already up to epoch {}",
+            error!(
+                "BUG: skipping sending partial sigs, we are already up to epoch {}",
                 self.epoch
+            );
+            debug_assert!(
+                false,
+                "skipping sending partial sigs, we are already up to higher epoch"
             );
             return;
         }
@@ -290,7 +296,7 @@ impl RandomnessEventLoop {
 
     #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
     fn complete_round(&mut self, epoch: EpochId, round: RandomnessRound) {
-        debug!("completing randomness generation");
+        debug!("completing randomness round");
         self.pending_tasks.remove(&(epoch, round));
         self.round_request_time.remove(&(epoch, round));
         self.completed_sigs.insert((epoch, round)); // in case we got it from a checkpoint
@@ -326,7 +332,10 @@ impl RandomnessEventLoop {
             return;
         }
         if epoch > self.epoch + 1 {
-            debug!("skipping received partial sigs, we are still on epoch {epoch}");
+            debug!(
+                "skipping received partial sigs, we are still on epoch {}",
+                self.epoch
+            );
             return;
         }
         if self.completed_sigs.contains(&(epoch, round)) {
@@ -348,25 +357,30 @@ impl RandomnessEventLoop {
             );
             return;
         }
-        if let Some((last_completed_epoch, last_completed_round)) = self.completed_sigs.last() {
-            const MAX_PARTIAL_SIGS_ROUNDS_AHEAD: u64 = 5;
-            if epoch == *last_completed_epoch
-                && round.0
-                    >= last_completed_round
-                        .0
-                        .saturating_add(MAX_PARTIAL_SIGS_ROUNDS_AHEAD)
-            {
-                debug!(
+        let (last_completed_epoch, last_completed_round) = match self.completed_sigs.last() {
+            Some((last_completed_epoch, last_completed_round)) => {
+                (*last_completed_epoch, *last_completed_round)
+            }
+            // If we just changed epochs and haven't completed any sigs yet, this will be used.
+            None => (self.epoch, RandomnessRound(0)),
+        };
+        const MAX_PARTIAL_SIGS_ROUNDS_AHEAD: u64 = 5;
+        if epoch == last_completed_epoch
+            && round.0
+                >= last_completed_round
+                    .0
+                    .saturating_add(MAX_PARTIAL_SIGS_ROUNDS_AHEAD)
+        {
+            debug!(
                     "skipping received partial sigs, most recent round we completed was only {last_completed_round}",
                 );
-                return;
-            }
-            if epoch > *last_completed_epoch && round.0 >= MAX_PARTIAL_SIGS_ROUNDS_AHEAD {
-                debug!(
+            return;
+        }
+        if epoch > last_completed_epoch && round.0 >= MAX_PARTIAL_SIGS_ROUNDS_AHEAD {
+            debug!(
                     "skipping received partial sigs, most recent epoch we completed was only {last_completed_epoch}",
                 );
-                return;
-            }
+            return;
         }
 
         // We passed all the checks, deserialize and save the partial sigs.
@@ -395,6 +409,10 @@ impl RandomnessEventLoop {
     fn maybe_aggregate_partial_signatures(&mut self, epoch: EpochId, round: RandomnessRound) {
         if self.completed_sigs.contains(&(epoch, round)) {
             error!("BUG: called maybe_aggregate_partial_signatures for already-completed round");
+            debug_assert!(
+                false,
+                "called maybe_aggregate_partial_signatures for already-completed round"
+            );
             return;
         }
 
@@ -592,8 +610,7 @@ impl RandomnessEventLoop {
                 .next()
                 .cloned();
             if let Some(key) = split_point {
-                let mut keep_tasks = self.pending_tasks.split_off(&key);
-                std::mem::swap(&mut self.pending_tasks, &mut keep_tasks);
+                self.pending_tasks = self.pending_tasks.split_off(&key);
             } else {
                 self.pending_tasks.clear();
             }
