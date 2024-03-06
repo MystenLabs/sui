@@ -1080,7 +1080,7 @@ impl SuiNode {
                     )),
                 ));
                 let consensus_manager =
-                    ConsensusManager::new_narwhal(&config, &consensus_config, registry_service);
+                    ConsensusManager::new_narwhal(&config, consensus_config, registry_service);
                 (consensus_adapter, consensus_manager)
             }
             ConsensusProtocol::Mysticeti => {
