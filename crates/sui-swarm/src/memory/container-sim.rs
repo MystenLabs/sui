@@ -56,12 +56,12 @@ impl Container {
             .name(&format!("{:?}", config.protocol_public_key().concise()))
             .init(move || {
                 info!("Node restarted");
-                let config = config.clone();
+                let config = (*config.clone()).clone();
                 let mut cancel_receiver = cancel_receiver.clone();
                 let startup_sender = startup_sender.clone();
                 async move {
                     let registry_service = mysten_metrics::RegistryService::new(Registry::new());
-                    let server = SuiNode::start(&config, registry_service, None)
+                    let server = SuiNode::start(config, registry_service, None)
                         .await
                         .unwrap();
 
