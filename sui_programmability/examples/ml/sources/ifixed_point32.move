@@ -166,13 +166,13 @@ module ml::ifixed_point32 {
     // The raw part of an approximation of log_2(e)
     const LOG2_E: u64 = 6196328018;
 
-    // A polynomial approximation of the exponential function on [0,1]
+    // A polynomial approximation of the x -> 2^x on [0,1]
     const P: vector<u64> = vector[4294967628, 2977044471, 1031765007, 238388159, 41310461, 5724033, 666181, 60979];
 
     /// Compute `exp(x)`.
     public fun exp(x: IFixedPoint32): IFixedPoint32 {
 
-        // Compute exp(x) as  2^{y} = 2^{ipart(y)) * 2^{fpart(y)) where y = |log2(e) * x|
+        // Compute exp(x) as  2^{y} = 2^{ipart(y)} * 2^{fpart(y)} where y = |log2(e) * x|
         // and take reciprocal if x is negative.
 
         let y = multiply(x, from_raw(LOG2_E, false));
