@@ -373,7 +373,7 @@ impl NameService {
             return if !name_record.is_node_expired(query.checkpoint_timestamp_ms) {
                 Ok(Some(name_record))
             } else {
-                Ok(None)
+                Err(Error::NameService(NameServiceError::NameExpired))
             };
         }
 
