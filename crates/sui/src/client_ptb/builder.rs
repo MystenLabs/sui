@@ -787,7 +787,7 @@ impl<'a> PTBBuilder<'a> {
     ) -> PTBResult<()> {
         // let sp!(cmd_span, tok) = &command.name;
         match command {
-            ParsedPTBCommand::TransferObjects(to_address, obj_args) => {
+            ParsedPTBCommand::TransferObjects(obj_args, to_address) => {
                 let to_arg = self.resolve(to_address, ToPure).await?;
                 let mut transfer_args = vec![];
                 for o in obj_args.value.into_iter() {

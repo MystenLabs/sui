@@ -35,16 +35,16 @@ expression: "results.join(\"\\n\")"
  6 │ --make-move-vec <vector<address>> [[@0x1],[@0x2]]
    ·                                    ┬
    ·                                    ╰── Unexpected '['
- 7 │ --transfer-objects @0x1 s
+ 7 │ --transfer-objects s @0x1
    ╰────
   help: Expected an argument here
 
   × Error when processing PTB
-   ╭─[7:25]
+   ╭─[7:20]
  6 │ --make-move-vec <vector<address>> [[@0x1],[@0x2]]
- 7 │ --transfer-objects @0x1 s
-   ·                         ┬
-   ·                         ╰── Expected '[' but found identifier 's'
+ 7 │ --transfer-objects s @0x1
+   ·                    ┬
+   ·                    ╰── Expected '[' but found identifier 's'
  8 │ --assign Z none
    ╰────
 
