@@ -1642,7 +1642,11 @@ fn binop(
             (Type_::bool(loc), operand_ty)
         }
 
-        Eq | Neq if context.env.supports_feature(context.current_package(), FeatureGate::AutoborrowEq) => {
+        Eq | Neq
+            if context
+                .env
+                .supports_feature(context.current_package(), FeatureGate::AutoborrowEq) =>
+        {
             let lhs_type = core::ready_tvars(&context.subst, el.ty.clone());
             let rhs_type = core::ready_tvars(&context.subst, er.ty.clone());
             let (lhs_ref, lhs_inner, rhs_ref, rhs_inner) = match (lhs_type, rhs_type) {
@@ -1677,38 +1681,26 @@ fn binop(
                     );
                     ty
                 }
-                (None, Some(rhs_mut)) => {
-                    // If the RHS is mutable, we reborrow it as immutable so avoid requiring the
-                    // LHS to be mutable.
-                    if rhs_mut {
-                        er = exp_to_ref(context, er.exp.loc, false, er);
-                    }
-                    el = exp_to_ref(context, el.exp.loc, false, el);
-                    sp(bop.loc, Type_::Ref(false, Box::new(ty)))
-                }
-                (Some(lhs_mut), None) => {
-                    // If the LHS is mutable, we reborrow it as immutable so avoid requiring the
-                    // RHS to be mutable.
-                    if lhs_mut {
-                        el = exp_to_ref(context, el.exp.loc, false, el);
-                    }
-                    er = exp_to_ref(context, er.exp.loc, false, er);
+                (None, Some(_)) | (Some(_), None) => {
+                    // If one of these is a ref (mut or otherwise), we make them both immutable
+                    // refs. This is to avoid requiring mutability on the non-ref one.
+                    er = exp_to_ref(context, er.exp.loc, er);
+                    el = exp_to_ref(context, el.exp.loc, el);
                     sp(bop.loc, Type_::Ref(false, Box::new(ty)))
                 }
                 (Some(lhs_mut), Some(rhs_mut)) => {
+                    // If both are mut or imm, we are done. If they mismatcch, we treat them both
+                    // like imm refs.
                     if lhs_mut == rhs_mut {
                         sp(bop.loc, Type_::Ref(lhs_mut, Box::new(ty)))
                     } else {
-                        if lhs_mut {
-                            el = exp_to_ref(context, el.exp.loc, false, el)
-                        };
-                        if rhs_mut {
-                            er = exp_to_ref(context, er.exp.loc, false, er)
-                        };
+                        el = exp_to_ref(context, el.exp.loc, el);
+                        er = exp_to_ref(context, er.exp.loc, er);
                         sp(bop.loc, Type_::Ref(false, Box::new(ty)))
                     }
                 }
             };
+            // The `eq_ty` is used in `hlir` to do freezing.
             (Type_::bool(loc), eq_ty)
         }
         Eq | Neq => {
@@ -1792,30 +1784,12 @@ fn loop_body(
     }
 }
 
-fn exp_to_ref(context: &mut Context, loc: Loc, mut_: bool, e: Box<T::Exp>) -> Box<T::Exp> {
+fn exp_to_ref(context: &mut Context, loc: Loc, e: Box<T::Exp>) -> Box<T::Exp> {
     let ety = &e.ty;
     let current_ty = core::unfold_type(&context.subst, ety.clone());
     match current_ty.value {
-        Type_::Ref(false, _t) => {
-            if mut_ {
-                make_error_exp(context, loc)
-            } else {
-                e
-            }
-        }
-        Type_::Ref(true, t) => {
-            if mut_ {
-                e
-            } else {
-                let freeze_type = sp(loc, Type_::Ref(false, Box::new(*t)));
-                let freeze_exp = sp(
-                    loc,
-                    T::UnannotatedExp_::Annotate(e, Box::new(freeze_type.clone())),
-                );
-                Box::new(T::exp(freeze_type, freeze_exp))
-            }
-        }
-        _ => exp_to_borrow(context, loc, mut_, e, current_ty),
+        Type_::Ref(_, _t) => e,
+        _ => exp_to_borrow(context, loc, /* mut_ */ false, e, current_ty),
     }
 }
 
