@@ -48,7 +48,7 @@ The reviews are rated (scored) on-chain using following criteria
 Total Score = (IS + ES) * VM
 ```
 
-## Backend
+## Smart contracts
 
 There are several modules that create the backend logic for the example. 
 
@@ -148,3 +148,9 @@ Multiple additional custom hooks, such as [useDashboardCreation](https://github.
 - **Proof of Experience Generation:** Proof of Experience(PoE) is an NFT that is minted by `SERVICE OWNER` for customers after they dine at the restaurant; customers can, then, burn the PoE to write a high-rated review later. Minting an NFT is facilitated by the [ownedServicePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/serviceOwner/ownedServices/page.tsx) component. This component is using the [useServicePoEGeneration](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/hooks/useServicePoeGeneration.ts) custom hook.
 
 - **Delete a Review:** The moderator can delete a review that contain inappropriate content. [moderatorRemovePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/user/moderator/remove/page.tsx) component is used to delete a review.
+
+:::info
+
+The complete app example can be found in [the reviews-rating repo](https://github.com/MystenLabs/reviews-ratings-poc).
+
+:::
