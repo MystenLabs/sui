@@ -1661,6 +1661,7 @@ fn binop(
             context.add_single_type_constraint(loc, msg(), ty.clone());
             let eq_ty = match (lhs_ref, rhs_ref) {
                 (None, None) => {
+                    // If both are values, they need drop but otherwise we are done.
                     let ability_msg = Some(format!(
                         "'{}' requires the '{}' ability as the value is consumed. Try \
                                  borrowing the values with '&' first.'",
@@ -1681,23 +1682,20 @@ fn binop(
                     );
                     ty
                 }
-                (None, Some(_)) | (Some(_), None) => {
-                    // If one of these is a ref (mut or otherwise), we make them both immutable
-                    // refs. This is to avoid requiring mutability on the non-ref one.
-                    er = exp_to_ref(context, er.exp.loc, er);
-                    el = exp_to_ref(context, el.exp.loc, el);
+                (None, Some(_)) => {
+                    // If lhs is a value and rhs is a ref, we treat them as imm. refs.
+                    el = exp_to_borrow(context, loc, /* mut_ */ false, el, ty.clone());
                     sp(bop.loc, Type_::Ref(false, Box::new(ty)))
                 }
-                (Some(lhs_mut), Some(rhs_mut)) => {
-                    // If both are mut or imm, we are done. If they mismatcch, we treat them both
-                    // like imm refs.
-                    if lhs_mut == rhs_mut {
-                        sp(bop.loc, Type_::Ref(lhs_mut, Box::new(ty)))
-                    } else {
-                        el = exp_to_ref(context, el.exp.loc, el);
-                        er = exp_to_ref(context, er.exp.loc, er);
-                        sp(bop.loc, Type_::Ref(false, Box::new(ty)))
-                    }
+                (Some(_), None) => {
+                    // If rhs is a value and lhs is a ref, we treat them as imm. refs.
+                    er = exp_to_borrow(context, loc, /* mut_ */ false, er, ty.clone());
+                    sp(bop.loc, Type_::Ref(false, Box::new(ty)))
+                }
+                (Some(_), Some(_)) => {
+                    // We can just compute the join type in this case, because they will match or
+                    // be promoted to imm. refs.
+                    join(context, bop.loc, msg, el.ty.clone(), er.ty.clone())
                 }
             };
             // The `eq_ty` is used in `hlir` to do freezing.
@@ -1781,15 +1779,6 @@ fn loop_body(
     } else {
         // if it was a while loop, the `if` case ran, so we can simply make a type var for the loop
         (false, context.named_block_type(name, eloc), eloop)
-    }
-}
-
-fn exp_to_ref(context: &mut Context, loc: Loc, e: Box<T::Exp>) -> Box<T::Exp> {
-    let ety = &e.ty;
-    let current_ty = core::unfold_type(&context.subst, ety.clone());
-    match current_ty.value {
-        Type_::Ref(_, _t) => e,
-        _ => exp_to_borrow(context, loc, /* mut_ */ false, e, current_ty),
     }
 }
 
