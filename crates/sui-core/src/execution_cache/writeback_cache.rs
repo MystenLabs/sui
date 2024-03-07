@@ -68,6 +68,7 @@ use sui_macros::fail_point_async;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData};
+use sui_types::bridge::Bridge;
 use sui_types::digests::{
     ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
 };
@@ -1049,6 +1050,10 @@ impl ExecutionCacheRead for WritebackCache {
     }
 
     fn check_owned_object_locks_exist(&self, _owned_object_refs: &[ObjectRef]) -> SuiResult {
+        todo!()
+    }
+
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
         todo!()
     }
 }
