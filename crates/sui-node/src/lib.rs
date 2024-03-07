@@ -1041,9 +1041,8 @@ impl SuiNode {
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
 
         // TODO (mysticeti): Move this to a protocol config flag.
-        let consensus_protocol = if std::env::var("CONSENSUS").is_ok() {
-            let consensus_choice = std::env::var("CONSENSUS").unwrap();
-            match consensus_choice.as_str() {
+        if let Ok(consensus_choice) = std::env::var("CONSENSUS") {
+            let consensus_protocol = match consensus_choice.as_str() {
                 "narwhal" => ConsensusProtocol::Narwhal,
                 "mysticeti" => ConsensusProtocol::Mysticeti,
                 "swap_each_epoch" => {
@@ -1058,13 +1057,10 @@ impl SuiNode {
                     warn!("Consensus env var was set to an invalid choice, using default consensus protocol {consensus:?}");
                     consensus
                 }
-            }
-        } else {
-            consensus_config.protocol.clone()
-        };
-
-        info!("Constructing consensus protocol {consensus_protocol:?}...");
-        consensus_config.protocol = consensus_protocol;
+            };
+            info!("Constructing consensus protocol {consensus_protocol:?}...");
+            consensus_config.protocol = consensus_protocol;
+        }
 
         let (consensus_adapter, consensus_manager) = match consensus_config.protocol {
             ConsensusProtocol::Narwhal => {
