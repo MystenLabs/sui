@@ -56,6 +56,7 @@ module sui_system::sui_system {
     use sui_system::staking_pool::PoolTokenExchangeRate;
     use std::option;
     use sui::dynamic_field;
+    use sui::vec_map::VecMap;
 
     #[test_only] use sui::balance;
     #[test_only] use sui_system::validator_set::ValidatorSet;
@@ -596,6 +597,18 @@ module sui_system::sui_system {
         inner
     }
 
+    #[allow(unused_function)]
+    /// Returns the voting power of the active validators, values are voting power in the scale of 10000.
+    fun validator_voting_powers(wrapper: &mut SuiSystemState): VecMap<address, u64> {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::active_validator_voting_powers(self)
+    }
+
+    #[test_only]
+    public fun validator_voting_powers_for_testing(wrapper: &mut SuiSystemState): VecMap<address, u64> {
+        validator_voting_powers(wrapper)
+    }
+
     #[test_only]
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
     /// since epochs are ever-increasing and epoch changes are intended to happen every 24 hours.
@@ -617,13 +630,6 @@ module sui_system::sui_system {
     public fun validator_stake_amount(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
         let self = load_system_state(wrapper);
         sui_system_state_inner::validator_stake_amount(self, validator_addr)
-    }
-
-    /// Returns the voting power of the active validator, values are voting power in the scale of 10000.
-    /// Aborts if `validator_addr` is not an active validator.
-    public fun validator_voting_power(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
-        let self = load_system_state(wrapper);
-        sui_system_state_inner::validator_voting_power(self, validator_addr)
     }
 
     #[test_only]

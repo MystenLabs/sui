@@ -36,6 +36,8 @@ pub const BRIDGE_MODULE_NAME: &IdentStr = ident_str!("bridge");
 pub const BRIDGE_CREATE_FUNCTION_NAME: &IdentStr = ident_str!("create");
 pub const BRIDGE_INIT_COMMITTEE_FUNCTION_NAME: &IdentStr = ident_str!("init_bridge_committee");
 
+pub const BRIDGE_ENABLE_PROTOCOL_VERSION: u64 = 39;
+
 pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];
 
 pub fn get_bridge_obj_initial_shared_version(

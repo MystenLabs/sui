@@ -28,6 +28,8 @@ module bridge::bridge {
     use bridge::treasury::{Self, BridgeTreasury};
 
     #[test_only]
+    use sui::hex;
+    #[test_only]
     use sui::object;
     #[test_only]
     use sui::test_scenario;
@@ -39,8 +41,6 @@ module bridge::bridge {
     use bridge::eth::ETH;
     #[test_only]
     use bridge::message::create_blocklist_message;
-    #[test_only]
-    use sui::hex;
 
     const MESSAGE_VERSION: u8 = 1;
 
@@ -153,7 +153,7 @@ module bridge::bridge {
     #[allow(unused_function)]
     fun init_bridge_committee(
         self: &mut Bridge,
-        system_state: &mut SuiSystemState,
+        active_validator_voting_power: VecMap<address, u64>,
         min_stake_participation_percentage: u64,
         ctx: &TxContext
     ) {
@@ -162,7 +162,7 @@ module bridge::bridge {
         if (vec_map::is_empty(committee::committee_members(&inner.committee))) {
             committee::try_create_next_committee(
                 &mut inner.committee,
-                system_state,
+                active_validator_voting_power,
                 min_stake_participation_percentage,
                 ctx
             )
@@ -744,7 +744,7 @@ module bridge::bridge {
             hex::decode(b"00000000000000000000000000000000000000c8"), // target_address
             1u8, // token_type
             balance::value(coin::balance(&coin))
-        );        
+        );
 
         let key = message::key(&message);
         linked_table::push_back(&mut load_inner_mut(&mut bridge).bridge_records, key, BridgeRecord {
@@ -763,7 +763,7 @@ module bridge::bridge {
             hex::decode(b"00000000000000000000000000000000000000c8"), // target_address
             1u8, // token_type
             balance::value(coin::balance(&coin))
-        );        
+        );
         let key = message::key(&message);
         linked_table::push_back(&mut load_inner_mut(&mut bridge).bridge_records, key, BridgeRecord {
             message,
@@ -781,7 +781,7 @@ module bridge::bridge {
             hex::decode(b"00000000000000000000000000000000000000c8"), // target_address
             1u8, // token_type
             balance::value(coin::balance(&coin))
-        );        
+        );
         let key = message::key(&message);
         linked_table::push_back(&mut load_inner_mut(&mut bridge).bridge_records, key, BridgeRecord {
             message,

@@ -19,7 +19,8 @@
 -  [Function `committee_members`](#0xb_committee_committee_members)
 
 
-<pre><code><b>use</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
+<pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
+<b>use</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
 <b>use</b> <a href="dependencies/sui-framework/ecdsa_k1.md#0x2_ecdsa_k1">0x2::ecdsa_k1</a>;
 <b>use</b> <a href="dependencies/sui-framework/event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="dependencies/sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -466,7 +467,7 @@
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, system_state: &<b>mut</b> <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, min_stake_participation_percentage: u64, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, active_validator_voting_power: <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, u64&gt;, min_stake_participation_percentage: u64, ctx: &<a href="dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -477,11 +478,10 @@
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_try_create_next_committee">try_create_next_committee</a>(
     self: &<b>mut</b> <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>,
-    system_state: &<b>mut</b> SuiSystemState,
+    active_validator_voting_power: VecMap&lt;<b>address</b>, u64&gt;,
     min_stake_participation_percentage: u64,
     ctx: &TxContext
 ) {
-    <b>let</b> validators = <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_active_validator_addresses">sui_system::active_validator_addresses</a>(system_state);
     <b>let</b> i = 0;
     <b>let</b> new_members = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
     <b>let</b> stake_participation_percentage = 0;
@@ -492,8 +492,9 @@
         // Find <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a> stake amount from system state
 
         // Process registration <b>if</b> it's active <a href="dependencies/sui-system/validator.md#0x3_validator">validator</a>
-        <b>if</b> (<a href="dependencies/move-stdlib/vector.md#0x1_vector_contains">vector::contains</a>(&validators, &registration.sui_address)) {
-            <b>let</b> <a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a> = <a href="dependencies/sui-system/sui_system.md#0x3_sui_system_validator_voting_power">sui_system::validator_voting_power</a>(system_state, registration.sui_address);
+        <b>let</b> <a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a> = <a href="dependencies/sui-framework/vec_map.md#0x2_vec_map_try_get">vec_map::try_get</a>(&active_validator_voting_power, &registration.sui_address);
+        <b>if</b> (<a href="dependencies/move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&<a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a>)) {
+            <b>let</b> <a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a> = <a href="dependencies/move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(<a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a>);
             stake_participation_percentage = stake_participation_percentage + <a href="dependencies/sui-system/voting_power.md#0x3_voting_power">voting_power</a>;
             <b>let</b> member = <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a> {
                 sui_address: registration.sui_address,
