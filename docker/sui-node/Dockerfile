@@ -69,6 +69,14 @@ COPY --from=stagex/musl . /rootfs
 COPY --from=stagex/gcc /usr/lib64/* /rootfs/usr/lib/
 
 COPY --from=build sui/target/release/sui-node /rootfs/usr/bin/sui-node
+
+# support current + legacy paths
+RUN mkdir -p /opt/sui/bin
+RUN mkdir -p /usr/local/bin
+
+RUN ln -s /rootfs/usr/bin/sui-node /opt/sui/bin/sui-node
+RUN ln -s /rootfs/usr/bin/sui-node /usr/local/bin/sui-node
+
 RUN --network=none find /rootfs -exec touch -hcd "@0" "{}" +
 
 FROM scratch AS package
@@ -81,5 +89,3 @@ LABEL git-revision=${GIT_REVISION}
 
 COPY --from=install /rootfs /
 
-ENTRYPOINT ["/usr/bin/sui-node"]
-CMD ["--version"]
