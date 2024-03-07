@@ -49,14 +49,13 @@ impl Container {
             _ => panic!("unsupported protocol"),
         };
 
-        let config = Arc::new(config);
         let startup_sender = Arc::new(startup_sender);
         let node = builder
             .ip(ip)
             .name(&format!("{:?}", config.protocol_public_key().concise()))
             .init(move || {
                 info!("Node restarted");
-                let config = (*config.clone()).clone();
+                let config = config.clone();
                 let mut cancel_receiver = cancel_receiver.clone();
                 let startup_sender = startup_sender.clone();
                 async move {
