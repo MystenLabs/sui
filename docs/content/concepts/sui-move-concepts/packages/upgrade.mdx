@@ -236,7 +236,8 @@ This pattern forms the basis for upgradeable packages involving shared objects, 
 To upgrade a package, your package must satisfy the following requirements:
 - You must have an `UpgradeTicket` for the package you want to upgrade. The Sui network issues `UpgradeCap`s when you publish a package, then you can issue `UpgradeTicket`s as the owner of that `UpgradeCap`. The Sui Client CLI handles this requirement automatically.
 - Your changes must be layout-compatible with the previous version.
-    - Existing `public` function signatures and struct layouts must remain the same.
+    - Existing `public` function signatures must remain the same.
+    - Existing struct layouts (including struct abilities) must remain the same.
     - You can add new structs and functions.
     - You can remove generic type constraints from existing functions (public or otherwise).
     - You can change function implementations.
