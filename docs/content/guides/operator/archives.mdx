@@ -90,3 +90,24 @@ state-archive-read-config:
 
 </TabItem>
 </Tabs>
+
+
+Even though these buckets are publicly readable, you need to make sure to properly grant the correct policies to read them via AWS, for example:
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetObject",
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:s3:::mysten-mainnet-archives/*",
+                "arn:aws:s3:::mysten-mainnet-archives"
+            ]
+        }
+    ]
+}
+```
