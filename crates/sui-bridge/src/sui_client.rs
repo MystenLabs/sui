@@ -58,7 +58,6 @@ use crate::crypto::BridgeAuthorityPublicKey;
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::SuiBridgeEvent;
 use crate::retry_with_max_elapsed_time;
-use crate::sui_transaction_builder::get_bridge_package_id;
 use crate::types::BridgeActionStatus;
 use crate::types::{BridgeAction, BridgeAuthority, BridgeCommittee};
 
@@ -202,8 +201,8 @@ where
         action: &BridgeAction,
     ) -> BridgeActionStatus {
         loop {
-            let Ok(bridge_records_id) =
-                retry_with_max_delay!(self.get_bridge_record_id(), Duration::from_secs(600))
+            let Ok(Ok(bridge_records_id)) =
+                retry_with_max_elapsed_time!(self.get_bridge_record_id(), Duration::from_secs(30))
             else {
                 // TODO: add metrics and fire alert
                 error!("Failed to get bridge records id");
