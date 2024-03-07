@@ -16,7 +16,7 @@ use crate::data::{self, QueryExecutor};
 use crate::{data::Db, error::Error};
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
-use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
+use diesel::{BoolExpressionMethods, ExpressionMethods, NullableExpressionMethods, QueryDsl};
 use serde::{Deserialize, Serialize};
 use sui_indexer::models::{events::StoredEvent, transactions::StoredTransaction};
 use sui_indexer::schema::{events, transactions, tx_senders};
@@ -195,13 +195,14 @@ impl Event {
 
                         if let Some(digest) = &filter.transaction_digest {
                             query = query.filter(
-                                events::dsl::tx_sequence_number.eq_any(
+                                events::dsl::tx_sequence_number.nullable().eq(
                                     transactions::dsl::transactions
                                         .select(transactions::dsl::tx_sequence_number)
                                         .filter(
                                             transactions::dsl::transaction_digest
                                                 .eq(digest.to_vec()),
-                                        ),
+                                        )
+                                        .single_value(),
                                 ),
                             )
                         }
