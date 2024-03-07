@@ -33,6 +33,7 @@ ResolvedGraph {
         warnings_are_errors: false,
         additional_named_addresses: {},
         no_lint: false,
+        ide_mode: false,
     },
     package_table: {
         "®´∑œ": Package {
