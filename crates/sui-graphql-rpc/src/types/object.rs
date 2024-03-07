@@ -1375,7 +1375,7 @@ where
         view,
         lhs,
         rhs,
-        page,
+        Some(page),
         move |query| filter.apply(query),
         move |newer| newer,
     )
