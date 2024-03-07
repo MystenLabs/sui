@@ -76,7 +76,7 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
         NonZeroUsize::new(1).unwrap(),
     )
     .await?;
-    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None, None));
     insert_keys(&perpetual_db, 1000)?;
     snapshot_writer
         .write_internal(0, true, perpetual_db.clone())
@@ -95,7 +95,7 @@ async fn test_snapshot_basic() -> Result<(), anyhow::Error> {
         MultiProgress::new(),
     )
     .await?;
-    let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None);
+    let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None, None);
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
     snapshot_reader
         .read(&restored_perpetual_db, abort_registration, None)
@@ -130,7 +130,7 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
         NonZeroUsize::new(1).unwrap(),
     )
     .await?;
-    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path, None, None));
     snapshot_writer
         .write_internal(0, true, perpetual_db.clone())
         .await?;
@@ -148,7 +148,7 @@ async fn test_snapshot_empty_db() -> Result<(), anyhow::Error> {
         MultiProgress::new(),
     )
     .await?;
-    let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None);
+    let restored_perpetual_db = AuthorityPerpetualTables::open(&restored_db_path, None, None);
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
     snapshot_reader
         .read(&restored_perpetual_db, abort_registration, None)

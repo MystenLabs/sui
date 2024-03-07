@@ -3,8 +3,11 @@
 
 use super::*;
 use crate::authority::authority_store::LockDetailsWrapper;
-use rocksdb::Options;
+use bincode::Options as OtherOptions;
+use rocksdb::compaction_filter::{CompactionFilter, CompactionFilterFn, Decision};
+use rocksdb::{CStrLike, CompactionDecision, Options};
 use serde::{Deserialize, Serialize};
+use std::ffi::CStr;
 use std::path::Path;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
@@ -128,18 +131,166 @@ pub struct AuthorityPerpetualTables {
     pub(crate) object_per_epoch_marker_table: DBMap<(EpochId, ObjectKey), MarkerValue>,
 }
 
-impl AuthorityPerpetualTables {
+#[derive(DBMapUtils)]
+pub struct AuthorityObjectCache {
+    pub(crate) object_tombstones: DBMap<ObjectID, SequenceNumber>,
+}
+
+impl AuthorityObjectCache {
     pub fn path(parent_path: &Path) -> PathBuf {
-        parent_path.join("perpetual")
+        parent_path.join("object_cache")
     }
 
     pub fn open(parent_path: &Path, db_options: Option<Options>) -> Self {
         Self::open_tables_read_write(
             Self::path(parent_path),
-            MetricConf::new("perpetual")
+            MetricConf::new("object_cache")
                 .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
             db_options,
             None,
+        )
+    }
+}
+
+#[derive(Clone)]
+pub struct ObjectCompactionFilter {
+    pub db: Arc<AuthorityObjectCache>,
+    pub metrics: Arc<ObjectCompactionMetrics>,
+}
+
+pub struct ObjectCompactionMetrics {
+    pub keys_removed: IntCounter,
+    pub keys_kept_indirect: IntCounter,
+    pub keys_kept_fresh: IntCounter,
+    pub keys_kept_deleted_or_wrapped: IntCounter,
+    pub keys_kept_missing: IntCounter,
+}
+
+impl ObjectCompactionMetrics {
+    pub fn new(registry: &Registry) -> Arc<Self> {
+        let this = Self {
+            keys_removed: register_int_counter_with_registry!(
+                "keys_removed",
+                "Last pruned checkpoint",
+                registry
+            )
+            .unwrap(),
+            keys_kept_indirect: register_int_counter_with_registry!(
+                "keys_kept_indirect",
+                "Last pruned checkpoint",
+                registry
+            )
+            .unwrap(),
+            keys_kept_fresh: register_int_counter_with_registry!(
+                "keys_kept_fresh",
+                "Last pruned checkpoint",
+                registry
+            )
+            .unwrap(),
+            keys_kept_deleted_or_wrapped: register_int_counter_with_registry!(
+                "keys_kept_deleted_or_wrapped",
+                "Last pruned checkpoint",
+                registry
+            )
+            .unwrap(),
+            keys_kept_missing: register_int_counter_with_registry!(
+                "keys_kept_missing",
+                "Last pruned checkpoint",
+                registry
+            )
+            .unwrap(),
+        };
+        Arc::new(this)
+    }
+}
+
+impl CompactionFilter for ObjectCompactionFilter {
+    fn filter(&mut self, _level: u32, key: &[u8], value: &[u8]) -> Decision {
+        //info!("inside compaction filter");
+        let config = bincode::DefaultOptions::new()
+            .with_big_endian()
+            .with_fixint_encoding();
+        let object_key: Option<ObjectKey> = config.deserialize(key).ok();
+        if let Some(object_key) = object_key {
+            let object_id = object_key.0;
+            if let Some(max_version) = self.db.object_tombstones.get(&object_id).unwrap() {
+                let version = object_key.1;
+                //info!("object_id = {}, max version = {}, version = {}", object_id, max_version, version);
+                let object: StoreObjectWrapper = bcs::from_bytes(value).unwrap();
+                if let StoreObject::Value(obj) = object.into_inner() {
+                    if let StoreData::IndirectObject(indirect_object) = obj.data {
+                        self.metrics.keys_kept_indirect.inc();
+                        Decision::Keep
+                    } else if version <= max_version {
+                        //info!("removed key");
+                        self.metrics.keys_removed.inc();
+                        Decision::Remove
+                    } else {
+                        self.metrics.keys_kept_fresh.inc();
+                        Decision::Keep
+                    }
+                } else {
+                    self.metrics.keys_kept_deleted_or_wrapped.inc();
+                    Decision::Keep
+                }
+            } else {
+                self.metrics.keys_kept_missing.inc();
+                Decision::Keep
+            }
+        } else {
+            //info!("failed to de-serialize");
+            Decision::Keep
+        }
+    }
+
+    fn name(&self) -> &CStr {
+        let c_str: &CStr = CStr::from_bytes_with_nul(b"yyyy\0").unwrap();
+        c_str
+    }
+}
+
+impl AuthorityPerpetualTables {
+    pub fn path(parent_path: &Path) -> PathBuf {
+        parent_path.join("perpetual")
+    }
+
+    pub fn open(
+        parent_path: &Path,
+        db_options: Option<Options>,
+        object_compaction_filter: Option<ObjectCompactionFilter>,
+    ) -> Self {
+        let mut objects_option = objects_table_default_config();
+        object_compaction_filter.into_iter().for_each(|mut f| {
+            objects_option
+                .options
+                .set_compaction_filter("object_filter", move |_level, key, value| {
+                    f.filter(_level, key, value)
+                })
+        });
+        Self::open_tables_read_write(
+            Self::path(parent_path),
+            MetricConf::new("perpetual")
+                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+            db_options,
+            Some(typed_store::rocks::DBMapTableConfigMap::new(
+                BTreeMap::from([
+                    ("objects".to_string(), objects_option),
+                    (
+                        "indirect_move_objects".to_string(),
+                        indirect_move_objects_table_default_config(),
+                    ),
+                    (
+                        "owned_object_transaction_locks".to_string(),
+                        owned_object_transaction_locks_table_default_config(),
+                    ),
+                    (
+                        "transactions".to_string(),
+                        transactions_table_default_config(),
+                    ),
+                    ("effects".to_string(), effects_table_default_config()),
+                    ("events".to_string(), events_table_default_config()),
+                ]),
+            )),
         )
     }
 

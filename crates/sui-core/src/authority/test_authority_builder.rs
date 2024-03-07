@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store_tables::AuthorityPerpetualTables;
+use crate::authority::authority_store_tables::{AuthorityObjectCache, AuthorityPerpetualTables};
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
@@ -172,8 +172,11 @@ impl<'a> TestAuthorityBuilder<'a> {
         let authority_store = match self.store {
             Some(store) => store,
             None => {
-                let perpetual_tables =
-                    Arc::new(AuthorityPerpetualTables::open(&path.join("store"), None));
+                let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
+                    &path.join("store"),
+                    None,
+                    None,
+                ));
                 // unwrap ok - for testing only.
                 AuthorityStore::open_with_committee_for_testing(
                     perpetual_tables,
@@ -185,6 +188,8 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .unwrap()
             }
         };
+        let object_tombstone_cache =
+            Arc::new(AuthorityObjectCache::open(&path.join("store"), None));
         let keypair = self
             .node_keypair
             .unwrap_or_else(|| local_network_config.validator_configs()[0].protocol_key_pair());
@@ -284,6 +289,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             },
             authority_overload_config,
             ArchiveReaderBalancer::default(),
+            object_tombstone_cache,
         )
         .await;
         // For any type of local testing that does not actually spawn a node, the checkpoint executor

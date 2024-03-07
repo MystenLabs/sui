@@ -12,7 +12,9 @@ use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
+use std::path::Path;
 
+use crate::authority::authority_store_tables::AuthorityObjectCache;
 use either::Either;
 use futures::{
     future::{join_all, BoxFuture},
@@ -84,6 +86,7 @@ impl PassthroughCache {
             num_epochs_to_retain: 0,
             ..Default::default()
         };
+        let db = Arc::new(AuthorityObjectCache::open(Path::new("/tmp"), None));
         let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
             &self.store.perpetual_tables,
             checkpoint_store,
@@ -91,6 +94,7 @@ impl PassthroughCache {
             pruning_config,
             AuthorityStorePruningMetrics::new_for_test(),
             usize::MAX,
+            &db,
         )
         .await;
         let _ = AuthorityStorePruner::compact(&self.store.perpetual_tables);

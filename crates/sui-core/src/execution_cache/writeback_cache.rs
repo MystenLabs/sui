@@ -620,15 +620,15 @@ impl WritebackCache {
             num_epochs_to_retain: 0,
             ..Default::default()
         };
-        let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
-            &self.store.perpetual_tables,
-            checkpoint_store,
-            &self.store.objects_lock_table,
-            pruning_config,
-            AuthorityStorePruningMetrics::new_for_test(),
-            usize::MAX,
-        )
-        .await;
+        // let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
+        //     &self.store.perpetual_tables,
+        //     checkpoint_store,
+        //     &self.store.objects_lock_table,
+        //     pruning_config,
+        //     AuthorityStorePruningMetrics::new_for_test(),
+        //     usize::MAX,
+        // )
+        // .await;
         let _ = AuthorityStorePruner::compact(&self.store.perpetual_tables);
     }
 

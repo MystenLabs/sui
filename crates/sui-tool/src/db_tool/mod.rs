@@ -265,7 +265,7 @@ pub fn print_consensus_commit(path: &Path, opt: PrintConsensusCommitOptions) -> 
 }
 
 pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::Result<()> {
-    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
+    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None, None);
     if let Some((epoch, checkpoint_seq_num)) =
         perpetual_db.get_checkpoint_sequence_number(&opt.digest)?
     {

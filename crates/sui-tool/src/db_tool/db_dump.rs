@@ -187,13 +187,17 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
 }
 
 pub fn compact(db_path: PathBuf) -> anyhow::Result<()> {
-    let perpetual = Arc::new(AuthorityPerpetualTables::open(&db_path, None));
+    let perpetual = Arc::new(AuthorityPerpetualTables::open(&db_path, None, None));
     AuthorityStorePruner::compact(&perpetual)?;
     Ok(())
 }
 
 pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
-    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+        &db_path.join("store"),
+        None,
+        None,
+    ));
     let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
         db_path.join("checkpoints"),
         MetricConf::default(),
@@ -207,36 +211,40 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
         latest_checkpoint.map(|x| x.sequence_number).unwrap_or(0)
     );
     info!("Highest pruned checkpoint: {}", highest_pruned_checkpoint);
-    let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
-    let lock_table = Arc::new(RwLockTable::new(1));
+    //let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
+    //let lock_table = Arc::new(RwLockTable::new(1));
     info!("Pruning setup for db at path: {:?}", db_path.display());
     let pruning_config = AuthorityStorePruningConfig {
         num_epochs_to_retain: 0,
         ..Default::default()
     };
     info!("Starting object pruning");
-    AuthorityStorePruner::prune_objects_for_eligible_epochs(
-        &perpetual_db,
-        &checkpoint_store,
-        &lock_table,
-        pruning_config,
-        metrics,
-        usize::MAX,
-    )
-    .await?;
+    // AuthorityStorePruner::prune_objects_for_eligible_epochs(
+    //     &perpetual_db,
+    //     &checkpoint_store,
+    //     &lock_table,
+    //     pruning_config,
+    //     metrics,
+    //     usize::MAX,
+    // )
+    // .await?;
     Ok(())
 }
 
 pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
-    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+        &db_path.join("store"),
+        None,
+        None,
+    ));
     let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
         db_path.join("checkpoints"),
         MetricConf::default(),
         None,
         None,
     ));
-    let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
-    let lock_table = Arc::new(RwLockTable::new(1));
+    //let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
+    //let lock_table = Arc::new(RwLockTable::new(1));
     info!("Pruning setup for db at path: {:?}", db_path.display());
     let pruning_config = AuthorityStorePruningConfig {
         num_epochs_to_retain_for_checkpoints: Some(1),
@@ -244,16 +252,16 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
     };
     info!("Starting txns and effects pruning");
     let archive_readers = ArchiveReaderBalancer::default();
-    AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
-        &perpetual_db,
-        &checkpoint_store,
-        &lock_table,
-        pruning_config,
-        metrics,
-        usize::MAX,
-        archive_readers,
-    )
-    .await?;
+    // AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
+    //     &perpetual_db,
+    //     &checkpoint_store,
+    //     &lock_table,
+    //     pruning_config,
+    //     metrics,
+    //     usize::MAX,
+    //     archive_readers,
+    // )
+    // .await?;
     Ok(())
 }
 
@@ -312,7 +320,7 @@ mod test {
 
         // Open the DB for writing
         let _: AuthorityEpochTables = AuthorityEpochTables::open(0, &primary_path, None);
-        let _: AuthorityPerpetualTables = AuthorityPerpetualTables::open(&primary_path, None);
+        let _: AuthorityPerpetualTables = AuthorityPerpetualTables::open(&primary_path, None, None);
 
         // Get all the tables for AuthorityEpochTables
         let tables = {
