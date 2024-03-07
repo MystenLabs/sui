@@ -61,12 +61,14 @@ impl StateSnapshotReaderV1 {
         download_concurrency: NonZeroUsize,
         m: MultiProgress,
     ) -> Result<Self> {
+        info!("TESTING -- (A)");
         let epoch_dir = format!("epoch_{}", epoch);
         let remote_object_store = if remote_store_config.no_sign_request {
             remote_store_config.make_http()?
         } else {
             remote_store_config.make().map(Arc::new)?
         };
+        info!("TESTING -- (B)");
         let local_object_store: Arc<dyn ObjectStorePutExt> =
             local_store_config.make().map(Arc::new)?;
         let local_staging_dir_root = local_store_config
@@ -74,13 +76,17 @@ impl StateSnapshotReaderV1 {
             .as_ref()
             .context("No directory specified")?
             .clone();
+        info!("TESTING -- (C)");
         let local_epoch_dir_path = local_staging_dir_root.join(&epoch_dir);
         if local_epoch_dir_path.exists() {
             fs::remove_dir_all(&local_epoch_dir_path)?;
         }
+        info!("TESTING -- (D) -- creating dir {local_epoch_dir_path:?}");
         fs::create_dir_all(&local_epoch_dir_path)?;
+        info!("TESTING -- (E)");
         // Download MANIFEST first
         let manifest_file_path = Path::from(epoch_dir.clone()).child("MANIFEST");
+        info!("TESTING -- (F)");
         copy_file(
             &manifest_file_path,
             &manifest_file_path,
@@ -88,34 +94,41 @@ impl StateSnapshotReaderV1 {
             &local_object_store,
         )
         .await?;
+        info!("TESTING -- (G)");
         let manifest = Self::read_manifest(path_to_filesystem(
             local_staging_dir_root.clone(),
             &manifest_file_path,
         )?)?;
+        info!("TESTING -- (H)");
         let snapshot_version = manifest.snapshot_version();
         if snapshot_version != 1u8 {
             return Err(anyhow!("Unexpected snapshot version: {}", snapshot_version));
         }
+        info!("TESTING -- (I)");
         if manifest.address_length() as usize > ObjectID::LENGTH {
             return Err(anyhow!(
                 "Max possible address length is: {}",
                 ObjectID::LENGTH
             ));
         }
+        info!("TESTING -- (J)");
         if manifest.epoch() != epoch {
             return Err(anyhow!("Download manifest is not for epoch: {}", epoch,));
         }
         let mut object_files = BTreeMap::new();
         let mut ref_files = BTreeMap::new();
+        info!("TESTING -- (K)");
         for file_metadata in manifest.file_metadata() {
             match file_metadata.file_type {
                 FileType::Object => {
+                    info!("TESTING -- (L)");
                     let entry = object_files
                         .entry(file_metadata.bucket_num)
                         .or_insert_with(BTreeMap::new);
                     entry.insert(file_metadata.part_num, file_metadata.clone());
                 }
                 FileType::Reference => {
+                    info!("TESTING -- (M)");
                     let entry = ref_files
                         .entry(file_metadata.bucket_num)
                         .or_insert_with(BTreeMap::new);
@@ -123,18 +136,26 @@ impl StateSnapshotReaderV1 {
                 }
             }
         }
+        info!("TESTING -- (N - Done populating object files)");
         let epoch_dir_path = Path::from(epoch_dir);
+        info!("TESTING -- (P)");
         let files: Vec<Path> = ref_files
             .values()
             .flat_map(|entry| {
                 let files: Vec<_> = entry
                     .values()
-                    .map(|file_metadata| file_metadata.file_path(&epoch_dir_path))
+                    .map(|file_metadata| {
+                        info!(
+                            "TESTING -- ref file metadata path: {:?}",
+                            file_metadata.file_path(&epoch_dir_path)
+                        );
+                        file_metadata.file_path(&epoch_dir_path)
+                    })
                     .collect();
                 files
             })
             .collect();
-
+        info!("TESTING -- (Q)");
         let progress_bar = m.add(
             ProgressBar::new(files.len() as u64).with_style(
                 ProgressStyle::with_template(
@@ -143,6 +164,7 @@ impl StateSnapshotReaderV1 {
                 .unwrap(),
             ),
         );
+        info!("TESTING -- (R)");
         copy_files(
             &files,
             &files,
@@ -152,7 +174,11 @@ impl StateSnapshotReaderV1 {
             Some(progress_bar.clone()),
         )
         .await?;
+
+        info!("TESTING -- (S)");
         progress_bar.finish_with_message("ref files download complete");
+        info!("TESTING -- (T)");
+        tokio::time::sleep(Duration::from_secs(100)).await;
         Ok(StateSnapshotReaderV1 {
             epoch,
             local_staging_dir_root,
@@ -172,6 +198,7 @@ impl StateSnapshotReaderV1 {
         abort_registration: AbortRegistration,
         sender: Option<tokio::sync::mpsc::Sender<Accumulator>>,
     ) -> Result<()> {
+        info!("TESTING -- starting snapshot reader read");
         // This computes and stores the sha3 digest of object references in REFERENCE file for each
         // bucket partition. When downloading objects, we will match sha3 digest of object references
         // per *.obj file against this. We do this so during restore we can pre fetch object
@@ -179,15 +206,18 @@ impl StateSnapshotReaderV1 {
         // doesn't match but we still need to ensure that objects match references exactly.
         let sha3_digests: Arc<Mutex<DigestByBucketAndPartition>> =
             Arc::new(Mutex::new(BTreeMap::new()));
+        info!("TESTING -- (1)");
 
         let num_part_files = self
             .ref_files
             .values()
             .map(|part_files| part_files.len())
             .sum::<usize>();
+        info!("TESTING -- (2)");
 
         // Generate checksums
         info!("Computing checksums");
+        info!("TESTING -- (3)");
         let checksum_progress_bar = self.m.add(
             ProgressBar::new(num_part_files as u64).with_style(
                 ProgressStyle::with_template(
@@ -196,20 +226,25 @@ impl StateSnapshotReaderV1 {
                 .unwrap(),
             ),
         );
+        info!("TESTING -- (4)");
         for (bucket, part_files) in self.ref_files.clone().iter() {
             for (part, _part_file) in part_files.iter() {
+                info!("TESTING -- (5)");
                 let mut sha3_digests = sha3_digests.lock().await;
                 let ref_iter = self.ref_iter(*bucket, *part)?;
                 let mut hasher = Sha3_256::default();
+                info!("TESTING -- (6)");
                 let mut empty = true;
                 self.object_files
                     .get(bucket)
                     .context(format!("No bucket exists for: {bucket}"))?
                     .get(part)
                     .context(format!("No part exists for bucket: {bucket}, part: {part}"))?;
+                info!("TESTING -- (7)");
                 for object_ref in ref_iter {
                     hasher.update(object_ref.2.inner());
                     empty = false;
+                    info!("TESTING -- (8)");
                 }
                 if !empty {
                     sha3_digests
@@ -218,10 +253,12 @@ impl StateSnapshotReaderV1 {
                         .entry(*part)
                         .or_insert(hasher.finalize().digest);
                 }
+                info!("TESTING -- (9)");
                 checksum_progress_bar.inc(1);
                 checksum_progress_bar.set_message(format!("Bucket: {}, Part: {}", bucket, part));
             }
         }
+        info!("TESTING -- (10)");
         checksum_progress_bar.finish_with_message("Checksumming complete");
 
         let accum_handle =

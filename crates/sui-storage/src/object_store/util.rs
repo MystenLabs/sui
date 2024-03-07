@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 use url::Url;
 
 pub const MANIFEST_FILENAME: &str = "MANIFEST";
@@ -80,6 +80,7 @@ impl PerEpochManifest {
 pub async fn get<S: ObjectStoreGetExt>(store: &S, src: &Path) -> Result<Bytes> {
     let bytes = retry(backoff::ExponentialBackoff::default(), || async {
         store.get_bytes(src).await.map_err(|e| {
+            panic!("TESTING -- FAILED GET BYTES");
             error!("Failed to read file from object store with error: {:?}", &e);
             backoff::Error::transient(e)
         })
@@ -114,9 +115,14 @@ pub async fn copy_file<S: ObjectStoreGetExt, D: ObjectStorePutExt>(
     src_store: &S,
     dest_store: &D,
 ) -> Result<()> {
+    info!("TESTING -- before get!!!!!!!!");
     let bytes = get(src_store, src).await?;
+    info!("TESTING -- after get!!!!!!!!");
     if !bytes.is_empty() {
-        put(dest_store, dest, bytes).await
+        info!("TESTING -- before put!!!!!!!!");
+        let ret = put(dest_store, dest, bytes).await;
+        info!("TESTING -- after put!!!!!!!!");
+        ret
     } else {
         warn!("Not copying empty file: {:?}", src);
         Ok(())
@@ -133,14 +139,19 @@ pub async fn copy_files<S: ObjectStoreGetExt, D: ObjectStorePutExt>(
 ) -> Result<Vec<()>> {
     let mut instant = Instant::now();
     let progress_bar_clone = progress_bar.clone();
+    info!("TESTING -- src: {:?}, dest: {:?}", src, dest);
     let results = futures::stream::iter(src.iter().zip(dest.iter()))
         .map(|(path_in, path_out)| async move {
+            info!("TESTING -- HERE!!!!!!!!");
             let ret = copy_file(path_in, path_out, src_store, dest_store).await;
+            info!("TESTING -- ret first: {:?}", ret);
+            info!("TESTING -- concurrency: {:?}", concurrency.get());
             Ok((path_out.clone(), ret))
         })
         .boxed()
         .buffer_unordered(concurrency.get())
         .try_for_each(|(path, ret)| {
+            info!("TESTING -- ret second: {:?}", ret);
             if let Some(progress_bar_clone) = &progress_bar_clone {
                 progress_bar_clone.inc(1);
                 progress_bar_clone.set_message(format!("file: {}", path));

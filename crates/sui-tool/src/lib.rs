@@ -900,11 +900,13 @@ pub async fn download_formal_snapshot(
     let (sender, mut receiver) = mpsc::channel(num_parallel_downloads);
 
     let snapshot_handle = tokio::spawn(async move {
+        info!("TESTING -- starting snapshot handle");
         let local_store_config = ObjectStoreConfig {
             object_store: Some(ObjectStoreType::File),
             directory: Some(snapshot_dir_clone.to_path_buf()),
             ..Default::default()
         };
+        info!("TESTING -- finished creating store config");
         let mut reader = StateSnapshotReaderV1::new(
             epoch,
             &snapshot_store_config,
@@ -915,6 +917,8 @@ pub async fn download_formal_snapshot(
         )
         .await
         .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));
+        info!("TESTING -- snapshot store config: {:?}", snapshot_store_config);
+        info!("TESTING -- created snapshot reader successfully");
         reader
             .read(&perpetual_db_clone, abort_registration, Some(sender))
             .await
