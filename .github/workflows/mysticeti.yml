@@ -33,21 +33,8 @@ env:
   RUSTDOCFLAGS: -D warnings
 
 jobs:
-  diff:
-    runs-on: [ubuntu-latest]
-    outputs:
-      isRust: ${{ steps.diff.outputs.isRust }}
-      isMove: ${{ steps.diff.outputs.isMove }}
-      isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
-    steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
-      - name: Detect Changes
-        uses: "./.github/actions/diffs"
-        id: diff
 
   test:
-    needs: diff
-    if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
@@ -75,8 +62,6 @@ jobs:
         shell: bash
 
   test-extra:
-    needs: diff
-    if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
@@ -120,8 +105,6 @@ jobs:
         shell: bash
 
   simtest:
-    needs: diff
-    if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     runs-on: [ubuntu-ghcloud]
     env:
