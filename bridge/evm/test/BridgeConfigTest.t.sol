@@ -32,11 +32,6 @@ contract BridgeConfigTest is BridgeBaseTest {
         config.convertERC20ToSuiDecimal(BridgeMessage.ETH, type(uint256).max);
     }
 
-    function testconvertERC20ToSuiDecimalTokenIdNotSupported() public {
-        vm.expectRevert(bytes("BridgeConfig: Unsupported token"));
-        config.convertERC20ToSuiDecimal(type(uint8).max, 10 ether);
-    }
-
     function testconvertERC20ToSuiDecimalInvalidSuiDecimal() public {
         vm.startPrank(address(bridge));
         address smallUSDC = address(new MockSmallUSDC());

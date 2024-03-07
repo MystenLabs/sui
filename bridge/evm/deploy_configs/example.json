@@ -1,6 +1,7 @@
 {
   "committeeMemberStake": [0],
   "committeeMembers": ["0x000"],
+  "minCommitteeStakeRequired": 10000,
   "sourceChainId": 0,
   "supportedChainIDs": [1],
   "supportedChainLimitsInDollars": [1000000],

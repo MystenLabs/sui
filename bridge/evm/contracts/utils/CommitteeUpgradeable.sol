@@ -45,7 +45,7 @@ abstract contract CommitteeUpgradeable is
             BridgeMessage.decodeUpgradePayload(message.payload);
 
         // verify proxy address
-        require(proxy == address(this), "SuiBridge: Invalid proxy address");
+        require(proxy == address(this), "CommitteeUpgradeable: Invalid proxy address");
 
         // authorize upgrade
         _upgradeAuthorized = true;
@@ -61,6 +61,6 @@ abstract contract CommitteeUpgradeable is
     /// @dev The _upgradeAuthorized state variable can only be set with the upgradeWithSignatures
     /// function, meaning that the upgrade can only be authorized by the committee.
     function _authorizeUpgrade(address) internal view override {
-        require(_upgradeAuthorized, "SuiBridge: Unauthorized upgrade");
+        require(_upgradeAuthorized, "CommitteeUpgradeable: Unauthorized upgrade");
     }
 }

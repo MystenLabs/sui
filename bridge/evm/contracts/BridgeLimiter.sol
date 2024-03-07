@@ -67,7 +67,7 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
     /// @param amount The amount of the token.
     /// @return boolean indicating whether the total amount will exceed the limit.
     function willAmountExceedLimit(uint8 chainID, uint8 tokenID, uint256 amount)
-        public
+        external
         view
         override
         returns (bool)

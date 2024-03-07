@@ -87,7 +87,6 @@ contract BridgeConfig is IBridgeConfig {
         public
         view
         override
-        tokenSupported(tokenID)
         returns (uint64)
     {
         uint8 ethDecimal = IERC20Metadata(getTokenAddress(tokenID)).decimals();
@@ -119,7 +118,6 @@ contract BridgeConfig is IBridgeConfig {
         public
         view
         override
-        tokenSupported(tokenID)
         returns (uint256)
     {
         uint8 ethDecimal = IERC20Metadata(getTokenAddress(tokenID)).decimals();

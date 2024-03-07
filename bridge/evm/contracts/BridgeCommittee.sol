@@ -26,22 +26,26 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
     /// @param _config The address of the BridgeConfig contract.
     /// @param committee addresses of the committee members.
     /// @param stake amounts of the committee members.
-    function initialize(address _config, address[] memory committee, uint16[] memory stake)
-        external
-        initializer
-    {
+    function initialize(
+        address _config,
+        address[] memory committee,
+        uint16[] memory stake,
+        uint16 minStakeRequired
+    ) external initializer {
         __CommitteeUpgradeable_init(address(this));
         __UUPSUpgradeable_init();
 
+        uint256 _committeeLength = committee.length;
+
         require(
-            committee.length == stake.length,
+            _committeeLength == stake.length,
             "BridgeCommittee: Committee and stake arrays must be of the same length"
         );
 
         config = IBridgeConfig(_config);
 
         uint16 totalStake;
-        for (uint16 i; i < committee.length; i++) {
+        for (uint16 i; i < _committeeLength; i++) {
             require(
                 committeeStake[committee[i]] == 0, "BridgeCommittee: Duplicate committee member"
             );
@@ -50,7 +54,7 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
             totalStake += stake[i];
         }
 
-        require(totalStake == 10000, "BridgeCommittee: Total stake must be 10000"); // 10000 == 100%
+        require(totalStake >= minStakeRequired, "BridgeCommittee: total stake is less than minimum"); // 10000 == 100%
     }
 
     /* ========== EXTERNAL FUNCTIONS ========== */
@@ -61,7 +65,7 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
     /// @param signatures The array of signatures to be verified.
     /// @param message The `BridgeMessage.Message` to be verified.
     function verifySignatures(bytes[] memory signatures, BridgeMessage.Message memory message)
-        public
+        external
         view
         override
     {
@@ -121,7 +125,7 @@ contract BridgeCommittee is IBridgeCommittee, CommitteeUpgradeable {
     /// @notice Updates the blocklist status of the provided addresses.
     /// @param _blocklist The addresses to update the blocklist status.
     /// @param isBlocklisted new blocklist status.
-    function _updateBlocklist(address[] memory _blocklist, bool isBlocklisted) internal {
+    function _updateBlocklist(address[] memory _blocklist, bool isBlocklisted) private {
         // check original blocklist value of each validator
         for (uint16 i; i < _blocklist.length; i++) {
             blocklist[_blocklist[i]] = isBlocklisted;

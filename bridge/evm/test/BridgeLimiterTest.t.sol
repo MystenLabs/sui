@@ -69,7 +69,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         assertFalse(limiter.willAmountExceedLimit(supportedChainID, tokenID, 1000000));
     }
 
-    function testUpdateBridgeTransfer() public {
+    function testRecordBridgeTransfer() public {
         changePrank(address(bridge));
         uint8 tokenID = 1;
         uint256 amount = 100000000; // wBTC has 8 decimals
@@ -184,7 +184,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         _stake[3] = 2002;
         _stake[4] = 4998;
         committee = new BridgeCommittee();
-        committee.initialize(address(config), _committee, _stake);
+        committee.initialize(address(config), _committee, _stake, minStakeRequired);
         // deploy new limiter with 2 supported chains
         uint64[] memory totalLimits = new uint64[](2);
         totalLimits[0] = 10000000000;
@@ -238,7 +238,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         _stake[2] = 2500;
         _stake[3] = 2500;
         committee = new BridgeCommittee();
-        committee.initialize(address(config), _committee, _stake);
+        committee.initialize(address(config), _committee, _stake, minStakeRequired);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = 10000; // SUI PRICE
@@ -307,7 +307,7 @@ contract BridgeLimiterTest is BridgeBaseTest {
         _stake[2] = 2500;
         _stake[3] = 2500;
         committee = new BridgeCommittee();
-        committee.initialize(address(config), _committee, _stake);
+        committee.initialize(address(config), _committee, _stake, minStakeRequired);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = 10000; // SUI PRICE

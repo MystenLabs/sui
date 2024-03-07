@@ -41,6 +41,7 @@ contract BridgeBaseTest is Test {
 
     uint8 public chainID = 1;
     uint64 totalLimit = 10000000000;
+    uint16 minStakeRequired = 10000;
 
     BridgeCommittee public committee;
     SuiBridge public bridge;
@@ -109,7 +110,10 @@ contract BridgeBaseTest is Test {
         vm.expectRevert(
             bytes("BridgeCommittee: Committee and stake arrays must be of the same length")
         );
-        committee.initialize(address(config), _committeeNotSameLength, _stakeNotSameLength);
+
+        committee.initialize(
+            address(config), _committeeNotSameLength, _stakeNotSameLength, minStakeRequired
+        );
 
         // Test fail initialize: Committee Duplicate Committee Member
         address[] memory _committeeDuplicateCommitteeMember = new address[](5);
@@ -128,28 +132,13 @@ contract BridgeBaseTest is Test {
 
         vm.expectRevert(bytes("BridgeCommittee: Duplicate committee member"));
         committee.initialize(
-            address(config), _committeeDuplicateCommitteeMember, _stakeDuplicateCommitteeMember
+            address(config),
+            _committeeDuplicateCommitteeMember,
+            _stakeDuplicateCommitteeMember,
+            minStakeRequired
         );
 
-        // Test fail initialize: Total Stake Must Be 10000
-        address[] memory _committeeTotalStakeMustBe10000 = new address[](4);
-        _committeeTotalStakeMustBe10000[0] = committeeMemberA;
-        _committeeTotalStakeMustBe10000[1] = committeeMemberB;
-        _committeeTotalStakeMustBe10000[2] = committeeMemberC;
-        _committeeTotalStakeMustBe10000[3] = committeeMemberD;
-
-        uint16[] memory _stakeTotalStakeMustBe10000 = new uint16[](4);
-        _stakeTotalStakeMustBe10000[0] = 1000;
-        _stakeTotalStakeMustBe10000[1] = 1000;
-        _stakeTotalStakeMustBe10000[2] = 1000;
-        _stakeTotalStakeMustBe10000[3] = 2000;
-
-        vm.expectRevert(bytes("BridgeCommittee: Total stake must be 10000"));
-        committee.initialize(
-            address(config), _committeeTotalStakeMustBe10000, _stakeTotalStakeMustBe10000
-        );
-
-        committee.initialize(address(config), _committee, _stake);
+        committee.initialize(address(config), _committee, _stake, minStakeRequired);
         vault = new BridgeVault(wETH);
         uint256[] memory tokenPrices = new uint256[](4);
         tokenPrices[0] = SUI_PRICE;

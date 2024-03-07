@@ -66,7 +66,12 @@ contract DeployBridge is Script {
             "BridgeCommittee.sol",
             abi.encodeCall(
                 BridgeCommittee.initialize,
-                (address(bridgeConfig), config.committeeMembers, committeeMemberStake)
+                (
+                    address(bridgeConfig),
+                    config.committeeMembers,
+                    committeeMemberStake,
+                    uint16(config.minCommitteeStakeRequired)
+                )
             )
         );
 
@@ -119,6 +124,7 @@ contract DeployBridge is Script {
 struct DeployConfig {
     uint256[] committeeMemberStake;
     address[] committeeMembers;
+    uint256 minCommitteeStakeRequired;
     uint256 sourceChainId;
     uint256[] supportedChainIDs;
     uint256[] supportedChainLimitsInDollars;
