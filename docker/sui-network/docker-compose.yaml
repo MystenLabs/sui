@@ -1,7 +1,6 @@
 version: "3"
 
 services:
-services:
   validator1:
     networks:
       - sui-network
@@ -36,7 +35,7 @@ services:
       - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
     volumes:
       - ./genesis/files/validator2-8080.yaml:/opt/sui/config/validator.yaml:ro
-      - /Users/johnmartin/src/github.com/johnjmartin/sui/docker/sui-network/genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
+      - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
       - /tmp/sui/db2:/opt/sui/db:rw
     command:
       [

@@ -82,7 +82,7 @@ def main(args: argparse.ArgumentParser) -> None:
     )
 
     # parse validator overlays
-    overlays = parse_overlays("validator", args.custom_overlays)
+    overlays = parse_overlays("validator")
 
     # process validator overlays
     for validator in validator_network_addresses:
@@ -112,14 +112,6 @@ if __name__ == "__main__":
         help="template to use for genesis.yaml generation",
         required=False,
     )
-    parser.add_argument(
-        "-c",
-        "--custom-overlays",
-        type=str,
-        help="optional custom overlay configuration",
-        required=False,
-    )
-    # parser.add_argument("-n", "--network", type=str, help="network", required=True)
     parser.add_argument(
         "-t",
         "--target-directory",
