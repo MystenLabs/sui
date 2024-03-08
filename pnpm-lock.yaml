@@ -659,8 +659,8 @@ importers:
         specifier: ^6.2.1
         version: 6.2.1
       jose:
-        specifier: ^4.14.4
-        version: 4.14.4
+        specifier: ^5.2.3
+        version: 5.2.3
       mitt:
         specifier: ^3.0.1
         version: 3.0.1
@@ -1493,8 +1493,8 @@ importers:
         specifier: ^0.7.1
         version: 0.7.1(nanostores@0.9.3)(react@18.2.0)
       jose:
-        specifier: ^4.14.4
-        version: 4.14.4
+        specifier: ^5.2.3
+        version: 5.2.3
       nanostores:
         specifier: ^0.9.3
         version: 0.9.3
@@ -1644,7 +1644,9 @@ importers:
         specifier: ^0.33.0
         version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
 
-  sdk/move-binary-format-wasm:
+  sdk/move-binary-format-wasm/pkg: {}
+
+  sdk/move-bytecode-template:
     devDependencies:
       '@mysten/build-scripts':
         specifier: workspace:*
@@ -1815,8 +1817,8 @@ importers:
         specifier: ^1.3.1
         version: 1.3.1
       jose:
-        specifier: ^4.14.4
-        version: 4.14.4
+        specifier: ^5.2.3
+        version: 5.2.3
       poseidon-lite:
         specifier: ^0.2.0
         version: 0.2.0
@@ -6158,7 +6160,7 @@ packages:
       graphql-request: 6.1.0(graphql@16.8.1)
       http-proxy-agent: 7.0.0
       https-proxy-agent: 7.0.2
-      jose: 5.2.1
+      jose: 5.2.3
       js-yaml: 4.1.0
       json-stable-stringify: 1.1.1
       lodash: 4.17.21
@@ -19492,15 +19494,11 @@ packages:
 
   /jose@4.13.1:
     resolution: {integrity: sha512-MSJQC5vXco5Br38mzaQKiq9mwt7lwj2eXpgpRyQYNHYt2lq1PjkWa7DLXX0WVcQLE9HhMh3jPiufS7fhJf+CLQ==}
+    deprecated: this version is no longer supported
     dev: true
 
-  /jose@4.14.4:
-    resolution: {integrity: sha512-j8GhLiKmUAh+dsFXlX1aJCbt5KMibuKb+d7j1JaOJG6s2UjX1PQlW+OKB/sD4a/5ZYF4RcmYmLSndOoU3Lt/3g==}
-    dev: false
-
-  /jose@5.2.1:
-    resolution: {integrity: sha512-qiaQhtQRw6YrOaOj0v59h3R6hUY9NvxBmmnMfKemkqYmBB0tEc97NbLP7ix44VP5p9/0YHG8Vyhzuo5YBNwviA==}
-    dev: true
+  /jose@5.2.3:
+    resolution: {integrity: sha512-KUXdbctm1uHVL8BYhnyHkgp3zDX5KW8ZhAKVFEfUbU2P8Alpzjb+48hHvjOdQIyPshoblhzsuqOwEEAbtHVirA==}
 
   /js-levenshtein@1.1.6:
     resolution: {integrity: sha512-X2BB11YZtrRqY4EnQcLX5Rh373zbK4alC1FW7D7MBhL2gtcC17cTnr6DmfHZeS0s2rTHjUTMMHfG7gO8SSdw+g==}

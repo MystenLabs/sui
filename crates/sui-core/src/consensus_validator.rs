@@ -3,11 +3,9 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use consensus_core::{TransactionVerifier, ValidationError};
 use eyre::WrapErr;
 use mysten_metrics::monitored_scope;
-use mysticeti_core::{block_validator::BlockVerifier, types::StatementBlock};
 use narwhal_types::{validate_batch_version, BatchAPI};
 use narwhal_worker::TransactionValidator;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
@@ -166,20 +164,6 @@ impl TransactionVerifier for SuiTxValidator {
 
         self.validate_transactions(txs)
             .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))
-    }
-}
-
-#[async_trait]
-impl BlockVerifier for SuiTxValidator {
-    type Error = eyre::Report;
-
-    async fn verify(&self, b: &StatementBlock) -> Result<(), Self::Error> {
-        let txs = b
-            .shared_transactions()
-            .map(|(_locator, tx)| tx_from_bytes(tx.data()).map(|tx| tx.kind))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        self.validate_transactions(txs)
     }
 }
 

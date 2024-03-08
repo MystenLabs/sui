@@ -61,7 +61,7 @@ exclude = [
   "external-crates/move/move-execution/v1/crates/move-bytecode-verifier",
   "external-crates/move/move-execution/v1/crates/move-stdlib",
   "external-crates/move/move-execution/v1/crates/move-vm-runtime",
-  "sdk/move-binary-format-wasm",
+  "sdk/move-bytecode-template",
 ]
 
 members = [
@@ -493,7 +493,7 @@ tower-http = { version = "0.3.4", features = [
 # tower-http = { version="0.4", features = ["trace"] }
 tower-layer = "0.3.2"
 twox-hash = "1.6.3"
-tracing = "0.1.40"
+tracing = "0.1.37"
 tracing-appender = "0.2.2"
 tracing-subscriber = { version = "0.3.15", default-features = false, features = [
   "std",
@@ -509,7 +509,7 @@ ttl_cache = "0.5.1"
 uint = "0.9.4"
 unescape = "0.1.0"
 ureq = "2.9.1"
-url = "2.4.0"
+url = "2.3.1"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
 webpki = { version = "0.101.0", package = "rustls-webpki", features = [
   "alloc",
@@ -671,14 +671,3 @@ field_names = "0.2.0"
 semver = "1.0.16"
 spinners = "4.1.0"
 include_dir = "0.7.3"
-
-
-# Patches for revm, needed by native bridge.
-# The initial reason of adding the patch is because they are required by forge:
-# (https://github.com/foundry-rs/foundry/blob/474591aa1e6922a0d5691ae1e2dcc355d8fcb92d/Cargo.toml#L234-L237)
-# The patch can be removed once we upgrade to a version of forge that no longer require override.
-[patch.crates-io]
-revm = { git = "https://github.com/bluealloy/revm", branch = "reth_freeze" }
-revm-primitives = { git = "https://github.com/bluealloy/revm", branch = "reth_freeze" }
-revm-interpreter = { git = "https://github.com/bluealloy/revm", branch = "reth_freeze" }
-revm-precompile = { git = "https://github.com/bluealloy/revm", branch = "reth_freeze" }
