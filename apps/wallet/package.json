@@ -146,7 +146,7 @@
 		"formik": "^2.4.2",
 		"framer-motion": "^10.12.22",
 		"idb-keyval": "^6.2.1",
-		"jose": "^4.14.4",
+		"jose": "^5.2.3",
 		"mitt": "^3.0.1",
 		"poseidon-lite": "^0.2.0",
 		"react": "^18.2.0",

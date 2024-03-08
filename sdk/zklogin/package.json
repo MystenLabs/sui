@@ -50,7 +50,7 @@
 		"@mysten/bcs": "workspace:*",
 		"@mysten/sui.js": "workspace:*",
 		"@noble/hashes": "^1.3.1",
-		"jose": "^4.14.4",
+		"jose": "^5.2.3",
 		"poseidon-lite": "^0.2.0"
 	}
 }
