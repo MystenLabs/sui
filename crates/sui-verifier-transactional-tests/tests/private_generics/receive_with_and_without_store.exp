@@ -11,9 +11,9 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 2 'publish'. lines 27-41:
 created: object(3,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4848800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 4856400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3 'publish'. lines 43-54:
 created: object(4,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4430800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 4438400,  storage_rebate: 978120, non_refundable_storage_fee: 9880

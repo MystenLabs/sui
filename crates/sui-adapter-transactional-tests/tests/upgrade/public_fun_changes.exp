@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 6-9:
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5038800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5046400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'upgrade'. lines 11-14:
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
@@ -27,7 +27,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 6 'upgrade'. lines 31-34:
 created: object(6,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5038800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5046400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 7 'upgrade'. lines 36-39:
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
@@ -40,4 +40,4 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 9 'upgrade'. lines 46-49:
 created: object(9,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5038800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5046400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220

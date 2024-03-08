@@ -10,12 +10,12 @@ use crate::{
     expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_},
     hlir::ast::{self as H, Value_, Var, Visibility},
     naming::{
-        ast::{BuiltinTypeName_, StructTypeParameter, TParam},
+        ast::{BuiltinTypeName_, DatatypeTypeParameter, TParam},
         fake_natives,
     },
     parser::ast::{
-        Ability, Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, ModuleName,
-        StructName, UnaryOp, UnaryOp_,
+        Ability, Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName,
+        ModuleName, UnaryOp, UnaryOp_, VariantName,
     },
     shared::{unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -39,11 +39,8 @@ fn extract_decls(
     prog: &G::Program,
 ) -> (
     HashMap<ModuleIdent, usize>,
-    HashMap<(ModuleIdent, StructName), (BTreeSet<IR::Ability>, Vec<IR::DatatypeTypeParameter>)>,
-    HashMap<
-        (ModuleIdent, FunctionName),
-        (BTreeSet<(ModuleIdent, StructName)>, IR::FunctionSignature),
-    >,
+    DatatypeDeclarations,
+    HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
 ) {
     let pre_compiled_modules = || {
         pre_compiled_lib.iter().flat_map(|pre_compiled| {
@@ -67,16 +64,27 @@ fn extract_decls(
     }
 
     let all_modules = || prog.modules.key_cloned_iter().chain(pre_compiled_modules());
-    let sdecls = all_modules()
+    let sdecls: DatatypeDeclarations = all_modules()
         .flat_map(|(m, mdef)| {
             mdef.structs.key_cloned_iter().map(move |(s, sdef)| {
                 let key = (m, s);
                 let abilities = abilities(&sdef.abilities);
-                let type_parameters = struct_type_parameters(sdef.type_parameters.clone());
+                let type_parameters = datatype_type_parameters(sdef.type_parameters.clone());
                 (key, (abilities, type_parameters))
             })
         })
         .collect();
+    let edecls: DatatypeDeclarations = all_modules()
+        .flat_map(|(m, mdef)| {
+            mdef.enums.key_cloned_iter().map(move |(e, edef)| {
+                let key = (m, e);
+                let abilities = abilities(&edef.abilities);
+                let type_parameters = datatype_type_parameters(edef.type_parameters.clone());
+                (key, (abilities, type_parameters))
+            })
+        })
+        .collect();
+    let ddecls: DatatypeDeclarations = sdecls.into_iter().chain(edecls).collect();
     let context = &mut Context::new(compilation_env, None, None);
     let fdecls = all_modules()
         .flat_map(|(m, mdef)| {
@@ -92,14 +100,22 @@ fn extract_decls(
                 // })
                 .map(move |(f, fdef)| {
                     let key = (m, f);
-                    let seen = seen_structs(&fdef.signature);
+                    let seen_datatypes = seen_datatypes(&fdef.signature);
                     let gsig = fdef.signature.clone();
-                    (key, (seen, gsig))
+                    (key, (seen_datatypes, gsig))
                 })
         })
-        .map(|(key, (seen, gsig))| (key, (seen, function_signature(context, gsig))))
+        .map(|(key, (seen_datatypes, sig))| {
+            (
+                key,
+                FunctionDeclaration {
+                    seen_datatypes,
+                    signature: function_signature(context, sig),
+                },
+            )
+        })
         .collect();
-    (orderings, sdecls, fdecls)
+    (orderings, ddecls, fdecls)
 }
 
 //**************************************************************************************************
@@ -113,7 +129,7 @@ pub fn program(
 ) -> Vec<AnnotatedCompiledUnit> {
     let mut units = vec![];
 
-    let (orderings, sdecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
+    let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
     let G::Program { modules: gmodules } = prog;
 
     let mut source_modules = gmodules
@@ -122,7 +138,7 @@ pub fn program(
         .collect::<Vec<_>>();
     source_modules.sort_by_key(|(_, mdef)| mdef.dependency_order);
     for (m, mdef) in source_modules {
-        if let Some(unit) = module(compilation_env, m, mdef, &orderings, &sdecls, &fdecls) {
+        if let Some(unit) = module(compilation_env, m, mdef, &orderings, &ddecls, &fdecls) {
             units.push(unit)
         }
     }
@@ -134,14 +150,11 @@ fn module(
     ident: ModuleIdent,
     mdef: G::ModuleDefinition,
     dependency_orderings: &HashMap<ModuleIdent, usize>,
-    struct_declarations: &HashMap<
-        (ModuleIdent, StructName),
+    datatype_declarations: &HashMap<
+        (ModuleIdent, DatatypeName),
         (BTreeSet<IR::Ability>, Vec<IR::DatatypeTypeParameter>),
     >,
-    function_declarations: &HashMap<
-        (ModuleIdent, FunctionName),
-        (BTreeSet<(ModuleIdent, StructName)>, IR::FunctionSignature),
-    >,
+    function_declarations: &HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
 ) -> Option<AnnotatedCompiledUnit> {
     let G::ModuleDefinition {
         warning_filter: _warning_filter,
@@ -151,13 +164,13 @@ fn module(
         dependency_order: _dependency_order,
         friends: gfriends,
         structs: gstructs,
+        enums: genums,
         constants: gconstants,
         functions: gfunctions,
     } = mdef;
     let mut context = Context::new(compilation_env, package_name, Some(&ident));
     let structs = struct_defs(&mut context, &ident, gstructs);
-    // TODO(enums): Add enum defs here!
-    let enums = vec![];
+    let enums = enum_defs(&mut context, &ident, genums);
     let constants = constants(&mut context, &ident, gconstants);
     let (collected_function_infos, functions) = functions(&mut context, &ident, gfunctions);
 
@@ -176,7 +189,8 @@ fn module(
     let addr_bytes = context.resolve_address(ident.value.address);
     let (imports, explicit_dependency_declarations) = context.materialize(
         dependency_orderings,
-        struct_declarations,
+        datatype_declarations,
+        // enum_declarations,
         function_declarations,
     );
 
@@ -315,7 +329,7 @@ fn var_info(
 fn struct_defs(
     context: &mut Context,
     m: &ModuleIdent,
-    structs: UniqueMap<StructName, H::StructDefinition>,
+    structs: UniqueMap<DatatypeName, H::StructDefinition>,
 ) -> Vec<IR::StructDefinition> {
     let mut structs = structs.into_iter().collect::<Vec<_>>();
     structs.sort_by_key(|(_, s)| s.index);
@@ -328,7 +342,7 @@ fn struct_defs(
 fn struct_def(
     context: &mut Context,
     m: &ModuleIdent,
-    s: StructName,
+    s: DatatypeName,
     sdef: H::StructDefinition,
 ) -> IR::StructDefinition {
     let H::StructDefinition {
@@ -342,7 +356,7 @@ fn struct_def(
     let loc = s.loc();
     let name = context.struct_definition_name(m, s);
     let abilities = abilities(&abs);
-    let type_formals = struct_type_parameters(tys);
+    let type_formals = datatype_type_parameters(tys);
     let fields = struct_fields(context, loc, fields);
     sp(
         loc,
@@ -383,7 +397,81 @@ fn struct_fields(
 }
 
 //**************************************************************************************************
-// Structs
+// Enums
+//**************************************************************************************************
+
+fn enum_defs(
+    context: &mut Context,
+    m: &ModuleIdent,
+    enums: UniqueMap<DatatypeName, H::EnumDefinition>,
+) -> Vec<IR::EnumDefinition> {
+    let mut enums = enums.into_iter().collect::<Vec<_>>();
+    enums.sort_by_key(|(_, e)| e.index);
+    enums
+        .into_iter()
+        .map(|(e, edef)| enum_def(context, m, e, edef))
+        .collect()
+}
+
+fn enum_def(
+    context: &mut Context,
+    m: &ModuleIdent,
+    e: DatatypeName,
+    edef: H::EnumDefinition,
+) -> IR::EnumDefinition {
+    let H::EnumDefinition {
+        warning_filter: _warning_filter,
+        index: _index,
+        attributes: _attributes,
+        abilities: abs,
+        type_parameters: tys,
+        variants,
+    } = edef;
+    let loc = e.loc();
+    let name = context.enum_definition_name(m, e);
+    let abilities = abilities(&abs);
+    let type_formals = datatype_type_parameters(tys);
+    let variants = enum_variants(context, variants);
+    sp(
+        loc,
+        IR::EnumDefinition_ {
+            name,
+            abilities,
+            type_formals,
+            variants,
+        },
+    )
+}
+
+fn enum_variants(
+    context: &mut Context,
+    gvariants: UniqueMap<VariantName, H::VariantDefinition>,
+) -> IR::VariantDefinitions {
+    let mut variants = gvariants
+        .into_iter()
+        .map(|(k, v)| (k, v))
+        .collect::<Vec<_>>();
+    variants.sort_by(|(_, v0), (_, v1)| v0.index.cmp(&v1.index));
+    variants
+        .into_iter()
+        .map(|(name, v)| {
+            let vloc = v.loc;
+            let fields = v
+                .fields
+                .into_iter()
+                .map(|(f, ty)| (field(f), base_type(context, ty)))
+                .collect();
+            let variant_ = IR::VariantDefinition_ {
+                name: context.variant_name(name),
+                fields,
+            };
+            sp(vloc, variant_)
+        })
+        .collect::<Vec<_>>()
+}
+
+//**************************************************************************************************
+// Constants
 //**************************************************************************************************
 
 fn constants(
@@ -518,36 +606,38 @@ fn function_signature(context: &mut Context, sig: H::FunctionSignature) -> IR::F
     }
 }
 
-fn seen_structs(sig: &H::FunctionSignature) -> BTreeSet<(ModuleIdent, StructName)> {
+fn seen_datatypes(sig: &H::FunctionSignature) -> BTreeSet<(ModuleIdent, DatatypeName)> {
     let mut seen = BTreeSet::new();
-    seen_structs_type(&mut seen, &sig.return_type);
+    seen_datatypes_type(&mut seen, &sig.return_type);
     sig.parameters
         .iter()
-        .for_each(|(_, st)| seen_structs_single_type(&mut seen, st));
+        .for_each(|(_, st)| seen_datatypes_single_type(&mut seen, st));
     seen
 }
 
-fn seen_structs_type(seen: &mut BTreeSet<(ModuleIdent, StructName)>, sp!(_, t_): &H::Type) {
+fn seen_datatypes_type(seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>, sp!(_, t_): &H::Type) {
     use H::Type_ as T;
     match t_ {
         T::Unit => (),
-        T::Single(st) => seen_structs_single_type(seen, st),
-        T::Multiple(ss) => ss.iter().for_each(|st| seen_structs_single_type(seen, st)),
+        T::Single(st) => seen_datatypes_single_type(seen, st),
+        T::Multiple(ss) => ss
+            .iter()
+            .for_each(|st| seen_datatypes_single_type(seen, st)),
     }
 }
 
-fn seen_structs_single_type(
-    seen: &mut BTreeSet<(ModuleIdent, StructName)>,
+fn seen_datatypes_single_type(
+    seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
     sp!(_, st_): &H::SingleType,
 ) {
     use H::SingleType_ as S;
     match st_ {
-        S::Base(bt) | S::Ref(_, bt) => seen_structs_base_type(seen, bt),
+        S::Base(bt) | S::Ref(_, bt) => seen_datatypes_base_type(seen, bt),
     }
 }
 
-fn seen_structs_base_type(
-    seen: &mut BTreeSet<(ModuleIdent, StructName)>,
+fn seen_datatypes_base_type(
+    seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
     sp!(_, bt_): &H::BaseType,
 ) {
     use H::{BaseType_ as B, TypeName_ as TN};
@@ -559,7 +649,7 @@ fn seen_structs_base_type(
             if let TN::ModuleType(m, s) = tn_ {
                 seen.insert((*m, *s));
             }
-            tys.iter().for_each(|st| seen_structs_base_type(seen, st))
+            tys.iter().for_each(|st| seen_datatypes_base_type(seen, st))
         }
         B::Param(TParam { .. }) => (),
     }
@@ -696,9 +786,9 @@ fn fun_type_parameters(tps: Vec<TParam>) -> Vec<(IR::TypeVar, BTreeSet<IR::Abili
         .collect()
 }
 
-fn struct_type_parameters(tps: Vec<StructTypeParameter>) -> Vec<IR::DatatypeTypeParameter> {
+fn datatype_type_parameters(tps: Vec<DatatypeTypeParameter>) -> Vec<IR::DatatypeTypeParameter> {
     tps.into_iter()
-        .map(|StructTypeParameter { is_phantom, param }| {
+        .map(|DatatypeTypeParameter { is_phantom, param }| {
             let name = type_var(param.user_specified_name);
             let constraints = abilities(&param.abilities);
             (is_phantom, name, constraints)
@@ -736,7 +826,7 @@ fn base_type(context: &mut Context, sp!(_, bt_): H::BaseType) -> IR::Type {
             IRT::Vector(Box::new(base_type(context, args.pop().unwrap())))
         }
         B::Apply(_, sp!(_, TN::ModuleType(m, s)), tys) => {
-            let n = context.qualified_struct_name(&m, s);
+            let n = context.qualified_datatype_name(&m, s);
             let tys = base_types(context, tys);
             IRT::Datatype(n, tys)
         }
@@ -810,6 +900,19 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): 
             code.push(sp(loc, B::BrFalse(label(if_false))));
             code.push(sp(loc, B::Branch(label(if_true))));
         }
+        C::VariantSwitch {
+            subject,
+            enum_name,
+            arms,
+        } => {
+            exp(context, code, subject);
+            let name = context.enum_definition_name(context.current_module().unwrap(), enum_name);
+            let arms = arms
+                .into_iter()
+                .map(|(variant, arm_lbl)| (context.variant_name(variant), sp(loc, label(arm_lbl))))
+                .collect::<Vec<_>>();
+            code.push(sp(loc, B::VariantSwitch(name, arms)));
+        }
         C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     }
 }
@@ -851,6 +954,41 @@ fn lvalue(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, l_): H::
 
             lvalues_(context, code, field_ls.into_iter().map(|(_, l)| l));
         }
+
+        L::UnpackVariant(e, v, unpack_type, _rhs_loc, tys, field_ls) if field_ls.is_empty() => {
+            let n = context.enum_definition_name(context.current_module().unwrap(), e);
+            code.push(sp(
+                loc,
+                B::UnpackVariant(
+                    n,
+                    context.variant_name(v),
+                    base_types(context, tys),
+                    convert_unpack_type(unpack_type),
+                ),
+            ));
+        }
+        L::UnpackVariant(e, v, unpack_type, _rhs_loc, tys, field_ls) => {
+            let n = context.enum_definition_name(context.current_module().unwrap(), e);
+            code.push(sp(
+                loc,
+                B::UnpackVariant(
+                    n,
+                    context.variant_name(v),
+                    base_types(context, tys),
+                    convert_unpack_type(unpack_type),
+                ),
+            ));
+
+            lvalues_(context, code, field_ls.into_iter().map(|(_, l)| l));
+        }
+    }
+}
+
+fn convert_unpack_type(unpack_type: H::UnpackType) -> IR::UnpackType {
+    match unpack_type {
+        H::UnpackType::ByValue => IR::UnpackType::ByValue,
+        H::UnpackType::ByImmRef => IR::UnpackType::ByImmRef,
+        H::UnpackType::ByMutRef => IR::UnpackType::ByMutRef,
     }
 }
 
@@ -950,6 +1088,22 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             }
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
             code.push(sp(loc, B::Pack(n, base_types(context, tys))))
+        }
+
+        E::PackVariant(e, v, tys, field_args) if field_args.is_empty() => {
+            // unlike structs, empty fields _are_ allowed in the bytecode
+            let e = context.enum_definition_name(context.current_module().unwrap(), e);
+            let v = context.variant_name(v);
+            code.push(sp(loc, B::PackVariant(e, v, base_types(context, tys))))
+        }
+
+        E::PackVariant(e, v, tys, field_args) => {
+            for (_, _, earg) in field_args {
+                exp(context, code, earg);
+            }
+            let e = context.enum_definition_name(context.current_module().unwrap(), e);
+            let v = context.variant_name(v);
+            code.push(sp(loc, B::PackVariant(e, v, base_types(context, tys))))
         }
 
         E::Vector(_, n, bt, args) => {

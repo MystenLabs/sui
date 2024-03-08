@@ -354,9 +354,9 @@ fn write_signature_token(ctx: &mut Context, t: &SignatureToken) -> String {
         SignatureToken::Address => "address".to_string(),
         SignatureToken::Signer => "signer".to_string(),
         SignatureToken::Vector(inner) => format!("vector<{}>", write_signature_token(ctx, inner)),
-        SignatureToken::Datatype(idx) => write_struct_handle_type(ctx, *idx),
+        SignatureToken::Datatype(idx) => write_datatype_handle_type(ctx, *idx),
         SignatureToken::DatatypeInstantiation(idx, types) => {
-            let n = write_struct_handle_type(ctx, *idx);
+            let n = write_datatype_handle_type(ctx, *idx);
             let tys = types
                 .iter()
                 .map(|ty| write_signature_token(ctx, ty))
@@ -372,16 +372,16 @@ fn write_signature_token(ctx: &mut Context, t: &SignatureToken) -> String {
     }
 }
 
-fn write_struct_handle_type(ctx: &mut Context, idx: DatatypeHandleIndex) -> String {
-    let struct_handle = ctx.module.datatype_handle_at(idx);
-    let struct_module_handle = ctx.module.module_handle_at(struct_handle.module);
+fn write_datatype_handle_type(ctx: &mut Context, idx: DatatypeHandleIndex) -> String {
+    let datatype_handle = ctx.module.datatype_handle_at(idx);
+    let struct_module_handle = ctx.module.module_handle_at(datatype_handle.module);
     let struct_module_id = ctx.module.module_id_for_handle(struct_module_handle);
     let module_alias = ctx.module_alias(struct_module_id).clone();
 
     format!(
         "{}::{}",
         module_alias,
-        ctx.module.identifier_at(struct_handle.name)
+        ctx.module.identifier_at(datatype_handle.name)
     )
 }
 

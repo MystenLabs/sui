@@ -39,7 +39,7 @@ pub(crate) fn production_config() -> VerifierConfig {
         max_type_nodes: Some(256),
         max_push_size: Some(10000),
         max_dependency_depth: Some(100),
-        max_struct_definitions: Some(200),
+        max_data_definitions: Some(200),
         max_fields_in_struct: Some(30),
         max_function_definitions: Some(1000),
 

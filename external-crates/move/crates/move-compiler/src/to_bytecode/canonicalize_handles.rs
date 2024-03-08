@@ -6,9 +6,10 @@ use std::collections::HashMap;
 use move_binary_format::{
     access::ModuleAccess,
     file_format::{
-        Bytecode, CodeUnit, DatatypeHandleIndex, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandleIndex, IdentifierIndex, ModuleHandleIndex, Signature, SignatureToken,
-        StructDefinition, StructDefinitionIndex, StructFieldInformation, TableIndex,
+        Bytecode, CodeUnit, DatatypeHandleIndex, EnumDefinition, EnumDefinitionIndex,
+        FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex, IdentifierIndex,
+        ModuleHandleIndex, Signature, SignatureToken, StructDefinition, StructDefinitionIndex,
+        StructFieldInformation, TableIndex,
     },
     internals::ModuleIndex,
     CompiledModule,
@@ -84,8 +85,8 @@ pub fn in_module(
         remap!(IdentifierIndex, fun.name, identifiers);
     }
 
-    for struct_ in &mut module.datatype_handles {
-        remap!(IdentifierIndex, struct_.name, identifiers);
+    for datatype in &mut module.datatype_handles {
+        remap!(IdentifierIndex, datatype.name, identifiers);
     }
 
     for def in &mut module.struct_defs {
@@ -94,6 +95,15 @@ pub fn in_module(
                 remap!(IdentifierIndex, field.name, identifiers);
             }
         };
+    }
+
+    for def in &mut module.enum_defs {
+        for variant in &mut def.variants {
+            remap!(IdentifierIndex, variant.variant_name, identifiers);
+            for field in &mut variant.fields {
+                remap!(IdentifierIndex, field.name, identifiers);
+            }
+        }
     }
 
     // 1 (c). Update ordering for identifiers.  Note that updates need to happen before other
@@ -138,15 +148,22 @@ pub fn in_module(
     // 2 (c). Update ordering for module handles.
     apply_permutation(&mut module.module_handles, modules);
 
-    // 3 (a). Choose ordering for struct handles.
+    // 3 (a). Choose ordering for datatype handles.
     let struct_defs = struct_definition_order(&module.struct_defs);
-    let structs = permutation(&module.datatype_handles, |ix, handle| {
+    let enums_defs = enum_definition_order(&module.enum_defs);
+    let datatypes = permutation(&module.datatype_handles, |ix, handle| {
         if handle.module == module.self_handle_idx() {
-            // Order structs from this module first, and in definition order
-            let Some(def_position) = struct_defs.get(&DatatypeHandleIndex(ix)) else {
+            // Order structs and enums from this module first, and in definition order
+
+            let ndx_ref = &DatatypeHandleIndex(ix);
+            let Some(ref_key) = struct_defs
+                .get(ndx_ref)
+                .map(|posn| posn.0)
+                .or_else(|| enums_defs.get(ndx_ref).map(|posn| posn.0))
+            else {
                 panic!("ICE struct handle from module without definition: {handle:?}");
             };
-            ReferenceKey::Internal(def_position.0)
+            ReferenceKey::Internal(ref_key)
         } else {
             // Order the remaining handles afterwards, in lexicographical order of module, then
             // struct name.
@@ -157,24 +174,33 @@ pub fn in_module(
         }
     });
 
-    // 3 (b). Update references to struct handles.
+    // 3 (b). Update references to struct and enum handles.
     for def in &mut module.struct_defs {
-        remap!(DatatypeHandleIndex, def.struct_handle, structs);
+        remap!(DatatypeHandleIndex, def.struct_handle, datatypes);
         if let StructFieldInformation::Declared(fields) = &mut def.field_information {
             for field in fields {
-                remap_signature_token(&mut field.signature.0, &structs);
+                remap_signature_token(&mut field.signature.0, &datatypes);
             }
         };
     }
 
-    for Signature(tokens) in &mut module.signatures {
-        for token in tokens {
-            remap_signature_token(token, &structs);
+    for def in &mut module.enum_defs {
+        remap!(DatatypeHandleIndex, def.enum_handle, datatypes);
+        for variant in &mut def.variants {
+            for field in &mut variant.fields {
+                remap_signature_token(&mut field.signature.0, &datatypes);
+            }
         }
     }
 
-    // 3 (c). Update ordering for struct handles.
-    apply_permutation(&mut module.datatype_handles, structs);
+    for Signature(tokens) in &mut module.signatures {
+        for token in tokens {
+            remap_signature_token(token, &datatypes);
+        }
+    }
+
+    // 3 (c). Update ordering for datatypes handles.
+    apply_permutation(&mut module.datatype_handles, datatypes);
 
     // 4 (a). Choose ordering for function handles.
     let function_defs = function_definition_order(&module.function_defs);
@@ -229,7 +255,7 @@ pub fn in_module(
     });
 }
 
-/// Reverses mapping from `StructDefinition(Index)` to `StructHandle`, so that handles for structs
+/// Reverses mapping from `StructDefinition(Index)` to `DatatpeHandle`, so that handles for structs
 /// defined in a module can be arranged in definition order.
 fn struct_definition_order(
     defs: &[StructDefinition],
@@ -237,6 +263,17 @@ fn struct_definition_order(
     defs.iter()
         .enumerate()
         .map(|(ix, def)| (def.struct_handle, StructDefinitionIndex(ix as TableIndex)))
+        .collect()
+}
+
+/// Reverses mapping from `EnumDefinition(Index)` to `DatatypeHandle`, so that handles for structs
+/// defined in a module can be arranged in definition order.
+fn enum_definition_order(
+    defs: &[EnumDefinition],
+) -> HashMap<DatatypeHandleIndex, EnumDefinitionIndex> {
+    defs.iter()
+        .enumerate()
+        .map(|(ix, def)| (def.enum_handle, EnumDefinitionIndex(ix as TableIndex)))
         .collect()
 }
 

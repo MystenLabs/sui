@@ -24,20 +24,20 @@ pub(crate) struct MoveStruct {
 
 #[derive(SimpleObject)]
 pub(crate) struct MoveStructTypeParameter {
-    constraints: Vec<MoveAbility>,
-    is_phantom: bool,
+    pub(crate) constraints: Vec<MoveAbility>,
+    pub(crate) is_phantom: bool,
 }
 
 /// Information for a particular field on a Move struct.
 #[derive(SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct MoveField {
-    name: String,
+    pub(crate) name: String,
     #[graphql(skip)]
-    type_: OpenMoveType,
+    pub(crate) type_: OpenMoveType,
 }
 
-/// Description of a type, defined in a Move module.
+/// Description of a struct type, defined in a Move module.
 #[Object]
 impl MoveStruct {
     /// The module this struct was originally defined in.

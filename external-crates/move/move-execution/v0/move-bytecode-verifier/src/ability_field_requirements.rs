@@ -20,7 +20,7 @@ pub fn verify_module(module: &CompiledModule) -> VMResult<()> {
 fn verify_module_impl(module: &CompiledModule) -> PartialVMResult<()> {
     let view = BinaryIndexedView::Module(module);
     for (idx, struct_def) in module.struct_defs().iter().enumerate() {
-        let sh = module.struct_handle_at(struct_def.struct_handle);
+        let sh = module.datatype_handle_at(struct_def.struct_handle);
         let fields = match &struct_def.field_information {
             StructFieldInformation::Native => continue,
             StructFieldInformation::Declared(fields) => fields,

@@ -6,7 +6,13 @@ A: object(0,0)
 task 1 'publish'. lines 8-69:
 created: object(1,0)
 mutated: object(0,1)
+<<<<<<< HEAD
 gas summary: computation_cost: 1000000, storage_cost: 9218800,  storage_rebate: 0, non_refundable_storage_fee: 0
+||||||| parent of 1d2c11510d ([4/n][move-enums] Changes to Sui to support enums)
+gas summary: computation_cost: 1000000, storage_cost: 9234000,  storage_rebate: 0, non_refundable_storage_fee: 0
+=======
+gas summary: computation_cost: 1000000, storage_cost: 9264400,  storage_rebate: 0, non_refundable_storage_fee: 0
+>>>>>>> 1d2c11510d ([4/n][move-enums] Changes to Sui to support enums)
 
 task 2 'programmable'. lines 71-73:
 created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)

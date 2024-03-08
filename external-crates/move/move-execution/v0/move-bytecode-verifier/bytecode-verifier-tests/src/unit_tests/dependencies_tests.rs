@@ -72,7 +72,7 @@ fn mk_script_function_module() -> CompiledModule {
             Signature(vec![]), // void
         ],
         struct_defs: vec![],
-        struct_handles: vec![],
+        datatype_handles: vec![],
         constant_pool: vec![],
         metadata: vec![],
         field_handles: vec![],
@@ -165,7 +165,7 @@ fn mk_invoking_module(use_generic: bool, valid: bool) -> CompiledModule {
             Signature(vec![SignatureToken::U64]), // u64
         ],
         struct_defs: vec![],
-        struct_handles: vec![],
+        datatype_handles: vec![],
         constant_pool: vec![],
         metadata: vec![],
         field_handles: vec![],
@@ -233,7 +233,7 @@ fn mk_invoking_script(use_generic: bool) -> CompiledScript {
             Signature(vec![]),                    // void
             Signature(vec![SignatureToken::U64]), // u64
         ],
-        struct_handles: vec![],
+        datatype_handles: vec![],
         constant_pool: vec![],
         metadata: vec![],
     };

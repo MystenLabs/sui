@@ -27,7 +27,7 @@ fn verify_key_structs(module: &CompiledModule) -> Result<(), ExecutionError> {
     let view = BinaryIndexedView::Module(module);
     let struct_defs = &module.struct_defs;
     for def in struct_defs {
-        let handle = module.struct_handle_at(def.struct_handle);
+        let handle = module.datatype_handle_at(def.struct_handle);
         if !handle.abilities.has_key() {
             continue;
         }
@@ -53,7 +53,7 @@ fn verify_key_structs(module: &CompiledModule) -> Result<(), ExecutionError> {
         // Check that the "id" field must have a struct type.
         let uid_field_type = &first_field.signature.0;
         let uid_field_type = match uid_field_type {
-            SignatureToken::Struct(struct_type) => struct_type,
+            SignatureToken::Datatype(struct_type) => struct_type,
             _ => {
                 return Err(verification_failure(format!(
                     "First field of struct {} must be of type {}::object::UID, \
@@ -63,7 +63,7 @@ fn verify_key_structs(module: &CompiledModule) -> Result<(), ExecutionError> {
             }
         };
         // check that the struct type for "id" field must be SUI_FRAMEWORK_ADDRESS::object::UID.
-        let uid_type_struct = module.struct_handle_at(*uid_field_type);
+        let uid_type_struct = module.datatype_handle_at(*uid_field_type);
         let uid_type_struct_name = view.identifier_at(uid_type_struct.name);
         let uid_type_module = module.module_handle_at(uid_type_struct.module);
         let uid_type_module_address = module.address_identifier_at(uid_type_module.address);
