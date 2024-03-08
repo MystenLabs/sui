@@ -15,6 +15,7 @@ use std::{
     sync::Arc,
     time::{self, Duration},
 };
+use sui_config::p2p::RandomnessConfig;
 use sui_types::{
     base_types::AuthorityName,
     committee::EpochId,
@@ -128,6 +129,7 @@ enum RandomnessMessage {
 
 struct RandomnessEventLoop {
     name: AuthorityName,
+    config: RandomnessConfig,
     mailbox: mpsc::Receiver<RandomnessMessage>,
     network: anemo::Network,
     allowed_peers: AllowedPeersUpdatable,
@@ -363,19 +365,18 @@ impl RandomnessEventLoop {
             // If we just changed epochs and haven't completed any sigs yet, this will be used.
             None => (self.epoch, RandomnessRound(0)),
         };
-        const MAX_PARTIAL_SIGS_ROUNDS_AHEAD: u64 = 10;
         if epoch == last_completed_epoch
             && round.0
                 >= last_completed_round
                     .0
-                    .saturating_add(MAX_PARTIAL_SIGS_ROUNDS_AHEAD)
+                    .saturating_add(self.config.max_partial_sigs_rounds_ahead())
         {
             debug!(
                     "skipping received partial sigs, most recent round we completed was only {last_completed_round}",
                 );
             return;
         }
-        if epoch > last_completed_epoch && round.0 >= MAX_PARTIAL_SIGS_ROUNDS_AHEAD {
+        if epoch > last_completed_epoch && round.0 >= self.config.max_partial_sigs_rounds_ahead() {
             debug!(
                     "skipping received partial sigs, most recent epoch we completed was only {last_completed_epoch}",
                 );
@@ -548,8 +549,7 @@ impl RandomnessEventLoop {
                 break; // wait for DKG in new epoch
             }
 
-            const MAX_CONCURRENT_SEND_PARTIAL_SIGNATURES: usize = 10;
-            if self.send_tasks.len() >= MAX_CONCURRENT_SEND_PARTIAL_SIGNATURES {
+            if self.send_tasks.len() >= self.config.max_partial_sigs_concurrent_sends() {
                 break; // limit concurrent tasks
             }
 
@@ -573,6 +573,7 @@ impl RandomnessEventLoop {
             self.send_tasks.entry((*epoch, *round)).or_insert_with(|| {
                 let name = self.name;
                 let network = self.network.clone();
+                let retry_interval = self.config.partial_signature_retry_interval();
                 let metrics = self.metrics.clone();
                 let authority_info = self.authority_info.clone();
                 let epoch = *epoch;
@@ -593,6 +594,7 @@ impl RandomnessEventLoop {
                 spawn_monitored_task!(RandomnessEventLoop::send_partial_signatures_task(
                     name,
                     network,
+                    retry_interval,
                     metrics,
                     authority_info,
                     epoch,
@@ -627,6 +629,7 @@ impl RandomnessEventLoop {
     async fn send_partial_signatures_task(
         name: AuthorityName,
         network: anemo::Network,
+        retry_interval: Duration,
         metrics: Metrics,
         authority_info: Arc<HashMap<AuthorityName, (PeerId, PartyId)>>,
         epoch: EpochId,
@@ -673,8 +676,7 @@ impl RandomnessEventLoop {
             futures::future::join_all(requests).await;
 
             // Keep retrying send to all peers until task is aborted via external message.
-            const SEND_PARTIAL_SIGNATURES_RETRY_TIME: Duration = Duration::from_secs(5);
-            tokio::time::sleep(SEND_PARTIAL_SIGNATURES_RETRY_TIME).await;
+            tokio::time::sleep(retry_interval).await;
         }
     }
 

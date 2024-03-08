@@ -78,6 +78,7 @@ impl Builder {
         (
             UnstartedRandomness {
                 name,
+                config,
                 handle,
                 mailbox,
                 allowed_peers,
@@ -92,6 +93,7 @@ impl Builder {
 /// Handle to an unstarted randomness network system
 pub struct UnstartedRandomness {
     pub(super) name: AuthorityName,
+    pub(super) config: RandomnessConfig,
     pub(super) handle: Handle,
     pub(super) mailbox: mpsc::Receiver<RandomnessMessage>,
     pub(super) allowed_peers: AllowedPeersUpdatable,
@@ -103,6 +105,7 @@ impl UnstartedRandomness {
     pub(super) fn build(self, network: anemo::Network) -> (RandomnessEventLoop, Handle) {
         let Self {
             name,
+            config,
             handle,
             mailbox,
             allowed_peers,
@@ -112,6 +115,7 @@ impl UnstartedRandomness {
         (
             RandomnessEventLoop {
                 name,
+                config,
                 mailbox,
                 network,
                 allowed_peers,

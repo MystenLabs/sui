@@ -333,13 +333,13 @@ pub struct RandomnessConfig {
     /// Maximum number of rounds ahead of our most recent completed round for which we should
     /// accept partial signatures from other validators.
     ///
-    /// If unspecified, this will default to 5.
+    /// If unspecified, this will default to 10.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_partial_sigs_rounds_ahead: Option<u64>,
 
     /// Maximum number of rounds for which partial signatures should be concurrently sent.
     ///
-    /// If unspecified, this will default to 5.
+    /// If unspecified, this will default to 10.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_partial_sigs_concurrent_sends: Option<usize>,
 
@@ -358,21 +358,21 @@ pub struct RandomnessConfig {
 
     /// Per-peer inflight limit for the SendPartialSignatures RPC.
     ///
-    /// If unspecified, this will default to 5.
+    /// If unspecified, this will default to 10.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub send_partial_signatures_inflight_limit: Option<usize>,
 }
 
 impl RandomnessConfig {
     pub fn max_partial_sigs_rounds_ahead(&self) -> u64 {
-        const MAX_PARTIAL_SIGS_ROUNDS_AHEAD: u64 = 5;
+        const MAX_PARTIAL_SIGS_ROUNDS_AHEAD: u64 = 10;
 
         self.max_partial_sigs_rounds_ahead
             .unwrap_or(MAX_PARTIAL_SIGS_ROUNDS_AHEAD)
     }
 
     pub fn max_partial_sigs_concurrent_sends(&self) -> usize {
-        const MAX_PARTIAL_SIGS_CONCURRENT_SENDS: usize = 5;
+        const MAX_PARTIAL_SIGS_CONCURRENT_SENDS: usize = 10;
 
         self.max_partial_sigs_concurrent_sends
             .unwrap_or(MAX_PARTIAL_SIGS_CONCURRENT_SENDS)
@@ -393,7 +393,7 @@ impl RandomnessConfig {
     }
 
     pub fn send_partial_signatures_inflight_limit(&self) -> usize {
-        const SEND_PARTIAL_SIGNATURES_INFLIGHT_LIMIT: usize = 5;
+        const SEND_PARTIAL_SIGNATURES_INFLIGHT_LIMIT: usize = 10;
 
         self.send_partial_signatures_inflight_limit
             .unwrap_or(SEND_PARTIAL_SIGNATURES_INFLIGHT_LIMIT)
