@@ -630,6 +630,9 @@ pub struct Flags {
     /// included only in tests, without creating the unit test code regular tests do.
     #[clap(skip)]
     keep_testing_functions: bool,
+
+    #[clap(skip)]
+    ide: bool,
 }
 
 impl Flags {
@@ -641,6 +644,7 @@ impl Flags {
             warnings_are_errors: false,
             silence_warnings: false,
             keep_testing_functions: false,
+            ide: false,
         }
     }
 
@@ -652,6 +656,7 @@ impl Flags {
             warnings_are_errors: false,
             silence_warnings: false,
             keep_testing_functions: false,
+            ide: false,
         }
     }
 
@@ -683,6 +688,10 @@ impl Flags {
         }
     }
 
+    pub fn set_ide(self, value: bool) -> Self {
+        Self { ide: value, ..self }
+    }
+
     pub fn is_empty(&self) -> bool {
         self == &Self::empty()
     }
@@ -709,6 +718,10 @@ impl Flags {
 
     pub fn silence_warnings(&self) -> bool {
         self.silence_warnings
+    }
+
+    pub fn is_ide(&self) -> bool {
+        self.ide
     }
 }
 

@@ -270,6 +270,7 @@ impl BuildConfig {
         flags
             .set_warnings_are_errors(self.warnings_are_errors)
             .set_silence_warnings(self.silence_warnings)
+            .set_ide(self.ide_mode)
     }
 
     pub fn update_lock_file_toolchain_version(

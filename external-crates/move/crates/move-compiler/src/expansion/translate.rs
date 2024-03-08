@@ -783,7 +783,10 @@ fn module_(
             P::ModuleMember::Use(_) => unreachable!(),
             P::ModuleMember::Friend(f) => friend(context, &mut friends, f),
             P::ModuleMember::Function(mut f) => {
-                if !context.is_source_definition && f.macro_.is_none() {
+                if (!context.is_source_definition && f.macro_.is_none())
+                    || (context.env().flags().is_ide()
+                        && context.env().package_config(package_name).is_dependency)
+                {
                     f.body.value = P::FunctionBody_::Native
                 }
                 function(
