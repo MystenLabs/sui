@@ -194,6 +194,11 @@ impl Event {
                         }
 
                         if let Some(digest) = &filter.transaction_digest {
+                            // Since the event filter takes in a single tx_digest, we know that
+                            // there will only be one corresponding transaction. We can use
+                            // single_value() to tell the query planner that we expect only one
+                            // instead of a range of values, which will subsequently speed up query
+                            // execution time.
                             query = query.filter(
                                 events::dsl::tx_sequence_number.nullable().eq(
                                     transactions::dsl::transactions
