@@ -12,7 +12,7 @@ use sui_types::{base_types::ObjectID, gas_coin::GasCoin, transaction::Transactio
 use tracing::info;
 
 #[tokio::main]
-fn main() -> Result<(), anyhow::Error> {
+async fn main() -> Result<(), anyhow::Error> {
     let mut wallet = create_wallet_context(60)?;
     let active_address = wallet
         .active_address()
