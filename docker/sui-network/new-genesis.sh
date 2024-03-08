@@ -1,7 +1,7 @@
 #!/bin/bash
 # assumes sui cli installed (brew install sui)
 
-DIR="genesis/files-old"
+DIR="genesis/files"
 
 if [ -d "$DIR" ]; then
     echo "Directory $DIR exists. Removing..."

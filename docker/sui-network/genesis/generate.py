@@ -16,7 +16,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _COMMON_OVERLAY_PATH = os.path.join(BASE_DIR, "overlays", "common.yaml")
 
 
-def parse_overlays(overlay_type: str, custom_overlay_path: str = None) -> str:
+def parse_overlays(overlay_type: str) -> str:
     overlays: str = ""
 
     with open(_COMMON_OVERLAY_PATH, "r") as f:
@@ -56,8 +56,6 @@ def main(args: argparse.ArgumentParser) -> None:
     with open(args.genesis_template, "r") as f:
         genesis_config = yaml.safe_load(f)
 
-    # parse number of validators
-    # validator_count = len(genesis_config["validator_config_info"])
     validator_network_addresses = get_network_addresses(genesis_config)
 
     # set the validator name based on their address
@@ -102,20 +100,6 @@ def main(args: argparse.ArgumentParser) -> None:
     # move other required files to target
     subprocess.run(["mv", "z/genesis.blob", f"{args.target_directory}/"], check=True)
 
-    # copy other required static files to target
-    # TODO: dynamically generate client keypair for faucet?
-    # _ = subprocess.run(
-    #     [
-    #         "cp",
-    #         "static/sui.keystore",
-    #         "static/sui-benchmark.keystore",
-    #         "static/fullnode.yaml",
-    #         f"{args.target_directory}/",
-    #     ],
-    #     check=True,
-    # )
-
-    # cleanup
     _ = subprocess.run(["rm", "-rf", "z"], check=True)
 
 

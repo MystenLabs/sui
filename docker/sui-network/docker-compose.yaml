@@ -102,51 +102,33 @@ services:
   stress:
     networks:
       - sui-network
-    image: mysten/sui-tools:mainnet-v1.19.1
+    image: stress:testing
     container_name: stress
     environment:
       - RUST_LOG=info
+      - STARTUP_DELAY_SECONDS=5
+      - STRESS_STAGGERED_START_MAX_MULTIPLIER=0
+      - FULLNODE_RPC_ADDRESS=fullnode1:9000
+      - USE_FULLNODE_FOR_RECONFIG=false
+      - PRIMARY_GAS_OWNER=0xd59d79516a4ed5b6825e80826c075a12bdd2759aaeb901df2f427f5f880c8f60
+      - GENESIS_BLOB_PATH=/opt/sui/config/genesis.blob
+      - KEYSTORE_PATH=/opt/sui/config/sui.keystore
+      - STRESS_TARGET_QPS=10
+      - STRESS_SHARED_COUNTER=1
+      - STRESS_TRANSFER_OBJECT=1
+      - STRESS_DELEGATION=0
+      - BATCH_PAYMENT=1
+      - BATCH_PAYMENT_SIZE=100
+      - STRESS_ADVERSARIAL=0
     volumes:
-      - ./genesis/static/fullnode.yaml:/opt/sui/config/fullnode.yaml:ro
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
       - ./genesis/static/sui.keystore:/opt/sui/config/sui.keystore:ro
-      - /tmp/sui/db5:/opt/sui/db:rw
-    command:
-      [
-        "/usr/local/bin/stress",
-        "--staggered-start-max-multiplier", "0",
-        "--fullnode-rpc-addresses", "fullnode1:9000",
-        "--use-fullnode-for-reconfig", "false",
-        "--num-client-threads", "5",
-        "--num-server-threads", "1",
-        "--num-transfer-accounts", "2",
-        "--local", "false",
-        "--primary-gas-owner-id", "0x7d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b58e",
-        "--genesis-blob-path", "/opt/sui/config/genesis.blob",
-        "--keystore-path", "/opt/sui/config/",
-        "bench",
-        "--target-qps", "10",
-        "--in-flight-ratio", "30",
-        "--shared-counter", "1",
-        "--transfer-object", "1",
-        "--delegation", "0",
-        "--batch-payment", "1",
-        "--batch-payment-size", "100",
-        "--adversarial", "0",
-        "--client-metric-host", "0.0.0.0",
-        "--num-workers", "2",
-      ]
     restart: on-failure
     logging:
       driver: "json-file"
       options:
         max-file: "10"
         max-size: "1g"
-  # fullnode1:
-  #   image: mysten/sui-node:mainnet-v1.19.1
-  #   ...
-  # fullnode2:
-  #   image: mysten/sui-node:mainnet-v1.19.1
 networks:
   sui-network:
     driver: bridge
