@@ -90,7 +90,6 @@ sui-simulator.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 zeroize.workspace = true
-mysticeti-core = { git = "https://github.com/MystenLabs/mysticeti", rev = "318d61d27f47d257d99a86983d835e9e9756bc59" }
 
 [dev-dependencies]
 clap.workspace = true
@@ -117,7 +116,10 @@ sui-protocol-config.workspace = true
 
 # moka uses `quanta` by default for timing, which is not compatible with the simulator
 [target.'cfg(msim)'.dependencies]
-moka = { workspace = true, default-features = false, features = ["sync", "atomic64"] }
+moka = { workspace = true, default-features = false, features = [
+    "sync",
+    "atomic64",
+] }
 [target.'cfg(not(msim))'.dependencies]
 moka = { workspace = true, features = ["sync"] }
 

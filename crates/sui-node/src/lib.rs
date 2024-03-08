@@ -249,7 +249,7 @@ static MAX_JWK_KEYS_PER_FETCH: usize = 100;
 
 impl SuiNode {
     pub async fn start(
-        config: &NodeConfig,
+        config: NodeConfig,
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
     ) -> Result<Arc<SuiNode>> {
@@ -392,12 +392,12 @@ impl SuiNode {
     }
 
     pub async fn start_async(
-        config: &NodeConfig,
+        config: NodeConfig,
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
         software_version: &'static str,
     ) -> Result<Arc<SuiNode>> {
-        NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(config);
+        NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(&config);
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
             info!(
@@ -690,7 +690,7 @@ impl SuiNode {
 
         let validator_components = if state.is_validator(&epoch_store) {
             let components = Self::construct_validator_components(
-                &config,
+                config.clone(),
                 state.clone(),
                 committee,
                 epoch_store.clone(),
@@ -1023,7 +1023,7 @@ impl SuiNode {
     }
 
     async fn construct_validator_components(
-        config: &NodeConfig,
+        config: NodeConfig,
         state: Arc<AuthorityState>,
         committee: Arc<Committee>,
         epoch_store: Arc<AuthorityPerEpochStore>,
@@ -1034,9 +1034,33 @@ impl SuiNode {
         registry_service: &RegistryService,
         sui_node_metrics: Arc<SuiNodeMetrics>,
     ) -> Result<ValidatorComponents> {
-        let consensus_config = config
-            .consensus_config()
+        let mut config_clone = config.clone();
+        let consensus_config = config_clone
+            .consensus_config
+            .as_mut()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
+
+        // TODO (mysticeti): Move this to a protocol config flag.
+        if let Ok(consensus_choice) = std::env::var("CONSENSUS") {
+            let consensus_protocol = match consensus_choice.as_str() {
+                "narwhal" => ConsensusProtocol::Narwhal,
+                "mysticeti" => ConsensusProtocol::Mysticeti,
+                "swap_each_epoch" => {
+                    if epoch_store.epoch() % 2 == 0 {
+                        ConsensusProtocol::Narwhal
+                    } else {
+                        ConsensusProtocol::Mysticeti
+                    }
+                }
+                _ => {
+                    let consensus = consensus_config.protocol.clone();
+                    warn!("Consensus env var was set to an invalid choice, using default consensus protocol {consensus:?}");
+                    consensus
+                }
+            };
+            info!("Constructing consensus protocol {consensus_protocol:?}...");
+            consensus_config.protocol = consensus_protocol;
+        }
 
         let (consensus_adapter, consensus_manager) = match consensus_config.protocol {
             ConsensusProtocol::Narwhal => {
@@ -1052,7 +1076,7 @@ impl SuiNode {
                     )),
                 ));
                 let consensus_manager =
-                    ConsensusManager::new_narwhal(config, consensus_config, registry_service);
+                    ConsensusManager::new_narwhal(&config, consensus_config, registry_service);
                 (consensus_adapter, consensus_manager)
             }
             ConsensusProtocol::Mysticeti => {
@@ -1068,7 +1092,7 @@ impl SuiNode {
                     client.clone(),
                 ));
                 let consensus_manager = ConsensusManager::new_mysticeti(
-                    config,
+                    &config,
                     consensus_config,
                     registry_service,
                     client,
@@ -1088,7 +1112,7 @@ impl SuiNode {
             SuiTxValidatorMetrics::new(&registry_service.default_registry());
 
         let validator_server_handle = Self::start_grpc_validator_service(
-            config,
+            &config,
             state.clone(),
             consensus_adapter.clone(),
             &registry_service.default_registry(),
@@ -1114,7 +1138,7 @@ impl SuiNode {
         };
 
         Self::start_epoch_specific_validator_components(
-            config,
+            &config,
             state.clone(),
             consensus_adapter,
             checkpoint_store,
@@ -1583,7 +1607,7 @@ impl SuiNode {
 
                     Some(
                         Self::construct_validator_components(
-                            &self.config,
+                            self.config.clone(),
                             self.state.clone(),
                             Arc::new(next_epoch_committee.clone()),
                             new_epoch_store.clone(),
