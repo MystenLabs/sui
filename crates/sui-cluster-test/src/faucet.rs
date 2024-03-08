@@ -12,7 +12,7 @@ use sui_faucet::{
 };
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
-use tracing::{debug, info, info_span, Instrument};
+use tracing::{debug, info};
 use uuid::Uuid;
 
 pub struct FaucetClientFactory;
