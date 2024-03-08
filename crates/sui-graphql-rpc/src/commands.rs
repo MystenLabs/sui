@@ -65,6 +65,6 @@ pub enum Command {
         /// Configures how frequently the background task refetches the available range supported by
         /// the db backing graphql service
         #[clap(long)]
-        available_range_update_ms: Option<u64>,
+        watermark_update_ms: Option<u64>,
     },
 }
