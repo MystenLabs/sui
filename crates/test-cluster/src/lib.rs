@@ -980,7 +980,7 @@ impl TestClusterBuilder {
             .unwrap();
 
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
-        let wallet = WalletContext::new(&wallet_conf, None, None).await.unwrap();
+        let wallet = WalletContext::new(&wallet_conf, None, None).unwrap();
 
         TestCluster {
             swarm,

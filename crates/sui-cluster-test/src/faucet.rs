@@ -30,8 +30,7 @@ impl FaucetClientFactory {
                     .expect("Expect local faucet key for local cluster")
                     .copy();
                 let wallet_context = new_wallet_context_from_cluster(cluster, key)
-                    .instrument(info_span!("init_wallet_context_for_faucet"))
-                    .await;
+                    .instrument(info_span!("init_wallet_context_for_faucet"));
 
                 let prom_registry = prometheus::Registry::new();
                 let config = FaucetConfig::default();
