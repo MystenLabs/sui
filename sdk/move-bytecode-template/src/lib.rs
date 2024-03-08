@@ -76,7 +76,6 @@ pub fn update_identifiers(binary: String, map: JsValue) -> Result<JsValue, JsErr
         });
 
     compiled_module.struct_defs.iter_mut().for_each(|def| {
-        def.struct_handle.0 = find_pos(def.struct_handle.0);
         if let StructFieldInformation::Declared(definitions) = &mut def.field_information {
             definitions.iter_mut().for_each(|field| {
                 field.name.0 = find_pos(field.name.0);

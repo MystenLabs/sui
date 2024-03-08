@@ -1,6 +1,6 @@
 [package]
-name = "move-binary-format-wasm"
-description = "WASM variant of the move-binary-format"
+name = "move-bytecode-template"
+description = "WASM variant of the move-binary-format which allows bytecode templates"
 version = "0.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"

@@ -1,5 +1,5 @@
 {
-	"name": "move-binary-format-tests",
+	"name": "move-bytecode-template",
 	"version": "0.1.0",
 	"description": "Move Binary Format implementation in WASM",
 	"type": "module",
