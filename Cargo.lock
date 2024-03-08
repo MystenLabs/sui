@@ -4931,16 +4931,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gettid"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34b20f40277dfb8a9dec7e2e945f6d8ff711e733c8f2a2c9b257562764b4c60d"
-dependencies = [
- "libc",
- "winapi",
-]
-
-[[package]]
 name = "ghash"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6396,15 +6386,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "memmap2"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f49388d20533534cd19360ad3d6a7dadc885944aa802ba3995040c5ec11288c6"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "memoffset"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6499,15 +6480,6 @@ checksum = "4192263c238a5f0d0c6bfd21f336a313a4ce1c450542449ca191bb657b4642ef"
 dependencies = [
  "mime",
  "unicase",
-]
-
-[[package]]
-name = "minibytes"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysticeti?rev=318d61d27f47d257d99a86983d835e9e9756bc59#318d61d27f47d257d99a86983d835e9e9756bc59"
-dependencies = [
- "memmap2 0.7.1",
- "serde",
 ]
 
 [[package]]
@@ -7499,40 +7471,6 @@ dependencies = [
  "proc-macro2 1.0.78",
  "syn 1.0.107",
  "synstructure",
-]
-
-[[package]]
-name = "mysticeti-core"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysticeti?rev=318d61d27f47d257d99a86983d835e9e9756bc59#318d61d27f47d257d99a86983d835e9e9756bc59"
-dependencies = [
- "async-trait",
- "axum",
- "bincode",
- "blake2",
- "crc32fast",
- "digest 0.10.6",
- "ed25519-consensus",
- "eyre",
- "futures",
- "gettid",
- "hex",
- "hyper",
- "libc",
- "memmap2 0.7.1",
- "minibytes",
- "parking_lot 0.12.1",
- "prometheus",
- "rand 0.8.5",
- "serde",
- "serde_yaml 0.9.21",
- "tabled",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-core",
- "tracing-subscriber",
- "zeroize",
 ]
 
 [[package]]
@@ -12050,7 +11988,6 @@ dependencies = [
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
- "mysticeti-core",
  "narwhal-config",
  "narwhal-crypto",
  "narwhal-executor",
@@ -14030,7 +13967,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b55cdc318ede251d0957f07afe5fed912119b8c1bc5a7804151826db999e737"
 dependencies = [
  "debugid",
- "memmap2 0.5.8",
+ "memmap2",
  "stable_deref_trait",
  "uuid 1.2.2",
 ]
