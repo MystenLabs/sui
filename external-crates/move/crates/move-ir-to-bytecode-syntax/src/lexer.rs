@@ -88,6 +88,8 @@ pub enum Tok {
     RBrace,
     LSquare,
     RSquare,
+    Enum,
+    VariantSwitch,
 }
 
 pub struct Lexer<'input> {
@@ -425,6 +427,8 @@ fn get_name_token(name: &str) -> Tok {
         "script" => Tok::Script,
         "struct" => Tok::Struct,
         "true" => Tok::True,
+        "enum" => Tok::Enum,
+        "variant_switch" => Tok::VariantSwitch,
         _ => Tok::NameValue,
     }
 }

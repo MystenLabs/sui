@@ -63,7 +63,7 @@ impl<'a> Context<'a> {
         dependency_orderings: &HashMap<ModuleIdent, usize>,
         struct_declarations: &HashMap<
             (ModuleIdent, StructName),
-            (BTreeSet<IR::Ability>, Vec<IR::StructTypeParameter>),
+            (BTreeSet<IR::Ability>, Vec<IR::DatatypeTypeParameter>),
         >,
         function_declarations: &HashMap<
             (ModuleIdent, FunctionName),
@@ -95,7 +95,7 @@ impl<'a> Context<'a> {
                 dependency_order,
                 IR::ModuleDependency {
                     name: ir_name,
-                    structs,
+                    datatypes: structs,
                     functions,
                 },
             ));
@@ -108,10 +108,10 @@ impl<'a> Context<'a> {
     fn insert_struct_dependency(
         module_dependencies: &mut BTreeMap<
             ModuleIdent,
-            (Vec<IR::StructDependency>, Vec<IR::FunctionDependency>),
+            (Vec<IR::DatatypeDependency>, Vec<IR::FunctionDependency>),
         >,
         module: ModuleIdent,
-        struct_dep: IR::StructDependency,
+        struct_dep: IR::DatatypeDependency,
     ) {
         module_dependencies
             .entry(module)
@@ -123,7 +123,7 @@ impl<'a> Context<'a> {
     fn insert_function_dependency(
         module_dependencies: &mut BTreeMap<
             ModuleIdent,
-            (Vec<IR::StructDependency>, Vec<IR::FunctionDependency>),
+            (Vec<IR::DatatypeDependency>, Vec<IR::FunctionDependency>),
         >,
         module: ModuleIdent,
         function_dep: IR::FunctionDependency,
@@ -138,11 +138,11 @@ impl<'a> Context<'a> {
     fn struct_dependencies(
         struct_declarations: &HashMap<
             (ModuleIdent, StructName),
-            (BTreeSet<Ability>, Vec<IR::StructTypeParameter>),
+            (BTreeSet<Ability>, Vec<IR::DatatypeTypeParameter>),
         >,
         module_dependencies: &mut BTreeMap<
             ModuleIdent,
-            (Vec<IR::StructDependency>, Vec<IR::FunctionDependency>),
+            (Vec<IR::DatatypeDependency>, Vec<IR::FunctionDependency>),
         >,
         seen_structs: BTreeSet<(ModuleIdent, StructName)>,
     ) {
@@ -155,15 +155,15 @@ impl<'a> Context<'a> {
     fn struct_dependency(
         struct_declarations: &HashMap<
             (ModuleIdent, StructName),
-            (BTreeSet<Ability>, Vec<IR::StructTypeParameter>),
+            (BTreeSet<Ability>, Vec<IR::DatatypeTypeParameter>),
         >,
         module: &ModuleIdent,
         sname: StructName,
-    ) -> IR::StructDependency {
+    ) -> IR::DatatypeDependency {
         let key = (*module, sname);
         let (abilities, type_formals) = struct_declarations.get(&key).unwrap().clone();
         let name = Self::translate_struct_name(sname);
-        IR::StructDependency {
+        IR::DatatypeDependency {
             abilities,
             name,
             type_formals,
@@ -177,7 +177,7 @@ impl<'a> Context<'a> {
         >,
         module_dependencies: &mut BTreeMap<
             ModuleIdent,
-            (Vec<IR::StructDependency>, Vec<IR::FunctionDependency>),
+            (Vec<IR::DatatypeDependency>, Vec<IR::FunctionDependency>),
         >,
         seen_structs: &mut BTreeSet<(ModuleIdent, StructName)>,
         seen_functions: BTreeSet<(ModuleIdent, FunctionName)>,
@@ -234,8 +234,8 @@ impl<'a> Context<'a> {
         IR::ModuleName(s)
     }
 
-    fn translate_struct_name(n: StructName) -> IR::StructName {
-        IR::StructName(n.0.value)
+    fn translate_struct_name(n: StructName) -> IR::DatatypeName {
+        IR::DatatypeName(n.0.value)
     }
 
     fn translate_constant_name(n: ConstantName) -> IR::ConstantName {
@@ -250,7 +250,7 @@ impl<'a> Context<'a> {
     // Name resolution
     //**********************************************************************************************
 
-    pub fn struct_definition_name(&self, m: &ModuleIdent, s: StructName) -> IR::StructName {
+    pub fn struct_definition_name(&self, m: &ModuleIdent, s: StructName) -> IR::DatatypeName {
         assert!(
             self.is_current_module(m),
             "ICE invalid struct definition lookup"
@@ -262,7 +262,7 @@ impl<'a> Context<'a> {
         &mut self,
         m: &ModuleIdent,
         s: StructName,
-    ) -> IR::QualifiedStructIdent {
+    ) -> IR::QualifiedDatatypeIdent {
         let mname = if self.is_current_module(m) {
             IR::ModuleName::module_self()
         } else {
@@ -270,7 +270,7 @@ impl<'a> Context<'a> {
             Self::ir_module_alias(m)
         };
         let n = Self::translate_struct_name(s);
-        IR::QualifiedStructIdent::new(mname, n)
+        IR::QualifiedDatatypeIdent::new(mname, n)
     }
 
     pub fn function_definition_name(&self, m: &ModuleIdent, f: FunctionName) -> IR::FunctionName {
