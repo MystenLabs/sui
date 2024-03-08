@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::file_format::{
-    Ability, AbilitySet, Signature, SignatureToken, StructHandle, StructHandleIndex, TableIndex,
-    TypeParameterIndex,
+    Ability, AbilitySet, DatatypeHandle, DatatypeHandleIndex, Signature, SignatureToken,
+    TableIndex, TypeParameterIndex,
 };
 use proptest::{
     collection::{vec, SizeRange},
@@ -69,11 +69,11 @@ impl SignatureGen {
         vec(SignatureTokenGen::strategy(), sig_count).prop_map(|signatures| Self { signatures })
     }
 
-    pub fn materialize(self, struct_handles: &[StructHandle]) -> Signature {
+    pub fn materialize(self, datatype_handles: &[DatatypeHandle]) -> Signature {
         Signature(
             self.signatures
                 .into_iter()
-                .map(move |token| token.materialize(struct_handles))
+                .map(move |token| token.materialize(datatype_handles))
                 .collect(),
         )
     }
@@ -157,7 +157,7 @@ impl SignatureTokenGen {
         Self::owned_strategy().prop_map(|atom| SignatureTokenGen::MutableReference(Box::new(atom)))
     }
 
-    pub fn materialize(self, struct_handles: &[StructHandle]) -> SignatureToken {
+    pub fn materialize(self, datatype_handles: &[DatatypeHandle]) -> SignatureToken {
         use SignatureTokenGen::*;
         match self {
             Bool => SignatureToken::Bool,
@@ -170,16 +170,16 @@ impl SignatureTokenGen {
             Address => SignatureToken::Address,
             Signer => SignatureToken::Signer,
             Struct(idx) => {
-                let struct_handles_len = struct_handles.len();
-                if struct_handles_len == 0 {
+                let datatype_handles_len = datatype_handles.len();
+                if datatype_handles_len == 0 {
                     // we are asked to create a type of a struct that cannot exist
                     // so we fake a U64 instead...
                     SignatureToken::U64
                 } else {
-                    let struct_idx = idx.index(struct_handles_len);
-                    let sh = &struct_handles[struct_idx];
+                    let struct_idx = idx.index(datatype_handles_len);
+                    let sh = &datatype_handles[struct_idx];
                     if sh.type_parameters.is_empty() {
-                        SignatureToken::Struct(StructHandleIndex(struct_idx as TableIndex))
+                        SignatureToken::Datatype(DatatypeHandleIndex(struct_idx as TableIndex))
                     } else {
                         let mut type_params = vec![];
                         for type_param in &sh.type_parameters {
@@ -190,23 +190,23 @@ impl SignatureTokenGen {
                                 _ => type_params.push(SignatureToken::U64),
                             }
                         }
-                        SignatureToken::StructInstantiation(
-                            StructHandleIndex(struct_idx as TableIndex),
+                        SignatureToken::DatatypeInstantiation(
+                            DatatypeHandleIndex(struct_idx as TableIndex),
                             type_params,
                         )
                     }
                 }
             }
-            Vector(token) => SignatureToken::Vector(Box::new(token.materialize(struct_handles))),
+            Vector(token) => SignatureToken::Vector(Box::new(token.materialize(datatype_handles))),
             Reference(token) => {
-                SignatureToken::Reference(Box::new(token.materialize(struct_handles)))
+                SignatureToken::Reference(Box::new(token.materialize(datatype_handles)))
             }
             MutableReference(token) => {
-                SignatureToken::MutableReference(Box::new(token.materialize(struct_handles)))
+                SignatureToken::MutableReference(Box::new(token.materialize(datatype_handles)))
             }
-            TypeParameter(idx) => {
-                SignatureToken::TypeParameter(idx.index(struct_handles.len()) as TypeParameterIndex)
-            }
+            TypeParameter(idx) => SignatureToken::TypeParameter(
+                idx.index(datatype_handles.len()) as TypeParameterIndex
+            ),
         }
     }
 }
