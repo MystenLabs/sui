@@ -2390,6 +2390,11 @@ impl<S> Envelope<SenderSignedData, S> {
     pub fn is_sponsored_tx(&self) -> bool {
         self.data().intent_message().value.is_sponsored_tx()
     }
+
+    pub fn is_randomness_reader(&self) -> bool {
+        self.shared_input_objects()
+            .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
+    }
 }
 
 impl Transaction {

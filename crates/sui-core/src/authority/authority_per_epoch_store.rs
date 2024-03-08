@@ -51,7 +51,7 @@ use super::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::ResolverWrapper;
 use crate::checkpoints::{
-    BuilderCheckpointSummary, CheckpointCommitHeight, CheckpointServiceNotify, EpochStats,
+    BuilderCheckpointSummary, CheckpointHeight, CheckpointServiceNotify, EpochStats,
     PendingCheckpoint, PendingCheckpointInfo, PendingCheckpointV2, PendingCheckpointV2Contents,
 };
 
@@ -401,9 +401,9 @@ pub struct AuthorityEpochTables {
     /// Because we don't want to create checkpoints with empty content(see CheckpointBuilder::write_checkpoint),
     /// the sequence number of checkpoint does not match height here.
     #[default_options_override_fn = "pending_checkpoints_table_default_config"]
-    pending_checkpoints: DBMap<CheckpointCommitHeight, PendingCheckpoint>,
+    pending_checkpoints: DBMap<CheckpointHeight, PendingCheckpoint>,
     #[default_options_override_fn = "pending_checkpoints_table_default_config"]
-    pending_checkpoints_v2: DBMap<CheckpointCommitHeight, PendingCheckpointV2>,
+    pending_checkpoints_v2: DBMap<CheckpointHeight, PendingCheckpointV2>,
 
     /// Checkpoint builder maintains internal list of transactions it included in checkpoints here
     builder_digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
@@ -1512,11 +1512,7 @@ impl AuthorityPerEpochStore {
         generating_randomness: bool,
     ) -> Option<DeferralKey> {
         // Defer transaction if it uses randomness but we are not yet generating randomness.
-        if !generating_randomness
-            && self.randomness_state_enabled()
-            && cert
-                .shared_input_objects()
-                .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
+        if !generating_randomness && self.randomness_state_enabled() && cert.is_randomness_reader()
         {
             return Some(DeferralKey::new_for_randomness(commit_round));
         }
@@ -2497,7 +2493,7 @@ impl AuthorityPerEpochStore {
             }
 
             // Generate pending checkpoint for regular user tx.
-            let commit_height = if self.randomness_state_enabled() {
+            let checkpoint_height = if self.randomness_state_enabled() {
                 commit_round * 2
             } else {
                 commit_round
@@ -2507,7 +2503,7 @@ impl AuthorityPerEpochStore {
                 details: PendingCheckpointInfo {
                     timestamp_ms: commit_timestamp,
                     last_of_epoch: final_round && randomness_round.is_none(),
-                    commit_height,
+                    checkpoint_height,
                 },
             });
 
@@ -2526,7 +2522,7 @@ impl AuthorityPerEpochStore {
                     details: PendingCheckpointInfo {
                         timestamp_ms: commit_timestamp,
                         last_of_epoch: final_round,
-                        commit_height: commit_height + 1,
+                        checkpoint_height: checkpoint_height + 1,
                     },
                 });
 
@@ -2545,10 +2541,7 @@ impl AuthorityPerEpochStore {
                 .get()
                 .expect("randomness manager should exist if randomness round is provided")
                 .clone();
-            // Spawn a task for this, because we can't await while holding `lock`.
-            spawn_monitored_task!(async move {
-                randomness_manager.generate_randomness(epoch, randomness_round);
-            });
+            randomness_manager.generate_randomness(epoch, randomness_round);
         }
 
         self.process_notifications(&notifications, &end_of_publish_transactions);
@@ -2569,7 +2562,7 @@ impl AuthorityPerEpochStore {
     }
 
     #[cfg(any(test, feature = "test-utils"))]
-    fn get_highest_pending_checkpoint_height(&self) -> CheckpointCommitHeight {
+    fn get_highest_pending_checkpoint_height(&self) -> CheckpointHeight {
         if self.randomness_state_enabled() {
             self.tables()
                 .expect("test should not cross epoch boundary")
@@ -3194,8 +3187,8 @@ impl AuthorityPerEpochStore {
 
     pub fn get_pending_checkpoints(
         &self,
-        last: Option<CheckpointCommitHeight>,
-    ) -> SuiResult<Vec<(CheckpointCommitHeight, PendingCheckpointV2)>> {
+        last: Option<CheckpointHeight>,
+    ) -> SuiResult<Vec<(CheckpointHeight, PendingCheckpointV2)>> {
         let tables = self.tables()?;
         if self.randomness_state_enabled() {
             let mut iter = tables.pending_checkpoints_v2.unbounded_iter();
@@ -3214,7 +3207,7 @@ impl AuthorityPerEpochStore {
 
     pub fn get_pending_checkpoint(
         &self,
-        index: &CheckpointCommitHeight,
+        index: &CheckpointHeight,
     ) -> SuiResult<Option<PendingCheckpointV2>> {
         if self.randomness_state_enabled() {
             Ok(self.tables()?.pending_checkpoints_v2.get(index)?)
@@ -3229,7 +3222,7 @@ impl AuthorityPerEpochStore {
 
     pub fn process_pending_checkpoint(
         &self,
-        commit_height: CheckpointCommitHeight,
+        commit_height: CheckpointHeight,
         content_info: Vec<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult<()> {
         // All created checkpoints are inserted in builder_checkpoint_summary in a single batch.
@@ -3240,7 +3233,7 @@ impl AuthorityPerEpochStore {
             let sequence_number = summary.sequence_number;
             let summary = BuilderCheckpointSummary {
                 summary,
-                commit_height: Some(commit_height),
+                checkpoint_height: Some(commit_height),
                 position_in_commit,
             };
             batch.insert_batch(
@@ -3277,7 +3270,7 @@ impl AuthorityPerEpochStore {
         }
         let builder_summary = BuilderCheckpointSummary {
             summary: summary.clone(),
-            commit_height: None,
+            checkpoint_height: None,
             position_in_commit: 0,
         };
         self.tables()?
@@ -3286,14 +3279,14 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn last_built_checkpoint_commit_height(&self) -> SuiResult<Option<CheckpointCommitHeight>> {
+    pub fn last_built_checkpoint_commit_height(&self) -> SuiResult<Option<CheckpointHeight>> {
         Ok(self
             .tables()?
             .builder_checkpoint_summary_v2
             .unbounded_iter()
             .skip_to_last()
             .next()
-            .and_then(|(_, b)| b.commit_height))
+            .and_then(|(_, b)| b.checkpoint_height))
     }
 
     pub fn last_built_checkpoint_summary(

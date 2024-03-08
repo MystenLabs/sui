@@ -6,7 +6,6 @@ use anemo::PeerId;
 use anyhow::Result;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::{dkg, nodes::PartyId, tbls::ThresholdBls, types::ThresholdBls12381MinSig};
-use futures::{stream::FuturesUnordered, StreamExt};
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::anemo_ext::NetworkExt;
 use serde::{Deserialize, Serialize};
@@ -497,6 +496,7 @@ impl RandomnessEventLoop {
                 ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
             {
                 error!("error while verifying randomness partial signatures after removing invalid partials: {e:?}");
+                debug_assert!(false, "error while verifying randomness partial signatures after removing invalid partials");
                 return;
             }
         }
@@ -647,7 +647,7 @@ impl RandomnessEventLoop {
             .collect();
 
         loop {
-            let mut requests = FuturesUnordered::new();
+            let mut requests = Vec::new();
             for (peer_name, peer) in &peers {
                 if name == **peer_name {
                     continue; // don't send partial sigs to self
@@ -669,9 +669,8 @@ impl RandomnessEventLoop {
                 });
             }
 
-            while requests.next().await.is_some() {
-                // Process all requests.
-            }
+            // Process all requests.
+            futures::future::join_all(requests).await;
 
             // Keep retrying send to all peers until task is aborted via external message.
             const SEND_PARTIAL_SIGNATURES_RETRY_TIME: Duration = Duration::from_secs(5);

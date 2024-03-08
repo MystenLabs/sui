@@ -25,7 +25,6 @@ use sui_types::{
     messages_consensus::{ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind},
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedTransaction},
-    SUI_RANDOMNESS_STATE_OBJECT_ID,
 };
 use tracing::{debug, error, info, instrument, trace_span};
 
@@ -759,9 +758,7 @@ impl SequencedConsensusTransaction {
         else {
             return false;
         };
-        certificate
-            .shared_input_objects()
-            .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
+        certificate.is_randomness_reader()
     }
 
     pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {

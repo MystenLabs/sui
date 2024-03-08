@@ -72,7 +72,7 @@ use typed_store::{
 };
 use typed_store_derive::DBMapUtils;
 
-pub type CheckpointCommitHeight = u64;
+pub type CheckpointHeight = u64;
 
 pub struct EpochStats {
     pub checkpoint_count: u64,
@@ -84,7 +84,7 @@ pub struct EpochStats {
 pub struct PendingCheckpointInfo {
     pub timestamp_ms: CheckpointTimestamp,
     pub last_of_epoch: bool,
-    pub commit_height: CheckpointCommitHeight,
+    pub checkpoint_height: CheckpointHeight,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -138,16 +138,16 @@ impl PendingCheckpointV2 {
         &self.as_v2().details
     }
 
-    pub fn height(&self) -> CheckpointCommitHeight {
-        self.details().commit_height
+    pub fn height(&self) -> CheckpointHeight {
+        self.details().checkpoint_height
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BuilderCheckpointSummary {
     pub summary: CheckpointSummary,
-    // Commit form which this checkpoint summary was built. None for genesis checkpoint
-    pub commit_height: Option<CheckpointCommitHeight>,
+    // Height at which this checkpoint summary was built. None for genesis checkpoint
+    pub checkpoint_height: Option<CheckpointHeight>,
     pub position_in_commit: usize,
 }
 
@@ -847,7 +847,7 @@ impl CheckpointBuilder {
     #[instrument(level = "debug", skip_all, fields(?height))]
     async fn make_checkpoint(
         &self,
-        height: CheckpointCommitHeight,
+        height: CheckpointHeight,
         pending: PendingCheckpointV2,
     ) -> anyhow::Result<()> {
         let pending = pending.into_v2();
@@ -880,7 +880,7 @@ impl CheckpointBuilder {
     #[instrument(level = "debug", skip_all)]
     async fn write_checkpoints(
         &self,
-        height: CheckpointCommitHeight,
+        height: CheckpointHeight,
         new_checkpoint: Vec<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult {
         let _scope = monitored_scope("CheckpointBuilder::write_checkpoints");
@@ -1925,8 +1925,8 @@ impl CheckpointServiceNotify for CheckpointServiceNoop {
 }
 
 impl PendingCheckpoint {
-    pub fn height(&self) -> CheckpointCommitHeight {
-        self.details.commit_height
+    pub fn height(&self) -> CheckpointHeight {
+        self.details.checkpoint_height
     }
 }
 
@@ -2235,7 +2235,7 @@ mod tests {
             details: PendingCheckpointInfo {
                 timestamp_ms: 0,
                 last_of_epoch: false,
-                commit_height: i,
+                checkpoint_height: i,
             },
         })
     }
