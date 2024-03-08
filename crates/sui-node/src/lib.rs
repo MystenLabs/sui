@@ -1294,9 +1294,7 @@ impl SuiNode {
             .await
             .map(Arc::new);
             if let Some(randomness_manager) = &randomness_manager {
-                epoch_store
-                    .set_randomness_manager(randomness_manager.clone())
-                    .await?;
+                epoch_store.set_randomness_manager(randomness_manager.clone())?;
             }
         }
 

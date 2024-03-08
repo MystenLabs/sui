@@ -866,7 +866,7 @@ impl AuthorityPerEpochStore {
         self.randomness_manager.get().cloned()
     }
 
-    pub async fn set_randomness_manager(
+    pub fn set_randomness_manager(
         &self,
         randomness_manager: Arc<RandomnessManager>,
     ) -> SuiResult<()> {
