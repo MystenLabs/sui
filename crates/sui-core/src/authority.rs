@@ -238,6 +238,8 @@ pub struct AuthorityMetrics {
     pub(crate) execution_driver_executed_transactions: IntCounter,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
     pub(crate) execution_queueing_delay_s: Histogram,
+    pub(crate) prepare_cert_gas_latency_ratio: Histogram,
+    pub(crate) execution_gas_latency_ratio: Histogram,
 
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
@@ -299,6 +301,11 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 20.,
     30., 60., 90.,
+];
+
+const GAS_LATENCY_RATIO_BUCKETS: &[f64] = &[
+    10.0, 50.0, 100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, 800.0, 900.0, 1000.0, 2000.0,
+    3000.0, 4000.0, 5000.0, 6000.0, 7000.0, 8000.0, 9000.0, 10000.0, 50000.0, 100000.0, 1000000.0,
 ];
 
 pub const DEV_INSPECT_GAS_COIN_VALUE: u64 = 1_000_000_000_000;
@@ -542,6 +549,20 @@ impl AuthorityMetrics {
                 "execution_queueing_delay_s",
                 "Queueing delay between a transaction is ready for execution until it starts executing.",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+            prepare_cert_gas_latency_ratio: register_histogram_with_registry!(
+                "prepare_cert_gas_latency_ratio",
+                "The ratio of computation gas divided by VM execution latency.",
+                GAS_LATENCY_RATIO_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+            execution_gas_latency_ratio: register_histogram_with_registry!(
+                "execution_gas_latency_ratio",
+                "The ratio of computation gas divided by certificate execution latency, include committing certificate.",
+                GAS_LATENCY_RATIO_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),
@@ -1221,6 +1242,7 @@ impl AuthorityState {
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
+        let process_certificate_start_time = tokio::time::Instant::now();
         let digest = *certificate.digest();
 
         fail_point_if!("correlated-crash-process-certificate", || {
@@ -1360,6 +1382,12 @@ impl AuthorityState {
             }
         }
 
+        let elapsed = process_certificate_start_time.elapsed().as_micros() as f64;
+        if elapsed > 0.0 {
+            self.metrics
+                .execution_gas_latency_ratio
+                .observe(effects.gas_cost_summary().computation_cost as f64 / elapsed);
+        };
         Ok((effects, execution_error_opt))
     }
 
@@ -1510,6 +1538,7 @@ impl AuthorityState {
     )> {
         let _scope = monitored_scope("Execution::prepare_certificate");
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
+        let prepare_certificate_start_time = tokio::time::Instant::now();
 
         // Cheap validity checks for a transaction, including input size limits.
         let tx_data = certificate.data().transaction_data();
@@ -1559,6 +1588,13 @@ impl AuthorityState {
             #[cfg(msim)]
             self.create_fail_state(certificate, epoch_store, &mut effects);
         });
+
+        let elapsed = prepare_certificate_start_time.elapsed().as_micros() as f64;
+        if elapsed > 0.0 {
+            self.metrics
+                .prepare_cert_gas_latency_ratio
+                .observe(effects.gas_cost_summary().computation_cost as f64 / elapsed);
+        }
 
         Ok((inner_temp_store, effects, execution_error_opt.err()))
     }
