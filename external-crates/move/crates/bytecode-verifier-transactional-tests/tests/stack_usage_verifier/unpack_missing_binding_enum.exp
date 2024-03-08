@@ -1,0 +1,37 @@
+processed 4 tasks
+
+task 0 'publish'. lines 1-22:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Test'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0x1::Test,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 0)],
+}
+
+task 1 'publish'. lines 24-45:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Test'. Got VMError: {
+    major_status: GENERIC_MEMBER_OPCODE_MISMATCH,
+    sub_status: None,
+    location: 0x1::Test,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(1), 1)],
+}
+
+task 2 'publish'. lines 47-68:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Test'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0x1::Test,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 0)],
+}
+
+task 3 'publish'. lines 70-91:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Test'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0x1::Test,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 0)],
+}

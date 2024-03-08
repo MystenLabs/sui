@@ -1,0 +1,91 @@
+//# publish
+module 0x1.Test {
+    struct X { b: bool }
+    enum T { V { i: u64, x: Self.X, b: bool, y: u64 } }
+
+    public new_t(): Self.T {
+        let x: Self.X;
+    label b0:
+        x = X { b: true };
+        return T.V { i: 0, x: move(x), b: false, y: 0 };
+    }
+
+    public destroy_t(t: Self.T): u64 * Self.X * bool {
+        let i: u64;
+        let x: Self.X;
+        let flag: bool;
+    label b0:
+        // unused item in unpack, invalid positive stack
+        T.V { i, x, b: flag } = move(t);
+        return move(i), move(x), move(flag);
+    }
+}
+
+//# publish
+module 0x1.Test {
+    struct X { b: bool }
+    enum T<H> { V{ i: H, x: Self.X, b: bool, y: u64 } }
+
+    public new_t(): Self.T<u64> {
+        let x: Self.X;
+    label b0:
+        x = X { b: true };
+        return T.V<u64> { i: 0, x: move(x), b: false, y: 0 };
+    }
+
+    public destroy_t(t: Self.T<u64>): u64 * Self.X * bool {
+        let i: u64;
+        let x: Self.X;
+        let flag: bool;
+    label b0:
+        // missing binding, invalid positive stack size and also non-generic unpack
+        T.V { i, x, b: flag } = move(t);
+        return move(i), move(x), move(flag);
+    }
+}
+
+//# publish
+module 0x1.Test {
+    struct X { b: bool }
+    enum T<H> { V{ i: H, x: Self.X, b: bool, y: u64 } }
+
+    public new_t(): Self.T<u64> {
+        let x: Self.X;
+    label b0:
+        x = X { b: true };
+        return T.V<u64> { i: 0, x: move(x), b: false, y: 0 };
+    }
+
+    public destroy_t(t: Self.T<u64>): u64 * Self.X * bool {
+        let i: u64;
+        let x: Self.X;
+        let flag: bool;
+    label b0:
+        // missing binding, invalid stack size and invalid instantiation
+        T.V<bool> { i, x, b: flag } = move(t);
+        return move(i), move(x), move(flag);
+    }
+}
+
+//# publish
+module 0x1.Test {
+    struct X { b: bool }
+    enum T<H> { V{ i: H, x: Self.X, b: bool, y: u64 } }
+
+    public new_t(): Self.T<u64> {
+        let x: Self.X;
+    label b0:
+        x = X { b: true };
+        return T.V<u64> { i: 0, x: move(x), b: false, y: 0 };
+    }
+
+    public destroy_t(t: Self.T<u64>): u64 * Self.X * bool {
+        let i: u64;
+        let x: Self.X;
+        let flag: bool;
+    label b0:
+        // missing binding, invalid stack size 
+        T.V<u64> { i, x, b: flag } = move(t);
+        return move(i), move(x), move(flag);
+    }
+}

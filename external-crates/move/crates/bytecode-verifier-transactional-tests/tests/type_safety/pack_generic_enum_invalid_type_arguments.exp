@@ -1,0 +1,73 @@
+processed 9 tasks
+
+task 0 'publish'. lines 1-11:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: PACK_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 1 'publish'. lines 13-23:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: RET_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 2 'publish'. lines 25-35:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: STLOC_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 3 'publish'. lines 37-47:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(Signature, 1), (FunctionDefinition, 0)],
+    offsets: [],
+}
+
+task 4 'publish'. lines 49-59:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: undefined,
+    indices: [],
+    offsets: [],
+}
+
+task 5 'publish'. lines 61-71:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
+    sub_status: None,
+    location: undefined,
+    indices: [],
+    offsets: [],
+}
+
+task 7 'publish'. lines 79-90:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: RET_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 8 'publish'. lines 92-103:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: STLOC_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}

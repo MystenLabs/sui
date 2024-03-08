@@ -1,0 +1,36 @@
+//# publish
+module 0x1.PolymorphicEnums {
+    enum EnumWithTwoVariants<T> {
+        One { },
+        Two { x: T }
+    }
+
+    public f(): u64 {
+        let x: Self.EnumWithTwoVariants<u64>;
+        let y: u64;
+        label b0:
+            x = EnumWithTwoVariants.Two<u64> { x: 42 };
+            variant_switch EnumWithTwoVariants (&x) {
+                One : b1,
+                Two : b2,
+            };
+        label b1:
+            EnumWithTwoVariants.Two<u64> { x: y } = move(x);
+            return 0;
+        label b2:
+            EnumWithTwoVariants.One<u64> { } = move(x);
+            return move(y);
+    }
+}
+
+//# run
+module 0x2.m {
+import 0x1.PolymorphicEnums;
+entry foo() {
+    let x: u64;
+    label b0:
+        x = PolymorphicEnums.f();
+        assert(move(x) == 42, 100);
+        return;
+}
+}

@@ -1,0 +1,46 @@
+//# publish
+module 0x1.M {
+    enum EnumValue {
+        Nothing { },
+        Coin { value: u64 }
+    }
+
+    nothing(): Self.EnumValue {
+    label b0:
+        return EnumValue.Nothing { };
+    }
+
+    zero(): Self.EnumValue {
+    label b0:
+        return EnumValue.Coin { value: 0 };
+    }
+}
+
+//# run
+module 0x2.m {
+import 0x1.M;
+
+entry foo() {
+    let z: M.EnumValue;
+    let x: u64;
+label b0:
+    z = M.nothing();
+    // invalid assignment 
+    z = M.zero();
+    return;
+}
+}
+
+//# run
+module 0x3.m {
+import 0x1.M;
+
+entry foo() {
+    let z: M.EnumValue;
+label b0:
+    z = M.zero();
+    // invalid assignment
+    z = M.zero();
+    return;
+}
+}

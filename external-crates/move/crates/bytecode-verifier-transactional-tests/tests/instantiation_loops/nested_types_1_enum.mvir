@@ -1,0 +1,11 @@
+//# publish
+module 0x1.M {
+    enum S<T> { V { b: bool }, R { } }
+
+    foo<T>() {
+    label b0:
+        // loop
+        Self.foo<Self.S<Self.S<T>>>();
+        return;
+    }
+}

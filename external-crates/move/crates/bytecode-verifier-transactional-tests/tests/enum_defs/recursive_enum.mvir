@@ -1,0 +1,56 @@
+//# publish
+module 0x1.Cup {
+    enum Cup<T> { V { f: T } }
+    public cup<T>(f: T): Self.Cup<T> {
+    label b0:
+        return Cup.V<T> { f: move(f) };
+    }
+}
+
+//# publish
+module 0x1.M0 {
+    // recursive enum
+    enum Foo { V { f: Self.Foo } }
+}
+
+//# publish
+module 0x1.M1 {
+    import 0x1.Cup;
+    // recursive enum
+    enum Foo { V { f: Cup.Cup<Self.Foo> } }
+
+    // would blow up the stack
+    public foo(): Self.Foo {
+    label b0:
+        return Foo.V { f: Cup.cup<Self.Foo>(Self.foo()) };
+    }
+
+}
+
+//# publish
+module 0x1.M2 {
+    import 0x1.signer;
+
+    enum X { V { y: vector<Self.Y> } }
+    enum Y { V { x: vector<Self.X> } }
+}
+
+//# publish
+module 0x1.M3 {
+    import 0x1.Cup;
+
+    // recursive enum
+    enum Foo { V { f: Cup.Cup<Self.Foo> } }
+
+}
+
+//# publish
+module 0x1.M3 {
+    import 0x1.Cup;
+
+    // indirect recursive enum
+    enum A { V { b: Self.B } }
+    enum B { V { c: Self.C } }
+    enum C { V { d: vector<Self.D> } }
+    enum D { V { x: Cup.Cup<Cup.Cup<Cup.Cup<Self.A>>> } }
+}

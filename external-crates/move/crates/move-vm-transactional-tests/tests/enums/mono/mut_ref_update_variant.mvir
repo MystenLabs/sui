@@ -1,0 +1,84 @@
+// Tests that if taking a mutable enum that the variant inside cane be mutated.
+
+//# print-bytecode
+module 0x1.MonomorphicEnums {
+    enum EnumWithTwoVariants has drop {
+        One { x: u64 },
+        Two { x: u64, y: u64 }
+    }
+
+    public f(t: u64): Self.EnumWithTwoVariants {
+        label b0:
+            return EnumWithTwoVariants.One { x: move(t) };
+    }
+
+    public mutate(e: &mut Self.EnumWithTwoVariants, x: u64, y: u64) {
+        label b0:
+            *(move(e)) = EnumWithTwoVariants.Two { x: move(x), y: move(y) };
+            return;
+    }
+
+    public is_variant_two(e: &Self.EnumWithTwoVariants): bool {
+        let x: &u64;
+        let u: &u64;
+        label b0:
+            variant_switch EnumWithTwoVariants (copy(e)) {
+                One : b1,
+                Two : b2,
+            };
+        label b1:
+            return false;
+        label b2:
+            return true;
+    }
+}
+
+//# publish
+module 0x1.MonomorphicEnums {
+    enum EnumWithTwoVariants has drop {
+        One { x: u64 },
+        Two { x: u64, y: u64 }
+    }
+
+    public f(t: u64): Self.EnumWithTwoVariants {
+        label b0:
+            return EnumWithTwoVariants.One { x: move(t) };
+    }
+
+    public mutate(e: &mut Self.EnumWithTwoVariants, x: u64, y: u64) {
+        label b0:
+            *(move(e)) = EnumWithTwoVariants.Two { x: move(x), y: move(y) };
+            return;
+    }
+
+    public is_variant_two(e: &Self.EnumWithTwoVariants): bool {
+        let x: &u64;
+        let u: &u64;
+        label b0:
+            variant_switch EnumWithTwoVariants (copy(e)) {
+                One : b1,
+                Two : b2,
+            };
+        label b1:
+            return false;
+        label b2:
+            return true;
+    }
+}
+
+//# run
+module 0x2.m {
+import 0x1.MonomorphicEnums;
+entry foo() {
+    let x: MonomorphicEnums.EnumWithTwoVariants;
+    let y: bool;
+    label b0:
+        x = MonomorphicEnums.f(42);
+        y = MonomorphicEnums.is_variant_two(&x);
+        assert(!move(y), 100);
+        MonomorphicEnums.mutate(&mut x, 43, 42);
+        y = MonomorphicEnums.is_variant_two(&x);
+        assert(move(y), 101);
+        return;
+}
+}

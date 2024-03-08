@@ -9,3 +9,15 @@ module 0x1.Token {
         return;
     }
 }
+
+//# publish
+module 0x2.Token {
+    enum T has key { V { b: bool } }
+
+    public test() {
+        let no: bool;
+    label b0:
+        no = T.V{ b: true } == T.V{ b: true }; // == requires drop
+        return;
+    }
+}

@@ -1,19 +1,24 @@
 processed 3 tasks
 
 task 0 'print-bytecode'. lines 1-8:
-// Move bytecode v6
+// Move bytecode v7
 module 1.m {
+
+
 
 
 entry foo() {
 B0:
 	0: Branch(0)
+
 }
 }
 
 task 1 'print-bytecode'. lines 10-19:
-// Move bytecode v6
+// Move bytecode v7
 module 2.m {
+
+
 
 
 entry foo() {
@@ -21,6 +26,7 @@ B0:
 	0: Branch(1)
 B1:
 	1: Branch(0)
+
 }
 }
 

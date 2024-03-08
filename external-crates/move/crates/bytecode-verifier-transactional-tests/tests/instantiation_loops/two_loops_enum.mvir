@@ -1,0 +1,20 @@
+//# publish
+
+// Two loops in the resulting graph.
+// One error for the loop.
+
+module 0x1.M {
+    enum S<T> { V { b: bool } }
+
+    f<T>() {
+    label b0:
+        Self.f<Self.S<T>>();
+        return;
+    }
+
+    g<T>() {
+    label b0:
+        Self.g<Self.S<T>>();
+        return;
+    }
+}
