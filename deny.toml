@@ -48,6 +48,9 @@ notice = "warn"
 # A list of advisory IDs to ignore. Note that ignored advisories will still
 # output a note when they are encountered.
 ignore = [
+    # "RUSTSEC-0000-0000",
+    # potential segfault in the time crate, brought by chrono et al.
+    "RUSTSEC-2020-0071",
     # difference 2.0.0 is unmaintained
     "RUSTSEC-2020-0095",
     # rusoto is unmaintained, use aws crates
@@ -96,7 +99,6 @@ allow = [
     "BSL-1.0",
     "Unicode-DFS-2016",
     #"Apache-2.0 WITH LLVM-exception",
-    "WTFPL",
 ]
 # List of explicitly disallowed licenses
 # See https://spdx.org/licenses/ for list of possible licenses
