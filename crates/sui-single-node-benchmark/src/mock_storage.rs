@@ -86,30 +86,6 @@ impl InMemoryObjectStore {
 
         Ok(input_objects.into())
     }
-
-    pub(crate) fn read_objects_for_synchronous_execution(
-        &self,
-        input_object_kinds: &[InputObjectKind],
-    ) -> SuiResult<InputObjects> {
-        let mut input_objects = Vec::new();
-        for kind in input_object_kinds {
-            let obj: Option<Object> = match kind {
-                InputObjectKind::MovePackage(id) => self.get_package_object(id)?.map(|o| o.into()),
-                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    self.get_object_by_key(&objref.0, objref.1)?
-                }
-
-                InputObjectKind::SharedMoveObject { id, .. } => self.get_object(id)?,
-            };
-
-            input_objects.push(ObjectReadResult::new(
-                *kind,
-                obj.ok_or_else(|| kind.object_not_found_error())?.into(),
-            ));
-        }
-
-        Ok(input_objects.into())
-    }
 }
 
 impl ObjectStore for InMemoryObjectStore {

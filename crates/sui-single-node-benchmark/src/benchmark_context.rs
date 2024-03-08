@@ -12,6 +12,7 @@ use futures::StreamExt;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
 use std::sync::Arc;
+use sui_config::node::RunWithRange;
 use sui_test_transaction_builder::PublishData;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -310,9 +311,10 @@ impl BenchmarkContext {
         info!("Building checkpoints");
         let validator = self.validator();
         let checkpoints = validator
-            .build_checkpoints(in_memory_store, transactions, effects, checkpoint_size)
+            .build_checkpoints(transactions, effects, checkpoint_size)
             .await;
         info!("Built {} checkpoints", checkpoints.len());
+        let last_checkpoint_seq = *checkpoints.last().unwrap().0.sequence_number();
         let (mut checkpoint_executor, checkpoint_sender) = validator.create_checkpoint_executor();
         for (checkpoint, contents) in checkpoints {
             let state = validator.get_validator();
@@ -337,7 +339,10 @@ impl BenchmarkContext {
         let start_time = std::time::Instant::now();
         info!("Starting checkpoint execution. You can now attach a profiler");
         checkpoint_executor
-            .run_epoch(validator.get_epoch_store().clone(), None)
+            .run_epoch(
+                validator.get_epoch_store().clone(),
+                Some(RunWithRange::Checkpoint(last_checkpoint_seq)),
+            )
             .await;
         let elapsed = start_time.elapsed().as_millis() as f64 / 1000f64;
         info!(
