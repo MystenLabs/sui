@@ -51,10 +51,5 @@ pub enum Command {
         /// RPC url to the Node for tx execution
         #[clap(long)]
         node_rpc_url: Option<String>,
-
-        /// Configures how frequently the background task refetches the available range supported by
-        /// the db backing graphql service
-        #[clap(long)]
-        available_range_update_ms: Option<u64>,
     },
 }

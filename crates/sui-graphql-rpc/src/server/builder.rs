@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::{
-    ConnectionConfig, Version, MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
+    ConnectionConfig, ServiceConfig, Version, MAX_CONCURRENT_REQUESTS,
+    RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
+use crate::consistency::CheckpointViewedAt;
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
-use crate::types::available_range::AvailableRange;
 use crate::types::checkpoint::Checkpoint;
 use crate::types::move_object::IMoveObject;
 use crate::types::object::IObject;
@@ -47,7 +48,8 @@ use mysten_metrics::spawn_monitored_task;
 use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
 use std::convert::Infallible;
 use std::net::TcpStream;
-use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+use std::sync::Arc;
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
@@ -81,13 +83,15 @@ pub(crate) struct ServerBuilder {
 #[derive(Clone)]
 pub(crate) struct AppState {
     connection: ConnectionConfig,
+    service: ServiceConfig,
     metrics: Metrics,
 }
 
 impl AppState {
-    fn new(connection: ConnectionConfig, metrics: Metrics) -> Self {
+    fn new(connection: ConnectionConfig, service: ServiceConfig, metrics: Metrics) -> Self {
         Self {
             connection,
+            service,
             metrics,
         }
     }
@@ -235,20 +239,19 @@ impl ServerBuilder {
     /// service is guaranteed to produce a consistent result for.
     pub fn build(self) -> Result<Server, Error> {
         let metrics = self.state.metrics.clone();
-        let sleep_ms = self.state.connection.available_range_update_ms;
+        let sleep_ms = self.state.service.background_tasks.watermark_update_ms;
         let (address, schema, db_reader, router) = self.build_components();
 
         // Start the background task to update a shared `AvailableRange`
-        let shared_available_range: Arc<RwLock<AvailableRange>> =
-            Arc::new(RwLock::new(AvailableRange { first: 0, last: 0 }));
-        let available_range_clone = shared_available_range.clone();
+        let watermark = Arc::new(AtomicU64::new(0));
+        let watermark_clone = watermark.clone();
         spawn_monitored_task!(async move {
-            update_available_range(&db_reader, available_range_clone, metrics, sleep_ms).await;
+            update_watermark(&db_reader, watermark_clone, metrics, sleep_ms).await;
         });
 
         let app = router
             .layer(axum::extract::Extension(schema))
-            .layer(axum::extract::Extension(shared_available_range))
+            .layer(axum::extract::Extension(watermark))
             .layer(Self::cors()?);
 
         Ok(Server {
@@ -285,7 +288,11 @@ impl ServerBuilder {
 
         // METRICS
         let metrics = Metrics::new(&registry);
-        let state = AppState::new(config.connection.clone(), metrics.clone());
+        let state = AppState::new(
+            config.connection.clone(),
+            config.service.clone(),
+            metrics.clone(),
+        );
         let mut builder = ServerBuilder::new(state);
 
         let name_service_config = config.service.name_service.clone();
@@ -379,7 +386,7 @@ pub fn export_schema() -> String {
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
-    shared_available_range: axum::Extension<Arc<RwLock<AvailableRange>>>,
+    watermark: axum::Extension<Arc<AtomicU64>>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -392,11 +399,10 @@ async fn graphql_handler(
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
 
-    let available_range = {
-        let lock = shared_available_range.read().unwrap();
-        *lock
-    };
-    req.data.insert(available_range);
+    let checkpoint_viewed_at = watermark.load(Relaxed);
+
+    // This wrapping is done to delineate the watermark from potentially other u64 types.
+    req.data.insert(CheckpointViewedAt(checkpoint_viewed_at));
 
     let result = schema.execute(req).await;
 
@@ -487,30 +493,26 @@ async fn get_or_init_server_start_time() -> &'static Instant {
     ONCE.get_or_init(|| async move { Instant::now() }).await
 }
 
-/// Starts an infinite loop that periodically updates the `AvailableRange`.
-pub(crate) async fn update_available_range(
+/// Starts an infinite loop that periodically updates the `checkpoint_viewed_at` high watermark.
+pub(crate) async fn update_watermark(
     db: &Db,
-    available_range: Arc<RwLock<AvailableRange>>,
+    checkpoint_viewed_at: Arc<AtomicU64>,
     metrics: Metrics,
     sleep_ms: u64,
 ) {
     loop {
-        let new_range = match {
-            db.execute(move |conn| Checkpoint::available_range(conn))
-                .await
-        } {
-            Ok((start, end)) => Some((start, end)),
-            Err(e) => {
-                let error_string = format!("Failed to update available range: {}", e);
-                error!("{}", error_string);
-                metrics.inc_errors(&[ServerError::new(error_string, None)]);
-                None
-            }
-        };
+        let new_checkpoint_viewed_at =
+            match Checkpoint::query_latest_checkpoint_sequence_number(db).await {
+                Ok(checkpoint) => Some(checkpoint),
+                Err(e) => {
+                    error!("{}", e);
+                    metrics.inc_errors(&[ServerError::new(e.to_string(), None)]);
+                    None
+                }
+            };
 
-        if let Some((first, last)) = new_range {
-            let mut mark = available_range.write().unwrap();
-            *mark = AvailableRange { first, last };
+        if let Some(checkpoint) = new_checkpoint_viewed_at {
+            checkpoint_viewed_at.store(checkpoint, Relaxed);
         }
 
         tokio::time::sleep(tokio::time::Duration::from_millis(sleep_ms)).await;
@@ -615,7 +617,7 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), cfg.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
-            let state = AppState::new(connection_config.clone(), metrics.clone());
+            let state = AppState::new(connection_config.clone(), cfg.clone(), metrics.clone());
             let schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
@@ -671,7 +673,11 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
-            let state = AppState::new(connection_config.clone(), metrics.clone());
+            let state = AppState::new(
+                connection_config.clone(),
+                service_config.clone(),
+                metrics.clone(),
+            );
             let schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
@@ -748,7 +754,11 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
-            let state = AppState::new(connection_config.clone(), metrics.clone());
+            let state = AppState::new(
+                connection_config.clone(),
+                service_config.clone(),
+                metrics.clone(),
+            );
             let schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
@@ -825,7 +835,11 @@ pub mod tests {
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
-        let state = AppState::new(connection_config.clone(), metrics.clone());
+        let state = AppState::new(
+            connection_config.clone(),
+            service_config.clone(),
+            metrics.clone(),
+        );
         let schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)
@@ -879,7 +893,11 @@ pub mod tests {
         let metrics = metrics();
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
-        let state = AppState::new(connection_config.clone(), metrics.clone());
+        let state = AppState::new(
+            connection_config.clone(),
+            service_config.clone(),
+            metrics.clone(),
+        );
         let schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)
@@ -922,7 +940,11 @@ pub mod tests {
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
-        let state = AppState::new(connection_config.clone(), metrics.clone());
+        let state = AppState::new(
+            connection_config.clone(),
+            service_config.clone(),
+            metrics.clone(),
+        );
         let schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)

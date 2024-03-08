@@ -242,9 +242,6 @@ async fn wait_for_graphql_checkpoint_catchup(
     let query = r#"
     {
         availableRange {
-            first {
-                sequenceNumber
-            }
             last {
                 sequenceNumber
             }

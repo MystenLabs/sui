@@ -42,7 +42,7 @@ pub(crate) const DEFAULT_SERVER_DB_URL: &str =
 pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 3;
 pub(crate) const DEFAULT_SERVER_PROM_HOST: &str = "0.0.0.0";
 pub(crate) const DEFAULT_SERVER_PROM_PORT: u16 = 9184;
-pub(crate) const DEFAULT_AVAILABLE_RANGE_UPDATE_MS: u64 = 1000;
+pub(crate) const DEFAULT_WATERMARK_UPDATE_MS: u64 = 500;
 
 /// The combination of all configurations for the GraphQL service.
 #[derive(Serialize, Clone, Deserialize, Debug, Default)]
@@ -72,7 +72,6 @@ pub struct ConnectionConfig {
     pub(crate) db_pool_size: u32,
     pub(crate) prom_url: String,
     pub(crate) prom_port: u16,
-    pub(crate) available_range_update_ms: u64,
 }
 
 /// Configuration on features supported by the GraphQL service, passed in a TOML-based file. These
@@ -92,6 +91,9 @@ pub struct ServiceConfig {
 
     #[serde(default)]
     pub(crate) name_service: NameServiceConfig,
+
+    #[serde(default)]
+    pub(crate) background_tasks: BackgroundTasksConfig,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
@@ -121,6 +123,13 @@ pub struct Limits {
     pub max_type_nodes: u32,
     #[serde(default)]
     pub max_move_value_depth: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub struct BackgroundTasksConfig {
+    #[serde(default)]
+    pub watermark_update_ms: u64,
 }
 
 #[derive(Debug)]
@@ -364,7 +373,6 @@ impl Default for ConnectionConfig {
             db_pool_size: DEFAULT_SERVER_DB_POOL_SIZE,
             prom_url: DEFAULT_SERVER_PROM_HOST.to_string(),
             prom_port: DEFAULT_SERVER_PROM_PORT,
-            available_range_update_ms: DEFAULT_AVAILABLE_RANGE_UPDATE_MS,
         }
     }
 }
@@ -399,6 +407,14 @@ impl Default for InternalFeatureConfig {
             tracing: false,
             apollo_tracing: false,
             open_telemetry: false,
+        }
+    }
+}
+
+impl Default for BackgroundTasksConfig {
+    fn default() -> Self {
+        Self {
+            watermark_update_ms: DEFAULT_WATERMARK_UPDATE_MS,
         }
     }
 }
