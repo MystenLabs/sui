@@ -4,7 +4,7 @@
 
 use anyhow::{bail, Context, Result};
 use move_command_line_common::files::{
-    extension_equals, find_filenames, find_move_filenames, MOVE_COMPILED_EXTENSION,
+    extension_equals, find_filenames, find_move_filenames, FileHash, MOVE_COMPILED_EXTENSION,
 };
 use move_compiler::command_line::DEFAULT_OUTPUT_DIR;
 use move_compiler::{diagnostics::WarningFilters, shared::PackageConfig};
@@ -12,6 +12,7 @@ use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fs,
     io::Write,
     path::{Path, PathBuf},
 };
@@ -308,6 +309,23 @@ impl ResolvedGraph {
             .into_iter()
     }
 
+    pub fn file_sources(&self) -> BTreeMap<FileHash, (FileName, String)> {
+        self.package_table
+            .iter()
+            .flat_map(|(_, rpkg)| {
+                rpkg.get_sources(&self.build_options)
+                    .unwrap()
+                    .iter()
+                    .map(|fname| {
+                        let contents = fs::read_to_string(fname.as_str()).unwrap();
+                        let fhash = FileHash::new(&contents);
+                        (fhash, (*fname, contents))
+                    })
+                    .collect::<BTreeMap<_, _>>()
+            })
+            .collect()
+    }
+
     pub fn contains_renaming(&self) -> Option<PackageName> {
         // Make sure no renamings have been performed
         self.package_table
@@ -474,8 +492,8 @@ impl Package {
             .collect()
     }
 
-    pub fn get_sources(&self, config: &BuildConfig, deps_only: bool) -> Result<Vec<FileName>> {
-        let places_to_look = source_paths_for_config(&self.package_path, config, deps_only);
+    pub fn get_sources(&self, config: &BuildConfig) -> Result<Vec<FileName>> {
+        let places_to_look = source_paths_for_config(&self.package_path, config);
         Ok(find_move_filenames(&places_to_look, false)?
             .into_iter()
             .map(FileName::from)
@@ -525,11 +543,7 @@ impl Package {
     }
 }
 
-fn source_paths_for_config(
-    package_path: &Path,
-    config: &BuildConfig,
-    deps_only: bool,
-) -> Vec<PathBuf> {
+fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<PathBuf> {
     let mut places_to_look = Vec::new();
     let mut add_path = |layout_path: SourcePackageLayout| {
         let path = package_path.join(layout_path.path());
@@ -542,8 +556,7 @@ fn source_paths_for_config(
     add_path(SourcePackageLayout::Sources);
     add_path(SourcePackageLayout::Scripts);
 
-    if config.dev_mode && !(config.ide_mode && deps_only) {
-        // don't include these if building deps for IDE
+    if config.dev_mode {
         add_path(SourcePackageLayout::Examples);
         add_path(SourcePackageLayout::Tests);
     }
@@ -552,8 +565,7 @@ fn source_paths_for_config(
 }
 
 fn package_digest_for_config(package_path: &Path, config: &BuildConfig) -> Result<PackageDigest> {
-    let mut source_paths =
-        source_paths_for_config(package_path, config, /* deps_only */ false);
+    let mut source_paths = source_paths_for_config(package_path, config);
     source_paths.push(package_path.join(SourcePackageLayout::Manifest.path()));
     compute_digest(&source_paths)
 }

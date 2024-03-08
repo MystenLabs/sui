@@ -56,10 +56,7 @@ impl ModelBuilder {
                     return None;
                 }
                 let mut dep_source_paths = pkg
-                    .get_sources(
-                        &self.resolution_graph.build_options,
-                        /* deps_only */ true,
-                    )
+                    .get_sources(&self.resolution_graph.build_options)
                     .unwrap();
                 let mut source_available = true;
                 // If source is empty, search bytecode(mv) files
