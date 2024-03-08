@@ -225,7 +225,7 @@ pub fn run_test_inner(
         if migration_mode {
             report_migration_to_buffer(&files, diags)
         } else {
-            report_diagnostics_to_buffer(&files, diags)
+            report_diagnostics_to_buffer(&files, diags, /* ansi_color */ false)
         }
     } else {
         vec![]

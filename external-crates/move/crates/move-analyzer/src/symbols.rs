@@ -1007,7 +1007,7 @@ pub fn get_symbols(
         let (files, compilation_result) = compiler.run::<PASS_PARSER>()?;
         let (_, compiler) = match compilation_result {
             Ok(v) => v,
-            Err(diags) => {
+            Err((_pass, diags)) => {
                 let failure = true;
                 diagnostics = Some((diags, failure));
                 eprintln!("parsed AST compilation failed");
@@ -1022,7 +1022,7 @@ pub fn get_symbols(
         let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
         let compiler = match compilation_result {
             Ok(v) => v,
-            Err(diags) => {
+            Err((_pass, diags)) => {
                 let failure = true;
                 diagnostics = Some((diags, failure));
                 eprintln!("typed AST compilation failed");
@@ -1038,7 +1038,7 @@ pub fn get_symbols(
         let compilation_result = compiler.at_typing(typed_program).build();
         let (units, diags) = match compilation_result {
             Ok(v) => v,
-            Err(diags) => {
+            Err((_pass, diags)) => {
                 let failure = false;
                 diagnostics = Some((diags, failure));
                 eprintln!("bytecode compilation failed");

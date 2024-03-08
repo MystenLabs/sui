@@ -326,7 +326,8 @@ codes!(
         InvalidTest: { msg: "unable to generate test", severity: NonblockingError },
         InvalidBytecodeInst:
             { msg: "unknown bytecode instruction function", severity: NonblockingError },
-        ValueWarning: { msg: "issue with attribute value", severity: Warning }
+        ValueWarning: { msg: "issue with attribute value", severity: Warning },
+        AmbiguousAttributeValue: { msg: "ambiguous attribute value", severity: NonblockingError },
     ],
     Tests: [
         TestFailed: { msg: "test failure", severity: BlockingError },
@@ -339,12 +340,12 @@ codes!(
     Editions: [
         FeatureTooNew: {
             msg: "feature is not supported in specified edition",
-            severity: BlockingError,
+            severity: NonblockingError,
         },
     ],
     Migration: [
-        NeedsPublic: { msg: "move 2024 migration: public struct", severity: BlockingError },
-        NeedsLetMut: { msg: "move 2024 migration: let mut", severity: BlockingError },
+        NeedsPublic: { msg: "move 2024 migration: public struct", severity: NonblockingError },
+        NeedsLetMut: { msg: "move 2024 migration: let mut", severity: NonblockingError },
     ]
 );
 

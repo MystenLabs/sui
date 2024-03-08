@@ -90,11 +90,19 @@
      * Scope: Module:Use
      */
 
-    "use-import": {
+    "use-import-fun": {
       pattern: /\b(use).*;/,
       inside: {
         "use-keyword": {
           pattern: /\b(use)\b/,
+          alias: "keyword",
+        },
+        "fun-keyword": {
+          pattern: /\b(fun)\b/,
+          alias: "keyword",
+        },
+        "as-keyword": {
+          pattern: /\b(as)\b/,
           alias: "keyword",
         },
         "self-keyword": {
@@ -172,9 +180,13 @@
      * Scope: Module:Struct
      */
 
-    "struct-definition": {
-      pattern: /\b(struct).*{/,
+    "struct-or-enum-definition": {
+      pattern: /\b(struct|enum).*[{;]/,
       inside: {
+        "enum-keyword": {
+          pattern: /\b(enum)\b/,
+          alias: "keyword",
+        },
         "struct-keyword": {
           pattern: /\b(struct)\b/,
           alias: "keyword",
@@ -215,17 +227,27 @@
       alias: "keyword",
     },
 
-    "function-visibility": {
+    "visibility": {
       pattern: /\b(public|entry|native|\(friend\))\b/,
       alias: "keyword"
+    },
+
+    "macro": {
+      pattern: /\b(macro)\b/,
+      alias: "keyword",
     },
 
     /**
      * Scope: Function
      */
 
+    "macro-variable": {
+      pattern: /[$](\w+)/,
+      alias: "builtin",
+    },
+
     "let-statement": {
-      pattern: /(\b(?:let)\s+)(\w+)/,
+      pattern: /(\b(?:let)\s+(?:mut\s+)?)([a-z_]+)/,
       lookbehind: true,
       alias: "variable",
     },
@@ -235,14 +257,24 @@
       alias: "keyword",
     },
 
-    "assert-macro": {
-      pattern: /\b(assert)!/,
-      alias: "function",
+    "mut-keyword": {
+      pattern: /\b(mut)\b/,
+      alias: "keyword",
+    },
+
+    "macro-call": {
+      pattern: /\b(\w+)!/,
+      alias: "builtin",
     },
 
     "control-flow": {
       pattern: /\b(?:abort|break|continue|return|if|while)\b/,
       alias: "keyword",
+    },
+
+    "label": {
+      pattern: /'(\w+):/,
+      alias: "namespace",
     },
 
     "function-call": {

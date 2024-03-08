@@ -10,6 +10,7 @@ Selection (default=1): Recorded edition in 'Move.toml'
 
 Would you like the Move compiler to migrate your code to Move 2024? (Y/n) 
 Generated changes . . .
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING A
 
 The following changes will be made.
@@ -108,21 +109,156 @@ The following changes will be made.
 @@ -7,1 +7,1 @@
 -    struct NotDroppable {}
 +    public struct NotDroppable {}
+@@ -30,1 +30,1 @@
+-        let v1 = V::empty<u64>();
++        let mut v1 = V::empty<u64>();
+@@ -38,1 +38,1 @@
+-        let v1 = V::empty();
++        let mut v1 = V::empty();
+@@ -39,1 +39,1 @@
+-        let v2 = V::empty();
++        let mut v2 = V::empty();
+@@ -55,1 +55,1 @@
+-        let v1 = V::empty();
++        let mut v1 = V::empty();
+@@ -72,1 +72,1 @@
+-        let v1 = V::empty();
++        let mut v1 = V::empty();
+@@ -73,1 +73,1 @@
+-        let v2 = V::empty();
++        let mut v2 = V::empty();
 @@ -85,1 +85,1 @@
 -        let i = 0;
 +        let mut i = 0;
+@@ -95,1 +95,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -102,1 +102,1 @@
+-        let vec = V::empty();
++        let mut vec = V::empty();
+@@ -129,1 +129,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -138,1 +138,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -145,1 +145,1 @@
+-        let vec = V::empty();
++        let mut vec = V::empty();
+@@ -159,1 +159,1 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -165,1 +165,1 @@
+-        let vec = V::empty();
++        let mut vec = V::empty();
+@@ -180,1 +180,1 @@
+-        let vec = V::empty();
++        let mut vec = V::empty();
+@@ -194,1 +194,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -202,1 +202,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -217,1 +217,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -233,1 +233,1 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -240,1 +240,1 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -247,1 +247,1 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -255,1 +255,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -264,1 +264,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -285,1 +285,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -304,1 +304,1 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -311,1 +311,1 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -324,1 +324,1 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -330,1 +330,1 @@
+-        let v = V::empty<u64>();
++        let mut v = V::empty<u64>();
+@@ -338,1 +338,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -360,1 +360,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -382,1 +382,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -389,1 +389,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -411,1 +411,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -420,1 +420,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -431,1 +431,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -442,1 +442,1 @@
+-        let empty = V::empty();
++        let mut empty = V::empty();
 @@ -444,1 +444,1 @@
 -        let i = 0;
 +        let mut i = 0;
+@@ -455,1 +455,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
 @@ -456,1 +456,1 @@
 -        let i = 0;
 +        let mut i = 0;
 @@ -471,1 +471,1 @@
 -    fun test_natives_with_type<T>(x1: T, x2: T): (T, T) {
 +    fun test_natives_with_type<T>(mut x1: T, mut x2: T): (T, T) {
+@@ -472,1 +472,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
+@@ -509,1 +509,1 @@
+-        let v = vector[7];
++        let mut v = vector[7];
+@@ -513,1 +513,1 @@
+-        let v = vector[7, 9];
++        let mut v = vector[7, 9];
+@@ -517,1 +517,1 @@
+-        let v = vector[6, 7];
++        let mut v = vector[6, 7];
+@@ -521,1 +521,1 @@
+-        let v = vector[5, 6, 8];
++        let mut v = vector[5, 6, 8];
+@@ -528,1 +528,1 @@
+-        let v = vector[];
++        let mut v = vector[];
+@@ -539,1 +539,1 @@
+-        let v = vector[7];
++        let mut v = vector[7];
+@@ -545,1 +545,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
 @@ -546,1 +546,1 @@
 -        let i = 0;
 +        let mut i = 0;
+@@ -559,1 +559,1 @@
+-        let v = V::empty();
++        let mut v = V::empty();
 @@ -560,1 +560,1 @@
 -        let i = 0;
 +        let mut i = 0;
@@ -140,8 +276,6 @@ Updating "tests/test0.move" . . .
 Changes complete
 Wrote patchfile out to: ./migration.patch
 
-External Command `diff -s migration.patch expected_migration.patch`:
-Files migration.patch and expected_migration.patch are identical
 External Command `diff -r -s sources migration_sources`:
 Files sources/mod0.move and migration_sources/mod0.move are identical
 Files sources/mod1.move and migration_sources/mod1.move are identical

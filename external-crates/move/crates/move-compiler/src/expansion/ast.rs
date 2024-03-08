@@ -70,6 +70,7 @@ pub struct UseFuns {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AttributeValue_ {
     Value(Value),
+    Address(Address),
     Module(ModuleIdent),
     ModuleAccess(ModuleAccess),
 }
@@ -935,8 +936,9 @@ impl AstDebug for AttributeValue_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
             AttributeValue_::Value(v) => v.ast_debug(w),
-            AttributeValue_::Module(m) => w.write(&format!("{}", m)),
+            AttributeValue_::Module(m) => w.write(&format!("{m}")),
             AttributeValue_::ModuleAccess(n) => n.ast_debug(w),
+            AttributeValue_::Address(a) => w.write(&format!("{a}")),
         }
     }
 }
