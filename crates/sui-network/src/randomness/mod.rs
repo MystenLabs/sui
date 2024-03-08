@@ -511,16 +511,13 @@ impl RandomnessEventLoop {
             }
         }
 
-        // TODO-DNS is there a way to do this by range, instead of saving all the keys and
-        // individually removing each one? From Googling I found some incomplete feature
-        // requests from 2022 but no clear answer. Same question applies to the above
-        // use of `retain` which is also not ideal.
         let keys_to_remove: Vec<_> = self
             .received_partial_sigs
             .range(sig_bounds)
             .map(|(key, _)| *key)
             .collect();
         for key in keys_to_remove {
+            // Have to remove keys one-by-one because BTreeMap does not support range-removal.
             self.received_partial_sigs.remove(&key);
         }
 

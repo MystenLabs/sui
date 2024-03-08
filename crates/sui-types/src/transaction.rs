@@ -2372,7 +2372,7 @@ impl<S> Envelope<SenderSignedData, S> {
     // Returns non-Digest keys that could be used to refer to this transaction.
     //
     // At the moment this returns a single Option for efficiency, but if more key types are added,
-    // the second return type could change to Vec<TransactionKey>.
+    // the return type could change to Vec<TransactionKey>.
     pub fn non_digest_key(&self) -> Option<TransactionKey> {
         match &self.data().intent_message().value.kind() {
             TransactionKind::RandomnessStateUpdate(rsu) => Some(TransactionKey::RandomnessRound(

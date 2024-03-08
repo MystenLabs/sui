@@ -4750,7 +4750,7 @@ impl RandomnessRoundReceiver {
             }
         }
 
-        panic!("RandomnessRoundReceiver event loop should never end");
+        info!("RandomnessRoundReceiver event loop ended");
     }
 
     #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]

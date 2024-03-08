@@ -639,10 +639,6 @@ impl SuiNode {
         }
 
         // Start the loop that receives new randomness and generates transactions for it.
-        // TODO-DNS Is it worth adding options to disable this and the Randomness network loop above?
-        // Seems mostly harmless to have this running-but-inert on full nodes, and simpler than figuring
-        // out logic to start it up later if full node becomes a validator. But maybe a bit icky for
-        // full nodes that never intend to become validators.
         RandomnessRoundReceiver::spawn(state.clone(), randomness_rx);
 
         if config
