@@ -96,3 +96,109 @@ As the new test function shows, the first transaction (explicitly) calls the ini
 
 If you try to run tests on the whole package at this point, you encounter compilation errors in the existing tests because of the
 `new_sword` function signature change. The changes required for the tests to run again is an exercise left for you. If you need help, you can refer to the source code for the package (with all the tests properly adjusted) in [first_package](https://github.com/MystenLabs/sui/tree/main/examples/move/first_package/sources/example.move).
+
+### Publish the package
+Once you have the package ready, you can publish it to the Sui network. To do so, use the `sui client publish` command of the Sui Client CLI. You will need to set a gas budget by using the `--gas-budget` flag. The gas budget is the maximum amount of gas you are willing to spend on the transaction. In testnet and devnet, a high budget would allow the transaction to be executed by the network.
+
+You can then check the status of the package using the `sui client objects` command. You can also view the status of the package using the [Sui Explorer](https://suiexplorer.com) or any other Sui blockchain explorer tools.
+
+```mermaid
+flowchart TB
+
+    subgraph Sui Blockchain
+        direction TB
+        address --> Forge
+	address --> UpgradeCap
+	address --> Coin
+    end
+```
+
+```
+$ sui client objects
+
+╭───────────────────────────────────────────────────────────────────────────────────────╮
+│ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
+│ │ objectId   │  0x48dc0998f450a86a63f9a59a03b60a87baa61ae5b552ecb8cfb9524b4109aa15  │ │
+│ │ version    │  10                                                                  │ │
+│ │ digest     │  fuEysv0wzTTNP13kgMFhP6V7GG43mbKcvjnw4jlg14w=                        │ │
+│ │ objectType │  0xe4dc..88cd::my_module::Forge                                      │ │
+│ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
+│ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
+│ │ objectId   │  0x9e3cab3f784819e0125168b7f8e9a2977bd59c3b0bff42a22cb0993f3e4e7a35  │ │
+│ │ version    │  10                                                                  │ │
+│ │ digest     │  2byd+RLeh48n6rxo8bAeILNWS6VjaEzapcn5sdg1VmM=                        │ │
+│ │ objectType │  0x0000..0002::coin::Coin                                            │ │
+│ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
+│ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
+│ │ objectId   │  0xe3db38c2e8529bc5fdcb67c1a03d8717c58b7b68e2816111e4ad8d2556bc0c53  │ │
+│ │ version    │  10                                                                  │ │
+│ │ digest     │  NVY9pLVpoFFmvAP4sxkIATVRwfcBff+ysXHdaiZx+Ec=                        │ │
+│ │ objectType │  0x0000..0002::package::UpgradeCap                                   │ │
+│ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
+╰───────────────────────────────────────────────────────────────────────────────────────╯
+```
+Note that the `objectId` field is the unique identifier of each object. You can use this identifier to call functions in the package. We now have 3 objects under our address:
+- The `Coin` object as a result of calling faucet in testnet or devnet
+- The `Forge` object as a result of the `init` function in the package
+- The `UpgradeCap` object as a result of publishing the package. You can learn more about it [here](../../../concepts/sui-move-concepts/packages/upgrade.mdx).
+
+### Interact with the package
+```mermaid
+flowchart TB
+    my_module["my_module::new_sword(&Forge, strength, magic)"]
+    
+    Sui_client["Sui client"]
+
+    subgraph Sui Blockchain
+	my_module
+	my_module --Sword--> address
+    end
+    
+    Sui_client --"PTB"--> my_module
+```
+Now that the package is published, you can interact with it by calling functions in the package. You can use the `sui client ptb` command of the Sui Client PTB CLI to call functions in the package. PTB stands for Programmable Transaction Blocks. You can learn more about it [here](../../../concepts/transactions/prog-txn-blocks.mdx). Transactions are what clients use to make changes to the Sui blockchain. A programmable transaction block is a collection of transactions that are executed together.
+
+For example, you can create a new `Sword` object defined in the package by calling the `new_sword` function in the `my_module` package, and then transfer the `Sword` object to any address:
+
+```shell
+$ sui client ptb \
+	--assign forge @0xFORGEID \
+	--assign to_address @0xADDRESS \
+	--move-call 0xPACKAGEID::my_module::new_sword forge 3 3 \
+	--assign sword \
+	--transfer-objects to_address "[sword]" \
+	--gas-budget 20000000
+```
+Make sure to replace `0xFORGEID`, `0xADDRESS`, and `0xPACKAGEID` with the actual `objectId` of the `Forge` object, the address of the recipient, and the `objectId` of the package, respectively. The above command makes use of the Sui Client PTB CLI. You can learn more about it [here](../../../references/cli/ptb.mdx).
+
+Once the transaction is executed, you can check the status of the `Sword` object using the `sui client objects` command or the blockchain explorer of your choice:
+```
+╭───────────────────────────────────────────────────────────────────────────────────────╮
+│ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
+│ │ objectId   │  0x48dc0998f450a86a63f9a59a03b60a87baa61ae5b552ecb8cfb9524b4109aa15  │ │
+│ │ version    │  11                                                                  │ │
+│ │ digest     │  /R0NMICp49ab3nQ8tgb5RlZ6O7SeyQVHKiBcr8Y6QeY=                        │ │
+│ │ objectType │  0xe4dc..88cd::my_module::Forge                                      │ │
+│ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
+│ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
+│ │ objectId   │  0x9e3cab3f784819e0125168b7f8e9a2977bd59c3b0bff42a22cb0993f3e4e7a35  │ │
+│ │ version    │  11                                                                  │ │
+│ │ digest     │  2OvUOhqwlHsOE9Vn40Hzf0HQQTPTp/edWp4V3Ch43Pg=                        │ │
+│ │ objectType │  0x0000..0002::coin::Coin                                            │ │
+│ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
+│ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
+│ │ objectId   │  0xe0f15011cb6796a7e016c63344067cb93dabe69ff84162b2967ed99b826c4c1d  │ │
+│ │ version    │  11                                                                  │ │
+│ │ digest     │  yCzz7CLjJJOlqGINDB4Cpe8y3u0NvsU1A+RGaEdZnO8=                        │ │
+│ │ objectType │  0xe4dc..88cd::my_module::Sword                                      │ │
+│ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
+│ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
+│ │ objectId   │  0xe3db38c2e8529bc5fdcb67c1a03d8717c58b7b68e2816111e4ad8d2556bc0c53  │ │
+│ │ version    │  10                                                                  │ │
+│ │ digest     │  NVY9pLVpoFFmvAP4sxkIATVRwfcBff+ysXHdaiZx+Ec=                        │ │
+│ │ objectType │  0x0000..0002::package::UpgradeCap                                   │ │
+│ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
+╰───────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+Congratulations! You have successfully published a package to the Sui network and modified the blockchain state by using a Programmable Transaction Block! You can find more dApp examples in the [App Examples](../app-examples.mdx) page.
