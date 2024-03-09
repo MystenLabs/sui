@@ -10,7 +10,7 @@ use crate::{
     },
     diag,
     diagnostics::Diagnostics,
-    expansion::ast::{AbilitySet, Attributes, ModuleIdent},
+    expansion::ast::{AbilitySet, Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     parser::ast::{ConstantName, FunctionName, StructName},
     shared::{unique_map::UniqueMap, CompilationEnv},
@@ -329,7 +329,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
         match command {
             C::IgnoreAndPop { exp, .. } => dep_exp(set, exp),
             C::Return { exp, .. } => dep_exp(set, exp),
-            C::Abort(exp) | C::Assign(_, exp) => dep_exp(set, exp),
+            C::Abort(exp) | C::Assign(_, _, exp) => dep_exp(set, exp),
             C::Mutate(lhs, rhs) => {
                 dep_exp(set, lhs);
                 dep_exp(set, rhs)
@@ -440,7 +440,7 @@ fn constant_(
     full_loc: Loc,
     attributes: &Attributes,
     signature: H::BaseType,
-    locals: UniqueMap<Var, H::SingleType>,
+    locals: UniqueMap<Var, (Mutability, H::SingleType)>,
     body: H::Block,
 ) -> Option<H::Exp> {
     use H::Command_ as C;
@@ -462,6 +462,7 @@ fn constant_(
     };
     let fake_infinite_loop_starts = BTreeSet::new();
     let function_context = super::CFGContext {
+        package: context.current_package,
         module,
         member: cfgir::MemberName::Constant(name.0),
         struct_declared_abilities: &context.struct_declared_abilities,
@@ -618,6 +619,7 @@ fn function_body(
             context.env.add_diags(diags);
 
             let function_context = super::CFGContext {
+                package: context.current_package,
                 module,
                 member: cfgir::MemberName::Function(name.0),
                 struct_declared_abilities: &context.struct_declared_abilities,
@@ -958,6 +960,7 @@ fn visit_function(
     context.env.add_warning_filter_scope(warning_filter.clone());
     let (cfg, infinite_loop_starts) = ImmForwardCFG::new(*start, blocks, block_info.iter());
     let function_context = super::CFGContext {
+        package: context.current_package,
         module: mident,
         member: cfgir::MemberName::Function(name.0),
         struct_declared_abilities: &context.struct_declared_abilities,

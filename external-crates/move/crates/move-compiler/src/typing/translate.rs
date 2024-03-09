@@ -5,10 +5,10 @@
 use crate::{
     diag,
     diagnostics::{codes::*, Diagnostic},
-    editions::{Edition, FeatureGate, Flavor},
+    editions::{FeatureGate, Flavor},
     expansion::ast::{
         Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend, ModuleAccess_,
-        ModuleIdent, ModuleIdent_, Value_, Visibility,
+        ModuleIdent, ModuleIdent_, Mutability, Value_, Visibility,
     },
     ice,
     naming::ast::{
@@ -28,7 +28,7 @@ use crate::{
     typing::{
         ast as T,
         core::{
-            self, make_tvar, public_testing_visibility, Context, Local, PublicForTesting,
+            self, make_tvar, public_testing_visibility, Context, PublicForTesting,
             ResolvedFunctionType, Subst,
         },
         dependency_ordering, expand, infinite_instantiations, macro_expand, recursive_structs,
@@ -255,9 +255,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     let body = if macro_.is_some() {
         sp(n_body.loc, T::FunctionBody_::Macro)
     } else {
-        let body = function_body(context, n_body);
-        unused_let_muts(context);
-        body
+        function_body(context, n_body)
     };
     context.current_function = None;
     context.in_macro_function = false;
@@ -357,7 +355,6 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
     context.return_type = Some(signature.clone());
 
     let mut value = exp(context, Box::new(nvalue));
-    unused_let_muts(context);
     subtype(
         context,
         signature.loc,
@@ -1858,11 +1855,11 @@ fn lvalue(
         } => {
             let var_ty = match case {
                 C::Bind => {
-                    context.declare_local(mut_, var, ty.clone());
+                    context.declare_local(mut_.unwrap(), var, ty.clone());
                     ty
                 }
                 C::Assign => {
-                    check_mutability(context, loc, "assignment", &var);
+                    assert!(mut_.is_none());
                     let var_ty = context.get_local_type(&var);
                     subtype(
                         context,
@@ -1875,6 +1872,7 @@ fn lvalue(
                 }
             };
             TL::Var {
+                mut_,
                 var,
                 ty: Box::new(var_ty),
                 unused_binding,
@@ -1964,26 +1962,6 @@ fn check_mutation(context: &mut Context, loc: Loc, given_ref: Type, rvalue_ty: &
         Ability_::Drop,
     );
     res_ty
-}
-
-fn check_mutability(context: &mut Context, eloc: Loc, usage: &str, v: &N::Var) {
-    let (decl_loc, mut_) = context.mark_mutable_usage(eloc, v);
-    if mut_.is_none() {
-        let v = &v.value.name;
-        let usage_msg = format!("Invalid {usage} of immutable variable '{v}'");
-        let decl_msg =
-            format!("To use the variable mutably, it must be declared 'mut', e.g. 'mut {v}'");
-        if context.env.edition(context.current_package()) == Edition::E2024_MIGRATION {
-            context
-                .env
-                .add_diag(diag!(Migration::NeedsLetMut, (decl_loc, decl_msg.clone()),))
-        }
-        context.env.add_diag(diag!(
-            TypeSafety::InvalidImmVariableUsage,
-            (eloc, usage_msg),
-            (decl_loc, decl_msg),
-        ))
-    }
 }
 
 //**************************************************************************************************
@@ -2700,12 +2678,7 @@ fn exp_to_borrow(
     let eb_ty = eb.ty;
     let sp!(ebloc, eb_) = eb.exp;
     let e_ = match eb_ {
-        TE::Use(v) => {
-            if mut_ {
-                check_mutability(context, loc, "mutable borrow", &v);
-            }
-            TE::BorrowLocal(mut_, v)
-        }
+        TE::Use(v) => TE::BorrowLocal(mut_, v),
         eb_ => {
             match &eb_ {
                 TE::Move { from_user, .. } | TE::Copy { from_user, .. } => {
@@ -3317,7 +3290,7 @@ fn expand_macro(
                 .map(|(sp!(vloc, v_), e)| {
                     let lvalue_ = match v_ {
                         Some(var_) => N::LValue_::Var {
-                            mut_: None,
+                            mut_: Some(Mutability::Either),
                             var: sp(vloc, var_),
                             unused_binding: false,
                         },
@@ -3400,31 +3373,6 @@ fn process_attributes<T: TName>(context: &mut Context, all_attributes: &UniqueMa
 //**************************************************************************************************
 // Follow-up warnings
 //**************************************************************************************************
-
-/// Generates warnings for unused mut declerations
-/// Should be called at the end of functions/constants
-fn unused_let_muts(context: &mut Context) {
-    let locals = context.take_locals();
-    let supports_let_mut = context
-        .env
-        .supports_feature(context.current_package, FeatureGate::LetMut);
-    if !supports_let_mut {
-        return;
-    }
-    for (v, local) in locals {
-        let Local { mut_, used_mut, .. } = local;
-        let Some(mut_loc) = mut_ else { continue };
-        if used_mut.is_none() && !v.value.starts_with_underscore() {
-            let decl_msg = format!("The variable '{}' is never used mutably", v.value.name);
-            let mut_msg = "Consider removing the 'mut' declaration here";
-            context.env.add_diag(diag!(
-                UnusedItem::MutModifier,
-                (v.loc, decl_msg),
-                (mut_loc, mut_msg)
-            ))
-        }
-    }
-}
 
 /// Generates warnings for unused (private) functions and unused constants.
 /// Should be called after the whole program has been processed.

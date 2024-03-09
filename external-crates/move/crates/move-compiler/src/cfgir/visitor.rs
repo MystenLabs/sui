@@ -181,7 +181,7 @@ pub trait SimpleAbsIntConstructor: Sized {
                 (v, unassigned)
             })
             .collect::<BTreeMap<_, _>>();
-        for (param, _) in &context.signature.parameters {
+        for (_, param, _) in &context.signature.parameters {
             locals.insert(
                 *param,
                 LocalState::Available(
@@ -244,7 +244,7 @@ pub trait SimpleAbsInt: Sized {
         }
         let sp!(_, cmd_) = cmd;
         match cmd_ {
-            C::Assign(ls, e) => {
+            C::Assign(_, ls, e) => {
                 let values = self.exp(context, state, e);
                 self.lvalues(context, state, ls, values);
             }
@@ -303,7 +303,7 @@ pub trait SimpleAbsInt: Sized {
         let sp!(loc, l_) = l;
         match l_ {
             L::Ignore => (),
-            L::Var(v, _) => {
+            L::Var { var: v, .. } => {
                 let locals = state.locals_mut();
                 locals.insert(*v, LocalState::Available(*loc, value));
             }

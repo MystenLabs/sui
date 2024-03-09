@@ -4,6 +4,7 @@
 
 use crate::{
     cfgir::{cfg::MutForwardCFG, remove_no_ops},
+    expansion::ast::Mutability,
     hlir::ast::{FunctionSignature, SingleType, Value, Var},
     parser,
     shared::unique_map::UniqueMap,
@@ -13,7 +14,7 @@ use std::collections::BTreeSet;
 /// returns true if anything changed
 pub fn optimize(
     signature: &FunctionSignature,
-    _locals: &UniqueMap<Var, SingleType>,
+    _locals: &UniqueMap<Var, (Mutability, SingleType)>,
     _constants: &UniqueMap<parser::ast::ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
@@ -64,7 +65,7 @@ mod count {
                 assigned: BTreeMap::new(),
                 used: BTreeMap::new(),
             };
-            for (v, _) in &signature.parameters {
+            for (_, v, _) in &signature.parameters {
                 ctx.assign(v, false);
             }
             ctx
@@ -111,7 +112,7 @@ mod count {
     pub fn command(context: &mut Context, sp!(_, cmd_): &Command) {
         use Command_ as C;
         match cmd_ {
-            C::Assign(ls, e) => {
+            C::Assign(_, ls, e) => {
                 exp(context, e);
                 let substitutable_rvalues = can_subst_exp(ls.len(), e);
                 lvalues(context, ls, substitutable_rvalues);
@@ -141,7 +142,7 @@ mod count {
         use LValue_ as L;
         match l_ {
             L::Ignore | L::Unpack(_, _, _) => (),
-            L::Var(v, _) => context.assign(v, substitutable),
+            L::Var { var, .. } => context.assign(var, substitutable),
         }
     }
 
@@ -274,7 +275,7 @@ mod eliminate {
     pub fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
         use Command_ as C;
         match cmd_ {
-            C::Assign(ls, e) => {
+            C::Assign(_, ls, e) => {
                 exp(context, e);
                 let eliminated = lvalues(context, ls);
                 remove_eliminated(context, eliminated, e)
@@ -315,12 +316,23 @@ mod eliminate {
         use LValue_ as L;
         match l_ {
             l_ @ L::Ignore | l_ @ L::Unpack(_, _, _) => LRes::Same(sp(loc, l_)),
-            L::Var(v, t) => {
-                let contained = context.ssa_temps.remove(&v);
+            L::Var {
+                var,
+                ty,
+                unused_assignment,
+            } => {
+                let contained = context.ssa_temps.remove(&var);
                 if contained {
-                    LRes::Elim(v)
+                    LRes::Elim(var)
                 } else {
-                    LRes::Same(sp(loc, L::Var(v, t)))
+                    LRes::Same(sp(
+                        loc,
+                        L::Var {
+                            var,
+                            ty,
+                            unused_assignment,
+                        },
+                    ))
                 }
             }
         }

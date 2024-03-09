@@ -4,7 +4,7 @@
 use crate::{
     diag,
     diagnostics::Diagnostic,
-    expansion::ast::ModuleIdent,
+    expansion::ast::{ModuleIdent, Mutability},
     naming::ast::{self as N, BlockLabel, Color, TParamID, Type, Type_, UseFuns, Var, Var_},
     parser::ast::FunctionName,
     shared::program_info::FunctionInfo,
@@ -186,7 +186,7 @@ fn recolor_macro(
 ) -> Result<
     (
         Vec<TParamID>,
-        Vec<(Option<Loc>, Var, N::Type)>,
+        Vec<(Mutability, Var, N::Type)>,
         N::Block,
         BlockLabel,
         Color,
@@ -272,8 +272,10 @@ fn bind_lambda(
 use recolor_struct::*;
 
 mod recolor_struct {
-    use crate::naming::ast::{self as N, BlockLabel, Color, Var};
-    use move_ir_types::location::Loc;
+    use crate::{
+        expansion::ast::Mutability,
+        naming::ast::{self as N, BlockLabel, Color, Var},
+    };
     use std::collections::{BTreeMap, BTreeSet};
     // handles all of the recoloring of variables, labels, and use funs.
     // The mask of known vars and labels is here to handle the case where a variable was captured
@@ -299,7 +301,7 @@ mod recolor_struct {
             }
         }
 
-        pub fn add_params(&mut self, params: &[(Option<Loc>, Var, N::Type)]) {
+        pub fn add_params(&mut self, params: &[(Mutability, Var, N::Type)]) {
             for (_, v, _) in params {
                 self.vars.insert(*v);
             }

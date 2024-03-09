@@ -8,16 +8,14 @@ use crate::{
         codes::{NameResolution, TypeSafety},
         Diagnostic,
     },
-    expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
+    expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
     ice,
     naming::ast::{
         self as N, BlockLabel, BuiltinTypeName_, Color, IndexSyntaxMethods, ResolvedUseFuns,
         StructDefinition, StructTypeParameter, TParam, TParamID, TVar, Type, TypeName, TypeName_,
         Type_, UseFunKind, Var,
     },
-    parser::ast::{
-        Ability_, ConstantName, Field, FunctionName, Mutability, StructName, ENTRY_MODIFIER,
-    },
+    parser::ast::{Ability_, ConstantName, Field, FunctionName, StructName, ENTRY_MODIFIER},
     shared::{known_attributes::TestingAttribute, program_info::*, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
@@ -54,12 +52,6 @@ pub enum Constraint {
 pub type Constraints = Vec<Constraint>;
 pub type TParamSubst = HashMap<TParamID, Type>;
 
-pub struct Local {
-    pub mut_: Mutability,
-    pub ty: Type,
-    pub used_mut: Option<Loc>,
-}
-
 #[derive(Debug)]
 pub struct MacroCall {
     pub module: ModuleIdent,
@@ -87,7 +79,7 @@ pub struct Context<'env> {
     pub in_macro_function: bool,
     max_variable_color: RefCell<u16>,
     pub return_type: Option<Type>,
-    locals: UniqueMap<Var, Local>,
+    locals: UniqueMap<Var, Type>,
 
     pub subst: Subst,
     pub constraints: Constraints,
@@ -476,13 +468,8 @@ impl<'env> Context<'env> {
             .push(Constraint::OrderedConstraint(loc, op, t))
     }
 
-    pub fn declare_local(&mut self, mut_: Mutability, var: Var, ty: Type) {
-        let local = Local {
-            mut_,
-            ty,
-            used_mut: None,
-        };
-        if let Err((_, prev_loc)) = self.locals.add(var, local) {
+    pub fn declare_local(&mut self, _: Mutability, var: Var, ty: Type) {
+        if let Err((_, prev_loc)) = self.locals.add(var, ty) {
             let msg = format!("ICE duplicate {var:?}. Should have been made unique in naming");
             self.env
                 .add_diag(ice!((var.loc, msg), (prev_loc, "Previously declared here")));
@@ -496,25 +483,7 @@ impl<'env> Context<'env> {
             return self.error_type(var.loc);
         }
 
-        self.locals.get(var).unwrap().ty.clone()
-    }
-
-    pub fn mark_mutable_usage(&mut self, loc: Loc, var: &Var) -> (Loc, Mutability) {
-        if !self.locals.contains_key(var) {
-            let msg = format!("ICE unbound {var:?}. Should have failed in naming");
-            self.env.add_diag(ice!((loc, msg)));
-            return (loc, Mutability::None);
-        }
-
-        // should not fail, already checked in naming
-        let decl_loc = *self.locals.get_loc(var).unwrap();
-        let local = self.locals.get_mut(var).unwrap();
-        local.used_mut = Some(loc);
-        (decl_loc, local.mut_)
-    }
-
-    pub fn take_locals(&mut self) -> UniqueMap<Var, Local> {
-        std::mem::take(&mut self.locals)
+        self.locals.get(var).unwrap().clone()
     }
 
     pub fn is_current_module(&self, m: &ModuleIdent) -> bool {

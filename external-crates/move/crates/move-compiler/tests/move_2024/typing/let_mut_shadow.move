@@ -7,7 +7,7 @@ module a::m {
             bar(x)
         };
         x = x + 1;
-        x
+        x;
     }
     fun bar(_: u64) {}
 }

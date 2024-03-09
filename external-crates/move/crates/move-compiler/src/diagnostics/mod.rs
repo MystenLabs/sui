@@ -574,6 +574,18 @@ macro_rules! ice {
     }}
 }
 
+#[macro_export]
+macro_rules! ice_assert {
+    ($env: expr, $cond: expr, $loc: expr, $($arg:tt)*) => {{
+        if !$cond {
+            $env.add_diag($crate::ice!((
+                $loc,
+                format!($($arg)*),
+            )));
+        }
+    }}
+}
+
 #[allow(clippy::wildcard_in_or_patterns)]
 pub fn print_stack_trace() {
     use std::backtrace::{Backtrace, BacktraceStatus};
