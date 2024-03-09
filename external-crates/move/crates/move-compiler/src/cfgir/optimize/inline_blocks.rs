@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_proc_macros::growing_stack;
+
 use crate::{
     cfgir::{
         ast::remap_labels,
@@ -34,6 +36,7 @@ fn optimize_(start: Label, blocks: &mut BasicBlocks) -> bool {
     inline_single_target_blocks(&single_target_labels, start, blocks)
 }
 
+#[growing_stack]
 fn find_single_target_labels(start: Label, blocks: &BasicBlocks) -> BTreeSet<Label> {
     use Command_ as C;
     let mut counts = BTreeMap::new();

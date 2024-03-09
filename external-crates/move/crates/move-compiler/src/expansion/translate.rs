@@ -26,6 +26,7 @@ use crate::{
 use move_command_line_common::parser::{parse_u16, parse_u256, parse_u32};
 use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -2804,6 +2805,7 @@ fn optional_types(context: &mut Context, pts_opt: Option<Vec<P::Type>>) -> Optio
 // Expressions
 //**************************************************************************************************
 
+#[growing_stack]
 fn sequence(context: &mut Context, loc: Loc, seq: P::Sequence) -> E::Sequence {
     let (puses, pitems, maybe_last_semicolon_loc, pfinal_item) = seq;
 
@@ -2831,6 +2833,7 @@ fn sequence(context: &mut Context, loc: Loc, seq: P::Sequence) -> E::Sequence {
     (use_funs, items)
 }
 
+#[growing_stack]
 fn sequence_item(context: &mut Context, sp!(loc, pitem_): P::SequenceItem) -> E::SequenceItem {
     use E::SequenceItem_ as ES;
     use P::SequenceItem_ as PS;
@@ -2873,6 +2876,7 @@ fn exps(context: &mut Context, pes: Vec<P::Exp>) -> Vec<E::Exp> {
         .collect()
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
     use E::Exp_ as EE;
     use P::Exp_ as PE;
@@ -3197,6 +3201,7 @@ fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: Box<P::Exp>) ->
     })
 }
 
+#[growing_stack]
 fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpDotted>> {
     use E::ExpDotted_ as EE;
     use P::Exp_ as PE;

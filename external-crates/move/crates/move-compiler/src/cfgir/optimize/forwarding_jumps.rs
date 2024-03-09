@@ -26,6 +26,8 @@
 // Label 2:
 //     ...
 
+use move_proc_macros::growing_stack;
+
 use crate::{
     cfgir::{
         ast::remap_labels,
@@ -123,6 +125,7 @@ fn optimize_forwarding_jumps(
     changed
 }
 
+#[growing_stack]
 fn optimize_cmd(sp!(_, cmd_): &mut Command, final_jumps: &BTreeMap<Label, Label>) -> bool {
     use Command_ as C;
     match cmd_ {

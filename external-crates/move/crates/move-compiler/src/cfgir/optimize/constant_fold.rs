@@ -14,6 +14,7 @@ use crate::{
     shared::unique_map::UniqueMap,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use std::convert::TryFrom;
 
 /// returns true if anything changed
@@ -49,6 +50,7 @@ pub fn optimize(
 
 // Some(changed) to keep
 // None to remove the cmd
+#[growing_stack]
 fn optimize_cmd(
     consts: &UniqueMap<ConstantName, Value>,
     sp!(_, cmd_): &mut Command,
@@ -79,6 +81,7 @@ fn optimize_cmd(
     })
 }
 
+#[growing_stack]
 fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
     use UnannotatedExp_ as E;
     let optimize_exp = |e| optimize_exp(consts, e);

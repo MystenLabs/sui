@@ -19,6 +19,7 @@ use crate::{
     shared::CompilationEnv,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 
 pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 
@@ -336,6 +337,7 @@ pub trait SimpleAbsInt: Sized {
     ) -> Option<Vec<<Self::State as SimpleDomain>::Value>> {
         None
     }
+    #[growing_stack]
     fn exp(
         &self,
         context: &mut Self::ExecutionContext,

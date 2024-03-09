@@ -14,6 +14,7 @@ use crate::{
 };
 use move_core_types::u256::U256;
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 
 //**************************************************************************************************
 // Functions
@@ -135,12 +136,14 @@ fn unexpected_lambda_type(context: &mut Context, loc: Loc) {
 // Expressions
 //**************************************************************************************************
 
+#[growing_stack]
 fn sequence(context: &mut Context, (_, seq): &mut T::Sequence) {
     for item in seq {
         sequence_item(context, item)
     }
 }
 
+#[growing_stack]
 fn sequence_item(context: &mut Context, item: &mut T::SequenceItem) {
     use T::SequenceItem_ as S;
     match &mut item.value {
@@ -155,6 +158,7 @@ fn sequence_item(context: &mut Context, item: &mut T::SequenceItem) {
     }
 }
 
+#[growing_stack]
 pub fn exp(context: &mut Context, e: &mut T::Exp) {
     use T::UnannotatedExp_ as E;
     match &e.exp.value {

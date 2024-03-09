@@ -6,10 +6,6 @@
 //      (<T> ",")* <T>?
 // Note that this allows an optional trailing comma.
 
-use move_command_line_common::files::FileHash;
-use move_ir_types::location::*;
-use move_symbol_pool::{symbol, Symbol};
-
 use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
@@ -18,6 +14,11 @@ use crate::{
     shared::*,
     MatchedFileCommentMap,
 };
+
+use move_command_line_common::files::FileHash;
+use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
+use move_symbol_pool::{symbol, Symbol};
 
 struct Context<'env, 'lexer, 'input> {
     package_name: Option<Symbol>,
@@ -1116,6 +1117,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
 //          | "return" <BlockLabel>? <Exp>?
 //          | "abort" "{" <Exp> "}"
 //          | "abort" <Exp>
+#[growing_stack]
 fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
     const VECTOR_IDENT: &str = "vector";
 
@@ -1701,6 +1703,7 @@ fn get_precedence(token: Tok) -> u32 {
 // This function takes the LHS of the expression as an argument, and it
 // continues parsing binary expressions as long as they have at least the
 // specified "min_prec" minimum precedence.
+#[growing_stack]
 fn parse_binop_exp(context: &mut Context, lhs: Exp, min_prec: u32) -> Result<Exp, Box<Diagnostic>> {
     let mut result = lhs;
     let mut next_tok_prec = get_precedence(context.tokens.peek());

@@ -19,6 +19,7 @@ use crate::{
     shared::{unique_map::UniqueMap, *},
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use state::*;
 use std::collections::BTreeMap;
@@ -207,6 +208,7 @@ fn unused_let_muts<T>(
 // Command
 //**************************************************************************************************
 
+#[growing_stack]
 fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
     use Command_ as C;
     match cmd_ {
@@ -343,6 +345,7 @@ fn lvalue(context: &mut Context, case: AssignCase, sp!(loc, l_): &LValue) {
     }
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, parent_e: &Exp) {
     use UnannotatedExp_ as E;
     let eloc = &parent_e.exp.loc;

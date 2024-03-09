@@ -15,6 +15,7 @@ use crate::{
     parser::ast::BinOp_,
     shared::{unique_map::UniqueMap, CompilationEnv},
 };
+use move_proc_macros::growing_stack;
 use state::{Value, *};
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
@@ -150,6 +151,7 @@ fn unused_mut_borrows(
 // Command
 //**************************************************************************************************
 
+#[growing_stack]
 fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
     use Command_ as C;
     match cmd_ {
@@ -221,6 +223,7 @@ fn lvalue(context: &mut Context, sp!(loc, l_): &LValue, value: Value) {
     }
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, parent_e: &Exp) -> Values {
     use UnannotatedExp_ as E;
     let eloc = &parent_e.exp.loc;

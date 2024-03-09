@@ -37,6 +37,7 @@ use crate::{
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 //**************************************************************************************************
@@ -393,6 +394,7 @@ mod check_valid_constant {
         },
     };
     use move_ir_types::location::*;
+    use move_proc_macros::growing_stack;
 
     pub(crate) fn signature<T: ToString, F: FnOnce() -> T>(
         context: &mut Context,
@@ -452,6 +454,7 @@ mod check_valid_constant {
         exp_(context, &e.exp)
     }
 
+    #[growing_stack]
     fn exp_(context: &mut Context, sp!(loc, e_): &T::UnannotatedExp) {
         use T::UnannotatedExp_ as E;
         const REFERENCE_CASE: &str = "References (and reference operations) are";
@@ -582,12 +585,14 @@ mod check_valid_constant {
         }
     }
 
+    #[growing_stack]
     fn sequence(context: &mut Context, (_, seq): &T::Sequence) {
         for item in seq {
             sequence_item(context, item)
         }
     }
 
+    #[growing_stack]
     fn sequence_item(context: &mut Context, sp!(loc, item_): &T::SequenceItem) {
         use T::SequenceItem_ as S;
         let error_case = match &item_ {
@@ -1168,6 +1173,7 @@ enum SeqCase {
     },
 }
 
+#[growing_stack]
 fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence {
     use N::SequenceItem_ as NS;
     use T::SequenceItem_ as TS;
@@ -1236,6 +1242,7 @@ fn exp_vec(context: &mut Context, es: Vec<N::Exp>) -> Vec<T::Exp> {
     es.into_iter().map(|e| *exp(context, Box::new(e))).collect()
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
     use N::Exp_ as NE;
     use T::UnannotatedExp_ as TE;
@@ -2286,6 +2293,7 @@ impl ExpDotted {
     }
 }
 
+#[growing_stack]
 fn process_exp_dotted(
     context: &mut Context,
     constraint_verb: Option<&str>,

@@ -24,6 +24,7 @@ use crate::{
 };
 
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
 use std::{
@@ -662,6 +663,7 @@ fn body(
     }
 }
 
+#[growing_stack]
 fn tail(
     context: &mut Context,
     block: &mut Block,
@@ -851,6 +853,7 @@ fn tail_block(
 // Value Position
 // -------------------------------------------------------------------------------------------------
 
+#[growing_stack]
 fn value(
     context: &mut Context,
     block: &mut Block,
@@ -1485,6 +1488,7 @@ fn error_exp(loc: Loc) -> H::Exp {
 // Statement Position
 // -------------------------------------------------------------------------------------------------
 
+#[growing_stack]
 fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
     use H::{Command_ as C, Statement_ as S};
     use T::UnannotatedExp_ as E;
