@@ -8,6 +8,7 @@ use crate::shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *};
 use crate::typing::core;
 use crate::{diag, ice};
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 
 //**************************************************************************************************
 // Entry
@@ -308,6 +309,7 @@ fn sequence(context: &mut Context, (uf, seq): &mut N::Sequence) {
     }
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
     match e_ {
         N::Exp_::Value(_)
@@ -379,6 +381,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
     }
 }
 
+#[growing_stack]
 fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => exp(context, e),

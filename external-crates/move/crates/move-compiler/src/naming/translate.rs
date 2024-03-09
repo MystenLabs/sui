@@ -21,6 +21,7 @@ use crate::{
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1371,6 +1372,7 @@ fn check_type_argument_arity<F: FnOnce() -> String>(
 // Exp
 //**************************************************************************************************
 
+#[growing_stack]
 fn sequence(context: &mut Context, (euse_funs, seq): E::Sequence) -> N::Sequence {
     context.new_local_scope();
     let nuse_funs = use_funs(context, euse_funs);
@@ -1379,6 +1381,7 @@ fn sequence(context: &mut Context, (euse_funs, seq): E::Sequence) -> N::Sequence
     (nuse_funs, nseq)
 }
 
+#[growing_stack]
 fn sequence_item(context: &mut Context, sp!(loc, ns_): E::SequenceItem) -> N::SequenceItem {
     use E::SequenceItem_ as ES;
     use N::SequenceItem_ as NS;
@@ -1419,6 +1422,7 @@ fn exps(context: &mut Context, es: Vec<E::Exp>) -> Vec<N::Exp> {
     es.into_iter().map(|e| *exp(context, Box::new(e))).collect()
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
     use E::Exp_ as EE;
     use N::Exp_ as NE;

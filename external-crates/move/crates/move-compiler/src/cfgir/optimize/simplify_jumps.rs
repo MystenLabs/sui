@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_proc_macros::growing_stack;
+
 use crate::{
     cfgir::cfg::MutForwardCFG,
     expansion::ast::Mutability,
@@ -31,6 +33,7 @@ pub fn optimize(
     changed
 }
 
+#[growing_stack]
 fn optimize_cmd(sp!(_, cmd_): &mut Command) -> bool {
     use Command_ as C;
     use UnannotatedExp_ as E;

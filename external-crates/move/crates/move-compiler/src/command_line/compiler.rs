@@ -26,6 +26,7 @@ use move_command_line_common::files::{
     find_filenames_vfs, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use pathdiff::diff_paths;
 use std::{
@@ -341,7 +342,7 @@ impl<'a> Compiler<'a> {
         }
 
         let (mut source_text, pprog, comments) =
-            with_large_stack!(parse_program(&mut compilation_env, maps, targets, deps,))?;
+            parse_program(&mut compilation_env, maps, targets, deps)?;
 
         source_text
             .iter_mut()
@@ -923,6 +924,7 @@ fn run(
     until: Pass,
     result_check: impl FnMut(&PassResult, &CompilationEnv),
 ) -> Result<PassResult, (Pass, Diagnostics)> {
+    #[growing_stack]
     fn rec(
         compilation_env: &mut CompilationEnv,
         pre_compiled_lib: Option<&FullyCompiledProgram>,
@@ -1025,13 +1027,7 @@ fn run(
             PassResult::Compilation(_, _) => unreachable!("ICE Pass::Compilation is >= all passes"),
         }
     }
-    with_large_stack!(rec(
-        compilation_env,
-        pre_compiled_lib,
-        cur,
-        until,
-        result_check
-    ))
+    rec(compilation_env, pre_compiled_lib, cur, until, result_check)
 }
 
 //**************************************************************************************************

@@ -48,6 +48,8 @@ fn count(signature: &FunctionSignature, cfg: &MutForwardCFG) -> BTreeSet<Var> {
 }
 
 mod count {
+    use move_proc_macros::growing_stack;
+
     use crate::{
         hlir::ast::{FunctionSignature, *},
         parser::ast::{BinOp, UnaryOp},
@@ -109,6 +111,7 @@ mod count {
         }
     }
 
+    #[growing_stack]
     pub fn command(context: &mut Context, sp!(_, cmd_): &Command) {
         use Command_ as C;
         match cmd_ {
@@ -146,6 +149,7 @@ mod count {
         }
     }
 
+    #[growing_stack]
     fn exp(context: &mut Context, parent_e: &Exp) {
         use UnannotatedExp_ as E;
         match &parent_e.exp.value {
@@ -252,6 +256,7 @@ fn eliminate(cfg: &mut MutForwardCFG, ssa_temps: BTreeSet<Var>) {
 mod eliminate {
     use crate::hlir::ast::{self as H, *};
     use move_ir_types::location::*;
+    use move_proc_macros::growing_stack;
     use std::collections::{BTreeMap, BTreeSet};
 
     pub struct Context {
@@ -272,6 +277,7 @@ mod eliminate {
         }
     }
 
+    #[growing_stack]
     pub fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
         use Command_ as C;
         match cmd_ {
@@ -338,6 +344,7 @@ mod eliminate {
         }
     }
 
+    #[growing_stack]
     fn exp(context: &mut Context, parent_e: &mut Exp) {
         use UnannotatedExp_ as E;
         match &mut parent_e.exp.value {

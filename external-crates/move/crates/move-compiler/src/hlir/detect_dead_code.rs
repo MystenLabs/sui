@@ -11,6 +11,7 @@ use crate::{
     typing::ast as T,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{collections::VecDeque, iter::Peekable};
 
@@ -289,6 +290,7 @@ fn body(context: &mut Context, seq: &VecDeque<T::SequenceItem>) {
     }
 }
 
+#[growing_stack]
 fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
     use T::UnannotatedExp_ as E;
     let T::Exp {
@@ -379,6 +381,7 @@ fn tail_block(context: &mut Context, seq: &VecDeque<T::SequenceItem>) -> Option<
 // Value Position
 // -------------------------------------------------------------------------------------------------
 
+#[growing_stack]
 fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
     use T::UnannotatedExp_ as E;
 
@@ -530,6 +533,7 @@ fn value_block(context: &mut Context, seq: &VecDeque<T::SequenceItem>) -> Option
 // Statement Position
 // -------------------------------------------------------------------------------------------------
 
+#[growing_stack]
 fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
     use T::UnannotatedExp_ as E;
     let T::Exp {

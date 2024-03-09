@@ -1665,6 +1665,7 @@ dependencies = [
  "move-core-types",
  "move-ir-to-bytecode",
  "move-ir-types",
+ "move-proc-macros",
  "move-stdlib",
  "move-symbol-pool",
  "once_cell",

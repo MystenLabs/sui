@@ -14,6 +14,7 @@ use crate::{
     },
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 type LambdaMap = BTreeMap<Var_, (N::Lambda, Vec<Type>, Type)>;
@@ -425,6 +426,7 @@ fn recolor_use_funs_(ctx: &mut Recolor, use_fun_color: &mut Color) {
     }
 }
 
+#[growing_stack]
 fn recolor_seq(ctx: &mut Recolor, (use_funs, seq): &mut N::Sequence) {
     recolor_use_funs(ctx, use_funs);
     for sp!(_, item_) in seq {
@@ -461,6 +463,7 @@ fn recolor_lvalue(ctx: &mut Recolor, sp!(_, lvalue_): &mut N::LValue) {
     }
 }
 
+#[growing_stack]
 fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
     match e_ {
         N::Exp_::Value(_) | N::Exp_::Constant(_, _) => (),
@@ -635,6 +638,7 @@ fn block(context: &mut Context, b: &mut N::Block) {
     seq(context, &mut b.seq)
 }
 
+#[growing_stack]
 fn seq(context: &mut Context, (_use_funs, seq): &mut N::Sequence) {
     for sp!(_, item_) in seq {
         match item_ {
@@ -679,6 +683,7 @@ fn lvalue(context: &mut Context, sp!(_, lv_): &mut N::LValue) {
     }
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
     match e_ {
         N::Exp_::Value(_)

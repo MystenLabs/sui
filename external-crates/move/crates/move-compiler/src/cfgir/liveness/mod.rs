@@ -16,6 +16,7 @@ use crate::{
     shared::{unique_map::UniqueMap, CompilationEnv},
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use state::*;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -80,6 +81,7 @@ fn analyze(
     (final_invariants, liveness.states)
 }
 
+#[growing_stack]
 fn command(state: &mut LivenessState, sp!(_, cmd_): &Command) {
     use Command_ as C;
     match cmd_ {
@@ -116,6 +118,7 @@ fn lvalue(state: &mut LivenessState, sp!(_, l_): &LValue) {
     }
 }
 
+#[growing_stack]
 fn exp(state: &mut LivenessState, parent_e: &Exp) {
     use UnannotatedExp_ as E;
     match &parent_e.exp.value {
@@ -176,6 +179,8 @@ pub fn last_usage(
 }
 
 mod last_usage {
+    use move_proc_macros::growing_stack;
+
     use crate::{
         cfgir::liveness::state::LivenessState,
         diag,
@@ -238,6 +243,7 @@ mod last_usage {
         }
     }
 
+    #[growing_stack]
     fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
         use Command_ as C;
         match cmd_ {
@@ -296,6 +302,7 @@ mod last_usage {
         }
     }
 
+    #[growing_stack]
     fn exp(context: &mut Context, parent_e: &mut Exp) {
         use UnannotatedExp_ as E;
         match &mut parent_e.exp.value {

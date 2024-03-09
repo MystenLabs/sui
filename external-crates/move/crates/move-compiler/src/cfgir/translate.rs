@@ -19,6 +19,7 @@ use crate::{
 use cfgir::ast::LoopInfo;
 use move_core_types::{account_address::AccountAddress as MoveAddress, runtime_value::MoveValue};
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use petgraph::{
     algo::{kosaraju_scc as petgraph_scc, toposort as petgraph_toposort},
@@ -664,6 +665,7 @@ fn function_body(
 
 type BlockList = Vec<(Label, BasicBlock)>;
 
+#[growing_stack]
 fn block(context: &mut Context, stmts: H::Block) -> BlockList {
     let (start_block, blocks) = block_(context, stmts);
     [(context.new_label(), start_block)]
@@ -672,6 +674,7 @@ fn block(context: &mut Context, stmts: H::Block) -> BlockList {
         .collect()
 }
 
+#[growing_stack]
 fn block_(context: &mut Context, stmts: H::Block) -> (BasicBlock, BlockList) {
     let mut current_block: BasicBlock = VecDeque::new();
     let mut blocks = Vec::new();
@@ -736,6 +739,7 @@ fn finalize_blocks(
     (out_label, out_blocks, block_info)
 }
 
+#[growing_stack]
 fn statement(
     context: &mut Context,
     sp!(sloc, stmt): H::Statement,
