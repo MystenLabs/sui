@@ -1,13 +1,9 @@
 module 0x8675309::M {
-    struct S { u: u64 }
-    struct R {
-        f: u64
-    }
-    struct G0<phantom T> has drop {}
-    struct G1<phantom T: key> {}
-    struct G2<phantom T> {}
-
-
+    public struct S has drop { u: u64 }
+    public struct R { f: u64 }
+    public struct G0<phantom T> {}
+    public struct G1<phantom T: key> {}
+    public struct G2<phantom T> has drop {}
 
     fun t0(s: S, s_ref: &S, s_mut: &mut S) {
         (0: u8) != (1: u128);
