@@ -1613,6 +1613,101 @@ fn binop(
     use T::UnannotatedExp_ as TE;
     let msg = || format!("Incompatible arguments to '{}'", &bop);
     let (ty, operand_ty) = match &bop.value {
+        Eq | Neq
+            if context
+                .env
+                .supports_feature(context.current_package(), FeatureGate::AutoborrowEq) =>
+        {
+            let lhs_type = core::ready_tvars(&context.subst, el.ty.clone());
+            let rhs_type = core::ready_tvars(&context.subst, er.ty.clone());
+            let (lhs_ref, lhs_inner) = match lhs_type {
+                sp!(_, Type_::Ref(lhs_mut, lhs)) => (Some(lhs_mut), *lhs),
+                lhs => (None, lhs),
+            };
+            let (rhs_ref, rhs_inner) = match rhs_type {
+                sp!(_, Type_::Ref(rhs_mut, rhs)) => (Some(rhs_mut), *rhs),
+                rhs => (None, rhs),
+            };
+            let ty = join(context, bop.loc, msg, lhs_inner.clone(), rhs_inner.clone());
+            context.add_single_type_constraint(loc, msg(), ty.clone());
+            let (out_lhs, eq_ty, out_rhs) = match (lhs_ref, rhs_ref) {
+                (None, None) => {
+                    // If both are values, they need drop but otherwise we are done.
+                    let ability_msg = Some(format!(
+                        "'{}' requires the '{}' ability as the value is consumed. Try \
+                                 borrowing the values with '&' first.'",
+                        &bop,
+                        Ability_::Drop,
+                    ));
+                    context.add_ability_constraint(
+                        el.exp.loc,
+                        ability_msg.clone(),
+                        lhs_inner,
+                        Ability_::Drop,
+                    );
+                    context.add_ability_constraint(
+                        er.exp.loc,
+                        ability_msg,
+                        rhs_inner,
+                        Ability_::Drop,
+                    );
+                    (el, ty, er)
+                }
+                (None, Some(_)) => {
+                    // If lhs is a value and rhs is a ref, we treat them as imm. refs.
+                    let out_lhs =
+                        exp_to_borrow(context, loc, /* mut_ */ false, el, ty.clone());
+                    let out_type = sp(bop.loc, Type_::Ref(false, Box::new(ty)));
+                    (out_lhs, out_type, er)
+                }
+                (Some(_), None) => {
+                    // If rhs is a value and lhs is a ref, we treat them as imm. refs.
+                    let out_rhs =
+                        exp_to_borrow(context, loc, /* mut_ */ false, er, ty.clone());
+                    let out_type = sp(bop.loc, Type_::Ref(false, Box::new(ty)));
+                    (el, out_type, out_rhs)
+                }
+                (Some(_), Some(_)) => {
+                    // We can just compute the join type in this case, because they will match or
+                    // be promoted to imm. refs.
+                    let out_type = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+                    (el, out_type, er)
+                }
+            };
+            // The `eq_ty` is used in `hlir` to do freezing.
+            return Box::new(T::exp(
+                Type_::bool(loc),
+                sp(loc, TE::BinopExp(out_lhs, bop, Box::new(eq_ty), out_rhs)),
+            ));
+        }
+        Eq | Neq => {
+            let ability_msg = Some(format!(
+                "'{}' requires the '{}' ability as the value is consumed. Try \
+                         borrowing the values with '&' first.'",
+                &bop,
+                Ability_::Drop,
+            ));
+            context.add_ability_constraint(
+                el.exp.loc,
+                ability_msg.clone(),
+                el.ty.clone(),
+                Ability_::Drop,
+            );
+            context.add_ability_constraint(er.exp.loc, ability_msg, er.ty.clone(), Ability_::Drop);
+            let ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+            context.add_single_type_constraint(loc, msg(), ty.clone());
+            (Type_::bool(loc), ty)
+        }
+
+        And | Or => {
+            let msg = || format!("Invalid argument to '{}'", &bop);
+            let lloc = el.exp.loc;
+            subtype(context, lloc, msg, el.ty.clone(), Type_::bool(bop.loc));
+            let rloc = er.exp.loc;
+            subtype(context, rloc, msg, er.ty.clone(), Type_::bool(bop.loc));
+            (Type_::bool(loc), Type_::bool(loc))
+        }
+
         Sub | Add | Mul | Mod | Div => {
             context.add_numeric_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
             context.add_numeric_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
@@ -1640,34 +1735,6 @@ fn binop(
             context.add_ordered_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
             let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
             (Type_::bool(loc), operand_ty)
-        }
-
-        Eq | Neq => {
-            let ability_msg = Some(format!(
-                "'{}' requires the '{}' ability as the value is consumed. Try \
-                         borrowing the values with '&' first.'",
-                &bop,
-                Ability_::Drop,
-            ));
-            context.add_ability_constraint(
-                el.exp.loc,
-                ability_msg.clone(),
-                el.ty.clone(),
-                Ability_::Drop,
-            );
-            context.add_ability_constraint(er.exp.loc, ability_msg, er.ty.clone(), Ability_::Drop);
-            let ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
-            context.add_single_type_constraint(loc, msg(), ty.clone());
-            (Type_::bool(loc), ty)
-        }
-
-        And | Or => {
-            let msg = || format!("Invalid argument to '{}'", &bop);
-            let lloc = el.exp.loc;
-            subtype(context, lloc, msg, el.ty.clone(), Type_::bool(bop.loc));
-            let rloc = er.exp.loc;
-            subtype(context, rloc, msg, er.ty.clone(), Type_::bool(bop.loc));
-            (Type_::bool(loc), Type_::bool(loc))
         }
 
         Range | Implies | Iff => {
@@ -2670,7 +2737,7 @@ fn exp_to_borrow(
     loc: Loc,
     mut_: bool,
     eb: Box<T::Exp>,
-    cur_ty: Type,
+    base_type: Type,
 ) -> Box<T::Exp> {
     use Type_::*;
     use T::UnannotatedExp_ as TE;
@@ -2689,7 +2756,7 @@ fn exp_to_borrow(
             TE::TempBorrow(mut_, Box::new(T::exp(eb_ty, sp(ebloc, eb_))))
         }
     };
-    let ty = sp(loc, Ref(mut_, Box::new(cur_ty)));
+    let ty = sp(loc, Ref(mut_, Box::new(base_type)));
     Box::new(T::exp(ty, sp(loc, e_)))
 }
 
