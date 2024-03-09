@@ -18,15 +18,32 @@ pub fn version() -> String {
 }
 
 #[wasm_bindgen]
-/// Deserialize the bytecode into a JSON string.
+/// Deserialize the `Uint8Array`` bytecode into a JSON object.
+///
+/// ```javascript
+/// import * as template from '@mysten/move-binary-template';
+///
+/// const json = template.deserialize( binary );
+/// console.log( json, json.identifiers );
+/// ```
 pub fn deserialize(binary: &[u8]) -> Result<JsValue, JsErr> {
     let compiled_module = CompiledModule::deserialize_with_defaults(binary)?;
     Ok(to_value(&compiled_module)?)
 }
 
 #[wasm_bindgen]
-/// Perform an operation on a bytecode string - deserialize, patch the identifiers
-/// and serialize back to a bytecode string.
+/// Update the identifiers in the module bytecode, given a map of old -> new identifiers.
+/// Returns the updated bytecode.
+///
+/// ```javascript
+/// import * as template from '@mysten/move-binary-template';
+///
+/// const updated = template.update_identifiers( binary, {
+///     'TEMPLATE': 'NEW_VALUE',
+///     'template': 'new_value',
+///     'Name':     'NewName'
+/// });
+/// ```
 pub fn update_identifiers(binary: &[u8], map: JsValue) -> Result<Box<[u8]>, JsErr> {
     let updates: HashMap<String, String> = serde_wasm_bindgen::from_value(map)?;
     let mut compiled_module = CompiledModule::deserialize_with_defaults(binary)?;
@@ -92,7 +109,24 @@ pub fn update_identifiers(binary: &[u8], map: JsValue) -> Result<Box<[u8]>, JsEr
 }
 
 #[wasm_bindgen]
-/// Updates a constant in the constant pool.
+/// Updates a constant in the constant pool. Because constants don't have names,
+/// the only way to identify them is by their type and value.
+///
+/// The value of a constant is BCS-encoded and the type is a string representation
+/// of the `SignatureToken` enum. String identifier for `SignatureToken` is a
+/// capitalized version of the type: U8, Address, Vector(Bool), Vector(U8), etc.
+///
+/// ```javascript
+/// import * as template from '@mysten/move-binary-template';
+/// import { bcs } from '@mysten/bcs';
+///
+/// let binary = template.update_constants(
+///     binary, // Uint8Array
+///     bcs.u64().serialize(0).toBytes(),      // new value
+///     bcs.u64().serialize(100000).toBytes(), // old value
+///     'U64'                                  // type
+/// );
+/// ```
 pub fn update_constants(
     binary: &[u8],
     new_value: &[u8],
@@ -128,7 +162,13 @@ pub struct Constant {
 
 #[wasm_bindgen]
 /// Convenience method to analyze the constant pool; returns all constants in order
-/// with their type and BCS value. The index can be used to update a constant.
+/// with their type and BCS value.
+///
+/// ```javascript
+/// import * as template from '@mysten/move-binary-template';
+///
+/// let consts = template.get_constants(binary);
+/// ```
 pub fn get_constants(binary: &[u8]) -> Result<JsValue, JsErr> {
     let compiled_module = CompiledModule::deserialize_with_defaults(&binary)?;
     let constants: Vec<Constant> = compiled_module
@@ -144,7 +184,7 @@ pub fn get_constants(binary: &[u8]) -> Result<JsValue, JsErr> {
 }
 
 #[wasm_bindgen]
-/// Serialize the JSON module into a HEX string.
+/// Serialize the JSON module into a `Uint8Array` (bytecode).
 pub fn serialize(json_module: JsValue) -> Result<Box<[u8]>, JsErr> {
     let compiled_module: CompiledModule = from_value(json_module)?;
     let mut binary = Vec::new();

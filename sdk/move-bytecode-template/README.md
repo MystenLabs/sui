@@ -14,7 +14,7 @@ This package is a perfect fit for the following applications:
 
 ## Example of a Template Module
 
-The following code is a close-copy of the `Coin` example in the [Move by Example](https://examples.sui.io/samples/coin.html).
+The following code is a close-copy of the `Coin` example from the [Move by Example](https://examples.sui.io/samples/coin.html) book.
 
 ```move
 module 0x0::template {
@@ -60,6 +60,9 @@ console.assert(updated != bytecode, 'identifiers were not updated!');
 To update constants in the bytecode, you can use the `update_constants` function. For each constant you need to supply new value as BCS bytes, existing value as BCS, and the type of the constant (as a string: `U8`, `U16` ... `U256`, `Address`, `Vector(U8)` and so on).
 
 ```ts
+import * as template from '@mysten/move-bytecode-template';
+import { bcs } from '@mysten/bcs';
+
 // please, manually scan the existing values, this operation is very sensitive
 console.log(template.get_constants(bytecode));
 
