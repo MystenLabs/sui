@@ -126,7 +126,7 @@ const GAS_FOR_TESTING: u64 = GAS_VALUE_FOR_TESTING;
 const DEFAULT_CHAIN_START_TIMESTAMP: u64 = 0;
 
 pub struct SuiTestAdapter<'a> {
-    pub(crate) compiled_state: CompiledState<'a>,
+    pub(crate) compiled_state: CompiledState,
     /// For upgrades: maps an upgraded package name to the original package name.
     package_upgrade_mapping: BTreeMap<Symbol, Symbol>,
     accounts: BTreeMap<String, TestAccount>,
@@ -175,7 +175,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
     type ExtraValueArgs = SuiExtraValueArgs;
     type Subcommand = SuiSubcommand<Self::ExtraValueArgs, Self::ExtraRunArgs>;
 
-    fn compiled_state(&mut self) -> &mut CompiledState<'a> {
+    fn compiled_state(&mut self) -> &mut CompiledState {
         &mut self.compiled_state
     }
 

@@ -113,7 +113,7 @@ pub enum Visitor {
 // Entry points and impls
 //**************************************************************************************************
 
-impl<'a> Compiler {
+impl Compiler {
     pub fn from_package_paths<Paths: Into<Symbol>, NamedAddress: Into<Symbol>>(
         targets: Vec<PackagePaths<Paths, NamedAddress>>,
         deps: Vec<PackagePaths<Paths, NamedAddress>>,
@@ -412,7 +412,7 @@ impl<'a> Compiler {
     }
 }
 
-impl<'a, const P: Pass> SteppedCompiler<P> {
+impl<const P: Pass> SteppedCompiler<P> {
     fn run_impl<const TARGET: Pass>(self) -> Result<SteppedCompiler<TARGET>, (Pass, Diagnostics)> {
         assert!(P > EMPTY_COMPILER);
         assert!(self.program.is_some());
@@ -554,7 +554,7 @@ ast_stepped_compilers!(
     (PASS_CFGIR, cfgir, CFGIR, at_cfgir, new_at_cfgir)
 );
 
-impl<'a> SteppedCompiler<PASS_COMPILATION> {
+impl SteppedCompiler<PASS_COMPILATION> {
     pub fn into_compiled_units(self) -> (Vec<AnnotatedCompiledUnit>, Diagnostics) {
         let Self {
             compilation_env: _,
