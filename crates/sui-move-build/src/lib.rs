@@ -20,7 +20,7 @@ use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
     diagnostics::{report_diagnostics_to_buffer, report_warnings, Diagnostics, FilesSourceText},
-    sui_mode::linters::LINT_WARNING_PREFIX,
+    linters::LINT_WARNING_PREFIX,
 };
 use move_core_types::{
     account_address::AccountAddress,

@@ -103,6 +103,10 @@ pub struct BuildConfig {
     /// If `true`, disable linters
     #[clap(long, global = true)]
     pub no_lint: bool,
+
+    /// If `true`, enables extra linters
+    #[clap(long, global = true)]
+    pub lint: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]

@@ -28,8 +28,9 @@ use move_compiler::{
     compiled_unit::{AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule},
     diagnostics::FilesSourceText,
     editions::Flavor,
+    linters::{self, LintLevel},
     shared::{NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
-    sui_mode::linters::{known_filters, linter_visitors},
+    sui_mode::{self},
     Compiler,
 };
 use move_docgen::{Docgen, DocgenOptions};
@@ -480,7 +481,13 @@ impl CompiledPackage {
         let mut paths = src_deps;
         paths.push(sources_package_paths.clone());
 
-        let lint = !resolution_graph.build_options.no_lint;
+        let lint_level = if resolution_graph.build_options.no_lint {
+            None
+        } else if resolution_graph.build_options.lint {
+            Some(LintLevel::All)
+        } else {
+            Some(LintLevel::Default)
+        };
         let sui_mode = resolution_graph
             .build_options
             .default_flavor
@@ -490,11 +497,16 @@ impl CompiledPackage {
             .unwrap()
             .set_flags(flags);
         if sui_mode {
-            let (filter_attr_name, filters) = known_filters();
+            let (filter_attr_name, filters) = sui_mode::linters::known_filters();
             compiler = compiler.add_custom_known_filters(filter_attr_name, filters);
-            if lint {
-                compiler = compiler.add_visitors(linter_visitors())
+            if let Some(lint_level) = lint_level {
+                compiler = compiler.add_visitors(sui_mode::linters::linter_visitors(lint_level))
             }
+        }
+        let (filter_attr_name, filters) = linters::known_filters();
+        compiler = compiler.add_custom_known_filters(filter_attr_name, filters);
+        if let Some(lint_level) = lint_level {
+            compiler = compiler.add_visitors(linters::linter_visitors(lint_level))
         }
         Ok(BuildResult {
             root_package_name,
