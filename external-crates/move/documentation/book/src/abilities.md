@@ -181,11 +181,11 @@ fun invalid_unused() {
     // Invalid, Cannot ignore 'Cup<NoAbilities>' because it does not have 'drop'.
     // Even though 'Cup' was declared with 'drop', the instance does not have 'drop'
     // because 'NoAbilities' does not have 'drop'
-    Cup<NoAbilities> { item: NoAbilities {}};
+    Cup<NoAbilities> { item: NoAbilities {} };
 }
 
 fun invalid_left_in_local(): u64 {
-    let n = Cup<NoAbilities> { item: NoAbilities {}};
+    let n = Cup<NoAbilities> { item: NoAbilities {} };
     // Invalid return: 'c_n' has a value
     // and 'Cup<NoAbilities>' does not have 'drop'
     0
@@ -218,18 +218,13 @@ public struct NoAbilities {}
 public struct MyData<T> has key { f: T }
 
 fun valid(addr: address) acquires MyData {
-     // Valid, 'MyData<u64>' has 'key'
-    let has_resource = exists<MyData<u64>>(addr);
-    if (has_resource) {
-        // Valid, 'MyData<u64>' has 'key'
-        let r = borrow_global_mut<MyData<u64>>(addr)
-        r.f = r.f + 1;
-    }
+    // Valid, 'MyData<u64>' has 'key'
+    transfer(addr, MyData<u64> { f: 0 });
 }
 
 fun invalid(addr: address) {
    // Invalid, 'MyData<NoAbilities>' does not have 'key'
-   let has_it = exists<MyData<NoAbilities>>(addr);
+   transfer(addr, MyData<NoAbilities> { f: NoAbilities {} })
    // Invalid, 'MyData<NoAbilities>' does not have 'key'
    borrow<NoAbilities>(addr);
    // Invalid, 'MyData<NoAbilities>' does not have 'key'
@@ -237,7 +232,5 @@ fun invalid(addr: address) {
 }
 
 // Mock storage operations
-native public fun exists<T: key>(addr: address): bool;
-native public fun borrow<T: key>(addr: address): &T;
-native public fun borrow_mut<T: key>(addr: address): &mut T;
+native public fun transfer<T: key>(addr: address, value: T);
 ```

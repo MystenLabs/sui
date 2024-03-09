@@ -4,8 +4,7 @@
 
 ## Getting Started
 
-- [Modules and Scripts](modules-and-scripts.md)
-- [Move Tutorial](creating-coins.md)
+- [Modules](modules.md)
 
 ## Primitive Types
 
@@ -30,16 +29,13 @@
 - [Generics](generics.md)
 - [Type Abilities](abilities.md)
 - [Uses and Aliases](uses.md)
-- [Friends](friends.md)
 - [Packages](packages.md)
 - [Unit Tests](unit-testing.md)
 
-## Global Storage
-
-- [Global Storage Structure](global-storage-structure.md)
-- [Global Storage Operators](global-storage-operators.md)
-
 ## Reference
 
-- [Standard Library](standard-library.md)
 - [Coding Conventions](coding-conventions.md)
+
+## Deprecated
+
+- [Friends](friends.md)
