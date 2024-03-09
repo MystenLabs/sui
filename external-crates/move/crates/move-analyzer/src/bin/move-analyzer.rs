@@ -138,9 +138,12 @@ fn main() {
         // to be available right after the client is initialized.
         if let Some(uri) = initialize_params.root_uri {
             if let Some(p) = symbols::SymbolicatorRunner::root_dir(&uri.to_file_path().unwrap()) {
-                if let Ok((Some(new_symbols), _)) =
-                    symbols::get_symbols(ide_files_root.clone(), p.as_path(), lint)
-                {
+                if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
+                    &mut BTreeMap::new(),
+                    ide_files_root.clone(),
+                    p.as_path(),
+                    lint,
+                ) {
                     let mut old_symbols = symbols.lock().unwrap();
                     (*old_symbols).merge(new_symbols);
                 }

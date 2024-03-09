@@ -799,26 +799,7 @@ pub(crate) fn make_source_and_deps_for_compiler(
     /* sources */ PackagePaths,
     /* deps */ Vec<(PackagePaths, ModuleFormat)>,
 )> {
-    let deps_package_paths = deps
-        .into_iter()
-        .map(|dep| {
-            let paths = dep
-                .source_paths
-                .into_iter()
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect::<Vec<_>>();
-            let named_address_map = named_address_mapping_for_compiler(dep.address_mapping);
-            Ok((
-                PackagePaths {
-                    name: Some((dep.name, dep.compiler_config)),
-                    paths,
-                    named_address_map,
-                },
-                dep.module_format,
-            ))
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let deps_package_paths = make_deps_for_compiler_internal(deps)?;
     let root_named_addrs = apply_named_address_renaming(
         root.source_package.package.name,
         named_address_mapping_for_compiler(&root.resolved_table),
@@ -837,4 +818,29 @@ pub(crate) fn make_source_and_deps_for_compiler(
         named_address_map: root_named_addrs,
     };
     Ok((source_package_paths, deps_package_paths))
+}
+
+pub(crate) fn make_deps_for_compiler_internal(
+    deps: Vec<DependencyInfo>,
+) -> Result<Vec<(PackagePaths, ModuleFormat)>> {
+    Ok(deps
+        .into_iter()
+        .map(|dep| {
+            let paths = dep
+                .source_paths
+                .into_iter()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+            let named_address_map = named_address_mapping_for_compiler(dep.address_mapping);
+            Ok((
+                PackagePaths {
+                    name: Some((dep.name, dep.compiler_config)),
+                    paths,
+                    named_address_map,
+                },
+                dep.module_format,
+            ))
+        })
+        .collect::<Result<Vec<_>>>()?)
 }

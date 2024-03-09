@@ -88,11 +88,12 @@ use vfs::{
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
+    command_line::compiler::{construct_pre_compiled_lib, FullyCompiledProgram},
     editions::Flavor,
     expansion::ast::{self as E, Fields, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
     parser::ast::{self as P, StructName},
-    shared::{Identifier, Name},
+    shared::{unique_map::UniqueMap, Identifier, Name},
     typing::ast::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
         ModuleCall, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
@@ -101,7 +102,8 @@ use move_compiler::{
 };
 use move_ir_types::location::*;
 use move_package::{
-    compilation::build_plan::BuildPlan, resolution::resolution_graph::ResolvedGraph,
+    compilation::{build_plan::BuildPlan, compiled_package::ModuleFormat},
+    resolution::resolution_graph::ResolvedGraph,
     source_package::parsed_manifest::FileName,
 };
 use move_symbol_pool::Symbol;
@@ -675,6 +677,9 @@ impl SymbolicatorRunner {
                 let mut missing_manifests = BTreeSet::new();
                 // infinite loop to wait for symbolication requests
                 eprintln!("starting symbolicator runner loop");
+                // keep pre-compiles package dependencies around, populating this map
+                // as packages get compiled
+                let mut pkg_dependencies = BTreeMap::new();
                 loop {
                     let starting_path_opt = {
                         // hold the lock only as long as it takes to get the data, rather than through
@@ -719,8 +724,12 @@ impl SymbolicatorRunner {
                             continue;
                         }
                         eprintln!("symbolication started");
-                        match get_symbols(ide_files_root.clone(), root_dir.unwrap().as_path(), lint)
-                        {
+                        match get_symbols(
+                            &mut pkg_dependencies,
+                            ide_files_root.clone(),
+                            root_dir.unwrap().as_path(),
+                            lint,
+                        ) {
                             Ok((symbols_opt, lsp_diagnostics)) => {
                                 eprintln!("symbolication finished");
                                 if let Some(new_symbols) = symbols_opt {
@@ -958,6 +967,7 @@ impl Symbols {
 /// actually (re)computed and the diagnostics are returned, the old symbolic information should
 /// be retained even if it's getting out-of-date.
 pub fn get_symbols(
+    pkg_deps: &mut BTreeMap<PathBuf, Arc<FullyCompiledProgram>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
     lint: bool,
@@ -997,63 +1007,119 @@ pub fn get_symbols(
         file_id_to_lines.insert(id, lines);
     }
 
+    let compiler_flags = resolution_graph.build_options.compiler_flags().clone();
     let build_plan = BuildPlan::create(resolution_graph)?;
     let mut parsed_ast = None;
     let mut typed_ast = None;
     let mut diagnostics = None;
-    build_plan.compile_with_driver(&mut std::io::sink(), |mut compiler| {
-        compiler = compiler.set_vfs_root(overlay_fs_root.clone());
-        // extract expansion AST
-        let (files, compilation_result) = compiler.run::<PASS_PARSER>()?;
-        let (_, compiler) = match compilation_result {
-            Ok(v) => v,
-            Err((_pass, diags)) => {
-                let failure = true;
-                diagnostics = Some((diags, failure));
-                eprintln!("parsed AST compilation failed");
-                return Ok((files, vec![]));
+
+    let mut dependencies = build_plan.compute_dependencies();
+    let compiled_libs = if let Ok(deps_package_paths) = dependencies.make_deps_for_compiler() {
+        // Partition deps_package according whether src is available
+        let src_deps = deps_package_paths
+            .iter()
+            .filter_map(|(p, b)| {
+                if let ModuleFormat::Source = b {
+                    Some(p.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let src_names = src_deps
+            .iter()
+            .filter_map(|p| p.name.as_ref().map(|(n, _)| *n))
+            .collect::<BTreeSet<_>>();
+
+        let compiled_deps = match pkg_deps.get(pkg_path) {
+            Some(d) => {
+                eprintln!("found pre-compiled libs for {:?}", pkg_path);
+                Some(d.clone())
+            }
+            None => {
+                if let Ok(res) = construct_pre_compiled_lib(src_deps, None, compiler_flags) {
+                    if let Ok(lib) = res {
+                        eprintln!("created pre-compiled libs for {:?}", pkg_path);
+                        let res = Arc::new(lib);
+                        pkg_deps.insert(pkg_path.to_path_buf(), res.clone());
+                        Some(res)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
             }
         };
-        eprintln!("compiled to parsed AST");
-        let (compiler, parsed_program) = compiler.into_ast();
-        parsed_ast = Some(parsed_program.clone());
+        if compiled_deps.is_some() {
+            // if successful, remove only source deps but keep bytecode deps as they
+            // were not used to construct pre-compiled lib in the first place
+            dependencies.remove_deps(src_names);
+        }
+        compiled_deps
+    } else {
+        None
+    };
 
-        // extract typed AST
-        let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
-        let compiler = match compilation_result {
-            Ok(v) => v,
-            Err((_pass, diags)) => {
-                let failure = true;
-                diagnostics = Some((diags, failure));
-                eprintln!("typed AST compilation failed");
-                return Ok((files, vec![]));
-            }
-        };
-        eprintln!("compiled to typed AST");
-        let (compiler, typed_program) = compiler.into_ast();
-        typed_ast = Some(typed_program.clone());
+    build_plan.compile_with_driver_and_deps(
+        dependencies,
+        &mut std::io::sink(),
+        |mut compiler| {
+            compiler = compiler.set_vfs_root(overlay_fs_root.clone());
+            compiler = compiler.set_pre_compiled_lib_opt(compiled_libs.clone());
+            // extract expansion AST
+            let (files, compilation_result) = compiler.run::<PASS_PARSER>()?;
+            let (_, compiler) = match compilation_result {
+                Ok(v) => v,
+                Err((_pass, diags)) => {
+                    let failure = true;
+                    diagnostics = Some((diags, failure));
+                    eprintln!("parsed AST compilation failed");
+                    return Ok((files, vec![]));
+                }
+            };
+            eprintln!("compiled to parsed AST");
+            let (compiler, parsed_program) = compiler.into_ast();
+            parsed_ast = Some(parsed_program.clone());
 
-        // compile to bytecode for accurate diags
-        eprintln!("compiling to bytecode");
-        let compilation_result = compiler.at_typing(typed_program).build();
-        let (units, diags) = match compilation_result {
-            Ok(v) => v,
-            Err((_pass, diags)) => {
+            // extract typed AST
+            let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
+            let compiler = match compilation_result {
+                Ok(v) => v,
+                Err((_pass, diags)) => {
+                    let failure = true;
+                    diagnostics = Some((diags, failure));
+                    eprintln!("typed AST compilation failed");
+                    return Ok((files, vec![]));
+                }
+            };
+            eprintln!("compiled to typed AST");
+            let (compiler, typed_program) = compiler.into_ast();
+            typed_ast = Some(typed_program.clone());
+
+            // compile to bytecode for accurate diags
+            eprintln!("compiling to bytecode");
+            let compilation_result = compiler.at_typing(typed_program).build();
+            let (units, diags) = match compilation_result {
+                Ok(v) => v,
+                Err((_pass, diags)) => {
+                    let failure = false;
+                    diagnostics = Some((diags, failure));
+                    eprintln!("bytecode compilation failed");
+                    return Ok((files, vec![]));
+                }
+            };
+            // warning diagnostics (if any) since compilation succeeded
+            if !diags.is_empty() {
+                // assign only if non-empty, otherwise return None to reset previous diagnostics
                 let failure = false;
                 diagnostics = Some((diags, failure));
-                eprintln!("bytecode compilation failed");
-                return Ok((files, vec![]));
             }
-        };
-        // warning diagnostics (if any) since compilation succeeded
-        if !diags.is_empty() {
-            // assign only if non-empty, otherwise return None to reset previous diagnostics
-            let failure = false;
-            diagnostics = Some((diags, failure));
-        }
-        eprintln!("compiled to bytecode");
-        Ok((files, units))
-    })?;
+            eprintln!("compiled to bytecode");
+            Ok((files, units))
+        },
+    )?;
 
     let mut ide_diagnostics = lsp_empty_diagnostics(&file_name_mapping);
     if let Some((compiler_diagnostics, failure)) = diagnostics {
@@ -1077,7 +1143,7 @@ pub fn get_symbols(
 
     // uwrap's are safe - this function returns earlier (during diagnostics processing)
     // when failing to produce the ASTs
-    let typed_modules = &typed_ast.unwrap().inner.modules;
+    let typed_modules = typed_ast.unwrap().inner.modules;
 
     let mut mod_outer_defs = BTreeMap::new();
     let mut mod_use_defs = BTreeMap::new();
@@ -1085,28 +1151,32 @@ pub fn get_symbols(
     let mut references = BTreeMap::new();
     let mut def_info = BTreeMap::new();
 
-    for (pos, module_ident, module_def) in typed_modules {
-        let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
-        let (defs, symbols) = get_mod_outer_defs(
-            &pos,
-            &sp(pos, *module_ident),
-            module_def,
+    pre_process_typed_modules(
+        &typed_modules,
+        &files,
+        &file_id_mapping,
+        &file_id_to_lines,
+        &file_name_mapping,
+        &mut mod_outer_defs,
+        &mut mod_use_defs,
+        &mut file_mods,
+        &mut references,
+        &mut def_info,
+    );
+
+    if let Some(libs) = compiled_libs.clone() {
+        pre_process_typed_modules(
+            &libs.typing.inner.modules,
             &files,
             &file_id_mapping,
             &file_id_to_lines,
+            &file_name_mapping,
+            &mut mod_outer_defs,
+            &mut mod_use_defs,
+            &mut file_mods,
             &mut references,
             &mut def_info,
         );
-
-        let cloned_defs = defs.clone();
-        let path = file_name_mapping.get(&cloned_defs.fhash.clone()).unwrap();
-        file_mods
-            .entry(path.to_path_buf())
-            .or_insert_with(BTreeSet::new)
-            .insert(cloned_defs);
-
-        mod_outer_defs.insert(mod_ident_str.clone(), defs);
-        mod_use_defs.insert(mod_ident_str, symbols);
     }
 
     eprintln!("get_symbols loaded file_mods length: {}", file_mods.len());
@@ -1130,6 +1200,13 @@ pub fn get_symbols(
         &mut mod_use_defs,
         &mut mod_to_alias_lengths,
     );
+    if let Some(libs) = compiled_libs.clone() {
+        parsing_symbolicator.prog_symbols(
+            &libs.parser,
+            &mut mod_use_defs,
+            &mut mod_to_alias_lengths,
+        );
+    }
 
     let mut typing_symbolicator = TypingSymbolicator {
         mod_outer_defs: &mod_outer_defs,
@@ -1143,6 +1220,83 @@ pub fn get_symbols(
         alias_lengths: &BTreeMap::new(),
     };
 
+    process_typed_modules(
+        &typed_modules,
+        &source_files,
+        &mod_to_alias_lengths,
+        &mut typing_symbolicator,
+        &mut file_use_defs,
+        &mut mod_use_defs,
+    );
+    if let Some(libs) = compiled_libs {
+        process_typed_modules(
+            &libs.typing.inner.modules,
+            &source_files,
+            &mod_to_alias_lengths,
+            &mut typing_symbolicator,
+            &mut file_use_defs,
+            &mut mod_use_defs,
+        );
+    }
+
+    let symbols = Symbols {
+        references,
+        file_use_defs,
+        file_name_mapping,
+        file_mods,
+        def_info,
+    };
+
+    eprintln!("get_symbols load complete");
+
+    Ok((Some(symbols), ide_diagnostics))
+}
+
+fn pre_process_typed_modules(
+    typed_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
+    files: &SimpleFiles<Symbol, String>,
+    file_id_mapping: &HashMap<FileHash, usize>,
+    file_id_to_lines: &HashMap<usize, Vec<String>>,
+    file_name_mapping: &BTreeMap<FileHash, PathBuf>,
+    mod_outer_defs: &mut BTreeMap<String, ModuleDefs>,
+    mod_use_defs: &mut BTreeMap<String, UseDefMap>,
+    file_mods: &mut BTreeMap<PathBuf, BTreeSet<ModuleDefs>>,
+    references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
+    def_info: &mut BTreeMap<DefLoc, DefInfo>,
+) {
+    for (pos, module_ident, module_def) in typed_modules {
+        let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
+        let (defs, symbols) = get_mod_outer_defs(
+            &pos,
+            &sp(pos, *module_ident),
+            module_def,
+            files,
+            file_id_mapping,
+            file_id_to_lines,
+            references,
+            def_info,
+        );
+
+        let cloned_defs = defs.clone();
+        let path = file_name_mapping.get(&cloned_defs.fhash.clone()).unwrap();
+        file_mods
+            .entry(path.to_path_buf())
+            .or_insert_with(BTreeSet::new)
+            .insert(cloned_defs);
+
+        mod_outer_defs.insert(mod_ident_str.clone(), defs);
+        mod_use_defs.insert(mod_ident_str, symbols);
+    }
+}
+
+fn process_typed_modules<'a>(
+    typed_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
+    source_files: &BTreeMap<FileHash, (Symbol, String)>,
+    mod_to_alias_lengths: &'a BTreeMap<String, BTreeMap<Position, usize>>,
+    typing_symbolicator: &mut TypingSymbolicator<'a>,
+    file_use_defs: &mut BTreeMap<PathBuf, UseDefMap>,
+    mod_use_defs: &mut BTreeMap<String, UseDefMap>,
+) {
     for (pos, module_ident, module_def) in typed_modules {
         let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         typing_symbolicator.use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
@@ -1157,23 +1311,12 @@ pub fn get_symbols(
         let fpath_buffer =
             dunce::canonicalize(fpath.as_str()).unwrap_or_else(|_| PathBuf::from(fpath.as_str()));
 
+        let use_defs = std::mem::replace(&mut typing_symbolicator.use_defs, UseDefMap::new());
         file_use_defs
             .entry(fpath_buffer)
             .or_insert_with(UseDefMap::new)
-            .extend(typing_symbolicator.use_defs.elements());
+            .extend(use_defs.elements());
     }
-
-    let symbols = Symbols {
-        references,
-        file_use_defs,
-        file_name_mapping,
-        file_mods,
-        def_info,
-    };
-
-    eprintln!("get_symbols load complete");
-
-    Ok((Some(symbols), ide_diagnostics))
 }
 
 fn file_sources(
@@ -3519,7 +3662,8 @@ fn docstring_test() {
     path.push("tests/symbols");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) =
+        get_symbols(&mut BTreeMap::new(), ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -3790,7 +3934,8 @@ fn symbols_test() {
     path.push("tests/symbols");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) =
+        get_symbols(&mut BTreeMap::new(), ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -4831,7 +4976,8 @@ fn const_test() {
     path.push("tests/symbols");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) =
+        get_symbols(&mut BTreeMap::new(), ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5071,7 +5217,8 @@ fn imports_test() {
     path.push("tests/symbols");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) =
+        get_symbols(&mut BTreeMap::new(), ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5273,7 +5420,8 @@ fn module_access_test() {
     path.push("tests/symbols");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) =
+        get_symbols(&mut BTreeMap::new(), ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5428,7 +5576,8 @@ fn parse_error_test() {
     path.push("tests/parse-error");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) =
+        get_symbols(&mut BTreeMap::new(), ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5513,7 +5662,8 @@ fn parse_error_with_deps_test() {
     path.push("tests/parse-error-dep");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) =
+        get_symbols(&mut BTreeMap::new(), ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5562,7 +5712,8 @@ fn pretype_error_test() {
     path.push("tests/pre-type-error");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) =
+        get_symbols(&mut BTreeMap::new(), ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5597,7 +5748,8 @@ fn pretype_error_with_deps_test() {
     path.push("tests/pre-type-error-dep");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) =
+        get_symbols(&mut BTreeMap::new(), ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -5695,7 +5847,8 @@ fn dot_call_test() {
     path.push("tests/move-2024");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) =
+        get_symbols(&mut BTreeMap::new(), ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -6025,7 +6178,8 @@ fn mod_ident_uniform_test() {
     path.push("tests/mod-ident-uniform");
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
-    let (symbols_opt, _) = get_symbols(ide_files_layer, path.as_path(), false).unwrap();
+    let (symbols_opt, _) =
+        get_symbols(&mut BTreeMap::new(), ide_files_layer, path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();

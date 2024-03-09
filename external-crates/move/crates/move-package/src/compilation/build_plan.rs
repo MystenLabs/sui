@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    compilation::compiled_package::CompiledPackage,
+    compilation::compiled_package::{make_deps_for_compiler_internal, CompiledPackage},
     resolution::resolution_graph::Package,
     resolution::resolution_graph::ResolvedGraph,
     source_package::{
@@ -18,8 +18,10 @@ use move_compiler::{
         report_diagnostics_to_buffer_with_env_color, report_warnings, FilesSourceText, Migration,
     },
     editions::Edition,
+    shared::PackagePaths,
     Compiler,
 };
+use move_symbol_pool::Symbol;
 use std::{
     collections::BTreeSet,
     io::Write,
@@ -40,10 +42,21 @@ pub struct BuildPlan {
     resolution_graph: ResolvedGraph,
 }
 
-struct CompilationDependencies<'a> {
+pub struct CompilationDependencies<'a> {
     root_package: Package,
     project_root: PathBuf,
     transitive_dependencies: Vec<DependencyInfo<'a>>,
+}
+
+impl<'a> CompilationDependencies<'a> {
+    pub fn remove_deps(&mut self, names: BTreeSet<Symbol>) {
+        self.transitive_dependencies
+            .retain(|d| !names.contains(&d.name));
+    }
+
+    pub fn make_deps_for_compiler(&self) -> Result<Vec<(PackagePaths, ModuleFormat)>> {
+        make_deps_for_compiler_internal(self.transitive_dependencies.clone())
+    }
 }
 
 impl BuildPlan {
@@ -131,7 +144,7 @@ impl BuildPlan {
         })
     }
 
-    fn compute_dependencies(&self) -> CompilationDependencies {
+    pub fn compute_dependencies(&self) -> CompilationDependencies {
         let root_package = &self.resolution_graph.package_table[&self.root];
         let project_root = match &self.resolution_graph.build_options.install_dir {
             Some(under_path) => under_path.clone(),
@@ -187,6 +200,19 @@ impl BuildPlan {
     pub fn compile_with_driver<W: Write>(
         &self,
         writer: &mut W,
+        compiler_driver: impl FnMut(
+            Compiler,
+        )
+            -> anyhow::Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
+    ) -> Result<CompiledPackage> {
+        let dependencies = self.compute_dependencies();
+        self.compile_with_driver_and_deps(dependencies, writer, compiler_driver)
+    }
+
+    pub fn compile_with_driver_and_deps<W: Write>(
+        &self,
+        dependencies: CompilationDependencies,
+        writer: &mut W,
         mut compiler_driver: impl FnMut(
             Compiler,
         )
@@ -196,7 +222,7 @@ impl BuildPlan {
             root_package,
             project_root,
             transitive_dependencies,
-        } = self.compute_dependencies();
+        } = dependencies;
 
         let compiled = CompiledPackage::build_all(
             writer,
