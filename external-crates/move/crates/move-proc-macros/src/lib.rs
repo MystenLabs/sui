@@ -82,6 +82,9 @@ pub fn test_variant_order(attr: TokenStream, item: TokenStream) -> TokenStream {
     deriv.into()
 }
 
+const RED_ZONE: usize = 1024 * 1024; // 1MB
+const STACK_PER_CALL: usize = 1024 * 1024 * 8; // 8MB
+
 /// This macro uses `stacker` to grow the stack of any function annotated with it. It does this by
 /// rewriting the function body to bump the stack pointer up by 1MB per call. The intent it to use
 /// this in the compiler to avoid stack overflows in many places that Rust was previously
@@ -90,10 +93,6 @@ pub fn test_variant_order(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// The `grow_stack` call takes two arguments, `RED_ZONE` and `STACK_SIZE`. It then checks to see
 /// if we're within `RED_ZONE` bytes of the end of the stack, and will allocate a new stack of at
 /// least `STACK_SIZE` bytes if so.
-
-const RED_ZONE: usize = 1024 * 1024; // 1MB
-const STACK_PER_CALL: usize = 1024 * 1024 * 8; // 8MB
-
 #[proc_macro_attribute]
 pub fn growing_stack(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input_fn = parse_macro_input!(item as ItemFn);
