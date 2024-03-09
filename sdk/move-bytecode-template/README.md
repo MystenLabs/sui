@@ -43,19 +43,66 @@ module 0x0::template {
 }
 ```
 
+To update the identifiers, you can use the `update_identifiers` function.
+
+```ts
+import { fromHEX, update_identifiers } from '@mysten/move-bytecode-template';
+
+let bytecode = /* ... */;
+let updated = update_identifiers(bytecode, {
+    "TEMPLATE": "MY_MODULE",
+    "template": "my_module"
+});
+
+console.assert(updated != bytecode, 'identifiers were not updated!');
+```
+
+To update constants in the bytecode, you can use the `update_constants` function. For each constant you need to supply new value as BCS bytes, existing value as BCS, and the type of the constant (as a string: `U8`, `U16` ... `U256`, `Address`, `Vector(U8)` and so on).
+
+```ts
+// please, manually scan the existing values, this operation is very sensitive
+console.log(template.get_constants(bytecode));
+
+let updated;
+
+// Update DECIMALS
+updated = update_constants(
+    bytecode,
+    bcs.u8().serialize(3).toBytes(), // new value
+    bcs.u8().serialize(6).toBytes(), // current value
+    'U8',                            // type of the constant
+);
+
+// Update SYMBOL
+updated = update_constants(
+    updated,
+    bcs.vector(bcs.string()).serialize('MYC').toBytes(), // new value
+    bcs.vector(bcs.string()).serialize('TMPL').toBytes(), // current value
+    'Vector(U8)', // type of the constant
+);
+
+// Update NAME
+updated = update_constants(
+    updated,
+    bcs.vector(bcs.string()).serialize('My Coin').toBytes(), // new value
+    bcs.vector(bcs.string()).serialize('Template Coin').toBytes(), // current value
+    'Vector(U8)', // type of the constant
+);
+```
+
 ## Usage in Web applications
 
 The package consists of code and a wasm binary. While the former can be imported directly, the latter should be made available in static / public assets as a Web application. Initialization needs to be performed via a URL, and once completed, other functions become available.
 
 ```ts
-import init, initSync, * as wasm from '@mysten/move-bytecode-template';
+import init, initSync, * as template from '@mysten/move-bytecode-template';
 
 await init('path/to/move_binary_format_bg.wasm');
 // alternatively initSync(...);
 
-let version = wasm.version();
-let json = wasm.deserialize('a11ceb0b06....');
-let bytes = wasm.serialize(json);
+let version = template.version();
+let json = template.deserialize(fromHEX('a11ceb0b06....'));
+let bytes = template.serialize(json);
 
 console.assert(json == bytes, '(de)serialization failed!');
 ```
@@ -65,7 +112,7 @@ console.assert(json == bytes, '(de)serialization failed!');
 To use this package with Vite, you need to import the source file and the wasm binary.
 
 ```ts
-import init, * as bytecodeTemplate from "@mysten/move-bytecode-template";
+import init, * as template from "@mysten/move-bytecode-template";
 import url from '@mysten/move-bytecode-template/move_bytecode_template_bg.wasm?url';
 ```
 
@@ -78,11 +125,11 @@ await init(url);
 Lastly, once the package is initialized, you can use the functions as described in the previous section.
 
 ```ts
-const template = "a11ceb0b06....";
+const templateBytecode = fromHEX("a11ceb0b06....");
 
-bytecodeTemplate.deserialize(template);
-bytecodeTemplate.version();
-bytecodeTemplate.update_identifiers(template, {
+template.deserialize(templateBytecode);
+template.version();
+template.update_identifiers(templateBytecode, {
     "TEMPLATE": "MY_MODULE",
     "template": "my_module"
 });
