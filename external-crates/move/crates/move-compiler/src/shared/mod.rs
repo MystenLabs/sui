@@ -462,10 +462,7 @@ impl CompilationEnv {
         attr_name: FilterPrefix,
         filters: Vec<WarningFilter>,
     ) -> anyhow::Result<()> {
-        let filter_attr = self
-            .known_filters
-            .entry(attr_name)
-            .or_insert_with(BTreeMap::new);
+        let filter_attr = self.known_filters.entry(attr_name).or_default();
         for filter in filters {
             let (prefix, n) = match filter {
                 WarningFilter::All(prefix) => (prefix, Symbol::from(FILTER_ALL)),
