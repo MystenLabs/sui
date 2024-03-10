@@ -65,7 +65,7 @@ module my_first_package::my_module {
             swords_created: 0,
         };
         // Transfer the forge object to the module/package publisher
-        transfer::transfer(admin, tx_context::sender(ctx));
+        transfer::public_transfer(admin, tx_context::sender(ctx));
     }
 
     // Part 4: Accessors required to read the struct attributes
