@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 36;
+const MAX_PROTOCOL_VERSION: u64 = 39;
 
 // Record history of protocol version allocations here:
 //
@@ -108,6 +108,9 @@ const MAX_PROTOCOL_VERSION: u64 = 36;
 // Version 36: Enable group operations native functions in devnet.
 //             Enable shared object deletion in mainnet.
 //             Set the consensus accepted transaction size and the included transactions size in the proposed block.
+// Version 37: Reject entry functions with mutable Random.
+// Version 38: Allow skipped epochs for randomness updates.
+// Version 39: Extra version to fix `test_upgrade_compatibility` simtest.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -382,6 +385,10 @@ struct FeatureFlags {
     // Enable native functions for group operations.
     #[serde(skip_serializing_if = "is_false")]
     enable_group_ops_native_functions: bool,
+
+    // Reject functions with mutable Random.
+    #[serde(skip_serializing_if = "is_false")]
+    reject_mutable_random_on_entry_functions: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -923,6 +930,10 @@ pub struct ProtocolConfig {
     /// protocol.
     random_beacon_reduction_allowed_delta: Option<u16>,
 
+    /// Minimum number of shares below wich voting weights will not be reduced for the
+    /// random beacon protocol.
+    random_beacon_reduction_lower_bound: Option<u32>,
+
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
     /// `max_tx_size_bytes` with some additional headroom.
     consensus_max_transaction_size_bytes: Option<u64>,
@@ -1149,6 +1160,10 @@ impl ProtocolConfig {
 
     pub fn enable_group_ops_native_functions(&self) -> bool {
         self.feature_flags.enable_group_ops_native_functions
+    }
+
+    pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
+        self.feature_flags.reject_mutable_random_on_entry_functions
     }
 }
 
@@ -1561,6 +1576,8 @@ impl ProtocolConfig {
 
             random_beacon_reduction_allowed_delta: None,
 
+            random_beacon_reduction_lower_bound: None,
+
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
@@ -1808,6 +1825,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.narwhal_header_v2 = true;
                         cfg.feature_flags.random_beacon = true;
+                        cfg.random_beacon_reduction_lower_bound = Some(1600);
                     }
                     // Only enable consensus digest in consensus commit prologue in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
@@ -1886,6 +1904,16 @@ impl ProtocolConfig {
                     cfg.consensus_max_transactions_in_block_bytes = Some(6 * 1_024 * 1024);
                     // 6 MB
                 }
+                37 => {
+                    cfg.feature_flags.reject_mutable_random_on_entry_functions = true;
+
+                    // Enable consensus digest in consensus commit prologue in testnet and devnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.include_consensus_digest_in_prologue = true;
+                    }
+                }
+                38 => {}
+                39 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -1940,6 +1968,9 @@ impl ProtocolConfig {
     }
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val
+    }
+    pub fn set_accept_zklogin_in_multisig_for_testing(&mut self, val: bool) {
+        self.feature_flags.accept_zklogin_in_multisig = val
     }
     #[cfg(msim)]
     pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
