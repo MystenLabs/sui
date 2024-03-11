@@ -690,7 +690,6 @@ impl Var {
 
     pub fn is_valid_name(s: Symbol) -> bool {
         s.starts_with('_')
-            || (s.starts_with('`') && s.ends_with('`'))
             || s.starts_with(|c: char| c.is_ascii_lowercase())
             || Self::is_syntax_identifier_name(s)
     }
