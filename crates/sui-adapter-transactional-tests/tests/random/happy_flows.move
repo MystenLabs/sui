@@ -44,3 +44,10 @@ module test::random {
 //> test::random::use_clock(Input(1));
 //> test::random::use_random(Input(2));
 //> TransferObjects([Result(0)], Input(3));
+
+// Good tx - use Clock, then Random, then merge
+//# programmable --sender A --inputs 10 immshared(6) immshared(8) @B
+//> SplitCoins(Gas, [Input(0)]);
+//> test::random::use_clock(Input(1));
+//> test::random::use_random(Input(2));
+//> MergeCoins(Gas, [Result(0)]);
