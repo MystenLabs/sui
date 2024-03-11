@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 38;
+const MAX_PROTOCOL_VERSION: u64 = 39;
 
 // Record history of protocol version allocations here:
 //
@@ -110,6 +110,7 @@ const MAX_PROTOCOL_VERSION: u64 = 38;
 //             Set the consensus accepted transaction size and the included transactions size in the proposed block.
 // Version 37: Reject entry functions with mutable Random.
 // Version 38: Allow skipped epochs for randomness updates.
+// Version 39: Extra version to fix `test_upgrade_compatibility` simtest.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -929,6 +930,10 @@ pub struct ProtocolConfig {
     /// protocol.
     random_beacon_reduction_allowed_delta: Option<u16>,
 
+    /// Minimum number of shares below wich voting weights will not be reduced for the
+    /// random beacon protocol.
+    random_beacon_reduction_lower_bound: Option<u32>,
+
     /// The maximum serialised transaction size (in bytes) accepted by consensus. That should be bigger than the
     /// `max_tx_size_bytes` with some additional headroom.
     consensus_max_transaction_size_bytes: Option<u64>,
@@ -1571,6 +1576,8 @@ impl ProtocolConfig {
 
             random_beacon_reduction_allowed_delta: None,
 
+            random_beacon_reduction_lower_bound: None,
+
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
@@ -1818,6 +1825,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.narwhal_header_v2 = true;
                         cfg.feature_flags.random_beacon = true;
+                        cfg.random_beacon_reduction_lower_bound = Some(1600);
                     }
                     // Only enable consensus digest in consensus commit prologue in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
@@ -1905,6 +1913,7 @@ impl ProtocolConfig {
                     }
                 }
                 38 => {}
+                39 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

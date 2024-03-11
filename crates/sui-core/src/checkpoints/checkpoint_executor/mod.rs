@@ -31,9 +31,11 @@ use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
 use prometheus::Registry;
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::{fail_point, fail_point_async};
+use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
+use sui_types::transaction::TransactionKind;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
@@ -282,6 +284,7 @@ impl CheckpointExecutor {
     fn process_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
         // Ensure that we are not skipping checkpoints at any point
         let seq = *checkpoint.sequence_number();
+        debug!("Bumping highest_executed_checkpoint watermark to {seq:?}");
         if let Some(prev_highest) = self
             .checkpoint_store
             .get_highest_executed_checkpoint_seq_number()
@@ -291,7 +294,6 @@ impl CheckpointExecutor {
         } else {
             assert_eq!(seq, 0);
         }
-        debug!("Bumping highest_executed_checkpoint watermark to {:?}", seq);
         if seq % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
             info!("Finished syncing and executing checkpoint {}", seq);
         }
@@ -592,12 +594,13 @@ async fn execute_checkpoint(
     //   get_unexecuted_transactions()
     // - Second, we execute all remaining transactions.
 
-    let (execution_digests, all_tx_digests, executable_txns) = get_unexecuted_transactions(
-        checkpoint.clone(),
-        cache_reader,
-        checkpoint_store.clone(),
-        epoch_store.clone(),
-    );
+    let (execution_digests, all_tx_digests, executable_txns, randomness_round) =
+        get_unexecuted_transactions(
+            checkpoint.clone(),
+            cache_reader,
+            checkpoint_store.clone(),
+            epoch_store.clone(),
+        );
 
     let tx_count = execution_digests.len();
     debug!("Number of transactions in the checkpoint: {:?}", tx_count);
@@ -620,6 +623,20 @@ async fn execute_checkpoint(
         data_ingestion_dir,
     )
     .await?;
+
+    // Once execution is complete, we know that any randomness contained in this checkpoint has
+    // been successfully included in a checkpoint certified by quorum of validators.
+    if let Some(round) = randomness_round {
+        // RandomnessManager is only present on validators.
+        if let Some(randomness_manager) = epoch_store.randomness_manager() {
+            debug!(
+                ?round,
+                "notifying RandomnessManager that randomness update was executed in checkpoint"
+            );
+            randomness_manager.notify_randomness_in_checkpoint(round)?;
+        }
+    }
+
     Ok(())
 }
 
@@ -839,7 +856,9 @@ fn extract_end_of_epoch_tx(
 }
 
 // Given a checkpoint, filter out any already executed transactions, then return the remaining
-// execution digests, transaction digests, and transactions to be executed.
+// execution digests, transaction digests, transactions to be executed, and randomness round
+// (if any) included in the checkpoint.
+#[allow(clippy::type_complexity)]
 fn get_unexecuted_transactions(
     checkpoint: VerifiedCheckpoint,
     cache_reader: &dyn ExecutionCacheRead,
@@ -849,6 +868,7 @@ fn get_unexecuted_transactions(
     Vec<ExecutionDigests>,
     Vec<TransactionDigest>,
     Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
+    Option<RandomnessRound>,
 ) {
     let checkpoint_sequence = checkpoint.sequence_number();
     let full_contents = checkpoint_store
@@ -888,12 +908,35 @@ fn get_unexecuted_transactions(
             .expect("read cannot fail")
             .unwrap_or_else(||
                 panic!(
-                    "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {}",
-                    change_epoch_tx_digest, checkpoint.sequence_number()
+                    "state-sync should have ensured that transaction with digest {change_epoch_tx_digest:?} exists for checkpoint: {}",
+                    checkpoint.sequence_number()
                 )
             );
         assert!(change_epoch_tx.data().intent_message().value.is_end_of_epoch_tx());
     });
+
+    // Look for a randomness state update tx. It must be first if it exists, because all other
+    // transactions in a checkpoint that includes a randomness state update are causally
+    // dependent on it.
+    let randomness_round = if let Some(first_digest) = execution_digests.first() {
+        let maybe_randomness_tx = cache_reader.get_transaction_block(&first_digest.transaction)
+            .expect("read cannot fail")
+            .unwrap_or_else(||
+                panic!(
+                    "state-sync should have ensured that transaction with digest {first_digest:?} exists for checkpoint: {}",
+                    checkpoint.sequence_number()
+                )
+            );
+        if let TransactionKind::RandomnessStateUpdate(rsu) =
+            maybe_randomness_tx.data().transaction_data().kind()
+        {
+            Some(rsu.randomness_round)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
@@ -970,7 +1013,12 @@ fn get_unexecuted_transactions(
             .collect()
     };
 
-    (execution_digests, all_tx_digests, executable_txns)
+    (
+        execution_digests,
+        all_tx_digests,
+        executable_txns,
+        randomness_round,
+    )
 }
 
 // Logs within the function are annotated with the checkpoint sequence number and epoch,

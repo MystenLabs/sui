@@ -247,6 +247,8 @@ async fn test_stake_all() {
 
 #[tokio::test]
 async fn test_withdraw_stake() {
+    telemetry_subscribers::init_for_testing();
+
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10000)
         .build()

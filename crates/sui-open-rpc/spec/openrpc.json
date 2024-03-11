@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "38",
+              "maxSupportedProtocolVersion": "39",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1881,6 +1881,7 @@
                 "poseidon_bn254_cost_base": null,
                 "poseidon_bn254_cost_per_block": null,
                 "random_beacon_reduction_allowed_delta": null,
+                "random_beacon_reduction_lower_bound": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },

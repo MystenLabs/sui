@@ -351,29 +351,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             .stats
                             .inc_num_user_transactions(authority_index as usize);
                     }
-                    if let ConsensusTransactionKind::RandomnessStateUpdate(
-                        randomness_round,
-                        bytes,
-                    ) = &transaction.kind
+                    if let ConsensusTransactionKind::RandomnessStateUpdate(randomness_round, _) =
+                        &transaction.kind
                     {
-                        if self.epoch_store.randomness_state_enabled() {
-                            debug!("adding RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}");
-                            let randomness_state_update_transaction = self
-                                .randomness_state_update_transaction(
-                                    *randomness_round,
-                                    bytes.clone(),
-                                );
-
-                            transactions.push((
-                                empty_bytes.as_slice(),
-                                SequencedConsensusTransactionKind::System(
-                                    randomness_state_update_transaction,
-                                ),
-                                consensus_output.leader_author_index(),
-                            ));
-                        } else {
-                            debug!("ignoring RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}: randomness state is not enabled on this node")
-                        }
+                        // These are deprecated and we should never see them. Log an error and eat the tx if one appears.
+                        error!("BUG: saw deprecated RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}")
                     } else {
                         let transaction = SequencedConsensusTransactionKind::External(transaction);
                         transactions.push((serialized_transaction, transaction, authority_index));
@@ -596,28 +578,6 @@ impl<C> ConsensusHandler<C> {
         VerifiedExecutableTransaction::new_system(transaction, self.epoch())
     }
 
-    fn randomness_state_update_transaction(
-        &self,
-        randomness_round: u64,
-        random_bytes: Vec<u8>,
-    ) -> VerifiedExecutableTransaction {
-        assert!(self.epoch_store.randomness_state_enabled());
-        let transaction = VerifiedTransaction::new_randomness_state_update(
-            self.epoch(),
-            randomness_round,
-            random_bytes,
-            self.epoch_store
-                .epoch_start_config()
-                .randomness_obj_initial_shared_version()
-                .expect("randomness state obj must exist"),
-        );
-        debug!(
-            "created randomness state update transaction: {:?}",
-            transaction.digest()
-        );
-        VerifiedExecutableTransaction::new_system(transaction, self.epoch())
-    }
-
     fn epoch(&self) -> EpochId {
         self.epoch_store.epoch()
     }
@@ -783,6 +743,22 @@ impl SequencedConsensusTransaction {
             self.transaction,
             SequencedConsensusTransactionKind::System(_)
         )
+    }
+
+    pub fn is_user_tx_with_randomness(&self, randomness_state_enabled: bool) -> bool {
+        if !randomness_state_enabled {
+            // If randomness is disabled, these should be processed same as a tx without randomness,
+            // which will eventually fail when the randomness state object is not found.
+            return false;
+        }
+        let SequencedConsensusTransactionKind::External(ConsensusTransaction {
+            kind: ConsensusTransactionKind::UserTransaction(certificate),
+            ..
+        }) = &self.transaction
+        else {
+            return false;
+        };
+        certificate.is_randomness_reader()
     }
 
     pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {

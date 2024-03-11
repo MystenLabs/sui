@@ -679,11 +679,13 @@ impl ConsensusAdapter {
         };
 
         let transaction_key = transaction.key();
-        // Log warnings for capability or end of publish transactions that fail to get sequenced
+        // Log warnings for administrative transactions that fail to get sequenced
         let _monitor = if matches!(
             transaction.kind,
             ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::CapabilityNotification(_)
+                | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
         ) {
             let transaction_key = transaction_key.clone();
             Some(CancelOnDrop(spawn_monitored_task!(async {

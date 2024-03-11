@@ -4388,7 +4388,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.7"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=ea66012b860d9dd152abb7f2156275698ee91126#ea66012b860d9dd152abb7f2156275698ee91126"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=812767c939e96f2f03f0faf13388e1cb48696726#812767c939e96f2f03f0faf13388e1cb48696726"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4431,7 +4431,6 @@ dependencies = [
  "schemars",
  "secp256k1",
  "serde",
- "serde_bytes",
  "serde_json",
  "serde_with",
  "sha2 0.10.6",
@@ -4447,10 +4446,8 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=ea66012b860d9dd152abb7f2156275698ee91126#ea66012b860d9dd152abb7f2156275698ee91126"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=812767c939e96f2f03f0faf13388e1cb48696726#812767c939e96f2f03f0faf13388e1cb48696726"
 dependencies = [
- "convert_case 0.6.0",
- "proc-macro2 1.0.78",
  "quote 1.0.35",
  "syn 1.0.107",
 ]
@@ -4458,13 +4455,11 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=ea66012b860d9dd152abb7f2156275698ee91126#ea66012b860d9dd152abb7f2156275698ee91126"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=812767c939e96f2f03f0faf13388e1cb48696726#812767c939e96f2f03f0faf13388e1cb48696726"
 dependencies = [
  "bcs",
- "bincode",
  "digest 0.10.6",
  "fastcrypto",
- "fastcrypto-derive",
  "hex",
  "itertools 0.10.5",
  "rand 0.8.5",
@@ -4473,13 +4468,12 @@ dependencies = [
  "tap",
  "tracing",
  "typenum",
- "zeroize",
 ]
 
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=ea66012b860d9dd152abb7f2156275698ee91126#ea66012b860d9dd152abb7f2156275698ee91126"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=812767c939e96f2f03f0faf13388e1cb48696726#812767c939e96f2f03f0faf13388e1cb48696726"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -4489,7 +4483,6 @@ dependencies = [
  "ark-relations",
  "ark-serialize",
  "ark-snark",
- "bcs",
  "blst",
  "byte-slice-cast",
  "derive_more",
@@ -4500,9 +4493,7 @@ dependencies = [
  "neptune",
  "num-bigint 0.4.4",
  "once_cell",
- "regex",
  "reqwest",
- "rustls-webpki",
  "schemars",
  "serde",
  "serde_json",
@@ -11953,6 +11944,7 @@ dependencies = [
 name = "sui-core"
 version = "0.1.0"
 dependencies = [
+ "anemo",
  "anyhow",
  "arc-swap",
  "async-trait",
@@ -12861,9 +12853,13 @@ dependencies = [
  "anemo-build",
  "anemo-tower",
  "anyhow",
+ "arc-swap",
+ "bcs",
+ "bytes",
  "dashmap",
  "ed25519-consensus",
  "fastcrypto",
+ "fastcrypto-tbls",
  "futures",
  "governor",
  "mysten-metrics",
