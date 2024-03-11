@@ -201,7 +201,7 @@ where
 
         self.network_manager.stop().await;
         self.broadcaster.stop();
-        self.core_thread_handle.stop();
+        self.core_thread_handle.stop().await;
         self.leader_timeout_handle.stop().await;
         self.synchronizer.stop().await;
 
