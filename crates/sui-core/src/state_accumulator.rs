@@ -368,10 +368,6 @@ impl StateAccumulator {
         epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
         debug!("Accumulated checkpoint {}", checkpoint_seq_num);
 
-        epoch_store
-            .checkpoint_state_notify_read
-            .notify(&checkpoint_seq_num, &acc);
-
         Ok(acc)
     }
 
@@ -421,28 +417,21 @@ impl StateAccumulator {
             epoch, next_to_accumulate, last_checkpoint_of_epoch
         );
 
-        let (checkpoints, mut accumulators) = epoch_store
+        let (checkpoints, accumulators) = epoch_store
             .get_accumulators_in_checkpoint_range(next_to_accumulate, last_checkpoint_of_epoch)?
             .into_iter()
             .unzip::<_, _, Vec<_>, Vec<_>>();
 
-        let remaining_checkpoints: Vec<_> = (next_to_accumulate..=last_checkpoint_of_epoch)
+        let missing_checkpoints: Vec<_> = (next_to_accumulate..=last_checkpoint_of_epoch)
             .filter(|seq_num| !checkpoints.contains(seq_num))
             .collect();
 
-        if !remaining_checkpoints.is_empty() {
-            debug!(
-                "Awaiting accumulation of checkpoints {:?} for epoch {} accumulation",
-                remaining_checkpoints, epoch
+        if !missing_checkpoints.is_empty() {
+            panic!(
+                "Checkpoints {:?} expected to already be accumulated during epoch {} accumulation.",
+                missing_checkpoints, epoch
             );
         }
-
-        let mut remaining_accumulators = epoch_store
-            .notify_read_checkpoint_state_digests(remaining_checkpoints)
-            .await
-            .expect("Failed to notify read checkpoint state digests");
-
-        accumulators.append(&mut remaining_accumulators);
 
         assert!(accumulators.len() == (last_checkpoint_of_epoch - next_to_accumulate + 1) as usize);
 

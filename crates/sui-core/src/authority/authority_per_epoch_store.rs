@@ -252,7 +252,6 @@ pub struct AuthorityPerEpochStore {
     /// within for certs within the current epoch.
     pub(crate) signature_verifier: SignatureVerifier,
 
-    pub(crate) checkpoint_state_notify_read: NotifyRead<CheckpointSequenceNumber, Accumulator>,
     executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
 
     /// This is used to notify all epoch specific tasks that epoch has ended.
@@ -807,7 +806,6 @@ impl AuthorityPerEpochStore {
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
             signature_verifier,
-            checkpoint_state_notify_read: NotifyRead::new(),
             executed_digests_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
@@ -1190,35 +1188,6 @@ impl AuthorityPerEpochStore {
             .safe_range_iter(from_checkpoint..=to_checkpoint)
             .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
-    }
-
-    /// Returns future containing the state digest for the given epoch
-    /// once available
-    pub async fn notify_read_checkpoint_state_digests(
-        &self,
-        checkpoints: Vec<CheckpointSequenceNumber>,
-    ) -> SuiResult<Vec<Accumulator>> {
-        // We need to register waiters _before_ reading from the database to avoid
-        // race conditions
-        let registrations = self.checkpoint_state_notify_read.register_all(&checkpoints);
-        let accumulators = self
-            .tables()?
-            .state_hash_by_checkpoint
-            .multi_get(checkpoints)?;
-
-        // Zipping together registrations and accumulators ensures returned order is
-        // the same as order of digests
-        let results =
-            accumulators
-                .into_iter()
-                .zip(registrations.into_iter())
-                .map(|(a, r)| match a {
-                    // Note that Some() clause also drops registration that is already fulfilled
-                    Some(ready) => Either::Left(futures::future::ready(ready)),
-                    None => Either::Right(r),
-                });
-
-        Ok(join_all(results).await)
     }
 
     /// `pending_certificates` table related methods. Should only be used from TransactionManager.
