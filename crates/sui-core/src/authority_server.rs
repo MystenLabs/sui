@@ -306,6 +306,13 @@ impl ValidatorService {
             .into());
         }
 
+        if !epoch_store.randomness_state_enabled() && transaction.is_randomness_reader() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "randomness is not enabled on this network".to_string(),
+            }
+            .into());
+        }
+
         // When authority is overloaded and decide to reject this tx, we still lock the object
         // and ask the client to retry in the future. This is because without locking, the
         // input objects can be locked by a different tx in the future, however, the input objects
