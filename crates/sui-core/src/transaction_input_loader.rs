@@ -13,7 +13,7 @@ use sui_types::{
     storage::{GetSharedLocks, ObjectKey},
     transaction::{
         InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
-        ReceivingObjectReadResult, ReceivingObjectReadResultKind, ReceivingObjects, TransactionKey,
+        ReceivingObjectReadResult, ReceivingObjectReadResultKind, ReceivingObjects,
     },
 };
 use tracing::instrument;
@@ -180,7 +180,7 @@ impl TransactionInputLoader {
     pub async fn read_objects_for_execution(
         &self,
         shared_lock_store: &impl GetSharedLocks,
-        tx_key: &TransactionKey,
+        tx_digest: &TransactionDigest,
         input_object_kinds: &[InputObjectKind],
         epoch_id: EpochId,
     ) -> SuiResult<InputObjects> {
@@ -194,7 +194,10 @@ impl TransactionInputLoader {
             match input {
                 InputObjectKind::MovePackage(id) => {
                     let package = self.cache.get_package_object(id)?.unwrap_or_else(|| {
-                        panic!("Executable transaction {tx_key:?} depends on non-existent package {id:?}")
+                        panic!(
+                            "Executable transaction {:?} depends on non-existent package {:?}",
+                            tx_digest, id
+                        )
                     });
 
                     results[i] = Some(ObjectReadResult {
@@ -211,7 +214,7 @@ impl TransactionInputLoader {
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
                             shared_lock_store
-                                .get_shared_locks(tx_key)?
+                                .get_shared_locks(tx_digest)?
                                 .into_iter()
                                 .collect(),
                         )
@@ -220,7 +223,10 @@ impl TransactionInputLoader {
                     // 1. either we have a bug that skips shared object version assignment
                     // 2. or we have some DB corruption
                     let version = shared_locks.get(id).unwrap_or_else(|| {
-                        panic!("Shared object locks should have been set. key: {tx_key:?}, obj id: {id:?}")
+                        panic!(
+                            "Shared object locks should have been set. tx_digest: {:?}, obj id: {:?}",
+                            tx_digest, id
+                        )
                     });
                     object_keys.push(ObjectKey(*id, *version));
                     fetches.push((i, input));
@@ -251,10 +257,10 @@ impl TransactionInputLoader {
                             object: ObjectReadResultKind::DeletedSharedObject(version, dependency),
                         }
                     } else {
-                        panic!("All dependencies of tx {tx_key:?} should have been executed now, but Shared Object id: {}, version: {version} is absent in epoch {epoch_id}", *id);
+                        panic!("All dependencies of tx {:?} should have been executed now, but Shared Object id: {}, version: {} is absent in epoch {}", tx_digest, *id, version, epoch_id);
                     }
                 },
-                _ => panic!("All dependencies of tx {tx_key:?} should have been executed now, but obj {key:?} is absent"),
+                _ => panic!("All dependencies of tx {:?} should have been executed now, but obj {:?} is absent", tx_digest, key),
             });
         }
 

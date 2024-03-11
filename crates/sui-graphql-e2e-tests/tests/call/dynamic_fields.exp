@@ -43,7 +43,7 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveValue"
+              "__typename": "MoveObject"
             }
           },
           {
@@ -57,20 +57,6 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveObject"
-            }
-          },
-          {
-            "name": {
-              "type": {
-                "repr": "vector<u8>"
-              },
-              "data": {
-                "Vector": []
-              },
-              "bcs": "AA=="
-            },
-            "value": {
               "__typename": "MoveValue"
             }
           },
@@ -81,6 +67,20 @@ Response: {
               },
               "data": {
                 "Bool": false
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "vector<u8>"
+              },
+              "data": {
+                "Vector": []
               },
               "bcs": "AA=="
             },
@@ -120,7 +120,7 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveValue"
+              "__typename": "MoveObject"
             }
           },
           {
@@ -134,20 +134,6 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveObject"
-            }
-          },
-          {
-            "name": {
-              "type": {
-                "repr": "vector<u8>"
-              },
-              "data": {
-                "Vector": []
-              },
-              "bcs": "AA=="
-            },
-            "value": {
               "__typename": "MoveValue"
             }
           },
@@ -158,6 +144,20 @@ Response: {
               },
               "data": {
                 "Bool": false
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "vector<u8>"
+              },
+              "data": {
+                "Vector": []
               },
               "bcs": "AA=="
             },
@@ -188,11 +188,7 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "bcs": "AAAAAAAAAAA=",
-              "data": {
-                "Number": "0"
-              },
-              "__typename": "MoveValue"
+              "__typename": "MoveObject"
             }
           },
           {
@@ -206,23 +202,9 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
-              "__typename": "MoveObject"
-            }
-          },
-          {
-            "name": {
-              "type": {
-                "repr": "vector<u8>"
-              },
+              "bcs": "AAAAAAAAAAA=",
               "data": {
-                "Vector": []
-              },
-              "bcs": "AA=="
-            },
-            "value": {
-              "bcs": "AQAAAAAAAAA=",
-              "data": {
-                "Number": "1"
+                "Number": "0"
               },
               "__typename": "MoveValue"
             }
@@ -241,6 +223,24 @@ Response: {
               "bcs": "AgAAAAAAAAA=",
               "data": {
                 "Number": "2"
+              },
+              "__typename": "MoveValue"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "vector<u8>"
+              },
+              "data": {
+                "Vector": []
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "bcs": "AQAAAAAAAAA=",
+              "data": {
+                "Number": "1"
               },
               "__typename": "MoveValue"
             }
