@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::move_integration_tests::build_and_publish_test_package;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
 use mysten_network::Multiaddr;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::ops::Deref;
-use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::dbg_addr,
@@ -48,9 +46,7 @@ use crate::{
 
 use super::*;
 use fastcrypto::traits::AggregateAuthenticator;
-use move_core_types::identifier::Identifier;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 
 pub use crate::authority::authority_test_utils::init_state_with_ids;
 
@@ -980,148 +976,6 @@ async fn test_oversized_txn() {
         .unwrap()
         .to_string()
         .contains("serialized transaction size exceeded maximum"));
-}
-
-async fn get_object_ref(obj_id: &ObjectID, authority_state: &Arc<AuthorityState>) -> ObjectRef {
-    authority_state
-        .get_object(obj_id)
-        .await
-        .unwrap()
-        .unwrap()
-        .compute_object_reference()
-}
-
-// TODO: Next test checks here only good transactions since execution with Random is not yet ready.
-// Testing bad transactions is done in crates/sui-adapter-transactional-tests/tests/a/ptb.move and once execution is
-// ready, we can add tests for good transactions there as well ans remove the next test.
-#[tokio::test]
-async fn test_allowed_ptb_with_random_txn() {
-    telemetry_subscribers::init_for_testing();
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let num_of_tx = 6;
-    let obj_ids = (0..num_of_tx)
-        .map(|_| ObjectID::random())
-        .collect::<Vec<_>>();
-    let authority_state =
-        init_state_with_ids(obj_ids.iter().map(|id| (sender, *id)).collect::<Vec<_>>()).await;
-    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
-    let initial_shared_version =
-        get_randomness_state_obj_initial_shared_version(authority_state.get_object_store())
-            .unwrap()
-            .unwrap();
-
-    // Publish the package we will call
-    let pkg = build_and_publish_test_package(
-        &authority_state,
-        &sender,
-        &sender_key,
-        &obj_ids[0],
-        "object_basics",
-        /* with_unpublished_deps */ false,
-    )
-    .await
-    .0;
-
-    // Create a server and a client
-    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-    let server = AuthorityServer::new_for_test(
-        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        authority_state.clone(),
-        consensus_address,
-    );
-    let server_handle = server.spawn_for_test().await.unwrap();
-    let client = NetworkAuthorityClient::connect(server_handle.address())
-        .await
-        .unwrap();
-
-    let obj_basics = Identifier::new("object_basics").unwrap();
-    let use_clock = Identifier::new("use_clock").unwrap();
-    let use_random = Identifier::new("use_random").unwrap();
-    let use_value = Identifier::new("use_value").unwrap();
-    let clock_arg = CallArg::CLOCK_IMM;
-    let random_arg = CallArg::Object(ObjectArg::SharedObject {
-        id: SUI_RANDOMNESS_STATE_OBJECT_ID,
-        initial_shared_version,
-        mutable: false,
-    });
-
-    // good tx - use_value, use_random
-    let mut builder = ProgrammableTransactionBuilder::new();
-    builder
-        .move_call(
-            pkg,
-            obj_basics.clone(),
-            use_value.clone(),
-            vec![],
-            vec![CallArg::from(123u64)],
-        )
-        .unwrap();
-    builder
-        .move_call(
-            pkg,
-            obj_basics.clone(),
-            use_random.clone(),
-            vec![],
-            vec![random_arg.clone()],
-        )
-        .unwrap();
-    let tx = to_sender_signed_transaction(
-        TransactionData::new_programmable(
-            sender,
-            vec![get_object_ref(&obj_ids[1], &authority_state).await],
-            builder.finish(),
-            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-            rgp,
-        ),
-        &sender_key,
-    );
-    let res = client.handle_transaction(tx.clone()).await;
-    assert!(res.is_ok());
-
-    // good tx - use_clock, use_random, transfer, merge (via pay without destinations)
-    let mut builder = ProgrammableTransactionBuilder::new();
-    builder
-        .move_call(
-            pkg,
-            obj_basics.clone(),
-            use_clock.clone(),
-            vec![],
-            vec![clock_arg.clone()],
-        )
-        .unwrap();
-    builder
-        .move_call(
-            pkg,
-            obj_basics.clone(),
-            use_random.clone(),
-            vec![],
-            vec![random_arg.clone()],
-        )
-        .unwrap();
-    builder
-        .transfer_object(sender, get_object_ref(&obj_ids[2], &authority_state).await)
-        .unwrap();
-    builder
-        .pay(
-            vec![
-                get_object_ref(&obj_ids[3], &authority_state).await,
-                get_object_ref(&obj_ids[4], &authority_state).await,
-            ],
-            vec![],
-            vec![],
-        )
-        .unwrap();
-    let tx = to_sender_signed_transaction(
-        TransactionData::new_programmable(
-            sender,
-            vec![get_object_ref(&obj_ids[5], &authority_state).await],
-            builder.finish(),
-            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-            rgp,
-        ),
-        &sender_key,
-    );
-    assert!(client.handle_transaction(tx).await.is_ok());
 }
 
 #[tokio::test]

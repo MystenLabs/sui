@@ -21,32 +21,26 @@ module test::random {
 
     public fun use_clock(_clock: &Clock) {}
     public fun use_random(_random: &Random) {}
-    public fun use_clock_random(_clock: &Clock, _random: &Random) {}
     public fun use_value(_value: u64) {}
 }
 
-// TODO: Enable the following cases once execution with Random is working.
+// Good tx - use Random
+//# programmable --sender A --inputs immshared(8)
+//> test::random::use_random(Input(0));
 
-// good tx - use_random
-// //# programmable --sender A --inputs immshared(8)
-// //> test::random::use_random(Input(0))
+// Good tx - use Clock and then Random
+//# programmable --sender A --inputs immshared(6) immshared(8) @A
+//> test::random::use_clock(Input(0));
+//> test::random::use_random(Input(1));
 
-// good tx - use_value, use_random
-// //# programmable --sender A --inputs 16 object(8,1)
-// //> test::random::use_value(Input(0));
-// //> test::random::use_random(Input(1))
+// Good tx - use value and then Random
+//# programmable --sender A --inputs 10 immshared(8) @A
+//> test::random::use_value(Input(0));
+//> test::random::use_random(Input(1));
 
-// good tx - use_clock, use_random, transfer
-// //# programmable --sender A --inputs 10 immshared(6) immshared(8) @B
-// //> SplitCoins(Gas, [Input(0)]);
-// //> test::random::use_clock(Input(1));
-// //> test::random::use_random(Input(2));
-// //> TransferObjects([Result(0)], Input(3))
-
-// good tx - use_clock, use_random, merge
-// //# programmable --sender A --inputs 10 immshared(6) immshared(8) @A
-// //> SplitCoins(Gas, [Input(0)]);
-// //> test::random::use_clock(Input(1));
-// //> test::random::use_random(Input(2));
-// //> TransferObjects([Result(0)], Input(3));
-// //> MergeCoins(Result(0), [Gas])
+// Good tx - use Clock, then Random, then transfer
+//# programmable --sender A --inputs 10 immshared(6) immshared(8) @B
+//> SplitCoins(Gas, [Input(0)]);
+//> test::random::use_clock(Input(1));
+//> test::random::use_random(Input(2));
+//> TransferObjects([Result(0)], Input(3));
