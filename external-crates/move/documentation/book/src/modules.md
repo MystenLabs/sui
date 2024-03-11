@@ -12,7 +12,7 @@ module <address>::<identifier> {
 }
 ```
 
-where `<address>` is a valid [named or literal address](./address.md).
+where `<address>` is a valid [named or literal address](./address.md) specifying the module's package.
 
 For example:
 
@@ -34,9 +34,9 @@ module 0x42::test {
 
 ## Names
 
-The `module 0x42::test` part specifies that the module `test` will be published under the [address](./address.md) `0x42`.
+The `module test_addr::test` part specifies that the module `test` will be published under the numerical [address](./address.md) value assigned for the name `test_addr` in the [package settings](./packages.md).
 
-Modules can also be declared using [named addresses](./address.md). For example:
+Modules should normally be declared using [named addresses](./address.md) (as opposed to using the numerical value directly). For example:
 
 ```move
 module test_addr::test {
@@ -51,7 +51,7 @@ module test_addr::test {
 }
 ```
 
-These named addreses commonly match the name of the [package](./packages.md).
+These named addresses commonly match the name of the [package](./packages.md).
 
 Because named addresses only exist at the source language level and during compilation,
 named addresses will be fully substituted for their value at the bytecode
@@ -92,3 +92,5 @@ The [`use`](./uses.md) keyword is used to refer to members from other modules.
 The [`const`](./constants.md) keyword defines constants that can be used in the functions of a module.
 
 [`friend`](./friends.md) are deprecated concept for specifying a list of trusted modules. The concept has been superceded by [`public(package)`](./functions.md#visibility)
+
+<!-- TODO member access rules -->

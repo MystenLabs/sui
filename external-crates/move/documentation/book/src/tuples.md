@@ -15,7 +15,7 @@ It might feel weird to have tuples in the language at all given these restrictio
 most common use cases for tuples in other languages is for functions to allow functions to return
 multiple values. Some languages work around this by forcing the users to write structs that contain
 the multiple return values. However in Move, you cannot put references inside of
-[structs](./structs-and-resources.md). This required Move to support multiple return values. These
+[structs](./structs.md). This required Move to support multiple return values. These
 multiple return values are all pushed on the stack at the bytecode level. At the source level, these
 multiple return values are represented using tuples.
 

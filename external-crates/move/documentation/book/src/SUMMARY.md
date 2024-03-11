@@ -24,7 +24,7 @@
 - [Conditionals](conditionals.md)
 - [While and Loop](loops.md)
 - [Functions](functions.md)
-- [Structs and Resources](structs-and-resources.md)
+- [Structs and Resources](structs.md)
 - [Constants](constants.md)
 - [Generics](generics.md)
 - [Type Abilities](abilities.md)

@@ -5,7 +5,7 @@ only, and cannot modify the underlying value (or any of its fields). Mutable ref
 modifications via a write through that reference. Move's type system enforces an ownership
 discipline that prevents reference errors.
 
-For more details on the rules of references, see [Structs and Resources](./structs-and-resources.md)
+For more details on the rules of references, see [Structs and Resources](./structs.md)
 
 ## Reference Operators
 
