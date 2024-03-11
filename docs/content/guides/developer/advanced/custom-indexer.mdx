@@ -156,7 +156,7 @@ The data ingestion executor can run multiple workflows simultaneously. For each 
 
 The concurrency parameter specifies how many threads the workflow uses. Having a concurrency value greater than 1 is helpful when tasks are idempotent and can be processed in parallel and out of order. The executor only updates the progress/watermark to a certain checkpoint when all preceding checkpoints are processed.
 
-Find more **examples** of custom ingestion pipelines in the Sui repository:
+Find more examples of custom ingestion pipelines in the Sui repository:
 * Sui data ingestion daemon that runs internal [pipelines](https://github.com/MystenLabs/sui/tree/main/crates/sui-data-ingestion/src/).
 * Sui Name Service's custom [indexer](https://github.com/MystenLabs/sui/tree/main/crates/suins-indexer/src).
 
