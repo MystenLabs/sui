@@ -125,7 +125,5 @@ Files sources/mod0.move and migration_sources/mod0.move are identical
 Files sources/mod_intermodule_errors.move and migration_sources/mod_intermodule_errors.move are identical
 Files sources/mod_let.move and migration_sources/mod_let.move are identical
 Files sources/mod_let_errors.move and migration_sources/mod_let_errors.move are identical
-External Command `diff -r -s tests migration_tests`:
-diff: tests: No such file or directory
 External Command `diff -s Move.toml Move.toml.expected`:
 Files Move.toml and Move.toml.expected are identical
