@@ -12,7 +12,6 @@
 - [Bool](bool.md)
 - [Address](address.md)
 - [Vector](vector.md)
-- [Signer](signer.md)
 - [References](references.md)
 - [Tuples and Unit](tuples.md)
 
@@ -24,7 +23,7 @@
 - [Conditionals](conditionals.md)
 - [While and Loop](loops.md)
 - [Functions](functions.md)
-- [Structs and Resources](structs.md)
+- [Structs](structs.md)
 - [Constants](constants.md)
 - [Generics](generics.md)
 - [Type Abilities](abilities.md)

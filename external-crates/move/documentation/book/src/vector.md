@@ -4,7 +4,7 @@
 collection of `T`'s that can grow or shrink by pushing/popping values off the "end".
 
 A `vector<T>` can be instantiated with any type `T`. For example, `vector<u64>`, `vector<address>`,
-`vector<0x42::MyModule::MyResource>`, and `vector<vector<u8>>` are all valid vector types.
+`vector<0x42::my_module::MyData>`, and `vector<vector<u8>>` are all valid vector types.
 
 ## Literals
 

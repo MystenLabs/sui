@@ -100,7 +100,7 @@ and similarly:
 // A struct without any abilities
 public struct NoAbilities {}
 
-public struct MyResource has key {
+public struct MyData has key {
     f: NoAbilities, // Error 'NoAbilities' does not have 'store'
 }
 ```
@@ -197,16 +197,16 @@ fun invalid_left_in_local(): u64 {
 ```move
 public struct Cup<T> has copy, drop, store { item: T }
 
-// 'MyInnerResource' is declared with 'store' so all fields need 'store'
-struct MyInnerResource has store {
+// 'MyInnerData is declared with 'store' so all fields need 'store'
+struct MyInnerData has store {
     yes: Cup<u64>, // Valid, 'Cup<u64>' has 'store'
     // no: Cup<signer>, Invalid, 'Cup<signer>' does not have 'store'
 }
 
-// 'MyResource' is declared with 'key' so all fields need 'store'
-struct MyResource has key {
+// 'MyData' is declared with 'key' so all fields need 'store'
+struct MyData has key {
     yes: Cup<u64>, // Valid, 'Cup<u64>' has 'store'
-    inner: Cup<MyInnerResource>, // Valid, 'Cup<MyInnerResource>' has 'store'
+    inner: Cup<MyInnerData>, // Valid, 'Cup<MyInnerData>' has 'store'
     // no: Cup<signer>, Invalid, 'Cup<signer>' does not have 'store'
 }
 ```

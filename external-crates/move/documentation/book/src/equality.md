@@ -103,7 +103,7 @@ module example {
     struct Coin has store { value: u64 }
     fun invalid(c1: Coin, c2: Coin) {
         c1 == c2 // ERROR!
-//      ^^    ^^ These resources would be destroyed!
+//      ^^    ^^ These assets would be destroyed!
     }
 }
 }
