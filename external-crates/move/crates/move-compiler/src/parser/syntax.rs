@@ -340,6 +340,13 @@ where
 // Identifiers, Addresses, and Names
 //**************************************************************************************************
 
+fn report_name_migration(context: &mut Context, name: &str, loc: Loc) {
+    context.env.add_diag(diag!(
+        Migration::NeedsRestrictedIdentifier,
+        (loc, name)
+    ));
+}
+
 // Parse an identifier:
 //      Identifier = <IdentifierValue>
 #[allow(clippy::needless_if)]
@@ -360,10 +367,7 @@ fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
         tok @ (Tok::Mut | Tok::Match | Tok::Enum | Tok::Type)
             if context.env.edition(context.package_name) == Edition::E2024_MIGRATION =>
         {
-            context.env.add_diag(diag!(
-                Migration::NeedsRestrictedIdentifier,
-                (context.tokens.current_token_loc(), format!("{}", tok))
-            ));
+            report_name_migration(context, &format!("{}", tok), context.tokens.current_token_loc());
             context.tokens.content().into()
         }
         _ => {
@@ -839,6 +843,7 @@ fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnost
     let mut_ = parse_mut_opt(context)?;
     let f = parse_field(context).or_else(|diag| {
         if mut_.is_some() && context.env.edition(context.package_name) == Edition::E2024_MIGRATION {
+            report_name_migration(context, "mut", mut_.unwrap());
             Ok(Field(sp(mut_.unwrap(), "mut".into())))
         } else {
             Err(diag)
@@ -877,6 +882,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
                 if mut_.is_some()
                     && context.env.edition(context.package_name) == Edition::E2024_MIGRATION
                 {
+                    report_name_migration(context, "mut", mut_.unwrap());
                     Ok(Var(sp(mut_.unwrap(), "mut".into())))
                 } else {
                     Err(diag)
@@ -2497,6 +2503,7 @@ fn parse_parameter(context: &mut Context) -> Result<(Mutability, Var, Type), Box
     let mut_ = parse_mut_opt(context)?;
     let v = parse_var(context).or_else(|diag| {
         if mut_.is_some() && context.env.edition(context.package_name) == Edition::E2024_MIGRATION {
+            report_name_migration(context, "mut", mut_.unwrap());
             Ok(Var(sp(mut_.unwrap(), "mut".into())))
         } else {
             Err(diag)
