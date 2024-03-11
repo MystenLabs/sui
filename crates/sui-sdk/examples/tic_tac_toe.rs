@@ -89,6 +89,7 @@ impl TicTacToe {
                 ],
                 None, // The node will pick a gas object belong to the signer if not provided.
                 1000,
+                None,
             )
             .await?;
 
@@ -188,6 +189,7 @@ impl TicTacToe {
                     ],
                     None,
                     1000,
+                    None,
                 )
                 .await?;
 

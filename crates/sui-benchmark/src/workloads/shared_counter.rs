@@ -204,6 +204,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
             return;
         }
         let gas_price = system_state_observer.state.borrow().reference_gas_price;
+        println!("ZZZZZZZ gas price {:?}", gas_price);
         let (head, tail) = self
             .init_gas
             .split_first()
@@ -217,6 +218,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 .0,
         );
         info!("Basics package id {:?}", self.basics_package_id);
+        println!("ZZZZZZ package id {:?}", self.basics_package_id);
         if !self.counters.is_empty() {
             // We already initialized the workload with some counters
             return;
@@ -229,7 +231,9 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
             let proxy_ref = proxy.clone();
             futures.push(async move {
                 if let Ok(effects) = proxy_ref.execute_transaction_block(transaction).await {
-                    effects.created()[0].0
+                    let created_counter = effects.created()[0].0;
+                    println!("ZZZZZZZ counter created {:?}", created_counter);
+                    created_counter
                 } else {
                     panic!("Failed to create shared counter!");
                 }
@@ -256,6 +260,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 .counters
                 .choose(&mut rand::thread_rng())
                 .expect("Failed to get a random counter from the pool");
+            // println!("ZZZZZ payload package id {:?} counter id {:?} gas {:?} counter_initial_shared_version {:?}", self.basics_package_id.unwrap(),counter_ref.0, g.clone(), counter_ref.1);
             shared_payloads.push(Box::new(SharedCounterTestPayload {
                 package_id: self.basics_package_id.unwrap(),
                 counter_id: counter_ref.0,

@@ -46,7 +46,7 @@ mod tests;
 
 const TASK_QUEUE_SIZE: usize = 2000;
 const EFFECTS_QUEUE_SIZE: usize = 10000;
-const TX_MAX_RETRY_TIMES: u32 = 10;
+const TX_MAX_RETRY_TIMES: u32 = 1000000;
 
 #[derive(Clone)]
 pub struct QuorumDriverTask {
