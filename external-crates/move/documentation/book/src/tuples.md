@@ -1,15 +1,17 @@
 # Tuples and Unit
 
 Move does not fully support tuples as one might expect coming from another language with them as a
-[first-class value](https://en.wikipedia.org/wiki/First-class_citizen). However, in order to support multiple return values, Move has tuple-like
-expressions. These expressions do not result in a concrete value at runtime (there are no tuples in
-the bytecode), and as a result they are very limited: they can only appear in expressions (usually
-in the return position for a function); they cannot be bound to local variables; they cannot be
-stored in structs; and tuple types cannot be used to instantiate generics.
+[first-class value](https://en.wikipedia.org/wiki/First-class_citizen). However, in order to support
+multiple return values, Move has tuple-like expressions. These expressions do not result in a
+concrete value at runtime (there are no tuples in the bytecode), and as a result they are very
+limited: they can only appear in expressions (usually in the return position for a function); they
+cannot be bound to local variables; they cannot be stored in structs; and tuple types cannot be used
+to instantiate generics.
 
-Similarly, [unit `()`](https://en.wikipedia.org/wiki/Unit_type) is a type created by the Move source language in order to be expression based.
-The unit value `()` does not result in any runtime value. We can consider unit`()` to be an empty
-tuple, and any restrictions that apply to tuples also apply to unit.
+Similarly, [unit `()`](https://en.wikipedia.org/wiki/Unit_type) is a type created by the Move source
+language in order to be expression based. The unit value `()` does not result in any runtime value.
+We can consider unit`()` to be an empty tuple, and any restrictions that apply to tuples also apply
+to unit.
 
 It might feel weird to have tuples in the language at all given these restrictions. But one of the
 most common use cases for tuples in other languages is for functions to allow functions to return
@@ -38,8 +40,7 @@ Sometimes, tuples with two elements are called "pairs" and tuples with three ele
 ### Examples
 
 ```move
-address 0x42 {
-module example {
+module 0x42::example {
     // all 3 of these functions are equivalent
 
     // when no return type is provided, it is assumed to be `()`
@@ -59,7 +60,6 @@ module example {
         (x, 0, 1, b"foobar")
     }
 }
-}
 ```
 
 ## Operations
@@ -73,8 +73,7 @@ For tuples of any size, they can be destructured in either a `let` binding or in
 For example:
 
 ```move
-address 0x42 {
-module example {
+module 0x42::example {
     // all 3 of these functions are equivalent
     fun returns_unit() {}
     fun returns_2_values(): (bool, bool) { (true, false) }
@@ -82,8 +81,8 @@ module example {
 
     fun examples(cond: bool) {
         let () = ();
-        let (x, y): (u8, u64) = (0, 1);
-        let (a, b, c, d) = (@0x0, 0, false, b"");
+        let (mut x, mut y): (u8, u64) = (0, 1);
+        let (mut a, mut b, mut c, mut d) = (@0x0, 0, false, b"");
 
         () = ();
         (x, y) = if (cond) (1, 2) else (3, 4);
@@ -92,14 +91,13 @@ module example {
 
     fun examples_with_function_calls() {
         let () = returns_unit();
-        let (x, y): (bool, bool) = returns_2_values();
-        let (a, b, c, d) = returns_4_values(&0);
+        let (mut x, mut y): (bool, bool) = returns_2_values();
+        let (mut a, mut b, mut c, mut d) = returns_4_values(&0);
 
         () = returns_unit();
         (x, y) = returns_2_values();
         (a, b, c, d) = returns_4_values(&1);
     }
-}
 }
 ```
 
@@ -124,7 +122,7 @@ let (a, b): (&u64, &u64) = (x, y);
 // since &mut u64 is a subtype of &u64
 let (c, d): (&u64, &u64) = (y, y);
 
-// error! (&u64, &mut u64) is NOT a subtype of (&mut u64, &mut u64)
+// ERROR! (&u64, &mut u64) is NOT a subtype of (&mut u64, &mut u64)
 // since &u64 is NOT a subtype of &mut u64
 let (e, f): (&mut u64, &mut u64) = (x, y);
 ```
@@ -132,6 +130,6 @@ let (e, f): (&mut u64, &mut u64) = (x, y);
 ## Ownership
 
 As mentioned above, tuple values don't really exist at runtime. And currently they cannot be stored
-into local variables because of this (but it is likely that this feature will come soon). As such,
-tuples can only be moved currently, as copying them would require putting them into a local variable
-first.
+into local variables because of this (but it is likely that this feature will come at some point in
+the future). As such, tuples can only be moved currently, as copying them would require putting
+them into a local variable first.
