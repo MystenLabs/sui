@@ -341,10 +341,9 @@ where
 //**************************************************************************************************
 
 fn report_name_migration(context: &mut Context, name: &str, loc: Loc) {
-    context.env.add_diag(diag!(
-        Migration::NeedsRestrictedIdentifier,
-        (loc, name)
-    ));
+    context
+        .env
+        .add_diag(diag!(Migration::NeedsRestrictedIdentifier, (loc, name)));
 }
 
 // Parse an identifier:
@@ -367,7 +366,11 @@ fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
         tok @ (Tok::Mut | Tok::Match | Tok::Enum | Tok::Type)
             if context.env.edition(context.package_name) == Edition::E2024_MIGRATION =>
         {
-            report_name_migration(context, &format!("{}", tok), context.tokens.current_token_loc());
+            report_name_migration(
+                context,
+                &format!("{}", tok),
+                context.tokens.current_token_loc(),
+            );
             context.tokens.content().into()
         }
         _ => {
@@ -841,13 +844,12 @@ fn parse_exp_field(context: &mut Context) -> Result<(Field, Exp), Box<Diagnostic
 // with the same name as the field.
 fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnostic>> {
     let mut_ = parse_mut_opt(context)?;
-    let f = parse_field(context).or_else(|diag| {
-        if mut_.is_some() && context.env.edition(context.package_name) == Edition::E2024_MIGRATION {
-            report_name_migration(context, "mut", mut_.unwrap());
+    let f = parse_field(context).or_else(|diag| match mut_ {
+        Some(mut_loc) if context.env.edition(context.package_name) == Edition::E2024_MIGRATION => {
+            report_name_migration(context, "mut", mut_loc);
             Ok(Field(sp(mut_.unwrap(), "mut".into())))
-        } else {
-            Err(diag)
         }
+        _ => Err(diag),
     })?;
     let arg = if mut_.is_some() {
         sp(f.loc(), Bind_::Var(mut_, Var(f.0)))
@@ -878,15 +880,14 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
             Tok::LBrace | Tok::Less | Tok::ColonColon | Tok::LParen
         ) {
             let mut_ = parse_mut_opt(context)?;
-            let v = parse_var(context).or_else(|diag| {
-                if mut_.is_some()
-                    && context.env.edition(context.package_name) == Edition::E2024_MIGRATION
+            let v = parse_var(context).or_else(|diag| match mut_ {
+                Some(mut_loc)
+                    if context.env.edition(context.package_name) == Edition::E2024_MIGRATION =>
                 {
-                    report_name_migration(context, "mut", mut_.unwrap());
+                    report_name_migration(context, "mut", mut_loc);
                     Ok(Var(sp(mut_.unwrap(), "mut".into())))
-                } else {
-                    Err(diag)
                 }
+                _ => Err(diag),
             })?;
             let v = Bind_::Var(mut_, v);
             let end_loc = context.tokens.previous_end_loc();
@@ -2501,13 +2502,12 @@ fn parse_function_decl(
 //      Parameter = "mut"? <Var> ":" <Type>
 fn parse_parameter(context: &mut Context) -> Result<(Mutability, Var, Type), Box<Diagnostic>> {
     let mut_ = parse_mut_opt(context)?;
-    let v = parse_var(context).or_else(|diag| {
-        if mut_.is_some() && context.env.edition(context.package_name) == Edition::E2024_MIGRATION {
-            report_name_migration(context, "mut", mut_.unwrap());
+    let v = parse_var(context).or_else(|diag| match mut_ {
+        Some(mut_loc) if context.env.edition(context.package_name) == Edition::E2024_MIGRATION => {
+            report_name_migration(context, "mut", mut_loc);
             Ok(Var(sp(mut_.unwrap(), "mut".into())))
-        } else {
-            Err(diag)
         }
+        _ => Err(diag),
     })?;
     consume_token(context.tokens, Tok::Colon)?;
     let t = parse_type(context)?;
