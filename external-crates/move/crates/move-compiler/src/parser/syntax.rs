@@ -798,7 +798,7 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
 // and returns None otherwise.
 //     MutOpt = "mut"?
 fn parse_mut_opt(context: &mut Context) -> Result<Option<Loc>, Box<Diagnostic>> {
-    // In migration mode, 'mu'` is assumed to be an identifier that needsd escaping.
+    // In migration mode, 'mut' is assumed to be an identifier that needsd escaping.
     if context.env.edition(context.package_name) == Edition::E2024_MIGRATION {
         Ok(None)
     } else if context.tokens.peek() == Tok::Mut {
