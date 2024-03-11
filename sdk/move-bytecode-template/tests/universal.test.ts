@@ -66,6 +66,20 @@ describe('move-binary-template', () => {
 				.find((c) => c.value_bcs == bcs.string().serialize('MCN').toBytes())
         );
 	});
+
+	it('should fail on incorrect identifier', () => {
+		expect(() => {
+			template.update_identifiers(pokemonBytes(), { Stats: '123123PokeStats' });
+		}).toThrow();
+
+		expect(() => {
+			template.update_identifiers(pokemonBytes(), { Stats: '\\aaa' });
+		}).toThrow();
+
+		expect(() => {
+			template.update_identifiers(pokemonBytes(), { Stats: '+say_hello' });
+		}).toThrow();
+	});
 });
 
 function pokemonBytes() {

@@ -45,14 +45,24 @@ pub fn deserialize(binary: &[u8]) -> Result<JsValue, JsErr> {
 /// });
 /// ```
 pub fn update_identifiers(binary: &[u8], map: JsValue) -> Result<Box<[u8]>, JsErr> {
-    let updates: HashMap<String, String> = serde_wasm_bindgen::from_value(map)?;
+    let mut updates: HashMap<String, String> = serde_wasm_bindgen::from_value(map)?;
     let mut compiled_module = CompiledModule::deserialize_with_defaults(binary)?;
 
     // First update the identifiers.
     for ident in compiled_module.identifiers.iter_mut() {
         let old = ident.to_string();
-        if let Some(new) = updates.get(&old) {
-            *ident = Identifier::new(new.clone()).map_err(|err| JsErr {
+        if updates.contains_key(&old) {
+            let new = updates.remove(&old).unwrap();
+
+            // Check if the new identifier is valid. Return a proper error if not.
+            if !Identifier::is_valid(&new) {
+                return Err(JsErr {
+                    display: format!("Invalid identifier: {}", new),
+                    message: "Invalid identifier".to_string(),
+                });
+            }
+
+            *ident = Identifier::new(new).map_err(|err| JsErr {
                 display: format!("{}", err),
                 message: err.to_string(),
             })?;
