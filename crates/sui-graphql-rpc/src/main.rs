@@ -11,6 +11,9 @@ use sui_graphql_rpc::config::{
 };
 use sui_graphql_rpc::server::builder::export_schema;
 use sui_graphql_rpc::server::graphiql_server::start_graphiql_server;
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
+use tracing::error;
 
 // WARNING!!!
 //
@@ -86,6 +89,8 @@ async fn main() {
             let _guard = telemetry_subscribers::TelemetryConfig::new()
                 .with_env()
                 .init();
+            let tracker = TaskTracker::new();
+            let cancellation_token = CancellationToken::new();
 
             println!("Starting server...");
             let server_config = ServerConfig {
@@ -96,9 +101,24 @@ async fn main() {
                 ..ServerConfig::default()
             };
 
-            start_graphiql_server(&server_config, &VERSION)
-                .await
-                .unwrap();
+            let cancellation_token_clone = cancellation_token.clone();
+            tracker.spawn(async move {
+                start_graphiql_server(&server_config, &VERSION, cancellation_token_clone)
+                    .await
+                    .unwrap();
+            });
+
+            // Wait for shutdown signal
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {},
+            }
+
+            println!("Shutting down...");
+
+            // Send shutdown signal to application
+            cancellation_token.cancel();
+            tracker.close();
+            tracker.wait().await;
         }
     }
 }

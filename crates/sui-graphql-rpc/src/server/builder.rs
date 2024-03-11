@@ -55,6 +55,7 @@ use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
+use tokio_util::sync::CancellationToken;
 use tower::{Layer, Service};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{error, info, warn};
@@ -62,14 +63,59 @@ use uuid::Uuid;
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
+    /// The following fields are exposed for background tasks
+    pub checkpoint_watermark: Arc<AtomicU64>,
+    pub(crate) state: AppState,
+    pub(crate) db_reader: Db,
 }
 
 impl Server {
+    /// Start the GraphQL service and any background tasks it is dependent on. When a cancellation
+    /// signal is received, the method waits for all tasks to complete before returning.
     pub async fn run(self) -> Result<(), Error> {
+        let cancellation_token = self.state.cancellation_token.clone();
         get_or_init_server_start_time().await;
-        self.server
-            .await
-            .map_err(|e| Error::Internal(format!("Server run failed: {}", e)))
+
+        // A handle that spawns a background task to periodically update the `CheckpointViewedAt`,
+        // which is the u64 high watermark of checkpoints that the service is guaranteed to produce
+        // a consistent result for.
+        let watermark_task = {
+            let metrics = self.state.metrics.clone();
+            let sleep_ms = self.state.service.background_tasks.watermark_update_ms;
+            let cancellation_token_clone = cancellation_token.clone();
+            info!("Starting watermark update task");
+            spawn_monitored_task!(async move {
+                update_watermark(
+                    &self.db_reader,
+                    self.checkpoint_watermark,
+                    metrics,
+                    sleep_ms,
+                    cancellation_token_clone,
+                )
+                .await;
+            })
+        };
+
+        let server_task = {
+            info!("Starting graphql service");
+            let cancellation_token_clone = cancellation_token.clone();
+            spawn_monitored_task!(async move {
+                self.server
+                    .with_graceful_shutdown(async {
+                        cancellation_token_clone.cancelled().await;
+                        info!("Shutdown signal received, terminating graphql service");
+                    })
+                    .await
+                    .map_err(|e| Error::Internal(format!("Server run failed: {}", e)))
+            })
+        };
+
+        // Wait for both tasks to complete. This ensures that the service doesn't fully shut down
+        // until both the background task and the server have completed their shutdown processes.
+        let _ = watermark_task.await;
+        let _ = server_task.await;
+
+        Ok(())
     }
 }
 
@@ -85,14 +131,21 @@ pub(crate) struct AppState {
     connection: ConnectionConfig,
     service: ServiceConfig,
     metrics: Metrics,
+    cancellation_token: CancellationToken,
 }
 
 impl AppState {
-    fn new(connection: ConnectionConfig, service: ServiceConfig, metrics: Metrics) -> Self {
+    fn new(
+        connection: ConnectionConfig,
+        service: ServiceConfig,
+        metrics: Metrics,
+        cancellation_token: CancellationToken,
+    ) -> Self {
         Self {
             connection,
             service,
             metrics,
+            cancellation_token,
         }
     }
 }
@@ -234,20 +287,14 @@ impl ServerBuilder {
         Ok(cors)
     }
 
-    /// Consumes the `ServerBuilder` to create a `Server` that can be run. Spawns a background task
-    /// to periodically update the `AvailableRange`, which is the range of checkpoints that the
-    /// service is guaranteed to produce a consistent result for.
+    /// Consumes the `ServerBuilder` to create a `Server` that can be run.
     pub fn build(self) -> Result<Server, Error> {
-        let metrics = self.state.metrics.clone();
-        let sleep_ms = self.state.service.background_tasks.watermark_update_ms;
+        let state = self.state.clone();
         let (address, schema, db_reader, router) = self.build_components();
 
-        // Start the background task to update a shared `AvailableRange`
+        // Start the background task to update a shared `CheckpointViewedAt`
         let watermark = Arc::new(AtomicU64::new(0));
         let watermark_clone = watermark.clone();
-        spawn_monitored_task!(async move {
-            update_watermark(&db_reader, watermark_clone, metrics, sleep_ms).await;
-        });
 
         let app = router
             .layer(axum::extract::Extension(schema))
@@ -261,10 +308,19 @@ impl ServerBuilder {
                     .map_err(|_| Error::Internal(format!("Failed to parse address {}", address)))?,
             )
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
+            checkpoint_watermark: watermark_clone,
+            state,
+            db_reader,
         })
     }
 
-    pub async fn from_config(config: &ServerConfig, version: &Version) -> Result<Self, Error> {
+    /// Instantiate a `ServerBuilder` from a `ServerConfig`, typically called when building the
+    /// graphql service for production usage.
+    pub async fn from_config(
+        config: &ServerConfig,
+        version: &Version,
+        cancellation_token: CancellationToken,
+    ) -> Result<Self, Error> {
         // PROMETHEUS
         let prom_addr: SocketAddr = format!(
             "{}:{}",
@@ -292,6 +348,7 @@ impl ServerBuilder {
             config.connection.clone(),
             config.service.clone(),
             metrics.clone(),
+            cancellation_token,
         );
         let mut builder = ServerBuilder::new(state);
 
@@ -382,7 +439,7 @@ pub fn export_schema() -> String {
 }
 
 /// Entry point for graphql requests. Each request is stamped with a unique ID, a `ShowUsage` flag
-/// if set in the request headers, and the available range as marked by the background task.
+/// if set in the request headers, and the high checkpoint watermark as set by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
@@ -499,8 +556,13 @@ pub(crate) async fn update_watermark(
     checkpoint_viewed_at: Arc<AtomicU64>,
     metrics: Metrics,
     sleep_ms: u64,
+    cancellation_token: CancellationToken,
 ) {
     loop {
+        if cancellation_token.is_cancelled() {
+            info!("Shutdown signal received, terminating watermark update task");
+            return;
+        }
         let new_checkpoint_viewed_at =
             match Checkpoint::query_latest_checkpoint_sequence_number(db).await {
                 Ok(checkpoint) => Some(checkpoint),
@@ -617,7 +679,13 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), cfg.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
-            let state = AppState::new(connection_config.clone(), cfg.clone(), metrics.clone());
+            let cancellation_token = CancellationToken::new();
+            let state = AppState::new(
+                connection_config.clone(),
+                cfg.clone(),
+                metrics.clone(),
+                cancellation_token.clone(),
+            );
             let schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
@@ -673,10 +741,12 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
+            let cancellation_token = CancellationToken::new();
             let state = AppState::new(
                 connection_config.clone(),
                 service_config.clone(),
                 metrics.clone(),
+                cancellation_token.clone(),
             );
             let schema = ServerBuilder::new(state)
                 .context_data(db)
@@ -754,10 +824,12 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
+            let cancellation_token = CancellationToken::new();
             let state = AppState::new(
                 connection_config.clone(),
                 service_config.clone(),
                 metrics.clone(),
+                cancellation_token.clone(),
             );
             let schema = ServerBuilder::new(state)
                 .context_data(db)
@@ -835,10 +907,12 @@ pub mod tests {
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
+        let cancellation_token = CancellationToken::new();
         let state = AppState::new(
             connection_config.clone(),
             service_config.clone(),
             metrics.clone(),
+            cancellation_token.clone(),
         );
         let schema = ServerBuilder::new(state)
             .context_data(db)
@@ -893,10 +967,12 @@ pub mod tests {
         let metrics = metrics();
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
+        let cancellation_token = CancellationToken::new();
         let state = AppState::new(
             connection_config.clone(),
             service_config.clone(),
             metrics.clone(),
+            cancellation_token.clone(),
         );
         let schema = ServerBuilder::new(state)
             .context_data(db)
@@ -940,10 +1016,12 @@ pub mod tests {
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
+        let cancellation_token = CancellationToken::new();
         let state = AppState::new(
             connection_config.clone(),
             service_config.clone(),
             metrics.clone(),
+            cancellation_token.clone(),
         );
         let schema = ServerBuilder::new(state)
             .context_data(db)

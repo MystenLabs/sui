@@ -23,6 +23,7 @@ use sui_types::storage::ReadStore;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 const VALIDATOR_COUNT: usize = 7;
 const EPOCH_DURATION_MS: u64 = 15000;
@@ -40,6 +41,7 @@ pub struct ExecutorCluster {
     pub graphql_client: SimpleClient,
     pub snapshot_config: SnapshotLagConfig,
     pub graphql_connection_config: ConnectionConfig,
+    pub cancellation_token: CancellationToken,
 }
 
 pub struct Cluster {
@@ -56,6 +58,7 @@ pub async fn start_cluster(
     internal_data_source_rpc_port: Option<u16>,
 ) -> Cluster {
     let db_url = graphql_connection_config.db_url.clone();
+    let cancellation_token = CancellationToken::new();
     // Starts validator+fullnode
     let val_fn = start_validator_with_fullnode(internal_data_source_rpc_port).await;
 
@@ -69,8 +72,12 @@ pub async fn start_cluster(
 
     // Starts graphql server
     let fn_rpc_url = val_fn.rpc_url().to_string();
-    let graphql_server_handle =
-        start_graphql_server_with_fn_rpc(graphql_connection_config.clone(), Some(fn_rpc_url)).await;
+    let graphql_server_handle = start_graphql_server_with_fn_rpc(
+        graphql_connection_config.clone(),
+        Some(fn_rpc_url),
+        Some(cancellation_token),
+    )
+    .await;
 
     let server_url = format!(
         "http://{}:{}/",
@@ -99,6 +106,7 @@ pub async fn serve_executor(
     snapshot_config: Option<SnapshotLagConfig>,
 ) -> ExecutorCluster {
     let db_url = graphql_connection_config.db_url.clone();
+    let cancellation_token = CancellationToken::new();
 
     let executor_server_url: SocketAddr = format!("127.0.0.1:{}", internal_data_source_rpc_port)
         .parse()
@@ -126,7 +134,11 @@ pub async fn serve_executor(
     .await;
 
     // Starts graphql server
-    let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
+    let graphql_server_handle = start_graphql_server(
+        graphql_connection_config.clone(),
+        cancellation_token.clone(),
+    )
+    .await;
 
     let server_url = format!(
         "http://{}:{}/",
@@ -145,20 +157,27 @@ pub async fn serve_executor(
         graphql_client: client,
         snapshot_config: snapshot_config.unwrap_or_default(),
         graphql_connection_config,
+        cancellation_token,
     }
 }
 
-pub async fn start_graphql_server(graphql_connection_config: ConnectionConfig) -> JoinHandle<()> {
-    start_graphql_server_with_fn_rpc(graphql_connection_config, None).await
+pub async fn start_graphql_server(
+    graphql_connection_config: ConnectionConfig,
+    cancellation_token: CancellationToken,
+) -> JoinHandle<()> {
+    start_graphql_server_with_fn_rpc(graphql_connection_config, None, Some(cancellation_token))
+        .await
 }
 
 pub async fn start_graphql_server_with_fn_rpc(
     graphql_connection_config: ConnectionConfig,
     fn_rpc_url: Option<String>,
+    cancellation_token: Option<CancellationToken>,
 ) -> JoinHandle<()> {
+    let cancellation_token = cancellation_token.unwrap_or_else(|| CancellationToken::new());
     let mut server_config = ServerConfig {
         connection: graphql_connection_config,
-        service: ServiceConfig::default(),
+        service: ServiceConfig::test_defaults(),
         ..ServerConfig::default()
     };
     if let Some(fn_rpc_url) = fn_rpc_url {
@@ -167,7 +186,7 @@ pub async fn start_graphql_server_with_fn_rpc(
 
     // Starts graphql server
     tokio::spawn(async move {
-        start_graphiql_server(&server_config, &Version("test"))
+        start_graphiql_server(&server_config, &Version("test"), cancellation_token)
             .await
             .unwrap();
     })
@@ -335,8 +354,11 @@ impl ExecutorCluster {
         latest_cp, latest_snapshot_cp));
     }
 
+    /// Deletes the database created for the test and sends a cancellation signal to the graphql
+    /// service. When this function is awaited on, the callsite will wait for the graphql service to
+    /// terminate its background task and then itself.
     pub async fn cleanup_resources(self) {
-        // Delete the database
+        self.cancellation_token.cancel();
         let db_url = self.graphql_connection_config.db_url.clone();
         force_delete_database(db_url).await;
     }
