@@ -72,7 +72,6 @@ pair corresponds to a single entry in the resulting `vector<u8>`.
 #### Example String Literals
 
 ```move
-script {
 fun byte_and_hex_strings() {
     assert!(b"" == x"", 0);
     assert!(b"Hello!\n" == x"48656C6C6F210A", 1);
@@ -82,7 +81,6 @@ fun byte_and_hex_strings() {
             x"2248656C6C6F09776F726C6421220A200D205C4E756C6C3D00",
         3
     );
-}
 }
 ```
 
@@ -108,6 +106,7 @@ library:
 | `vector::remove<T>(v: &mut vector<T>, i: u64): T`          | Remove the `i`th element of the vector `v`, shifting all subsequent elements. This is O(n) and preserves ordering of elements in the vector                     | If `i` is out of bounds        |
 | `vector::swap_remove<T>(v: &mut vector<T>, i: u64): T`     | Swap the `i`th element of the vector `v` with the last element and then pop the element, This is O(1), but does not preserve ordering of elements in the vector  | If `i` is out of bounds        |
 
+<!-- TODO we should just link out to generated stdlib docs? Maybe?  -->
 More operations may be added over time.
 
 ## Example
@@ -115,7 +114,7 @@ More operations may be added over time.
 ```move
 use std::vector;
 
-let v = vector::empty<u64>();
+let mut v = vector::empty<u64>();
 vector::push_back(&mut v, 5);
 vector::push_back(&mut v, 6);
 
@@ -149,21 +148,29 @@ fun destroy_droppable_vector<T: drop>(vec: vector<T>) {
 ```
 
 Similarly, vectors cannot be copied unless the element type has `copy`. In other words, a
-`vector<T>` has `copy` if and only if `T` has `copy`. However, even copyable vectors are never
-implicitly copied:
+`vector<T>` has `copy` if and only if `T` has `copy`. Note that it will be implicitly copied if needed:
 
 ```move
-let x = vector::singleton<u64>(10);
-let y = copy x; // compiler error without the copy!
+let x = vector[10];
+let y = x; // implicit copy
+let z = x;
+(y, z)
 ```
 
-Copies of large vectors can be expensive, so the compiler requires explicit `copy`'s to make it
-easier to see where they are happening.
+Keep in mind, copies of large vectors can be expensive,
+If this is a concern, annotating the `intended` usage can prevent accidental copies. For example,
+
+```move
+let x = vector[10];
+let y = move x;
+let z = x; // ERROR! x has been moved
+(y, z)
+```
 
 For more details see the sections on [type abilities](./abilities.md) and [generics](./generics.md).
 
 ## Ownership
 
 As mentioned [above](#destroying-and-copying-vectors), `vector` values can be copied only if the
-elements can be copied. In that case, the copy must be explicit via a
+elements can be copied. In that case, the copy can be done via a
 [`copy`](./variables.md#move-and-copy) or a [dereference `*`](./references.md#reading-and-writing-through-references).
