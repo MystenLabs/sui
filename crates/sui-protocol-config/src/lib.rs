@@ -1825,7 +1825,6 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.narwhal_header_v2 = true;
                         cfg.feature_flags.random_beacon = true;
-                        cfg.random_beacon_reduction_lower_bound = Some(1600);
                     }
                     // Only enable consensus digest in consensus commit prologue in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
@@ -1912,7 +1911,12 @@ impl ProtocolConfig {
                         cfg.feature_flags.include_consensus_digest_in_prologue = true;
                     }
                 }
-                38 => {}
+                38 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // New parameter for random beacon, only enabled on devnet.
+                        cfg.random_beacon_reduction_lower_bound = Some(1600);
+                    }
+                }
                 39 => {}
                 // Use this template when making changes:
                 //
