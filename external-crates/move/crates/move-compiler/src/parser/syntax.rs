@@ -799,9 +799,7 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
 //     MutOpt = "mut"?
 fn parse_mut_opt(context: &mut Context) -> Result<Option<Loc>, Box<Diagnostic>> {
     // In migration mode, 'mut' is assumed to be an identifier that needsd escaping.
-    if context.env.edition(context.package_name) == Edition::E2024_MIGRATION {
-        Ok(None)
-    } else if context.tokens.peek() == Tok::Mut {
+    if context.tokens.peek() == Tok::Mut {
         let start_loc = context.tokens.start_loc();
         context.tokens.advance()?;
         let end_loc = context.tokens.previous_end_loc();
@@ -839,7 +837,13 @@ fn parse_exp_field(context: &mut Context) -> Result<(Field, Exp), Box<Diagnostic
 // with the same name as the field.
 fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnostic>> {
     let mut_ = parse_mut_opt(context)?;
-    let f = parse_field(context)?;
+    let f = parse_field(context).or_else(|diag| {
+        if mut_.is_some() && context.env.edition(context.package_name) == Edition::E2024_MIGRATION {
+            Ok(Field(sp(mut_.unwrap(), "mut".into())))
+        } else {
+            Err(diag)
+        }
+    })?;
     let arg = if mut_.is_some() {
         sp(f.loc(), Bind_::Var(mut_, Var(f.0)))
     } else if match_token(context.tokens, Tok::Colon)? {
@@ -869,7 +873,16 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
             Tok::LBrace | Tok::Less | Tok::ColonColon | Tok::LParen
         ) {
             let mut_ = parse_mut_opt(context)?;
-            let v = Bind_::Var(mut_, parse_var(context)?);
+            let v = parse_var(context).or_else(|diag| {
+                if mut_.is_some()
+                    && context.env.edition(context.package_name) == Edition::E2024_MIGRATION
+                {
+                    Ok(Var(sp(mut_.unwrap(), "mut".into())))
+                } else {
+                    Err(diag)
+                }
+            })?;
+            let v = Bind_::Var(mut_, v);
             let end_loc = context.tokens.previous_end_loc();
             return Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, v));
         }
@@ -2482,7 +2495,13 @@ fn parse_function_decl(
 //      Parameter = "mut"? <Var> ":" <Type>
 fn parse_parameter(context: &mut Context) -> Result<(Mutability, Var, Type), Box<Diagnostic>> {
     let mut_ = parse_mut_opt(context)?;
-    let v = parse_var(context)?;
+    let v = parse_var(context).or_else(|diag| {
+        if mut_.is_some() && context.env.edition(context.package_name) == Edition::E2024_MIGRATION {
+            Ok(Var(sp(mut_.unwrap(), "mut".into())))
+        } else {
+            Err(diag)
+        }
+    })?;
     consume_token(context.tokens, Tok::Colon)?;
     let t = parse_type(context)?;
     Ok((mut_, v, t))
