@@ -173,9 +173,10 @@ $ sui client ptb \
 	--transfer-objects to_address "[sword]" \
 	--gas-budget 20000000
 ```
+{@include: ../../../references/cli/address-prefix.mdx}
 Make sure to replace `0xFORGE_ID`, `0xADDRESS`, and `0xPACKAGEID` with the actual `objectId` of the `Forge` object, the address of the recipient, and the `objectId` of the package, respectively. The above command makes use of the Sui Client PTB CLI. You can learn more about it [here](../../../references/cli/ptb.mdx).
 
-Once the transaction is executed, you can check the status of the `Sword` object using the `sui client objects` command or the blockchain explorer of your choice. You should see a total of 4 objects now:
+Once the transaction is executed, you can check the status of the `Sword` object by using the `sui client objects` command or the blockchain explorer of your choice. You should see a total of 4 objects now:
 ```
 ╭───────────────────────────────────────────────────────────────────────────────────────╮
 │ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
