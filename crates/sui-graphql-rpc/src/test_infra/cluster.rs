@@ -158,7 +158,7 @@ pub async fn start_graphql_server_with_fn_rpc(
 ) -> JoinHandle<()> {
     let mut server_config = ServerConfig {
         connection: graphql_connection_config,
-        service: ServiceConfig::default(),
+        service: ServiceConfig::test_defaults(),
         ..ServerConfig::default()
     };
     if let Some(fn_rpc_url) = fn_rpc_url {

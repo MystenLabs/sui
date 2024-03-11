@@ -234,14 +234,14 @@ impl ServerBuilder {
     }
 
     /// Consumes the `ServerBuilder` to create a `Server` that can be run. Spawns a background task
-    /// to periodically update the `AvailableRange`, which is the range of checkpoints that the
-    /// service is guaranteed to produce a consistent result for.
+    /// to periodically update the `CheckpointViewedAt`, which is the u64 high watermark of
+    /// checkpoints that the service is guaranteed to produce a consistent result for.
     pub fn build(self) -> Result<Server, Error> {
         let metrics = self.state.metrics.clone();
         let sleep_ms = self.state.service.background_tasks.watermark_update_ms;
         let (address, schema, db_reader, router) = self.build_components();
 
-        // Start the background task to update a shared `AvailableRange`
+        // Start the background task to update a shared `CheckpointViewedAt`
         let watermark = Arc::new(AtomicU64::new(0));
         let watermark_clone = watermark.clone();
         spawn_monitored_task!(async move {
@@ -392,7 +392,7 @@ pub fn export_schema() -> String {
 }
 
 /// Entry point for graphql requests. Each request is stamped with a unique ID, a `ShowUsage` flag
-/// if set in the request headers, and the available range as marked by the background task.
+/// if set in the request headers, and the high checkpoint watermark as set by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,

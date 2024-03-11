@@ -357,6 +357,15 @@ impl ServiceConfig {
     pub fn read(contents: &str) -> Result<Self, toml::de::Error> {
         toml::de::from_str::<Self>(contents)
     }
+
+    pub fn test_defaults() -> Self {
+        Self {
+            limits: Limits::default(),
+            disabled_features: BTreeSet::new(),
+            experiments: Experiments::default(),
+            background_tasks: BackgroundTasksConfig::test_defaults(),
+        }
+    }
 }
 
 impl Ide {
@@ -375,6 +384,14 @@ impl Limits {
             max_type_argument_width: self.max_type_argument_width as usize,
             max_type_nodes: self.max_type_nodes as usize,
             max_move_value_depth: self.max_move_value_depth as usize,
+        }
+    }
+}
+
+impl BackgroundTasksConfig {
+    pub fn test_defaults() -> Self {
+        Self {
+            watermark_update_ms: 100, // Set to 100ms for testing
         }
     }
 }

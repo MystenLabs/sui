@@ -112,9 +112,21 @@ async fn main() {
                 ..ServerConfig::default()
             };
 
-            start_graphiql_server(&server_config, &VERSION)
+            tokio::spawn(async move {
+                start_graphiql_server(&server_config, &VERSION)
+                    .await
+                    .unwrap();
+            });
+
+            // start_graphiql_server(&server_config, &VERSION)
+            // .await
+            // .unwrap();
+
+            tokio::signal::ctrl_c()
                 .await
-                .unwrap();
+                .expect("failed to listen for event");
+
+            println!("Shutting down...");
         }
         Command::FromConfig { path } => {
             println!("Starting server...");
