@@ -4,17 +4,17 @@
 use std::{collections::BTreeSet, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
-use mysten_metrics::{metered_channel, monitored_scope};
+use mysten_metrics::{metered_channel, monitored_scope, spawn_logged_monitored_task};
 use thiserror::Error;
 use tokio::sync::{oneshot, oneshot::error::RecvError};
 use tracing::warn;
 
-use crate::error::{ConsensusError, ConsensusResult};
 use crate::{
     block::{BlockRef, Round, VerifiedBlock},
     context::Context,
     core::Core,
     core_thread::CoreError::Shutdown,
+    error::{ConsensusError, ConsensusResult},
 };
 
 const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 32;
@@ -110,13 +110,16 @@ impl ChannelCoreThreadDispatcher {
             context: context.clone(),
         };
 
-        let join_handle = tokio::spawn(async move {
-            if let Err(err) = core_thread.run().await {
-                if !matches!(err, ConsensusError::Shutdown) {
-                    panic!("Fatal error occurred: {err}");
+        let join_handle = spawn_logged_monitored_task!(
+            async move {
+                if let Err(err) = core_thread.run().await {
+                    if !matches!(err, ConsensusError::Shutdown) {
+                        panic!("Fatal error occurred: {err}");
+                    }
                 }
-            }
-        });
+            },
+            "ConsensusCoreThread"
+        );
 
         // Explicitly using downgraded sender in order to allow sharing the CoreThreadDispatcher but
         // able to shutdown the CoreThread by dropping the original sender.
