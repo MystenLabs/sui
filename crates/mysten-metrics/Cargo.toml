@@ -21,4 +21,3 @@ futures.workspace = true
 async-trait.workspace = true
 
 prometheus-closure-metric.workspace = true
-workspace-hack.workspace = true

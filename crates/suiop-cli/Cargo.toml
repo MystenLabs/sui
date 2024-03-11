@@ -41,7 +41,6 @@ reqwest = { workspace = true, features = [
 ], default-features = false }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-workspace-hack.workspace = true
 include_dir.workspace = true
 
 [dev-dependencies]

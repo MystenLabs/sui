@@ -15,7 +15,6 @@ rand.workspace = true
 simulacrum.workspace = true
 sui-types.workspace = true
 sui-core.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

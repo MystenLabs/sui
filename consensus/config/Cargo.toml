@@ -13,7 +13,5 @@ rand.workspace = true
 serde.workspace = true
 shared-crypto.workspace = true
 
-workspace-hack.workspace = true
-
 [dev-dependencies]
 insta.workspace = true

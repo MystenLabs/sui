@@ -23,6 +23,3 @@ sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "su
 move-cli.workspace = true
 move-package.workspace = true
 move-unit-test.workspace = true
-
-[dependencies]
-workspace-hack.workspace = true

@@ -26,7 +26,6 @@ sui-keys.workspace = true
 sui-protocol-config.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
-workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true

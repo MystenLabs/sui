@@ -17,9 +17,6 @@ tokio.workspace = true
 name = "tests"
 harness = false
 
-[dependencies]
-workspace-hack.workspace = true
-
 [features]
 default = ["pg_backend"]
 pg_integration = []

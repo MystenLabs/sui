@@ -158,8 +158,6 @@ def do_cut(args):
     with open(Path() / "sui-execution" / "src" / "lib.rs", mode="w") as lib:
         generate_lib(lib)
 
-    run(["cargo", "hakari", "generate"])
-
 
 def do_generate_lib(args):
     if args.dry_run:
@@ -604,7 +602,7 @@ def discover_cuts():
 
 
 if __name__ == "__main__":
-    for bin in ["git", "cargo", "cargo-hakari"]:
+    for bin in ["git", "cargo"]:
         if not which(bin):
             print(f"Please install '{bin}'", file=stderr)
 
