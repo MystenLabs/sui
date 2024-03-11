@@ -342,12 +342,7 @@ where
 
 // Parse an identifier:
 //      Identifier = <IdentifierValue>
-#[allow(clippy::needless_if)]
 fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
-    if matches!(
-        context.tokens.peek(),
-        Tok::Identifier | Tok::RestrictedIdentifier
-    ) {}
     let id: Symbol = match context.tokens.peek() {
         Tok::Identifier => context.tokens.content().into(),
         Tok::RestrictedIdentifier => {
@@ -706,12 +701,22 @@ fn parse_attribute_value(context: &mut Context) -> Result<AttributeValue, Box<Di
 
 // Parse a single attribute
 //      Attribute =
-//          <Identifier>
+//          "for"
+//          | <Identifier>
 //          | <Identifier> "=" <AttributeValue>
 //          | <Identifier> "(" Comma<Attribute> ")"
 fn parse_attribute(context: &mut Context) -> Result<Attribute, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
-    let n = parse_identifier(context)?;
+    let n = match context.tokens.peek() {
+        // hack for `#[syntax(for)]` attribute
+        Tok::For => {
+            let for_ = context.tokens.content().into();
+            context.tokens.advance()?;
+            let end_loc = context.tokens.previous_end_loc();
+            spanned(context.tokens.file_hash(), start_loc, end_loc, for_)
+        }
+        _ => parse_identifier(context)?,
+    };
     let attr_ = match context.tokens.peek() {
         Tok::Equal => {
             context.tokens.advance()?;
