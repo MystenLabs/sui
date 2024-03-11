@@ -45,6 +45,7 @@ export type ZkSendLinkOptions = {
 	path?: string;
 	address?: string;
 	contract?: ZkBagContractOptions;
+	contractOnlyLink?: boolean;
 } & (
 	| {
 			address: string;
@@ -81,6 +82,7 @@ export class ZkSendLink {
 	#network: 'mainnet' | 'testnet';
 	#host?: string;
 	#path?: string;
+	#contractOnlyLink?: boolean;
 
 	constructor({
 		network = DEFAULT_ZK_SEND_LINK_OPTIONS.network,
@@ -91,6 +93,7 @@ export class ZkSendLink {
 		address,
 		host,
 		path,
+		contractOnlyLink,
 	}: ZkSendLinkOptions) {
 		if (!keypair && !address) {
 			throw new Error('Either keypair or address must be provided');
@@ -103,6 +106,7 @@ export class ZkSendLink {
 		this.#network = network;
 		this.#host = host;
 		this.#path = path;
+		this.#contractOnlyLink = contractOnlyLink;
 
 		if (contract) {
 			this.#contract = new ZkBag(contract.packageId, contract);
@@ -140,6 +144,10 @@ export class ZkSendLink {
 	}
 
 	async loadOwnedData() {
+		if (this.#contractOnlyLink) {
+			await this.#loadBag();
+			return;
+		}
 		await Promise.all([
 			this.#loadBag(),
 			this.#loadInitialTransactionData(),
@@ -155,7 +163,7 @@ export class ZkSendLink {
 			objects?: string[];
 		},
 	) {
-		if (!this.#contract || !this.#bagObjects) {
+		if (!this.#contractOnlyLink && (!this.#contract || !this.#bagObjects)) {
 			return this.#listNonContractClaimableAssets(address, options);
 		}
 
@@ -168,7 +176,7 @@ export class ZkSendLink {
 			digest: string;
 		}[] = [];
 
-		for (const object of this.#bagObjects) {
+		for (const object of this.#bagObjects ?? []) {
 			const type = parseStructTag(object.type);
 
 			if (
@@ -318,30 +326,6 @@ export class ZkSendLink {
 
 		const store = txb.object(this.#contract.ids.bagStoreId);
 
-		const [bag, proof] = this.#contract.reclaim(txb, { arguments: [store, this.#address] });
-
-		const objectsToAdd = [];
-
-		for (const object of this.#bagObjects) {
-			objectsToAdd.push({
-				result: this.#contract.claim(txb, {
-					arguments: [
-						bag,
-						proof,
-						txb.receivingRef({
-							objectId: object.objectId,
-							version: object.version,
-							digest: object.digest,
-						}),
-					],
-					typeArguments: [object.type],
-				}),
-				type: object.type,
-			});
-		}
-
-		this.#contract.finalize(txb, { arguments: [bag, proof] });
-
 		const newLinkKp = Ed25519Keypair.generate();
 
 		const newLink = new ZkSendLinkBuilder({
@@ -354,15 +338,9 @@ export class ZkSendLink {
 			keypair: newLinkKp,
 		});
 
-		const receiver = txb.pure.address(newLinkKp.toSuiAddress());
-		this.#contract.new(txb, { arguments: [store, receiver] });
+		const to = txb.pure.address(newLinkKp.toSuiAddress());
 
-		for (const { result, type } of objectsToAdd) {
-			this.#contract.add(txb, {
-				arguments: [store, receiver, result],
-				typeArguments: [type],
-			});
-		}
+		this.#contract.update_receiver(txb, { arguments: [store, this.#address, to] });
 
 		return {
 			url: newLink.getLink(),

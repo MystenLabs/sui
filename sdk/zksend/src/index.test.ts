@@ -10,6 +10,7 @@ import { describe } from 'node:test';
 import { expect, test } from 'vitest';
 
 import { ZkSendLink, ZkSendLinkBuilder } from './index.js';
+import { listCreatedLinks } from './links/utils.js';
 
 export const DEMO_BEAR_CONFIG = {
 	packageId: '0xab8ed19f16874f9b8b66b0b6e325ee064848b1a7fdcb1c2f0478b17ad8574e65',
@@ -17,9 +18,9 @@ export const DEMO_BEAR_CONFIG = {
 };
 
 export const ZK_BAG_CONFIG = {
-	packageId: '0x47822def052ee6074dc5d3e9962cbfcadc1424dcc65df535b6c2b5d86a28fe96',
-	bagStoreId: '0x19b03a96969ff4166ba532b3ac9bdf295f5bb6d6dea7377cd8170d3db0145b02',
-	bagStoreTableId: '0x2fc366651852311e49f97d0208ff1ebf989793006dc959c79ffc35cb44149ef3',
+	packageId: '0x036fee67274d0d85c3532f58296abe0dee86b93864f1b2b9074be6adb388f138',
+	bagStoreId: '0x5c63e71734c82c48a3cb9124c54001d1a09736cfb1668b3b30cd92a96dd4d0ce',
+	bagStoreTableId: '0x4e1bc4085d64005e03eb4eab2510d527aeba9548cda431cb8f149ff37451f870',
 };
 
 const client = new SuiClient({
@@ -138,9 +139,14 @@ describe('Contract links', () => {
 				signer: keypair,
 			});
 
-			const lostLink = await ZkSendLink.fromUrl(link.getLink(), {
-				contract: ZK_BAG_CONFIG,
+			await new Promise((resolve) => setTimeout(resolve, 3000));
+
+			const {
+				links: [lostLink],
+			} = await listCreatedLinks({
+				address: keypair.toSuiAddress(),
 				network: 'testnet',
+				contract: ZK_BAG_CONFIG,
 			});
 
 			const { url, transactionBlock } = await lostLink.createRegenerateTransaction(

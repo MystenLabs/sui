@@ -3,45 +3,52 @@
 
 import '@mysten/sui.js/graphql/schemas/2024-01';
 
+import { bcs } from '@mysten/sui.js/bcs';
+import type { SuiClient } from '@mysten/sui.js/client';
 import { SuiGraphQLClient } from '@mysten/sui.js/graphql';
-// import type { ResultOf } from '@mysten/sui.js/graphql/schemas/2024-01';
 import { graphql } from '@mysten/sui.js/graphql/schemas/2024-01';
+import { fromB64, normalizeSuiAddress } from '@mysten/sui.js/utils';
 
-const CreatedLinkFragment = graphql(`
-	fragment CreatedLinkFragment on TransactionBlock {
-		digest
-		effects {
-			timestamp
-			objectChanges {
-				nodes {
-					outputState {
-						address
-						version
-						owner {
-							__typename
-							... on Parent {
-								parent {
-									address
-									owner {
-										... on Parent {
-											parent {
-												address
-											}
-										}
-									}
-								}
-							}
-							... on AddressOwner {
-								owner {
-									address
+import { ZkSendLink } from './claim.js';
+import type { ZkBagContractOptions } from './zk-bag.js';
+
+const ListCreatedLinksQuery = graphql(`
+	query listCreatedLinks($address: SuiAddress!, $function: String!, $cursor: String) {
+		transactionBlocks(
+			last: 10
+			before: $cursor
+			filter: { signAddress: $address, function: $function, kind: PROGRAMMABLE_TX }
+		) {
+			pageInfo {
+				startCursor
+				hasPreviousPage
+			}
+			nodes {
+				digest
+				kind {
+					__typename
+					... on ProgrammableTransactionBlock {
+						inputs(first: 10) {
+							nodes {
+								__typename
+								... on Pure {
+									bytes
 								}
 							}
 						}
-						asMoveObject {
-							contents {
-								data
-								type {
-									repr
+						transactions(first: 10) {
+							nodes {
+								__typename
+								... on MoveCallTransaction {
+									module
+									functionName
+									package
+									arguments {
+										__typename
+										... on Input {
+											ix
+										}
+									}
 								}
 							}
 						}
@@ -52,38 +59,37 @@ const CreatedLinkFragment = graphql(`
 	}
 `);
 
-const GetCreatedLinksQuery = graphql(
-	`
-		query getCreatedLinks($sender: String!, $cursor: String, $function: String!) {
-			transactionBlocks(filter: { signAddress: $sender, function: $function }, last: 1) {
-				nodes {
-					...CreatedLinkFragment
-				}
-			}
-		}
-	`,
-	[CreatedLinkFragment],
-);
-
-export async function getCreatedLinks(options: {
-	network: 'mainnet' | 'testnet';
-	sender: string;
-	packageId: string;
+export async function listCreatedLinks({
+	address,
+	cursor,
+	network,
+	contract,
+	...linkOptions
+}: {
+	address: string;
+	contract: ZkBagContractOptions;
 	cursor?: string;
+	network?: 'mainnet' | 'testnet';
+	// Link options:
+	host?: string;
+	path?: string;
+	client?: SuiClient;
 }) {
 	const gqlClient = new SuiGraphQLClient({
 		url:
-			options.network === 'mainnet'
-				? 'https://sui-mainnet.mystenlabs.com/graphql'
-				: 'https://sui-testnet.mystenlabs.com/graphql',
+			network === 'testnet'
+				? 'https://sui-testnet.mystenlabs.com/graphql'
+				: 'https://sui-mainnet.mystenlabs.com/graphql',
 	});
 
+	const packageId = normalizeSuiAddress(contract.packageId);
+
 	const page = await gqlClient.query({
-		query: GetCreatedLinksQuery,
+		query: ListCreatedLinksQuery,
 		variables: {
-			sender: options.sender,
-			cursor: options.cursor,
-			function: `${options.packageId}::zk_bag::new`,
+			address,
+			cursor,
+			function: `${packageId}::zk_bag::new`,
 		},
 	});
 
@@ -93,24 +99,54 @@ export async function getCreatedLinks(options: {
 		throw new Error('Failed to load created links');
 	}
 
-	// return {
-	// 	cursor: transactionBlocks.pageInfo.startCursor,
-	// 	hasNextPage: transactionBlocks.pageInfo.hasPreviousPage,
-	// 	links: transactionBlocks.node.map((node: any) => node.id),
-	// };
+	const links = transactionBlocks.nodes
+		.map((node) => {
+			if (node.kind?.__typename !== 'ProgrammableTransactionBlock') {
+				throw new Error('Invalid transaction block');
+			}
+
+			const fn = node.kind.transactions.nodes.find(
+				(fn) =>
+					fn.__typename === 'MoveCallTransaction' &&
+					fn.package === packageId &&
+					fn.module === 'zk_bag' &&
+					fn.functionName === 'new',
+			);
+
+			if (fn?.__typename !== 'MoveCallTransaction') {
+				return null;
+			}
+
+			const addressArg = fn.arguments[1];
+
+			if (addressArg.__typename !== 'Input') {
+				throw new Error('Invalid address argument');
+			}
+
+			const input = node.kind.inputs.nodes[addressArg.ix];
+
+			if (input.__typename !== 'Pure') {
+				throw new Error('Expected Address input to be a Pure value');
+			}
+
+			const address = bcs.Address.parse(fromB64(input.bytes as string));
+
+			return new ZkSendLink({
+				network,
+				address,
+				contract,
+				contractOnlyLink: true,
+				...linkOptions,
+			});
+		})
+		.reverse()
+		.filter(Boolean) as ZkSendLink[];
+
+	await Promise.all(links.map((link) => link.loadOwnedData()));
+
+	return {
+		cursor: transactionBlocks.pageInfo.startCursor,
+		hasNextPage: transactionBlocks.pageInfo.hasPreviousPage,
+		links,
+	};
 }
-
-// function listLinkAssets(txb: ResultOf<typeof CreatedLinkFragment>) {
-// 	const nfts = [];
-// 	const balances = new Map<string, bigint>();
-
-// 	const dynamicField = txb.effects?.objectChanges.nodes.find((node) => {
-// 		node.outputState?.asMoveObject?.contents?.type.repr === DYNAMIC_FIELD_TYPE;
-// 	});
-
-// 	if (!dynamicField) {
-// 		throw new Error('Failed to find dynamic field');
-// 	}
-
-// 	const dynamicFieldId = dynamicField.outputState?.address;
-// }

@@ -143,4 +143,26 @@ export class ZkBag<IDs> {
 			arguments: [txb.object(bag), txb.object(claim)],
 		});
 	}
+
+	update_receiver(
+		txb: TransactionBlock,
+		{
+			arguments: [bag, from, to],
+		}: {
+			arguments: [
+				bag: TransactionObjectArgument | string,
+				from: TransactionArgument | string,
+				to: TransactionArgument | string,
+			];
+		},
+	) {
+		txb.moveCall({
+			target: `${this.#package}::${this.#module}::update_receiver`,
+			arguments: [
+				txb.object(bag),
+				typeof from === 'string' ? txb.pure.address(from) : from,
+				typeof to === 'string' ? txb.pure.address(to) : to,
+			],
+		});
+	}
 }
