@@ -801,6 +801,7 @@ impl CheckpointBuilder {
         height: CheckpointCommitHeight,
         pending: PendingCheckpoint,
     ) -> anyhow::Result<()> {
+        let _scope = monitored_scope("zzzMakeCheckpoint");
         self.metrics
             .checkpoint_roots_count
             .inc_by(pending.roots.len() as u64);

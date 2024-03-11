@@ -934,6 +934,8 @@ pub struct ProtocolConfig {
     consensus_max_transaction_size_bytes: Option<u64>,
     /// The maximum size of transactions included in a consensus proposed block
     consensus_max_transactions_in_block_bytes: Option<u64>,
+
+    max_checkpoint_gas_level: Option<u64>,
 }
 
 // feature flags
@@ -1574,6 +1576,8 @@ impl ProtocolConfig {
             consensus_max_transaction_size_bytes: None,
 
             consensus_max_transactions_in_block_bytes: None,
+
+            max_checkpoint_gas_level: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -1894,6 +1898,7 @@ impl ProtocolConfig {
 
                     cfg.consensus_max_transaction_size_bytes = Some(256 * 1024); // 256KB
                     cfg.consensus_max_transactions_in_block_bytes = Some(6 * 1_024 * 1024);
+
                     // 6 MB
                 }
                 37 => {
@@ -1904,7 +1909,11 @@ impl ProtocolConfig {
                         cfg.feature_flags.include_consensus_digest_in_prologue = true;
                     }
                 }
-                38 => {}
+                38 => {
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.max_checkpoint_gas_level = Some(150_000_000);
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

@@ -58,7 +58,7 @@ pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 10_000;
 // objects that are storage expensive. That may happen (and often is the case)
 // because the object touched are set up in genesis and carry no storage cost
 // (and thus rebate) on first usage.
-pub const TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE: u64 = 5_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE: u64 = 50000;
 
 pub const GAS_PRICE_FOR_SYSTEM_TX: u64 = 1;
 

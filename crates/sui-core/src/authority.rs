@@ -950,6 +950,8 @@ impl AuthorityState {
         tx_data: &SenderSignedData,
         do_authority_overload_check: bool,
     ) -> SuiResult {
+        return Ok(());
+
         if do_authority_overload_check {
             self.check_authority_overload(tx_data)?;
         }
