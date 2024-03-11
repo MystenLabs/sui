@@ -100,7 +100,12 @@ When needing to execute a move call, use the `--move-call` transaction to call a
 
 ```bash
 --assign A none
---move-call std::option::is_none<u64> A
+--move-call std::option::is_none "<u64>" A
+```
+
+To call a specific function from a specific package
+```bash
+--move-call @0xPACKAGE_ADDR::MODULE_NAME::FUNCTION_NAME "FUNC_ARG1" "FUNC_ARG2"
 ```
 
 

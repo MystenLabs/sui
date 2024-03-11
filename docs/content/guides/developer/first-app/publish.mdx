@@ -98,7 +98,11 @@ If you try to run tests on the whole package at this point, you encounter compil
 `new_sword` function signature change. The changes required for the tests to run again is an exercise left for you. If you need help, you can refer to the source code for the package (with all the tests properly adjusted) in [first_package](https://github.com/MystenLabs/sui/tree/main/examples/move/first_package/sources/example.move).
 
 ### Publish the package
-Once you have the package ready, you can publish it to the Sui network. To do so, use the `sui client publish` command of the Sui Client CLI. You will need to set a gas budget by using the `--gas-budget` flag. The gas budget is the maximum amount of gas you are willing to spend on the transaction. In testnet and devnet, a high budget would allow the transaction to be executed by the network.
+Once you have the package ready, you can publish it to the Sui network. To do so, use 
+```
+sui client publish
+```
+You will need to set a gas budget by using the `--gas-budget` flag. The gas budget is the maximum amount of gas you are willing to spend on the transaction. In testnet and devnet, a high budget would allow the transaction to be executed by the network.
 
 You can then check the status of the package using the `sui client objects` command. You can also view the status of the package using the [Sui Explorer](https://suiexplorer.com) or any other Sui blockchain explorer tools.
 
@@ -160,18 +164,18 @@ Now that the package is published, you can interact with it by calling functions
 
 For example, you can create a new `Sword` object defined in the package by calling the `new_sword` function in the `my_module` package, and then transfer the `Sword` object to any address:
 
-```shell
+```bash
 $ sui client ptb \
-	--assign forge @0xFORGEID \
+	--assign forge @0xFORGE_ID \
 	--assign to_address @0xADDRESS \
 	--move-call 0xPACKAGEID::my_module::new_sword forge 3 3 \
 	--assign sword \
 	--transfer-objects to_address "[sword]" \
 	--gas-budget 20000000
 ```
-Make sure to replace `0xFORGEID`, `0xADDRESS`, and `0xPACKAGEID` with the actual `objectId` of the `Forge` object, the address of the recipient, and the `objectId` of the package, respectively. The above command makes use of the Sui Client PTB CLI. You can learn more about it [here](../../../references/cli/ptb.mdx).
+Make sure to replace `0xFORGE_ID`, `0xADDRESS`, and `0xPACKAGEID` with the actual `objectId` of the `Forge` object, the address of the recipient, and the `objectId` of the package, respectively. The above command makes use of the Sui Client PTB CLI. You can learn more about it [here](../../../references/cli/ptb.mdx).
 
-Once the transaction is executed, you can check the status of the `Sword` object using the `sui client objects` command or the blockchain explorer of your choice:
+Once the transaction is executed, you can check the status of the `Sword` object using the `sui client objects` command or the blockchain explorer of your choice. You should see a total of 4 objects now:
 ```
 ╭───────────────────────────────────────────────────────────────────────────────────────╮
 │ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
