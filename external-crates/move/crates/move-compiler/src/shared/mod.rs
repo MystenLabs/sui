@@ -905,3 +905,38 @@ impl IndexedPhysicalPackagePath {
         })
     }
 }
+
+//**************************************************************************************************
+// Format a comma list correctly for error reporting and other messages.
+//**************************************************************************************************
+
+macro_rules! format_oxford_list {
+    ($sep:expr, $format_str:expr, $e:expr) => {{
+        let entries = $e;
+        match entries.len() {
+            0 => String::new(),
+            1 => format!($format_str, entries[0]),
+            2 => format!(
+                "{} {} {}",
+                format!($format_str, entries[0]),
+                $sep,
+                format!($format_str, entries[1])
+            ),
+            _ => {
+                let entries = entries
+                    .iter()
+                    .map(|entry| format!($format_str, entry))
+                    .collect::<Vec<_>>();
+                if let Some((last, init)) = entries.split_last() {
+                    let mut result = init.join(", ");
+                    result.push_str(&format!(", {} {}", $sep, last));
+                    result
+                } else {
+                    String::new()
+                }
+            }
+        }
+    }};
+}
+
+pub(crate) use format_oxford_list;
