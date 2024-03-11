@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::{
-    ConnectionConfig, Version, MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
+    ConnectionConfig, ServiceConfig, Version, MAX_CONCURRENT_REQUESTS,
+    RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
 use crate::consistency::CheckpointViewedAt;
 use crate::context_data::package_cache::DbPackageStore;
@@ -81,13 +82,15 @@ pub(crate) struct ServerBuilder {
 #[derive(Clone)]
 pub(crate) struct AppState {
     connection: ConnectionConfig,
+    service: ServiceConfig,
     metrics: Metrics,
 }
 
 impl AppState {
-    fn new(connection: ConnectionConfig, metrics: Metrics) -> Self {
+    fn new(connection: ConnectionConfig, service: ServiceConfig, metrics: Metrics) -> Self {
         Self {
             connection,
+            service,
             metrics,
         }
     }
@@ -235,7 +238,7 @@ impl ServerBuilder {
     /// service is guaranteed to produce a consistent result for.
     pub fn build(self) -> Result<Server, Error> {
         let metrics = self.state.metrics.clone();
-        let sleep_ms = self.state.connection.watermark_update_ms;
+        let sleep_ms = self.state.service.background_tasks.watermark_update_ms;
         let (address, schema, db_reader, router) = self.build_components();
 
         // Start the background task to update a shared `AvailableRange`
@@ -296,7 +299,11 @@ impl ServerBuilder {
 
         // METRICS
         let metrics = Metrics::new(&registry);
-        let state = AppState::new(config.connection.clone(), metrics.clone());
+        let state = AppState::new(
+            config.connection.clone(),
+            config.service.clone(),
+            metrics.clone(),
+        );
         let mut builder = ServerBuilder::new(state);
 
         let name_service_config = config.name_service.clone();
@@ -621,7 +628,7 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), cfg.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
-            let state = AppState::new(connection_config.clone(), metrics.clone());
+            let state = AppState::new(connection_config.clone(), cfg.clone(), metrics.clone());
             let schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
@@ -677,7 +684,11 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
-            let state = AppState::new(connection_config.clone(), metrics.clone());
+            let state = AppState::new(
+                connection_config.clone(),
+                service_config.clone(),
+                metrics.clone(),
+            );
             let schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
@@ -754,7 +765,11 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
-            let state = AppState::new(connection_config.clone(), metrics.clone());
+            let state = AppState::new(
+                connection_config.clone(),
+                service_config.clone(),
+                metrics.clone(),
+            );
             let schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
@@ -831,7 +846,11 @@ pub mod tests {
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
-        let state = AppState::new(connection_config.clone(), metrics.clone());
+        let state = AppState::new(
+            connection_config.clone(),
+            service_config.clone(),
+            metrics.clone(),
+        );
         let schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)
@@ -885,7 +904,11 @@ pub mod tests {
         let metrics = metrics();
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
-        let state = AppState::new(connection_config.clone(), metrics.clone());
+        let state = AppState::new(
+            connection_config.clone(),
+            service_config.clone(),
+            metrics.clone(),
+        );
         let schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)
@@ -928,7 +951,11 @@ pub mod tests {
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
-        let state = AppState::new(connection_config.clone(), metrics.clone());
+        let state = AppState::new(
+            connection_config.clone(),
+            service_config.clone(),
+            metrics.clone(),
+        );
         let schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)

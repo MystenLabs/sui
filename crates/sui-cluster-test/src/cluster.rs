@@ -248,7 +248,6 @@ impl Cluster for LocalNewCluster {
                 None,
                 None,
                 None,
-                None,
             );
 
             start_graphql_server_with_fn_rpc(

@@ -44,7 +44,9 @@ pub(crate) const DEFAULT_SERVER_PROM_HOST: &str = "0.0.0.0";
 pub(crate) const DEFAULT_SERVER_PROM_PORT: u16 = 9184;
 pub(crate) const DEFAULT_WATERMARK_UPDATE_MS: u64 = 500;
 
-/// Configuration on connections for the RPC, passed in as command-line arguments.
+/// Configuration on connections for the RPC, passed in as command-line arguments. This sets
+/// specific connections between this service and other services, and might differ from instance to
+/// instance of the GraphQL service.
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct ConnectionConfig {
     pub(crate) port: u16,
@@ -53,10 +55,9 @@ pub struct ConnectionConfig {
     pub(crate) db_pool_size: u32,
     pub(crate) prom_url: String,
     pub(crate) prom_port: u16,
-    pub(crate) watermark_update_ms: u64,
 }
 
-/// Configuration on features supported by the RPC, passed in a TOML-based file.
+/// Configuration on features supported by the GraphQL service, passed in a TOML-based file.
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct ServiceConfig {
@@ -68,6 +69,9 @@ pub struct ServiceConfig {
 
     #[serde(default)]
     pub(crate) experiments: Experiments,
+
+    #[serde(default)]
+    pub(crate) background_tasks: BackgroundTasksConfig,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
@@ -99,42 +103,21 @@ pub struct Limits {
     pub max_move_value_depth: u32,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub struct BackgroundTasksConfig {
+    #[serde(default)]
+    pub watermark_update_ms: u64,
+}
+
 #[derive(Debug)]
 pub struct Version(pub &'static str);
-
-impl Limits {
-    /// Extract limits for the package resolver.
-    pub fn package_resolver_limits(&self) -> sui_package_resolver::Limits {
-        sui_package_resolver::Limits {
-            max_type_argument_depth: self.max_type_argument_depth as usize,
-            max_type_argument_width: self.max_type_argument_width as usize,
-            max_type_nodes: self.max_type_nodes as usize,
-            max_move_value_depth: self.max_move_value_depth as usize,
-        }
-    }
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Ide {
     #[serde(default)]
     pub(crate) ide_title: String,
-}
-
-impl Default for Ide {
-    fn default() -> Self {
-        Self {
-            ide_title: DEFAULT_IDE_TITLE.to_string(),
-        }
-    }
-}
-
-impl Ide {
-    pub fn new(ide_title: Option<String>) -> Self {
-        Self {
-            ide_title: ide_title.unwrap_or_else(|| DEFAULT_IDE_TITLE.to_string()),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -145,72 +128,46 @@ pub struct Experiments {
     #[cfg(test)]
     test_flag: bool,
 }
-
-impl ConnectionConfig {
-    pub fn new(
-        port: Option<u16>,
-        host: Option<String>,
-        db_url: Option<String>,
-        db_pool_size: Option<u32>,
-        prom_url: Option<String>,
-        prom_port: Option<u16>,
-        watermark_update_ms: Option<u64>,
-    ) -> Self {
-        let default = Self::default();
-        Self {
-            port: port.unwrap_or(default.port),
-            host: host.unwrap_or(default.host),
-            db_url: db_url.unwrap_or(default.db_url),
-            db_pool_size: db_pool_size.unwrap_or(default.db_pool_size),
-            prom_url: prom_url.unwrap_or(default.prom_url),
-            prom_port: prom_port.unwrap_or(default.prom_port),
-            watermark_update_ms: watermark_update_ms.unwrap_or(default.watermark_update_ms),
-        }
-    }
-
-    pub fn ci_integration_test_cfg() -> Self {
-        Self {
-            db_url: DEFAULT_SERVER_DB_URL.to_string(),
-            watermark_update_ms: 100, // Set to 100ms for faster tests
-            ..Default::default()
-        }
-    }
-
-    pub fn ci_integration_test_cfg_with_db_name(
-        db_name: String,
-        port: u16,
-        prom_port: u16,
-    ) -> Self {
-        Self {
-            db_url: format!("postgres://postgres:postgrespw@localhost:5432/{}", db_name),
-            port,
-            prom_port,
-            watermark_update_ms: 100, // Set to 100ms for faster tests
-            ..Default::default()
-        }
-    }
-
-    pub fn db_name(&self) -> String {
-        self.db_url.split('/').last().unwrap().to_string()
-    }
-
-    pub fn db_url(&self) -> String {
-        self.db_url.clone()
-    }
-
-    pub fn db_pool_size(&self) -> u32 {
-        self.db_pool_size
-    }
-
-    pub fn server_address(&self) -> String {
-        format!("{}:{}", self.host, self.port)
-    }
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
+pub struct InternalFeatureConfig {
+    #[serde(default)]
+    pub(crate) query_limits_checker: bool,
+    #[serde(default)]
+    pub(crate) feature_gate: bool,
+    #[serde(default)]
+    pub(crate) logger: bool,
+    #[serde(default)]
+    pub(crate) query_timeout: bool,
+    #[serde(default)]
+    pub(crate) metrics: bool,
+    #[serde(default)]
+    pub(crate) tracing: bool,
+    #[serde(default)]
+    pub(crate) apollo_tracing: bool,
+    #[serde(default)]
+    pub(crate) open_telemetry: bool,
 }
 
-impl ServiceConfig {
-    pub fn read(contents: &str) -> Result<Self, toml::de::Error> {
-        toml::de::from_str::<Self>(contents)
-    }
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
+pub struct TxExecFullNodeConfig {
+    #[serde(default)]
+    pub(crate) node_rpc_url: Option<String>,
+}
+
+#[derive(Serialize, Clone, Deserialize, Debug, Default)]
+pub struct ServerConfig {
+    #[serde(default)]
+    pub service: ServiceConfig,
+    #[serde(default)]
+    pub connection: ConnectionConfig,
+    #[serde(default)]
+    pub internal_features: InternalFeatureConfig,
+    #[serde(default)]
+    pub name_service: NameServiceConfig,
+    #[serde(default)]
+    pub tx_exec_full_node: TxExecFullNodeConfig,
+    #[serde(default)]
+    pub ide: Ide,
 }
 
 /// The enabled features and service limits configured by the server.
@@ -303,100 +260,10 @@ impl ServiceConfig {
     }
 }
 
-impl Default for ConnectionConfig {
-    fn default() -> Self {
-        Self {
-            port: DEFAULT_SERVER_CONNECTION_PORT,
-            host: DEFAULT_SERVER_CONNECTION_HOST.to_string(),
-            db_url: DEFAULT_SERVER_DB_URL.to_string(),
-            db_pool_size: DEFAULT_SERVER_DB_POOL_SIZE,
-            prom_url: DEFAULT_SERVER_PROM_HOST.to_string(),
-            prom_port: DEFAULT_SERVER_PROM_PORT,
-            watermark_update_ms: DEFAULT_WATERMARK_UPDATE_MS,
-        }
-    }
-}
-
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            max_query_depth: MAX_QUERY_DEPTH,
-            max_query_nodes: MAX_QUERY_NODES,
-            max_output_nodes: MAX_OUTPUT_NODES,
-            max_query_payload_size: MAX_QUERY_PAYLOAD_SIZE,
-            max_db_query_cost: MAX_DB_QUERY_COST,
-            default_page_size: DEFAULT_PAGE_SIZE,
-            max_page_size: MAX_PAGE_SIZE,
-            request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
-            max_type_argument_depth: MAX_TYPE_ARGUMENT_DEPTH,
-            max_type_argument_width: MAX_TYPE_ARGUMENT_WIDTH,
-            max_type_nodes: MAX_TYPE_NODES,
-            max_move_value_depth: MAX_MOVE_VALUE_DEPTH,
-        }
-    }
-}
-
-#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
-pub struct InternalFeatureConfig {
-    #[serde(default)]
-    pub(crate) query_limits_checker: bool,
-    #[serde(default)]
-    pub(crate) feature_gate: bool,
-    #[serde(default)]
-    pub(crate) logger: bool,
-    #[serde(default)]
-    pub(crate) query_timeout: bool,
-    #[serde(default)]
-    pub(crate) metrics: bool,
-    #[serde(default)]
-    pub(crate) tracing: bool,
-    #[serde(default)]
-    pub(crate) apollo_tracing: bool,
-    #[serde(default)]
-    pub(crate) open_telemetry: bool,
-}
-
-impl Default for InternalFeatureConfig {
-    fn default() -> Self {
-        Self {
-            query_limits_checker: true,
-            feature_gate: true,
-            logger: true,
-            query_timeout: true,
-            metrics: true,
-            tracing: false,
-            apollo_tracing: false,
-            open_telemetry: false,
-        }
-    }
-}
-
-#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
-pub struct TxExecFullNodeConfig {
-    #[serde(default)]
-    pub(crate) node_rpc_url: Option<String>,
-}
-
 impl TxExecFullNodeConfig {
     pub fn new(node_rpc_url: Option<String>) -> Self {
         Self { node_rpc_url }
     }
-}
-
-#[derive(Serialize, Clone, Deserialize, Debug, Default)]
-pub struct ServerConfig {
-    #[serde(default)]
-    pub service: ServiceConfig,
-    #[serde(default)]
-    pub connection: ConnectionConfig,
-    #[serde(default)]
-    pub internal_features: InternalFeatureConfig,
-    #[serde(default)]
-    pub name_service: NameServiceConfig,
-    #[serde(default)]
-    pub tx_exec_full_node: TxExecFullNodeConfig,
-    #[serde(default)]
-    pub ide: Ide,
 }
 
 impl ServerConfig {
@@ -426,6 +293,152 @@ impl ServerConfig {
         std::fs::write(path, config).map_err(|e| {
             SuiGraphQLError::Internal(format!("Failed to create yaml from cfg: {}", e))
         })
+    }
+}
+
+impl ConnectionConfig {
+    pub fn new(
+        port: Option<u16>,
+        host: Option<String>,
+        db_url: Option<String>,
+        db_pool_size: Option<u32>,
+        prom_url: Option<String>,
+        prom_port: Option<u16>,
+    ) -> Self {
+        let default = Self::default();
+        Self {
+            port: port.unwrap_or(default.port),
+            host: host.unwrap_or(default.host),
+            db_url: db_url.unwrap_or(default.db_url),
+            db_pool_size: db_pool_size.unwrap_or(default.db_pool_size),
+            prom_url: prom_url.unwrap_or(default.prom_url),
+            prom_port: prom_port.unwrap_or(default.prom_port),
+        }
+    }
+
+    pub fn ci_integration_test_cfg() -> Self {
+        Self {
+            db_url: DEFAULT_SERVER_DB_URL.to_string(),
+            ..Default::default()
+        }
+    }
+
+    pub fn ci_integration_test_cfg_with_db_name(
+        db_name: String,
+        port: u16,
+        prom_port: u16,
+    ) -> Self {
+        Self {
+            db_url: format!("postgres://postgres:postgrespw@localhost:5432/{}", db_name),
+            port,
+            prom_port,
+            ..Default::default()
+        }
+    }
+
+    pub fn db_name(&self) -> String {
+        self.db_url.split('/').last().unwrap().to_string()
+    }
+
+    pub fn db_url(&self) -> String {
+        self.db_url.clone()
+    }
+
+    pub fn db_pool_size(&self) -> u32 {
+        self.db_pool_size
+    }
+
+    pub fn server_address(&self) -> String {
+        format!("{}:{}", self.host, self.port)
+    }
+}
+
+impl ServiceConfig {
+    pub fn read(contents: &str) -> Result<Self, toml::de::Error> {
+        toml::de::from_str::<Self>(contents)
+    }
+}
+
+impl Ide {
+    pub fn new(ide_title: Option<String>) -> Self {
+        Self {
+            ide_title: ide_title.unwrap_or_else(|| DEFAULT_IDE_TITLE.to_string()),
+        }
+    }
+}
+
+impl Limits {
+    /// Extract limits for the package resolver.
+    pub fn package_resolver_limits(&self) -> sui_package_resolver::Limits {
+        sui_package_resolver::Limits {
+            max_type_argument_depth: self.max_type_argument_depth as usize,
+            max_type_argument_width: self.max_type_argument_width as usize,
+            max_type_nodes: self.max_type_nodes as usize,
+            max_move_value_depth: self.max_move_value_depth as usize,
+        }
+    }
+}
+
+impl Default for Ide {
+    fn default() -> Self {
+        Self {
+            ide_title: DEFAULT_IDE_TITLE.to_string(),
+        }
+    }
+}
+
+impl Default for ConnectionConfig {
+    fn default() -> Self {
+        Self {
+            port: DEFAULT_SERVER_CONNECTION_PORT,
+            host: DEFAULT_SERVER_CONNECTION_HOST.to_string(),
+            db_url: DEFAULT_SERVER_DB_URL.to_string(),
+            db_pool_size: DEFAULT_SERVER_DB_POOL_SIZE,
+            prom_url: DEFAULT_SERVER_PROM_HOST.to_string(),
+            prom_port: DEFAULT_SERVER_PROM_PORT,
+        }
+    }
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            max_query_depth: MAX_QUERY_DEPTH,
+            max_query_nodes: MAX_QUERY_NODES,
+            max_output_nodes: MAX_OUTPUT_NODES,
+            max_query_payload_size: MAX_QUERY_PAYLOAD_SIZE,
+            max_db_query_cost: MAX_DB_QUERY_COST,
+            default_page_size: DEFAULT_PAGE_SIZE,
+            max_page_size: MAX_PAGE_SIZE,
+            request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
+            max_type_argument_depth: MAX_TYPE_ARGUMENT_DEPTH,
+            max_type_argument_width: MAX_TYPE_ARGUMENT_WIDTH,
+            max_type_nodes: MAX_TYPE_NODES,
+            max_move_value_depth: MAX_MOVE_VALUE_DEPTH,
+        }
+    }
+}
+
+impl Default for InternalFeatureConfig {
+    fn default() -> Self {
+        Self {
+            query_limits_checker: true,
+            feature_gate: true,
+            logger: true,
+            query_timeout: true,
+            metrics: true,
+            tracing: false,
+            apollo_tracing: false,
+            open_telemetry: false,
+        }
+    }
+}
+
+impl Default for BackgroundTasksConfig {
+    fn default() -> Self {
+        Self {
+            watermark_update_ms: DEFAULT_WATERMARK_UPDATE_MS,
+        }
     }
 }
 
@@ -497,6 +510,7 @@ mod tests {
             limits: Limits::default(),
             disabled_features: BTreeSet::from([G::Coins, G::NameService]),
             experiments: Experiments::default(),
+            background_tasks: BackgroundTasksConfig::default(),
         };
 
         assert_eq!(actual, expect)
@@ -561,6 +575,7 @@ mod tests {
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },
+            background_tasks: BackgroundTasksConfig::default(),
         };
 
         assert_eq!(actual, expect);
