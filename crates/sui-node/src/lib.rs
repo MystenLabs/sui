@@ -28,6 +28,7 @@ use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::ExecutionCacheMetrics;
 use sui_core::execution_cache::NotifyReadWrapper;
+use sui_json_rpc::ServerType;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
 use sui_protocol_config::ProtocolVersion;
@@ -1928,7 +1929,12 @@ pub fn build_http_server(
         ))?;
         server.register_module(MoveUtils::new(state))?;
 
-        server.to_router(None)?
+        let server_type = if config.websocket_only {
+            Some(ServerType::WebSocket)
+        } else {
+            None
+        };
+        server.to_router(server_type)?
     };
 
     router = router.merge(json_rpc_router);
