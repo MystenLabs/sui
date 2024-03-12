@@ -877,7 +877,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
         context.tokens.peek(),
         Tok::Identifier | Tok::RestrictedIdentifier | Tok::Mut
         // carve-out for migration with new keywords
-        | Tok::Match | Tok::Enum | Tok::Type
+        | Tok::Match | Tok::For | Tok::Enum | Tok::Type
     ) {
         let next_tok = context.tokens.lookahead()?;
         if !matches!(

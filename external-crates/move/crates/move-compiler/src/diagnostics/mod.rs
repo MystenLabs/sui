@@ -530,13 +530,6 @@ impl Diagnostic {
         const MIGRATION_CATEGORY: u8 = codes::Category::Migration as u8;
         self.info.category() == MIGRATION_CATEGORY
     }
-
-    pub fn is_move_2024_migration_error(&self) -> bool {
-        const MIGRATION_CATEGORY: u8 = codes::Category::Migration as u8;
-        const TYPE_SAFETY_CATEGORY: u8 = codes::Category::TypeSafety as u8;
-        const MUT_USAGE: u8 = codes::TypeSafety::InvalidImmVariableUsage as u8;
-        self.info.category() == MIGRATION_CATEGORY
-    }
 }
 
 #[macro_export]
