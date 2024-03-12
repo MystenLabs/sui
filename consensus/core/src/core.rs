@@ -4,6 +4,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     sync::Arc,
+    time::Duration,
 };
 
 use consensus_config::{AuthorityIndex, ProtocolKeyPair};
@@ -222,11 +223,8 @@ impl Core {
     }
 
     // Attempts to create a new block, persist and broadcast it to all peers.
-    fn try_propose(
-        &mut self,
-        ignore_leaders_check: bool,
-    ) -> ConsensusResult<Option<VerifiedBlock>> {
-        if let Some(block) = self.try_new_block(ignore_leaders_check) {
+    fn try_propose(&mut self, force: bool) -> ConsensusResult<Option<VerifiedBlock>> {
+        if let Some(block) = self.try_new_block(force) {
             // When there is only one authority in committee, it is unnecessary to broadcast
             // the block which will fail anyway without subscribers to the signal.
             if self.context.committee.size() > 1 {
@@ -241,16 +239,27 @@ impl Core {
 
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
     /// or earlier round, then no block is created and None is returned.
-    fn try_new_block(&mut self, ignore_leaders_check: bool) -> Option<VerifiedBlock> {
+    fn try_new_block(&mut self, force: bool) -> Option<VerifiedBlock> {
         let _scope = monitored_scope("Core::try_new_block");
+
         let clock_round = self.threshold_clock.get_round();
         if clock_round <= self.last_proposed_round() {
             return None;
         }
+
+        let now = timestamp_utc_ms();
+
         // Create a new block either because we want to "forcefully" propose a block due to a leader timeout,
-        // or because we are actually ready to produce the block (leader exists)
-        if !(ignore_leaders_check || self.last_quorum_leaders_exist()) {
-            return None;
+        // or because we are actually ready to produce the block (leader exists and min delay has passed).
+        if !force {
+            if !self.last_quorum_leaders_exist() {
+                return None;
+            }
+            if Duration::from_micros(now.saturating_sub(self.last_proposed_timestamp_ms()))
+                < self.context.parameters.min_round_delay
+            {
+                return None;
+            }
         }
 
         // TODO: produce the block for the clock_round. As the threshold clock can advance many rounds at once (ex
@@ -260,7 +269,6 @@ impl Core {
         // Probably proposing for all the intermediate rounds might not make much sense.
 
         // 1. Consume the ancestors to be included in proposal
-        let now = timestamp_utc_ms();
         let ancestors = self.ancestors_to_propose(clock_round, now);
 
         // 2. Consume the next transactions to be included.
@@ -413,6 +421,10 @@ impl Core {
     /// Returns the leaders of the provided round.
     fn leaders(&self, round: Round) -> Vec<AuthorityIndex> {
         self.committer.get_leaders(round)
+    }
+
+    fn last_proposed_timestamp_ms(&self) -> BlockTimestampMs {
+        self.last_proposed_block.timestamp_ms()
     }
 
     fn last_proposed_round(&self) -> Round {
