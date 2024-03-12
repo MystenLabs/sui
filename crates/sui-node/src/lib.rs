@@ -30,6 +30,7 @@ use sui_core::execution_cache::ExecutionCacheMetrics;
 use sui_core::execution_cache::NotifyReadWrapper;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
+use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
@@ -1081,28 +1082,32 @@ impl SuiNode {
             .as_mut()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
 
-        // TODO (mysticeti): Move this to a protocol config flag.
-        if let Ok(consensus_choice) = std::env::var("CONSENSUS") {
-            let consensus_protocol = match consensus_choice.as_str() {
-                "narwhal" => ConsensusProtocol::Narwhal,
-                "mysticeti" => ConsensusProtocol::Mysticeti,
-                "swap_each_epoch" => {
-                    if epoch_store.epoch() % 2 == 0 {
-                        ConsensusProtocol::Narwhal
-                    } else {
-                        ConsensusProtocol::Mysticeti
+        // Only allow overriding the consensus protocol, if the protocol version supports
+        // fields needed by Mysticeti.
+        if epoch_store.protocol_config().version >= ProtocolVersion::new(36) {
+            if let Ok(consensus_choice) = std::env::var("CONSENSUS") {
+                let consensus_protocol = match consensus_choice.as_str() {
+                    "narwhal" => ConsensusProtocol::Narwhal,
+                    "mysticeti" => ConsensusProtocol::Mysticeti,
+                    "swap_each_epoch" => {
+                        if epoch_store.epoch() % 2 == 0 {
+                            ConsensusProtocol::Narwhal
+                        } else {
+                            ConsensusProtocol::Mysticeti
+                        }
                     }
-                }
-                _ => {
-                    let consensus = consensus_config.protocol.clone();
-                    warn!("Consensus env var was set to an invalid choice, using default consensus protocol {consensus:?}");
-                    consensus
-                }
-            };
-            info!("Constructing consensus protocol {consensus_protocol:?}...");
-            consensus_config.protocol = consensus_protocol;
+                    _ => {
+                        let consensus = consensus_config.protocol.clone();
+                        warn!("Consensus env var was set to an invalid choice, using default consensus protocol {consensus:?}");
+                        consensus
+                    }
+                };
+                info!("Constructing consensus protocol {consensus_protocol:?}...");
+                consensus_config.protocol = consensus_protocol;
+            }
         }
 
+        // TODO (mysticeti): Move protocol choice to a protocol config flag.
         let (consensus_adapter, consensus_manager) = match consensus_config.protocol {
             ConsensusProtocol::Narwhal => {
                 let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
