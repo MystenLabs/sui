@@ -98,7 +98,7 @@ use move_compiler::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
         ModuleCall, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
     },
-    PASS_PARSER, PASS_TYPING,
+    PASS_CFGIR, PASS_PARSER, PASS_TYPING,
 };
 use move_ir_types::location::*;
 use move_package::{
@@ -1037,20 +1037,15 @@ pub fn get_symbols(
                 eprintln!("found pre-compiled libs for {:?}", pkg_path);
                 Some(d.clone())
             }
-            None => {
-                if let Ok(res) = construct_pre_compiled_lib(src_deps, None, compiler_flags) {
-                    if let Ok(lib) = res {
-                        eprintln!("created pre-compiled libs for {:?}", pkg_path);
-                        let res = Arc::new(lib);
-                        pkg_deps.insert(pkg_path.to_path_buf(), res.clone());
-                        Some(res)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            }
+            None => construct_pre_compiled_lib(src_deps, None, compiler_flags)
+                .ok()
+                .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
+                .and_then(|lib| {
+                    eprintln!("created pre-compiled libs for {:?}", pkg_path);
+                    let res = Arc::new(lib);
+                    pkg_deps.insert(pkg_path.to_path_buf(), res.clone());
+                    Some(res)
+                }),
         };
         if compiled_deps.is_some() {
             // if successful, remove only source deps but keep bytecode deps as they
@@ -1062,64 +1057,61 @@ pub fn get_symbols(
         None
     };
 
-    build_plan.compile_with_driver_and_deps(
-        dependencies,
-        &mut std::io::sink(),
-        |mut compiler| {
-            compiler = compiler.set_vfs_root(overlay_fs_root.clone());
-            compiler = compiler.set_pre_compiled_lib_opt(compiled_libs.clone());
-            // extract expansion AST
-            let (files, compilation_result) = compiler.run::<PASS_PARSER>()?;
-            let (_, compiler) = match compilation_result {
-                Ok(v) => v,
-                Err((_pass, diags)) => {
-                    let failure = true;
-                    diagnostics = Some((diags, failure));
-                    eprintln!("parsed AST compilation failed");
-                    return Ok((files, vec![]));
-                }
-            };
-            eprintln!("compiled to parsed AST");
-            let (compiler, parsed_program) = compiler.into_ast();
-            parsed_ast = Some(parsed_program.clone());
+    build_plan.compile_with_driver_and_deps(dependencies, &mut std::io::sink(), |compiler| {
+        // extract expansion AST
+        let (files, compilation_result) = compiler
+            .set_vfs_root(overlay_fs_root.clone())
+            .set_pre_compiled_lib_opt(compiled_libs.clone())
+            .run::<PASS_PARSER>()?;
+        let (_, compiler) = match compilation_result {
+            Ok(v) => v,
+            Err((_pass, diags)) => {
+                let failure = true;
+                diagnostics = Some((diags, failure));
+                eprintln!("parsed AST compilation failed");
+                return Ok((files, vec![]));
+            }
+        };
+        eprintln!("compiled to parsed AST");
+        let (compiler, parsed_program) = compiler.into_ast();
+        parsed_ast = Some(parsed_program.clone());
 
-            // extract typed AST
-            let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
-            let compiler = match compilation_result {
-                Ok(v) => v,
-                Err((_pass, diags)) => {
-                    let failure = true;
-                    diagnostics = Some((diags, failure));
-                    eprintln!("typed AST compilation failed");
-                    return Ok((files, vec![]));
-                }
-            };
-            eprintln!("compiled to typed AST");
-            let (compiler, typed_program) = compiler.into_ast();
-            typed_ast = Some(typed_program.clone());
+        // extract typed AST
+        let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
+        let compiler = match compilation_result {
+            Ok(v) => v,
+            Err((_pass, diags)) => {
+                let failure = true;
+                diagnostics = Some((diags, failure));
+                eprintln!("typed AST compilation failed");
+                return Ok((files, vec![]));
+            }
+        };
+        eprintln!("compiled to typed AST");
+        let (compiler, typed_program) = compiler.into_ast();
+        typed_ast = Some(typed_program.clone());
 
-            // compile to bytecode for accurate diags
-            eprintln!("compiling to bytecode");
-            let compilation_result = compiler.at_typing(typed_program).build();
-            let (units, diags) = match compilation_result {
-                Ok(v) => v,
-                Err((_pass, diags)) => {
-                    let failure = false;
-                    diagnostics = Some((diags, failure));
-                    eprintln!("bytecode compilation failed");
-                    return Ok((files, vec![]));
-                }
-            };
-            // warning diagnostics (if any) since compilation succeeded
-            if !diags.is_empty() {
-                // assign only if non-empty, otherwise return None to reset previous diagnostics
+        // compile to CFGIR for accurate diags
+        eprintln!("compiling to CFGIR");
+        let compilation_result = compiler.at_typing(typed_program).run::<PASS_CFGIR>();
+        let mut compiler = match compilation_result {
+            Ok(v) => v,
+            Err((_pass, diags)) => {
                 let failure = false;
                 diagnostics = Some((diags, failure));
+                eprintln!("compilation to CFGIR failed");
+                return Ok((files, vec![]));
             }
-            eprintln!("compiled to bytecode");
-            Ok((files, units))
-        },
-    )?;
+        };
+        // warning diagnostics (if any) since compilation succeeded
+        let failure = false;
+        diagnostics = Some((
+            compiler.compilation_env().take_final_warning_diags(),
+            failure,
+        ));
+        eprintln!("compiled to CFGIR");
+        Ok((files, vec![]))
+    })?;
 
     let mut ide_diagnostics = lsp_empty_diagnostics(&file_name_mapping);
     if let Some((compiler_diagnostics, failure)) = diagnostics {
