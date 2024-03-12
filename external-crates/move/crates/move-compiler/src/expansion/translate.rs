@@ -1700,11 +1700,11 @@ impl Move2024PathExpander {
                         if context.env.edition(context.current_package)
                             == Edition::E2024_MIGRATION =>
                     {
-                        context.env.add_diag(diag!(
-                            Migration::NeedsGlobalQualification,
-                            (root_name.loc, "Must globally qualify name")
-                        ));
                         if let Some(address) = top_level_address_opt(context, root_name) {
+                            context.env.add_diag(diag!(
+                                Migration::NeedsGlobalQualification,
+                                (root_name.loc, "Must globally qualify name")
+                            ));
                             let mident =
                                 sp(ident_loc, ModuleIdent_::new(address, ModuleName(next_name)));
                             ModuleAccess(loc, EN::ModuleAccess(mident, last_name))
