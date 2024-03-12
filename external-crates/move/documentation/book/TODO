@@ -3,6 +3,7 @@
 - We don't describe identifier rules in a single place
 - We don't describe rules for namespaces and uses
 - attributes/annotations in general
+- describe paths/places more like the compiler thinks about them in 2024
 
 Move 2024
 - Methods
