@@ -9,7 +9,7 @@ module sui::vec_set_tests {
     #[test]
     #[expected_failure(abort_code = vec_set::EKeyAlreadyExists)]
     fun duplicate_key_abort() {
-        let m = vec_set::empty();
+        let mut m = vec_set::empty();
         vec_set::insert(&mut m, 1);
         vec_set::insert(&mut m, 1);
     }
@@ -17,7 +17,7 @@ module sui::vec_set_tests {
     #[test]
     #[expected_failure(abort_code = vec_set::EKeyDoesNotExist)]
     fun nonexistent_key_remove() {
-        let m = vec_set::empty();
+        let mut m = vec_set::empty();
         vec_set::insert(&mut m, 1);
         let k = 2;
         vec_set::remove(&mut m, &k);
@@ -25,8 +25,8 @@ module sui::vec_set_tests {
 
     #[test]
     fun smoke() {
-        let m = vec_set::empty();
-        let i = 0;
+        let mut m = vec_set::empty();
+        let mut i = 0;
         while (i < 10) {
             let k = i + 2;
             vec_set::insert(&mut m, k);
@@ -34,7 +34,7 @@ module sui::vec_set_tests {
         };
         assert!(!vec_set::is_empty(&m), 0);
         assert!(vec_set::size(&m) == 10, 1);
-        let i = 0;
+        let mut i = 0;
         // make sure the elements are as expected in all of the getter APIs we expose
         while (i < 10) {
             let k = i + 2;
@@ -43,7 +43,7 @@ module sui::vec_set_tests {
         };
         // remove all the elements
         let keys = vec_set::into_keys(copy m);
-        let i = 0;
+        let mut i = 0;
         while (i < 10) {
             let k = i + 2;
             vec_set::remove(&mut m, &k);
@@ -54,7 +54,7 @@ module sui::vec_set_tests {
 
     #[test]
     fun test_keys() {
-        let m = vec_set::empty();
+        let mut m = vec_set::empty();
         vec_set::insert(&mut m, 1);
         vec_set::insert(&mut m, 2);
         vec_set::insert(&mut m, 3);

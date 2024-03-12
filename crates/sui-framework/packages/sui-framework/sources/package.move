@@ -36,14 +36,14 @@ module sui::package {
     /// generates a module, by consuming its one-time witness, so it
     /// can be used to identify the address that published the package
     /// a type originated from.
-    struct Publisher has key, store {
+    public struct Publisher has key, store {
         id: UID,
         package: String,
         module_name: String,
     }
 
     /// Capability controlling the ability to upgrade a package.
-    struct UpgradeCap has key, store {
+    public struct UpgradeCap has key, store {
         id: UID,
         /// (Mutable) ID of the package that can be upgraded.
         package: ID,
@@ -62,7 +62,7 @@ module sui::package {
     /// between concurrent updates or a change in its upgrade policy after
     /// issuing a ticket, so the ticket is a "Hot Potato" to preserve forward
     /// progress.
-    struct UpgradeTicket {
+    public struct UpgradeTicket {
         /// (Immutable) ID of the `UpgradeCap` this originated from.
         cap: ID,
         /// (Immutable) ID of the package that can be upgraded.
@@ -79,7 +79,7 @@ module sui::package {
     /// information to be used to update the `UpgradeCap`.  This is a "Hot
     /// Potato" to ensure that it is used to update its `UpgradeCap` before
     /// the end of the transaction that performed the upgrade.
-    struct UpgradeReceipt {
+    public struct UpgradeReceipt {
         /// (Immutable) ID of the `UpgradeCap` this originated from.
         cap: ID,
         /// (Immutable) ID of the package after it was upgraded.
@@ -93,12 +93,12 @@ module sui::package {
     public fun claim<OTW: drop>(otw: OTW, ctx: &mut TxContext): Publisher {
         assert!(types::is_one_time_witness(&otw), ENotOneTimeWitness);
 
-        let type = type_name::get_with_original_ids<OTW>();
+        let `type` = type_name::get_with_original_ids<OTW>();
 
         Publisher {
             id: object::new(ctx),
-            package: type_name::get_address(&type),
-            module_name: type_name::get_module(&type),
+            package: type_name::get_address(&`type`),
+            module_name: type_name::get_module(&`type`),
         }
     }
 
@@ -119,17 +119,17 @@ module sui::package {
 
     /// Check whether type belongs to the same package as the publisher object.
     public fun from_package<T>(self: &Publisher): bool {
-        let type = type_name::get_with_original_ids<T>();
+        let `type` = type_name::get_with_original_ids<T>();
 
-        (type_name::get_address(&type) == self.package)
+        (type_name::get_address(&`type`) == self.package)
     }
 
     /// Check whether a type belongs to the same module as the publisher object.
     public fun from_module<T>(self: &Publisher): bool {
-        let type = type_name::get_with_original_ids<T>();
+        let `type` = type_name::get_with_original_ids<T>();
 
-        (type_name::get_address(&type) == self.package)
-            && (type_name::get_module(&type) == self.module_name)
+        (type_name::get_address(&`type`) == self.package)
+            && (type_name::get_module(&`type`) == self.module_name)
     }
 
     /// Read the name of the module.
@@ -272,12 +272,12 @@ module sui::package {
     #[test_only]
     /// Test-only function to claim a Publisher object bypassing OTW check.
     public fun test_claim<OTW: drop>(_: OTW, ctx: &mut TxContext): Publisher {
-        let type = type_name::get_with_original_ids<OTW>();
+        let `type` = type_name::get_with_original_ids<OTW>();
 
         Publisher {
             id: object::new(ctx),
-            package: type_name::get_address(&type),
-            module_name: type_name::get_module(&type),
+            package: type_name::get_address(&`type`),
+            module_name: type_name::get_module(&`type`),
         }
     }
 
@@ -302,7 +302,7 @@ module sui::package {
 
         // Generate a fake package ID for the upgraded package by
         // hashing the existing package and cap ID.
-        let data = object::id_to_bytes(&cap);
+        let mut data = object::id_to_bytes(&cap);
         std::vector::append(&mut data, object::id_to_bytes(&package));
         let package = object::id_from_bytes(sui::hash::blake2b256(&data));
 

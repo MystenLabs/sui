@@ -5,7 +5,7 @@
 module sui::malicious_policy {
     use sui::transfer_policy::{Self as policy, TransferRequest};
 
-    struct Rule has drop {}
+    public struct Rule has drop {}
 
     public fun cheat<T>(request: &mut TransferRequest<T>) {
         policy::add_receipt(Rule {}, request);
@@ -23,8 +23,8 @@ module sui::transfer_policy_tests {
     use sui::package;
     use sui::coin;
 
-    struct OTW has drop {}
-    struct Asset has key, store { id: UID }
+    public struct OTW has drop {}
+    public struct Asset has key, store { id: UID }
 
     #[test]
     /// No policy set;
@@ -43,7 +43,7 @@ module sui::transfer_policy_tests {
     /// Policy set and completed;
     fun test_rule_completed() {
         let ctx = &mut ctx();
-        let (policy, cap) = prepare(ctx);
+        let (mut policy, cap) = prepare(ctx);
 
         assert!(vec_set::size(policy::rules(&policy)) == 0, 0);
         // now require everyone to pay any amount
@@ -51,7 +51,7 @@ module sui::transfer_policy_tests {
 
         assert!(vec_set::size(policy::rules(&policy)) == 1, 1);
 
-        let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
+        let mut request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
 
         dummy_policy::pay(&mut policy, &mut request, coin::mint_for_testing(10_000, ctx));
         policy::confirm_request(&policy, request);
@@ -65,7 +65,7 @@ module sui::transfer_policy_tests {
     /// Policy set and completed; rule removed; empty policy works
     fun test_remove_rule_completed() {
         let ctx = &mut ctx();
-        let (policy, cap) = prepare(ctx);
+        let (mut policy, cap) = prepare(ctx);
 
         assert!(vec_set::size(policy::rules(&policy)) == 0, 0);
 
@@ -74,7 +74,7 @@ module sui::transfer_policy_tests {
 
         assert!(vec_set::size(policy::rules(&policy)) == 1, 0);
 
-        let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
+        let mut request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
         dummy_policy::pay(&mut policy, &mut request, coin::mint_for_testing(10_000, ctx));
         policy::confirm_request(&policy, request);
 
@@ -92,7 +92,7 @@ module sui::transfer_policy_tests {
     /// Policy set but not satisfied;
     fun test_rule_ignored() {
         let ctx = &mut ctx();
-        let (policy, cap) = prepare(ctx);
+        let (mut policy, cap) = prepare(ctx);
 
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
@@ -108,7 +108,7 @@ module sui::transfer_policy_tests {
     /// Attempt to add another policy;
     fun test_rule_exists() {
         let ctx = &mut ctx();
-        let (policy, cap) = prepare(ctx);
+        let (mut policy, cap) = prepare(ctx);
 
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
@@ -125,11 +125,11 @@ module sui::transfer_policy_tests {
     /// Attempt to cheat by using another rule approval;
     fun test_rule_swap() {
         let ctx = &mut ctx();
-        let (policy, cap) = prepare(ctx);
+        let (mut policy, cap) = prepare(ctx);
 
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
-        let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
+        let mut request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
 
         // try to add receipt from another rule
         malicious_policy::cheat(&mut request);

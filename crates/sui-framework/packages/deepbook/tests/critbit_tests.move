@@ -23,11 +23,11 @@ module deepbook::critbit_test {
     #[test] fun test_find_cloest_key() { let _ = test_find_closest_key_(scenario());}
 
 
-    fun test_insert_(test: Scenario): TransactionEffects{
+    fun test_insert_(mut test: Scenario): TransactionEffects{
         let (owner, _) = people();
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
             critbit::insert_leaf(&mut t1, 48, 48);
             critbit::insert_leaf(&mut t1, 16, 16);
             critbit::insert_leaf(&mut t1, 1, 1);
@@ -62,7 +62,7 @@ module deepbook::critbit_test {
         };
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
             critbit::insert_leaf(&mut t1, 1, 1);
             critbit::insert_leaf(&mut t1, 3, 3);
             critbit::insert_leaf(&mut t1, 16, 16);
@@ -105,7 +105,7 @@ module deepbook::critbit_test {
             assert!(max_leaf_key == 48, 0);
             assert!(max_leaf_index == 3, 1);
 
-            let (key, index) = critbit::next_leaf(&t1, 1);
+            let (mut key, mut index) = critbit::next_leaf(&t1, 1);
             assert!(key == 3, 0);
             assert!(index == 1, 0);
             (key, index) = critbit::next_leaf(&t1, 3);
@@ -134,7 +134,7 @@ module deepbook::critbit_test {
         };
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
 
             critbit::insert_leaf(&mut t1, 128, 128);
             critbit::insert_leaf(&mut t1, 160, 160);
@@ -174,17 +174,17 @@ module deepbook::critbit_test {
         end(test)
     }
 
-    fun test_next_leaf_(test: Scenario): TransactionEffects{
+    fun test_next_leaf_(mut test: Scenario): TransactionEffects{
         let (owner, _) = people();
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
             critbit::insert_leaf(&mut t1, 48, 48);
             critbit::insert_leaf(&mut t1, 16, 16);
             critbit::insert_leaf(&mut t1, 1, 1);
             critbit::insert_leaf(&mut t1, 3, 3);
 
-            let (key, index) = critbit::next_leaf(&t1, 1);
+            let (mut key, mut index) = critbit::next_leaf(&t1, 1);
             assert_eq(key,3);
             assert_eq(index,3);
             (key, index) = critbit::next_leaf(&t1, 3);
@@ -201,13 +201,13 @@ module deepbook::critbit_test {
         };
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
             critbit::insert_leaf(&mut t1, 1, 1);
             critbit::insert_leaf(&mut t1, 3, 3);
             critbit::insert_leaf(&mut t1, 16, 16);
             critbit::insert_leaf(&mut t1, 48, 48);
 
-            let (key, index) = critbit::next_leaf(&t1, 1);
+            let (mut key, mut index) = critbit::next_leaf(&t1, 1);
             assert_eq(key,3);
             assert_eq(index,1);
             (key, index) = critbit::next_leaf(&t1, 3);
@@ -226,17 +226,17 @@ module deepbook::critbit_test {
         end(test)
     }
 
-    fun test_previous_leaf_(test: Scenario): TransactionEffects{
+    fun test_previous_leaf_(mut test: Scenario): TransactionEffects{
         let (owner, _) = people();
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
             critbit::insert_leaf(&mut t1, 48, 48);
             critbit::insert_leaf(&mut t1, 16, 16);
             critbit::insert_leaf(&mut t1, 1, 1);
             critbit::insert_leaf(&mut t1, 3, 3);
 
-            let (key, index) = critbit::previous_leaf(&t1, 1);
+            let (mut key, mut index) = critbit::previous_leaf(&t1, 1);
             assert_eq(key,0);
             assert_eq(index,PARTITION_INDEX);
             (key, index) = critbit::previous_leaf(&t1, 3);
@@ -253,13 +253,13 @@ module deepbook::critbit_test {
         };
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
             critbit::insert_leaf(&mut t1, 1, 1);
             critbit::insert_leaf(&mut t1, 3, 3);
             critbit::insert_leaf(&mut t1, 16, 16);
             critbit::insert_leaf(&mut t1, 48, 48);
 
-            let (key, index) = critbit::previous_leaf(&t1, 1);
+            let (mut key, mut index) = critbit::previous_leaf(&t1, 1);
             assert_eq(key,0);
             assert_eq(index, PARTITION_INDEX);
             (key, index) = critbit::previous_leaf(&t1, 3);
@@ -278,11 +278,11 @@ module deepbook::critbit_test {
         end(test)
     }
 
-    fun test_min_max_leaf_(test: Scenario): TransactionEffects{
+    fun test_min_max_leaf_(mut test: Scenario): TransactionEffects{
         let (owner, _) = people();
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
             critbit::insert_leaf(&mut t1, 48, 48);
             critbit::insert_leaf(&mut t1, 16, 16);
             critbit::insert_leaf(&mut t1, 1, 1);
@@ -300,7 +300,7 @@ module deepbook::critbit_test {
         };
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
             critbit::insert_leaf(&mut t1, 1, 1);
             critbit::insert_leaf(&mut t1, 3, 3);
             critbit::insert_leaf(&mut t1, 16, 16);
@@ -320,11 +320,11 @@ module deepbook::critbit_test {
         end(test)
     }
 
-    fun test_remove_(test: Scenario): TransactionEffects{
+    fun test_remove_(mut test: Scenario): TransactionEffects{
         let (owner, _) = people();
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
             critbit::insert_leaf(&mut t1, 48, 48);
             critbit::remove_leaf_by_index(&mut t1, 0);
             critbit::check_empty_tree(&t1);
@@ -332,7 +332,7 @@ module deepbook::critbit_test {
         };
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
             critbit::insert_leaf(&mut t1, 48, 48);
             critbit::insert_leaf(&mut t1, 16, 16);
 
@@ -361,7 +361,7 @@ module deepbook::critbit_test {
         };
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
             critbit::insert_leaf(&mut t1, 48, 48);
             critbit::insert_leaf(&mut t1, 16, 16);
             critbit::insert_leaf(&mut t1, 3, 3);
@@ -413,7 +413,7 @@ module deepbook::critbit_test {
         };
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
             critbit::insert_leaf(&mut t1, 128, 128);
             critbit::insert_leaf(&mut t1, 160, 160);
             critbit::insert_leaf(&mut t1, 240, 240);
@@ -478,11 +478,11 @@ module deepbook::critbit_test {
     }
 
 
-    fun test_find_closest_key_(test: Scenario): TransactionEffects{
+    fun test_find_closest_key_(mut test: Scenario): TransactionEffects{
         let (owner, _) = people();
 
         next_tx(&mut test, owner); {
-            let t1 = critbit::new<u64>(ctx(&mut test));
+            let mut t1 = critbit::new<u64>(ctx(&mut test));
 
             assert_eq(critbit::find_closest_key(&t1, 1), 0);
 

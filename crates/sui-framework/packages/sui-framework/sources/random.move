@@ -21,12 +21,12 @@ module sui::random {
 
     /// Singleton shared object which stores the global randomness state.
     /// The actual state is stored in a versioned inner field.
-    struct Random has key {
+    public struct Random has key {
         id: UID,
         inner: Versioned,
     }
 
-    struct RandomInner has store {
+    public struct RandomInner has store {
         version: u64,
 
         epoch: u64,

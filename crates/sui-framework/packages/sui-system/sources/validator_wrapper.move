@@ -11,7 +11,7 @@ module sui_system::validator_wrapper {
 
     const EInvalidVersion: u64 = 0;
 
-    struct ValidatorWrapper has store {
+    public struct ValidatorWrapper has store {
         inner: Versioned
     }
 

@@ -28,12 +28,12 @@ module sui::authenticator_state {
     /// Singleton shared object which stores the global authenticator state.
     /// The actual state is stored in a dynamic field of type AuthenticatorStateInner to support
     /// future versions of the authenticator state.
-    struct AuthenticatorState has key {
+    public struct AuthenticatorState has key {
         id: UID,
         version: u64,
     }
 
-    struct AuthenticatorStateInner has store {
+    public struct AuthenticatorStateInner has store {
         version: u64,
 
         /// List of currently active JWKs.
@@ -42,7 +42,7 @@ module sui::authenticator_state {
 
     #[allow(unused_field)]
     /// Must match the JWK struct in fastcrypto-zkp
-    struct JWK has store, drop, copy {
+    public struct JWK has store, drop, copy {
         kty: String,
         e: String,
         n: String,
@@ -51,13 +51,13 @@ module sui::authenticator_state {
 
     #[allow(unused_field)]
     /// Must match the JwkId struct in fastcrypto-zkp
-    struct JwkId has store, drop, copy {
+    public struct JwkId has store, drop, copy {
         iss: String,
         kid: String,
     }
 
     #[allow(unused_field)]
-    struct ActiveJwk has store, drop, copy {
+    public struct ActiveJwk has store, drop, copy {
         jwk_id: JwkId,
         jwk: JWK,
         epoch: u64,
@@ -108,7 +108,7 @@ module sui::authenticator_state {
         } else if (vector::length(a_bytes) > vector::length(b_bytes)) {
             false
         } else {
-            let i = 0;
+            let mut i = 0;
             while (i < vector::length(a_bytes)) {
                 let a_byte = *vector::borrow(a_bytes, i);
                 let b_byte = *vector::borrow(b_bytes, i);
@@ -158,7 +158,7 @@ module sui::authenticator_state {
             active_jwks: vector[],
         };
 
-        let self = AuthenticatorState {
+        let mut self = AuthenticatorState {
             id: object::authenticator_state(),
             version,
         };
@@ -196,7 +196,7 @@ module sui::authenticator_state {
     }
 
     fun check_sorted(new_active_jwks: &vector<ActiveJwk>) {
-        let i = 0;
+        let mut i = 0;
         while (i < vector::length(new_active_jwks) - 1) {
             let a = vector::borrow(new_active_jwks, i);
             let b = vector::borrow(new_active_jwks, i + 1);
@@ -223,9 +223,9 @@ module sui::authenticator_state {
 
         let inner = load_inner_mut(self);
 
-        let res = vector[];
-        let i = 0;
-        let j = 0;
+        let mut res = vector[];
+        let mut i = 0;
+        let mut j = 0;
         let active_jwks_len = vector::length(&inner.active_jwks);
         let new_active_jwks_len = vector::length(&new_active_jwks);
 
@@ -235,7 +235,7 @@ module sui::authenticator_state {
 
             // when they are equal, push only one, but use the max epoch of the two
             if (active_jwk_equal(old_jwk, new_jwk)) {
-                let jwk = *old_jwk;
+                let mut jwk = *old_jwk;
                 jwk.epoch = math::max(old_jwk.epoch, new_jwk.epoch);
                 vector::push_back(&mut res, jwk);
                 i = i + 1;
@@ -269,9 +269,9 @@ module sui::authenticator_state {
     }
 
     fun deduplicate(jwks: vector<ActiveJwk>): vector<ActiveJwk> {
-        let res = vector[];
-        let i = 0;
-        let prev: Option<JwkId> = option::none();
+        let mut res = vector[];
+        let mut i = 0;
+        let mut prev: Option<JwkId> = option::none();
         while (i < vector::length(&jwks)) {
             let jwk = vector::borrow(&jwks, i);
             if (option::is_none(&prev)) {
@@ -305,9 +305,9 @@ module sui::authenticator_state {
 
         // first we count how many jwks from each issuer are above the min_epoch
         // and store the counts in a vector that parallels the (sorted) active_jwks vector
-        let issuer_max_epochs = vector[];
-        let i = 0;
-        let prev_issuer: Option<String> = option::none();
+        let mut issuer_max_epochs = vector[];
+        let mut i = 0;
+        let mut prev_issuer: Option<String> = option::none();
 
         while (i < len) {
             let cur = vector::borrow(&inner.active_jwks, i);
@@ -330,10 +330,10 @@ module sui::authenticator_state {
 
         // Now, filter out any JWKs that are below the min_epoch, unless that issuer has no
         // JWKs >= the min_epoch, in which case we keep all of them.
-        let new_active_jwks: vector<ActiveJwk> = vector[];
-        let prev_issuer: Option<String> = option::none();
-        let i = 0;
-        let j = 0;
+        let mut new_active_jwks: vector<ActiveJwk> = vector[];
+        let mut prev_issuer: Option<String> = option::none();
+        let mut i = 0;
+        let mut j = 0;
         while (i < len) {
             let jwk = vector::borrow(&inner.active_jwks, i);
             let cur_iss = &jwk.jwk_id.iss;

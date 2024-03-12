@@ -63,7 +63,7 @@ module sui::kiosk_extension {
     /// The Extension struct contains the data used by the extension and the
     /// configuration for this extension. Stored under the `ExtensionKey`
     /// dynamic field.
-    struct Extension has store {
+    public struct Extension has store {
         /// Storage for the extension, an isolated Bag. By putting the extension
         /// into a single dynamic field, we reduce the amount of fields on the
         /// top level (eg items / listings) while giving extension developers
@@ -93,7 +93,7 @@ module sui::kiosk_extension {
     /// The `ExtensionKey` is a typed dynamic field key used to store the
     /// extension configuration and data. `Ext` is a phantom type that is used
     /// to identify the extension witness.
-    struct ExtensionKey<phantom Ext> has store, copy, drop {}
+    public struct ExtensionKey<phantom Ext> has store, copy, drop {}
 
     // === Management ===
 

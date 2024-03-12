@@ -27,7 +27,7 @@ module std::type_name {
     /// The type is not from a package/module. It is a primitive type.
     const ENonModuleType: u64 = 0;
 
-    struct TypeName has copy, drop, store {
+    public struct TypeName has copy, drop, store {
         /// String representation of the type. All types are represented
         /// using their source syntax:
         /// "u8", "u64", "bool", "address", "vector", and so on for primitive types.
@@ -86,8 +86,8 @@ module std::type_name {
         // Base16 (string) representation of an address has 2 symbols per byte.
         let len = address::length() * 2;
         let str_bytes = ascii::as_bytes(&self.name);
-        let addr_bytes = vector[];
-        let i = 0;
+        let mut addr_bytes = vector[];
+        let mut i = 0;
 
         // Read `len` bytes from the type name and push them to addr_bytes.
         while (i < len) {
@@ -107,9 +107,9 @@ module std::type_name {
         assert!(!is_primitive(self), ENonModuleType);
 
         // Starts after address and a double colon: `<addr as HEX>::`
-        let i = address::length() * 2 + 2;
+        let mut i = address::length() * 2 + 2;
         let str_bytes = ascii::as_bytes(&self.name);
-        let module_name = vector[];
+        let mut module_name = vector[];
 
         loop {
             let char = vector::borrow(str_bytes, i);

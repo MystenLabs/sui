@@ -6,7 +6,7 @@ module sui::table_vec {
     use sui::table::{Self, Table};
     use sui::tx_context::TxContext;
 
-    struct TableVec<phantom Element: store> has store {
+    public struct TableVec<phantom Element: store> has store {
         /// The contents of the table vector.
         contents: Table<u64, Element>,
     }
@@ -23,7 +23,7 @@ module sui::table_vec {
 
     /// Return a TableVec of size one containing element `e`.
     public fun singleton<Element: store>(e: Element, ctx: &mut TxContext): TableVec<Element> {
-        let t = empty(ctx);
+        let mut t = empty(ctx);
         push_back(&mut t, e);
         t
     }

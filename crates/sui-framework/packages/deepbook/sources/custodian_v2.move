@@ -16,7 +16,7 @@ module deepbook::custodian_v2 {
     const EAdminAccountCapRequired: u64 = 2;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
-    struct Account<phantom T> has store {
+    public struct Account<phantom T> has store {
         available_balance: Balance<T>,
         locked_balance: Balance<T>,
     }
@@ -26,7 +26,7 @@ module deepbook::custodian_v2 {
     /// the permission to both access funds and create new `AccountCap`s.
     /// Calling `create_child_account_cap` creates a "child account cap" such that id != owner
     /// that can access funds, but cannot create new `AccountCap`s.
-    struct AccountCap has key, store {
+    public struct AccountCap has key, store {
         id: UID,
         /// The owner of this AccountCap. Note: this is
         /// derived from an object ID, not a user address
@@ -34,7 +34,7 @@ module deepbook::custodian_v2 {
     }
 
     // Custodian for limit orders.
-    struct Custodian<phantom T> has key, store {
+    public struct Custodian<phantom T> has key, store {
         id: UID,
         /// Map from the owner address of AccountCap object to an Account object
         account_balances: Table<address, Account<T>>,
@@ -216,7 +216,7 @@ module deepbook::custodian_v2 {
     const ENull: u64 = 0;
 
     #[test_only]
-    struct USD {}
+    public struct USD {}
 
     #[test_only]
     public(friend) fun assert_user_balance<T>(
@@ -260,7 +260,7 @@ module deepbook::custodian_v2 {
     fun test_user_balance_does_not_exist(){
         let owner: address = @0xAAAA;
         let bob: address = @0xBBBB;
-        let test = test_scenario::begin(owner);
+        let mut test = test_scenario::begin(owner);
         test_scenario::next_tx(&mut test, owner);
         {
             setup_test(&mut test);
@@ -282,7 +282,7 @@ module deepbook::custodian_v2 {
     fun test_account_balance() {
         let owner: address = @0xAAAA;
         let bob: address = @0xBBBB;
-        let test = test_scenario::begin(owner);
+        let mut test = test_scenario::begin(owner);
         test_scenario::next_tx(&mut test, owner);
         {
             setup_test(&mut test);
@@ -301,10 +301,10 @@ module deepbook::custodian_v2 {
         };
         test_scenario::next_tx(&mut test, bob);
         {
-            let custodian = take_shared<Custodian<USD>>(&test);
+            let mut custodian = take_shared<Custodian<USD>>(&test);
             let account_cap = take_from_sender<AccountCap>(&test);
             deposit(&mut custodian, mint_for_testing<USD>(10000, ctx(&mut test)), bob);
-            let (asset_available, asset_locked) = account_balance(&custodian, bob);
+            let (asset_available, mut asset_locked) = account_balance(&custodian, bob);
             assert_eq(asset_available, 10000);
             assert_eq(asset_locked, 0);
             asset_locked = account_locked_balance(&custodian, bob);
@@ -317,7 +317,7 @@ module deepbook::custodian_v2 {
 
     #[test]
     fun test_create_child_account_cap() {
-        let ctx = tx_context::dummy();
+        let mut ctx = tx_context::dummy();
         let admin_cap = mint_account_cap(&mut ctx);
         // check that we can duplicate child cap, and don't get another admin cap
         let child_cap = create_child_account_cap(&admin_cap, &mut ctx);
@@ -325,7 +325,7 @@ module deepbook::custodian_v2 {
         assert!(&child_cap.id != &admin_cap.id, 0);
 
         // check that both child and admin cap can access the funds
-        let custodian = new<USD>(&mut ctx);
+        let mut custodian = new<USD>(&mut ctx);
         increase_user_available_balance(&mut custodian, account_owner(&admin_cap), balance::create_for_testing(10000));
         let coin = decrease_user_available_balance(&mut custodian, &child_cap, 10000);
 
@@ -339,7 +339,7 @@ module deepbook::custodian_v2 {
     #[test]
     fun test_cant_create_with_child() {
         // a child cap cannot create an account cap
-        let ctx = tx_context::dummy();
+        let mut ctx = tx_context::dummy();
         let admin_cap = mint_account_cap(&mut ctx);
         // check that we can duplicate child cap, and don't get another admin cap
         let child_cap1 = create_child_account_cap(&admin_cap, &mut ctx);

@@ -30,7 +30,7 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_order_query_pagination() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         add_orders(200, TIMESTAMP_INF, none(), &mut scenario);
         let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         let page1 = iter_bids(&pool, none(), none(), none(), none(), true);
@@ -67,7 +67,7 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_order_query_pagination_decending() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         add_orders(200, TIMESTAMP_INF, none(), &mut scenario);
         let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         let page1 = iter_bids(&pool, none(), none(), none(), none(), false);
@@ -105,7 +105,7 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_order_query_start_order_id() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         add_orders(200, TIMESTAMP_INF, none(), &mut scenario);
         let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         // test start order id
@@ -143,7 +143,7 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_order_query_with_expiry() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         add_orders(20, TIMESTAMP_INF, none(), &mut scenario);
 
         let clock = test_scenario::take_shared<Clock>(&scenario);
@@ -172,7 +172,7 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_order_query_with_max_id() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         add_orders(70, TIMESTAMP_INF, none(), &mut scenario);
 
         let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
@@ -206,7 +206,7 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_order_query_pagination_multiple_orders_same_tick_level() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         // orders with same tick level repeated 4 times
         add_orders(50, TIMESTAMP_INF, none(), &mut scenario);
         add_orders(50, TIMESTAMP_INF, none(), &mut scenario);
@@ -260,7 +260,7 @@ module deepbook::order_query_tests {
 
     #[test]
     fun test_query_after_insert() {
-        let scenario = prepare_scenario();
+        let mut scenario = prepare_scenario();
         add_orders(200, TIMESTAMP_INF, none(), &mut scenario);
 
         // insert a new order at tick level 10
@@ -294,7 +294,7 @@ module deepbook::order_query_tests {
     }
 
     fun prepare_scenario(): Scenario {
-        let scenario = test_scenario::begin(@0x1);
+        let mut scenario = test_scenario::begin(@0x1);
         next_tx(&mut scenario, OWNER);
         setup_test(5000000, 2500000, &mut scenario, OWNER);
 
@@ -304,7 +304,7 @@ module deepbook::order_query_tests {
         mint_account_cap_transfer(BOB, test_scenario::ctx(&mut scenario));
         next_tx(&mut scenario, ALICE);
 
-        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
+        let mut pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         let account_cap = test_scenario::take_from_sender<AccountCap>(&scenario);
         let account_cap_user = account_owner(&account_cap);
         let (base_custodian, quote_custodian) = clob_v2::borrow_mut_custodian(&mut pool);
@@ -321,7 +321,7 @@ module deepbook::order_query_tests {
     }
 
     fun add_orders(order_count: u64, timestamp: u64, price: Option<u64>, scenario: &mut Scenario) {
-        let n = 1;
+        let mut n = 1;
         while (n <= order_count) {
             let price = if (option::is_some(&price)) {
                 option::destroy_some(price) * FLOAT_SCALING
@@ -330,7 +330,7 @@ module deepbook::order_query_tests {
             };
 
             let account_cap = test_scenario::take_from_sender<AccountCap>(scenario);
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(scenario);
+            let mut pool = test_scenario::take_shared<Pool<SUI, USD>>(scenario);
             let clock = test_scenario::take_shared<Clock>(scenario);
             clob_v2::place_limit_order<SUI, USD>(
                 &mut pool,

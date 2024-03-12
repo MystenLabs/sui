@@ -96,7 +96,7 @@ module sui::ecdsa_k1_tests {
     }
 
     // Helper Move function to recover signature directly to an ETH address.
-    fun ecrecover_eth_address(sig: vector<u8>, msg: vector<u8>): vector<u8> {
+    fun ecrecover_eth_address(mut sig: vector<u8>, msg: vector<u8>): vector<u8> {
         // Normalize the last byte of the signature to be 0 or 1.
         let v = vector::borrow_mut(&mut sig, 64);
         if (*v == 27) {
@@ -112,8 +112,8 @@ module sui::ecdsa_k1_tests {
         let uncompressed = ecdsa_k1::decompress_pubkey(&pubkey);
 
         // Take the last 64 bytes of the uncompressed pubkey.
-        let uncompressed_64 = vector::empty<u8>();
-        let i = 1;
+        let mut uncompressed_64 = vector::empty<u8>();
+        let mut i = 1;
         while (i < 65) {
             let value = vector::borrow(&uncompressed, i);
             vector::push_back(&mut uncompressed_64, *value);
@@ -122,8 +122,8 @@ module sui::ecdsa_k1_tests {
 
         // Take the last 20 bytes of the hash of the 64-bytes uncompressed pubkey.
         let hashed = hash::keccak256(&uncompressed_64);
-        let addr = vector::empty<u8>();
-        let i = 12;
+        let mut addr = vector::empty<u8>();
+        let mut i = 12;
         while (i < 32) {
             let value = vector::borrow(&hashed, i);
             vector::push_back(&mut addr, *value);

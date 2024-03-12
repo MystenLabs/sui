@@ -43,7 +43,7 @@ module sui::object {
     /// Here, the values are not globally unique because there can be multiple values of type `ID`
     /// with the same underlying bytes. For example, `object::id(&obj)` can be called as many times
     /// as you want for a given `obj`, and each `ID` value will be identical.
-    struct ID has copy, drop, store {
+    public struct ID has copy, drop, store {
         // We use `address` instead of `vector<u8>` here because `address` has a more
         // compact serialization. `address` is serialized as a BCS fixed-length sequence,
         // which saves us the length prefix we would pay for if this were `vector<u8>`.
@@ -57,7 +57,7 @@ module sui::object {
     /// other words for any two values `id1: UID` and `id2: UID`, `id1` != `id2`.
     /// This is a privileged type that can only be derived from a `TxContext`.
     /// `UID` doesn't have the `drop` ability, so deleting a `UID` requires a call to `delete`.
-    struct UID has store {
+    public struct UID has store {
         id: ID,
     }
 

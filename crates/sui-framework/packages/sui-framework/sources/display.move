@@ -48,7 +48,7 @@ module sui::display {
     ///
     /// Uses only String type due to external-facing nature of the object,
     /// the property names have a priority over their types.
-    struct Display<phantom T: key> has key, store {
+    public struct Display<phantom T: key> has key, store {
         id: UID,
         /// Contains fields for display. Currently supported
         /// fields are: name, link, image and description.
@@ -63,12 +63,12 @@ module sui::display {
     ///
     /// Since Sui RPC supports querying events by type, finding a Display for the T
     /// would be as simple as looking for the first event with `Display<T>`.
-    struct DisplayCreated<phantom T: key> has copy, drop {
+    public struct DisplayCreated<phantom T: key> has copy, drop {
         id: ID
     }
 
     /// Version of Display got updated -
-    struct VersionUpdated<phantom T: key> has copy, drop {
+    public struct VersionUpdated<phantom T: key> has copy, drop {
         id: ID,
         version: u16,
         fields: VecMap<String, String>,
@@ -90,8 +90,8 @@ module sui::display {
         let len = vector::length(&fields);
         assert!(len == vector::length(&values), EVecLengthMismatch);
 
-        let i = 0;
-        let display = new<T>(pub, ctx);
+        let mut i = 0;
+        let mut display = new<T>(pub, ctx);
         while (i < len) {
             add_internal(&mut display, *vector::borrow(&fields, i), *vector::borrow(&values, i));
             i = i + 1;
@@ -134,7 +134,7 @@ module sui::display {
         let len = vector::length(&fields);
         assert!(len == vector::length(&values), EVecLengthMismatch);
 
-        let i = 0;
+        let mut i = 0;
         while (i < len) {
             add_internal(self, *vector::borrow(&fields, i), *vector::borrow(&values, i));
             i = i + 1;
@@ -205,21 +205,21 @@ module sui::display_tests {
     #[allow(unused_field)]
     /// An example object.
     /// Purely for visibility.
-    struct Capy has key {
+    public struct Capy has key {
         id: UID,
         name: String
     }
 
     /// Test witness type to create a Publisher object.
-    struct CAPY has drop {}
+    public struct CAPY has drop {}
 
     #[test]
     fun capy_init() {
-        let test = test::begin(@0x2);
+        let mut test = test::begin(@0x2);
         let pub = package::test_claim(CAPY {}, test::ctx(&mut test));
 
         // create a new display object
-        let display = display::new<Capy>(&pub, test::ctx(&mut test));
+        let mut display = display::new<Capy>(&pub, test::ctx(&mut test));
 
         display::add(&mut display, utf8(b"name"), utf8(b"Capy {name}"));
         display::add(&mut display, utf8(b"link"), utf8(b"https://capy.art/capy/{id}"));

@@ -27,7 +27,7 @@ module sui::dynamic_field {
     const ESharedObjectOperationNotSupported: u64 = 4;
 
     /// Internal object used for storing the field and value
-    struct Field<Name: copy + drop + store, Value: store> has key {
+    public struct Field<Name: copy + drop + store, Value: store> has key {
         /// Determined by the hash of the object ID, the field name value and it's type,
         /// i.e. hash(parent.id || name || Name)
         id: UID,

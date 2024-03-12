@@ -30,7 +30,7 @@ module sui::zklogin_verified_id_tests {
         let iss = utf8(b"https://accounts.google.com");
         let salt_hash = 15232766888716517538274372547598053531354666056102343895255590477425668733026u256;
 
-        let scenario_val = test_scenario::begin(address);
+        let mut scenario_val = test_scenario::begin(address);
         let scenario = &mut scenario_val;
         {
             verify_zklogin_id(kc_name, kc_value, iss, aud, salt_hash, test_scenario::ctx(scenario));

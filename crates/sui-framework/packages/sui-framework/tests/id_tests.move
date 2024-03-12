@@ -8,13 +8,13 @@ module sui::id_tests {
 
     const EIdBytesMismatch: u64 = 0;
 
-    struct Object has key {
+    public struct Object has key {
         id: object::UID,
     }
 
     #[test]
     fun test_get_id() {
-        let ctx = tx_context::dummy();
+        let mut ctx = tx_context::dummy();
         let id = object::new(&mut ctx);
         let obj_id = object::uid_to_inner(&id);
         let obj = Object { id };

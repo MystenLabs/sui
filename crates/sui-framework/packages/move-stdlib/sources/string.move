@@ -14,7 +14,7 @@ module std::string {
     const EINVALID_INDEX: u64 = 2;
 
     /// A `String` holds a sequence of bytes which is guaranteed to be in utf8 format.
-    struct String has copy, drop, store {
+    public struct String has copy, drop, store {
         bytes: vector<u8>,
     }
 
@@ -76,7 +76,7 @@ module std::string {
         let bytes = &s.bytes;
         assert!(at <= vector::length(bytes) && internal_is_char_boundary(bytes, at), EINVALID_INDEX);
         let l = length(s);
-        let front = sub_string(s, 0, at);
+        let mut front = sub_string(s, 0, at);
         let end = sub_string(s, at, l);
         append(&mut front, o);
         append(&mut front, end);

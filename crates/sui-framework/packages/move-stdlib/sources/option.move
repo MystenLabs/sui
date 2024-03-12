@@ -7,7 +7,7 @@ module std::option {
 
     /// Abstraction of a value that may or may not be present. Implemented with a vector of size
     /// zero or one because Move bytecode does not have ADTs.
-    struct Option<Element> has copy, drop, store {
+    public struct Option<Element> has copy, drop, store {
         vec: vector<Element>
     }
 
@@ -115,7 +115,7 @@ module std::option {
 
     /// Destroys `t.` If `t` holds a value, return it. Returns `default` otherwise
     public fun destroy_with_default<Element: drop>(t: Option<Element>, default: Element): Element {
-        let Option { vec } = t;
+        let Option { mut vec } = t;
         if (vector::is_empty(&vec)) default
         else vector::pop_back(&mut vec)
     }
@@ -124,7 +124,7 @@ module std::option {
     /// Aborts if `t` does not hold a value
     public fun destroy_some<Element>(t: Option<Element>): Element {
         assert!(is_some(&t), EOPTION_NOT_SET);
-        let Option { vec } = t;
+        let Option { mut vec } = t;
         let elem = vector::pop_back(&mut vec);
         vector::destroy_empty(vec);
         elem
