@@ -143,8 +143,16 @@ pub async fn print_recent_incidents(long: bool, limit: usize, days: usize) -> Re
                 } else {
                     None
                 };
+            let priority = match incident["priority"]["name"].as_str() {
+                Some("P0") => "P0".red(),
+                Some("P1") => "P1".magenta(),
+                Some("P2") => "P2".truecolor(255, 165, 0),
+                Some("P3") => "P3".yellow(),
+                Some("P4") => "P4".white(),
+                _ => "  ".white(),
+            };
             println!(
-                "{}: ({}) {} ({})",
+                "{}: ({}) {} {} ({})",
                 incident["incident_number"]
                     .as_u64()
                     .expect("incident_number as_u64")
@@ -153,6 +161,7 @@ pub async fn print_recent_incidents(long: bool, limit: usize, days: usize) -> Re
                 resolved_at
                     .map(|v| (v.num_days().to_string() + "d").yellow())
                     .unwrap_or("".to_string().yellow()),
+                priority,
                 incident["title"].as_str().expect("title").green(),
                 incident["html_url"]
                     .as_str()
