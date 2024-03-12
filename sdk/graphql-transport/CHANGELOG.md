@@ -1,5 +1,13 @@
 # @mysten/graphql-transport
 
+## 0.0.2
+
+### Patch Changes
+
+- a63b9327a6: Protocol config update
+- Updated dependencies [0cafa94027]
+  - @mysten/sui.js@0.51.0
+
 ## 0.0.1
 
 ### Patch Changes
