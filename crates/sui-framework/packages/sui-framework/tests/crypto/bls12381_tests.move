@@ -574,8 +574,7 @@ module sui::bls12381_tests {
         let g = bls12381::g1_generator();
         let mut scalars: vector<group_ops::Element<bls12381::Scalar>> = vector::empty();
         let mut elements: vector<group_ops::Element<bls12381::G1>> = vector::empty();
-        while (i < 34) {
-            // this limit is defined in the protocol config
+        while (i < 34) { // this limit is defined in the protocol config
             let base_scalar = bls12381::scalar_from_u64(i);
             let base = bls12381::g1_mul(&base_scalar, &g);
             let exponent_scalar = bls12381::scalar_from_u64(i + 100);
