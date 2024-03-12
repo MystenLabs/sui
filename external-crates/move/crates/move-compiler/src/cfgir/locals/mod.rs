@@ -476,23 +476,24 @@ fn check_mutability(
             format!("To use the variable mutably, it must be declared 'mut', e.g. 'mut {vstr}'");
         if context.env.edition(context.package) == Edition::E2024_MIGRATION {
             context.add_diag(diag!(Migration::NeedsLetMut, (decl_loc, decl_msg.clone())))
-        }
-        let mut diag = diag!(
-            TypeSafety::InvalidImmVariableUsage,
-            (eloc, usage_msg),
-            (decl_loc, decl_msg),
-        );
-        if let Some(prev) = prev_assignment {
-            if prev != decl_loc {
-                let msg = if eloc == prev {
-                    "The variable is assigned multiple times here in a loop"
-                } else {
-                    "The variable was initially assigned here"
-                };
-                diag.add_secondary_label((prev, msg));
+        } else {
+            let mut diag = diag!(
+                TypeSafety::InvalidImmVariableUsage,
+                (eloc, usage_msg),
+                (decl_loc, decl_msg),
+            );
+            if let Some(prev) = prev_assignment {
+                if prev != decl_loc {
+                    let msg = if eloc == prev {
+                        "The variable is assigned multiple times here in a loop"
+                    } else {
+                        "The variable was initially assigned here"
+                    };
+                    diag.add_secondary_label((prev, msg));
+                }
             }
+            context.add_diag(diag)
         }
-        context.add_diag(diag)
     }
 }
 
