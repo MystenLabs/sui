@@ -258,7 +258,7 @@ pub fn format_vm_error(e: &VMError) -> String {
     )
 }
 
-impl<'a> SimpleVMTestAdapter {
+impl SimpleVMTestAdapter {
     fn perform_session_action<Ret>(
         &mut self,
         gas_budget: Option<u64>,

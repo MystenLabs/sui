@@ -60,7 +60,7 @@ pub struct CompiledState {
     temp_files: BTreeMap<String, NamedTempFile>,
 }
 
-impl<'a> CompiledState {
+impl CompiledState {
     pub fn resolve_named_address(&self, s: &str) -> AccountAddress {
         if let Some(addr) = self
             .named_address_mapping
@@ -399,7 +399,7 @@ fn display_return_values(return_values: SerializedReturnValues) -> Option<String
     }
 }
 
-impl<'a> CompiledState {
+impl CompiledState {
     pub fn new(
         named_address_mapping: BTreeMap<String, NumericalAddress>,
         pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
