@@ -1715,12 +1715,6 @@ impl Move2024PathExpander {
                             )
                         }
                     }
-                    // let result = if context.env.edition(context.current_package) == Edition::E2024_MIGRATION {
-                    //     if
-                    //     result
-                    // } else {
-                    //     return
-                    // }
                     result @ (ModuleIdent(_, _) | ModuleAccess(_, _)) => {
                         ResolutionFailure(Box::new(result), InvalidKind("an address".to_string()))
                     }
