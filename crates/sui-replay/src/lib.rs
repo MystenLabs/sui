@@ -434,18 +434,30 @@ pub async fn execute_replay_command(
             }
 
             if html {
-                // TODO(Laura) open up the URL with params `?network=rpc_url#<URL Encoded JSON object>`
-                use lz4_flex::block::compress_prepend_size;
+                use flate2::write::ZlibEncoder;
+                use flate2::Compression;
 
                 let input = sandbox_state.output.clone();
 
-                let compressed = compress_prepend_size(input.as_bytes());
+                //let compressed = compress_prepend_size(input.as_bytes());
 
+                let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
+                e.write_all(input.as_bytes())?;
+                let compressed = e.finish()?;
+
+                let local_prefix = "http://localhost:5173";
+                let _remote_prefix = "https://multisig-toolkit-amz9iwckn-mysten-labs.vercel.app";
                 let url = format!(
-                    "https://multisig-toolkit-amz9iwckn-mysten-labs.vercel.app/replay?network={}#{:?}",&rpc_url.unwrap_or("local".parse()?),
+                    "{}/replay?network={}#{:?}",
+                    local_prefix,
+                    &rpc_url.unwrap_or("local".parse()?),
                     compressed
-                ).replace(" ", "");
-                //info!("{:?}", url);
+                )
+                .replace(" ", "")
+                .replace("[", "")
+                .replace("]", "");
+
+                info!("{:?}", url);
                 open::that(url).ok();
             }
 

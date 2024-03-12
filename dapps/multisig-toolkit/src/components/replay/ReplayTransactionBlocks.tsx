@@ -58,16 +58,14 @@ export function ReplayTransactionBlocks({
 										{command.SplitCoins[1].map((argument) => renderArgument(argument))}
 									</div>
 								</>
-								// TODO(laura): Do this for all: `MergeCoins`, `MakeMoveVec` and all other commands. Also add these in types properly.
 							)}
 
-							{/* { 'MergeCoins' in command && ... } */}
 							{'TransferObjects' in command && (
 								<>
 									<div>Address: {renderArgument(command.TransferObjects[1])}</div>
 									<div>
 										Objects:
-										{command.SplitCoins[0].map((argument) => renderArgument(argument))}
+										{command.TransferObjects[0].map((argument) => renderArgument(argument))}
 									</div>
 								</>
 							)}
@@ -77,13 +75,12 @@ export function ReplayTransactionBlocks({
 									<div>Coin: {renderArgument(command.MergeCoins[0])}</div>
 									<div>
 										Coins:
-										{command.SplitCoins[1].map((argument) => renderArgument(argument))}
+										{command.MergeCoins[1].map((argument) => renderArgument(argument))}
 									</div>
 								</>
 							)}
 							{'MakeMoveVec' in command && (
 								<>
-									<div>Type: {renderArgument(command.MakeMoveVec[0])}</div>
 									<div>
 										Arguments:
 										{command.MakeMoveVec[1].map((argument) => renderArgument(argument))}
@@ -92,7 +89,9 @@ export function ReplayTransactionBlocks({
 							)}
 							{'Publish' in command && (
 								<>
-									<div>ObjectIds: {command.Publish[1].map((argument) => renderArgument(argument))}</div>
+									<div>
+										ObjectIds: {command.Publish[1].map((argument) => renderArgument(argument))}
+									</div>
 								</>
 							)}
 							{'Upgrade' in command && (
