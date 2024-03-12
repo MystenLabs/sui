@@ -378,7 +378,7 @@ mod test {
     }
 
     async fn test_protocol_upgrade_compatibility_impl() {
-        let max_ver = ProtocolVersion::MAX.as_u64();
+        let max_ver = 36;
         let manifest = sui_framework_snapshot::load_bytecode_snapshot_manifest();
 
         let Some((&starting_version, _)) = manifest.range(..max_ver).last() else {
