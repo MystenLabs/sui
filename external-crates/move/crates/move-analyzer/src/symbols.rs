@@ -1040,11 +1040,11 @@ pub fn get_symbols(
             None => construct_pre_compiled_lib(src_deps, None, compiler_flags)
                 .ok()
                 .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
-                .and_then(|lib| {
+                .map(|lib| {
                     eprintln!("created pre-compiled libs for {:?}", pkg_path);
                     let res = Arc::new(lib);
                     pkg_deps.insert(pkg_path.to_path_buf(), res.clone());
-                    Some(res)
+                    res
                 }),
         };
         if compiled_deps.is_some() {
@@ -1269,7 +1269,7 @@ fn pre_process_typed_modules(
         let path = file_name_mapping.get(&cloned_defs.fhash.clone()).unwrap();
         file_mods
             .entry(path.to_path_buf())
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(cloned_defs);
 
         mod_outer_defs.insert(mod_ident_str.clone(), defs);
