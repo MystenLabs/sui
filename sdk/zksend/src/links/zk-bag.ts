@@ -114,7 +114,7 @@ export class ZkBag<IDs> {
 		}: {
 			arguments: [
 				bag: TransactionObjectArgument | string,
-				claim: TransactionObjectArgument | string,
+				claim: Extract<TransactionArgument, { kind: 'NestedResult' }>,
 				id: TransactionObjectArgument | string,
 			];
 			typeArguments: [string];
@@ -134,7 +134,7 @@ export class ZkBag<IDs> {
 		}: {
 			arguments: [
 				bag: TransactionObjectArgument | string,
-				claim: TransactionObjectArgument | string,
+				claim: Extract<TransactionArgument, { kind: 'NestedResult' }>,
 			];
 		},
 	) {
