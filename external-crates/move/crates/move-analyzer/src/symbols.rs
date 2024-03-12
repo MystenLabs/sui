@@ -1103,12 +1103,8 @@ pub fn get_symbols(
                 return Ok((files, vec![]));
             }
         };
-        // warning diagnostics (if any) since compilation succeeded
         let failure = false;
-        diagnostics = Some((
-            compiler.compilation_env().take_final_warning_diags(),
-            failure,
-        ));
+        diagnostics = Some((compiler.compilation_env().take_final_diags(), failure));
         eprintln!("compiled to CFGIR");
         Ok((files, vec![]))
     })?;
