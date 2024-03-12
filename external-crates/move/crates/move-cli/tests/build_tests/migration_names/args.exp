@@ -18,12 +18,9 @@ The following changes will be made.
 
 --- sources/mod0.move
 +++ sources/mod0.move
-@@ -3,1 +3,1 @@
--    struct S { n: u64 }
-+    public struct S { n: u64 }
 @@ -5,1 +5,1 @@
--    fun t0(type: u64, enum: S, mut: bool, match: u64): u64 {
-+    fun t0(`type`: u64, `enum`: S, `mut`: bool, `match`: u64): u64 {
+-    fun t0(type: u64, enum: S, mut: bool, match: u64, for: u64): u64 {
++    fun t0(`type`: u64, `enum`: S, `mut`: bool, `match`: u64, `for`: u64): u64 {
 @@ -6,1 +6,1 @@
 -        if (type == match) {
 +        if (`type` == `match`) {
@@ -37,16 +34,13 @@ The following changes will be made.
 -            match
 +            `match`
 @@ -11,1 +11,1 @@
--            enum.n
-+            `enum`.n
+-            enum.n + for
++            `enum`.n + `for`
 --- sources/mod_intermodule_errors.move
 +++ sources/mod_intermodule_errors.move
-@@ -3,1 +3,1 @@
--    struct S { n: u64 }
-+    public struct S { n: u64 }
 @@ -5,1 +5,1 @@
--    public fun t0(type: u64, enum: S, mut: bool, match: u64): u64 {
-+    public fun t0(`type`: u64, `enum`: S, `mut`: bool, `match`: u64): u64 {
+-    public fun t0(type: u64, enum: S, mut: bool, match: u64, for: u64): u64 {
++    public fun t0(`type`: u64, `enum`: S, `mut`: bool, `match`: u64, `for`: u64): u64 {
 @@ -6,1 +6,1 @@
 -        if (type == match) {
 +        if (`type` == `match`) {
@@ -60,16 +54,10 @@ The following changes will be made.
 -            match
 +            `match`
 @@ -11,1 +11,1 @@
--            enum.n
-+            `enum`.n
+-            enum.n + for
++            `enum`.n + `for`
 --- sources/mod_let.move
 +++ sources/mod_let.move
-@@ -3,1 +3,1 @@
--    struct S has drop { n: u64 }
-+    public struct S has drop { n: u64 }
-@@ -5,1 +5,1 @@
--    fun t0(type: u64, enum: S, mut: bool, match: u64): u64 {
-+    fun t0(`type`: u64, `enum`: S, `mut`: bool, `match`: u64): u64 {
 @@ -6,1 +6,1 @@
 -        let type = 0;
 +        let `type` = 0;
@@ -83,16 +71,13 @@ The following changes will be made.
 -        let match = 3;
 +        let `match` = 3;
 @@ -10,1 +10,1 @@
--        type + enum + mut + match
-+        `type` + `enum` + `mut` + `match`
+-        let for = 3;
++        let `for` = 3;
+@@ -11,1 +11,1 @@
+-        type + enum + mut + match + for
++        `type` + `enum` + `mut` + `match` + `for`
 --- sources/mod_let_errors.move
 +++ sources/mod_let_errors.move
-@@ -3,1 +3,1 @@
--    struct S { n: u64 }
-+    public struct S { n: u64 }
-@@ -5,1 +5,1 @@
--    fun t0(type: u64, enum: S, mut: bool, match: u64): u64 {
-+    fun t0(`type`: u64, `enum`: S, `mut`: bool, `match`: u64): u64 {
 @@ -6,1 +6,1 @@
 -        let type = 0;
 +        let `type` = 0;
@@ -106,8 +91,11 @@ The following changes will be made.
 -        let match = 3;
 +        let `match` = 3;
 @@ -10,1 +10,1 @@
--        type + enum + mut + match
-+        `type` + `enum` + `mut` + `match`
+-        let for = 3;
++        let `for` = 3;
+@@ -11,1 +11,1 @@
+-        type + enum + mut + match + for
++        `type` + `enum` + `mut` + `match` + `for`
 
 
 ============================================================

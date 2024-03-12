@@ -358,7 +358,7 @@ fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
             peeled.into()
         }
         // carve-out for migration with new keywords
-        tok @ (Tok::Mut | Tok::Match | Tok::Enum | Tok::Type)
+        tok @ (Tok::Mut | Tok::Match | Tok::For | Tok::Enum | Tok::Type)
             if context.env.edition(context.package_name) == Edition::E2024_MIGRATION =>
         {
             report_name_migration(
@@ -454,7 +454,7 @@ fn parse_leading_name_access_<'a, F: FnOnce() -> &'a str>(
             Ok(sp(loc, LeadingNameAccess_::AnonymousAddress(addr)))
         }
         // carve-out for migration with new keywords
-        Tok::Mut | Tok::Match | Tok::Enum | Tok::Type
+        Tok::Mut | Tok::Match | Tok::For | Tok::Enum | Tok::Type
             if context.env.edition(context.package_name) == Edition::E2024_MIGRATION =>
         {
             if global_name {
@@ -877,7 +877,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
         context.tokens.peek(),
         Tok::Identifier | Tok::RestrictedIdentifier | Tok::Mut
         // carve-out for migration with new keywords
-        | Tok::Match | Tok::Enum | Tok::Type
+        | Tok::Match | Tok::For | Tok::Enum | Tok::Type
     ) {
         let next_tok = context.tokens.lookahead()?;
         if !matches!(
@@ -1239,7 +1239,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             parse_name_exp(context)?
         }
         // carve-out for migration with new keywords
-        Tok::Mut | Tok::Match | Tok::Enum | Tok::Type
+        Tok::Mut | Tok::Match | Tok::For | Tok::Enum | Tok::Type
             if context.env.edition(context.package_name) == Edition::E2024_MIGRATION =>
         {
             parse_name_exp(context)?
@@ -2751,10 +2751,11 @@ fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context
                 context
                     .env
                     .add_diag(diag!(Migration::NeedsPublic, (loc, msg.clone())))
+            } else {
+                let mut err = diag!(Syntax::InvalidModifier, (loc, msg));
+                err.add_note(note);
+                context.env.add_diag(err);
             }
-            let mut err = diag!(Syntax::InvalidModifier, (loc, msg));
-            err.add_note(note);
-            context.env.add_diag(err);
         }
     } else if let Some(vis) = visibility {
         let msg = format!(

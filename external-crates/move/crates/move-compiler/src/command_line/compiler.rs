@@ -367,7 +367,7 @@ impl<'a> Compiler<'a> {
                 // errors occurred that prevented migration, remove any migration diagnostics
                 // Only report blocking errors since those are stopping migration
                 diags.retain(|d| {
-                    !d.is_migration() && d.info().severity() >= Severity::BlockingError
+                    !d.is_migration() && d.info().severity() >= Severity::NonblockingError
                 });
                 return Ok((files, Err(diags)));
             }
