@@ -1,5 +1,11 @@
 # @mysten/enoki
 
+## 0.2.0
+
+### Minor Changes
+
+- 3b1da3967a: Add support for secret key authentication
+
 ## 0.1.4
 
 ### Patch Changes

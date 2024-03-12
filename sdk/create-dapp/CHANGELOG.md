@@ -1,5 +1,11 @@
 # @mysten/create-dapp
 
+## 0.2.6
+
+### Patch Changes
+
+- @mysten/dapp-kit@0.12.4
+
 ## 0.2.5
 
 ### Patch Changes
