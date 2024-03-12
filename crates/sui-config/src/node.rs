@@ -79,6 +79,10 @@ pub struct NodeConfig {
     #[serde(default = "default_enable_index_processing")]
     pub enable_index_processing: bool,
 
+    // only alow websocket connections for jsonrpc traffic
+    #[serde(default)]
+    pub websocket_only: bool,
+
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
 

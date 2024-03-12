@@ -46,6 +46,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -170,6 +171,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -294,6 +296,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -418,6 +421,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -542,6 +546,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -666,6 +671,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -790,6 +796,7 @@ validator_configs:
           request_batches_rate_limit: ~
     enable-event-processing: false
     enable-index-processing: true
+    websocket-only: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -878,3 +885,4 @@ account_keys:
   - mfPjCoE6SX0Sl84MnmNS/LS+tfPpkn7I8tziuk2g0WM=
   - 5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi8=
 genesis: "[fake genesis]"
+
