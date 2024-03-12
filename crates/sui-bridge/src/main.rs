@@ -51,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
     let prometheus_registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&prometheus_registry);
     info!("Metrics server started at port {}", config.metrics_port);
-
+    println!("hello!");
     // Init logging
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
