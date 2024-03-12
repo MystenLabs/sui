@@ -8,7 +8,7 @@ if [ -z "$API_USER" ] || [ -z "$API_KEY" ]; then
   exit 1
 fi
 
-NETWORK=$1
+NETWORK="$1"
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd $REPO_ROOT
@@ -48,22 +48,32 @@ git fetch -q || exit 1
 
 # put code to check if git client is clean into function
 function check_git_clean {
-  message=$1
+  message="$1"
+  path="$2"
   # if any files are edited or staged, exit with error
-  if ! git diff --quiet --exit-code || ! git diff --cached --quiet --exit-code; then
+  if ! git diff --quiet --exit-code -- $path || ! git diff --cached --quiet --exit-code -- $path; then
     echo "Error: $message"
     exit 1
   fi
 }
 
-check_git_clean "Please commit or stash your changes before running this script"
+check_git_clean "Please commit or stash your changes before running this script" "*"
 
 # check out all files in crates/sui-protocol-config/src/snapshots at origin commit
 echo "Checking out $NETWORK snapshot files"
 git checkout $ORIGIN_COMMIT -- crates/sui-protocol-config/src/snapshots || exit 1
 
-echo "Checking for changes to snapshot files"
-check_git_clean "Detected changes to snapshot files since $ORIGIN_COMMIT - not safe to release"
+if [ "$NETWORK" != "testnet" ] && [ "$NETWORK" != "mainnet" ]; then
+  NETWORK_PATTERN="*__version_*"
+else
+  NETWORK_PATTERN="*__"$(echo "$NETWORK" | awk '{print toupper(substr($0, 1, 1)) substr($0, 2)}')"_version_*"
+fi
+
+echo "Checking for changes to snapshot files matching $NETWORK_PATTERN"
+check_git_clean "Detected changes to snapshot files since $ORIGIN_COMMIT - not safe to release" "$NETWORK_PATTERN"
+
+# remove any snapshot file changes that were ignored
+git reset --hard HEAD
 
 echo "Running snapshot tests..."
 cargo test --package sui-protocol-config snapshot_tests || exit 1
