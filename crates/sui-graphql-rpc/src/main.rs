@@ -136,20 +136,36 @@ async fn main() {
             tracker.wait().await;
         }
         Command::FromConfig { path } => {
+            let tracker = TaskTracker::new();
             let cancellation_token = CancellationToken::new();
 
             println!("Starting server...");
-            start_graphiql_server_from_cfg_path(
-                path.to_str().unwrap(),
-                &VERSION,
-                cancellation_token,
-            )
-            .await
-            .map_err(|x| {
-                error!("Error: {:?}", x);
-                x
-            })
-            .unwrap();
+            let cancellation_token_clone = cancellation_token.clone();
+            tracker.spawn(async move {
+                start_graphiql_server_from_cfg_path(
+                    path.to_str().unwrap(),
+                    &VERSION,
+                    cancellation_token_clone,
+                )
+                .await
+                .map_err(|x| {
+                    error!("Error: {:?}", x);
+                    x
+                })
+                .unwrap();
+            });
+
+            // Wait for shutdown signal
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {},
+            }
+
+            println!("Shutting down...");
+
+            // Send shutdown signal to application
+            cancellation_token.cancel();
+            tracker.close();
+            tracker.wait().await;
         }
     }
 }
