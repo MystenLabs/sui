@@ -1,10 +1,12 @@
 # Functions
 
-Functions are declared inside of modules and define the logic and behavior of the module. Functions can be reused, either being called from other functions or as entry points for execution.
+Functions are declared inside of modules and define the logic and behavior of the module. Functions
+can be reused, either being called from other functions or as entry points for execution.
 
 ## Declaration
 
-Functions are declared with the `fun` keyword followed by the function name, type parameters, parameters, a return type, and finally the function body.
+Functions are declared with the `fun` keyword followed by the function name, type parameters,
+parameters, a return type, and finally the function body.
 
 ```text
 <visibility>? <entry>? fun <identifier><[type_parameters: constraint],*>([identifier: type],*): <return_type> <acquires [identifier],*> <function_body>
@@ -18,7 +20,8 @@ fun foo<T1, T2>(x: u64, y: T1, z: T2): (T2, T1, u64) { (z, y, x) }
 
 ### Visibility
 
-Module functions, by default, can only be called within the same module. These internal (sometimes called private) functions cannot be called from other modules or as entry points.
+Module functions, by default, can only be called within the same module. These internal (sometimes
+called private) functions cannot be called from other modules or as entry points.
 
 ```move
 module a::m {
@@ -35,12 +38,13 @@ module b::other {
 ```
 
 To allow access from other modules, the function must be declared `public` or `public(package)`.
-Tangential to visibility, an [`entry`](#entry-modifier) function can be called as an entry point
-for execution.
+Tangential to visibility, an [`entry`](#entry-modifier) function can be called as an entry point for
+execution.
 
 #### `public` visibility
 
-A `public` function can be called by *any* function defined in *any* module. As shown in the following example, a `public` function can be called by:
+A `public` function can be called by _any_ function defined in _any_ module. As shown in the
+following example, a `public` function can be called by:
 
 - other functions defined in the same module,
 - functions defined in another module, or
@@ -65,6 +69,7 @@ Fore more details on the entry point to execution see [the section below](#entry
 
 The `public(package)` visibility modifier is a more restricted form of the `public` modifier to give
 more control about where a function can be used. A `public(package)` function can be called by:
+
 - other functions defined in the same module, or
 - other functions defined in the same package (the same address)
 
@@ -96,12 +101,15 @@ enumerated by the callee's module. see [Friends](./friends.md) for more details.
 
 ### `entry` modifier
 
-In addition to `public` functions, you might have some functions in your modules that you want to use as the entry point to execution. The `entry` modifier is designed to allow module functions to initiate execution, without having to expose the functionality to other modules.
+In addition to `public` functions, you might have some functions in your modules that you want to
+use as the entry point to execution. The `entry` modifier is designed to allow module functions to
+initiate execution, without having to expose the functionality to other modules.
 
 Essentially, the combination of `pbulic` and `entry` functions define the "main" functions of a
 module, and they specify where Move programs can start executing.
 
-Keep in mind though, an `entry` function _can_ still be called by other Move functions. So while they _can_ serve as the start of a Move program, they aren't restricted to that case.
+Keep in mind though, an `entry` function _can_ still be called by other Move functions. So while
+they _can_ serve as the start of a Move program, they aren't restricted to that case.
 
 For example:
 
@@ -124,7 +132,8 @@ restrictions are specific to each individual deployment of Move.
 
 ### Name
 
-Function names can start with letters `a` to `z`. After the first character, function names can contain underscores `_`, letters `a` to `z`, letters `A` to `Z`, or digits `0` to `9`.
+Function names can start with letters `a` to `z`. After the first character, function names can
+contain underscores `_`, letters `a` to `z`, letters `A` to `Z`, or digits `0` to `9`.
 
 ```move
 fun fOO() {}
@@ -187,7 +196,8 @@ Using [tuples](./tuples.md), a function can return multiple values:
 fun one_two_three(): (u64, u64, u64) { (0, 1, 2) }
 ```
 
-If no return type is specified, the function has an implicit return type of unit `()`. These functions are equivalent:
+If no return type is specified, the function has an implicit return type of unit `()`. These
+functions are equivalent:
 
 ```move
 fun just_unit(): () { () }
@@ -195,11 +205,14 @@ fun just_unit() { () }
 fun just_unit() { }
 ```
 
-As mentioned in the [tuples section](./tuples.md), these tuple "values" are virtual and do not exist at runtime. So for a function that returns unit `()`, it will not be returning any value at all during execution.
+As mentioned in the [tuples section](./tuples.md), these tuple "values" are virtual and do not exist
+at runtime. So for a function that returns unit `()`, it will not be returning any value at all
+during execution.
 
 ### Function body
 
-A function's body is an expression block. The return value of the function is the last value in the sequence
+A function's body is an expression block. The return value of the function is the last value in the
+sequence
 
 ```move
 fun example(): u64 {
@@ -215,7 +228,8 @@ For more information on expression blocks, see [Move variables](./variables.md).
 
 ### Native Functions
 
-Some functions do not have a body specified, and instead have the body provided by the VM. These functions are marked `native`.
+Some functions do not have a body specified, and instead have the body provided by the VM. These
+functions are marked `native`.
 
 Without modifying the VM source code, a programmer cannot add new native functions. Furthermore, it
 is the intent that `native` functions are used for either standard library code or for functionality
@@ -299,7 +313,9 @@ fun add(x: u64, y: u64): u64 {
 
 The return value here is the result of `x + y`.
 
-[As mentioned above](#function-body), the function's body is an [expression block](./variables.md). The expression block can sequence various statements, and the final expression in the block will be be the value of that block
+[As mentioned above](#function-body), the function's body is an [expression block](./variables.md).
+The expression block can sequence various statements, and the final expression in the block will be
+be the value of that block
 
 ```move
 fun double_and_add(x: u64, y: u64): u64 {
@@ -313,14 +329,16 @@ The return value here is the result of `double_x + double_y`
 
 ### `return` expression
 
-A function implicitly returns the value that its body evaluates to. However, functions can also use the explicit `return` expression:
+A function implicitly returns the value that its body evaluates to. However, functions can also use
+the explicit `return` expression:
 
 ```move
 fun f1(): u64 { return 0 }
 fun f2(): u64 { 0 }
 ```
 
-These two functions are equivalent. In this slightly more involved example, the function subtracts two `u64` values, but returns early with `0` if the second value is too large:
+These two functions are equivalent. In this slightly more involved example, the function subtracts
+two `u64` values, but returns early with `0` if the second value is too large:
 
 ```move
 fun safe_sub(x: u64, y: u64): u64 {
@@ -331,7 +349,8 @@ fun safe_sub(x: u64, y: u64): u64 {
 
 Note that the body of this function could also have been written as `if (y > x) 0 else x - y`.
 
-However `return` really shines is in exiting deep within other control flow constructs. In this example, the function iterates through a vector to find the index of a given value:
+However `return` really shines is in exiting deep within other control flow constructs. In this
+example, the function iterates through a vector to find the index of a given value:
 
 ```move
 use std::vector;
@@ -348,7 +367,8 @@ fun index_of<T>(v: &vector<T>, target: &T): Option<u64> {
 }
 ```
 
-Using `return` without an argument is shorthand for `return ()`. That is, the following two functions are equivalent:
+Using `return` without an argument is shorthand for `return ()`. That is, the following two
+functions are equivalent:
 
 ```move
 fun foo() { return }

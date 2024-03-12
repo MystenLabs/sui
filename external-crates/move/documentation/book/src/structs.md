@@ -5,11 +5,11 @@ non-reference, non-tuple type, including other structs.
 
 Structs can be used to define all "asset" values or unrestricted values, where the operations
 performed on those values can be controlled by the struct's [abilities](./abilities.md). By default,
-structs are linear and ephemeral. By this we mean that they: cannot be copied, cannot be
-dropped, and cannot be stored in storage. This means that all values have to have ownership
-transferred (linear) and the values must be dealt with by the end of the program's execution
-(ephemeral). We can relax this behavior by giving the struct [abilities](./abilities.md) which allow
-values to be copied or dropped and also to be stored in storage or to define storage schemas.
+structs are linear and ephemeral. By this we mean that they: cannot be copied, cannot be dropped,
+and cannot be stored in storage. This means that all values have to have ownership transferred
+(linear) and the values must be dealt with by the end of the program's execution (ephemeral). We can
+relax this behavior by giving the struct [abilities](./abilities.md) which allow values to be copied
+or dropped and also to be stored in storage or to define storage schemas.
 
 ## Defining Structs
 
@@ -37,12 +37,12 @@ public struct B { a: A }
 
 ### Visibility
 
-As you may have noticed, all structs are declared as `public`. This means that the type of
-the struct can be referred to from any other module. However, the fields of the struct, and the
-ability to create or destroy the struct, are still internal to the module that defines the struct.
+As you may have noticed, all structs are declared as `public`. This means that the type of the
+struct can be referred to from any other module. However, the fields of the struct, and the ability
+to create or destroy the struct, are still internal to the module that defines the struct.
 
-In the future, we plan on adding to declare structs as `public(package)` or as internal, much
-like [functions](./functions.md#visibility).
+In the future, we plan on adding to declare structs as `public(package)` or as internal, much like
+[functions](./functions.md#visibility).
 
 ### Abilities
 
@@ -223,10 +223,9 @@ let y: bool = *&foo.y;
 let foo2: Foo = *&bar.foo;
 ```
 
-More canonically, the dot operator can be used to read fields of a struct without
-any borrowing. As is true with
-[dereferencing](./references.md#reading-and-writing-through-references), the field type must
-have the `copy` [ability](./abilities.mdcopy).
+More canonically, the dot operator can be used to read fields of a struct without any borrowing. As
+is true with [dereferencing](./references.md#reading-and-writing-through-references), the field type
+must have the `copy` [ability](./abilities.mdcopy).
 
 ```move
 let foo = Foo { x: 3, y: true };
@@ -294,7 +293,8 @@ Most struct operations on a struct type `T` can only be performed inside the mod
 Following these rules, if you want to modify your struct outside the module, you will need to
 provide public APIs for them. The end of the chapter contains some examples of this.
 
-However as stated [in the visibility section above](#visibility), struct _types_ are always visible to another module
+However as stated [in the visibility section above](#visibility), struct _types_ are always visible
+to another module
 
 ```move
 module a::m {
@@ -359,8 +359,7 @@ module a::m {
 }
 ```
 
-To fix the example `fun destroying_1`, you would need to manually "unpack" the
-value:
+To fix the example `fun destroying_1`, you would need to manually "unpack" the value:
 
 ```move
 module a::m {
@@ -373,8 +372,8 @@ module a::m {
 }
 ```
 
-Recall that you are only able to deconstruct a struct within the module in which it is defined.
-This can be leveraged to enforce certain invariants in a system, for example, conservation of money.
+Recall that you are only able to deconstruct a struct within the module in which it is defined. This
+can be leveraged to enforce certain invariants in a system, for example, conservation of money.
 
 If on the other hand, your struct does not represent something valuable, you can add the abilities
 `copy` and `drop` to get a struct value that might feel more familiar from other programming
@@ -400,5 +399,5 @@ module a::m {
 
 ## Storage
 
-Structs can be used to define storage schemas, but the details are different per deployment of
-Move. See the documentation for the [`key` ability](./abilities.md#key) for more details.
+Structs can be used to define storage schemas, but the details are different per deployment of Move.
+See the documentation for the [`key` ability](./abilities.md#key) for more details.

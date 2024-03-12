@@ -43,7 +43,7 @@ result. These values are so common that specific syntax is provided to make the 
 readable, as opposed to having to use `vector[]` where each individual `u8` value is specified in
 numeric form.
 
-There are currently two supported types of `vector<u8>` literals, *byte strings* and *hex strings*.
+There are currently two supported types of `vector<u8>` literals, _byte strings_ and _hex strings_.
 
 #### Byte Strings
 
@@ -99,14 +99,15 @@ library:
 | `vector::borrow_mut<T>(v: &mut vector<T>, i: u64): &mut T` | Return a mutable reference to the `T` at index `i`                                                                                                              | If `i` is not in bounds        |
 | `vector::destroy_empty<T>(v: vector<T>)`                   | Delete `v`                                                                                                                                                      | If `v` is not empty            |
 | `vector::append<T>(v1: &mut vector<T>, v2: vector<T>)`     | Add the elements in `v2` to the end of `v1`                                                                                                                     | Never                          |
-| `vector::contains<T>(v: &vector<T>, e: &T): bool`          | Return true if `e` is in the vector `v`. Otherwise, returns false                                                                                                | Never                          |
+| `vector::contains<T>(v: &vector<T>, e: &T): bool`          | Return true if `e` is in the vector `v`. Otherwise, returns false                                                                                               | Never                          |
 | `vector::swap<T>(v: &mut vector<T>, i: u64, j: u64)`       | Swaps the elements at the `i`th and `j`th indices in the vector `v`                                                                                             | If `i` or `j` is out of bounds |
 | `vector::reverse<T>(v: &mut vector<T>)`                    | Reverses the order of the elements in the vector `v` in place                                                                                                   | Never                          |
 | `vector::index_of<T>(v: &vector<T>, e: &T): (bool, u64)`   | Return `(true, i)` if `e` is in the vector `v` at index `i`. Otherwise, returns `(false, 0)`                                                                    | Never                          |
 | `vector::remove<T>(v: &mut vector<T>, i: u64): T`          | Remove the `i`th element of the vector `v`, shifting all subsequent elements. This is O(n) and preserves ordering of elements in the vector                     | If `i` is out of bounds        |
-| `vector::swap_remove<T>(v: &mut vector<T>, i: u64): T`     | Swap the `i`th element of the vector `v` with the last element and then pop the element, This is O(1), but does not preserve ordering of elements in the vector  | If `i` is out of bounds        |
+| `vector::swap_remove<T>(v: &mut vector<T>, i: u64): T`     | Swap the `i`th element of the vector `v` with the last element and then pop the element, This is O(1), but does not preserve ordering of elements in the vector | If `i` is out of bounds        |
 
 <!-- TODO we should just link out to generated stdlib docs? Maybe?  -->
+
 More operations may be added over time.
 
 ## Example
@@ -148,7 +149,8 @@ fun destroy_droppable_vector<T: drop>(vec: vector<T>) {
 ```
 
 Similarly, vectors cannot be copied unless the element type has `copy`. In other words, a
-`vector<T>` has `copy` if and only if `T` has `copy`. Note that it will be implicitly copied if needed:
+`vector<T>` has `copy` if and only if `T` has `copy`. Note that it will be implicitly copied if
+needed:
 
 ```move
 let x = vector[10];
@@ -157,8 +159,8 @@ let z = x;
 (y, z)
 ```
 
-Keep in mind, copies of large vectors can be expensive,
-If this is a concern, annotating the `intended` usage can prevent accidental copies. For example,
+Keep in mind, copies of large vectors can be expensive, If this is a concern, annotating the
+`intended` usage can prevent accidental copies. For example,
 
 ```move
 let x = vector[10];
@@ -173,4 +175,5 @@ For more details see the sections on [type abilities](./abilities.md) and [gener
 
 As mentioned [above](#destroying-and-copying-vectors), `vector` values can be copied only if the
 elements can be copied. In that case, the copy can be done via a
-[`copy`](./variables.md#move-and-copy) or a [dereference `*`](./references.md#reading-and-writing-through-references).
+[`copy`](./variables.md#move-and-copy) or a
+[dereference `*`](./references.md#reading-and-writing-through-references).

@@ -1,7 +1,8 @@
 # Local Variables and Scope
 
 Local variables in Move are lexically (statically) scoped. New variables are introduced with the
-keyword `let`, which will shadow any previous local with the same name. Locals marked as `mut` are mutable and can be updated both directly and via a mutable reference.
+keyword `let`, which will shadow any previous local with the same name. Locals marked as `mut` are
+mutable and can be updated both directly and via a mutable reference.
 
 ## Declaring Local Variables
 
@@ -149,8 +150,8 @@ In a rarer case, the type system might not be able to infer a type for divergent
 following code is unreachable). Both [`return`](./functions.md#return-expression) and
 [`abort`](./abort-and-assert.md) are expressions and can have any type. A [`loop`](./loops.md) has
 type `()` if it has a `break` (or `T` if has a `break e` where `e: T`), but if there is no break out
-of the `loop`, it could have any type.
-If these types cannot be inferred, a type annotation is required. For example, this code:
+of the `loop`, it could have any type. If these types cannot be inferred, a type annotation is
+required. For example, this code:
 
 ```move
 let a: u8 = return ();
@@ -229,7 +230,6 @@ let P(local1, local2) = T { f1: 1, f2: 2 };
 // local1: u64
 // local2: u64
 ```
-
 
 Here is a more complicated example:
 
@@ -374,7 +374,7 @@ let (x1, y, z1) = three(); // WARNING!
 All of the different structures in `let` can be combined! With that we arrive at this general
 grammar for `let` statements:
 
-> _let-binding_ → **let** _pattern-or-list_ _type-annotation_<sub>_opt_</sub>
+> _let-binding_ → **let** _pattern-or-list_ _type-annotation_<sub>_opt_</sub> >
 > _initializer_<sub>_opt_</sub> > _pattern-or-list_ → _pattern_ | **(** _pattern-list_ **)** >
 > _pattern-list_ → _pattern_ **,**<sub>_opt_</sub> | _pattern_ **,** _pattern-list_ >
 > _type-annotation_ → **:** _type_ _initializer_ → **=** _expression_
@@ -384,7 +384,7 @@ both destructure data (possibly recursively) and introduce the bindings. The pat
 follows:
 
 > _pattern_ → _local-variable_ | _struct-type_ **{** _field-binding-list_ **}** >
-> _field-binding-list_ → _field-binding_ **,**<sub>_opt_</sub> | _field-binding_ **,**
+> _field-binding-list_ → _field-binding_ **,**<sub>_opt_</sub> | _field-binding_ **,** >
 > _field-binding-list_ > _field-binding_ → _field_ | _field_ **:** _pattern_
 
 A few concrete examples with this grammar applied:
@@ -606,8 +606,8 @@ explicitly destroyed within its declaring module.)
 ```
 
 If a final expression is not present in a block---that is, if there is a trailing semicolon `;`,
-there is an implicit [unit `()` value](https://en.wikipedia.org/wiki/Unit_type). Similarly, if the expression block is empty, there is an
-implicit unit `()` value.
+there is an implicit [unit `()` value](https://en.wikipedia.org/wiki/Unit_type). Similarly, if the
+expression block is empty, there is an implicit unit `()` value.
 
 Both are equivalent
 

@@ -17,9 +17,9 @@ It might feel weird to have tuples in the language at all given these restrictio
 most common use cases for tuples in other languages is for functions to allow functions to return
 multiple values. Some languages work around this by forcing the users to write structs that contain
 the multiple return values. However in Move, you cannot put references inside of
-[structs](./structs.md). This required Move to support multiple return values. These
-multiple return values are all pushed on the stack at the bytecode level. At the source level, these
-multiple return values are represented using tuples.
+[structs](./structs.md). This required Move to support multiple return values. These multiple return
+values are all pushed on the stack at the bytecode level. At the source level, these multiple return
+values are represented using tuples.
 
 ## Literals
 
@@ -105,8 +105,9 @@ For more details, see [Move Variables](./variables.md).
 
 ## Subtyping
 
-Along with references, tuples are the only types that have [subtyping](https://en.wikipedia.org/wiki/Subtyping) in Move. Tuples do have
-subtyping only in the sense that subtype with references (in a covariant way).
+Along with references, tuples are the only types that have
+[subtyping](https://en.wikipedia.org/wiki/Subtyping) in Move. Tuples do have subtyping only in the
+sense that subtype with references (in a covariant way).
 
 For example:
 
@@ -131,5 +132,5 @@ let (e, f): (&mut u64, &mut u64) = (x, y);
 
 As mentioned above, tuple values don't really exist at runtime. And currently they cannot be stored
 into local variables because of this (but it is likely that this feature will come at some point in
-the future). As such, tuples can only be moved currently, as copying them would require putting
-them into a local variable first.
+the future). As such, tuples can only be moved currently, as copying them would require putting them
+into a local variable first.

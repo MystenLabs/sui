@@ -1,39 +1,48 @@
 # Address
 
-`address` is a built-in type in Move that is used to represent locations (sometimes called accounts) in storage. An `address` value is a 256-bit (32 byte) identifier. Move uses addresses as a way to differentiate different packages of [modules](./modules.md), where each package has its own address. Specific deployments of Move might also use the `address` value for [storage](./abilities.md#key) operations.
+`address` is a built-in type in Move that is used to represent locations (sometimes called accounts)
+in storage. An `address` value is a 256-bit (32 byte) identifier. Move uses addresses as a way to
+differentiate different packages of [modules](./modules.md), where each package has its own address.
+Specific deployments of Move might also use the `address` value for [storage](./abilities.md#key)
+operations.
 
-Although an `address` is a 256 bit integer under the hood, Move addresses are intentionally opaque---they cannot be created from integers, they do not support arithmetic operations, and they cannot be modified. Specific deployments of Move might have `native` functions to enable some of these operations (e.g., creating an `address` from bytes `vector<u8>`), but these are not part of the Move language itself.
+Although an `address` is a 256 bit integer under the hood, Move addresses are intentionally
+opaque---they cannot be created from integers, they do not support arithmetic operations, and they
+cannot be modified. Specific deployments of Move might have `native` functions to enable some of
+these operations (e.g., creating an `address` from bytes `vector<u8>`), but these are not part of
+the Move language itself.
 
-While there are runtime address values (values of type `address`), they *cannot* be used to access modules at runtime.
+While there are runtime address values (values of type `address`), they _cannot_ be used to access
+modules at runtime.
 
 ## Addresses and Their Syntax
 
-Addresses come in two flavors, named or numerical. The syntax for a named address follows the
-same rules for any named identifier in Move. The syntax of a numerical address is not restricted
-to hex-encoded values, and any valid [`u256` numerical value](./integers.md) can be used as an
-address value, e.g., `42`, `0xCAFE`, and `10_000` are all valid numerical address
-literals.
+Addresses come in two flavors, named or numerical. The syntax for a named address follows the same
+rules for any named identifier in Move. The syntax of a numerical address is not restricted to
+hex-encoded values, and any valid [`u256` numerical value](./integers.md) can be used as an address
+value, e.g., `42`, `0xCAFE`, and `10_000` are all valid numerical address literals.
 
-To distinguish when an address is being used in an expression context or not, the
-syntax when using an address differs depending on the context where it's used:
+To distinguish when an address is being used in an expression context or not, the syntax when using
+an address differs depending on the context where it's used:
 
-* When an address is used as an expression the address must be prefixed by the `@` character, i.e., [`@<numerical_value>`](./integers.md) or `@<named_address_identifier>`.
-* Outside of expression contexts, the address may be written without the leading `@` character, i.e., [`<numerical_value>`](./integers.md) or `<named_address_identifier>`.
+- When an address is used as an expression the address must be prefixed by the `@` character, i.e.,
+  [`@<numerical_value>`](./integers.md) or `@<named_address_identifier>`.
+- Outside of expression contexts, the address may be written without the leading `@` character,
+  i.e., [`<numerical_value>`](./integers.md) or `<named_address_identifier>`.
 
-In general, you can think of `@` as an operator that takes an address from being a namespace item to being an expression item.
+In general, you can think of `@` as an operator that takes an address from being a namespace item to
+being an expression item.
 
 ## Named Addresses
 
-Named addresses are a feature that allow identifiers to be used in place of
-numerical values in any spot where addresses are used, and not just at the
-value level.  Named addresses are declared and bound as top level elements
-(outside of modules and scripts) in Move Packages, or passed as arguments
-to the Move compiler.
+Named addresses are a feature that allow identifiers to be used in place of numerical values in any
+spot where addresses are used, and not just at the value level. Named addresses are declared and
+bound as top level elements (outside of modules and scripts) in Move Packages, or passed as
+arguments to the Move compiler.
 
-Named addresses only exist at the source language level and will be fully
-substituted for their value at the bytecode level. Because of this, modules
-and module members should be accessed through the module's named address
-and not through the numerical value assigned to the named address during
+Named addresses only exist at the source language level and will be fully substituted for their
+value at the bytecode level. Because of this, modules and module members should be accessed through
+the module's named address and not through the numerical value assigned to the named address during
 compilation. So while `use my_addr::foo` is equivalent to `use 0x2::foo` (if `my_addr` is assigned
 `0x2`), it is a best practice to always use the `my_addr` name.
 

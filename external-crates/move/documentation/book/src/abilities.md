@@ -1,6 +1,11 @@
 # Abilities
 
-Abilities are a typing feature in Move that control what actions are permissible for values of a given type. This system grants fine grained control over the "linear" typing behavior of values, as well as if and how values are used in storage (as defined by the specific deployment of Move, e.g. the notion of storage for the blockchain). This is implemented by gating access to certain bytecode instructions so that for a value to be used with the bytecode instruction, it must have the ability required (if one is required at all—not every instruction is gated by an ability).
+Abilities are a typing feature in Move that control what actions are permissible for values of a
+given type. This system grants fine grained control over the "linear" typing behavior of values, as
+well as if and how values are used in storage (as defined by the specific deployment of Move, e.g.
+the notion of storage for the blockchain). This is implemented by gating access to certain bytecode
+instructions so that for a value to be used with the bytecode instruction, it must have the ability
+required (if one is required at all—not every instruction is gated by an ability).
 
 <!-- TODO future section on detailed walk through maybe. We have some examples at the end but it might be helpful to explain why we have precisely this set of abilities
 
@@ -10,59 +15,79 @@ If you are already somewhat familiar with abilities from writing Move programs, 
 
 The four abilities are:
 
-* [`copy`](#copy)
-    * Allows values of types with this ability to be copied.
-* [`drop`](#drop)
-    * Allows values of types with this ability to be popped/dropped.
-* [`store`](#store)
-    * Allows values of types with this ability to exist inside a value in storage.
-* [`key`](#key)
-    * Allows the type to serve as a "key" for storage. Ostensibly this means the value can be a top-level value in storage; in other words, it does not need to be contained in another value to be in storage.
+- [`copy`](#copy)
+  - Allows values of types with this ability to be copied.
+- [`drop`](#drop)
+  - Allows values of types with this ability to be popped/dropped.
+- [`store`](#store)
+  - Allows values of types with this ability to exist inside a value in storage.
+- [`key`](#key)
+  - Allows the type to serve as a "key" for storage. Ostensibly this means the value can be a
+    top-level value in storage; in other words, it does not need to be contained in another value to
+    be in storage.
 
 ### `copy`
 
-The `copy` ability allows values of types with that ability to be copied. It gates the ability to copy values out of local variables with the [`copy`](./variables.md#move-and-copy) operator and to copy values via references with [dereference `*e`](./references.md#reading-and-writing-through-references).
+The `copy` ability allows values of types with that ability to be copied. It gates the ability to
+copy values out of local variables with the [`copy`](./variables.md#move-and-copy) operator and to
+copy values via references with
+[dereference `*e`](./references.md#reading-and-writing-through-references).
 
 If a value has `copy`, all values contained inside of that value have `copy`.
 
 ### `drop`
 
-The `drop` ability allows values of types with that ability to be dropped. By dropped, we mean that value is not transferred and is effectively destroyed as the Move program executes. As such, this ability gates the ability to ignore values in a multitude of locations, including:
-* not using the value in a local variable or parameter
-* not using the value in a [sequence via `;`](./variables.md#expression-blocks)
-* overwriting values in variables in [assignments](./variables.md#assignments)
-* overwriting values via references when [writing `*e1 = e2`](./references.md#reading-and-writing-through-references).
+The `drop` ability allows values of types with that ability to be dropped. By dropped, we mean that
+value is not transferred and is effectively destroyed as the Move program executes. As such, this
+ability gates the ability to ignore values in a multitude of locations, including:
+
+- not using the value in a local variable or parameter
+- not using the value in a [sequence via `;`](./variables.md#expression-blocks)
+- overwriting values in variables in [assignments](./variables.md#assignments)
+- overwriting values via references when
+  [writing `*e1 = e2`](./references.md#reading-and-writing-through-references).
 
 If a value has `drop`, all values contained inside of that value have `drop`.
 
 ### `store`
 
-The `store` ability allows values of types with this ability to exist inside of a value in storage, *but* not necessarily as a top-level value in storage. This is the only ability that does not directly gate an operation. Instead it gates the existence in storage when used in tandem with `key`.
+The `store` ability allows values of types with this ability to exist inside of a value in storage,
+_but_ not necessarily as a top-level value in storage. This is the only ability that does not
+directly gate an operation. Instead it gates the existence in storage when used in tandem with
+`key`.
 
 If a value has `store`, all values contained inside of that value have `store`
 
 ### `key`
 
-The `key` ability allows the type to serve as a key for storage operations as defined by the deployment of Move. While it is specific per Move instance, it serves to gates all storage operations, so in order for a type to be used with storage primitives, the type must have the `key` ability.
+The `key` ability allows the type to serve as a key for storage operations as defined by the
+deployment of Move. While it is specific per Move instance, it serves to gates all storage
+operations, so in order for a type to be used with storage primitives, the type must have the `key`
+ability.
 
-If a value has `key`, all values contained inside of that value have `store`. This is the only ability with this sort of asymmetry.
+If a value has `key`, all values contained inside of that value have `store`. This is the only
+ability with this sort of asymmetry.
 
 ## Builtin Types
 
 All primitive, builtin types have `copy`, `drop`, and `store`
 
-* `bool`, `u8`, `u16`, `u32`, `u64`, `u128`, `u256`, and `address` all have `copy`, `drop`, and `store`.
-* `vector<T>` may have `copy`, `drop`, and `store` depending on the abilities of `T`.
-    * See [Conditional Abilities and Generic Types](#conditional-abilities-and-generic-types) for more details.
-* Immutable references `&` and mutable references `&mut` both have `copy` and `drop`.
-    * This refers to copying and dropping the reference itself, not what they refer to.
-    * References cannot appear in global storage, hence they do not have `store`.
+- `bool`, `u8`, `u16`, `u32`, `u64`, `u128`, `u256`, and `address` all have `copy`, `drop`, and
+  `store`.
+- `vector<T>` may have `copy`, `drop`, and `store` depending on the abilities of `T`.
+  - See [Conditional Abilities and Generic Types](#conditional-abilities-and-generic-types) for more
+    details.
+- Immutable references `&` and mutable references `&mut` both have `copy` and `drop`.
+  - This refers to copying and dropping the reference itself, not what they refer to.
+  - References cannot appear in global storage, hence they do not have `store`.
 
-None of the primitive types have `key`, meaning none of them can be used directly with the [global storage operations](./global-storage-operators.md).
+None of the primitive types have `key`, meaning none of them can be used directly with the
+[global storage operations](./global-storage-operators.md).
 
 ## Annotating Structs
 
-To declare that a `struct` has an ability, it is declared with `has <ability>` after the struct name and either before or after the fields. For example:
+To declare that a `struct` has an ability, it is declared with `has <ability>` after the struct name
+and either before or after the fields. For example:
 
 ```move
 public struct Ignorable has drop { f: u64 }
@@ -70,18 +95,22 @@ public struct Pair has copy, drop, store { x: u64, y: u64 }
 public struct MyVec(vector<u64>) has copy, drop, store;
 ```
 
-In this case: `Ignorable` has the `drop` ability. `Pair` and `MyVec` both have `copy`, `drop`, and `store`.
+In this case: `Ignorable` has the `drop` ability. `Pair` and `MyVec` both have `copy`, `drop`, and
+`store`.
 
+All of these abilities have strong guarantees over these gated operations. The operation can be
+performed on the value only if it has that ability; even if the value is deeply nested inside of
+some other collection!
 
-All of these abilities have strong guarantees over these gated operations. The operation can be performed on the value only if it has that ability; even if the value is deeply nested inside of some other collection!
+As such: when declaring a struct’s abilities, certain requirements are placed on the fields. All
+fields must satisfy these constraints. These rules are necessary so that structs satisfy the
+reachability rules for the abilities given above. If a struct is declared with the ability...
 
-As such: when declaring a struct’s abilities, certain requirements are placed on the fields. All fields must satisfy these constraints. These rules are necessary so that structs satisfy the reachability rules for the abilities given above. If a struct is declared with the ability...
-
-* `copy`, all fields must have `copy`.
-* `drop`, all fields must have `drop`.
-* `store`, all fields must have `store`.
-* `key`, all fields must have `store`.
-    * `key` is the only ability currently that doesn’t require itself.
+- `copy`, all fields must have `copy`.
+- `drop`, all fields must have `drop`.
+- `store`, all fields must have `store`.
+- `key`, all fields must have `store`.
+  - `key` is the only ability currently that doesn’t require itself.
 
 For example:
 
@@ -107,28 +136,41 @@ public struct MyData has key {
 
 ## Conditional Abilities and Generic Types
 
-When abilities are annotated on a generic type, not all instances of that type are guaranteed to have that ability. Consider this struct declaration:
+When abilities are annotated on a generic type, not all instances of that type are guaranteed to
+have that ability. Consider this struct declaration:
 
 ```move
 public struct Cup<T> has copy, drop, store, key { item: T }
 ```
 
-It might be very helpful if `Cup` could hold any type, regardless of its abilities. The type system can *see* the type parameter, so it should be able to remove abilities from `Cup` if it *sees* a type parameter that would violate the guarantees for that ability.
+It might be very helpful if `Cup` could hold any type, regardless of its abilities. The type system
+can _see_ the type parameter, so it should be able to remove abilities from `Cup` if it _sees_ a
+type parameter that would violate the guarantees for that ability.
 
-This behavior might sound a bit confusing at first, but it might be more understandable if we think about collection types. We could consider the builtin type `vector` to have the following type declaration:
+This behavior might sound a bit confusing at first, but it might be more understandable if we think
+about collection types. We could consider the builtin type `vector` to have the following type
+declaration:
 
 ```move
 vector<T> has copy, drop, store;
 ```
 
-We want `vector`s to work with any type. We don't want separate `vector` types for different abilities. So what are the rules we would want? Precisely the same that we would want with the field rules above.  So, it would be safe to copy a `vector` value only if the inner elements can be copied. It would be safe to ignore a `vector` value only if the inner elements can be ignored/dropped. And, it would be safe to put a `vector` in storage only if the inner elements can be in storage.
+We want `vector`s to work with any type. We don't want separate `vector` types for different
+abilities. So what are the rules we would want? Precisely the same that we would want with the field
+rules above. So, it would be safe to copy a `vector` value only if the inner elements can be copied.
+It would be safe to ignore a `vector` value only if the inner elements can be ignored/dropped. And,
+it would be safe to put a `vector` in storage only if the inner elements can be in storage.
 
-To have this extra expressiveness, a type might not have all the abilities it was declared with depending on the instantiation of that type; instead, the abilities a type will have depends on both its declaration **and** its type arguments. For any type, type parameters are pessimistically assumed to be used inside of the struct, so the abilities are only granted if the type parameters meet the requirements described above for fields. Taking `Cup` from above as an example:
+To have this extra expressiveness, a type might not have all the abilities it was declared with
+depending on the instantiation of that type; instead, the abilities a type will have depends on both
+its declaration **and** its type arguments. For any type, type parameters are pessimistically
+assumed to be used inside of the struct, so the abilities are only granted if the type parameters
+meet the requirements described above for fields. Taking `Cup` from above as an example:
 
-* `Cup` has the ability `copy` only if `T` has `copy`.
-* It has `drop` only if `T` has `drop`.
-* It has `store` only if `T` has `store`.
-* It has `key` only if `T` has `store`.
+- `Cup` has the ability `copy` only if `T` has `copy`.
+- It has `drop` only if `T` has `drop`.
+- It has `store` only if `T` has `store`.
+- It has `key` only if `T` has `store`.
 
 Here are examples for this conditional system for each ability:
 

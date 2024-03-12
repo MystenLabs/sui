@@ -1,6 +1,12 @@
 # Modules
 
-**Modules** are the core program unit that define types along with functions that operate on these types. Struct types define the schema of Move's [storage](./abilities.md#key), and module functions define the rules interacting with values of those types. While modules themselves are also stored in storage, they are not accessible from within a Move program. In a blockchain environment, the modules are stored on chain in a process typically referred to as "publishing". After being published, [`entry`](./functions.md#entry-modifier) and [`public`](./functions.md#visibility) functions can be invoked according to the rules of that particular Move instance.
+**Modules** are the core program unit that define types along with functions that operate on these
+types. Struct types define the schema of Move's [storage](./abilities.md#key), and module functions
+define the rules interacting with values of those types. While modules themselves are also stored in
+storage, they are not accessible from within a Move program. In a blockchain environment, the
+modules are stored on chain in a process typically referred to as "publishing". After being
+published, [`entry`](./functions.md#entry-modifier) and [`public`](./functions.md#visibility)
+functions can be invoked according to the rules of that particular Move instance.
 
 ## Syntax
 
@@ -12,7 +18,8 @@ module <address>::<identifier> {
 }
 ```
 
-where `<address>` is a valid [named or literal address](./address.md) specifying the module's package.
+where `<address>` is a valid [named or literal address](./address.md) specifying the module's
+package.
 
 For example:
 
@@ -34,9 +41,12 @@ module 0x42::test {
 
 ## Names
 
-The `module test_addr::test` part specifies that the module `test` will be published under the numerical [address](./address.md) value assigned for the name `test_addr` in the [package settings](./packages.md).
+The `module test_addr::test` part specifies that the module `test` will be published under the
+numerical [address](./address.md) value assigned for the name `test_addr` in the
+[package settings](./packages.md).
 
-Modules should normally be declared using [named addresses](./address.md) (as opposed to using the numerical value directly). For example:
+Modules should normally be declared using [named addresses](./address.md) (as opposed to using the
+numerical value directly). For example:
 
 ```move
 module test_addr::test {
@@ -53,9 +63,9 @@ module test_addr::test {
 
 These named addresses commonly match the name of the [package](./packages.md).
 
-Because named addresses only exist at the source language level and during compilation,
-named addresses will be fully substituted for their value at the bytecode
-level. For example if we had the following code:
+Because named addresses only exist at the source language level and during compilation, named
+addresses will be fully substituted for their value at the bytecode level. For example if we had the
+following code:
 
 ```move
 fun example() {
@@ -63,8 +73,8 @@ fun example() {
 }
 ```
 
-and we compiled it with `my_addr` set to `0xC0FFEE`, then it would be equivalent
-to the following operationally:
+and we compiled it with `my_addr` set to `0xC0FFEE`, then it would be equivalent to the following
+operationally:
 
 ```move
 fun example() {
@@ -75,22 +85,26 @@ fun example() {
 While at the source level these two different accesses are equivalent, it is a best practice to
 always use the named address and not the numerical value assigned to that address.
 
-Module names can start with letters `a` to `z` or letters `A` to `Z`. After the first character, module names can contain underscores `_`, letters `a` to `z`, letters `A` to `Z`, or digits `0` to `9`.
+Module names can start with letters `a` to `z` or letters `A` to `Z`. After the first character,
+module names can contain underscores `_`, letters `a` to `z`, letters `A` to `Z`, or digits `0` to
+`9`.
 
 ```move
 module a::my_module {}
 module a::foo_bar_42 {}
 ```
 
-Typically, module names start with an lowercase letter. A module named `my_module` should be stored in a source file named `my_module.move`.
+Typically, module names start with an lowercase letter. A module named `my_module` should be stored
+in a source file named `my_module.move`.
 
 ## Members
 
-All members inside a `module` block can appear in any order.
-Fundamentally, a module is a collection of [`types`](./structs.md) and [`functions`](./functions.md).
-The [`use`](./uses.md) keyword is used to refer to members from other modules.
-The [`const`](./constants.md) keyword defines constants that can be used in the functions of a module.
+All members inside a `module` block can appear in any order. Fundamentally, a module is a collection
+of [`types`](./structs.md) and [`functions`](./functions.md). The [`use`](./uses.md) keyword is used
+to refer to members from other modules. The [`const`](./constants.md) keyword defines constants that
+can be used in the functions of a module.
 
-[`friend`](./friends.md) are deprecated concept for specifying a list of trusted modules. The concept has been superceded by [`public(package)`](./functions.md#visibility)
+[`friend`](./friends.md) are deprecated concept for specifying a list of trusted modules. The
+concept has been superceded by [`public(package)`](./functions.md#visibility)
 
 <!-- TODO member access rules -->

@@ -4,7 +4,8 @@ Move offers two constructs for looping: `while` and `loop`.
 
 ## `while` loops
 
-The `while` construct repeats the body (an expression of type unit) until the condition (an expression of type `bool`) evaluates to `false`.
+The `while` construct repeats the body (an expression of type unit) until the condition (an
+expression of type `bool`) evaluates to `false`.
 
 Here is an example of simple `while` loop that computes the sum of the numbers from `0` to `n`:
 
@@ -31,7 +32,8 @@ fun foo() {
 
 ### `break`
 
-The `break` expression can be used to exit a loop before the condition evaluates to `false`. For example, this loop uses `break` to find the smallest factor of `n` that's greater than 1:
+The `break` expression can be used to exit a loop before the condition evaluates to `false`. For
+example, this loop uses `break` to find the smallest factor of `n` that's greater than 1:
 
 ```move
 fun smallest_factor(n: u64): u64 {
@@ -50,7 +52,8 @@ The `break` expression cannot be used outside of a loop.
 
 ### `continue`
 
-The `continue` expression skips the rest of the loop and continues to the next iteration. This loop uses `continue` to compute the sum of `1, 2, ..., n`, except when the number is divisible by 10:
+The `continue` expression skips the rest of the loop and continues to the next iteration. This loop
+uses `continue` to compute the sum of `1, 2, ..., n`, except when the number is divisible by 10:
 
 ```move
 fun sum_intermediate(n: u64): u64 {
@@ -70,7 +73,8 @@ The `continue` expression cannot be used outside of a loop.
 
 ### The type of `break` and `continue`
 
-`break` and `continue`, much like `return` and `abort`, can have any type. The following examples illustrate where this flexible typing can be helpful:
+`break` and `continue`, much like `return` and `abort`, can have any type. The following examples
+illustrate where this flexible typing can be helpful:
 
 ```move
 fun pop_smallest_while_not_equal(
@@ -143,7 +147,8 @@ fun sum(n: u64): u64 {
 }
 ```
 
-As you might expect, `continue` can also be used inside a `loop`. Here is `sum_intermediate` from above rewritten using `loop` instead of `while`
+As you might expect, `continue` can also be used inside a `loop`. Here is `sum_intermediate` from
+above rewritten using `loop` instead of `while`
 
 ```move
 fun sum_intermediate(n: u64): u64 {
@@ -175,7 +180,8 @@ If a `loop` contains a `break`, the expression has type unit `()`
 let () = loop { if (i < 10) i = i + 1 else break };
 ```
 
-If `loop` does not have a `break`, `loop` can have any type much like `return`, `abort`, `break`, and `continue`.
+If `loop` does not have a `break`, `loop` can have any type much like `return`, `abort`, `break`,
+and `continue`.
 
 ```move
 (loop (): u64);
