@@ -75,7 +75,6 @@ if [ -n "$USE_MOCK_CRYPTO" ]; then
   )
 fi
 
-echo "@@@@@@@@@@@@@@@@@@@@@@@@@"
 TARGET=$(rustc -vV | grep host | sed 's/^host: //')
 if [ -z "$TARGET" ]; then
   echo "Failed to determine target from rustc -vV"
