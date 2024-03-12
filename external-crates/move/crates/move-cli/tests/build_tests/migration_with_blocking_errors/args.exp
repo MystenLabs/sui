@@ -32,3 +32,5 @@ error[E04007]: incompatible types
    │             Given: '(A=0x1)::mod0::S'
 
 Error: Compilation error
+External Command `diff -s Move.toml Move.toml.expected`:
+Files Move.toml and Move.toml.expected are identical
