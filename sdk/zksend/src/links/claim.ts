@@ -44,8 +44,6 @@ export type ZkSendLinkOptions = {
 	host?: string;
 	path?: string;
 	address?: string;
-	contract?: ZkBagContractOptions;
-	contractOnlyLink?: boolean;
 } & (
 	| {
 			address: string;
@@ -55,7 +53,18 @@ export type ZkSendLinkOptions = {
 			keypair: Keypair;
 			address?: never;
 	  }
-);
+) &
+	(
+		| {
+				isContractLink: true;
+				contract: ZkBagContractOptions;
+		  }
+		| {
+				isContractLink: false;
+				contract?: never;
+		  }
+	);
+
 export class ZkSendLink {
 	#client: SuiClient;
 	#address: string;
@@ -82,7 +91,6 @@ export class ZkSendLink {
 	#network: 'mainnet' | 'testnet';
 	#host?: string;
 	#path?: string;
-	#contractOnlyLink?: boolean;
 
 	constructor({
 		network = DEFAULT_ZK_SEND_LINK_OPTIONS.network,
@@ -93,7 +101,7 @@ export class ZkSendLink {
 		address,
 		host,
 		path,
-		contractOnlyLink,
+		isContractLink,
 	}: ZkSendLinkOptions) {
 		if (!keypair && !address) {
 			throw new Error('Either keypair or address must be provided');
@@ -106,23 +114,54 @@ export class ZkSendLink {
 		this.#network = network;
 		this.#host = host;
 		this.#path = path;
-		this.#contractOnlyLink = contractOnlyLink;
 
-		if (contract) {
+		if (isContractLink) {
+			if (!contract) {
+				throw new Error('Contract options are required for contract based links');
+			}
+
 			this.#contract = new ZkBag(contract.packageId, contract);
 		}
 	}
 
-	static async fromUrl(url: string, options?: Omit<ZkSendLinkOptions, 'keypair' | 'address'>) {
+	static async fromUrl(
+		url: string,
+		{
+			contract,
+			...options
+		}: Omit<ZkSendLinkOptions, 'keypair' | 'address' | 'isContractLink'> = {},
+	) {
 		const parsed = new URL(url);
-		const keypair = Ed25519Keypair.fromSecretKey(fromB64(parsed.hash.slice(1)));
+		const isContractLink = parsed.hash.startsWith('#$');
 
-		const link = new ZkSendLink({
-			...options,
-			keypair,
-			host: `${parsed.protocol}//${parsed.host}`,
-			path: parsed.pathname,
-		});
+		let link: ZkSendLink;
+		if (isContractLink) {
+			if (!contract) {
+				throw new Error('Contract options are required for contract based links');
+			}
+
+			const keypair = Ed25519Keypair.fromSecretKey(fromB64(parsed.hash.slice(2)));
+			link = new ZkSendLink({
+				...options,
+				keypair,
+				host: `${parsed.protocol}//${parsed.host}`,
+				path: parsed.pathname,
+				isContractLink: true,
+				contract,
+			});
+		} else {
+			const keypair = Ed25519Keypair.fromSecretKey(
+				fromB64(isContractLink ? parsed.hash.slice(2) : parsed.hash.slice(1)),
+			);
+
+			link = new ZkSendLink({
+				...options,
+				keypair,
+				host: `${parsed.protocol}//${parsed.host}`,
+				path: parsed.pathname,
+				isContractLink: false,
+			});
+		}
 
 		await link.loadOwnedData();
 
@@ -131,11 +170,14 @@ export class ZkSendLink {
 
 	static async fromAddress(
 		address: string,
-		options?: Omit<ZkSendLinkOptions, 'keypair' | 'address'>,
+		options: Omit<ZkSendLinkOptions, 'keypair' | 'address' | 'isContractLink'> & {
+			contract: ZkBagContractOptions;
+		},
 	) {
 		const link = new ZkSendLink({
 			...options,
 			address,
+			isContractLink: true,
 		});
 
 		await link.loadOwnedData();
@@ -144,15 +186,11 @@ export class ZkSendLink {
 	}
 
 	async loadOwnedData() {
-		if (this.#contractOnlyLink) {
+		if (this.#contract) {
 			await this.#loadBag();
-			return;
+		} else {
+			await Promise.all([this.#loadInitialTransactionData(), this.#loadOwnedObjects()]);
 		}
-		await Promise.all([
-			this.#loadBag(),
-			this.#loadInitialTransactionData(),
-			this.#loadOwnedObjects(),
-		]);
 	}
 
 	async listClaimableAssets(
@@ -163,7 +201,7 @@ export class ZkSendLink {
 			objects?: string[];
 		},
 	) {
-		if (!this.#contractOnlyLink && (!this.#contract || !this.#bagObjects)) {
+		if (!this.#contract) {
 			return this.#listNonContractClaimableAssets(address, options);
 		}
 
@@ -264,7 +302,7 @@ export class ZkSendLink {
 			reclaim?: boolean;
 		} = {},
 	) {
-		if (!this.#contract || !this.#bagObjects) {
+		if (!this.#contract) {
 			return this.#createNonContractClaimTransaction(address, options);
 		}
 
@@ -288,7 +326,7 @@ export class ZkSendLink {
 
 		const objectsToTransfer = [];
 
-		for (const object of this.#bagObjects) {
+		for (const object of this.#bagObjects ?? []) {
 			objectsToTransfer.push(
 				this.#contract.claim(txb, {
 					arguments: [

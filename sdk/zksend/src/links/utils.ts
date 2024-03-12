@@ -135,7 +135,7 @@ export async function listCreatedLinks({
 				network,
 				address,
 				contract,
-				contractOnlyLink: true,
+				isContractLink: true,
 				...linkOptions,
 			});
 		})

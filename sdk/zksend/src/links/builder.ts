@@ -100,7 +100,9 @@ export class ZkSendLinkBuilder {
 	getLink(): string {
 		const link = new URL(this.#host);
 		link.pathname = this.#path;
-		link.hash = toB64(decodeSuiPrivateKey(this.#keypair.getSecretKey()).secretKey);
+		link.hash = `${this.#contract ? '$' : ''}${toB64(
+			decodeSuiPrivateKey(this.#keypair.getSecretKey()).secretKey,
+		)}`;
 
 		if (this.#redirect) {
 			link.searchParams.set('redirect_url', this.#redirect.url);
@@ -117,6 +119,7 @@ export class ZkSendLinkBuilder {
 		...options
 	}: CreateZkSendLinkOptions & {
 		signer: Signer;
+		waitForTransactionBlock?: boolean;
 	}) {
 		const txb = await this.createSendTransaction(options);
 
@@ -125,7 +128,9 @@ export class ZkSendLinkBuilder {
 			signer,
 		});
 
-		await this.#client.waitForTransactionBlock({ digest: result.digest });
+		if (options.waitForTransactionBlock) {
+			await this.#client.waitForTransactionBlock({ digest: result.digest });
+		}
 
 		return result;
 	}

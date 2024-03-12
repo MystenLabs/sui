@@ -73,6 +73,7 @@ describe('Contract links', () => {
 
 			await link.create({
 				signer: keypair,
+				waitForTransactionBlock: true,
 			});
 
 			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
@@ -137,6 +138,7 @@ describe('Contract links', () => {
 
 			await link.create({
 				signer: keypair,
+				waitForTransactionBlock: true,
 			});
 
 			await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -229,6 +231,7 @@ describe('Non contract links', () => {
 
 			await link.create({
 				signer: keypair,
+				waitForTransactionBlock: true,
 			});
 
 			// Balances sometimes not updated even though we wait for the transaction to be indexed
@@ -293,6 +296,7 @@ describe('Non contract links', () => {
 			const claimLink = new ZkSendLink({
 				keypair: linkKp,
 				network: 'testnet',
+				isContractLink: false,
 			});
 
 			await claimLink.loadOwnedData();
