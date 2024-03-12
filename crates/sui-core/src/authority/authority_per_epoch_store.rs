@@ -2485,7 +2485,6 @@ impl AuthorityPerEpochStore {
             self.get_reconfig_state_read_lock_guard().should_accept_tx()
         };
         let make_checkpoint = should_accept_tx || final_round;
-        let mut created_pending_checkpoints = Vec::new();
         if make_checkpoint {
             // Filter out roots of any deferred tx.
             for deferred in deferred_tx_roots {
@@ -2507,9 +2506,7 @@ impl AuthorityPerEpochStore {
                     checkpoint_height,
                 },
             });
-
             self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
-            created_pending_checkpoints.push(pending_checkpoint);
 
             // Generate pending checkpoint for user tx with randomness.
             if let Some(randomness_round) = randomness_round {
@@ -2526,9 +2523,7 @@ impl AuthorityPerEpochStore {
                         checkpoint_height: checkpoint_height + 1,
                     },
                 });
-
                 self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
-                created_pending_checkpoints.push(pending_checkpoint);
             }
         }
 
@@ -2536,8 +2531,12 @@ impl AuthorityPerEpochStore {
 
         // Only after batch is written, notify checkpoint service to start building any new
         // pending checkpoints.
-        for pending_checkpoint in created_pending_checkpoints {
-            checkpoint_service.notify_checkpoint(&pending_checkpoint)?;
+        if make_checkpoint {
+            debug!(
+                ?commit_round,
+                "Notifying checkpoint service about new pending checkpoint(s)",
+            );
+            checkpoint_service.notify_checkpoint()?;
         }
 
         // Once commit processing is recorded, kick off randomness generation.
