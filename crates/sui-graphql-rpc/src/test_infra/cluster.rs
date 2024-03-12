@@ -174,7 +174,7 @@ pub async fn start_graphql_server_with_fn_rpc(
     fn_rpc_url: Option<String>,
     cancellation_token: Option<CancellationToken>,
 ) -> JoinHandle<()> {
-    let cancellation_token = cancellation_token.unwrap_or_else(|| CancellationToken::new());
+    let cancellation_token = cancellation_token.unwrap_or_else(CancellationToken::new);
     let mut server_config = ServerConfig {
         connection: graphql_connection_config,
         service: ServiceConfig::test_defaults(),

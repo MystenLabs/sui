@@ -610,27 +610,38 @@ pub mod tests {
     use std::time::Duration;
     use uuid::Uuid;
 
-    async fn prep_cluster() -> ConnectionConfig {
-        let rng = StdRng::from_seed([12; 32]);
-        let mut sim = Simulacrum::new_with_rng(rng);
+    /// Prepares a schema for tests dealing with extensions. Returns a `ServerBuilder` that can be
+    /// further extended with `context_data` and `extension` for testing.
+    fn prep_schema(
+        connection_config: Option<ConnectionConfig>,
+        service_config: Option<ServiceConfig>,
+    ) -> ServerBuilder {
+        let connection_config =
+            connection_config.unwrap_or_else(ConnectionConfig::ci_integration_test_cfg);
+        let service_config = service_config.unwrap_or_default();
 
-        sim.create_checkpoint();
-        sim.create_checkpoint();
+        let db_url: String = connection_config.db_url.clone();
+        let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
 
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let cluster = serve_executor(
+        let metrics = metrics();
+        let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
+        let pg_conn_pool = PgManager::new(reader);
+        let cancellation_token = CancellationToken::new();
+        let watermark = CheckpointViewedAt(1);
+        let state = AppState::new(
             connection_config.clone(),
-            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
-            Arc::new(sim),
-            None,
-        )
-        .await;
-
-        cluster
-            .wait_for_checkpoint_catchup(2, Duration::from_secs(10))
-            .await;
-
-        connection_config
+            service_config.clone(),
+            metrics.clone(),
+            cancellation_token.clone(),
+        );
+        ServerBuilder::new(state)
+            .context_data(db)
+            .context_data(pg_conn_pool)
+            .context_data(service_config)
+            .context_data(query_id())
+            .context_data(ip_address())
+            .context_data(metrics.clone())
+            .context_data(watermark)
     }
 
     fn metrics() -> Metrics {
@@ -649,8 +660,6 @@ pub mod tests {
     }
 
     pub async fn test_timeout_impl() {
-        let connection_config = prep_cluster().await;
-
         struct TimedExecuteExt {
             pub min_req_delay: Duration,
         }
@@ -676,32 +685,11 @@ pub mod tests {
             }
         }
 
-        async fn test_timeout(
-            delay: Duration,
-            timeout: Duration,
-            connection_config: &ConnectionConfig,
-        ) -> Response {
-            let db_url: String = connection_config.db_url.clone();
-            let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+        async fn test_timeout(delay: Duration, timeout: Duration) -> Response {
             let mut cfg = ServiceConfig::default();
             cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
 
-            let metrics = metrics();
-            let db = Db::new(reader.clone(), cfg.limits, metrics.clone());
-            let pg_conn_pool = PgManager::new(reader);
-            let cancellation_token = CancellationToken::new();
-            let state = AppState::new(
-                connection_config.clone(),
-                cfg.clone(),
-                metrics.clone(),
-                cancellation_token.clone(),
-            );
-            let schema = ServerBuilder::new(state)
-                .context_data(db)
-                .context_data(pg_conn_pool)
-                .context_data(cfg)
-                .context_data(query_id())
-                .context_data(ip_address())
+            let schema = prep_schema(None, Some(cfg))
                 .extension(Timeout::default())
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
@@ -714,33 +702,25 @@ pub mod tests {
         let timeout = Duration::from_millis(1000);
         let delay = Duration::from_millis(100);
 
-        test_timeout(delay, timeout, &connection_config)
+        test_timeout(delay, timeout)
             .await
             .into_result()
             .expect("Should complete successfully");
 
         // Should timeout
-        let errs: Vec<_> = test_timeout(timeout, timeout, &connection_config)
+        let errs: Vec<_> = test_timeout(delay, delay)
             .await
             .into_result()
             .unwrap_err()
             .into_iter()
             .map(|e| e.message)
             .collect();
-        let exp = format!("Request timed out. Limit: {}s", timeout.as_secs_f32());
+        let exp = format!("Request timed out. Limit: {}s", delay.as_secs_f32());
         assert_eq!(errs, vec![exp]);
     }
 
     pub async fn test_query_depth_limit_impl() {
-        let connection_config = prep_cluster().await;
-
-        async fn exec_query_depth_limit(
-            depth: u32,
-            query: &str,
-            connection_config: &ConnectionConfig,
-        ) -> Response {
-            let db_url: String = connection_config.db_url.clone();
-            let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+        async fn exec_query_depth_limit(depth: u32, query: &str) -> Response {
             let service_config = ServiceConfig {
                 limits: Limits {
                     max_query_depth: depth,
@@ -748,29 +728,14 @@ pub mod tests {
                 },
                 ..Default::default()
             };
-            let metrics = metrics();
-            let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
-            let pg_conn_pool = PgManager::new(reader);
-            let cancellation_token = CancellationToken::new();
-            let state = AppState::new(
-                connection_config.clone(),
-                service_config.clone(),
-                metrics.clone(),
-                cancellation_token.clone(),
-            );
-            let schema = ServerBuilder::new(state)
-                .context_data(db)
-                .context_data(pg_conn_pool)
-                .context_data(service_config)
-                .context_data(query_id())
-                .context_data(ip_address())
-                .context_data(metrics.clone())
+
+            let schema = prep_schema(None, Some(service_config))
                 .extension(QueryLimitsChecker::default())
                 .build_schema();
             schema.execute(query).await
         }
 
-        exec_query_depth_limit(1, "{ chainIdentifier }", &connection_config)
+        exec_query_depth_limit(1, "{ chainIdentifier }")
             .await
             .into_result()
             .expect("Should complete successfully");
@@ -778,14 +743,13 @@ pub mod tests {
         exec_query_depth_limit(
             5,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
-            &connection_config,
         )
         .await
         .into_result()
         .expect("Should complete successfully");
 
         // Should fail
-        let errs: Vec<_> = exec_query_depth_limit(0, "{ chainIdentifier }", &connection_config)
+        let errs: Vec<_> = exec_query_depth_limit(0, "{ chainIdentifier }")
             .await
             .into_result()
             .unwrap_err()
@@ -800,7 +764,6 @@ pub mod tests {
         let errs: Vec<_> = exec_query_depth_limit(
             2,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
-            &connection_config,
         )
         .await
         .into_result()
@@ -815,15 +778,7 @@ pub mod tests {
     }
 
     pub async fn test_query_node_limit_impl() {
-        let connection_config = prep_cluster().await;
-
-        async fn exec_query_node_limit(
-            nodes: u32,
-            query: &str,
-            connection_config: &ConnectionConfig,
-        ) -> Response {
-            let db_url: String = connection_config.db_url.clone();
-            let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+        async fn exec_query_node_limit(nodes: u32, query: &str) -> Response {
             let service_config = ServiceConfig {
                 limits: Limits {
                     max_query_nodes: nodes,
@@ -831,29 +786,14 @@ pub mod tests {
                 },
                 ..Default::default()
             };
-            let metrics = metrics();
-            let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
-            let pg_conn_pool = PgManager::new(reader);
-            let cancellation_token = CancellationToken::new();
-            let state = AppState::new(
-                connection_config.clone(),
-                service_config.clone(),
-                metrics.clone(),
-                cancellation_token.clone(),
-            );
-            let schema = ServerBuilder::new(state)
-                .context_data(db)
-                .context_data(pg_conn_pool)
-                .context_data(service_config)
-                .context_data(query_id())
-                .context_data(ip_address())
-                .context_data(metrics.clone())
+
+            let schema = prep_schema(None, Some(service_config))
                 .extension(QueryLimitsChecker::default())
                 .build_schema();
             schema.execute(query).await
         }
 
-        exec_query_node_limit(1, "{ chainIdentifier }", &connection_config)
+        exec_query_node_limit(1, "{ chainIdentifier }")
             .await
             .into_result()
             .expect("Should complete successfully");
@@ -861,14 +801,13 @@ pub mod tests {
         exec_query_node_limit(
             5,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
-            &connection_config,
         )
         .await
         .into_result()
         .expect("Should complete successfully");
 
         // Should fail
-        let err: Vec<_> = exec_query_node_limit(0, "{ chainIdentifier }", &connection_config)
+        let err: Vec<_> = exec_query_node_limit(0, "{ chainIdentifier }")
             .await
             .into_result()
             .unwrap_err()
@@ -883,7 +822,6 @@ pub mod tests {
         let err: Vec<_> = exec_query_node_limit(
             4,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
-            &connection_config,
         )
         .await
         .into_result()
@@ -898,13 +836,6 @@ pub mod tests {
     }
 
     pub async fn test_query_default_page_limit_impl() {
-        let rng = StdRng::from_seed([12; 32]);
-        let mut sim = Simulacrum::new_with_rng(rng);
-
-        sim.create_checkpoint();
-        sim.create_checkpoint();
-
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
         let service_config = ServiceConfig {
             limits: Limits {
                 default_page_size: 1,
@@ -912,26 +843,7 @@ pub mod tests {
             },
             ..Default::default()
         };
-        let metrics = metrics();
-        let db_url: String = connection_config.db_url.clone();
-        let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
-        let pg_conn_pool = PgManager::new(reader);
-        let cancellation_token = CancellationToken::new();
-        let state = AppState::new(
-            connection_config.clone(),
-            service_config.clone(),
-            metrics.clone(),
-            cancellation_token.clone(),
-        );
-        let schema = ServerBuilder::new(state)
-            .context_data(db)
-            .context_data(pg_conn_pool)
-            .context_data(service_config)
-            .context_data(query_id())
-            .context_data(ip_address())
-            .context_data(metrics.clone())
-            .build_schema();
+        let schema = prep_schema(None, Some(service_config)).build_schema();
 
         let resp = schema
             .execute("{ checkpoints { nodes { sequenceNumber } } }")
@@ -969,29 +881,7 @@ pub mod tests {
     }
 
     pub async fn test_query_max_page_limit_impl() {
-        let connection_config = prep_cluster().await;
-
-        let service_config = ServiceConfig::default();
-        let db_url: String = connection_config.db_url.clone();
-        let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let metrics = metrics();
-        let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
-        let pg_conn_pool = PgManager::new(reader);
-        let cancellation_token = CancellationToken::new();
-        let state = AppState::new(
-            connection_config.clone(),
-            service_config.clone(),
-            metrics.clone(),
-            cancellation_token.clone(),
-        );
-        let schema = ServerBuilder::new(state)
-            .context_data(db)
-            .context_data(pg_conn_pool)
-            .context_data(service_config)
-            .context_data(query_id())
-            .context_data(ip_address())
-            .context_data(metrics.clone())
-            .build_schema();
+        let schema = prep_schema(None, None).build_schema();
 
         schema
             .execute("{ objects(first: 1) { nodes { version } } }")
@@ -1015,35 +905,11 @@ pub mod tests {
     }
 
     pub async fn test_query_complexity_metrics_impl() {
-        let connection_config = prep_cluster().await;
+        let server_builder = prep_schema(None, None);
+        let metrics = server_builder.state.metrics.clone();
+        let schema = server_builder.build_schema();
 
-        let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
-        let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
-        let metrics = Metrics::new(&registry);
-
-        let service_config = ServiceConfig::default();
-        let db_url: String = connection_config.db_url.clone();
-        let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
-        let pg_conn_pool = PgManager::new(reader);
-        let cancellation_token = CancellationToken::new();
-        let state = AppState::new(
-            connection_config.clone(),
-            service_config.clone(),
-            metrics.clone(),
-            cancellation_token.clone(),
-        );
-        let schema = ServerBuilder::new(state)
-            .context_data(db)
-            .context_data(pg_conn_pool)
-            .context_data(service_config)
-            .context_data(query_id())
-            .context_data(ip_address())
-            .context_data(metrics.clone())
-            .extension(QueryLimitsChecker::default())
-            .build_schema();
-
-        schema
+        let result = schema
             .execute("{ chainIdentifier }")
             .await
             .into_result()
