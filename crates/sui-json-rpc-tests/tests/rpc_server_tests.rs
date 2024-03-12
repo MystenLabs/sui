@@ -3,7 +3,6 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-#[cfg(not(msim))]
 use std::str::FromStr;
 use std::time::Duration;
 use sui_json::{call_args, type_args};
