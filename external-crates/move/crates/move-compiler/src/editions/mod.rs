@@ -9,7 +9,11 @@ use std::{
     str::FromStr,
 };
 
-use crate::{diag, diagnostics::Diagnostic, shared::{CompilationEnv, format_oxford_list}};
+use crate::{
+    diag,
+    diagnostics::Diagnostic,
+    shared::{format_oxford_list, CompilationEnv},
+};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
@@ -105,9 +109,7 @@ pub fn valid_editions_for_feature(feature: FeatureGate) -> Vec<Edition> {
 static SUPPORTED_FEATURES: Lazy<BTreeMap<Edition, BTreeSet<FeatureGate>>> =
     Lazy::new(|| BTreeMap::from_iter(Edition::ALL.iter().map(|e| (*e, e.features()))));
 
-const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
-    FeatureGate::MacroFuns,
-];
+const E2024_ALPHA_FEATURES: &[FeatureGate] = &[FeatureGate::MacroFuns];
 
 const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::NestedUse,
@@ -147,7 +149,12 @@ impl Edition {
 
     const SEP: &'static str = ".";
 
-    pub const ALL: &'static [Self] = &[Self::LEGACY, Self::E2024_ALPHA, Self::E2024_BETA, Self::E2024_MIGRATION];
+    pub const ALL: &'static [Self] = &[
+        Self::LEGACY,
+        Self::E2024_ALPHA,
+        Self::E2024_BETA,
+        Self::E2024_MIGRATION,
+    ];
     pub const VALID: &'static [Self] = &[Self::LEGACY, Self::E2024_ALPHA, Self::E2024_BETA];
 
     pub fn supports(&self, feature: FeatureGate) -> bool {

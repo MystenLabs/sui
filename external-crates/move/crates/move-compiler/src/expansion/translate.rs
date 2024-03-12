@@ -3608,8 +3608,8 @@ fn check_valid_function_parameter_name(context: &mut Context, is_macro: Option<L
         context.env().add_diag(diag);
     } else if !is_valid_local_variable_name(v.value()) {
         let msg = format!(
-            "Invalid parameter name '{}'. Local variable names must start with 'a'..'z' or \
-                 '_'",
+            "Invalid parameter name '{}'. Local variable names must start with 'a'..'z', '_', \
+            or be a valid name quoted with backticks (`name`)",
             v,
         );
         context
@@ -3622,8 +3622,8 @@ fn check_valid_function_parameter_name(context: &mut Context, is_macro: Option<L
 fn check_valid_local_name(context: &mut Context, v: &Var) {
     if !is_valid_local_variable_name(v.value()) {
         let msg = format!(
-            "Invalid local variable name '{}'. Local variable names must start with 'a'..'z' or \
-             '_'",
+            "Invalid local name '{}'. Local variable names must start with 'a'..'z', '_', \
+            or be a valid name quoted with backticks (`name`)",
             v,
         );
         context

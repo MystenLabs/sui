@@ -346,6 +346,7 @@ codes!(
     Migration: [
         NeedsPublic: { msg: "move 2024 migration: public struct", severity: NonblockingError },
         NeedsLetMut: { msg: "move 2024 migration: let mut", severity: NonblockingError },
+        NeedsRestrictedIdentifier: { msg: "move 2024 migration: restricted identifier", severity: NonblockingError },
     ]
 );
 

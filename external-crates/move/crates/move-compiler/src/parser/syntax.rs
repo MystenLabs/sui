@@ -340,6 +340,12 @@ where
 // Identifiers, Addresses, and Names
 //**************************************************************************************************
 
+fn report_name_migration(context: &mut Context, name: &str, loc: Loc) {
+    context
+        .env
+        .add_diag(diag!(Migration::NeedsRestrictedIdentifier, (loc, name)));
+}
+
 // Parse an identifier:
 //      Identifier = <IdentifierValue>
 fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
@@ -350,6 +356,17 @@ fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
             let content = context.tokens.content();
             let peeled = &content[1..content.len() - 1];
             peeled.into()
+        }
+        // carve-out for migration with new keywords
+        tok @ (Tok::Mut | Tok::Match | Tok::Enum | Tok::Type)
+            if context.env.edition(context.package_name) == Edition::E2024_MIGRATION =>
+        {
+            report_name_migration(
+                context,
+                &format!("{}", tok),
+                context.tokens.current_token_loc(),
+            );
+            context.tokens.content().into()
         }
         _ => {
             return Err(unexpected_token_error(context.tokens, "an identifier"));
@@ -435,6 +452,19 @@ fn parse_leading_name_access_<'a, F: FnOnce() -> &'a str>(
         Tok::NumValue => {
             let sp!(loc, addr) = parse_address_bytes(context)?;
             Ok(sp(loc, LeadingNameAccess_::AnonymousAddress(addr)))
+        }
+        // carve-out for migration with new keywords
+        Tok::Mut | Tok::Match | Tok::Enum | Tok::Type
+            if context.env.edition(context.package_name) == Edition::E2024_MIGRATION =>
+        {
+            if global_name {
+                Err(unexpected_token_error(context.tokens, item_description()))
+            } else {
+                let loc = current_token_loc(context.tokens);
+                let n = parse_identifier(context)?;
+                let name = LeadingNameAccess_::Name(n);
+                Ok(sp(loc, name))
+            }
         }
         _ => Err(unexpected_token_error(context.tokens, item_description())),
     }
@@ -776,6 +806,25 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
 // Fields and Bindings
 //**************************************************************************************************
 
+// Parse an optional "mut" modifier token. Consumes and returns the location of the token if present
+// and returns None otherwise.
+//     MutOpt = "mut"?
+fn parse_mut_opt(context: &mut Context) -> Result<Option<Loc>, Box<Diagnostic>> {
+    // In migration mode, 'mut' is assumed to be an identifier that needsd escaping.
+    if context.tokens.peek() == Tok::Mut {
+        let start_loc = context.tokens.start_loc();
+        context.tokens.advance()?;
+        let end_loc = context.tokens.previous_end_loc();
+        Ok(Some(make_loc(
+            context.tokens.file_hash(),
+            start_loc,
+            end_loc,
+        )))
+    } else {
+        Ok(None)
+    }
+}
+
 // Parse a field name optionally followed by a colon and an expression argument:
 //      ExpField = <Field> <":" <Exp>>?
 fn parse_exp_field(context: &mut Context) -> Result<(Field, Exp), Box<Diagnostic>> {
@@ -799,23 +848,22 @@ fn parse_exp_field(context: &mut Context) -> Result<(Field, Exp), Box<Diagnostic
 // If the binding is not specified, the default is to use a variable
 // with the same name as the field.
 fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnostic>> {
-    if context.tokens.peek() == Tok::Mut {
-        let start_loc = context.tokens.start_loc();
-        context.tokens.advance()?;
-        let end_loc = context.tokens.previous_end_loc();
-        let mut_loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
-        let f = parse_field(context)?;
-        let arg = sp(f.loc(), Bind_::Var(Some(mut_loc), Var(f.0)));
-        Ok((f, arg))
+    let mut_ = parse_mut_opt(context)?;
+    let f = parse_field(context).or_else(|diag| match mut_ {
+        Some(mut_loc) if context.env.edition(context.package_name) == Edition::E2024_MIGRATION => {
+            report_name_migration(context, "mut", mut_loc);
+            Ok(Field(sp(mut_.unwrap(), "mut".into())))
+        }
+        _ => Err(diag),
+    })?;
+    let arg = if mut_.is_some() {
+        sp(f.loc(), Bind_::Var(mut_, Var(f.0)))
+    } else if match_token(context.tokens, Tok::Colon)? {
+        parse_bind(context)?
     } else {
-        let f = parse_field(context)?;
-        let arg = if match_token(context.tokens, Tok::Colon)? {
-            parse_bind(context)?
-        } else {
-            sp(f.loc(), Bind_::Var(None, Var(f.0)))
-        };
-        Ok((f, arg))
-    }
+        sp(f.loc(), Bind_::Var(None, Var(f.0)))
+    };
+    Ok((f, arg))
 }
 
 // Parse a binding:
@@ -828,20 +876,25 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     if matches!(
         context.tokens.peek(),
         Tok::Identifier | Tok::RestrictedIdentifier | Tok::Mut
+        // carve-out for migration with new keywords
+        | Tok::Match | Tok::Enum | Tok::Type
     ) {
         let next_tok = context.tokens.lookahead()?;
         if !matches!(
             next_tok,
             Tok::LBrace | Tok::Less | Tok::ColonColon | Tok::LParen
         ) {
-            let mut_ = if context.tokens.peek() == Tok::Mut {
-                context.tokens.advance()?;
-                let end_loc = context.tokens.previous_end_loc();
-                Some(make_loc(context.tokens.file_hash(), start_loc, end_loc))
-            } else {
-                None
-            };
-            let v = Bind_::Var(mut_, parse_var(context)?);
+            let mut_ = parse_mut_opt(context)?;
+            let v = parse_var(context).or_else(|diag| match mut_ {
+                Some(mut_loc)
+                    if context.env.edition(context.package_name) == Edition::E2024_MIGRATION =>
+                {
+                    report_name_migration(context, "mut", mut_loc);
+                    Ok(Var(sp(mut_.unwrap(), "mut".into())))
+                }
+                _ => Err(diag),
+            })?;
+            let v = Bind_::Var(mut_, v);
             let end_loc = context.tokens.previous_end_loc();
             return Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, v));
         }
@@ -1183,6 +1236,12 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             }
         }
         Tok::Identifier | Tok::RestrictedIdentifier | Tok::SyntaxIdentifier => {
+            parse_name_exp(context)?
+        }
+        // carve-out for migration with new keywords
+        Tok::Mut | Tok::Match | Tok::Enum | Tok::Type
+            if context.env.edition(context.package_name) == Edition::E2024_MIGRATION =>
+        {
             parse_name_exp(context)?
         }
 
@@ -2447,15 +2506,14 @@ fn parse_function_decl(
 // Parse a function parameter:
 //      Parameter = "mut"? <Var> ":" <Type>
 fn parse_parameter(context: &mut Context) -> Result<(Mutability, Var, Type), Box<Diagnostic>> {
-    let mut_ = if context.tokens.peek() == Tok::Mut {
-        let start_loc = context.tokens.start_loc();
-        context.tokens.advance()?;
-        let end_loc = context.tokens.previous_end_loc();
-        Some(make_loc(context.tokens.file_hash(), start_loc, end_loc))
-    } else {
-        None
-    };
-    let v = parse_var(context)?;
+    let mut_ = parse_mut_opt(context)?;
+    let v = parse_var(context).or_else(|diag| match mut_ {
+        Some(mut_loc) if context.env.edition(context.package_name) == Edition::E2024_MIGRATION => {
+            report_name_migration(context, "mut", mut_loc);
+            Ok(Var(sp(mut_.unwrap(), "mut".into())))
+        }
+        _ => Err(diag),
+    })?;
     consume_token(context.tokens, Tok::Colon)?;
     let t = parse_type(context)?;
     Ok((mut_, v, t))
