@@ -761,12 +761,18 @@ impl ConsensusAdapter {
                     .sequencing_acknowledge_latency
                     .with_label_values(&[&bucket, tx_type])
                     .report(ack_start.elapsed().as_millis() as u64);
+                debug!(
+                    "ZZZZZZ submit txn to consensus done {:?}",
+                    &transaction.key()
+                );
             };
             match select(processed_waiter, submit_inner.boxed()).await {
                 Either::Left((processed, _submit_inner)) => processed,
                 Either::Right(((), processed_waiter)) => {
                     debug!("Submitted {transaction_key:?} to consensus");
-                    processed_waiter.await
+                    let ppp = processed_waiter.await;
+                    debug!("ZZZZZ processed {transaction_key:?} in consensus");
+                    ppp
                 }
             }
             .expect("Storage error when waiting for consensus message processed");

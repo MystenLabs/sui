@@ -1553,7 +1553,7 @@ impl AuthorityPerEpochStore {
             }) {
                 if let Some(old_deferral_key) = previously_deferred_tx_digests.get(cert.digest()) {
                     return Some(DeferralKey::new_for_consensus_round(
-                        old_deferral_key.future_round() + 1,
+                        commit_round + 1,
                         *old_deferral_key.deferred_from_round(),
                     ));
                 } else {
@@ -2321,10 +2321,10 @@ impl AuthorityPerEpochStore {
             })
             .collect();
         // roots are used for tracking transaction dependency
-        let mut roots: BTreeSet<_> = verified_transactions
-            .iter()
-            .filter_map(|transaction| transaction.0.transaction.executable_transaction_digest())
-            .collect();
+        // let mut roots: BTreeSet<_> = verified_transactions
+        //     .iter()
+        //     .filter_map(|transaction| transaction.0.transaction.executable_transaction_digest())
+        //     .collect();
         let mut system_transactions = Vec::with_capacity(verified_transactions.len());
         let mut zzz_sequenced_transactions = Vec::with_capacity(verified_transactions.len());
         let mut end_of_publish_transactions = Vec::with_capacity(verified_transactions.len());
@@ -2388,6 +2388,10 @@ impl AuthorityPerEpochStore {
         let mut sequenced_transactions: Vec<VerifiedSequencedConsensusTransaction> =
             deferred_tx.into_iter().map(|tx| tx.1).collect();
         sequenced_transactions.extend(zzz_sequenced_transactions);
+        let mut roots: BTreeSet<_> = sequenced_transactions
+            .iter()
+            .filter_map(|transaction| transaction.0.transaction.executable_transaction_digest())
+            .collect();
 
         PostConsensusTxReorder::reorder(
             &mut sequenced_transactions,
@@ -2499,6 +2503,7 @@ impl AuthorityPerEpochStore {
             .cloned()
             .chain(end_of_publish.iter().map(|tx| tx.0.transaction.key()))
         {
+            debug!("ZZZ notify process {:?}", key);
             self.consensus_notify_read.notify(&key, &());
         }
     }

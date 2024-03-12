@@ -982,6 +982,11 @@ impl CheckpointBuilder {
                 .into_iter()
                 .zip(transactions_and_sizes.into_iter())
             {
+                debug!(
+                    "ZZZZZZ including txn {:?} in checkpoint {:?}",
+                    effects.transaction_digest(),
+                    last_checkpoint_seq.unwrap_or_default() + 1
+                );
                 let (transaction, size) = transaction_and_size
                     .unwrap_or_else(|| panic!("Could not find executed transaction {:?}", effects));
                 // ConsensusCommitPrologue and AuthenticatorStateUpdate are guaranteed to be
