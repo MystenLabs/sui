@@ -353,6 +353,12 @@ impl DBCheckpointHandler {
                     deleted.push(*epoch);
                     let local_fs_path = path_to_filesystem(self.input_root_path.clone(), path)?;
                     fs::remove_dir_all(&local_fs_path)?;
+                    let path_exists = local_fs_path.exists();
+                    if path_exists {
+                        info!("Path metadata: {:?}", local_fs_path.metadata()?);
+                    } else {
+                        info!("Path {} removed", local_fs_path.display());
+                    }
                 }
                 Err(_) => {
                     debug!("Not ready for deletion yet: {path}");
