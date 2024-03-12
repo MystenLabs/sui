@@ -598,14 +598,11 @@ pub mod tests {
         context_data::db_data_provider::PgManager,
         extensions::query_limits_checker::QueryLimitsChecker,
         extensions::timeout::Timeout,
-        test_infra::cluster::{serve_executor, DEFAULT_INTERNAL_DATA_SOURCE_PORT},
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
         Response,
     };
-    use rand::{rngs::StdRng, SeedableRng};
-    use simulacrum::Simulacrum;
     use std::sync::Arc;
     use std::time::Duration;
     use uuid::Uuid;
@@ -640,8 +637,8 @@ pub mod tests {
             .context_data(service_config)
             .context_data(query_id())
             .context_data(ip_address())
-            .context_data(metrics.clone())
             .context_data(watermark)
+            .context_data(metrics)
     }
 
     fn metrics() -> Metrics {
@@ -907,9 +904,11 @@ pub mod tests {
     pub async fn test_query_complexity_metrics_impl() {
         let server_builder = prep_schema(None, None);
         let metrics = server_builder.state.metrics.clone();
-        let schema = server_builder.build_schema();
+        let schema = server_builder
+            .extension(QueryLimitsChecker::default()) // QueryLimitsChecker is where we actually set the metrics
+            .build_schema();
 
-        let result = schema
+        schema
             .execute("{ chainIdentifier }")
             .await
             .into_result()
