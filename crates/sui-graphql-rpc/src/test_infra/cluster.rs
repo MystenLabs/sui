@@ -174,7 +174,7 @@ pub async fn start_graphql_server_with_fn_rpc(
     fn_rpc_url: Option<String>,
     cancellation_token: Option<CancellationToken>,
 ) -> JoinHandle<()> {
-    let cancellation_token = cancellation_token.unwrap_or_else(|| CancellationToken::new());
+    let cancellation_token = cancellation_token.unwrap_or_default();
     let mut server_config = ServerConfig {
         connection: graphql_connection_config,
         service: ServiceConfig::test_defaults(),
@@ -251,8 +251,8 @@ async fn wait_for_indexer_checkpoint_catchup(
     .expect("Timeout waiting for indexer to catchup to checkpoint");
 }
 
-/// Ping the GraphQL server until its background task has updated the available range to the desired
-/// checkpoint.
+/// Ping the GraphQL server until its background task has updated the checkpoint watermark to the
+/// desired checkpoint.
 async fn wait_for_graphql_checkpoint_catchup(
     client: &SimpleClient,
     checkpoint: u64,
@@ -313,6 +313,8 @@ async fn wait_for_graphql_checkpoint_catchup(
 }
 
 impl Cluster {
+    /// Waits for the indexer to index up to the given checkpoint, then waits for the graphql
+    /// service's background task to update the checkpoint watermark to the given checkpoint.
     pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         wait_for_indexer_checkpoint_catchup(&self.indexer_store, checkpoint, base_timeout).await;
         wait_for_graphql_checkpoint_catchup(&self.graphql_client, checkpoint, base_timeout).await
@@ -320,6 +322,8 @@ impl Cluster {
 }
 
 impl ExecutorCluster {
+    /// Waits for the indexer to index up to the given checkpoint, then waits for the graphql
+    /// service's background task to update the checkpoint watermark to the given checkpoint.
     pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         wait_for_indexer_checkpoint_catchup(&self.indexer_store, checkpoint, base_timeout).await;
         wait_for_graphql_checkpoint_catchup(&self.graphql_client, checkpoint, base_timeout).await

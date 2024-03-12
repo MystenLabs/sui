@@ -46,7 +46,7 @@ pub(crate) struct ConsistentNamedCursor {
 /// The high checkpoint watermark stamped on each GraphQL request. This is used to ensure
 /// cross-query consistency.
 #[derive(Clone, Copy)]
-pub(crate) struct CheckpointViewedAt(pub(crate) u64);
+pub(crate) struct CheckpointViewedAt(pub u64);
 
 /// Trait for cursors that have a checkpoint sequence number associated with them.
 pub(crate) trait Checkpointed: CursorType {
