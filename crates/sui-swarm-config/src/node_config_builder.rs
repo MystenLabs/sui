@@ -195,6 +195,7 @@ impl ValidatorConfigBuilder {
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             authority_overload_config: self.authority_overload_config.unwrap_or_default(),
             run_with_range: None,
+            websocket_only: false,
         }
     }
 
@@ -447,6 +448,7 @@ impl FullnodeConfigBuilder {
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             authority_overload_config: Default::default(),
             run_with_range: self.run_with_range,
+            websocket_only: false,
         }
     }
 }
