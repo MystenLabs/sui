@@ -7,6 +7,7 @@ import { bcs } from '@mysten/sui.js/bcs';
 import type { SuiClient } from '@mysten/sui.js/client';
 import { SuiGraphQLClient } from '@mysten/sui.js/graphql';
 import { graphql } from '@mysten/sui.js/graphql/schemas/2024-01';
+import type { TransactionBlock } from '@mysten/sui.js/transactions';
 import { fromB64, normalizeSuiAddress } from '@mysten/sui.js/utils';
 
 import { ZkSendLink } from './claim.js';
@@ -149,4 +150,44 @@ export async function listCreatedLinks({
 		hasNextPage: transactionBlocks.pageInfo.hasPreviousPage,
 		links,
 	};
+}
+
+export function isClaimTransaction(
+	txb: TransactionBlock,
+	options: {
+		packageId: string;
+	},
+) {
+	let transfers = 0;
+
+	for (const tx of txb.blockData.transactions) {
+		switch (tx.kind) {
+			case 'TransferObjects':
+				// Ensure that we are only transferring results of a claim
+				if (!tx.objects.every((o) => o.kind === 'Result' || o.kind === 'NestedResult')) {
+					return false;
+				}
+				transfers++;
+				break;
+			case 'MoveCall':
+				const [packageId, module, fn] = tx.target.split('::');
+
+				if (packageId !== options.packageId) {
+					return false;
+				}
+
+				if (module !== 'zk_bag') {
+					return false;
+				}
+
+				if (fn !== 'init_claim' && fn !== 'reclaim' && fn !== 'claim' && fn !== 'finalize') {
+					return false;
+				}
+				break;
+			default:
+				return false;
+		}
+	}
+
+	return transfers === 1;
 }
