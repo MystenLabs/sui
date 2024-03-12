@@ -2346,6 +2346,7 @@ impl AuthorityPerEpochStore {
             self.get_reconfig_state_read_lock_guard().should_accept_tx()
         };
         let make_checkpoint = should_accept_tx || final_round;
+        let mut created_checkpoint = None;
         if make_checkpoint {
             let pending_checkpoint = PendingCheckpoint {
                 roots: roots.into_iter().collect(),
@@ -2357,10 +2358,14 @@ impl AuthorityPerEpochStore {
             };
 
             self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
-            checkpoint_service.notify_checkpoint(&pending_checkpoint)?;
+            created_checkpoint = Some(pending_checkpoint);
         }
 
         batch.write()?;
+
+        if let Some(pending_checkpoint) = created_checkpoint {
+            checkpoint_service.notify_checkpoint(&pending_checkpoint)?;
+        }
 
         self.process_notifications(&notifications, &end_of_publish_transactions);
 
