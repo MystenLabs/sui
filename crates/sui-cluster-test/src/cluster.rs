@@ -253,6 +253,7 @@ impl Cluster for LocalNewCluster {
             start_graphql_server_with_fn_rpc(
                 graphql_connection_config.clone(),
                 Some(fullnode_url.clone()),
+                /* cancellation_token */ None,
             )
             .await;
         }
