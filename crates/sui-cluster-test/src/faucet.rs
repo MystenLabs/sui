@@ -12,7 +12,7 @@ use sui_faucet::{
 };
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
-use tracing::{debug, info};
+use tracing::{debug, info, info_span, Instrument};
 use uuid::Uuid;
 
 pub struct FaucetClientFactory;
@@ -29,12 +29,13 @@ impl FaucetClientFactory {
                     .local_faucet_key()
                     .expect("Expect local faucet key for local cluster")
                     .copy();
-                let wallet_context = new_wallet_context_from_cluster(cluster, key);
+                let wallet_context = new_wallet_context_from_cluster(cluster, key)
+                    .instrument(info_span!("init_wallet_context_for_faucet"));
 
                 let prom_registry = prometheus::Registry::new();
                 let config = FaucetConfig::default();
                 let simple_faucet = SimpleFaucet::new(
-                    wallet_context,
+                    wallet_context.into_inner(),
                     &prom_registry,
                     &cluster.config_directory().join("faucet.wal"),
                     config,

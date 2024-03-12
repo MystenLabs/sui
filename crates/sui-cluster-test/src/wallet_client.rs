@@ -11,7 +11,7 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{KeypairTraits, Signature};
 use sui_types::transaction::TransactionData;
-use tracing::info;
+use tracing::{info, info_span, Instrument};
 
 pub struct WalletClient {
     wallet_context: WalletContext,
@@ -24,14 +24,15 @@ impl WalletClient {
     pub async fn new_from_cluster(cluster: &(dyn Cluster + Sync + Send)) -> Self {
         let key = cluster.user_key();
         let address: SuiAddress = key.public().into();
-        let wallet_context = new_wallet_context_from_cluster(cluster, key);
+        let wallet_context = new_wallet_context_from_cluster(cluster, key)
+            .instrument(info_span!("init_wallet_context_for_test_user"));
 
         let rpc_url = String::from(cluster.fullnode_url());
         info!("Use fullnode rpc: {}", &rpc_url);
         let fullnode_client = SuiClientBuilder::default().build(rpc_url).await.unwrap();
 
         Self {
-            wallet_context,
+            wallet_context: wallet_context.into_inner(),
             address,
             fullnode_client,
         }
