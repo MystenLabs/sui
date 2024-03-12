@@ -96,7 +96,22 @@ diesel::table! {
 }
 
 diesel::table! {
-    events (tx_sequence_number, event_sequence_number) {
+    events (tx_sequence_number, event_sequence_number, checkpoint_sequence_number) {
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        transaction_digest -> Bytea,
+        checkpoint_sequence_number -> Int8,
+        senders -> Array<Nullable<Bytea>>,
+        package -> Bytea,
+        module -> Text,
+        event_type -> Text,
+        timestamp_ms -> Int8,
+        bcs -> Bytea,
+    }
+}
+
+diesel::table! {
+    events_partition_0 (tx_sequence_number, event_sequence_number, checkpoint_sequence_number) {
         tx_sequence_number -> Int8,
         event_sequence_number -> Int8,
         transaction_digest -> Bytea,
@@ -262,7 +277,25 @@ diesel::table! {
 }
 
 diesel::table! {
+    tx_calls_partition_0 (package, tx_sequence_number, cp_sequence_number) {
+        cp_sequence_number -> Int8,
+        tx_sequence_number -> Int8,
+        package -> Bytea,
+        module -> Text,
+        func -> Text,
+    }
+}
+
+diesel::table! {
     tx_changed_objects (object_id, tx_sequence_number, cp_sequence_number) {
+        cp_sequence_number -> Int8,
+        tx_sequence_number -> Int8,
+        object_id -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_changed_objects_partition_0 (object_id, tx_sequence_number, cp_sequence_number) {
         cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
         object_id -> Bytea,
@@ -289,6 +322,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    tx_input_objects_partition_0 (object_id, tx_sequence_number, cp_sequence_number) {
+        cp_sequence_number -> Int8,
+        tx_sequence_number -> Int8,
+        object_id -> Bytea,
+    }
+}
+
+diesel::table! {
     tx_recipients (recipient, tx_sequence_number, cp_sequence_number) {
         cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
@@ -297,7 +338,23 @@ diesel::table! {
 }
 
 diesel::table! {
+    tx_recipients_partition_0 (recipient, tx_sequence_number, cp_sequence_number) {
+        cp_sequence_number -> Int8,
+        tx_sequence_number -> Int8,
+        recipient -> Bytea,
+    }
+}
+
+diesel::table! {
     tx_senders (sender, tx_sequence_number, cp_sequence_number) {
+        cp_sequence_number -> Int8,
+        tx_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_senders_partition_0 (sender, tx_sequence_number, cp_sequence_number) {
         cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
         sender -> Bytea,
@@ -313,6 +370,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     epoch_peak_tps,
     epochs,
     events,
+    events_partition_0,
     move_call_metrics,
     move_calls,
     objects,
@@ -323,9 +381,14 @@ diesel::allow_tables_to_appear_in_same_query!(
     transactions,
     transactions_partition_0,
     tx_calls,
+    tx_calls_partition_0,
     tx_changed_objects,
+    tx_changed_objects_partition_0,
     tx_count_metrics,
     tx_input_objects,
+    tx_input_objects_partition_0,
     tx_recipients,
+    tx_recipients_partition_0,
     tx_senders,
+    tx_senders_partition_0,
 );
