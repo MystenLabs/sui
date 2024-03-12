@@ -23,6 +23,7 @@ use sui_types::storage::ReadStore;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 const VALIDATOR_COUNT: usize = 7;
 const EPOCH_DURATION_MS: u64 = 15000;
@@ -165,9 +166,12 @@ pub async fn start_graphql_server_with_fn_rpc(
         server_config.tx_exec_full_node.node_rpc_url = Some(fn_rpc_url);
     };
 
+    // todo
+    let cancellation_token = CancellationToken::new();
+
     // Starts graphql server
     tokio::spawn(async move {
-        start_graphiql_server(&server_config, &Version("test"))
+        start_graphiql_server(&server_config, &Version("test"), cancellation_token)
             .await
             .unwrap();
     })

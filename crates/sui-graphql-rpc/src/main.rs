@@ -13,6 +13,8 @@ use sui_graphql_rpc::server::builder::export_schema;
 use sui_graphql_rpc::server::graphiql_server::{
     start_graphiql_server, start_graphiql_server_from_cfg_path,
 };
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 use tracing::error;
 
 // WARNING!!!
@@ -102,6 +104,8 @@ async fn main() {
             let _guard = telemetry_subscribers::TelemetryConfig::new()
                 .with_env()
                 .init();
+            let tracker = TaskTracker::new();
+            let cancellation_token = CancellationToken::new();
 
             println!("Starting server...");
             let server_config = ServerConfig {
@@ -112,31 +116,40 @@ async fn main() {
                 ..ServerConfig::default()
             };
 
-            tokio::spawn(async move {
-                start_graphiql_server(&server_config, &VERSION)
+            let cancellation_token_clone = cancellation_token.clone();
+            tracker.spawn(async move {
+                start_graphiql_server(&server_config, &VERSION, cancellation_token_clone)
                     .await
                     .unwrap();
             });
 
-            // start_graphiql_server(&server_config, &VERSION)
-            // .await
-            // .unwrap();
-
-            tokio::signal::ctrl_c()
-                .await
-                .expect("failed to listen for event");
+            // Wait for shutdown signal
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {},
+            }
 
             println!("Shutting down...");
+
+            // Send shutdown signal to application
+            cancellation_token.cancel();
+            tracker.close();
+            tracker.wait().await;
         }
         Command::FromConfig { path } => {
+            let cancellation_token = CancellationToken::new();
+
             println!("Starting server...");
-            start_graphiql_server_from_cfg_path(path.to_str().unwrap(), &VERSION)
-                .await
-                .map_err(|x| {
-                    error!("Error: {:?}", x);
-                    x
-                })
-                .unwrap();
+            start_graphiql_server_from_cfg_path(
+                path.to_str().unwrap(),
+                &VERSION,
+                cancellation_token,
+            )
+            .await
+            .map_err(|x| {
+                error!("Error: {:?}", x);
+                x
+            })
+            .unwrap();
         }
     }
 }
