@@ -43,6 +43,8 @@ pub(crate) struct ConsistentNamedCursor {
     pub c: u64,
 }
 
+/// The high checkpoint watermark stamped on each GraphQL request. This is used to ensure
+/// cross-query consistency.
 #[derive(Clone, Copy)]
 pub(crate) struct CheckpointViewedAt(pub(crate) u64);
 

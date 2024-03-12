@@ -69,10 +69,15 @@ pub struct Server {
 }
 
 impl Server {
+    /// Start the GraphQL service and any background tasks it is dependent on. When a cancellation
+    /// signal is received, the method waits for all tasks to complete before returning.
     pub async fn run(self) -> Result<(), Error> {
         let cancellation_token = self.state.cancellation_token.clone();
         get_or_init_server_start_time().await;
 
+        // A handle that spawns a background task to periodically update the `CheckpointViewedAt`,
+        // which is the u64 high watermark of checkpoints that the service is guaranteed to produce
+        // a consistent result for.
         let watermark_task = {
             let metrics = self.state.metrics.clone();
             let sleep_ms = self.state.service.background_tasks.watermark_update_ms;
@@ -281,9 +286,7 @@ impl ServerBuilder {
         Ok(cors)
     }
 
-    /// Consumes the `ServerBuilder` to create a `Server` that can be run. Spawns a background task
-    /// to periodically update the `CheckpointViewedAt`, which is the u64 high watermark of
-    /// checkpoints that the service is guaranteed to produce a consistent result for.
+    /// Consumes the `ServerBuilder` to create a `Server` that can be run.
     pub fn build(self) -> Result<Server, Error> {
         let state = self.state.clone();
         let (address, schema, db_reader, router) = self.build_components();
