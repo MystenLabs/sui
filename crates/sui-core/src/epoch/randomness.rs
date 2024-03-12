@@ -20,7 +20,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::OnceCell;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use typed_store::rocks::DBBatch;
 use typed_store::Map;
 
@@ -506,7 +506,7 @@ impl Inner {
             return Ok(());
         };
         if *party_id != msg.sender {
-            info!("ignoring equivocating DKG Message from authority {authority:?} pretending to be PartyId {party_id:?}");
+            warn!("ignoring equivocating DKG Message from authority {authority:?} pretending to be PartyId {party_id:?}");
             return Ok(());
         }
         match self.party.process_message(msg, &mut rand::thread_rng()) {
@@ -542,7 +542,7 @@ impl Inner {
             return Ok(());
         };
         if *party_id != conf.sender {
-            info!("ignoring equivocating DKG Confirmation from authority {authority:?} pretending to be PartyId {party_id:?}");
+            warn!("ignoring equivocating DKG Confirmation from authority {authority:?} pretending to be PartyId {party_id:?}");
             return Ok(());
         }
         self.confirmations.insert(conf.sender, conf.clone());
