@@ -15,7 +15,7 @@ module sui_system::storage_fund {
     ///    the non-refundable portion taken out and put into `non_refundable_balance`.
     /// - `non_refundable_balance` contains any remaining inflow of the storage fund that should not
     ///    be taken out of the fund.
-    struct StorageFund has store {
+    public struct StorageFund has store {
         total_object_storage_rebates: Balance<SUI>,
         non_refundable_balance: Balance<SUI>,
     }

@@ -18,7 +18,7 @@ module sui::dynamic_object_field {
 
     // Internal object used for storing the field and the name associated with the value
     // The separate type is necessary to prevent key collision with direct usage of dynamic_field
-    struct Wrapper<Name> has copy, drop, store {
+    public struct Wrapper<Name> has copy, drop, store {
         name: Name,
     }
 

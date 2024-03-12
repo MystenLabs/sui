@@ -39,7 +39,7 @@ module sui_system::sui_system_state_inner {
     const SYSTEM_STATE_VERSION_V1: u64 = 1;
 
     /// A list of system config parameters.
-    struct SystemParameters has store {
+    public struct SystemParameters has store {
         /// The duration of an epoch, in milliseconds.
         epoch_duration_ms: u64,
 
@@ -71,7 +71,7 @@ module sui_system::sui_system_state_inner {
     }
 
     /// Added min_validator_count.
-    struct SystemParametersV2 has store {
+    public struct SystemParametersV2 has store {
         /// The duration of an epoch, in milliseconds.
         epoch_duration_ms: u64,
 
@@ -106,7 +106,7 @@ module sui_system::sui_system_state_inner {
     }
 
     /// The top-level object containing all information of the Sui system.
-    struct SuiSystemStateInner has store {
+    public struct SuiSystemStateInner has store {
         /// The current epoch ID, starting from 0.
         epoch: u64,
         /// The current protocol version, starting from 1.
@@ -154,7 +154,7 @@ module sui_system::sui_system_state_inner {
     }
 
     /// Uses SystemParametersV2 as the parameters.
-    struct SuiSystemStateInnerV2 has store {
+    public struct SuiSystemStateInnerV2 has store {
         /// The current epoch ID, starting from 0.
         epoch: u64,
         /// The current protocol version, starting from 1.
@@ -203,7 +203,7 @@ module sui_system::sui_system_state_inner {
 
     /// Event containing system-level epoch information, emitted during
     /// the epoch advancement transaction.
-    struct SystemEpochInfoEvent has copy, drop {
+    public struct SystemEpochInfoEvent has copy, drop {
         epoch: u64,
         protocol_version: u64,
         reference_gas_price: u64,
@@ -831,10 +831,10 @@ module sui_system::sui_system_state_inner {
         self: &mut SuiSystemStateInnerV2,
         new_epoch: u64,
         next_protocol_version: u64,
-        storage_reward: Balance<SUI>,
-        computation_reward: Balance<SUI>,
-        storage_rebate_amount: u64,
-        non_refundable_storage_fee_amount: u64,
+        mut storage_reward: Balance<SUI>,
+        mut computation_reward: Balance<SUI>,
+        mut storage_rebate_amount: u64,
+        mut non_refundable_storage_fee_amount: u64,
         storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
         reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
@@ -893,7 +893,7 @@ module sui_system::sui_system_state_inner {
         let computation_charge_u128 = (computation_charge as u128);
 
         let storage_fund_reward_amount = (storage_fund_balance as u128) * computation_charge_u128 / total_stake_u128;
-        let storage_fund_reward = balance::split(&mut computation_reward, (storage_fund_reward_amount as u64));
+        let mut storage_fund_reward = balance::split(&mut computation_reward, (storage_fund_reward_amount as u64));
         let storage_fund_reinvestment_amount =
             storage_fund_reward_amount * (storage_fund_reinvest_rate as u128) / BASIS_POINT_DENOMINATOR;
         let storage_fund_reinvestment = balance::split(
@@ -934,7 +934,7 @@ module sui_system::sui_system_state_inner {
         // Because of precision issues with integer divisions, we expect that there will be some
         // remaining balance in `storage_fund_reward` and `computation_reward`.
         // All of these go to the storage fund.
-        let leftover_staking_rewards = storage_fund_reward;
+        let mut leftover_staking_rewards = storage_fund_reward;
         balance::join(&mut leftover_staking_rewards, computation_reward);
         let leftover_storage_fund_inflow = balance::value(&leftover_staking_rewards);
 
@@ -1052,11 +1052,11 @@ module sui_system::sui_system_state_inner {
 
     #[allow(lint(self_transfer))]
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.
-    fun extract_coin_balance(coins: vector<Coin<SUI>>, amount: option::Option<u64>, ctx: &mut TxContext): Balance<SUI> {
-        let merged_coin = vector::pop_back(&mut coins);
+    fun extract_coin_balance(mut coins: vector<Coin<SUI>>, amount: option::Option<u64>, ctx: &mut TxContext): Balance<SUI> {
+        let mut merged_coin = vector::pop_back(&mut coins);
         pay::join_vec(&mut merged_coin, coins);
 
-        let total_balance = coin::into_balance(merged_coin);
+        let mut total_balance = coin::into_balance(merged_coin);
         // return the full amount if amount is not specified
         if (option::is_some(&amount)) {
             let amount = option::destroy_some(amount);

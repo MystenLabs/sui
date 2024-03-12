@@ -25,14 +25,14 @@ module sui_system::validator_cap {
     /// `UnverifiedValidatorOperationCap`. Thus, before converting `UnverifiedValidatorOperationCap`
     /// to `ValidatorOperationCap`, verification needs to be done to make sure
     /// the cap object is still valid.
-    struct UnverifiedValidatorOperationCap has key, store {
+    public struct UnverifiedValidatorOperationCap has key, store {
         id: UID,
         authorizer_validator_address: address,
     }
 
     /// Privileged operations require `ValidatorOperationCap` for permission check.
     /// This is only constructed after successful verification.
-    struct ValidatorOperationCap has drop {
+    public struct ValidatorOperationCap has drop {
         authorizer_validator_address: address,
     }
 

@@ -9,7 +9,7 @@ module sui::token_test_utils {
     use sui::token::{Self, Token, TokenPolicy, TokenPolicyCap};
 
     /// The type of the test Token.
-    struct TEST has drop {}
+    public struct TEST has drop {}
 
     /// Get a context for testing.
     public fun ctx(sender: address): TxContext {

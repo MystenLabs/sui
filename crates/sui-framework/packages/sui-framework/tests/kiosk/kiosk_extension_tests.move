@@ -22,10 +22,10 @@ module sui::kiosk_marketplace_ext {
     const ENotInstalled: u64 = 3;
 
     /// The Extension Witness.
-    struct Ext<phantom Market> has drop {}
+    public struct Ext<phantom Market> has drop {}
 
     /// A Bid on an item of type `T`.
-    struct Bid<phantom T> has copy, store, drop {}
+    public struct Bid<phantom T> has copy, store, drop {}
 
     /// Add the `Marketplace` extension to the given `Kiosk`.
     ///
@@ -151,14 +151,14 @@ module sui::kiosk_extensions_tests {
     use sui::kiosk;
 
     /// The `Ext` witness to use for testing.
-    struct Extension has drop {}
+    public struct Extension has drop {}
 
     // === Default Behavior ===
 
     #[test]
     fun test_default_behavior() {
         let ctx = &mut test::ctx();
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::add(Extension {}, &mut kiosk, &owner_cap, 3, ctx);
 
@@ -195,7 +195,7 @@ module sui::kiosk_extensions_tests {
         let ctx = &mut test::ctx();
         let (policy, _policy_cap) = test::get_policy(ctx);
         let (asset, _asset_id) = test::get_asset(ctx);
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::add(Extension {}, &mut kiosk, &owner_cap, 0, ctx);
         ext::lock(Extension {}, &mut kiosk, asset, &policy);
@@ -208,7 +208,7 @@ module sui::kiosk_extensions_tests {
         let ctx = &mut test::ctx();
         let (policy, _policy_cap) = test::get_policy(ctx);
         let (asset, _asset_id) = test::get_asset(ctx);
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::add(Extension {}, &mut kiosk, &owner_cap, 1, ctx);
         ext::lock(Extension {}, &mut kiosk, asset, &policy);
@@ -221,7 +221,7 @@ module sui::kiosk_extensions_tests {
         let ctx = &mut test::ctx();
         let (policy, _policy_cap) = test::get_policy(ctx);
         let (asset, _asset_id) = test::get_asset(ctx);
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::add(Extension {}, &mut kiosk, &owner_cap, 0, ctx);
         ext::place(Extension {}, &mut kiosk, asset, &policy);
@@ -234,7 +234,7 @@ module sui::kiosk_extensions_tests {
         let ctx = &mut test::ctx();
         let (policy, policy_cap) = test::get_policy(ctx);
         let (asset, asset_id) = test::get_asset(ctx);
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::add(Extension {}, &mut kiosk, &owner_cap, 2, ctx);
         ext::place(Extension {}, &mut kiosk, asset, &policy);
@@ -260,7 +260,7 @@ module sui::kiosk_extensions_tests {
     #[test, expected_failure(abort_code = sui::kiosk_extension::EExtensionNotInstalled)]
     fun test_enable_not_installed() {
         let ctx = &mut test::ctx();
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::enable<Extension>(&mut kiosk, &owner_cap);
 
@@ -270,7 +270,7 @@ module sui::kiosk_extensions_tests {
     #[test, expected_failure(abort_code = sui::kiosk_extension::EExtensionNotInstalled)]
     fun test_disable_not_installed() {
         let ctx = &mut test::ctx();
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::disable<Extension>(&mut kiosk, &owner_cap);
 
@@ -280,7 +280,7 @@ module sui::kiosk_extensions_tests {
     #[test, expected_failure(abort_code = sui::kiosk_extension::EExtensionNotInstalled)]
     fun test_remove_not_installed() {
         let ctx = &mut test::ctx();
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::remove<Extension>(&mut kiosk, &owner_cap);
 
@@ -300,7 +300,7 @@ module sui::kiosk_extensions_tests {
     #[test, expected_failure(abort_code = sui::kiosk_extension::EExtensionNotInstalled)]
     fun test_storage_mut_not_installed() {
         let ctx = &mut test::ctx();
-        let (kiosk, _owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, _owner_cap) = test::get_kiosk(ctx);
 
         let _ = ext::storage_mut(Extension {}, &mut kiosk);
 
@@ -312,7 +312,7 @@ module sui::kiosk_extensions_tests {
         let ctx = &mut test::ctx();
         let (policy, _policy_cap) = test::get_policy(ctx);
         let (asset, _asset_id) = test::get_asset(ctx);
-        let (kiosk, _owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, _owner_cap) = test::get_kiosk(ctx);
 
         ext::lock(Extension {}, &mut kiosk, asset, &policy);
 
@@ -324,7 +324,7 @@ module sui::kiosk_extensions_tests {
         let ctx = &mut test::ctx();
         let (policy, _policy_cap) = test::get_policy(ctx);
         let (asset, _asset_id) = test::get_asset(ctx);
-        let (kiosk, _owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, _owner_cap) = test::get_kiosk(ctx);
 
         ext::place(Extension {}, &mut kiosk, asset, &policy);
 

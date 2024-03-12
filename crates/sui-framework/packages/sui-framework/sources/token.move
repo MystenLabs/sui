@@ -65,7 +65,7 @@ module sui::token {
 
     /// A single `Token` with `Balance` inside. Can only be owned by an address,
     /// and actions performed on it must be confirmed in a matching `TokenPolicy`.
-    struct Token<phantom T> has key {
+    public struct Token<phantom T> has key {
         id: UID,
         /// The Balance of the `Token`.
         balance: Balance<T>,
@@ -73,7 +73,7 @@ module sui::token {
 
     /// A Capability that manages a single `TokenPolicy` specified in the `for`
     /// field. Created together with `TokenPolicy` in the `new` function.
-    struct TokenPolicyCap<phantom T> has key, store { id: UID, for: ID }
+    public struct TokenPolicyCap<phantom T> has key, store { id: UID, `for`: ID }
 
     /// `TokenPolicy` represents a set of rules that define what actions can be
     /// performed on a `Token` and which `Rules` must be satisfied for the
@@ -84,7 +84,7 @@ module sui::token {
     /// - For an action to become available, there needs to be a record in the
     /// `rules` VecMap. To allow an action to be performed freely, there's an
     /// `allow` function that can be called by the `TokenPolicyCap` owner.
-    struct TokenPolicy<phantom T> has key {
+    public struct TokenPolicy<phantom T> has key {
         id: UID,
         /// The balance that is effectively spent by the user on the "spend"
         /// action. However, actual decrease of the supply can only be done by
@@ -102,7 +102,7 @@ module sui::token {
     /// A request to perform an "Action" on a token. Stores the information
     /// about the action to be performed and must be consumed by the `confirm_request`
     /// or `confirm_request_mut` functions when the Rules are satisfied.
-    struct ActionRequest<phantom T> {
+    public struct ActionRequest<phantom T> {
         /// Name of the Action to look up in the Policy. Name can be one of the
         /// default actions: `transfer`, `spend`, `to_coin`, `from_coin` or a
         /// custom action.
@@ -125,12 +125,12 @@ module sui::token {
     /// Dynamic field key for the `TokenPolicy` to store the `Config` for a
     /// specific action `Rule`. There can be only one configuration per
     /// `Rule` per `TokenPolicy`.
-    struct RuleKey<phantom T> has store, copy, drop { is_protected: bool }
+    public struct RuleKey<phantom T> has store, copy, drop { is_protected: bool }
 
     /// An event emitted when a `TokenPolicy` is created and shared. Because
     /// `TokenPolicy` can only be shared (and potentially frozen in the future),
     /// we emit this event in the `share_policy` function and mark it as mutable.
-    struct TokenPolicyCreated<phantom T> has copy, drop {
+    public struct TokenPolicyCreated<phantom T> has copy, drop {
         /// ID of the `TokenPolicy` that was created.
         id: ID,
         /// Whether the `TokenPolicy` is "shared" (mutable) or "frozen"
@@ -154,7 +154,7 @@ module sui::token {
 
         let cap = TokenPolicyCap {
             id: object::new(ctx),
-            for: object::id(&policy)
+            `for`: object::id(&policy)
         };
 
         (policy, cap)
@@ -348,7 +348,7 @@ module sui::token {
 
         let rules = &vec_set::into_keys(*vec_map::get(&policy.rules, &name));
         let rules_len = vector::length(rules);
-        let i = 0;
+        let mut i = 0;
 
         while (i < rules_len) {
             let rule = vector::borrow(rules, i);
@@ -369,7 +369,7 @@ module sui::token {
     /// See `confirm_request` for the list of abort conditions.
     public fun confirm_request_mut<T>(
         policy: &mut TokenPolicy<T>,
-        request: ActionRequest<T>,
+        mut request: ActionRequest<T>,
         ctx: &mut TxContext
     ): (String, u64, address, Option<address>) {
         assert!(vec_map::contains(&policy.rules, &request.name), EUnknownAction);
@@ -461,7 +461,7 @@ module sui::token {
         config: Config,
         _ctx: &mut TxContext
     ) {
-        assert!(object::id(self) == cap.for, ENotAuthorized);
+        assert!(object::id(self) == cap.`for`, ENotAuthorized);
         df::add(&mut self.id, key<Rule>(), config)
     }
 
@@ -491,7 +491,7 @@ module sui::token {
         _rule: Rule, self: &mut TokenPolicy<T>, cap: &TokenPolicyCap<T>
     ): &mut Config {
         assert!(has_rule_config_with_type<T, Rule, Config>(self), ENoConfig);
-        assert!(object::id(self) == cap.for, ENotAuthorized);
+        assert!(object::id(self) == cap.`for`, ENotAuthorized);
         df::borrow_mut(&mut self.id, key<Rule>())
     }
 
@@ -511,7 +511,7 @@ module sui::token {
         _ctx: &mut TxContext
     ): Config {
         assert!(has_rule_config_with_type<T, Rule, Config>(self), ENoConfig);
-        assert!(object::id(self) == cap.for, ENotAuthorized);
+        assert!(object::id(self) == cap.`for`, ENotAuthorized);
         df::remove(&mut self.id, key<Rule>())
     }
 
@@ -541,7 +541,7 @@ module sui::token {
         action: String,
         _ctx: &mut TxContext
     ) {
-        assert!(object::id(self) == cap.for, ENotAuthorized);
+        assert!(object::id(self) == cap.`for`, ENotAuthorized);
         vec_map::insert(&mut self.rules, action, vec_set::empty());
     }
 
@@ -555,7 +555,7 @@ module sui::token {
         action: String,
         _ctx: &mut TxContext
     ) {
-        assert!(object::id(self) == cap.for, ENotAuthorized);
+        assert!(object::id(self) == cap.`for`, ENotAuthorized);
         vec_map::remove(&mut self.rules, &action);
     }
 
@@ -568,7 +568,7 @@ module sui::token {
         action: String,
         ctx: &mut TxContext
     ) {
-        assert!(object::id(self) == cap.for, ENotAuthorized);
+        assert!(object::id(self) == cap.`for`, ENotAuthorized);
         if (!vec_map::contains(&self.rules, &action)) {
             allow(self, cap, action, ctx);
         };
@@ -589,7 +589,7 @@ module sui::token {
         action: String,
         _ctx: &mut TxContext
     ) {
-        assert!(object::id(self) == cap.for, ENotAuthorized);
+        assert!(object::id(self) == cap.`for`, ENotAuthorized);
 
         vec_set::remove(
             vec_map::get_mut(&mut self.rules, &action),
@@ -717,7 +717,7 @@ module sui::token {
         };
         let cap = TokenPolicyCap {
             id: object::new(ctx),
-            for: object::id(&policy)
+            `for`: object::id(&policy)
         };
 
         (policy, cap)
@@ -728,7 +728,7 @@ module sui::token {
         policy: TokenPolicy<T>,
         cap: TokenPolicyCap<T>
     ) {
-        let TokenPolicyCap { id: cap_id, for: _ } = cap;
+        let TokenPolicyCap { id: cap_id, `for`: _ } = cap;
         let TokenPolicy { id, rules: _, spent_balance } = policy;
         balance::destroy_for_testing(spent_balance);
         object::delete(cap_id);

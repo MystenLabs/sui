@@ -14,7 +14,7 @@ module sui::object_table {
     // Attempted to destroy a non-empty table
     const ETableNotEmpty: u64 = 0;
 
-    struct ObjectTable<phantom K: copy + drop + store, phantom V: key + store> has key, store {
+    public struct ObjectTable<phantom K: copy + drop + store, phantom V: key + store> has key, store {
         /// the ID of this table
         id: UID,
         /// the number of key-value pairs in the table

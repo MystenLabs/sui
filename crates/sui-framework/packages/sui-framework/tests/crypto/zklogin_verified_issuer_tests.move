@@ -32,7 +32,7 @@ module sui::zklogin_verified_issuer_tests {
 
         assert!(check_zklogin_issuer(address,  address_seed, &iss), 0);
 
-        let scenario_val = test_scenario::begin(address);
+        let mut scenario_val = test_scenario::begin(address);
         let scenario = &mut scenario_val;
         {
             verify_zklogin_issuer(address_seed, iss, test_scenario::ctx(scenario));
@@ -52,7 +52,7 @@ module sui::zklogin_verified_issuer_tests {
         let other_address = @0x1;
         let iss = utf8(b"https://accounts.google.com");
         let address_seed = 3006596378422062745101035755700472756930796952630484939867684134047976874601u256;
-        let scenario_val = test_scenario::begin(other_address);
+        let mut scenario_val = test_scenario::begin(other_address);
         let scenario = &mut scenario_val;
         {
             verify_zklogin_issuer(address_seed, iss, test_scenario::ctx(scenario));

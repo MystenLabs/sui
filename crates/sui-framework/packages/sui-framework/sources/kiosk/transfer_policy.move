@@ -50,7 +50,7 @@ module sui::transfer_policy {
 
     /// A "Hot Potato" forcing the buyer to get a transfer permission
     /// from the item type (`T`) owner on purchase attempt.
-    struct TransferRequest<phantom T> {
+    public struct TransferRequest<phantom T> {
         /// The ID of the transferred item. Although the `T` has no
         /// constraints, the main use case for this module is to work
         /// with Objects.
@@ -71,7 +71,7 @@ module sui::transfer_policy {
     /// there's no limitation to how many policies can be created, for most
     /// of the cases there's no need to create more than one since any of the
     /// policies can be used to confirm the `TransferRequest`.
-    struct TransferPolicy<phantom T> has key, store {
+    public struct TransferPolicy<phantom T> has key, store {
         id: UID,
         /// The Balance of the `TransferPolicy` which collects `SUI`.
         /// By default, transfer policy does not collect anything , and it's
@@ -87,21 +87,21 @@ module sui::transfer_policy {
 
     /// A Capability granting the owner permission to add/remove rules as well
     /// as to `withdraw` and `destroy_and_withdraw` the `TransferPolicy`.
-    struct TransferPolicyCap<phantom T> has key, store {
+    public struct TransferPolicyCap<phantom T> has key, store {
         id: UID,
         policy_id: ID
     }
 
     /// Event that is emitted when a publisher creates a new `TransferPolicyCap`
     /// making the discoverability and tracking the supported types easier.
-    struct TransferPolicyCreated<phantom T> has copy, drop { id: ID }
+    public struct TransferPolicyCreated<phantom T> has copy, drop { id: ID }
 
     /// Event that is emitted when a publisher destroys a `TransferPolicyCap`.
     /// Allows for tracking supported policies.
-    struct TransferPolicyDestroyed<phantom T> has copy, drop { id: ID }
+    public struct TransferPolicyDestroyed<phantom T> has copy, drop { id: ID }
 
     /// Key to store "Rule" configuration for a specific `TransferPolicy`.
-    struct RuleKey<phantom T: drop> has copy, store, drop {}
+    public struct RuleKey<phantom T: drop> has copy, store, drop {}
 
     /// Construct a new `TransferRequest` hot potato which requires an
     /// approving action from the creator to be destroyed / resolved. Once
@@ -189,8 +189,8 @@ module sui::transfer_policy {
         self: &TransferPolicy<T>, request: TransferRequest<T>
     ): (ID, u64, ID) {
         let TransferRequest { item, paid, from, receipts } = request;
-        let completed = vec_set::into_keys(receipts);
-        let total = vector::length(&completed);
+        let mut completed = vec_set::into_keys(receipts);
+        let mut total = vector::length(&completed);
 
         assert!(total == vec_set::size(&self.rules), EPolicyNotSatisfied);
 

@@ -8,8 +8,8 @@ module sui::clock_tests {
 
     #[test]
     fun creating_a_clock_and_incrementing_it() {
-        let ctx = tx_context::dummy();
-        let clock = clock::create_for_testing(&mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut clock = clock::create_for_testing(&mut ctx);
 
         clock::increment_for_testing(&mut clock, 42);
         assert!(clock::timestamp_ms(&clock) == 42, 1);

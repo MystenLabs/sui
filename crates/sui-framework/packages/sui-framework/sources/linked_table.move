@@ -14,7 +14,7 @@ module sui::linked_table {
     // Attempted to remove the front or back of an empty table
     const ETableIsEmpty: u64 = 1;
 
-    struct LinkedTable<K: copy + drop + store, phantom V: store> has key, store {
+    public struct LinkedTable<K: copy + drop + store, phantom V: store> has key, store {
         /// the ID of this table
         id: UID,
         /// the number of key-value pairs in the table
@@ -25,7 +25,7 @@ module sui::linked_table {
         tail: Option<K>,
     }
 
-    struct Node<K: copy + drop + store, V: store> has store {
+    public struct Node<K: copy + drop + store, V: store> has store {
         /// the previous key
         prev: Option<K>,
         /// the next key

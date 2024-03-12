@@ -41,7 +41,7 @@ module sui_system::staking_pool {
     const EStakedSuiBelowThreshold: u64 = 18;
 
     /// A staking pool embedded in each validator struct in the system state object.
-    struct StakingPool has key, store {
+    public struct StakingPool has key, store {
         id: UID,
         /// The epoch at which this pool became active.
         /// The value is `None` if the pool is pre-active and `Some(<epoch_number>)` if active or inactive.
@@ -72,13 +72,13 @@ module sui_system::staking_pool {
     }
 
     /// Struct representing the exchange rate of the stake pool token to SUI.
-    struct PoolTokenExchangeRate has store, copy, drop {
+    public struct PoolTokenExchangeRate has store, copy, drop {
         sui_amount: u64,
         pool_token_amount: u64,
     }
 
     /// A self-custodial object holding the staked SUI tokens.
-    struct StakedSui has key, store {
+    public struct StakedSui has key, store {
         id: UID,
         /// ID of the staking pool we are staking with.
         pool_id: ID,
@@ -138,7 +138,7 @@ module sui_system::staking_pool {
         staked_sui: StakedSui,
         ctx: &TxContext
     ) : Balance<SUI> {
-        let (pool_token_withdraw_amount, principal_withdraw) =
+        let (pool_token_withdraw_amount, mut principal_withdraw) =
             withdraw_from_principal(pool, staked_sui);
         let principal_withdraw_amount = balance::value(&principal_withdraw);
 
@@ -244,7 +244,7 @@ module sui_system::staking_pool {
     ) : Balance<SUI> {
         let exchange_rate = pool_token_exchange_rate_at_epoch(pool, epoch);
         let total_sui_withdraw_amount = get_sui_amount(&exchange_rate, pool_token_withdraw_amount);
-        let reward_withdraw_amount =
+        let mut reward_withdraw_amount =
             if (total_sui_withdraw_amount >= principal_withdraw_amount)
                 total_sui_withdraw_amount - principal_withdraw_amount
             else 0;
@@ -357,7 +357,7 @@ module sui_system::staking_pool {
             return initial_exchange_rate()
         };
         let clamped_epoch = option::get_with_default(&pool.deactivation_epoch, epoch);
-        let epoch = math::min(clamped_epoch, epoch);
+        let mut epoch = math::min(clamped_epoch, epoch);
         let activation_epoch = *option::borrow(&pool.activation_epoch);
 
         // Find the latest epoch that's earlier than the given epoch with an entry in the table
@@ -453,7 +453,7 @@ module sui_system::staking_pool {
         let new_epoch_exchange_rate = pool_token_exchange_rate_at_epoch(pool, current_epoch);
         let total_sui_withdraw_amount = get_sui_amount(&new_epoch_exchange_rate, pool_token_withdraw_amount);
 
-        let reward_withdraw_amount =
+        let mut reward_withdraw_amount =
             if (total_sui_withdraw_amount >= staked_amount)
                 total_sui_withdraw_amount - staked_amount
             else 0;

@@ -19,7 +19,7 @@ module sui::clock {
     /// reference or value will fail to verify, and honest validators
     /// will not sign or execute transactions that use `Clock` as an
     /// input parameter, unless it is passed by immutable reference.
-    struct Clock has key {
+    public struct Clock has key {
         id: UID,
         /// The clock's timestamp, which is set automatically by a
         /// system transaction every time consensus commits a

@@ -11,12 +11,12 @@ module sui::test_scenario_tests {
     const EIdBytesMismatch: u64 = 0;
     const EValueMismatch: u64 = 1;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: object::UID,
         value: u64,
     }
 
-    struct Wrapper has key {
+    public struct Wrapper has key {
         id: object::UID,
         child: Object,
     }
@@ -24,7 +24,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_wrap_unwrap() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         {
             let id = ts::new_object(&mut scenario);
             let obj = Object { id, value: 10 };
@@ -50,7 +50,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_remove_then_return() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         {
             let id = ts::new_object(&mut scenario);
             let obj = Object { id, value: 10 };
@@ -73,7 +73,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_return_and_update() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         {
             let id = ts::new_object(&mut scenario);
             let obj = Object { id, value: 10 };
@@ -81,7 +81,7 @@ module sui::test_scenario_tests {
         };
         ts::next_tx(&mut scenario, sender);
         {
-            let obj = ts::take_from_sender<Object>(&scenario);
+            let mut obj = ts::take_from_sender<Object>(&scenario);
             assert!(obj.value == 10, 0);
             obj.value = 100;
             ts::return_to_sender(&scenario, obj);
@@ -98,7 +98,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_remove_during_tx() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         {
             let id = ts::new_object(&mut scenario);
             let obj = Object { id, value: 10 };
@@ -113,7 +113,7 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EEmptyInventory)]
     fun test_double_remove() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         {
             let id = ts::new_object(&mut scenario);
             let obj = Object { id, value: 10 };
@@ -136,7 +136,7 @@ module sui::test_scenario_tests {
         let addr1 = @0x0;
         let addr2 = @0x1;
         let addr3 = @0x2;
-        let scenario = ts::begin(addr1);
+        let mut scenario = ts::begin(addr1);
         {
             let id = ts::new_object(&mut scenario);
             let obj = Object { id, value: 10 };
@@ -182,7 +182,7 @@ module sui::test_scenario_tests {
     fun test_transfer_then_delete() {
         let tx1_sender = @0x0;
         let tx2_sender = @0x1;
-        let scenario = ts::begin(tx1_sender);
+        let mut scenario = ts::begin(tx1_sender);
         // send an object to tx2_sender
         let id_bytes;
         {
@@ -214,7 +214,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_get_owned_obj_ids() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid1 = ts::new_object(&mut scenario);
         let uid2 = ts::new_object(&mut scenario);
         let uid3 = ts::new_object(&mut scenario);
@@ -238,7 +238,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_take_owned_by_id() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid1 = ts::new_object(&mut scenario);
         let uid2 = ts::new_object(&mut scenario);
         let uid3 = ts::new_object(&mut scenario);
@@ -271,7 +271,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_get_last_created_object_id() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         {
             let id = ts::new_object(&mut scenario);
             let id_addr = object::uid_to_address(&id);
@@ -286,7 +286,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_take_shared_by_id() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid1 = ts::new_object(&mut scenario);
         let uid2 = ts::new_object(&mut scenario);
         let uid3 = ts::new_object(&mut scenario);
@@ -319,7 +319,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_take_shared() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid1 = ts::new_object(&mut scenario);
         {
             let obj1 = Object { id: uid1, value: 10 };
@@ -338,7 +338,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_delete_shared() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid1 = ts::new_object(&mut scenario);
         {
             let obj1 = Object { id: uid1, value: 10 };
@@ -358,7 +358,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_take_immutable_by_id() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid1 = ts::new_object(&mut scenario);
         let uid2 = ts::new_object(&mut scenario);
         let uid3 = ts::new_object(&mut scenario);
@@ -391,7 +391,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_take_immutable() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid1 = ts::new_object(&mut scenario);
         {
             let obj1 = Object { id: uid1, value: 10 };
@@ -410,7 +410,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_unreturned_objects() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid1 = ts::new_object(&mut scenario);
         let uid2 = ts::new_object(&mut scenario);
         let uid3 = ts::new_object(&mut scenario);
@@ -436,7 +436,7 @@ module sui::test_scenario_tests {
     #[test]
     fun test_later_epoch() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
 
         let ts0 = tx_context::epoch_timestamp_ms(ts::ctx(&mut scenario));
 
@@ -472,7 +472,7 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_invalid_shared_usage() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         {
             let id = ts::new_object(&mut scenario);
             let obj1 = Object { id, value: 10 };
@@ -491,7 +491,7 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_invalid_immutable_usage() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         {
             let id = ts::new_object(&mut scenario);
             let obj1 = Object { id, value: 10 };
@@ -510,14 +510,14 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_modify_immutable() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         {
             let id = ts::new_object(&mut scenario);
             let obj1 = Object { id, value: 10 };
             transfer::public_freeze_object(obj1);
         };
         ts::next_tx(&mut scenario, sender);
-        let obj1 = ts::take_immutable<Object>(&scenario);
+        let mut obj1 = ts::take_immutable<Object>(&scenario);
         ts::next_tx(&mut scenario, sender);
         obj1.value = 100;
         ts::next_tx(&mut scenario, sender);
@@ -530,7 +530,7 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::ECantReturnObject)]
     fun test_invalid_address_return() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let id = ts::new_object(&mut scenario);
         ts::return_to_sender(&scenario, Object { id, value: 10 });
         abort 42
@@ -540,7 +540,7 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::ECantReturnObject)]
     fun test_invalid_shared_return() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let id = ts::new_object(&mut scenario);
         ts::return_shared(Object { id, value: 10 });
         abort 42
@@ -550,7 +550,7 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::ECantReturnObject)]
     fun test_invalid_immutable_return() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let id = ts::new_object(&mut scenario);
         ts::return_immutable(Object { id, value: 10 });
         abort 42
@@ -587,7 +587,7 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EObjectNotFound)]
     fun test_object_not_found() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid = ts::new_object(&mut scenario);
         let id = object::uid_to_inner(&uid);
         ts::return_to_sender(&scenario, ts::take_from_sender_by_id<Object>(&scenario, id));
@@ -598,7 +598,7 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EObjectNotFound)]
     fun test_object_not_found_shared() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid = ts::new_object(&mut scenario);
         let id = object::uid_to_inner(&uid);
         ts::return_to_sender(&scenario, ts::take_shared_by_id<Object>(&scenario, id));
@@ -609,7 +609,7 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EObjectNotFound)]
     fun test_object_not_found_immutable() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid = ts::new_object(&mut scenario);
         let id = object::uid_to_inner(&uid);
         ts::return_to_sender(&scenario, ts::take_immutable_by_id<Object>(&scenario, id));
@@ -620,7 +620,7 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EObjectNotFound)]
     fun test_wrong_object_type() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid = ts::new_object(&mut scenario);
         let id = object::uid_to_inner(&uid);
         transfer::public_transfer(Object { id: uid, value: 10 }, sender);
@@ -632,7 +632,7 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EObjectNotFound)]
     fun test_wrong_object_type_shared() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid = ts::new_object(&mut scenario);
         let id = object::uid_to_inner(&uid);
         transfer::public_share_object(Object { id: uid, value: 10 });
@@ -644,7 +644,7 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EObjectNotFound)]
     fun test_wrong_object_type_immutable() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let uid = ts::new_object(&mut scenario);
         let id = object::uid_to_inner(&uid);
         transfer::public_freeze_object(Object { id: uid, value: 10 });
@@ -655,8 +655,8 @@ module sui::test_scenario_tests {
     #[test]
     fun test_dynamic_field_still_borrowed() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let parent = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut parent = ts::new_object(&mut scenario);
         sui::dynamic_field::add(&mut parent, b"", 10);
         let r = sui::dynamic_field::borrow<vector<u8>, u64>(&parent, b"");
         ts::end(scenario);
@@ -667,8 +667,8 @@ module sui::test_scenario_tests {
     #[test]
     fun test_dynamic_object_field_still_borrowed() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let parent = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut parent = ts::new_object(&mut scenario);
         let id = ts::new_object(&mut scenario);
         sui::dynamic_object_field::add(&mut parent, b"", Object { id, value: 10});
         let obj = sui::dynamic_object_field::borrow<vector<u8>, Object>(&parent, b"");
@@ -680,8 +680,8 @@ module sui::test_scenario_tests {
     #[test]
     fun test_dynamic_object_field_not_retrievable() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let parent = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut parent = ts::new_object(&mut scenario);
         let uid = ts::new_object(&mut scenario);
         let obj = Object { id: uid, value: 10};
         let id = object::id(&obj);
@@ -702,8 +702,8 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_dynamic_field_shared_misuse() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let parent = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut parent = ts::new_object(&mut scenario);
         let uid = ts::new_object(&mut scenario);
         let obj = Object { id: uid, value: 10};
         let id = object::id(&obj);
@@ -721,8 +721,8 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_dynamic_field_immutable_misuse() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let parent = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut parent = ts::new_object(&mut scenario);
         let uid = ts::new_object(&mut scenario);
         let obj = Object { id: uid, value: 10};
         let id = object::id(&obj);
@@ -740,8 +740,8 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_dynamic_object_field_shared_misuse() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let parent = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut parent = ts::new_object(&mut scenario);
         let uid = ts::new_object(&mut scenario);
         let obj = Object { id: uid, value: 10};
         let id = object::id(&obj);
@@ -758,8 +758,8 @@ module sui::test_scenario_tests {
     #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_dynamic_object_field_immutable_misuse() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let parent = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut parent = ts::new_object(&mut scenario);
         let uid = ts::new_object(&mut scenario);
         let obj = Object { id: uid, value: 10};
         let id = object::id(&obj);

@@ -17,13 +17,13 @@ module sui::borrow {
     const EWrongValue: u64 = 1;
 
     /// An object wrapping a `T` and providing the borrow API.
-    struct Referent<T: key + store> has store {
+    public struct Referent<T: key + store> has store {
         id: address,
         value: Option<T>
     }
 
     /// A hot potato making sure the object is put back once borrowed.
-    struct Borrow { ref: address, obj: ID }
+    public struct Borrow { ref: address, obj: ID }
 
     /// Create a new `Referent` struct
     public fun new<T: key + store>(value: T, ctx: &mut TxContext): Referent<T> {
@@ -61,14 +61,14 @@ module sui::borrow {
     }
 
     #[test_only]
-    struct Test has key, store {
+    public struct Test has key, store {
         id: object::UID
     }
 
     #[test]
     fun test_borrow() {
         let ctx = &mut sui::tx_context::dummy();
-        let ref = new(Test { id: object::new(ctx) }, ctx);
+        let mut ref = new(Test { id: object::new(ctx) }, ctx);
 
         let (value, borrow) = borrow(&mut ref);
         put_back(&mut ref, value, borrow);
@@ -82,8 +82,8 @@ module sui::borrow {
     /// The `value` is swapped with another instance of the type `T`.
     fun test_object_swap() {
         let ctx = &mut sui::tx_context::dummy();
-        let ref_1 = new(Test { id: object::new(ctx) }, ctx);
-        let ref_2 = new(Test { id: object::new(ctx) }, ctx);
+        let mut ref_1 = new(Test { id: object::new(ctx) }, ctx);
+        let mut ref_2 = new(Test { id: object::new(ctx) }, ctx);
 
         let (v_1, b_1) = borrow(&mut ref_1);
         let (v_2, b_2) = borrow(&mut ref_2);
@@ -103,8 +103,8 @@ module sui::borrow {
     /// The both `borrow` and `value` are swapped with another `Referent`.
     fun test_borrow_fail() {
         let ctx = &mut sui::tx_context::dummy();
-        let ref_1 = new(Test { id: object::new(ctx) }, ctx);
-        let ref_2 = new(Test { id: object::new(ctx) }, ctx);
+        let mut ref_1 = new(Test { id: object::new(ctx) }, ctx);
+        let mut ref_2 = new(Test { id: object::new(ctx) }, ctx);
 
         let (v_1, b_1) = borrow(&mut ref_1);
         let (v_2, b_2) = borrow(&mut ref_2);

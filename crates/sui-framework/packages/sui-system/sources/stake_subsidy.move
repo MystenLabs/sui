@@ -15,7 +15,7 @@ module sui_system::stake_subsidy {
     #[test_only]
     friend sui_system::governance_test_utils;
 
-    struct StakeSubsidy has store {
+    public struct StakeSubsidy has store {
         /// Balance of SUI set aside for stake subsidies that will be drawn down over time.
         balance: Balance<SUI>,
 

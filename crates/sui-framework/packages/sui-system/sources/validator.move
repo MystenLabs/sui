@@ -93,7 +93,7 @@ module sui_system::validator {
     /// Max gas price a validator can set is 100K MIST.
     const MAX_VALIDATOR_GAS_PRICE: u64 = 100_000;
 
-    struct ValidatorMetadata has store {
+    public struct ValidatorMetadata has store {
         /// The Sui Address of the validator. This is the sender that created the Validator object,
         /// and also the address to send validator/coins to during withdraws.
         sui_address: address,
@@ -136,7 +136,7 @@ module sui_system::validator {
         extra_fields: Bag,
     }
 
-    struct Validator has store {
+    public struct Validator has store {
         /// Summary of the validator.
         metadata: ValidatorMetadata,
         /// The voting power of this validator, which might be different from its
@@ -161,7 +161,7 @@ module sui_system::validator {
     }
 
     /// Event emitted when a new stake request is received.
-    struct StakingRequestEvent has copy, drop {
+    public struct StakingRequestEvent has copy, drop {
         pool_id: ID,
         validator_address: address,
         staker_address: address,
@@ -170,7 +170,7 @@ module sui_system::validator {
     }
 
     /// Event emitted when a new unstake request is received.
-    struct UnstakingRequestEvent has copy, drop {
+    public struct UnstakingRequestEvent has copy, drop {
         pool_id: ID,
         validator_address: address,
         staker_address: address,
@@ -918,13 +918,13 @@ module sui_system::validator {
         p2p_address: vector<u8>,
         primary_address: vector<u8>,
         worker_address: vector<u8>,
-        initial_stake_option: Option<Balance<SUI>>,
+        mut initial_stake_option: Option<Balance<SUI>>,
         gas_price: u64,
         commission_rate: u64,
         is_active_at_genesis: bool,
         ctx: &mut TxContext
     ): Validator {
-        let validator = new_from_metadata(
+        let mut validator = new_from_metadata(
             new_metadata(
                 sui_address,
                 protocol_pubkey_bytes,

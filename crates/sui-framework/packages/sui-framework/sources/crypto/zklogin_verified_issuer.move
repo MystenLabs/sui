@@ -18,7 +18,7 @@ module sui::zklogin_verified_issuer {
 
     /// Posession of a VerifiedIssuer proves that the user's address was created using zklogin and with the given issuer
     /// (identity provider).
-    struct VerifiedIssuer has key {
+    public struct VerifiedIssuer has key {
         /// The ID of this VerifiedIssuer
         id: UID,
         /// The address this VerifiedID is associated with

@@ -20,13 +20,13 @@ module sui::balance {
 
     /// A Supply of T. Used for minting and burning.
     /// Wrapped into a `TreasuryCap` in the `Coin` module.
-    struct Supply<phantom T> has store {
+    public struct Supply<phantom T> has store {
         value: u64
     }
 
     /// Storable balance - an inner struct of a Coin type.
     /// Can be used to store coins which don't need the key ability.
-    struct Balance<phantom T> has store {
+    public struct Balance<phantom T> has store {
         value: u64
     }
 
@@ -143,7 +143,7 @@ module sui::balance_tests {
 
     #[test]
     fun test_balance() {
-        let balance = balance::zero<SUI>();
+        let mut balance = balance::zero<SUI>();
         let another = balance::create_for_testing(1000);
 
         balance::join(&mut balance, another);

@@ -5,7 +5,7 @@
 module sui::prover_tests {
     use sui::object::UID;
 
-    struct Obj has key, store {
+    public struct Obj has key, store {
         id: UID
     }
 

@@ -9,8 +9,8 @@ module sui::table_tests {
     #[test]
     fun simple_all_functions() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let table = table::new(ts::ctx(&mut scenario));
+        let mut scenario = ts::begin(sender);
+        let mut table = table::new(ts::ctx(&mut scenario));
         // add fields
         add(&mut table, b"hello", 0);
         add(&mut table, b"goodbye", 1);
@@ -40,8 +40,8 @@ module sui::table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
     fun add_duplicate() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let table = table::new(ts::ctx(&mut scenario));
+        let mut scenario = ts::begin(sender);
+        let mut table = table::new(ts::ctx(&mut scenario));
         add(&mut table, b"hello", 0);
         add(&mut table, b"hello", 1);
         abort 42
@@ -51,7 +51,7 @@ module sui::table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_missing() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let table = table::new<u64, u64>(ts::ctx(&mut scenario));
         borrow(&table, 0);
         abort 42
@@ -61,8 +61,8 @@ module sui::table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_mut_missing() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let table = table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = ts::begin(sender);
+        let mut table = table::new<u64, u64>(ts::ctx(&mut scenario));
         borrow_mut(&mut table, 0);
         abort 42
     }
@@ -71,8 +71,8 @@ module sui::table_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun remove_missing() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let table = table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = ts::begin(sender);
+        let mut table = table::new<u64, u64>(ts::ctx(&mut scenario));
         remove(&mut table, 0);
         abort 42
     }
@@ -81,8 +81,8 @@ module sui::table_tests {
     #[expected_failure(abort_code = sui::table::ETableNotEmpty)]
     fun destroy_non_empty() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let table = table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = ts::begin(sender);
+        let mut table = table::new<u64, u64>(ts::ctx(&mut scenario));
         add(&mut table, 0, 0);
         table::destroy_empty(table);
         ts::end(scenario);
@@ -91,8 +91,8 @@ module sui::table_tests {
     #[test]
     fun sanity_check_contains() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let table = table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = ts::begin(sender);
+        let mut table = table::new<u64, u64>(ts::ctx(&mut scenario));
         assert!(!contains(&table, 0), 0);
         add(&mut table, 0, 0);
         assert!(contains<u64, u64>(&table, 0), 0);
@@ -104,8 +104,8 @@ module sui::table_tests {
     #[test]
     fun sanity_check_drop() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let table = table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = ts::begin(sender);
+        let mut table = table::new<u64, u64>(ts::ctx(&mut scenario));
         add(&mut table, 0, 0);
         assert!(table::length(&table) == 1, 0);
         ts::end(scenario);
@@ -115,8 +115,8 @@ module sui::table_tests {
     #[test]
     fun sanity_check_size() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let table = table::new<u64, u64>(ts::ctx(&mut scenario));
+        let mut scenario = ts::begin(sender);
+        let mut table = table::new<u64, u64>(ts::ctx(&mut scenario));
         assert!(table::is_empty(&table), 0);
         assert!(table::length(&table) == 0, 0);
         add(&mut table, 0, 0);

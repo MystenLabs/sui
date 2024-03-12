@@ -15,15 +15,15 @@ module deepbook::custodian {
     const EUserBalanceDoesNotExist: u64 = 1;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
-    struct Account<phantom T> has store {
+    public struct Account<phantom T> has store {
         available_balance: Balance<T>,
         locked_balance: Balance<T>,
     }
 
-    struct AccountCap has key, store { id: UID }
+    public struct AccountCap has key, store { id: UID }
 
     // Custodian for limit orders.
-    struct Custodian<phantom T> has key, store {
+    public struct Custodian<phantom T> has key, store {
         id: UID,
         /// Map from an AccountCap object ID to an Account object
         account_balances: Table<ID, Account<T>>,
@@ -174,7 +174,7 @@ module deepbook::custodian {
     const ENull: u64 = 0;
 
     #[test_only]
-    struct USD {}
+    public struct USD {}
 
     #[test_only]
     public(friend) fun assert_user_balance<T>(
@@ -218,7 +218,7 @@ module deepbook::custodian {
     fun test_user_balance_does_not_exist(){
         let owner: address = @0xAAAA;
         let bob: address = @0xBBBB;
-        let test = test_scenario::begin(owner);
+        let mut test = test_scenario::begin(owner);
         test_scenario::next_tx(&mut test, owner);
         {
             setup_test(&mut test);
@@ -241,7 +241,7 @@ module deepbook::custodian {
     fun test_account_balance() {
         let owner: address = @0xAAAA;
         let bob: address = @0xBBBB;
-        let test = test_scenario::begin(owner);
+        let mut test = test_scenario::begin(owner);
         test_scenario::next_tx(&mut test, owner);
         {
             setup_test(&mut test);
@@ -261,11 +261,11 @@ module deepbook::custodian {
         };
         test_scenario::next_tx(&mut test, bob);
         {
-            let custodian = take_shared<Custodian<USD>>(&test);
+            let mut custodian = take_shared<Custodian<USD>>(&test);
             let account_cap = take_from_sender<AccountCap>(&test);
             let account_cap_user = object::id(&account_cap);
             deposit(&mut custodian, mint_for_testing<USD>(10000, ctx(&mut test)), account_cap_user);
-            let (asset_available, asset_locked) = account_balance(&custodian, account_cap_user);
+            let (asset_available, mut asset_locked) = account_balance(&custodian, account_cap_user);
             assert_eq(asset_available, 10000);
             assert_eq(asset_locked, 0);
             asset_locked = account_locked_balance(&custodian, account_cap_user);

@@ -10,8 +10,8 @@ module sui::dynamic_field_tests {
     #[test]
     fun simple_all_functions() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let id = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut id = ts::new_object(&mut scenario);
         // add fields
         add<u64, u64>(&mut id, 0, 0);
         add<vector<u8>, u64>(&mut id, b"", 1);
@@ -48,8 +48,8 @@ module sui::dynamic_field_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
     fun add_duplicate() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let id = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut id = ts::new_object(&mut scenario);
         add<u64, u64>(&mut id, 0, 0);
         add<u64, u64>(&mut id, 0, 1);
         abort 42
@@ -59,8 +59,8 @@ module sui::dynamic_field_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
     fun add_duplicate_mismatched_type() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let id = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut id = ts::new_object(&mut scenario);
         add<u64, u64>(&mut id, 0, 0u64);
         add<u64, u8>(&mut id, 0, 1u8);
         abort 42
@@ -70,7 +70,7 @@ module sui::dynamic_field_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_missing() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
+        let mut scenario = ts::begin(sender);
         let id = ts::new_object(&mut scenario);
         borrow<u64, u64>(&id, 0);
         abort 42
@@ -80,8 +80,8 @@ module sui::dynamic_field_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
     fun borrow_wrong_type() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let id = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut id = ts::new_object(&mut scenario);
         add(&mut id, 0, 0);
         borrow<u64, u8>(&id, 0);
         abort 42
@@ -91,8 +91,8 @@ module sui::dynamic_field_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun borrow_mut_missing() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let id = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut id = ts::new_object(&mut scenario);
         borrow_mut<u64, u64>(&mut id, 0);
         abort 42
     }
@@ -101,8 +101,8 @@ module sui::dynamic_field_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
     fun borrow_mut_wrong_type() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let id = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut id = ts::new_object(&mut scenario);
         add(&mut id, 0, 0);
         borrow_mut<u64, u8>(&mut id, 0);
         abort 42
@@ -112,8 +112,8 @@ module sui::dynamic_field_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
     fun remove_missing() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let id = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut id = ts::new_object(&mut scenario);
         remove<u64, u64>(&mut id, 0);
         abort 42
     }
@@ -122,8 +122,8 @@ module sui::dynamic_field_tests {
     #[expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
     fun remove_wrong_type() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let id = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut id = ts::new_object(&mut scenario);
         add(&mut id, 0, 0);
         remove<u64, u8>(&mut id, 0);
         abort 42
@@ -132,8 +132,8 @@ module sui::dynamic_field_tests {
     #[test]
     fun sanity_check_exists() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let id = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut id = ts::new_object(&mut scenario);
         assert!(!exists_with_type<u64, u64>(&id, 0), 0);
         add(&mut id, 0, 0);
         assert!(exists_with_type<u64, u64>(&id, 0), 0);
@@ -146,8 +146,8 @@ module sui::dynamic_field_tests {
     #[test]
     fun delete_uid_with_fields() {
         let sender = @0x0;
-        let scenario = ts::begin(sender);
-        let id = ts::new_object(&mut scenario);
+        let mut scenario = ts::begin(sender);
+        let mut id = ts::new_object(&mut scenario);
         add(&mut id, 0, 0);
         assert!(exists_with_type<u64, u64>(&id, 0), 0);
         ts::end(scenario);

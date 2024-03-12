@@ -69,14 +69,14 @@ module std::string_tests {
 
     #[test]
     fun test_append() {
-        let s = string::utf8(b"abcd");
+        let mut s = string::utf8(b"abcd");
         string::append(&mut s, string::utf8(b"ef"));
         assert!(s == string::utf8(b"abcdef"), 22)
     }
 
     #[test]
     fun test_insert() {
-        let s = string::utf8(b"abcd");
+        let mut s = string::utf8(b"abcd");
         string::insert(&mut s, 1, string::utf8(b"xy"));
         assert!(s == string::utf8(b"axybcd"), 22)
     }

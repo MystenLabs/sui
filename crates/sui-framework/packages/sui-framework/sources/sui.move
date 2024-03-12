@@ -27,7 +27,7 @@ module sui::sui {
     const TOTAL_SUPPLY_MIST: u64 = 10_000_000_000_000_000_000;
 
     /// Name of the coin
-    struct SUI has drop {}
+    public struct SUI has drop {}
 
     #[allow(unused_function)]
     /// Register the `SUI` Coin to acquire its `Supply`.
@@ -47,7 +47,7 @@ module sui::sui {
             ctx
         );
         transfer::public_freeze_object(metadata);
-        let supply = coin::treasury_into_supply(treasury);
+        let mut supply = coin::treasury_into_supply(treasury);
         let total_sui = balance::increase_supply(&mut supply, TOTAL_SUPPLY_MIST);
         balance::destroy_supply(supply);
         total_sui

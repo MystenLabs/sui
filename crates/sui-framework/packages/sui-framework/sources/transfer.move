@@ -16,7 +16,7 @@ module sui::transfer {
     /// `id` at version `version` if you can prove mutable access to the parent
     /// object during the transaction.
     /// Internals of this struct are opaque outside this module.
-    struct Receiving<phantom T: key> has drop {
+    public struct Receiving<phantom T: key> has drop {
         id: ID,
         version: u64,
     }
