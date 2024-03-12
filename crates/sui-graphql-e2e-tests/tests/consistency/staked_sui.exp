@@ -20,7 +20,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3 'run'. lines 24-24:
-events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [205, 194, 213, 73, 180, 73, 66, 247, 47, 26, 252, 245, 47, 78, 73, 151, 248, 107, 13, 176, 55, 9, 53, 252, 244, 197, 180, 96, 178, 157, 125, 125, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [113, 81, 134, 172, 92, 109, 144, 241, 174, 131, 1, 57, 116, 67, 141, 186, 227, 178, 165, 5, 212, 248, 141, 142, 102, 169, 158, 242, 137, 46, 156, 74, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
 created: object(3,0), object(3,1)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0)
 deleted: object(_), object(2,0)
@@ -38,7 +38,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7 'run'. lines 34-34:
-events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [205, 194, 213, 73, 180, 73, 66, 247, 47, 26, 252, 245, 47, 78, 73, 151, 248, 107, 13, 176, 55, 9, 53, 252, 244, 197, 180, 96, 178, 157, 125, 125, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 1, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [113, 81, 134, 172, 92, 109, 144, 241, 174, 131, 1, 57, 116, 67, 141, 186, 227, 178, 165, 5, 212, 248, 141, 142, 102, 169, 158, 242, 137, 46, 156, 74, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 1, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
 created: object(7,0)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0), object(3,0)
 deleted: object(6,0)
@@ -67,13 +67,13 @@ Response: {
       "stakedSuis": {
         "edges": [
           {
-            "cursor": "IFEXLqk/9mvdveGdt4EtBK7Q+Ysiqru1IcKWm3v48TjmBAAAAAAAAAA=",
+            "cursor": "IF+/AEWZ0T3ZmXNQtQQLhVimRuIpWdWzP+alrmfk1E71BAAAAAAAAAA=",
             "node": {
               "principal": "10000000000"
             }
           },
           {
-            "cursor": "IF1zkOJDFUUZOfzyC/CEK43f/sv9y+xzXlySacfrS7VoBAAAAAAAAAA=",
+            "cursor": "IHVywJlhwbSAG4B/jEuUcJX/RPaELpFQvyjIs0t4FR6KBAAAAAAAAAA=",
             "node": {
               "principal": "10000000000"
             }
@@ -115,36 +115,36 @@ Response: {
   "data": {
     "coins_after_obj_3_1_chkpt_3": {
       "stakedSuis": {
-        "edges": []
+        "edges": [
+          {
+            "cursor": "IHVywJlhwbSAG4B/jEuUcJX/RPaELpFQvyjIs0t4FR6KAwAAAAAAAAA=",
+            "node": {
+              "principal": "10000000000"
+            }
+          }
+        ]
       }
     },
     "coins_before_obj_3_1_chkpt_3": {
       "stakedSuis": {
-        "edges": [
-          {
-            "cursor": "IFEXLqk/9mvdveGdt4EtBK7Q+Ysiqru1IcKWm3v48TjmAwAAAAAAAAA=",
-            "node": {
-              "principal": "10000000000"
-            }
-          }
-        ]
+        "edges": []
       }
     },
     "coins_after_obj_7_0_chkpt_3": {
       "stakedSuis": {
+        "edges": []
+      }
+    },
+    "coins_before_obj_7_0_chkpt_3": {
+      "stakedSuis": {
         "edges": [
           {
-            "cursor": "IF1zkOJDFUUZOfzyC/CEK43f/sv9y+xzXlySacfrS7VoAwAAAAAAAAA=",
+            "cursor": "IF+/AEWZ0T3ZmXNQtQQLhVimRuIpWdWzP+alrmfk1E71AwAAAAAAAAA=",
             "node": {
               "principal": "10000000000"
             }
           }
         ]
-      }
-    },
-    "coins_before_obj_7_0_chkpt_3": {
-      "stakedSuis": {
-        "edges": []
       }
     }
   }
