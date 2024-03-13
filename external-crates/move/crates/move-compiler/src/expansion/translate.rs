@@ -570,9 +570,10 @@ fn top_level_address_(
         // This should have been handled elsewhere in alias resolution for user-provided paths, and
         // should never occur in compiler-generated ones.
         P::LeadingNameAccess_::GlobalAddress(name) => {
-            context.env.add_diag(ice!(
-                (loc, "Found an address in top-level address position that uses a global name")
-            ));
+            context.env.add_diag(ice!((
+                loc,
+                "Found an address in top-level address position that uses a global name"
+            )));
             Address::NamedUnassigned(name)
         }
         P::LeadingNameAccess_::Name(name) => {
@@ -605,11 +606,12 @@ fn top_level_address_opt(context: &mut DefnContext, ln: P::LeadingNameAccess) ->
         // This should have been handled elsewhere in alias resolution for user-provided paths, and
         // should never occur in compiler-generated ones.
         P::LeadingNameAccess_::GlobalAddress(_) => {
-            context.env.add_diag(ice!(
-                (loc, "Found an address in top-level address position that uses a global name")
-            ));
+            context.env.add_diag(ice!((
+                loc,
+                "Found an address in top-level address position that uses a global name"
+            )));
             None
-        },
+        }
         P::LeadingNameAccess_::Name(name) => {
             let addr = named_address_mapping.get(&name.value).copied()?;
             Some(make_address(context, name, loc, addr))
