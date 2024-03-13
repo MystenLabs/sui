@@ -9,12 +9,13 @@ import { MultiSigPublicKey } from '../../src/multisig/publickey';
 import { TransactionBlock } from '../../src/transactions';
 import { getZkLoginSignature } from '../../src/zklogin';
 import { toZkLoginPublicIdentifier } from '../../src/zklogin/publickey';
-import { DEFAULT_RECIPIENT, setupWithFundedAddress, TestToolbox } from './utils/setup';
+import { DEFAULT_RECIPIENT, setupWithFundedAddress, TestToolbox, setup } from './utils/setup';
 
 describe('MultiSig with zklogin signature', () => {
 	let toolbox: TestToolbox;
 
 	beforeAll(async () => {
+		toolbox = await setup();
 		// Make sure the epoch is at least 1 so the JWK objects can be found when verifying zklogin signature.
 		const startTime = Date.now();
 		const timeout = 20000; // 20 seconds timeout
@@ -137,3 +138,4 @@ describe('MultiSig with zklogin signature', () => {
 		expect(result.effects?.status.status).toEqual('success');
 	});
 });
+
