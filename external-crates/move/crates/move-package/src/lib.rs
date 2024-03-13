@@ -11,7 +11,7 @@ pub mod package_hooks;
 pub mod resolution;
 pub mod source_package;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use clap::*;
 use lock_file::LockFile;
 use move_compiler::{
@@ -108,23 +108,48 @@ pub struct BuildConfig {
 #[derive(Parser, Debug, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
 pub struct LintFlag {
     /// If `true`, disable linters
-    #[clap(name = "no-lint", long = "no-lint", global = true)]
+    #[clap(
+        name = "no-lint",
+        long = "no-lint",
+        global = true,
+        group = "lint-level"
+    )]
     pub no_lint: bool,
+
     /// If `true`, enables extra linters
-    #[clap(name = "lint", long = "lint", global = true)]
+    #[clap(name = "lint", long = "lint", global = true, group = "lint-level")]
     pub lint: bool,
 }
 
 impl LintFlag {
-    // TODO we really should find a way for clap to generate these
-    pub fn level(&self) -> Result<LintLevel> {
-        let Self { no_lint, lint } = self;
-        Ok(match (*no_lint, *lint) {
-            (true, false) => LintLevel::None,
-            (false, false) => LintLevel::Default,
-            (false, true) => LintLevel::All,
-            (true, true) => bail!("Cannot set both --no-lint and --lint flags"),
-        })
+    pub const LEVEL_NONE: Self = Self {
+        no_lint: true,
+        lint: false,
+    };
+    const LEVEL_DEFAULT: Self = Self {
+        no_lint: false,
+        lint: false,
+    };
+    const LEVEL_ALL: Self = Self {
+        no_lint: false,
+        lint: true,
+    };
+
+    pub fn get(&self) -> LintLevel {
+        match self {
+            &Self::LEVEL_NONE => LintLevel::None,
+            &Self::LEVEL_DEFAULT => LintLevel::Default,
+            &Self::LEVEL_ALL => LintLevel::All,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn set(&mut self, level: LintLevel) {
+        *self = match level {
+            LintLevel::None => Self::LEVEL_NONE,
+            LintLevel::Default => Self::LEVEL_DEFAULT,
+            LintLevel::All => Self::LEVEL_ALL,
+        }
     }
 }
 

@@ -481,7 +481,7 @@ impl CompiledPackage {
         let mut paths = src_deps;
         paths.push(sources_package_paths.clone());
 
-        let lint_level = resolution_graph.build_options.lint_flag.level()?;
+        let lint_level = resolution_graph.build_options.lint_flag.get();
         let sui_mode = resolution_graph
             .build_options
             .default_flavor
